@@ -25,13 +25,44 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Extract source owner from issue body
+        id: owner
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          python - <<'PY'
+          import os, re, sys
+          body = os.environ.get("ISSUE_BODY", "")
+          m = re.search(
+              r"^###\s+Submission URL\s*\n+(?P<value>.+?)(?=\n+###\s|\Z)",
+              body,
+              re.MULTILINE | re.DOTALL,
+          )
+          if not m:
+              sys.exit("no Submission URL section in issue body")
+          url = m.group("value").strip()
+          out_path = os.environ["GITHUB_OUTPUT"]
+          with open(out_path, "a") as fh:
+              repo = re.match(r"https://github\.com/([^/]+)/", url)
+              if repo:
+                  fh.write(f"kind=github_repo\n")
+                  fh.write(f"owner={repo.group(1)}\n")
+              elif url.startswith("https://gist.github.com/"):
+                  fh.write(f"kind=gist\n")
+                  fh.write(f"owner=\n")
+              else:
+                  sys.exit(f"unsupported URL in issue body: {url!r}")
+          PY
+
       - name: Mint lean-eval-bot installation token
         id: app_token
+        if: steps.owner.outputs.kind == 'github_repo'
         uses: actions/create-github-app-token@v1
         continue-on-error: true
         with:
           app-id: ${{ secrets.LEAN_EVAL_BOT_APP_ID }}
           private-key: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
+          owner: ${{ steps.owner.outputs.owner }}
 
       - name: Fetch submission
         id: fetch
