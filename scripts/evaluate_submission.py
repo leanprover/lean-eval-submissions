@@ -270,12 +270,19 @@ def _prime_workspace(target: pathlib.Path) -> None:
             capture_output=True,
             text=True,
         )
-        # Forward stderr so workflow logs show `lake update` + `lake exe cache get`
-        # + `lake build` progress even on success.
-        if result.stderr:
-            print(f"--- {' '.join(args)} stderr (begin) ---", file=sys.stderr)
-            print(result.stderr.strip(), file=sys.stderr)
-            print(f"--- {' '.join(args)} stderr (end) ---", file=sys.stderr)
+        # Forward both stdout and stderr so workflow logs show the full
+        # output of `lake update` + `lake exe cache get` + `lake build`
+        # regardless of which stream each step chose. Lake routes
+        # progress to stdout on 4.x, info: lines to stderr, etc.
+        label = " ".join(args)
+        print(f"--- {label} [rc={result.returncode}] ---", file=sys.stderr)
+        if result.stdout and result.stdout.strip():
+            print("stdout:", file=sys.stderr)
+            print(result.stdout.rstrip(), file=sys.stderr)
+        if result.stderr and result.stderr.strip():
+            print("stderr:", file=sys.stderr)
+            print(result.stderr.rstrip(), file=sys.stderr)
+        print(f"--- end {label} ---", file=sys.stderr)
         if result.returncode != 0:
             stderr = (result.stderr or "").strip()
             stdout = (result.stdout or "").strip()
