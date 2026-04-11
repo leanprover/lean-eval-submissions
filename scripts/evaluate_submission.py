@@ -270,6 +270,12 @@ def _prime_workspace(target: pathlib.Path) -> None:
             capture_output=True,
             text=True,
         )
+        # Forward stderr so workflow logs show `lake update` + `lake exe cache get`
+        # + `lake build` progress even on success.
+        if result.stderr:
+            print(f"--- {' '.join(args)} stderr (begin) ---", file=sys.stderr)
+            print(result.stderr.strip(), file=sys.stderr)
+            print(f"--- {' '.join(args)} stderr (end) ---", file=sys.stderr)
         if result.returncode != 0:
             stderr = (result.stderr or "").strip()
             stdout = (result.stdout or "").strip()
@@ -409,6 +415,13 @@ def _run_run_eval(
     )
     stderr = (result.stderr or "").strip()
     stdout = (result.stdout or "").strip()
+    # Always forward run-eval's stderr so the workflow log shows lake
+    # build + comparator output, which we need to diagnose any problem
+    # that reports succeeded=false.
+    if stderr:
+        print("--- run-eval stderr (begin) ---", file=sys.stderr)
+        print(stderr, file=sys.stderr)
+        print("--- run-eval stderr (end) ---", file=sys.stderr)
     if result.returncode != 0:
         details = "\n".join(
             part for part in [f"stderr:\n{stderr}" if stderr else "", f"stdout:\n{stdout}" if stdout else ""] if part
