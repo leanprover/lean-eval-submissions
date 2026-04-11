@@ -187,7 +187,10 @@ class OverlayMatchTests(unittest.TestCase):
                 source_dir=src,
             )
             record = ev.overlay_match(
-                match, generated_root=generated, workspaces_root=workspaces
+                match,
+                generated_root=generated,
+                workspaces_root=workspaces,
+                prime=False,
             )
             self.assertTrue(record["overlaid"])
             target = workspaces / "two_plus_two"
@@ -223,6 +226,7 @@ class OverlayMatchTests(unittest.TestCase):
                 ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
                 generated_root=generated,
                 workspaces_root=workspaces,
+                prime=False,
             )
             self.assertTrue(record["overlaid"])
             self.assertEqual(
@@ -247,7 +251,10 @@ class OverlayMatchTests(unittest.TestCase):
                 skip_reason="no Submission.lean next to lakefile.toml",
             )
             record = ev.overlay_match(
-                match, generated_root=generated, workspaces_root=workspaces
+                match,
+                generated_root=generated,
+                workspaces_root=workspaces,
+                prime=False,
             )
         self.assertFalse(record["overlaid"])
         self.assertIn("Submission.lean", record["skip_reason"])
@@ -267,6 +274,7 @@ class OverlayMatchTests(unittest.TestCase):
                 ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
                 generated_root=generated,
                 workspaces_root=workspaces,
+                prime=False,
             )
         self.assertFalse(record["overlaid"])
         self.assertIn("empty", record["skip_reason"])

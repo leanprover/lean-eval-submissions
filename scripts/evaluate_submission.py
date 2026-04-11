@@ -244,12 +244,37 @@ def _share_packages(
     return None
 
 
+def _prime_workspace(target: pathlib.Path) -> None:
+    """Run `lake update` + `lake exe cache get` outside of landrun so that
+    comparator's sandboxed `lake build` does not try to clone packages
+    into paths landrun will deny.
+
+    Matches the pattern in check_comparator_installation.py.
+    """
+    for args in (["lake", "update"], ["lake", "exe", "cache", "get"]):
+        result = subprocess.run(
+            args,
+            cwd=target,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            stderr = (result.stderr or "").strip()
+            stdout = (result.stdout or "").strip()
+            details = "\n".join(part for part in [stderr, stdout] if part)
+            raise EvaluateError(
+                f"{' '.join(args)} failed in {target}:\n{details}"
+            )
+
+
 def overlay_match(
     match: WorkspaceMatch,
     *,
     generated_root: pathlib.Path,
     workspaces_root: pathlib.Path,
     shared_packages: pathlib.Path | None = None,
+    prime: bool = True,
 ) -> dict:
     """Copy generated/<id>/ to workspaces/<id>/, overlay submitter content.
 
@@ -331,6 +356,12 @@ def overlay_match(
             "overlaid_files": [],
             "shared_packages": shared_state,
         }
+
+    # 4. Prime the workspace with `lake update` + `lake exe cache get`
+    #    so comparator's sandboxed lake build does not try to clone
+    #    packages into paths landrun will deny.
+    if prime:
+        _prime_workspace(target)
 
     return {
         "problem_id": match.problem_id,
@@ -473,6 +504,10 @@ def evaluate_submission(
                 generated_root=generated_root,
                 workspaces_root=workspaces_root,
                 shared_packages=shared_packages,
+                # If a fake run-eval runner is injected (tests), the
+                # synthetic pristine workspaces don't carry a real lakefile
+                # so skip the real `lake update` + `lake exe cache get`.
+                prime=run_eval_runner is None,
             )
             overlay_records.append(record)
             if record["overlaid"]:
