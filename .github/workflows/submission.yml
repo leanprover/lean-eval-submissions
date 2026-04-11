@@ -105,6 +105,21 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Free disk space for Mathlib cache
+        # Standard runners ship with ~14GB free; Mathlib unpacked is
+        # several GB and we hold it twice (repo root + per-workspace).
+        # Strip Android, .NET, Haskell, and other preinstalled caches we
+        # do not need. Frees ~30GB.
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
