@@ -413,37 +413,27 @@ def _run_run_eval(
     ]
     for pid in problem_ids:
         args.extend(["--problem", pid])
-    result = subprocess.run(
+    process = subprocess.Popen(
         args,
         cwd=repo_root,
-        check=False,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=None,
         text=True,
     )
-    stderr = (result.stderr or "").strip()
-    stdout = (result.stdout or "").strip()
-    # Always forward run-eval's stderr so the workflow log shows lake
-    # build + comparator output, which we need to diagnose any problem
-    # that reports succeeded=false.
-    if stderr:
-        print("--- run-eval stderr (begin) ---", file=sys.stderr)
-        print(stderr, file=sys.stderr)
-        print("--- run-eval stderr (end) ---", file=sys.stderr)
-    if result.returncode != 0:
+    stdout, _ = process.communicate()
+    stdout = (stdout or "").strip()
+    if process.returncode != 0:
         details = "\n".join(
-            part for part in [f"stderr:\n{stderr}" if stderr else "", f"stdout:\n{stdout}" if stdout else ""] if part
+            part for part in [f"stdout:\n{stdout}" if stdout else ""] if part
         )
         raise EvaluateError(
-            f"lake exe lean-eval run-eval failed with exit code {result.returncode}:\n{details}"
+            f"lake exe lean-eval run-eval failed with exit code {process.returncode}:\n{details}"
         )
     try:
-        return json.loads(result.stdout)
+        return json.loads(stdout)
     except json.JSONDecodeError as exc:
-        details = "\n".join(
-            part for part in [f"stdout:\n{stdout or '(empty)'}", f"stderr:\n{stderr or '(empty)'}"] if part
-        )
         raise EvaluateError(
-            f"run-eval exited 0 but produced invalid JSON ({exc}):\n{details}"
+            f"run-eval exited 0 but produced invalid JSON ({exc}):\nstdout:\n{stdout or '(empty)'}"
         ) from exc
 
 

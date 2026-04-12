@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import io
 import pathlib
 import sys
 import tempfile
 import textwrap
 import unittest
+from contextlib import redirect_stderr
+from unittest import mock
 
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -368,6 +371,52 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
                     repo_root=tmp_path,
                     run_eval_runner=_fake_runner_factory([]),
                 )
+
+
+class RunEvalInvocationTests(unittest.TestCase):
+    def test_run_eval_streams_stderr_and_parses_stdout_json(self) -> None:
+        class FakeProcess:
+            def __init__(self) -> None:
+                self.returncode = 0
+
+            def communicate(self) -> tuple[str, None]:
+                print("live comparator output", file=sys.stderr)
+                return ('{"problems": [{"id": "two_plus_two", "succeeded": true}]}', None)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = pathlib.Path(tmp)
+            stderr = io.StringIO()
+            with mock.patch.object(ev.subprocess, "Popen", return_value=FakeProcess()) as popen:
+                with redirect_stderr(stderr):
+                    result = ev._run_run_eval(
+                        problem_ids=["two_plus_two"],
+                        workspaces_root=repo_root / "workspaces",
+                        repo_root=repo_root,
+                    )
+
+        self.assertEqual(result["problems"][0]["id"], "two_plus_two")
+        self.assertIn("live comparator output", stderr.getvalue())
+        _, kwargs = popen.call_args
+        self.assertIs(kwargs["stderr"], None)
+        self.assertEqual(kwargs["stdout"], ev.subprocess.PIPE)
+
+    def test_run_eval_nonzero_exit_includes_stdout(self) -> None:
+        class FakeProcess:
+            def __init__(self) -> None:
+                self.returncode = 1
+
+            def communicate(self) -> tuple[str, None]:
+                return ("failure details", None)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = pathlib.Path(tmp)
+            with mock.patch.object(ev.subprocess, "Popen", return_value=FakeProcess()):
+                with self.assertRaisesRegex(ev.EvaluateError, "failure details"):
+                    ev._run_run_eval(
+                        problem_ids=["two_plus_two"],
+                        workspaces_root=repo_root / "workspaces",
+                        repo_root=repo_root,
+                    )
 
 
 class SummaryCapTests(unittest.TestCase):
