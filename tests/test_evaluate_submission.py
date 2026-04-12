@@ -69,7 +69,7 @@ def _write_manifest(path: pathlib.Path, problem_ids: list[str]) -> None:
                 test = false
                 module = "Fake.{pid}"
                 theorem = "{pid}"
-                author = "tester"
+                submitter = "tester"
                 """
             )
         )
