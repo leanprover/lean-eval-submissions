@@ -34,6 +34,42 @@ The attacker does not control:
 The goal we resist: **a submitter receiving credit on the leaderboard
 for a theorem they have not actually proved.**
 
+**Submission confidentiality is best-effort, not a guarantee.** Private
+submissions (those filed against a private GitHub repo readable only
+via the `lean-eval-bot` App) are evaluated without uploading their
+source as a workflow artifact, so the source is not exposed to anyone
+authenticated against the GitHub Actions API. Confidentiality of the
+source — and of the App installation token used to clone it — depends
+on several properties of the workflow's structure that we do not
+actively probe:
+
+- fetch and evaluate share a job, so source never crosses a runner
+  boundary;
+- `APP_INSTALLATION_TOKEN` is scoped to the env of the single
+  `Fetch submission` step;
+- `fetch_submission.py` strips `.git/` from the cloned source before
+  tarring, because `clone_url_for` embeds the installation token in
+  the `origin` remote URL and `git remote add` persists that URL into
+  `.git/config` (regression test:
+  `FetchSubmissionTarballHygieneTests`). Comparator's landrun policy
+  is `--ro /`, so anything left on the runner under a path the
+  sandbox can stat is readable by the untrusted Lean elaborator.
+
+A future workflow refactor could regress any of these silently.
+`actions/create-github-app-token` does write the token to
+`$RUNNER_TEMP/_runner_file_commands/{set_output,save_state}_<uuid>`
+during the mint step, but actions/runner's `FileCommandManager`
+deletes the previous step's files at the start of every step
+(`runner/src/Runner.Worker/FileCommandManager.cs:InitializeFiles`),
+so by the time untrusted Lean runs in `evaluate_submission.py` those
+files have been deleted many steps earlier. Deeper shared-host paths
+that apply to any secret on a GitHub-hosted runner (e.g. reading
+`/proc/<runner-worker-pid>/environ` or attaching ptrace to the
+worker) are partially mitigated by Ubuntu's
+`kernel.yama.ptrace_scope=1` but are not something we actively probe.
+Submitters who require confidentiality should audit the workflow
+themselves before relying on this.
+
 ## 2. Architecture: Challenge / Submission / Solution
 
 Every benchmark problem ships as a self-contained Lake project in
