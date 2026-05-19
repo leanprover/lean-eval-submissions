@@ -697,13 +697,26 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     try:
         args = _parse_args(argv)
+        # Resolve every path arg to an absolute path. `repo_root` in
+        # particular MUST be absolute: the per-submission tempdir is
+        # created under it and its path is passed to `lake exe lean-eval
+        # run-eval` as `--workspaces-root`, while that subprocess runs
+        # with `cwd=repo_root`. A relative `--repo-root` (e.g. the
+        # `submission.yml` two-checkout layout passes `lean-eval`) would
+        # otherwise make run-eval resolve the workspaces-root against its
+        # own root a second time and silently fall back to the pristine
+        # `generated/` workspaces — scoring every submission as 0.
         evaluate_submission(
-            source_dir=args.source_dir,
-            generated_root=args.generated_root,
-            manifest_path=args.manifest,
-            output_dir=args.output_dir,
-            repo_root=args.repo_root,
-            shared_packages=args.shared_packages,
+            source_dir=args.source_dir.resolve(),
+            generated_root=args.generated_root.resolve(),
+            manifest_path=args.manifest.resolve(),
+            output_dir=args.output_dir.resolve(),
+            repo_root=args.repo_root.resolve(),
+            shared_packages=(
+                args.shared_packages.resolve()
+                if args.shared_packages is not None
+                else None
+            ),
         )
     except EvaluateError as exc:
         print(str(exc), file=sys.stderr)
