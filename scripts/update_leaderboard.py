@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Merge comparator results into a clone of leanprover/lean-eval-leaderboard.
+Merge comparator results into the lean-eval-submissions results store.
 
-Implements the sticky-no-op semantics documented at
-https://github.com/leanprover/lean-eval-leaderboard (README, schema v1).
-Does not run git; the caller is responsible for cloning the leaderboard
-repo, committing the modified file, and pushing.
+Implements the sticky-no-op semantics documented in this repository's
+README (results record schema v1). Does not run git; the caller is
+responsible for checking out the results store, committing the modified
+file, and pushing.
 """
 
 from __future__ import annotations
@@ -188,7 +188,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--leaderboard-dir",
         required=True,
         type=pathlib.Path,
-        help="Path to a local clone of leanprover/lean-eval-leaderboard.",
+        help="Path to a checkout of the lean-eval-submissions results store.",
     )
     parser.add_argument(
         "--results-json",

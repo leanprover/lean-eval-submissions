@@ -33,7 +33,7 @@ body:
 
         If your submission is in a private repository, install the
         `lean-eval-bot` GitHub App on it so the CI can clone it. The install
-        link is in the lean-eval README.
+        link is in this repository's README.
 
   - type: input
     id: source_url

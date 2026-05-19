@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussion on Zulip
+    url: https://leanprover.zulipchat.com/#narrow/channel/583341-Model-comparisons-for-Lean/topic/LeanEval/with/594108910
+    about: General questions and discussion about lean-eval happen in the #Model-comparisons-for-Lean > LeanEval topic on the Lean Zulip.
+  - name: Benchmark source code and documentation
+    url: https://github.com/leanprover/lean-eval
+    about: The problem set, the `lean-eval` CLI, and the comparator/sandbox security model live here. Read its README before opening a submission issue.
+  - name: Leaderboard
+    url: https://lean-lang.org/eval/
+    about: The public leaderboard, rendered from the results store in this repository.
