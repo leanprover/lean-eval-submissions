@@ -139,6 +139,18 @@
         "submission_repo": "kim-em/626f5e295e4073d0e82bf8d157ef494d"
       }
     },
+    "Dogfood (lean-eval-submissions pipeline test)": {
+      "two_plus_two": {
+        "benchmark_commit": "2434b5c88f7a43162aeed99295460f5d850b7ca2",
+        "issue_number": 3,
+        "production_description": "Re-run of the lean-eval-submissions pipeline dogfood after fixing the relative-`--repo-root` bug (PR #2). Not a real model result.",
+        "solved_at": "2026-05-19T16:06:40Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "047be6d40ebf65d3ff05c4749fd3a46d065a608d",
+        "submission_repo": "kim-em/ede4762b2951ff5a7b9d6ec91c32adf9"
+      }
+    },
     "GPT-5.5": {
       "two_plus_two": {
         "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
