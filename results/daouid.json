@@ -81,6 +81,15 @@
         "submission_ref": "6d77c88ed6db82e990b092a900b197de2db3b6b1",
         "submission_repo": "daouid/lean-eval"
       },
+      "exists_nonisotopic_link": {
+        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+        "issue_number": 7,
+        "solved_at": "2026-05-19T23:08:32Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "288e702189aefa88044372a196ac102c7f3de98b",
+        "submission_repo": "daouid/lean-eval"
+      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
         "issue_number": 245,
