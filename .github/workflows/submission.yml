@@ -401,7 +401,7 @@ jobs:
             fi
             echo "results push rejected on attempt $attempt; retrying"
             sleep $((attempt * 2))
-            if [ $attempt -eq $MAX_ATTEMPTS ]; then
+            if [ "$attempt" -eq "$MAX_ATTEMPTS" ]; then
               gh issue comment ${{ github.event.issue.number }} \
                 --repo "${{ github.repository }}" \
                 --body "⚠️ Could not push the result after $MAX_ATTEMPTS attempts (race). An operator will need to retry this submission."
