@@ -2,6 +2,15 @@
   "schema_version": 1,
   "solved": {
     "EVO": {
+      "finite_graph_ramsey_theorem": {
+        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+        "issue_number": 9,
+        "solved_at": "2026-05-20T01:29:50Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "a1e0792d6a3c8ef61256554f03d3e2b66dee95ff",
+        "submission_repo": "machinelearning2014/deepthought_lean_eval"
+      },
       "two_plus_two": {
         "benchmark_commit": "9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66",
         "issue_number": 265,
