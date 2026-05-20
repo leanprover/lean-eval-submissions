@@ -2,6 +2,15 @@
   "schema_version": 1,
   "solved": {
     "Seed Prover (ByteDance)": {
+      "balanceable_bounded_partitions": {
+        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+        "issue_number": 15,
+        "solved_at": "2026-05-20T10:49:33Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "aaad6f72484191b65cc7a72a67e038d1f4cbf23d",
+        "submission_repo": "GanjinZero/balanceable_bounded_partitions"
+      },
       "brauer_character_in_cyclotomic": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 12,
