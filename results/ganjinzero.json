@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Seed Prover (ByteDance)": {
+      "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
+        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+        "issue_number": 10,
+        "solved_at": "2026-05-20T06:09:50Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "e2f7eec0791dbaa6e5f8b3c85b8be0ff35540e63",
+        "submission_repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    }
+  },
+  "user": "GanjinZero"
+}
