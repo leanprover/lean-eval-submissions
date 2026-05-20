@@ -228,6 +228,15 @@
         "submission_public": true,
         "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
         "submission_repo": "daouid/lean-eval"
+      },
+      "vonNeumann_doubleCommutant_tfae": {
+        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+        "issue_number": 13,
+        "solved_at": "2026-05-20T09:43:56Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "fab2fd9d8801fa14b19706209bd9245500a97ce4",
+        "submission_repo": "daouid/lean-eval"
       }
     }
   },
