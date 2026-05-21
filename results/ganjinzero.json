@@ -29,6 +29,15 @@
         "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "contractibleSpace_houseWithTwoRooms": {
+        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+        "issue_number": 17,
+        "solved_at": "2026-05-21T15:32:28Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "5f0fced6229aa389d705245e0d40eaef28fa3332",
+        "submission_repo": "GanjinZero/contractibleSpace_houseWithTwoRooms"
+      },
       "cubic_decay_asymptotic": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 12,
