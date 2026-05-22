@@ -52,6 +52,15 @@
         "submission_ref": "50b4d43ba912ea3ae79d128a43a478184dffec43",
         "submission_repo": "daouid/lean-eval"
       },
+      "cyclotomic_integer_house_le_two": {
+        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+        "issue_number": 22,
+        "solved_at": "2026-05-22T10:23:40Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "ffb92010a8ee7c1824d31ec96031b6f0910dd51b",
+        "submission_repo": "daouid/lean-eval"
+      },
       "def_hole_example": {
         "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
         "issue_number": 245,
