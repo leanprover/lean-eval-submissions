@@ -208,6 +208,15 @@
         "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
         "submission_repo": "daouid/lean-eval"
       },
+      "rouche_zero_count_eq": {
+        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+        "issue_number": 23,
+        "solved_at": "2026-05-22T13:50:22Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "af1b0c11fab8544e36697e0d7cb85d1aee926215",
+        "submission_repo": "daouid/lean-eval"
+      },
       "sturm_separation": {
         "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
         "issue_number": 245,
