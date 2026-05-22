@@ -10,6 +10,15 @@
         "submission_public": true,
         "submission_ref": "db96b4ce22c3aadf0d9a5a436b5b28b7aef0bd5f",
         "submission_repo": "Morgan-Griffiths/2190083efd46fb1e5720b71603940a24"
+      },
+      "posSemidef_map_exp": {
+        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+        "issue_number": 37,
+        "solved_at": "2026-05-22T20:09:53Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "c8c99fc3f82132045106510b592d4111d4b31e0b",
+        "submission_repo": "Morgan-Griffiths/c71279c880cb7d2fc2bf0cd90fca4bb8"
       }
     }
   },
