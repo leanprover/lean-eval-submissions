@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "GPT-5.5": {
+      "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
+        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+        "issue_number": 36,
+        "solved_at": "2026-05-22T19:52:32Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "db96b4ce22c3aadf0d9a5a436b5b28b7aef0bd5f",
+        "submission_repo": "Morgan-Griffiths/2190083efd46fb1e5720b71603940a24"
+      }
+    }
+  },
+  "user": "Morgan-Griffiths"
+}
