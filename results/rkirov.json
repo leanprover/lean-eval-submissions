@@ -97,6 +97,15 @@
         "submission_ref": "69e24b6b1a18117485ef55663d4773900655e033",
         "submission_repo": "rkirov/lean-eval"
       },
+      "heat_kernel_solves_heat_equation": {
+        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+        "issue_number": 39,
+        "solved_at": "2026-05-22T21:26:16Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "7984d665265a2bde32e64599842ea98d1d7991b1",
+        "submission_repo": "rkirov/lean-eval"
+      },
       "instance_hole_example": {
         "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
         "issue_number": 78,
