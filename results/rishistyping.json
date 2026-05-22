@@ -39,6 +39,15 @@
         "submission_ref": "a111ea0d8d4bb6b9b003d8e3484fe6bda32dd6e5",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "finite_graph_ramsey_theorem": {
+        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+        "issue_number": 31,
+        "solved_at": "2026-05-22T16:27:16Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "340d460d18c259569d4d3de50b7220968d8addfa",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow": {
         "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
         "issue_number": 24,
