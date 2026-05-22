@@ -11,6 +11,16 @@
         "submission_ref": "db96b4ce22c3aadf0d9a5a436b5b28b7aef0bd5f",
         "submission_repo": "Morgan-Griffiths/2190083efd46fb1e5720b71603940a24"
       },
+      "oppenheim_inequality": {
+        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+        "issue_number": 38,
+        "production_description": "Autonomous lmp",
+        "solved_at": "2026-05-22T20:11:01Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "9024c01533ea012383110196915bcb582331bcce",
+        "submission_repo": "Morgan-Griffiths/5a6dfcdd13165a579e6fe9101c1568a0"
+      },
       "posSemidef_map_exp": {
         "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
         "issue_number": 37,
