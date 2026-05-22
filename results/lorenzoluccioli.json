@@ -182,6 +182,16 @@
         "submission_ref": "945a650516082dfeba205b6b4c2ffab1515b0669",
         "submission_repo": "LorenzoLuccioli/lean-eval"
       },
+      "variable_binder_example": {
+        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+        "issue_number": 27,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-05-22T15:38:55Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "08e066e5462f5972e07e13ea45faf344ecad2797",
+        "submission_repo": "LorenzoLuccioli/lean-eval"
+      },
       "vonNeumann_doubleCommutant_tfae": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 178,
