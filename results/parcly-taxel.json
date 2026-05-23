@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Aristotle (Harmonic)": {
+      "balanceable_bounded_partitions": {
+        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+        "issue_number": 45,
+        "solved_at": "2026-05-23T10:57:42Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "742a46c15bb0e180fe6abdfbe5e75586e5b734e2",
+        "submission_repo": "Parcly-Taxel/lean-eval-bbp"
+      }
+    }
+  },
+  "user": "Parcly-Taxel"
+}
