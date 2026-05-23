@@ -2,6 +2,16 @@
   "schema_version": 1,
   "solved": {
     "GPT-5.5": {
+      "brauer_character_in_cyclotomic": {
+        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+        "issue_number": 46,
+        "production_description": "Generated via an LMP",
+        "solved_at": "2026-05-23T20:09:14Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "aa6af3605a939af31c219c540940de95a99afdc4",
+        "submission_repo": "Morgan-Griffiths/997b9a415edd5b3300f67b0b86e2d6d3"
+      },
       "cubic_decay_asymptotic": {
         "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
         "issue_number": 47,
