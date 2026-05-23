@@ -22,6 +22,16 @@
         "submission_ref": "df2507d7a55fa45e93a751ede355a1e9766cb789",
         "submission_repo": "Morgan-Griffiths/1795fd65bee80ec5bd54080789cde3fa"
       },
+      "dirichlet_eigenvalues_eq_nat_sq": {
+        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+        "issue_number": 49,
+        "production_description": "Generated via an LMP",
+        "solved_at": "2026-05-23T20:09:35Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "f99ff369694089eaa380b08a98ca9d931446a5fe",
+        "submission_repo": "Morgan-Griffiths/38d9086a96f7c2789ec6c9b666bea346"
+      },
       "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
         "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
         "issue_number": 36,
