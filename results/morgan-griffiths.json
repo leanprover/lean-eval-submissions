@@ -2,6 +2,16 @@
   "schema_version": 1,
   "solved": {
     "GPT-5.5": {
+      "cubic_decay_asymptotic": {
+        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+        "issue_number": 47,
+        "production_description": "Generated via an LMP",
+        "solved_at": "2026-05-23T20:08:07Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "df2507d7a55fa45e93a751ede355a1e9766cb789",
+        "submission_repo": "Morgan-Griffiths/1795fd65bee80ec5bd54080789cde3fa"
+      },
       "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
         "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
         "issue_number": 36,
