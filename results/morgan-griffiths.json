@@ -39,6 +39,16 @@
         "submission_public": true,
         "submission_ref": "c8c99fc3f82132045106510b592d4111d4b31e0b",
         "submission_repo": "Morgan-Griffiths/c71279c880cb7d2fc2bf0cd90fca4bb8"
+      },
+      "sturm_separation": {
+        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+        "issue_number": 48,
+        "production_description": "Generated via an LMP",
+        "solved_at": "2026-05-23T20:08:29Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "f6fbbec44403ca1deb935e418096d549b3667820",
+        "submission_repo": "Morgan-Griffiths/ed35c85db9f1469c0d65d88810a4ed46"
       }
     }
   },
