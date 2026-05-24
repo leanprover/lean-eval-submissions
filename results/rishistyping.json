@@ -57,6 +57,15 @@
         "submission_ref": "a111ea0d8d4bb6b9b003d8e3484fe6bda32dd6e5",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "dirichlet_eigenvalues_eq_nat_sq": {
+        "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
+        "issue_number": 61,
+        "solved_at": "2026-05-24T17:35:20Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "86553a82ecf9821bdd72fc0e95a52c4d0d71f87e",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "dvd_card_connectedComponent_markoffGraph": {
         "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
         "issue_number": 62,
