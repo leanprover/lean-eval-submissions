@@ -129,6 +129,15 @@
         "submission_ref": "c7abe0c73a7b48149c75057189098e1623180d4a",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "oppenheim_inequality": {
+        "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
+        "issue_number": 64,
+        "solved_at": "2026-05-24T20:57:17Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "df480ead727246748657481878cdc5a580ddcd2d",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "pi1_circle_mulEquiv_int": {
         "benchmark_commit": "22ed426aa75a262d33937508336e042907886caa",
         "issue_number": 209,
