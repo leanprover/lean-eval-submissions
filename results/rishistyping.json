@@ -93,6 +93,15 @@
         "submission_ref": "43b19dd7cadd5d9f6cd9dd6af293b7f773f1b6d7",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "substInv_X_sub_X_sq_eq_catalan": {
+        "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
+        "issue_number": 52,
+        "solved_at": "2026-05-24T14:56:35Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "d4b49163f6509bda43ba53ae94540000c70db97d",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "two_plus_two": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 166,
