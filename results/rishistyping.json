@@ -2,6 +2,15 @@
   "schema_version": 1,
   "solved": {
     "Stealth Model": {
+      "brauer_character_in_cyclotomic": {
+        "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
+        "issue_number": 59,
+        "solved_at": "2026-05-24T16:06:27Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "6faa2fd24fdcf4327130da1dbcc19a311fe1c240",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "bvp_comparison": {
         "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
         "issue_number": 255,
