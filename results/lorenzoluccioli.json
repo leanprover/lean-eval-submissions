@@ -12,6 +12,16 @@
         "submission_ref": "00b32807abe0d286c4638daf888c739e1bb4b90c",
         "submission_repo": "LorenzoLuccioli/lean-eval"
       },
+      "contractibleSpace_houseWithTwoRooms": {
+        "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
+        "issue_number": 50,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-05-24T14:14:51Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "1eaafe40f94f7302c93c8590955b93bd1290b6e4",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "cyclotomic_integer_house_le_two": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 178,
