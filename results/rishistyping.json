@@ -128,6 +128,15 @@
         "submission_public": true,
         "submission_ref": "d732ef6dcf75ea68c58e3597ba30c111689612d8",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
+      "variable_binder_example": {
+        "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
+        "issue_number": 58,
+        "solved_at": "2026-05-24T16:04:22Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "5025bed3e2b9aab28dba4191fea1e4b7ae8efc94",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       }
     },
     "[submission] aegis-of-the-unit-circle-logos": {
