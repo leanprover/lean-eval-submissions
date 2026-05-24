@@ -87,6 +87,15 @@
         "submission_ref": "7b1bb00700c3b9271df041f37e26a5cc5e656251",
         "submission_repo": "rkirov/lean-eval"
       },
+      "exists_complementary_polynomial_on_unit_circle": {
+        "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
+        "issue_number": 51,
+        "solved_at": "2026-05-24T14:50:11Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "cfed2cbc06b8373b35c442f5247b852c51c933eb",
+        "submission_repo": "rkirov/lean-eval"
+      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
         "issue_number": 78,
