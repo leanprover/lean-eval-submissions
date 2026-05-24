@@ -20,6 +20,15 @@
         "submission_ref": "da19ed34ff1271b062d5a1f056b17ab1421e42dc",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "cubic_decay_asymptotic": {
+        "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
+        "issue_number": 54,
+        "solved_at": "2026-05-24T15:29:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "0d8f5783c5ee7baeff6cd1938b25309106b8e1b4",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "cyclotomic_integer_house_le_two": {
         "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
         "issue_number": 235,
