@@ -318,8 +318,8 @@ class PushTests(unittest.TestCase):
             self.assertEqual(len(seen_requests), 2)
             urls = [r["url"] for r in seen_requests]
             self.assertTrue(all("/repos/leanprover/lean-eval-audit/contents/audit/" in u for u in urls))
-            self.assertTrue(any(u.endswith("-01234567.tar.age") for u in urls))
-            self.assertTrue(any(u.endswith("-01234567.json") for u in urls))
+            self.assertTrue(any(u.endswith("alice-99-01234567.tar.age") for u in urls))
+            self.assertTrue(any(u.endswith("alice-99-01234567.json") for u in urls))
             self.assertTrue(urls[0].endswith(".tar.age"))
             self.assertTrue(urls[1].endswith(".json"))
             sidecar_body = seen_requests[1]["body"]
