@@ -200,6 +200,15 @@
         "submission_public": false,
         "submission_ref": "5025bed3e2b9aab28dba4191fea1e4b7ae8efc94",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
+      "vonNeumann_doubleCommutant_tfae": {
+        "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
+        "issue_number": 66,
+        "solved_at": "2026-05-25T01:07:23Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "e03cbce00cdc9626e0bf27bcd6546b1630ca2fb3",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       }
     },
     "[submission] aegis-of-the-unit-circle-logos": {
