@@ -59,14 +59,12 @@ def _write_submitter_workspace(
     return target
 
 
-def _write_manifest(path: pathlib.Path, problem_ids: list[str]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    blocks = []
+def _write_manifest(manifest_dir: pathlib.Path, problem_ids: list[str]) -> None:
+    manifest_dir.mkdir(parents=True, exist_ok=True)
     for pid in problem_ids:
-        blocks.append(
+        (manifest_dir / f"{pid}.toml").write_text(
             textwrap.dedent(
                 f"""\
-                [[problem]]
                 id = "{pid}"
                 title = "{pid}"
                 test = false
@@ -74,9 +72,9 @@ def _write_manifest(path: pathlib.Path, problem_ids: list[str]) -> None:
                 holes = ["{pid}"]
                 submitter = "tester"
                 """
-            )
+            ),
+            encoding="utf-8",
         )
-    path.write_text("\n".join(blocks), encoding="utf-8")
 
 
 def _fake_runner_factory(pass_ids: list[str]):
@@ -352,22 +350,22 @@ class OverlayMatchTests(unittest.TestCase):
 class EvaluateSubmissionEndToEndTests(unittest.TestCase):
     def _setup_repo_like(self, tmp_path: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path]:
         generated = tmp_path / "generated"
-        manifest = tmp_path / "manifests" / "problems.toml"
-        return generated, manifest
+        manifest_dir = tmp_path / "manifests" / "problems"
+        return generated, manifest_dir
 
     def test_single_problem_pass(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = pathlib.Path(tmp)
-            generated, manifest = self._setup_repo_like(tmp_path)
+            generated, manifest_dir = self._setup_repo_like(tmp_path)
             _write_pristine(generated, "two_plus_two")
-            _write_manifest(manifest, ["two_plus_two"])
+            _write_manifest(manifest_dir, ["two_plus_two"])
             src = tmp_path / "src"
             _write_submitter_workspace(src, ".", "two_plus_two")
             output = tmp_path / "out"
             result = ev.evaluate_submission(
                 source_dir=src,
                 generated_root=generated,
-                manifest_path=manifest,
+                manifest_dir=manifest_dir,
                 output_dir=output,
                 repo_root=tmp_path,
                 run_eval_runner=_fake_runner_factory(["two_plus_two"]),
@@ -379,10 +377,10 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
     def test_multi_problem_mixed_results(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = pathlib.Path(tmp)
-            generated, manifest = self._setup_repo_like(tmp_path)
+            generated, manifest_dir = self._setup_repo_like(tmp_path)
             _write_pristine(generated, "two_plus_two")
             _write_pristine(generated, "list_append_singleton_length")
-            _write_manifest(manifest, ["two_plus_two", "list_append_singleton_length"])
+            _write_manifest(manifest_dir, ["two_plus_two", "list_append_singleton_length"])
             src = tmp_path / "src"
             _write_submitter_workspace(src, "a", "two_plus_two")
             _write_submitter_workspace(src, "b", "list_append_singleton_length")
@@ -390,7 +388,7 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
             result = ev.evaluate_submission(
                 source_dir=src,
                 generated_root=generated,
-                manifest_path=manifest,
+                manifest_dir=manifest_dir,
                 output_dir=output,
                 repo_root=tmp_path,
                 run_eval_runner=_fake_runner_factory(["two_plus_two"]),
@@ -404,11 +402,11 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
         # actually-attempted workspaces should reach the run-eval call.
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = pathlib.Path(tmp)
-            generated, manifest = self._setup_repo_like(tmp_path)
+            generated, manifest_dir = self._setup_repo_like(tmp_path)
             problem_ids = ["alpha", "beta", "gamma", "delta", "epsilon"]
             for pid in problem_ids:
                 _write_pristine(generated, pid)
-            _write_manifest(manifest, problem_ids)
+            _write_manifest(manifest_dir, problem_ids)
             src = tmp_path / "src"
             for pid in problem_ids:
                 # All five workspaces present in the fork.
@@ -436,7 +434,7 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
             result = ev.evaluate_submission(
                 source_dir=src,
                 generated_root=generated,
-                manifest_path=manifest,
+                manifest_dir=manifest_dir,
                 output_dir=output,
                 repo_root=tmp_path,
                 run_eval_runner=runner,
@@ -448,9 +446,9 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
     def test_fork_with_no_real_submissions_explains_pristine_skip(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = pathlib.Path(tmp)
-            generated, manifest = self._setup_repo_like(tmp_path)
+            generated, manifest_dir = self._setup_repo_like(tmp_path)
             _write_pristine(generated, "two_plus_two")
-            _write_manifest(manifest, ["two_plus_two"])
+            _write_manifest(manifest_dir, ["two_plus_two"])
             src = tmp_path / "src"
             _write_submitter_workspace(
                 src, ".", "two_plus_two",
@@ -461,7 +459,7 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
                 ev.evaluate_submission(
                     source_dir=src,
                     generated_root=generated,
-                    manifest_path=manifest,
+                    manifest_dir=manifest_dir,
                     output_dir=output,
                     repo_root=tmp_path,
                     run_eval_runner=_fake_runner_factory([]),
@@ -470,9 +468,9 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
     def test_no_matches_is_hard_fail(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = pathlib.Path(tmp)
-            generated, manifest = self._setup_repo_like(tmp_path)
+            generated, manifest_dir = self._setup_repo_like(tmp_path)
             _write_pristine(generated, "two_plus_two")
-            _write_manifest(manifest, ["two_plus_two"])
+            _write_manifest(manifest_dir, ["two_plus_two"])
             src = tmp_path / "src"
             src.mkdir()
             (src / "README.md").write_text("nothing here")
@@ -481,7 +479,7 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
                 ev.evaluate_submission(
                     source_dir=src,
                     generated_root=generated,
-                    manifest_path=manifest,
+                    manifest_dir=manifest_dir,
                     output_dir=output,
                     repo_root=tmp_path,
                     run_eval_runner=_fake_runner_factory([]),
