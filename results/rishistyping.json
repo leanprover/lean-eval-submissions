@@ -75,6 +75,15 @@
         "submission_ref": "6b2e160e5b5076bcb21829227709edf5696c093c",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "exists_complementary_polynomial_on_unit_circle": {
+        "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
+        "issue_number": 76,
+        "solved_at": "2026-05-25T07:30:19Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b5e2bdea578ee42fd89a80f4622b194c56096e1a",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "exists_nonisotopic_link": {
         "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
         "issue_number": 70,
