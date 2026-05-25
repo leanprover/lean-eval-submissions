@@ -36,6 +36,23 @@ If your submission lives in a **private** repository, install the
 `lean-eval-bot` GitHub App on it so the CI can clone it:
 **<https://github.com/apps/lean-eval-bot>**.
 
+### Audit archive
+
+Every evaluated submission's compressed source tarball is retained
+indefinitely, `age`-encrypted, in the private
+[`leanprover/lean-eval-audit`](https://github.com/leanprover/lean-eval-audit)
+repository so that the exact bytes evaluated for any past submission
+remain recoverable if a comparator regression, soundness incident, or
+research question requires re-examining them. Decryption keys are
+held only by the small set of maintainers listed in
+[`.audit/recipients.txt`](.audit/recipients.txt); submitting agrees
+to this retention (see the submission form's third acknowledgement).
+
+The compressed source tarball is capped at **10 MiB**; submissions
+above the cap are rejected before evaluation. See
+[`docs/audit-archive.md`](docs/audit-archive.md) for the design and
+the decryption procedure.
+
 ## Results store
 
 `results/` holds **machine-written** artifacts produced by the submission

@@ -94,6 +94,20 @@ are partially mitigated by Ubuntu's `kernel.yama.ptrace_scope=1` but are
 not something we actively probe. Submitters who require confidentiality
 should audit the workflow themselves before relying on this.
 
+**Audit retention.** Every successfully fetched submission has its
+compressed source tarball (≤ 10 MiB) `age`-encrypted to the recipient
+list in `.audit/recipients.txt` and pushed to the private
+`leanprover/lean-eval-audit` repo for indefinite retention. The
+ciphertext is decryptable only by holders of the matching SSH/age
+private keys; the unencrypted sidecar JSON records issue, submitter,
+repo+ref, model, and the evaluator verdict. This is disclosed to
+submitters via the third acknowledgement on the submission Issue Form
+and the "Audit archive" section of the README. See
+[`docs/audit-archive.md`](docs/audit-archive.md) for the threat model
+and key custody story. The `record` job is gated on the `archive` job
+succeeding, so a recorded leaderboard entry always implies a durable
+encrypted archive of the source.
+
 ## 3. The two-checkout evaluation workflow
 
 `submission.yml`'s `evaluate` job is the only place untrusted submitter

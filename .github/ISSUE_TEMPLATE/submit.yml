@@ -86,3 +86,11 @@ body:
           required: true
         - label: I understand that only the set of solved problem IDs, along with the metadata I entered above, will be published to the public leaderboard results store.
           required: true
+        - label: |
+            I understand that an encrypted copy of the submission source
+            tree (compressed gzipped tar, ≤ 10 MiB) is retained
+            indefinitely in the private `leanprover/lean-eval-audit`
+            repository for audit purposes, decryptable only by a small
+            set of benchmark maintainers listed in `.audit/recipients.txt`.
+            See [`docs/audit-archive.md`](https://github.com/leanprover/lean-eval-submissions/blob/main/docs/audit-archive.md).
+          required: true

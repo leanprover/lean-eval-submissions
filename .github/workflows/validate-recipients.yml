@@ -1,0 +1,73 @@
+# Lints `.audit/recipients.txt` on every push and PR that touches the
+# audit-archive configuration. A malformed line here would silently
+# break the archive step of the submission workflow on the next
+# submission, after which we would also have lost the audit copy of
+# whatever submissions ran in between.
+#
+# The validator encrypts a tiny fixture to each recipient line in
+# isolation; age rejects malformed recipients at encrypt time, so a
+# successful encrypt-per-line implies every line is well-formed. We
+# do NOT verify that anyone holds the matching private key — that
+# requires a manual decrypt drill (see docs/audit-archive.md).
+name: Validate audit recipients
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.audit/recipients.txt'
+      - '.github/workflows/validate-recipients.yml'
+  pull_request:
+    paths:
+      - '.audit/recipients.txt'
+      - '.github/workflows/validate-recipients.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # actions/checkout pinned to 11bd7190 (= refs/tags/v4.2.2 as of 2026-05-04).
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Install age
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq age
+
+      - name: Validate recipients.txt
+        run: |
+          set -euo pipefail
+          RECIPIENTS=.audit/recipients.txt
+          if [ ! -f "$RECIPIENTS" ]; then
+            echo "::error::$RECIPIENTS does not exist"
+            exit 1
+          fi
+          LINE_COUNT=0
+          while IFS= read -r line; do
+            stripped=${line## }
+            stripped=${stripped%% }
+            if [ -z "$stripped" ] || [[ "$stripped" == \#* ]]; then
+              continue
+            fi
+            LINE_COUNT=$((LINE_COUNT + 1))
+            tmp=$(mktemp)
+            echo "$stripped" > "$tmp"
+            if ! printf 'probe' | age --recipients-file "$tmp" --output /dev/null 2>/tmp/age.err; then
+              echo "::error::recipient line is not a valid age recipient:"
+              echo "::error::  $stripped"
+              echo "::error::age stderr:"
+              sed 's/^/::error::  /' /tmp/age.err
+              rm -f "$tmp"
+              exit 1
+            fi
+            rm -f "$tmp"
+          done < "$RECIPIENTS"
+          if [ "$LINE_COUNT" -eq 0 ]; then
+            echo "::error::$RECIPIENTS has no recipient lines (all blank or comments)"
+            exit 1
+          fi
+          echo "validated $LINE_COUNT recipient(s)"
