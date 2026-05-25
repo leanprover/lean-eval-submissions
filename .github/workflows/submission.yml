@@ -259,7 +259,7 @@ jobs:
           python scripts/evaluate_submission.py \
             --source-dir /tmp/submission-src \
             --generated-root lean-eval/generated \
-            --manifest lean-eval/manifests/problems.toml \
+            --manifest-dir lean-eval/manifests/problems \
             --output-dir /tmp/evaluate-out \
             --repo-root lean-eval \
             --shared-packages lean-eval/.lake/packages

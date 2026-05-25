@@ -48,25 +48,25 @@ class WorkspaceMatch:
     skip_reason: str | None = None
 
 
-def _load_manifest_ids(manifest_path: pathlib.Path) -> set[str]:
-    """Read `manifests/problems.toml` and return the set of problem ids.
+def _load_manifest_ids(manifest_dir: pathlib.Path) -> set[str]:
+    """Read `manifests/problems/*.toml` and return the set of problem ids.
 
-    We parse just enough to extract `id` from each `[[problem]]` entry; full
-    validation lives in `lake exe lean-eval validate-manifest`. Mirrors what
-    `generate_projects.py:load_manifest` did before that module went away.
+    Each problem lives in its own top-level-key TOML file at
+    `manifests/problems/<id>.toml`. We parse just enough to extract `id`
+    from each file; full validation (filename-↔-id, schema, uniqueness)
+    lives in `lake exe lean-eval validate-manifest`.
     """
-    with manifest_path.open("rb") as handle:
-        data = tomllib.load(handle)
-    problems = data.get("problem", [])
-    if not problems:
-        raise EvaluateError(f"No problems found in {manifest_path}")
+    if not manifest_dir.is_dir():
+        raise EvaluateError(f"Manifest directory not found: {manifest_dir}")
     ids: set[str] = set()
-    for entry in problems:
-        if not isinstance(entry, dict):
-            continue
-        problem_id = entry.get("id")
+    for path in sorted(manifest_dir.glob("*.toml")):
+        with path.open("rb") as handle:
+            data = tomllib.load(handle)
+        problem_id = data.get("id")
         if isinstance(problem_id, str) and problem_id.strip():
             ids.add(problem_id.strip())
+    if not ids:
+        raise EvaluateError(f"No problems found in {manifest_dir}")
     return ids
 
 
@@ -571,7 +571,7 @@ def evaluate_submission(
     *,
     source_dir: pathlib.Path,
     generated_root: pathlib.Path,
-    manifest_path: pathlib.Path,
+    manifest_dir: pathlib.Path,
     output_dir: pathlib.Path,
     repo_root: pathlib.Path,
     shared_packages: pathlib.Path | None = None,
@@ -587,7 +587,7 @@ def evaluate_submission(
     repo's `.lake/packages`) that per-workspace builds can reuse instead of
     re-unpacking Mathlib for each.
     """
-    manifest_ids = _load_manifest_ids(manifest_path)
+    manifest_ids = _load_manifest_ids(manifest_dir)
     matches = detect_matches(source_dir, manifest_ids, generated_root=generated_root)
 
     overlay_records: list[dict] = []
@@ -672,7 +672,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-dir", type=pathlib.Path, required=True)
     parser.add_argument("--generated-root", type=pathlib.Path, required=True)
-    parser.add_argument("--manifest", type=pathlib.Path, required=True)
+    parser.add_argument(
+        "--manifest-dir",
+        type=pathlib.Path,
+        required=True,
+        help="Path to the manifest directory (default: lean-eval/manifests/problems).",
+    )
     parser.add_argument("--output-dir", type=pathlib.Path, required=True)
     parser.add_argument(
         "--repo-root",
@@ -709,7 +714,7 @@ def main(argv: list[str] | None = None) -> int:
         evaluate_submission(
             source_dir=args.source_dir.resolve(),
             generated_root=args.generated_root.resolve(),
-            manifest_path=args.manifest.resolve(),
+            manifest_dir=args.manifest_dir.resolve(),
             output_dir=args.output_dir.resolve(),
             repo_root=args.repo_root.resolve(),
             shared_packages=(
