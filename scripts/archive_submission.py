@@ -87,10 +87,24 @@ def _short_ref(sha: str) -> str:
     return sha[:8]
 
 
+SUBMITTER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*$")
+
+
 def _audit_path(sidecar: dict, archived_at: dt.datetime) -> str:
+    # Path layout: audit/YYYY/MM/{submitter}-{issue}-{ref8}.{tar.age,json}.
+    # Including the submitter login is what guarantees uniqueness: backfilled
+    # records carry their original `leanprover/lean-eval` issue numbers (see
+    # the submissions repo README's issue_number-provenance note), so the
+    # same integer issue can refer to two unrelated submissions from
+    # different submitters. Live records all come from this repo and have
+    # globally-unique issues, but treating them the same way means there is
+    # one path schema, not two.
+    submitter = str(sidecar["submitter"])
+    if not SUBMITTER_RE.fullmatch(submitter):
+        sys.exit(f"sidecar.submitter has unexpected shape: {submitter!r}")
     issue = int(sidecar["issue"])
     ref8 = _short_ref(str(sidecar["submission_ref"]))
-    return f"audit/{archived_at:%Y/%m}/{issue}-{ref8}"
+    return f"audit/{archived_at:%Y/%m}/{submitter}-{issue}-{ref8}"
 
 
 # ---------------------------------------------------------------------------

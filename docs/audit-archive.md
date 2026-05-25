@@ -25,8 +25,8 @@ per submission, immediately after evaluation.
 audit/
   YYYY/
     MM/
-      {issue}-{ref8}.tar.age   # age-encrypted gzipped tar of source
-      {issue}-{ref8}.json      # sidecar (issue, submitter, model, digests, verdict)
+      {submitter}-{issue}-{ref8}.tar.age   # age-encrypted gzipped tar of source
+      {submitter}-{issue}-{ref8}.json      # sidecar (issue, submitter, model, digests, verdict)
 ```
 
 The tarball is the same `source.tar.gz` that `fetch_submission.py`
@@ -66,7 +66,7 @@ Two new pieces live inside the existing `submission.yml`:
    blob SHA of the local bytes. On match, the existing upload is
    treated as success and the workflow proceeds to the sidecar upload.
    On mismatch, the push fails hard — two different submissions racing
-   into the same `audit/YYYY/MM/{issue}-{ref8}` path is an
+   into the same `audit/YYYY/MM/{submitter}-{issue}-{ref8}` path is an
    operator-investigatable collision, not something to silently
    resolve.
 
@@ -141,7 +141,7 @@ brew install age            # or: apt install age, or cargo install rage
 #    public half is in recipients.txt.
 age -d -i ~/.ssh/id_rsa \
   -o /tmp/source.tar.gz \
-  audit/2026/05/73-52c6d202.tar.age
+  audit/2026/05/GanjinZero-73-52c6d202.tar.age
 
 # 3. Verify the recovered bytes against the sidecar's plaintext SHA.
 sha256sum /tmp/source.tar.gz   # match sidecar.sha256_plaintext_tar
