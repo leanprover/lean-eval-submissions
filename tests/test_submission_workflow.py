@@ -181,6 +181,34 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # this test alongside the workflow.
         self.assertIn("10 * 1024 * 1024", self.text)
 
+    def test_archive_gated_on_audit_ciphertext_ready(self) -> None:
+        # If encrypt or the ciphertext upload fails, `archive` must NOT
+        # run — otherwise the submitter sees a misleading "evaluation
+        # did not produce results" comment instead of the correct
+        # "audit encryption failed" one.
+        self.assertIn(
+            "audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}",
+            self.text,
+            "evaluate must expose audit_ciphertext_ready as a job output",
+        )
+        self.assertIn(
+            "needs.evaluate.outputs.audit_ciphertext_ready == 'true'",
+            self.text,
+            "archive's if-condition must gate on audit_ciphertext_ready",
+        )
+        self.assertIn(
+            "needs.evaluate.outputs.audit_ciphertext_ready != 'true'",
+            self.text,
+            "notify must branch when audit_ciphertext_ready is not true",
+        )
+
+    def test_archive_reads_per_problem_verdict_from_summary(self) -> None:
+        # Per-problem records live at summary["run_eval"]["problems"];
+        # results.json is just {"passed": [ids]}. Passing --results
+        # would silently omit the verdict from every sidecar.
+        self.assertIn("--summary /tmp/results-in/summary.json", self.text)
+        self.assertNotIn("--results /tmp/results-in/results.json", self.text)
+
 
 if __name__ == "__main__":
     unittest.main()

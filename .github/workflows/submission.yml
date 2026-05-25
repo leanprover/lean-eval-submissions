@@ -65,6 +65,7 @@ jobs:
     outputs:
       fetch_succeeded: ${{ steps.fetch_status.outputs.succeeded }}
       size_within_cap: ${{ steps.size_status.outputs.within_cap }}
+      audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}
       benchmark_commit: ${{ steps.benchmark.outputs.sha }}
     steps:
       # This repo (lean-eval-submissions): supplies the pipeline scripts.
@@ -229,6 +230,7 @@ jobs:
             --output-dir /tmp/audit-encrypt
 
       - name: Upload audit ciphertext artifact
+        id: upload_audit
         if: steps.encrypt.outcome == 'success'
         # actions/upload-artifact pinned to ea165f8d (= refs/tags/v4.6.2 as of 2026-05-04).
         # Safe to upload on a public repo because the artifact contains
@@ -244,6 +246,22 @@ jobs:
             /tmp/audit-encrypt/sidecar.partial.json
           if-no-files-found: error
           retention-days: 7
+
+      - name: Record audit-ciphertext readiness for downstream jobs
+        id: audit_status
+        if: always()
+        run: |
+          # `archive` and `notify` both branch on this. Without it, an
+          # encrypt or artifact-upload failure would make `archive` start,
+          # fail at download-artifact, and the submitter would see a
+          # generic "evaluation did not produce results" message instead
+          # of the correct "audit encryption failed" one.
+          if [ "${{ steps.encrypt.outcome }}" = "success" ] \
+             && [ "${{ steps.upload_audit.outcome }}" = "success" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Free disk space for Mathlib cache
         # Standard runners ship with ~14GB free; Mathlib unpacked is
@@ -375,6 +393,7 @@ jobs:
       always()
       && needs.evaluate.outputs.fetch_succeeded == 'true'
       && needs.evaluate.outputs.size_within_cap == 'true'
+      && needs.evaluate.outputs.audit_ciphertext_ready == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -425,16 +444,19 @@ jobs:
           ARCHIVER_TOKEN: ${{ steps.archiver_token.outputs.token }}
         run: |
           set -euo pipefail
-          RESULTS_FLAG=()
-          if [ -f /tmp/results-in/results.json ]; then
-            RESULTS_FLAG+=(--results /tmp/results-in/results.json)
+          # Per-problem evaluator verdict lives in summary.json under
+          # `run_eval.problems`, not in results.json (which is just
+          # {"passed": [ids]}). See scripts/evaluate_submission.py.
+          SUMMARY_FLAG=()
+          if [ -f /tmp/results-in/summary.json ]; then
+            SUMMARY_FLAG+=(--summary /tmp/results-in/summary.json)
           fi
           python scripts/archive_submission.py push \
             --ciphertext /tmp/audit-in/source.tar.gz.age \
             --sidecar /tmp/audit-in/sidecar.partial.json \
             --benchmark-commit "${{ needs.evaluate.outputs.benchmark_commit }}" \
             --workflow-run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            "${RESULTS_FLAG[@]}"
+            "${SUMMARY_FLAG[@]}"
 
   record:
     # Now gated on `archive` as well: if the audit archival did not
@@ -660,7 +682,11 @@ jobs:
       always()
       && needs.evaluate.outputs.fetch_succeeded == 'true'
       && needs.evaluate.outputs.size_within_cap == 'true'
-      && (needs.archive.result != 'success' || needs.record.result != 'success')
+      && (
+        needs.evaluate.outputs.audit_ciphertext_ready != 'true'
+        || needs.archive.result != 'success'
+        || needs.record.result != 'success'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -672,8 +698,15 @@ jobs:
           EVALUATE_RESULT: ${{ needs.evaluate.result }}
           ARCHIVE_RESULT: ${{ needs.archive.result }}
           RECORD_RESULT: ${{ needs.record.result }}
+          # Audit-encrypt failure also fails the evaluate job, so check
+          # it first — otherwise the submitter would see "Submission.lean
+          # failed to compile" for what was really an infrastructure
+          # failure unrelated to their proof.
+          AUDIT_CIPHERTEXT_READY: ${{ needs.evaluate.outputs.audit_ciphertext_ready }}
         run: |
-          if [ "$EVALUATE_RESULT" != "success" ]; then
+          if [ "$AUDIT_CIPHERTEXT_READY" != "true" ]; then
+            BODY="❌ Audit encryption of the submission did not complete; the submission was not evaluated and the leaderboard was not updated. An operator will need to investigate. See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          elif [ "$EVALUATE_RESULT" != "success" ]; then
             BODY="❌ Submission evaluation did not produce results (evaluate job: $EVALUATE_RESULT). The most common cause is that \`Submission.lean\` failed to compile. See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           elif [ "$ARCHIVE_RESULT" != "success" ]; then
             BODY="❌ Audit archival did not complete (archive job: $ARCHIVE_RESULT); the leaderboard was not updated. An operator will need to investigate. See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

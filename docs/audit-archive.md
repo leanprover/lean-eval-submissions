@@ -52,10 +52,31 @@ Two new pieces live inside the existing `submission.yml`:
 2. **Archive job**, runs after `evaluate`. Mints an installation token
    for the `lean-eval-archiver` GitHub App (scoped only to
    `lean-eval-audit`), downloads the ciphertext + sidecar artifact,
-   merges in the evaluator verdict from `submission-results`, and
-   uploads both objects via the GitHub Contents API. `record` (the
-   leaderboard updater) is gated on this job succeeding: if archive
-   fails, no leaderboard update happens.
+   merges in the per-problem evaluator verdict from
+   `summary.json["run_eval"]["problems"]` (the raw output of
+   `lake exe lean-eval run-eval --json`), and uploads both objects via
+   the GitHub Contents API. `record` (the leaderboard updater) is
+   gated on this job succeeding: if archive fails, no leaderboard
+   update happens.
+
+   The Contents API upload is **idempotent**. A workflow rerun after a
+   partial failure that uploaded the ciphertext but not the sidecar
+   encounters the existing ciphertext at the predicted path; the
+   script fetches the file's Git blob SHA and compares it with the
+   blob SHA of the local bytes. On match, the existing upload is
+   treated as success and the workflow proceeds to the sidecar upload.
+   On mismatch, the push fails hard — two different submissions racing
+   into the same `audit/YYYY/MM/{issue}-{ref8}` path is an
+   operator-investigatable collision, not something to silently
+   resolve.
+
+   `evaluate` exposes `audit_ciphertext_ready` as a job output, set to
+   `'true'` only when both the encrypt step and the ciphertext-artifact
+   upload step succeeded. `archive` gates on this output; `notify`
+   branches on it so an audit-encryption failure produces an
+   "audit encryption failed" comment rather than the misleading
+   "Submission.lean failed to compile" message that would otherwise
+   fire from the generic evaluate-failure path.
 
 ## Threat model
 

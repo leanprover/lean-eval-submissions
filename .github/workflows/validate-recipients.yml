@@ -39,35 +39,53 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y -qq age
 
       - name: Validate recipients.txt
+        # Driven from Python so the line-stripping rules match
+        # scripts/archive_submission.py's `_recipient_lines` exactly
+        # (`.strip()` over arbitrary leading/trailing whitespace, including
+        # tabs and multiple spaces). A bash `${var## }` equivalent only
+        # strips one literal space and silently passes through tab-indented
+        # lines, which would diverge from what the live workflow accepts.
         run: |
-          set -euo pipefail
-          RECIPIENTS=.audit/recipients.txt
-          if [ ! -f "$RECIPIENTS" ]; then
-            echo "::error::$RECIPIENTS does not exist"
-            exit 1
-          fi
-          LINE_COUNT=0
-          while IFS= read -r line; do
-            stripped=${line## }
-            stripped=${stripped%% }
-            if [ -z "$stripped" ] || [[ "$stripped" == \#* ]]; then
-              continue
-            fi
-            LINE_COUNT=$((LINE_COUNT + 1))
-            tmp=$(mktemp)
-            echo "$stripped" > "$tmp"
-            if ! printf 'probe' | age --recipients-file "$tmp" --output /dev/null 2>/tmp/age.err; then
-              echo "::error::recipient line is not a valid age recipient:"
-              echo "::error::  $stripped"
-              echo "::error::age stderr:"
-              sed 's/^/::error::  /' /tmp/age.err
-              rm -f "$tmp"
-              exit 1
-            fi
-            rm -f "$tmp"
-          done < "$RECIPIENTS"
-          if [ "$LINE_COUNT" -eq 0 ]; then
-            echo "::error::$RECIPIENTS has no recipient lines (all blank or comments)"
-            exit 1
-          fi
-          echo "validated $LINE_COUNT recipient(s)"
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import subprocess
+          import sys
+          import tempfile
+
+          recipients_path = pathlib.Path(".audit/recipients.txt")
+          if not recipients_path.is_file():
+              print(f"::error::{recipients_path} does not exist")
+              sys.exit(1)
+          line_count = 0
+          for raw in recipients_path.read_text(encoding="utf-8").splitlines():
+              stripped = raw.strip()
+              if not stripped or stripped.startswith("#"):
+                  continue
+              line_count += 1
+              # Validate each recipient by encrypting a fixture to it
+              # in isolation: age rejects malformed recipients at encrypt
+              # time, so success-per-line implies every line is well-formed.
+              with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tf:
+                  tf.write(stripped + "\n")
+                  rec_path = tf.name
+              try:
+                  proc = subprocess.run(
+                      ["age", "--recipients-file", rec_path, "--output", "/dev/null"],
+                      input=b"probe",
+                      capture_output=True,
+                  )
+              finally:
+                  os.unlink(rec_path)
+              if proc.returncode != 0:
+                  print("::error::recipient line is not a valid age recipient:")
+                  print(f"::error::  {stripped}")
+                  print("::error::age stderr:")
+                  for ln in proc.stderr.decode("utf-8", errors="replace").splitlines():
+                      print(f"::error::  {ln}")
+                  sys.exit(1)
+          if line_count == 0:
+              print(f"::error::{recipients_path} has no recipient lines (all blank or comments)")
+              sys.exit(1)
+          print(f"validated {line_count} recipient(s)")
+          PY
