@@ -48,13 +48,20 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         ]
         self.assertEqual(
             job_headers,
-            ["  evaluate:", "  record:", "  notify:"],
-            "expected exactly the evaluate/record/notify jobs",
+            ["  evaluate:", "  archive:", "  record:", "  notify:"],
+            "expected exactly the evaluate/archive/record/notify jobs",
         )
         self.assertNotIn(
             "name: submission-source",
             self.text,
             "the submission source must never be uploaded as an artifact",
+        )
+        # The audit-archive design only ever uploads the encrypted
+        # ciphertext, never the plaintext source.
+        self.assertIn(
+            "name: submission-audit-ciphertext",
+            self.text,
+            "the audit-archive ciphertext artifact must exist",
         )
 
     def test_both_checkouts_disable_persisted_credentials(self) -> None:
@@ -134,6 +141,73 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn(
             "repos/leanprover/lean-eval-leaderboard/dispatches", self.text
         )
+
+    def test_archive_token_is_step_scoped(self) -> None:
+        # Mirrors the APP_INSTALLATION_TOKEN invariant: the
+        # lean-eval-archiver installation token (write access to
+        # leanprover/lean-eval-audit) must appear in exactly one
+        # step-scoped env block, never at job level.
+        self.assertEqual(
+            self.text.count("ARCHIVER_TOKEN:"),
+            1,
+            "the archiver token must be set in exactly one (step-scoped) env block",
+        )
+
+    def test_record_waits_on_archive(self) -> None:
+        # Policy: a recorded leaderboard entry implies a durable
+        # archived copy of the source. The `record` job therefore has
+        # to depend on `archive`, so that an archive failure suppresses
+        # the leaderboard write.
+        self.assertIn(
+            "needs: [evaluate, archive]",
+            self.text,
+            "record must depend on both evaluate and archive",
+        )
+
+    def test_archive_uses_archiver_app_scoped_to_audit_repo(self) -> None:
+        self.assertIn("LEAN_EVAL_ARCHIVER_APP_ID", self.text)
+        self.assertIn("LEAN_EVAL_ARCHIVER_PRIVATE_KEY", self.text)
+        # The installation token must be scoped to the audit repo only,
+        # not to the entire org. `actions/create-github-app-token`
+        # honours `repositories:` to narrow the scope.
+        self.assertRegex(
+            self.text,
+            r"repositories:\s*lean-eval-audit\b",
+            "the archiver token must be scoped to lean-eval-audit only",
+        )
+
+    def test_size_cap_is_ten_mib(self) -> None:
+        # Surface the cap as a literal so a silent change has to update
+        # this test alongside the workflow.
+        self.assertIn("10 * 1024 * 1024", self.text)
+
+    def test_archive_gated_on_audit_ciphertext_ready(self) -> None:
+        # If encrypt or the ciphertext upload fails, `archive` must NOT
+        # run — otherwise the submitter sees a misleading "evaluation
+        # did not produce results" comment instead of the correct
+        # "audit encryption failed" one.
+        self.assertIn(
+            "audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}",
+            self.text,
+            "evaluate must expose audit_ciphertext_ready as a job output",
+        )
+        self.assertIn(
+            "needs.evaluate.outputs.audit_ciphertext_ready == 'true'",
+            self.text,
+            "archive's if-condition must gate on audit_ciphertext_ready",
+        )
+        self.assertIn(
+            "needs.evaluate.outputs.audit_ciphertext_ready != 'true'",
+            self.text,
+            "notify must branch when audit_ciphertext_ready is not true",
+        )
+
+    def test_archive_reads_per_problem_verdict_from_summary(self) -> None:
+        # Per-problem records live at summary["run_eval"]["problems"];
+        # results.json is just {"passed": [ids]}. Passing --results
+        # would silently omit the verdict from every sidecar.
+        self.assertIn("--summary /tmp/results-in/summary.json", self.text)
+        self.assertNotIn("--results /tmp/results-in/results.json", self.text)
 
 
 if __name__ == "__main__":

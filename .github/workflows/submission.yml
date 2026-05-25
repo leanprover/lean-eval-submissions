@@ -64,6 +64,8 @@ jobs:
     # submission was scored against; the `record` job records it.
     outputs:
       fetch_succeeded: ${{ steps.fetch_status.outputs.succeeded }}
+      size_within_cap: ${{ steps.size_status.outputs.within_cap }}
+      audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}
       benchmark_commit: ${{ steps.benchmark.outputs.sha }}
     steps:
       # This repo (lean-eval-submissions): supplies the pipeline scripts.
@@ -166,6 +168,100 @@ jobs:
             --repo "${{ github.repository }}" \
             --body "❌ Submission fetch failed. See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. If your submission repo is private, make sure the \`lean-eval-bot\` GitHub App is installed on it."
           gh issue close ${{ github.event.issue.number }} --repo "${{ github.repository }}" --reason "not planned" || true
+
+      # Audit-archive integration. The compressed source tar produced by
+      # fetch_submission.py is capped at 10 MiB (see docs/audit-archive.md
+      # > "Size cap"), then encrypted with `age` against
+      # `.audit/recipients.txt` and uploaded as a ciphertext-only artifact
+      # for the `archive` job to push to leanprover/lean-eval-audit.
+      #
+      # Order: BEFORE the expensive lean/landrun/comparator setup so that
+      # a size-cap failure rejects the submission fast. The encrypted
+      # artifact is safe to upload even on a public repo because the
+      # plaintext source never appears in it (see SECURITY.md and the
+      # leading comment of this file for why the plaintext source must
+      # NEVER be uploaded as an artifact).
+      - name: Check submission size cap
+        id: size_check
+        if: steps.fetch.outcome == 'success'
+        run: |
+          SIZE_BYTES=$(stat -c %s /tmp/fetch-out/source.tar.gz)
+          CAP_BYTES=$((10 * 1024 * 1024))
+          echo "submission tarball size: ${SIZE_BYTES} bytes (cap: ${CAP_BYTES} bytes / 10 MiB)"
+          if [ "$SIZE_BYTES" -gt "$CAP_BYTES" ]; then
+            echo "::error::source tarball is ${SIZE_BYTES} bytes, over the ${CAP_BYTES}-byte (10 MiB) audit cap"
+            exit 1
+          fi
+
+      - name: Record size-cap status for downstream jobs
+        id: size_status
+        if: always()
+        run: |
+          if [ "${{ steps.size_check.outcome }}" = "success" ]; then
+            echo "within_cap=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "within_cap=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment on size cap failure
+        if: failure() && steps.size_check.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SIZE_KB=$(( $(stat -c %s /tmp/fetch-out/source.tar.gz) / 1024 ))
+          gh issue comment ${{ github.event.issue.number }} \
+            --repo "${{ github.repository }}" \
+            --body "❌ Submission rejected: the compressed source tarball is ${SIZE_KB} KiB, over the 10240 KiB (10 MiB) audit-archive cap. Every evaluated submission is retained in encrypted form for audit (see [docs/audit-archive.md](https://github.com/${{ github.repository }}/blob/main/docs/audit-archive.md)); the cap keeps that archive bounded. Trim build artifacts, large fixtures, or unrelated files from your submission repo before resubmitting."
+          gh issue close ${{ github.event.issue.number }} --repo "${{ github.repository }}" --reason "not planned" || true
+
+      - name: Install age (audit encryption)
+        if: steps.size_check.outcome == 'success'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq age
+
+      - name: Encrypt submission for audit archive
+        id: encrypt
+        if: steps.size_check.outcome == 'success'
+        run: |
+          mkdir -p /tmp/audit-encrypt
+          python scripts/archive_submission.py encrypt \
+            --source-tar /tmp/fetch-out/source.tar.gz \
+            --metadata /tmp/fetch-out/metadata.json \
+            --recipients .audit/recipients.txt \
+            --output-dir /tmp/audit-encrypt
+
+      - name: Upload audit ciphertext artifact
+        id: upload_audit
+        if: steps.encrypt.outcome == 'success'
+        # actions/upload-artifact pinned to ea165f8d (= refs/tags/v4.6.2 as of 2026-05-04).
+        # Safe to upload on a public repo because the artifact contains
+        # only the age-encrypted ciphertext and the unencrypted sidecar
+        # metadata, never the plaintext source. See docs/audit-archive.md
+        # > "Threat model" and the SECURITY.md note that forbids uploading
+        # the plaintext source.
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: submission-audit-ciphertext
+          path: |
+            /tmp/audit-encrypt/source.tar.gz.age
+            /tmp/audit-encrypt/sidecar.partial.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Record audit-ciphertext readiness for downstream jobs
+        id: audit_status
+        if: always()
+        run: |
+          # `archive` and `notify` both branch on this. Without it, an
+          # encrypt or artifact-upload failure would make `archive` start,
+          # fail at download-artifact, and the submitter would see a
+          # generic "evaluation did not produce results" message instead
+          # of the correct "audit encryption failed" one.
+          if [ "${{ steps.encrypt.outcome }}" = "success" ] \
+             && [ "${{ steps.upload_audit.outcome }}" = "success" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Free disk space for Mathlib cache
         # Standard runners ship with ~14GB free; Mathlib unpacked is
@@ -278,8 +374,96 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  record:
+  archive:
+    # Pushes the encrypted submission tarball + sidecar JSON to
+    # leanprover/lean-eval-audit using the `lean-eval-archiver` GitHub
+    # App. Runs on a fresh runner — the archiver's write-capable
+    # installation token must not be co-resident with untrusted Lean
+    # elaboration. See docs/audit-archive.md > "Threat model".
+    #
+    # `if: always()` gated on the two evaluate outputs: archive runs
+    # whenever the source was successfully fetched AND was within the
+    # size cap, even if the evaluation step itself later failed (the
+    # ciphertext artifact will exist; archiving the source is still
+    # required for audit). On fetch-failure or size-cap-failure, archive
+    # is skipped and the relevant in-job commenter has already explained
+    # the rejection to the submitter.
     needs: evaluate
+    if: |
+      always()
+      && needs.evaluate.outputs.fetch_succeeded == 'true'
+      && needs.evaluate.outputs.size_within_cap == 'true'
+      && needs.evaluate.outputs.audit_ciphertext_ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      # This repo (lean-eval-submissions): supplies scripts/archive_submission.py.
+      # actions/checkout pinned to 11bd7190 (= refs/tags/v4.2.2 as of 2026-05-04).
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      # actions/setup-python pinned to a26af69b (= refs/tags/v5.6.0 as of 2026-05-04).
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11.10'
+
+      # actions/download-artifact pinned to d3f86a10 (= refs/tags/v4.3.0 as of 2026-05-04).
+      # Ciphertext artifact is required: archive cannot proceed without it.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: submission-audit-ciphertext
+          path: /tmp/audit-in
+
+      # Results artifact is optional: if evaluate failed mid-run the
+      # results.json may not have been uploaded, but the source archive
+      # should still be recorded (with sidecar.evaluator_verdict omitted).
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        id: results_download
+        continue-on-error: true
+        with:
+          name: submission-results
+          path: /tmp/results-in
+
+      - name: Mint lean-eval-archiver installation token
+        id: archiver_token
+        # actions/create-github-app-token pinned to d72941d7 (= refs/tags/v1 as of 2026-05-04).
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547
+        with:
+          app-id: ${{ secrets.LEAN_EVAL_ARCHIVER_APP_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_ARCHIVER_PRIVATE_KEY }}
+          owner: leanprover
+          repositories: lean-eval-audit
+
+      - name: Push to lean-eval-audit
+        env:
+          # Step-scoped: never in the env of any other step in this job.
+          # Mirrors the lean-eval-bot token scoping pattern in `evaluate`.
+          ARCHIVER_TOKEN: ${{ steps.archiver_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          # Per-problem evaluator verdict lives in summary.json under
+          # `run_eval.problems`, not in results.json (which is just
+          # {"passed": [ids]}). See scripts/evaluate_submission.py.
+          SUMMARY_FLAG=()
+          if [ -f /tmp/results-in/summary.json ]; then
+            SUMMARY_FLAG+=(--summary /tmp/results-in/summary.json)
+          fi
+          python scripts/archive_submission.py push \
+            --ciphertext /tmp/audit-in/source.tar.gz.age \
+            --sidecar /tmp/audit-in/sidecar.partial.json \
+            --benchmark-commit "${{ needs.evaluate.outputs.benchmark_commit }}" \
+            --workflow-run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            "${SUMMARY_FLAG[@]}"
+
+  record:
+    # Now gated on `archive` as well: if the audit archival did not
+    # complete, the leaderboard must not advance either. The two
+    # mechanisms are independent, but our policy is that a recorded
+    # leaderboard entry implies a durable archived copy of the source.
+    needs: [evaluate, archive]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -482,15 +666,27 @@ jobs:
             --repo "${{ github.repository }}" \
             --reason "completed"
 
-  # Catches the case where fetch succeeded but the pipeline did not
-  # complete cleanly — most often the evaluation steps failing because
-  # the submitter's Submission.lean did not compile, or the leaderboard
+  # Catches the case where fetch succeeded AND the size cap passed but
+  # the pipeline did not complete cleanly — most often the evaluation
+  # steps failing because the submitter's Submission.lean did not
+  # compile, the audit-archive push failing, or the leaderboard
   # `record` job failing. Without this, the submitter sees no comment.
-  # Gated on `evaluate.outputs.fetch_succeeded` so we do NOT duplicate
-  # the in-job fetch-failure comment.
+  #
+  # Gated on `fetch_succeeded` AND `size_within_cap` so we do NOT
+  # duplicate the in-job fetch-failure comment or the size-cap-failure
+  # comment (those rejection paths each have their own dedicated
+  # commenter step in the evaluate job).
   notify:
-    needs: [evaluate, record]
-    if: always() && needs.evaluate.outputs.fetch_succeeded == 'true' && needs.record.result != 'success'
+    needs: [evaluate, archive, record]
+    if: |
+      always()
+      && needs.evaluate.outputs.fetch_succeeded == 'true'
+      && needs.evaluate.outputs.size_within_cap == 'true'
+      && (
+        needs.evaluate.outputs.audit_ciphertext_ready != 'true'
+        || needs.archive.result != 'success'
+        || needs.record.result != 'success'
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -500,12 +696,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVALUATE_RESULT: ${{ needs.evaluate.result }}
+          ARCHIVE_RESULT: ${{ needs.archive.result }}
           RECORD_RESULT: ${{ needs.record.result }}
+          # Audit-encrypt failure also fails the evaluate job, so check
+          # it first — otherwise the submitter would see "Submission.lean
+          # failed to compile" for what was really an infrastructure
+          # failure unrelated to their proof.
+          AUDIT_CIPHERTEXT_READY: ${{ needs.evaluate.outputs.audit_ciphertext_ready }}
         run: |
-          if [ "$EVALUATE_RESULT" = "success" ]; then
-            BODY="❌ Recording the submission to the leaderboard did not complete (record job: $RECORD_RESULT). See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          else
+          if [ "$AUDIT_CIPHERTEXT_READY" != "true" ]; then
+            BODY="❌ Audit encryption of the submission did not complete; the submission was not evaluated and the leaderboard was not updated. An operator will need to investigate. See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          elif [ "$EVALUATE_RESULT" != "success" ]; then
             BODY="❌ Submission evaluation did not produce results (evaluate job: $EVALUATE_RESULT). The most common cause is that \`Submission.lean\` failed to compile. See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          elif [ "$ARCHIVE_RESULT" != "success" ]; then
+            BODY="❌ Audit archival did not complete (archive job: $ARCHIVE_RESULT); the leaderboard was not updated. An operator will need to investigate. See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          else
+            BODY="❌ Recording the submission to the leaderboard did not complete (record job: $RECORD_RESULT). See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           fi
           gh issue comment ${{ github.event.issue.number }} \
             --repo "${{ github.repository }}" \

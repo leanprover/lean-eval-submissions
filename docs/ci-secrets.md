@@ -16,6 +16,7 @@ is unrelated to this pipeline.
 | --- | --- | --- | --- |
 | `lean-eval-bot` | GitHub App | `LEAN_EVAL_BOT_APP_ID`, `LEAN_EVAL_BOT_PRIVATE_KEY` | `submission.yml` (fetch) |
 | `lean-eval-recorder` | GitHub App | `LEAN_EVAL_RECORDER_APP_ID`, `LEAN_EVAL_RECORDER_PRIVATE_KEY` | `submission.yml` (record) |
+| `lean-eval-archiver` | GitHub App | `LEAN_EVAL_ARCHIVER_APP_ID`, `LEAN_EVAL_ARCHIVER_PRIVATE_KEY` | `submission.yml` (archive) |
 | `LEADERBOARD_WRITE_TOKEN` | Fine-grained PAT | `LEADERBOARD_WRITE_TOKEN` | `submission.yml` (leaderboard redeploy dispatch) |
 | Ruleset `main protection` | Repository Ruleset | (config in this file, applied via API) | branch protection on `main` |
 
@@ -147,6 +148,74 @@ workflow has the app's secrets.
    ```
 7. Add the App ID to the `main` ruleset's bypass list (see Ruleset
    section below).
+
+## GitHub App: `lean-eval-archiver`
+
+Used by [`.github/workflows/submission.yml`](../.github/workflows/submission.yml)
+to push `age`-encrypted submission tarballs and unencrypted metadata
+sidecars to [`leanprover/lean-eval-audit`](https://github.com/leanprover/lean-eval-audit).
+See [`docs/audit-archive.md`](audit-archive.md) for the design.
+
+### App settings
+
+- Owner account: `kim-em` (User account).
+- Webhook: deactivated.
+- Repository permissions:
+  - `Contents: Read and write`
+- Where can this GitHub App be installed: **Only on this account**.
+- Installed on: `leanprover/lean-eval-audit` only (single-repo
+  installation, scoped via `repositories: lean-eval-audit` in the
+  workflow's `actions/create-github-app-token` step).
+
+This is a **distinct App from `lean-eval-bot` and `lean-eval-recorder`**,
+on purpose:
+
+- `lean-eval-bot` is installed on arbitrary contributor repositories so
+  it must stay `Contents: Read` only — bumping it to write would silently
+  expand the trust boundary for every submitter who installed it.
+- `lean-eval-recorder` writes the leaderboard results store, a public
+  repo; the audit archive is a private repo with a different access
+  policy. Keeping the apps separate means an audit-archive compromise
+  cannot also rewrite the leaderboard, and vice versa.
+
+### Repository secrets (in `leanprover/lean-eval-submissions`)
+
+- `LEAN_EVAL_ARCHIVER_APP_ID` — the App ID number.
+- `LEAN_EVAL_ARCHIVER_PRIVATE_KEY` — the full PEM contents of a private
+  key generated for the app.
+
+### Where used
+
+[`.github/workflows/submission.yml`](../.github/workflows/submission.yml),
+in the `Mint lean-eval-archiver installation token` step of the
+`archive` job. The minted token authenticates the
+`scripts/archive_submission.py push` invocation, which writes one
+ciphertext file and one sidecar JSON to `lean-eval-audit` via the
+GitHub Contents API.
+
+The `archive` job runs on a separate runner from the one that elaborates
+untrusted Lean (the `evaluate` job), so the write-capable installation
+token is never co-resident with an attacker-influenced process. See
+[`docs/audit-archive.md`](audit-archive.md) > "Threat model".
+
+### Reconstruction from scratch
+
+1. As the desired app owner, visit <https://github.com/settings/apps/new>.
+2. Fill in:
+   - Name: `lean-eval-archiver`
+   - Homepage URL: `https://github.com/leanprover/lean-eval-audit`
+   - Webhook → Active: unchecked
+   - Repository permissions → Contents: Read and write (everything else
+     stays "No access")
+   - Where can this GitHub App be installed: **Only on this account**
+3. Save → record the App ID.
+4. Generate a private key, download the `.pem`.
+5. Install the app on `leanprover/lean-eval-audit` only.
+6. Set the secrets:
+   ```bash
+   gh secret set LEAN_EVAL_ARCHIVER_APP_ID -R leanprover/lean-eval-submissions < <(printf '%s' "<APP_ID>")
+   gh secret set LEAN_EVAL_ARCHIVER_PRIVATE_KEY -R leanprover/lean-eval-submissions < path/to/key.pem
+   ```
 
 ## PAT: `LEADERBOARD_WRITE_TOKEN`
 

@@ -1,0 +1,91 @@
+# Lints `.audit/recipients.txt` on every push and PR that touches the
+# audit-archive configuration. A malformed line here would silently
+# break the archive step of the submission workflow on the next
+# submission, after which we would also have lost the audit copy of
+# whatever submissions ran in between.
+#
+# The validator encrypts a tiny fixture to each recipient line in
+# isolation; age rejects malformed recipients at encrypt time, so a
+# successful encrypt-per-line implies every line is well-formed. We
+# do NOT verify that anyone holds the matching private key — that
+# requires a manual decrypt drill (see docs/audit-archive.md).
+name: Validate audit recipients
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.audit/recipients.txt'
+      - '.github/workflows/validate-recipients.yml'
+  pull_request:
+    paths:
+      - '.audit/recipients.txt'
+      - '.github/workflows/validate-recipients.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # actions/checkout pinned to 11bd7190 (= refs/tags/v4.2.2 as of 2026-05-04).
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+
+      - name: Install age
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq age
+
+      - name: Validate recipients.txt
+        # Driven from Python so the line-stripping rules match
+        # scripts/archive_submission.py's `_recipient_lines` exactly
+        # (`.strip()` over arbitrary leading/trailing whitespace, including
+        # tabs and multiple spaces). A bash `${var## }` equivalent only
+        # strips one literal space and silently passes through tab-indented
+        # lines, which would diverge from what the live workflow accepts.
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import subprocess
+          import sys
+          import tempfile
+
+          recipients_path = pathlib.Path(".audit/recipients.txt")
+          if not recipients_path.is_file():
+              print(f"::error::{recipients_path} does not exist")
+              sys.exit(1)
+          line_count = 0
+          for raw in recipients_path.read_text(encoding="utf-8").splitlines():
+              stripped = raw.strip()
+              if not stripped or stripped.startswith("#"):
+                  continue
+              line_count += 1
+              # Validate each recipient by encrypting a fixture to it
+              # in isolation: age rejects malformed recipients at encrypt
+              # time, so success-per-line implies every line is well-formed.
+              with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as tf:
+                  tf.write(stripped + "\n")
+                  rec_path = tf.name
+              try:
+                  proc = subprocess.run(
+                      ["age", "--recipients-file", rec_path, "--output", "/dev/null"],
+                      input=b"probe",
+                      capture_output=True,
+                  )
+              finally:
+                  os.unlink(rec_path)
+              if proc.returncode != 0:
+                  print("::error::recipient line is not a valid age recipient:")
+                  print(f"::error::  {stripped}")
+                  print("::error::age stderr:")
+                  for ln in proc.stderr.decode("utf-8", errors="replace").splitlines():
+                      print(f"::error::  {ln}")
+                  sys.exit(1)
+          if line_count == 0:
+              print(f"::error::{recipients_path} has no recipient lines (all blank or comments)")
+              sys.exit(1)
+          print(f"validated {line_count} recipient(s)")
+          PY

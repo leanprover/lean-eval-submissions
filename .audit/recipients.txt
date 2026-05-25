@@ -1,0 +1,21 @@
+# Recipients for the lean-eval audit archive.
+#
+# Each non-comment line is an age recipient. age supports both native
+# X25519 recipients (`age1...`) and SSH public keys (`ssh-rsa` ≥ 2048
+# bits, `ssh-ed25519`). The submission workflow runs:
+#
+#   age --recipients-file .audit/recipients.txt --output X.age X
+#
+# on every submission, so any holder of a corresponding private key
+# can decrypt all past and future archived submissions. Add or remove
+# recipients via PR; the validate-recipients workflow lints each
+# non-comment line.
+#
+# To rotate keys: add the new recipient on its own line, land the PR,
+# and from then on new submissions are encrypted to the union of old
+# and new. Old ciphertexts remain decryptable by their original
+# recipients only; re-encrypting historical entries is a manual
+# operation, not done automatically.
+
+# Kim Morrison (@kim-em) -- GitHub key id 125797072.
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC25/TA+s6ERpIoF+SmlrjKqtfjkfqBOAVwnfhSKGkZ7s9a/DqxB+jxVCX7u8EFBZPydh//tv6kaSeVksMeyagt0+HCq1SUad7aY0exk9jp5usNkrpQqsBsvgILzE/inp5rAjCOhsuJCurpjoY8h27cmOIk8uuE6KGzBKzvarIhgaf7t/wvi3Mrjmps9WkfjepDQTs/6POL0Kwfvu3MwfFu7dee/68Il6Skk/pbBY0MMEb0seIx6aIN4f5eARQVj+fz/+NgLfXQ46FXA1kkDSf40x7H4PpDp3UhKegnTsObfo2mA2oDKb5QncCxied2zqEAlp7xj18GqxxqCd8lrdPB
