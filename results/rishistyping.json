@@ -120,6 +120,15 @@
         "submission_ref": "44b59c1711e473522dd787ee41c0dedea09d4c1a",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
+        "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
+        "issue_number": 65,
+        "solved_at": "2026-05-25T00:45:01Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "2897d321abc278987c34e3e022b3d6f9531fdbb2",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "mulCayley_connected_iff_closure_eq_top": {
         "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
         "issue_number": 30,
