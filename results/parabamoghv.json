@@ -2,6 +2,16 @@
   "schema_version": 1,
   "solved": {
     "Aristotle (Harmonic)": {
+      "brauer_fowler": {
+        "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
+        "issue_number": 103,
+        "production_description": "Auto-formalized by Aristotle",
+        "solved_at": "2026-05-26T22:18:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "03a356c462f76d0244af5b2e9e1aa00b21a3004e",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "symAction_range_eq_centralizer_glAction": {
         "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
         "issue_number": 220,
