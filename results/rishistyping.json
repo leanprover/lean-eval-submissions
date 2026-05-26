@@ -165,6 +165,15 @@
         "submission_ref": "65fb96fcf629eddec9738329684dc59550bcd51d",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "kakutani_fixed_point": {
+        "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
+        "issue_number": 101,
+        "solved_at": "2026-05-26T19:07:06Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "8a5a6c1379ede05ad0faf6351c74a073276e039b",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "linear_ode_asymptotic_stability": {
         "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
         "issue_number": 63,
