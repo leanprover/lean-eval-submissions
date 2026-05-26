@@ -269,6 +269,16 @@
         "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "schauder_fixed_point": {
+        "benchmark_commit": "d27268c592bbedca0d60ecd361baeecb72e6d45d",
+        "issue_number": 90,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-05-26T10:08:09Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "e3ab99a7ffd1ae258b28da8903003eed7ec2d5c5",
+        "submission_repo": "GanjinZero/schauder_fixed_point"
+      },
       "sturm": {
         "benchmark_commit": "dc0a77053f401986e3f8431d713b20b5c4cbe5d8",
         "issue_number": 87,
