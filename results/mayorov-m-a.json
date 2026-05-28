@@ -32,6 +32,16 @@
         "submission_ref": "c4f3856d0991ef6539d44ebdfe1d5067e07e587f",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
+      "brouwer_fixed_point": {
+        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+        "issue_number": 113,
+        "production_description": "First attempt used  `pin_sphere_n_mulEquiv_int` which Aleph can't prove yet.\nFor the second attempt we asked Aleph to use Milnor's proof instead and to avoid \"`HomotopyGroup.Pi`, `pin_sphere_n_mulEquiv_int`, `pi1_circle_mulEquiv_int`, singular/cellular homology, or fundamental groups. Mathlib's algebraic-topology infrastructure is too thin to prove \"S^(d-1) is not contractible\"(that was human judgement).",
+        "solved_at": "2026-05-28T18:27:34Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "9f174025eda55647c3fe8a673940f2cd511b26d8",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
       "bvp_comparison": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 157,
