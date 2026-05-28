@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Aristotle (Harmonic)": {
+      "sturm": {
+        "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
+        "issue_number": 111,
+        "production_description": "Solved autonomously by aristotle. Manually bumped to 4.30.0-rc2.",
+        "solved_at": "2026-05-28T13:08:32Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "095cb521420de37bb9e236c57f5dde738fc381f9",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      }
+    }
+  },
+  "user": "adrianmartir"
+}
