@@ -242,6 +242,16 @@
         "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
+      "nash_equilibrium_exists": {
+        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+        "issue_number": 115,
+        "production_description": "The solution used schauder_fixed_point.\nSchauder fixed-point theorem was first proven by Aleph and then manually inlined.\n\nOther than that, the solution was produced autonomously.",
+        "solved_at": "2026-05-28T19:11:19Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "c05503e4a317d5c2732aef43184f2d0c8dbc14cb",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
       "oppenheim_inequality": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 157,
