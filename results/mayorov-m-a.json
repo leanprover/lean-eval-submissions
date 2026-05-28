@@ -282,6 +282,16 @@
         "submission_ref": "74e8e3ac94238741f8d00e8ac7e81ad49a51f867",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
+      "sturm": {
+        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+        "issue_number": 112,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-05-28T16:36:32Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "efaaf2b427771f1b4147fbe00c7338b2bda99af7",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
       "sturm_separation": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 157,
