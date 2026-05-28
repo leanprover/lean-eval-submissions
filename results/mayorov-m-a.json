@@ -192,6 +192,16 @@
         "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
+      "kakutani_fixed_point": {
+        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+        "issue_number": 114,
+        "production_description": "The solution used brouwer_fixed_point.\nBrouwer fixed-point theorem was first proved by Aleph and then manually inlined.\n\nOther than that, the solutions were produced autonomously.",
+        "solved_at": "2026-05-28T18:56:19Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "95cb929946e8c78ef47bea9914a4f3a6a6d1a43a",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
       "koszul_formula": {
         "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
         "issue_number": 110,
@@ -290,6 +300,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "74e8e3ac94238741f8d00e8ac7e81ad49a51f867",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
+      "schauder_fixed_point": {
+        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+        "issue_number": 114,
+        "production_description": "The solution used brouwer_fixed_point.\nBrouwer fixed-point theorem was first proved by Aleph and then manually inlined.\n\nOther than that, the solutions were produced autonomously.",
+        "solved_at": "2026-05-28T18:56:19Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "95cb929946e8c78ef47bea9914a4f3a6a6d1a43a",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
       "sturm": {
