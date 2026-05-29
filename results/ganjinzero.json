@@ -130,6 +130,16 @@
         "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "frobenius_kernel_isNormal": {
+        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+        "issue_number": 117,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-05-29T00:58:13Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "3e0114a027d3bc100a232bd315beaefbfb1dd190",
+        "submission_repo": "GanjinZero/frobenius_kernel_isNormal"
+      },
       "glAction_range_eq_centralizer_symAction": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 11,
