@@ -162,6 +162,16 @@
         "submission_ref": "945a650516082dfeba205b6b4c2ffab1515b0669",
         "submission_repo": "LorenzoLuccioli/lean-eval"
       },
+      "nash_equilibrium_exists": {
+        "benchmark_commit": "60a0f0a136978bb36098a9e314d86db1b81c5df0",
+        "issue_number": 123,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-05-29T16:00:03Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "357c94cae8f674383dfcf7ffa96b5c05179d490a",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "oppenheim_inequality": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 172,
@@ -171,6 +181,16 @@
         "submission_public": true,
         "submission_ref": "00b32807abe0d286c4638daf888c739e1bb4b90c",
         "submission_repo": "LorenzoLuccioli/lean-eval"
+      },
+      "parallel_postulate_independent": {
+        "benchmark_commit": "60a0f0a136978bb36098a9e314d86db1b81c5df0",
+        "issue_number": 123,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-05-29T16:00:03Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "357c94cae8f674383dfcf7ffa96b5c05179d490a",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "permute_to_unimodal": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
