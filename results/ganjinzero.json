@@ -177,6 +177,16 @@
         "submission_ref": "a07c161df9739152497b19ba0437be662b7754c2",
         "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
       },
+      "lidskii_last": {
+        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+        "issue_number": 116,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-05-29T00:36:12Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "1c261e95181a91b2832abfac380553854ef201cb",
+        "submission_repo": "GanjinZero/lidskii_last"
+      },
       "linear_ode_asymptotic_stability": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 12,
