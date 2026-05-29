@@ -187,6 +187,16 @@
         "submission_ref": "a07c161df9739152497b19ba0437be662b7754c2",
         "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
       },
+      "lidskii_inequality": {
+        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+        "issue_number": 120,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-05-29T07:11:17Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "503d59689a0f4e79813de48f65550fcc6583d131",
+        "submission_repo": "GanjinZero/lidskii_inequality"
+      },
       "lidskii_last": {
         "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
         "issue_number": 116,
