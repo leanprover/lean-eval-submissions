@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Claude Opus 4.7 + GPT-5.5 (human-in-the-loop)": {
+      "baer_suzuki": {
+        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+        "issue_number": 118,
+        "production_description": "Claude Opus 4.7 + GPT-5.5, human-in-the-loop direction and review. Self-contained: inlines a port of Isaacs, Finite Group Theory Ch. 1-2 (p-core / Fitting subgroup / minimal-normal machinery) under Submission/, since Mathlib has no pCore. Builds on Mathlib rev 5450b53e5ddc; proof routes through Aschbacher \u00a731 (normal closure of x is a p-group)",
+        "solved_at": "2026-05-29T05:09:46Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "70b7cf773979bb3a037442ff832f353457bf62f3",
+        "submission_repo": "yawara/lean-eval-submissions"
+      }
+    }
+  },
+  "user": "yawara"
+}
