@@ -329,6 +329,16 @@
         "submission_ref": "e3ab99a7ffd1ae258b28da8903003eed7ec2d5c5",
         "submission_repo": "GanjinZero/schauder_fixed_point"
       },
+      "solvable_by_radicals_converse": {
+        "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
+        "issue_number": 126,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-05-30T10:08:49Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "d9e7d0d4d641482193c54f9e7bc2df5ee61cf14b",
+        "submission_repo": "GanjinZero/solvable_by_radicals_converse"
+      },
       "sturm": {
         "benchmark_commit": "dc0a77053f401986e3f8431d713b20b5c4cbe5d8",
         "issue_number": 87,
