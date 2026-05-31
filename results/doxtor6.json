@@ -10,6 +10,15 @@
         "submission_public": false,
         "submission_ref": "905cfa940566afe283ac0f4d7be05c2a0d6bc9e4",
         "submission_repo": "doxtor6/lean-eval"
+      },
+      "vonNeumann_doubleCommutant_tfae": {
+        "benchmark_commit": "8dc055ac0f83d45d3cbf5eac5db59fab4d742b32",
+        "issue_number": 139,
+        "solved_at": "2026-05-31T11:25:45Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "dc1319fc2c043e76b9cadb61b84f501d19a9c48e",
+        "submission_repo": "doxtor6/lean-eval"
       }
     }
   },
