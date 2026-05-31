@@ -2,6 +2,15 @@
   "schema_version": 1,
   "solved": {
     "MerLean-Prover": {
+      "bvp_comparison": {
+        "benchmark_commit": "8dc055ac0f83d45d3cbf5eac5db59fab4d742b32",
+        "issue_number": 143,
+        "solved_at": "2026-05-31T12:37:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "8db8125b8c00705cce96805f08c26acdab8db2f9",
+        "submission_repo": "doxtor6/lean-eval"
+      },
       "runge_theorem": {
         "benchmark_commit": "d04e5d5f1959528ffb320b7d7c19aad47f709012",
         "issue_number": 138,
