@@ -2,6 +2,16 @@
   "schema_version": 1,
   "solved": {
     "Aleph Prover(logicalintelligence.com)": {
+      "baer_suzuki": {
+        "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
+        "issue_number": 135,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-05-31T05:00:27Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b41267b886149eba6d6b2f7f6f2b34c5c752e80d",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
       "balanceable_bounded_partitions": {
         "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
         "issue_number": 248,
@@ -330,6 +340,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "95cb929946e8c78ef47bea9914a4f3a6a6d1a43a",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
+      "solvable_by_radicals_converse": {
+        "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
+        "issue_number": 135,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-05-31T05:00:27Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b41267b886149eba6d6b2f7f6f2b34c5c752e80d",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
       "sturm": {
