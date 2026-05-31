@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "MerLean-Prover": {
+      "runge_theorem": {
+        "benchmark_commit": "d04e5d5f1959528ffb320b7d7c19aad47f709012",
+        "issue_number": 138,
+        "solved_at": "2026-05-31T10:02:53Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "905cfa940566afe283ac0f4d7be05c2a0d6bc9e4",
+        "submission_repo": "doxtor6/lean-eval"
+      }
+    }
+  },
+  "user": "doxtor6"
+}
