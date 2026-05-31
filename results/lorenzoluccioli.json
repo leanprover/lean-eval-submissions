@@ -102,6 +102,16 @@
         "submission_ref": "c462e552170678fb3efa6bc97d57e9729265de4c",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "furstenberg_topological": {
+        "benchmark_commit": "4f66541ea658c5263405ac310a323779fb399027",
+        "issue_number": 149,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-05-31T23:33:16Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b3b8e4096a02ab124f24326526ec6d500a3828b3",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "glAction_range_eq_centralizer_symAction": {
         "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
         "issue_number": 238,
