@@ -11,6 +11,16 @@
         "submission_public": false,
         "submission_ref": "adc7efca7ed68160bbdf5089a928e29fa8bdbfe7",
         "submission_repo": "JohnEdwardJennings/lean-eval-personal"
+      },
+      "kakutani_fixed_point": {
+        "benchmark_commit": "70adaaa6b523781e363c75033212fdbf1e765cf1",
+        "issue_number": 145,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.\n\nThe Brouwer fixed-point theorem formalization component of this proof was extracted from Aristotle's proof `brouwer_fixed_point`.",
+        "solved_at": "2026-05-31T19:47:44Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "c0394520ef2822aec78dc6f88bcf3152e3bdfbf6",
+        "submission_repo": "JohnEdwardJennings/lean-eval-personal"
       }
     }
   },
