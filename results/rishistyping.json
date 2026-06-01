@@ -14,6 +14,15 @@
       }
     },
     "Stealth Model": {
+      "baer_suzuki": {
+        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+        "issue_number": 163,
+        "solved_at": "2026-06-01T19:34:30Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "ebf6eb948bf3b6aa3ddae70b985121dd1d4ee84c",
+        "submission_repo": "rishistyping/lean-eval-baer-suzuki-submission"
+      },
       "brauer_character_in_cyclotomic": {
         "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
         "issue_number": 59,
