@@ -29,6 +29,42 @@
         "submission_ref": "f31ca1be7002532e1b4d3e0dcf76deef3993ef90",
         "submission_repo": "doxtor6/lean-eval"
       },
+      "dirichlet_eigenvalues_eq_nat_sq": {
+        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+        "issue_number": 166,
+        "solved_at": "2026-06-01T23:28:30Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
+        "submission_repo": "doxtor6/lean-eval"
+      },
+      "exists_complementary_polynomial_on_unit_circle": {
+        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+        "issue_number": 166,
+        "solved_at": "2026-06-01T23:28:30Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
+        "submission_repo": "doxtor6/lean-eval"
+      },
+      "exists_nonisotopic_link": {
+        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+        "issue_number": 166,
+        "solved_at": "2026-06-01T23:28:30Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
+        "submission_repo": "doxtor6/lean-eval"
+      },
+      "rouche_zero_count_eq": {
+        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+        "issue_number": 166,
+        "solved_at": "2026-06-01T23:28:30Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
+        "submission_repo": "doxtor6/lean-eval"
+      },
       "runge_theorem": {
         "benchmark_commit": "d04e5d5f1959528ffb320b7d7c19aad47f709012",
         "issue_number": 138,
@@ -36,6 +72,24 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "905cfa940566afe283ac0f4d7be05c2a0d6bc9e4",
+        "submission_repo": "doxtor6/lean-eval"
+      },
+      "sturm_separation": {
+        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+        "issue_number": 166,
+        "solved_at": "2026-06-01T23:28:30Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
+        "submission_repo": "doxtor6/lean-eval"
+      },
+      "substInv_X_sub_X_sq_eq_catalan": {
+        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+        "issue_number": 166,
+        "solved_at": "2026-06-01T23:28:30Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
         "submission_repo": "doxtor6/lean-eval"
       },
       "vonNeumann_doubleCommutant_tfae": {
