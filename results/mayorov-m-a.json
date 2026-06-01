@@ -252,6 +252,16 @@
         "submission_ref": "dabb202918652d10defc619684753b3635950a2c",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
+      "lidskii_last": {
+        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+        "issue_number": 154,
+        "production_description": "The proof required `lidskii_inequality` solution, it was previously solved by Aleph, then for this run it had access to that whole proof. At the end, only the `lidskii_inequality` theorem itself was needed.\n\nNo other human intervention other wise.",
+        "solved_at": "2026-06-01T08:58:10Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "14c7460132cb1db1dee2096374d6c0441efd1235",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
       "linear_ode_asymptotic_stability": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 157,
