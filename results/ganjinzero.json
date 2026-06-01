@@ -21,6 +21,16 @@
         "submission_ref": "aaad6f72484191b65cc7a72a67e038d1f4cbf23d",
         "submission_repo": "GanjinZero/balanceable_bounded_partitions"
       },
+      "banach_alaoglu_bourbaki": {
+        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+        "issue_number": 160,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-01T15:44:40Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "4f902c5d81ba3881dec21d01bcf2d17e26a9588a",
+        "submission_repo": "GanjinZero/banach_alaoglu_bourbaki"
+      },
       "brauer_character_in_cyclotomic": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 12,
