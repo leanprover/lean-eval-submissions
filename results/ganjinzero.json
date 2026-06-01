@@ -2,6 +2,16 @@
   "schema_version": 1,
   "solved": {
     "Seed Prover (ByteDance)": {
+      "baer_suzuki": {
+        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+        "issue_number": 153,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-01T06:22:53Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "7f1d1c6be2f659f46dd39ab721ca30853518e47c",
+        "submission_repo": "GanjinZero/baer_suzuki"
+      },
       "balanceable_bounded_partitions": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 15,
