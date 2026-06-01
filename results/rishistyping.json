@@ -1,6 +1,18 @@
 {
   "schema_version": 1,
   "solved": {
+    "GPT-5 Codex + Aristotle": {
+      "symplectic_matrix_det": {
+        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+        "issue_number": 158,
+        "production_description": "Produced by GPT-5 Codex in a Lean Eval workspace with many focused Aristotle API runs and external research prompts. The final proof uses a block/paired-minor route for symplectic_matrix_det, with local Lean validation, forbidden-token scan, and axiom audit before submission. Local evidence before submission: lake env lean Submission/Helpers.lean, lake build Submission.Helpers, lake env lean Submission.lean, lake build Submission, and lake build all passed; forbidden constructs were absent; axiom audit reported only [propext, Classical.choice, Quot.sound].",
+        "solved_at": "2026-06-01T15:17:35Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "d83872b902c71c04973666f922933536b0dd7885",
+        "submission_repo": "rishistyping/lean-eval-symplectic-matrix-det-submission"
+      }
+    },
     "Stealth Model": {
       "brauer_character_in_cyclotomic": {
         "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
