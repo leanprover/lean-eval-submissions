@@ -2,6 +2,15 @@
   "schema_version": 1,
   "solved": {
     "MerLean-Prover": {
+      "brauer_character_in_cyclotomic": {
+        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+        "issue_number": 156,
+        "solved_at": "2026-06-01T11:11:03Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f31ca1be7002532e1b4d3e0dcf76deef3993ef90",
+        "submission_repo": "doxtor6/lean-eval"
+      },
       "bvp_comparison": {
         "benchmark_commit": "8dc055ac0f83d45d3cbf5eac5db59fab4d742b32",
         "issue_number": 143,
@@ -9,6 +18,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "8db8125b8c00705cce96805f08c26acdab8db2f9",
+        "submission_repo": "doxtor6/lean-eval"
+      },
+      "cubic_decay_asymptotic": {
+        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+        "issue_number": 156,
+        "solved_at": "2026-06-01T11:11:03Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f31ca1be7002532e1b4d3e0dcf76deef3993ef90",
         "submission_repo": "doxtor6/lean-eval"
       },
       "runge_theorem": {
