@@ -21,6 +21,26 @@
         "submission_public": false,
         "submission_ref": "c0394520ef2822aec78dc6f88bcf3152e3bdfbf6",
         "submission_repo": "JohnEdwardJennings/lean-eval-personal"
+      },
+      "schauder_fixed_point": {
+        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+        "issue_number": 150,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.\n\nThe Brouwer fixed-point theorem formalization component of the `schauder_fixed_point` proof was extracted from Aristotle's proof of `brouwer_fixed_point`.",
+        "solved_at": "2026-06-01T04:32:51Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "5b12ad730eac01f5544aa500521ba81af726bc66",
+        "submission_repo": "JohnEdwardJennings/lean-eval-personal"
+      },
+      "symplectic_matrix_det": {
+        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+        "issue_number": 150,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.\n\nThe Brouwer fixed-point theorem formalization component of the `schauder_fixed_point` proof was extracted from Aristotle's proof of `brouwer_fixed_point`.",
+        "solved_at": "2026-06-01T04:32:51Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "5b12ad730eac01f5544aa500521ba81af726bc66",
+        "submission_repo": "JohnEdwardJennings/lean-eval-personal"
       }
     }
   },
