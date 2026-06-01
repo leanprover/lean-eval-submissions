@@ -321,6 +321,15 @@
         "submission_ref": "0d6c18f4a6e1bf7541eb7188c7a991b8c481c721",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "symplectic_matrix_det": {
+        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+        "issue_number": 165,
+        "solved_at": "2026-06-01T19:42:57Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "d83872b902c71c04973666f922933536b0dd7885",
+        "submission_repo": "rishistyping/lean-eval-symplectic-matrix-det-stealth-submission"
+      },
       "two_plus_two": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 166,
