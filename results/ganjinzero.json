@@ -293,6 +293,16 @@
         "submission_ref": "ba5bb5eacdeb4f0bd0517d8729dad6349957ce68",
         "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
       },
+      "pell_solution_convergent": {
+        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+        "issue_number": 159,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-01T15:23:35Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "5cb919e3763562f544696658ab54e86490d109e9",
+        "submission_repo": "GanjinZero/pell_solution_convergent"
+      },
       "permute_to_unimodal": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 11,
