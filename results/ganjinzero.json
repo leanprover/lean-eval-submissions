@@ -339,6 +339,16 @@
         "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "runge_theorem": {
+        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+        "issue_number": 152,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-01T06:25:34Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "28f43627cf0e293888865d60a690e14d27f7d8c6",
+        "submission_repo": "GanjinZero/runge_theorem"
+      },
       "schauder_fixed_point": {
         "benchmark_commit": "d27268c592bbedca0d60ecd361baeecb72e6d45d",
         "issue_number": 90,
