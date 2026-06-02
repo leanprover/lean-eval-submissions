@@ -2,6 +2,26 @@
   "schema_version": 1,
   "solved": {
     "Aristotle (Harmonic)": {
+      "abel_ruffini": {
+        "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
+        "issue_number": 167,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-02T00:33:49Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "ad7e5343ae5c09756ca9c7a0b8fe545bf705a886",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
+      "banach_alaoglu_bourbaki": {
+        "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
+        "issue_number": 167,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-02T00:33:49Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "ad7e5343ae5c09756ca9c7a0b8fe545bf705a886",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "brauer_character_in_cyclotomic": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 172,
@@ -162,6 +182,16 @@
         "submission_ref": "945a650516082dfeba205b6b4c2ffab1515b0669",
         "submission_repo": "LorenzoLuccioli/lean-eval"
       },
+      "liouville_arnold": {
+        "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
+        "issue_number": 167,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-02T00:33:49Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "ad7e5343ae5c09756ca9c7a0b8fe545bf705a886",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 178,
@@ -200,6 +230,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "357c94cae8f674383dfcf7ffa96b5c05179d490a",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
+      "pell_solution_convergent": {
+        "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
+        "issue_number": 167,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-02T00:33:49Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "ad7e5343ae5c09756ca9c7a0b8fe545bf705a886",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "permute_to_unimodal": {
@@ -261,6 +301,16 @@
         "submission_public": true,
         "submission_ref": "945a650516082dfeba205b6b4c2ffab1515b0669",
         "submission_repo": "LorenzoLuccioli/lean-eval"
+      },
+      "wiener_atom_detection": {
+        "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
+        "issue_number": 167,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-02T00:33:49Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "ad7e5343ae5c09756ca9c7a0b8fe545bf705a886",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
       }
     }
   },
