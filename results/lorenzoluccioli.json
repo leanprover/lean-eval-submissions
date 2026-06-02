@@ -202,6 +202,16 @@
         "submission_ref": "ad7e5343ae5c09756ca9c7a0b8fe545bf705a886",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "lp_maximum_principle": {
+        "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
+        "issue_number": 180,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-02T22:09:56Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "8ddbd90e158b16c4b65c78a5adefc03877ffdbcb",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 178,
