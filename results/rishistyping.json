@@ -240,6 +240,15 @@
         "submission_ref": "c7abe0c73a7b48149c75057189098e1623180d4a",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "nash_equilibrium_exists": {
+        "benchmark_commit": "4e9ec2907fdf00f2ae5bdac8fcc58c02966941b2",
+        "issue_number": 173,
+        "solved_at": "2026-06-02T11:48:11Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "2706f1bca502525ec9f9246203cb79add410cbae",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "oppenheim_inequality": {
         "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
         "issue_number": 64,
@@ -247,6 +256,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "df480ead727246748657481878cdc5a580ddcd2d",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
+      "pell_solution_convergent": {
+        "benchmark_commit": "4e9ec2907fdf00f2ae5bdac8fcc58c02966941b2",
+        "issue_number": 173,
+        "solved_at": "2026-06-02T11:48:11Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "2706f1bca502525ec9f9246203cb79add410cbae",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
       "permute_to_unimodal": {
