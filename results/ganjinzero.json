@@ -454,6 +454,16 @@
         "submission_public": false,
         "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
+      },
+      "wiener_atom_detection": {
+        "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
+        "issue_number": 169,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-02T01:14:28Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "1c42fc33dc9a7bab5550f0e5bf40ec868388d139",
+        "submission_repo": "GanjinZero/wiener_atom_detection"
       }
     }
   },
