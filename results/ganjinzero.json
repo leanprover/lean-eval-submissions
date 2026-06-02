@@ -265,6 +265,16 @@
         "submission_ref": "e2f7eec0791dbaa6e5f8b3c85b8be0ff35540e63",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "monge_kantorovich": {
+        "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
+        "issue_number": 168,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-02T00:54:48Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "59a1d46f1b52192cb609ded73c3d67c5cfaf4339",
+        "submission_repo": "GanjinZero/monge_kantorovich"
+      },
       "mulCayley_connected_iff_closure_eq_top": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 12,
