@@ -82,6 +82,16 @@
         "submission_ref": "967a90b73db64a1939ef0fba144e183e35e97612",
         "submission_repo": "LorenzoLuccioli/lean-eval"
       },
+      "euler_lagrange_equation": {
+        "benchmark_commit": "2d226240c2a18f5d359215b5146d9d753a265690",
+        "issue_number": 174,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-02T14:13:21Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "277a392dd2e8a32228ef9550a3c93003827694f1",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "exists_complementary_polynomial_on_unit_circle": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 178,
@@ -201,6 +211,16 @@
         "submission_public": true,
         "submission_ref": "945a650516082dfeba205b6b4c2ffab1515b0669",
         "submission_repo": "LorenzoLuccioli/lean-eval"
+      },
+      "monge_kantorovich": {
+        "benchmark_commit": "2d226240c2a18f5d359215b5146d9d753a265690",
+        "issue_number": 174,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-02T14:13:21Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "277a392dd2e8a32228ef9550a3c93003827694f1",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "nash_equilibrium_exists": {
         "benchmark_commit": "60a0f0a136978bb36098a9e314d86db1b81c5df0",
