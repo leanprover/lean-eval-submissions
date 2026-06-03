@@ -2,6 +2,16 @@
   "schema_version": 1,
   "solved": {
     "Aleph Prover(logicalintelligence.com)": {
+      "abel_ruffini": {
+        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+        "issue_number": 185,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-06-03T07:37:57Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
       "baer_suzuki": {
         "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
         "issue_number": 135,
@@ -20,6 +30,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "669913b82e25206fa3b28cccdbf547deb994f359",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
+      "banach_alaoglu_bourbaki": {
+        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+        "issue_number": 185,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-06-03T07:37:57Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
       "brauer_character_in_cyclotomic": {
@@ -130,6 +150,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
+      "euler_lagrange_equation": {
+        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+        "issue_number": 185,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-06-03T07:37:57Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
       "exists_complementary_polynomial_on_unit_circle": {
@@ -302,6 +332,16 @@
         "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
+      "monge_kantorovich": {
+        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+        "issue_number": 185,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-06-03T07:37:57Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
       "nash_equilibrium_exists": {
         "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
         "issue_number": 115,
@@ -330,6 +370,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "70d4898435b35874940833a998f9c63b4736cb0b",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
+      "pell_solution_convergent": {
+        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+        "issue_number": 185,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-06-03T07:37:57Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
       "permute_to_unimodal": {
@@ -450,6 +500,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "8e7aa68ed38f5cedbdcaf25381ca5c2fa2b2e435",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
+      "wiener_atom_detection": {
+        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+        "issue_number": 185,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-06-03T07:37:57Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       }
     }
