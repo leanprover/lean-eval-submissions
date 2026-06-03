@@ -286,6 +286,16 @@
         "submission_ref": "57237674ee95e715f1e50b24997f07b3bab59fd2",
         "submission_repo": "GanjinZero/liouville_arnold"
       },
+      "lp_maximum_principle": {
+        "benchmark_commit": "fdace9d297ef8a609dfaf5e30a305aa8fc235a1f",
+        "issue_number": 181,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-03T00:46:51Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "aefcc92c54b72bd35931144fd3746b9005dba1d7",
+        "submission_repo": "GanjinZero/lp_maximum_principle"
+      },
       "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 10,
