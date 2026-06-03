@@ -122,6 +122,26 @@
         "submission_ref": "6ae2287b66eb687095e58fd0dbaeb7635ab26aba",
         "submission_repo": "LorenzoLuccioli/lean-eval"
       },
+      "fourier_dirichlet_fejer": {
+        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+        "issue_number": 192,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-03T17:49:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f6ad7207305f6beb1629e11f0ad0ae51a473acd6",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
+      "fraser_kakeya_fourier_decay": {
+        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+        "issue_number": 192,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-03T17:49:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f6ad7207305f6beb1629e11f0ad0ae51a473acd6",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "frobenius_kernel_isNormal": {
         "benchmark_commit": "80c130e15221cb7bc5312c5d19237be92081afb0",
         "issue_number": 97,
