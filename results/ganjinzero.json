@@ -170,6 +170,16 @@
         "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "fourier_dirichlet_fejer": {
+        "benchmark_commit": "b4bb63115fcd20c5c8f15f7761766db0e9a3aad0",
+        "issue_number": 182,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-03T03:47:28Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "557e9ffc23c0e0658fd0762d5df9b27b27d556ee",
+        "submission_repo": "GanjinZero/fourier_dirichlet_fejer"
+      },
       "fraser_kakeya_fourier_decay": {
         "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
         "issue_number": 175,
