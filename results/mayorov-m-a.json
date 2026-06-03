@@ -42,6 +42,16 @@
         "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
+      "boone_higman_simple": {
+        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+        "issue_number": 188,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-06-03T14:49:14Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "7d73806069322eb218d5720c51e279f3e791ca71",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
       "brauer_character_in_cyclotomic": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 157,
@@ -200,6 +210,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "1dfb06b50fdb6efa234c9d279148ff41345d2380",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
+      "fraser_kakeya_fourier_decay": {
+        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+        "issue_number": 188,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-06-03T14:49:14Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "7d73806069322eb218d5720c51e279f3e791ca71",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
       "frobenius_kernel_isNormal": {
