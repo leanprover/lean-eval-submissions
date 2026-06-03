@@ -212,6 +212,16 @@
         "submission_ref": "1dfb06b50fdb6efa234c9d279148ff41345d2380",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
+      "fourier_dirichlet_fejer": {
+        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+        "issue_number": 189,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-06-03T15:19:00Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "c1cd30b2c26ee6b8c30d6bab9d10456f600daff7",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
       "fraser_kakeya_fourier_decay": {
         "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
         "issue_number": 188,
@@ -340,6 +350,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
+      "lp_maximum_principle": {
+        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+        "issue_number": 189,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-06-03T15:19:00Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "c1cd30b2c26ee6b8c30d6bab9d10456f600daff7",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
       "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
