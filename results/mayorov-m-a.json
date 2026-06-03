@@ -272,6 +272,16 @@
         "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
+      "liouville_arnold": {
+        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+        "issue_number": 184,
+        "production_description": "Two attempts were made, for the second one we added guidance to only focus on homeomorphism(asked by the challenge) and not diffeomorphism(which is what the actual theorem claims).\nThe first attempt got stuck in the part that's not well developed in Mathlib.",
+        "solved_at": "2026-06-03T07:23:45Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "292b247e8fe6743133343c23e6cef4c75ae247a8",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
       "list_append_singleton_length": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 157,
