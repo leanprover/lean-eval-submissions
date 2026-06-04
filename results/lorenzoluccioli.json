@@ -22,6 +22,16 @@
         "submission_ref": "ad7e5343ae5c09756ca9c7a0b8fe545bf705a886",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "boone_higman_simple": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 201,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-04T11:35:00Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "89e40cbfdfa2193ce169c06808a810d7d59cd8d9",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "brauer_character_in_cyclotomic": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 172,
