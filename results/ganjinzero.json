@@ -449,6 +449,16 @@
         "submission_ref": "e3ab99a7ffd1ae258b28da8903003eed7ec2d5c5",
         "submission_repo": "GanjinZero/schauder_fixed_point"
       },
+      "sobolev_embedding_morrey": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 210,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-05T13:22:36Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "1f34698caf70cad38002767ae15f25fc24945028",
+        "submission_repo": "GanjinZero/sobolev_embedding_morrey"
+      },
       "solvable_by_radicals_converse": {
         "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
         "issue_number": 126,
