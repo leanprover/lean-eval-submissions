@@ -335,6 +335,16 @@
         "submission_ref": "59a1d46f1b52192cb609ded73c3d67c5cfaf4339",
         "submission_repo": "GanjinZero/monge_kantorovich"
       },
+      "mountain_pass": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 211,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-05T13:24:27Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "7b887b7c0cf4ee0b8f237428640e4ccc2d773358",
+        "submission_repo": "GanjinZero/mountain_pass"
+      },
       "mulCayley_connected_iff_closure_eq_top": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 12,
