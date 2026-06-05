@@ -382,6 +382,16 @@
         "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
         "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       },
+      "mountain_pass": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 208,
+        "production_description": "Solved completely autonomously without human intervention",
+        "solved_at": "2026-06-05T12:07:53Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "86f4da9a5e6b39f46649dbb8814a302a20f8bbe5",
+        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      },
       "nash_equilibrium_exists": {
         "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
         "issue_number": 115,
