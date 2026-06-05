@@ -489,6 +489,16 @@
         "submission_ref": "d9e7d0d4d641482193c54f9e7bc2df5ee61cf14b",
         "submission_repo": "GanjinZero/solvable_by_radicals_converse"
       },
+      "stable_unstable_manifolds": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 213,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-05T15:40:00Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "8e1e59fa6455a001efec9359dbd77a8300660af3",
+        "submission_repo": "GanjinZero/stable_unstable_manifolds"
+      },
       "sturm": {
         "benchmark_commit": "dc0a77053f401986e3f8431d713b20b5c4cbe5d8",
         "issue_number": 87,
