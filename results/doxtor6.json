@@ -11,6 +11,15 @@
         "submission_ref": "f31ca1be7002532e1b4d3e0dcf76deef3993ef90",
         "submission_repo": "doxtor6/lean-eval"
       },
+      "brouwer_fixed_point": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 216,
+        "solved_at": "2026-06-05T18:10:39Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "3c44320d1c9c944d71e1fb25b3ad08fd0699106e",
+        "submission_repo": "doxtor6/lean-eval"
+      },
       "bvp_comparison": {
         "benchmark_commit": "8dc055ac0f83d45d3cbf5eac5db59fab4d742b32",
         "issue_number": 143,
