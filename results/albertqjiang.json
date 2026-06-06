@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Leanstral 1.4": {
+      "abel_ruffini": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 227,
+        "production_description": "Leanstral 1.4 produced it with the prompt \"prove this theorem: {theorem statement}\". Cost is 1.95 dollars.\n\nIt used 4.31 so there was a bit of post-hoc modification to suit the submission. Second submission since the first one has some package import issue",
+        "solved_at": "2026-06-06T11:27:02Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "e2da3e08cd545f6c18c9972f8ccd2d1f73b33382",
+        "submission_repo": "albertqjiang/lean-eval-submissions"
+      }
+    }
+  },
+  "user": "albertqjiang"
+}
