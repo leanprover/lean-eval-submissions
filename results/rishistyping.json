@@ -339,6 +339,15 @@
         "submission_ref": "f8984c05f818c6779211c4850db9477ab728309a",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "sturm": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 226,
+        "solved_at": "2026-06-06T11:22:53Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "49e0a31b1b3daf57b314f6ad33097af36ebd4aa7",
+        "submission_repo": "rishistyping/lean-eval-sturm-submission"
+      },
       "sturm_separation": {
         "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
         "issue_number": 60,
