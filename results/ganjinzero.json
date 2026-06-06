@@ -12,6 +12,16 @@
         "submission_ref": "9451087eb2d5dd31a9ab6cd93b24f07cba42008b",
         "submission_repo": "GanjinZero/abel_ruffini"
       },
+      "anosov_bowen_shadowing": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 220,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-06T07:04:24Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "44d03e133ea18aafeb6282a386cc6af487f05e44",
+        "submission_repo": "GanjinZero/anosov_bowen_shadowing"
+      },
       "baer_suzuki": {
         "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
         "issue_number": 153,
