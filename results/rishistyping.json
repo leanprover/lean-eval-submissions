@@ -159,6 +159,15 @@
         "submission_ref": "c2a45650283d4ef9078475861a978958b58ed95d",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "fourier_dirichlet_fejer": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 229,
+        "solved_at": "2026-06-06T20:47:32Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "11f1c9d1aa3af240ee85099beee09a1d84185b04",
+        "submission_repo": "rishistyping/lean-eval-fourier-dirichlet-fejer-submission"
+      },
       "furstenberg_topological": {
         "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
         "issue_number": 186,
