@@ -103,6 +103,15 @@
         "submission_ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
         "submission_repo": "test1-deepthought/lean-eval-solutions"
       },
+      "finite_graph_ramsey_theorem": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 221,
+        "solved_at": "2026-06-06T10:27:07Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "73791422ab4d7a4db8afedae381a1c422c9c849e",
+        "submission_repo": "test1-deepthought/lean-eval-solutions"
+      },
       "instance_hole_example": {
         "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
         "issue_number": 219,
@@ -119,6 +128,15 @@
         "submission_kind": "github_repo",
         "submission_public": true,
         "submission_ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
+        "submission_repo": "test1-deepthought/lean-eval-solutions"
+      },
+      "sturm_separation": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 221,
+        "solved_at": "2026-06-06T10:27:07Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "73791422ab4d7a4db8afedae381a1c422c9c849e",
         "submission_repo": "test1-deepthought/lean-eval-solutions"
       },
       "two_plus_two": {
