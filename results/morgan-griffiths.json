@@ -32,6 +32,16 @@
         "submission_ref": "f99ff369694089eaa380b08a98ca9d931446a5fe",
         "submission_repo": "Morgan-Griffiths/38d9086a96f7c2789ec6c9b666bea346"
       },
+      "heat_kernel_solves_heat_equation": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 253,
+        "production_description": "autonomous lmp",
+        "solved_at": "2026-06-07T19:04:15Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "e8b3c7cacece586503b95731ba8fb0c76b44fa39",
+        "submission_repo": "Morgan-Griffiths/a608e78316f8f803f034f796ce6fa044"
+      },
       "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
         "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
         "issue_number": 36,
