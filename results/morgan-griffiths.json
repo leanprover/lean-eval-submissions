@@ -12,6 +12,16 @@
         "submission_ref": "aa6af3605a939af31c219c540940de95a99afdc4",
         "submission_repo": "Morgan-Griffiths/997b9a415edd5b3300f67b0b86e2d6d3"
       },
+      "contractibleSpace_houseWithTwoRooms": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 254,
+        "production_description": "autonomous lmp",
+        "solved_at": "2026-06-07T19:04:59Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "21697ed3e6191030c3763cd5533dbe9daea8d558",
+        "submission_repo": "Morgan-Griffiths/ab1fa300a44533da6e88f8f813e8db15"
+      },
       "cubic_decay_asymptotic": {
         "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
         "issue_number": 47,
