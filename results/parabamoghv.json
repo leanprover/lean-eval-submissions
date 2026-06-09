@@ -12,6 +12,16 @@
         "submission_ref": "03a356c462f76d0244af5b2e9e1aa00b21a3004e",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "hippocrates_lunes": {
+        "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
+        "issue_number": 269,
+        "production_description": "Autoformalized using Aristotle (Harmonic), orchestrated by Amogh Parab.",
+        "solved_at": "2026-06-09T23:04:53Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "3fd53ed5d047eab29f4d046368fdda62e16b3cc8",
+        "submission_repo": "parabamoghv/lean-eval"
+      },
       "rokhlin_lemma": {
         "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
         "issue_number": 268,
