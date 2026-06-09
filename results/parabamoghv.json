@@ -12,6 +12,15 @@
         "submission_ref": "03a356c462f76d0244af5b2e9e1aa00b21a3004e",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "rokhlin_lemma": {
+        "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
+        "issue_number": 268,
+        "solved_at": "2026-06-09T16:32:52Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "0fd6757519437214451709b32dca6225eac7bc6b",
+        "submission_repo": "parabamoghv/lean-eval"
+      },
       "symAction_range_eq_centralizer_glAction": {
         "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
         "issue_number": 220,
