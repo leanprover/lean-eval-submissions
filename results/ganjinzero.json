@@ -172,6 +172,16 @@
         "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "fang_xia_tiling_partition_transitive": {
+        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+        "issue_number": 263,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-09T01:09:49Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "2b5d22a9fec2aad7fa841313a2f29773fcc39af1",
+        "submission_repo": "GanjinZero/fang_xia_tiling_partition_transitive"
+      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 12,
