@@ -266,7 +266,7 @@ def clone_url_for(descriptor: SourceDescriptor, token: str | None) -> str:
             )
         return f"https://github.com/{descriptor.owner}/{descriptor.name}.git"
     if descriptor.kind == "gist":
-        # Gists do not need authentication; even secret gists are clonable with the URL.
+        # Gists do not need authentication; even secret gists are cloneable with the URL.
         return f"https://gist.github.com/{descriptor.owner}/{descriptor.name}.git"
     raise FetchError(f"Unknown descriptor kind: {descriptor.kind}")
 
@@ -276,7 +276,7 @@ def resolve_ref(
 ) -> str:
     """Resolve a descriptor to a concrete 40-char SHA.
 
-    For commit-SHA refs, passes them through unchanged after format-checking.
+    For commit-SHA refs, passes them through after format-checking.
     For branch/tag refs, uses `git ls-remote`.
     For refs that are `None`, uses HEAD.
     """
@@ -398,7 +398,7 @@ def fetch_submission(
         # For private-repo submissions, `clone_url` embeds the
         # `lean-eval-bot` App installation token in the `origin` remote
         # URL, which `git remote add` persists into `.git/config`.
-        # Comparator's landrun policy is `--ro /`, so anything left on
+        # Compartor's landrun policy is `--ro /`, so anything left on
         # the runner under a path the sandbox can stat is readable by
         # the untrusted Lean elaborator; dropping `.git` here keeps the
         # token (and any other VCS metadata) out of `source.tar.gz` and
@@ -406,7 +406,7 @@ def fetch_submission(
         # auth-injection in `clone_url_for` ever moves to
         # `http.extraheader` / credential helper, this strip becomes
         # belt-and-braces but can stay.
-        shutil.rmtree(source_dir / ".git")
+        shutil.rmtree(source_dir / ".git", ignore_errors=True)
         guard_no_path_escape(source_dir)
         tar_source(source_dir, output_dir / "source.tar.gz")
 
