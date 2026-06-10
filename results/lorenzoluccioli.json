@@ -352,6 +352,16 @@
         "submission_ref": "08b5700fc39fe1aea00c915f6945d02973a5b7be",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "solvable_by_radicals_converse": {
+        "benchmark_commit": "c7790bd6cfc7f45038ea3de033670423dd350bed",
+        "issue_number": 271,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-10T00:32:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "25077b7c4e5f63ea56b3a3881cc3031f4ade3e91",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "stable_unstable_manifolds": {
         "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
         "issue_number": 215,
