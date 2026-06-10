@@ -308,6 +308,16 @@
         "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "hippocrates_lunes": {
+        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+        "issue_number": 277,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-10T07:46:19Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "e9ffb41d5fe057c556c3e18d3061b11333758589",
+        "submission_repo": "GanjinZero/hippocrates_lunes"
+      },
       "hurewicz_h1_abelianization": {
         "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
         "issue_number": 275,
