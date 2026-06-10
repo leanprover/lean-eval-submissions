@@ -22,6 +22,16 @@
         "submission_ref": "c0394520ef2822aec78dc6f88bcf3152e3bdfbf6",
         "submission_repo": "JohnEdwardJennings/lean-eval-personal"
       },
+      "lidskii_inequality": {
+        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+        "issue_number": 273,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-10T02:27:18Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "ed8286bcfa2eb0c9df0a6e1bfee31ff62ca868ae",
+        "submission_repo": "JohnEdwardJennings/lean-eval-personal"
+      },
       "lidskii_last": {
         "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
         "issue_number": 272,
