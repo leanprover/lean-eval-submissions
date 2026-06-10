@@ -425,6 +425,16 @@
         "submission_ref": "59a1d46f1b52192cb609ded73c3d67c5cfaf4339",
         "submission_repo": "GanjinZero/monge_kantorovich"
       },
+      "moran_equality_affine": {
+        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+        "issue_number": 276,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-10T07:43:16Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "be2288dd8750caef725eac2037a4b93ba74c6ab2",
+        "submission_repo": "GanjinZero/moran_equality_affine"
+      },
       "morley_theorem": {
         "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
         "issue_number": 274,
