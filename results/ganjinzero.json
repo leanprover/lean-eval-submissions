@@ -51,6 +51,16 @@
         "submission_ref": "4f902c5d81ba3881dec21d01bcf2d17e26a9588a",
         "submission_repo": "GanjinZero/banach_alaoglu_bourbaki"
       },
+      "boone_higman_embedding": {
+        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+        "issue_number": 274,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-10T02:36:08Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
+      },
       "boone_higman_simple": {
         "benchmark_commit": "b4bb63115fcd20c5c8f15f7761766db0e9a3aad0",
         "issue_number": 183,
@@ -98,6 +108,16 @@
         "submission_public": false,
         "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
+      },
+      "choquet_representation_theorem": {
+        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+        "issue_number": 274,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-10T02:36:08Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
       },
       "contractibleSpace_houseWithTwoRooms": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
@@ -249,6 +269,26 @@
         "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "hausdorff_absolute_continuity": {
+        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+        "issue_number": 274,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-10T02:36:08Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
+      },
+      "hausdorff_positivity_criterion": {
+        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+        "issue_number": 274,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-10T02:36:08Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
+      },
       "heat_kernel_solves_heat_equation": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 12,
@@ -355,6 +395,16 @@
         "submission_ref": "59a1d46f1b52192cb609ded73c3d67c5cfaf4339",
         "submission_repo": "GanjinZero/monge_kantorovich"
       },
+      "morley_theorem": {
+        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+        "issue_number": 274,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-10T02:36:08Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
+      },
       "mountain_pass": {
         "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
         "issue_number": 211,
@@ -449,6 +499,26 @@
         "submission_public": false,
         "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
+      },
+      "regular_value_ae": {
+        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+        "issue_number": 274,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-10T02:36:08Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
+      },
+      "rising_sun_lemma": {
+        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+        "issue_number": 274,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-10T02:36:08Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
       },
       "rokhlin_lemma": {
         "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
