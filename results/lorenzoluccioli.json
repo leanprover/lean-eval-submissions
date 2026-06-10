@@ -222,6 +222,16 @@
         "submission_ref": "c462e552170678fb3efa6bc97d57e9729265de4c",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "lidskii_last": {
+        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+        "issue_number": 278,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-10T20:30:51Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "344930052a13285243170796cf7887d58b2dc25b",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "linear_ode_asymptotic_stability": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 178,
@@ -331,6 +341,16 @@
         "submission_public": true,
         "submission_ref": "00b32807abe0d286c4638daf888c739e1bb4b90c",
         "submission_repo": "LorenzoLuccioli/lean-eval"
+      },
+      "rokhlin_lemma": {
+        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+        "issue_number": 278,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-10T20:30:51Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "344930052a13285243170796cf7887d58b2dc25b",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "rouche_zero_count_eq": {
         "benchmark_commit": "9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66",
