@@ -219,6 +219,18 @@
         "submission_ref": "69e24b6b1a18117485ef55663d4773900655e033",
         "submission_repo": "rkirov/lean-eval"
       }
+    },
+    "Claude Opus 4.7, 4.8 and Fable 5 + OSS contributions": {
+      "jacobian_challenge_diffgeo": {
+        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+        "issue_number": 284,
+        "production_description": "vanilla Claude Code using Opus 4.7, 4.8 and Fable 5. Partial ports from https://github.com/Brsanch/jacobian-lean-challenge https://github.com/tangentstorm/JacobianChallenge and https://github.com/mrdouglasny/jacobian-challenge.",
+        "solved_at": "2026-06-11T18:59:34Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "906335fb5e24909782b204a3fbd2ec5cf96f8ffb",
+        "submission_repo": "rkirov/jacobian-claude"
+      }
     }
   },
   "user": "rkirov"
