@@ -2,6 +2,15 @@
   "schema_version": 1,
   "solved": {
     "MerLean-Prover": {
+      "banach_alaoglu_bourbaki": {
+        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+        "issue_number": 287,
+        "solved_at": "2026-06-12T16:33:20Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "83c8d6ca60463a2173d012ca80c2e248900eb5dc",
+        "submission_repo": "doxtor6/lean-eval"
+      },
       "brauer_character_in_cyclotomic": {
         "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
         "issue_number": 156,
@@ -83,6 +92,15 @@
         "submission_ref": "92f0d06a2e7c6ee78aca2686d523dbf862780082",
         "submission_repo": "doxtor6/lean-eval"
       },
+      "fourier_dirichlet_fejer": {
+        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+        "issue_number": 287,
+        "solved_at": "2026-06-12T16:33:20Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "83c8d6ca60463a2173d012ca80c2e248900eb5dc",
+        "submission_repo": "doxtor6/lean-eval"
+      },
       "heat_kernel_solves_heat_equation": {
         "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
         "issue_number": 187,
@@ -126,6 +144,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "74148fe0b4570fde8c97cb388a65ed8ae4dffc1c",
+        "submission_repo": "doxtor6/lean-eval"
+      },
+      "pell_solution_convergent": {
+        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+        "issue_number": 287,
+        "solved_at": "2026-06-12T16:33:20Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "83c8d6ca60463a2173d012ca80c2e248900eb5dc",
         "submission_repo": "doxtor6/lean-eval"
       },
       "pi1_circle_mulEquiv_int": {
