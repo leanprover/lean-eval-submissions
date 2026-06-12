@@ -224,6 +224,16 @@
         "submission_ref": "14c6a6a5d2c525ebab5f768f844bb87eebc8d12c",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "hippocrates_lunes": {
+        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+        "issue_number": 292,
+        "production_description": "Blaml",
+        "solved_at": "2026-06-12T23:12:21Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "a499d27c4d545c4738944d2367f13cb8ba1e6baf",
+        "submission_repo": "rishistyping/lean-eval-hippocrates-lunes"
+      },
       "instance_hole_example": {
         "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
         "issue_number": 236,
