@@ -188,6 +188,15 @@
         "submission_ref": "11f1c9d1aa3af240ee85099beee09a1d84185b04",
         "submission_repo": "rishistyping/lean-eval-fourier-dirichlet-fejer-submission"
       },
+      "frobenius_kernel_isNormal": {
+        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+        "issue_number": 290,
+        "solved_at": "2026-06-12T20:45:53Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "b7d530ed045c2b8c329d5b2db2e24ad02b5a0fa6",
+        "submission_repo": "rishistyping/lean-eval-frobenius-kernel-isnormal"
+      },
       "furstenberg_topological": {
         "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
         "issue_number": 186,
