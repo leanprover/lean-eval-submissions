@@ -333,6 +333,15 @@
         "submission_ref": "c7abe0c73a7b48149c75057189098e1623180d4a",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "multi_hole_helpers_example": {
+        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+        "issue_number": 308,
+        "solved_at": "2026-06-13T14:19:55Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "61af95d0ca68fb998e64aa682f7cfdc3a564d843",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "nash_equilibrium_exists": {
         "benchmark_commit": "4e9ec2907fdf00f2ae5bdac8fcc58c02966941b2",
         "issue_number": 173,
