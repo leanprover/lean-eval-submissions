@@ -42,6 +42,15 @@
         "submission_ref": "3d9872b93d0ebf87c4fb805677d2fb5b9b65a09b",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "bauer_extreme_point_uniqueness": {
+        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+        "issue_number": 302,
+        "solved_at": "2026-06-13T13:07:55Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "22353340f1fef1294c8baa522cdc338038e78ddc",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "brauer_character_in_cyclotomic": {
         "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
         "issue_number": 59,
