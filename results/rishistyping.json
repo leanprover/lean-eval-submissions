@@ -342,6 +342,16 @@
         "submission_ref": "2706f1bca502525ec9f9246203cb79add410cbae",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "noncomputable_hole_example": {
+        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+        "issue_number": 305,
+        "production_description": "No Description: Blaml",
+        "solved_at": "2026-06-13T13:43:43Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "47bfd6e9eeeb40a9a09928198c862ab0cdb3311a",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "oppenheim_inequality": {
         "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
         "issue_number": 64,
