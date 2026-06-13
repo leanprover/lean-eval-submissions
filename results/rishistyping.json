@@ -378,6 +378,15 @@
         "submission_ref": "b8b280cda7b114f9447c58e8811e237efb2b7db3",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "rokhlin_lemma": {
+        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+        "issue_number": 298,
+        "solved_at": "2026-06-13T10:27:10Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "6171fcf1391558fe1bc76c40bf4cda82e5b42020",
+        "submission_repo": "rishistyping/lean-eval-rokhlin-lemma"
+      },
       "rouche_zero_count_eq": {
         "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
         "issue_number": 72,
