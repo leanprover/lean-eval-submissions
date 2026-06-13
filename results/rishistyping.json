@@ -252,6 +252,15 @@
         "submission_ref": "65fb96fcf629eddec9738329684dc59550bcd51d",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "jacobian_challenge_diffgeo": {
+        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+        "issue_number": 296,
+        "solved_at": "2026-06-13T10:32:21Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "d373a6d4126c78dae25c6017a89a671cbf0bf86a",
+        "submission_repo": "rishistyping/lean-eval-jacobian-challenge-diffgeo"
+      },
       "kakutani_fixed_point": {
         "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
         "issue_number": 101,
