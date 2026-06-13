@@ -51,6 +51,16 @@
         "submission_ref": "4f902c5d81ba3881dec21d01bcf2d17e26a9588a",
         "submission_repo": "GanjinZero/banach_alaoglu_bourbaki"
       },
+      "bauer_extreme_point_uniqueness": {
+        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+        "issue_number": 295,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-13T03:06:42Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "6620bc6eb0982d55826fb725cf54272da9bbf827",
+        "submission_repo": "GanjinZero/bauer_extreme_point_uniqueness"
+      },
       "boone_higman_embedding": {
         "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
         "issue_number": 274,
