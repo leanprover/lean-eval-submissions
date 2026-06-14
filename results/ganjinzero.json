@@ -427,6 +427,16 @@
         "submission_ref": "1c261e95181a91b2832abfac380553854ef201cb",
         "submission_repo": "GanjinZero/lidskii_last"
       },
+      "lindemann_weierstrass": {
+        "benchmark_commit": "f11b2eda181c431caad3faf5a004b02b9deb2d18",
+        "issue_number": 316,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-14T08:03:43Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "8a9ca3f15a05403bff4a302d02a7943020e9fd14",
+        "submission_repo": "GanjinZero/lindemann_weierstrass"
+      },
       "linear_ode_asymptotic_stability": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 12,
