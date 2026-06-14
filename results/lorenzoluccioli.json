@@ -232,6 +232,16 @@
         "submission_ref": "01c8a3f7fd7d8796a92d1b6978f7cbe8773b7dc6",
         "submission_repo": "LorenzoLuccioli/lean-eval"
       },
+      "halmos_generic_weak_mixing": {
+        "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
+        "issue_number": 326,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-14T18:38:02Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f87eceecfe33616822435ea855c108b0baff82cb",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "hausdorff_absolute_continuity": {
         "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
         "issue_number": 310,
