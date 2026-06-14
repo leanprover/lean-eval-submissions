@@ -362,6 +362,16 @@
         "submission_ref": "eecd3cf9fbc94c47ab6471dc4d44070e1d033174",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "lindemann_weierstrass": {
+        "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
+        "issue_number": 322,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-14T14:21:49Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f56b1c592e18b14fd43f7623d5064aa1c03611ec",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "linear_ode_asymptotic_stability": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 178,
@@ -530,6 +540,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "3b77889dca2f55c0f29178fd5b1a87de54e2c602",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
+      "radon_transform_inversion": {
+        "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
+        "issue_number": 322,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-14T14:21:49Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f56b1c592e18b14fd43f7623d5064aa1c03611ec",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "regular_value_ae": {
