@@ -212,6 +212,16 @@
         "submission_ref": "c462e552170678fb3efa6bc97d57e9729265de4c",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "fundamental_topos_theory": {
+        "benchmark_commit": "e0fea56670a02d1079fa5193501a27e086dde966",
+        "issue_number": 335,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-15T08:58:29Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "5458950b7732e33fc31e5ce5450bd5b75044401e",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "furstenberg_topological": {
         "benchmark_commit": "4f66541ea658c5263405ac310a323779fb399027",
         "issue_number": 149,
@@ -491,6 +501,16 @@
         "submission_public": true,
         "submission_ref": "00b32807abe0d286c4638daf888c739e1bb4b90c",
         "submission_repo": "LorenzoLuccioli/lean-eval"
+      },
+      "ornstein_weiss_rokhlin": {
+        "benchmark_commit": "e0fea56670a02d1079fa5193501a27e086dde966",
+        "issue_number": 335,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-15T08:58:29Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "5458950b7732e33fc31e5ce5450bd5b75044401e",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "parallel_postulate_independent": {
         "benchmark_commit": "60a0f0a136978bb36098a9e314d86db1b81c5df0",
