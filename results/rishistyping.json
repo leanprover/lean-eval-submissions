@@ -415,6 +415,15 @@
         "submission_ref": "b8b280cda7b114f9447c58e8811e237efb2b7db3",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "regular_value_ae": {
+        "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
+        "issue_number": 329,
+        "solved_at": "2026-06-15T00:18:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "d9ea55d3d2f4b21af5f4e739e8cb37e6368d3f6f",
+        "submission_repo": "rishistyping/lean-eval"
+      },
       "rising_sun_lemma": {
         "benchmark_commit": "d281725fa1cfcc237ba813a25355267ca9a8f4f5",
         "issue_number": 320,
