@@ -288,6 +288,27 @@ def _validate_sidecar(sidecar: dict) -> None:
         sys.exit(f"sidecar.size_bytes_plaintext_tar must be a non-negative integer, got {size_plain!r}")
 
 
+# The stable identity of an archived submission. Two sidecars describe the
+# same source iff every one of these fields matches. Comparing the whole tuple
+# (not just the plaintext digest) means a stale or misplaced sidecar that
+# happens to share a digest but names a different submission is treated as a
+# collision, not a re-archive no-op.
+_IDENTITY_FIELDS = (
+    "submitter",
+    "issue",
+    "submission_repo",
+    "submission_ref",
+    "sha256_plaintext_tar",
+)
+
+
+def _same_source(existing: dict, ours: dict) -> bool:
+    return all(
+        existing.get(f) is not None and existing.get(f) == ours.get(f)
+        for f in _IDENTITY_FIELDS
+    )
+
+
 def _push(args: argparse.Namespace) -> int:
     token = os.environ.get("ARCHIVER_TOKEN") or ""
     if not token:
@@ -377,20 +398,20 @@ def _push(args: argparse.Namespace) -> int:
         audit_repo=audit_repo, token=token, path=sidecar_remote
     )
     if existing_sidecar is not None:
-        existing_plain = existing_sidecar.get("sha256_plaintext_tar")
-        ours_plain = sidecar["sha256_plaintext_tar"]
-        if existing_plain == ours_plain:
+        if _same_source(existing_sidecar, sidecar):
             print(
                 f"archive: {sidecar_remote} already records this source "
-                f"(plaintext {ours_plain}); idempotent no-op"
+                f"(plaintext {sidecar['sha256_plaintext_tar']}); idempotent no-op"
             )
             print(f"archived: {audit_repo}:{ciphertext_remote}")
             print(f"          {audit_repo}:{sidecar_remote}")
             return 0
+        existing_identity = {f: existing_sidecar.get(f) for f in _IDENTITY_FIELDS}
+        ours_identity = {f: sidecar.get(f) for f in _IDENTITY_FIELDS}
         sys.exit(
             f"audit path {base_path!r} already exists in {audit_repo} for a "
-            f"different source (existing plaintext {existing_plain!r} vs ours "
-            f"{ours_plain!r}). This indicates a colliding archive — "
+            f"different source (existing {existing_identity} vs ours "
+            f"{ours_identity}). This indicates a colliding archive — "
             f"investigate before retrying."
         )
 
@@ -467,6 +488,20 @@ def _get_remote_sidecar(*, audit_repo: str, token: str, path: str) -> dict | Non
         sys.exit(f"could not decode existing sidecar {path} in {audit_repo}: {exc}")
 
 
+def _is_sha_conflict(body: str) -> bool:
+    """True if a 422 PUT response means the path is already populated.
+
+    A create (PUT without `sha`) over an existing file returns 422 with
+    `"sha" wasn't supplied`; some responses phrase it `already exists`. Any
+    *other* 422 — a malformed path, oversize content, branch-protection
+    rejection, generic validation error — is a real failure that must not be
+    retried as a sha race (doing so would mask it as a misleading
+    "exhausted retries" error).
+    """
+    low = body.lower()
+    return ("sha" in low and "supplied" in low) or "already exists" in low
+
+
 def _retry_after_seconds(exc: urllib.error.HTTPError) -> float | None:
     """Parse a Retry-After response header in seconds. None if absent/unusable."""
     ra = exc.headers.get("Retry-After") if exc.headers else None
@@ -539,12 +574,15 @@ def _put_contents(
             return
         except urllib.error.HTTPError as exc:
             err_body = exc.read().decode("utf-8", errors="replace")
-            if exc.code in (409, 422):
+            if exc.code == 409 or (exc.code == 422 and _is_sha_conflict(err_body)):
                 # The path's state changed between our GET and this PUT: a
                 # 422 `"sha" wasn't supplied` means it now exists though we
                 # thought it absent; a 409 means our sha went stale under a
-                # sibling write. Re-fetch the current sha and retry. If it
-                # has converged to our content, we're done.
+                # sibling write. Other 422s are real validation failures
+                # (bad path, oversize content, ...) and fall through to the
+                # hard-fail branch below rather than being retried as a race.
+                # Re-fetch the current sha and retry; if it has converged to
+                # our content, we're done.
                 refreshed = _api_get(audit_repo=audit_repo, token=token, path=path)
                 if refreshed is None:
                     existing_sha = None

@@ -275,9 +275,22 @@ class PushTests(unittest.TestCase):
         return path
 
     @staticmethod
-    def _sidecar_meta(plaintext_sha: str, *, sha: str = "abc123") -> bytes:
-        """A Contents-API GET response for an existing sidecar file."""
-        body = json.dumps({"sha256_plaintext_tar": plaintext_sha}).encode("utf-8")
+    def _sidecar_meta(*, sha: str = "abc123", **identity_overrides) -> bytes:
+        """A Contents-API GET response for an existing sidecar file.
+
+        The decoded sidecar defaults to the identity written by
+        `_partial_sidecar`; pass keyword overrides (e.g. ``submitter=`` or
+        ``sha256_plaintext_tar=``) to simulate a colliding source.
+        """
+        identity = {
+            "submitter": "alice",
+            "issue": 99,
+            "submission_repo": "alice/proofs",
+            "submission_ref": VALID_REF,
+            "sha256_plaintext_tar": VALID_PLAINTEXT_SHA,
+        }
+        identity.update(identity_overrides)
+        body = json.dumps(identity).encode("utf-8")
         return json.dumps({
             "sha": sha,
             "encoding": "base64",
@@ -373,7 +386,7 @@ class PushTests(unittest.TestCase):
                 method = req.get_method()
                 calls.append((method, req.full_url))
                 if method == "GET" and req.full_url.endswith(".json"):
-                    return io.BytesIO(self._sidecar_meta(VALID_PLAINTEXT_SHA))
+                    return io.BytesIO(self._sidecar_meta())
                 raise AssertionError(f"unexpected {method} {req.full_url}")
 
             with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
@@ -400,7 +413,7 @@ class PushTests(unittest.TestCase):
 
             def fake_urlopen(req, timeout=None):
                 if req.get_method() == "GET" and req.full_url.endswith(".json"):
-                    return io.BytesIO(self._sidecar_meta("b" * 64))
+                    return io.BytesIO(self._sidecar_meta(sha256_plaintext_tar="b" * 64))
                 raise AssertionError("must not PUT on a colliding archive")
 
             with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
@@ -412,6 +425,66 @@ class PushTests(unittest.TestCase):
                         "--sidecar", str(sidecar),
                     ])
             self.assertIn("colliding archive", str(ctx.exception).lower())
+
+    def test_push_fails_on_identity_collision_with_matching_digest(self) -> None:
+        # Stale/misplaced sidecar: same plaintext digest but a different
+        # submission identity. Comparing the full identity tuple (not the
+        # digest alone) must still flag this as a collision rather than no-op.
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            ciphertext = self._ciphertext(tmp)
+            sidecar = self._partial_sidecar(tmp)
+
+            def fake_urlopen(req, timeout=None):
+                if req.get_method() == "GET" and req.full_url.endswith(".json"):
+                    # Digest matches; submitter does not.
+                    return io.BytesIO(self._sidecar_meta(submitter="mallory"))
+                raise AssertionError("must not PUT on an identity collision")
+
+            with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
+                with self.assertRaises(SystemExit) as ctx:
+                    arch.main([
+                        "push",
+                        "--ciphertext", str(ciphertext),
+                        "--sidecar", str(sidecar),
+                    ])
+            self.assertIn("colliding archive", str(ctx.exception).lower())
+
+    def test_push_fails_fast_on_non_sha_422(self) -> None:
+        # A 422 whose body is NOT the "sha wasn't supplied" conflict is a real
+        # validation failure (e.g. content too large). It must fail fast with
+        # the response body, not be retried as a sha race and reported as
+        # exhausted retries.
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            ciphertext = self._ciphertext(tmp)
+            sidecar = self._partial_sidecar(tmp)
+            validation_body = json.dumps(
+                {"message": "content is too large"}
+            ).encode("utf-8")
+            puts = 0
+
+            def fake_urlopen(req, timeout=None):
+                nonlocal puts
+                if req.get_method() == "GET":
+                    raise self._not_found(req.full_url)
+                puts += 1
+                raise urllib.error.HTTPError(
+                    req.full_url, 422, "Unprocessable Entity", {},
+                    io.BytesIO(validation_body),
+                )
+
+            with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
+                with self.assertRaises(SystemExit) as ctx:
+                    arch.main([
+                        "push",
+                        "--ciphertext", str(ciphertext),
+                        "--sidecar", str(sidecar),
+                    ])
+            self.assertIn("content is too large", str(ctx.exception))
+            self.assertEqual(puts, 1)  # failed immediately, no retries
 
     def test_push_updates_orphan_ciphertext_when_sidecar_absent(self) -> None:
         # A prior run uploaded the ciphertext then crashed before the
