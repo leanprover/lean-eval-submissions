@@ -377,6 +377,16 @@
         "submission_ref": "a07c161df9739152497b19ba0437be662b7754c2",
         "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
       },
+      "kolmogorov_arnold_superposition": {
+        "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
+        "issue_number": 331,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-15T02:00:54Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "2b084d9b848089fedcefefc77ade7f2a9f470244",
+        "submission_repo": "GanjinZero/kolmogorov_arnold_superposition"
+      },
       "koszul_formula": {
         "benchmark_commit": "ecb1fbd7f00983159c06053260e5e8741786ebb4",
         "issue_number": 86,
