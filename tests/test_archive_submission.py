@@ -274,6 +274,22 @@ class PushTests(unittest.TestCase):
         path.write_bytes(body)
         return path
 
+    @staticmethod
+    def _sidecar_meta(plaintext_sha: str, *, sha: str = "abc123") -> bytes:
+        """A Contents-API GET response for an existing sidecar file."""
+        body = json.dumps({"sha256_plaintext_tar": plaintext_sha}).encode("utf-8")
+        return json.dumps({
+            "sha": sha,
+            "encoding": "base64",
+            "content": base64.b64encode(body).decode("ascii"),
+        }).encode("utf-8")
+
+    @staticmethod
+    def _not_found(url: str) -> urllib.error.HTTPError:
+        return urllib.error.HTTPError(
+            url, 404, "Not Found", {}, io.BytesIO(b'{"message":"Not Found"}')
+        )
+
     def test_push_uploads_ciphertext_then_sidecar_from_summary(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
@@ -293,12 +309,14 @@ class PushTests(unittest.TestCase):
                 "overlay_records": [],
             }))
 
-            seen_requests: list[dict] = []
+            puts: list[dict] = []
 
             def fake_urlopen(req, timeout=None):
-                seen_requests.append({
+                # Nothing archived yet: every existence GET is a 404.
+                if req.get_method() == "GET":
+                    raise self._not_found(req.full_url)
+                puts.append({
                     "url": req.full_url,
-                    "method": req.get_method(),
                     "body": json.loads(req.data.decode("utf-8")) if req.data else None,
                     "headers": dict(req.header_items()),
                 })
@@ -315,16 +333,17 @@ class PushTests(unittest.TestCase):
                     "--workflow-run-url", "https://example.invalid/run/1",
                 ])
             self.assertEqual(rc, 0)
-            self.assertEqual(len(seen_requests), 2)
-            urls = [r["url"] for r in seen_requests]
+            # A brand-new submission creates exactly two files: ciphertext
+            # then sidecar. No `sha` is supplied, since neither exists.
+            self.assertEqual(len(puts), 2)
+            urls = [r["url"] for r in puts]
             self.assertTrue(all("/repos/leanprover/lean-eval-audit/contents/audit/" in u for u in urls))
-            self.assertTrue(any(u.endswith("alice-99-01234567.tar.age") for u in urls))
-            self.assertTrue(any(u.endswith("alice-99-01234567.json") for u in urls))
-            self.assertTrue(urls[0].endswith(".tar.age"))
-            self.assertTrue(urls[1].endswith(".json"))
-            sidecar_body = seen_requests[1]["body"]
+            self.assertTrue(urls[0].endswith("alice-99-01234567.tar.age"))
+            self.assertTrue(urls[1].endswith("alice-99-01234567.json"))
+            self.assertNotIn("sha", puts[0]["body"])
+            self.assertNotIn("sha", puts[1]["body"])
             uploaded_sidecar = json.loads(
-                base64.b64decode(sidecar_body["content"]).decode("utf-8")
+                base64.b64decode(puts[1]["body"]["content"]).decode("utf-8")
             )
             self.assertEqual(uploaded_sidecar["evaluator_verdict"], {
                 "two_plus_two": "pass",
@@ -336,38 +355,26 @@ class PushTests(unittest.TestCase):
             self.assertEqual(len(uploaded_sidecar["sha256_ciphertext"]), 64)
             self.assertEqual(uploaded_sidecar["benchmark_commit"], "f" * 40)
             self.assertIn("archived_at", uploaded_sidecar)
-            self.assertEqual(seen_requests[0]["headers"]["Authorization"], "Bearer xxx")
+            self.assertEqual(puts[0]["headers"]["Authorization"], "Bearer xxx")
 
-    def test_push_idempotent_when_existing_matches(self) -> None:
-        # Workflow rerun after a partial failure: ciphertext is already
-        # uploaded with matching bytes. Push must complete successfully
-        # without trying to overwrite.
+    def test_push_idempotent_on_reeval_same_source(self) -> None:
+        # Re-evaluating an already-archived submission. The sidecar exists
+        # and records the same plaintext digest; age is non-deterministic so
+        # the fresh ciphertext bytes differ, but the source is identical.
+        # The push must be a no-op and must NOT overwrite the first copy.
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
-            ciphertext_bytes = b"age-encryption.org/v1\nfakebody"
-            ciphertext = self._ciphertext(tmp, ciphertext_bytes)
+            ciphertext = self._ciphertext(tmp, b"age-encryption.org/v1\nfreshly-rekeyed")
             sidecar = self._partial_sidecar(tmp)
-            expected_blob_sha = arch._git_blob_sha(ciphertext_bytes)
 
-            already_exists_body = json.dumps({
-                "message": "Invalid request.",
-                "errors": [{"message": 'file already exists'}],
-            }).encode("utf-8")
-
-            call_log: list[tuple[str, str]] = []
+            calls: list[tuple[str, str]] = []
 
             def fake_urlopen(req, timeout=None):
                 method = req.get_method()
-                url = req.full_url
-                call_log.append((method, url))
-                if method == "PUT" and url.endswith(".tar.age"):
-                    raise urllib.error.HTTPError(
-                        url, 422, "Unprocessable Entity", {}, io.BytesIO(already_exists_body)
-                    )
-                if method == "GET" and url.endswith(".tar.age"):
-                    return io.BytesIO(json.dumps({"sha": expected_blob_sha}).encode())
-                # Sidecar PUT succeeds.
-                return io.BytesIO(b'{"content": {"sha": "deadbeef"}}')
+                calls.append((method, req.full_url))
+                if method == "GET" and req.full_url.endswith(".json"):
+                    return io.BytesIO(self._sidecar_meta(VALID_PLAINTEXT_SHA))
+                raise AssertionError(f"unexpected {method} {req.full_url}")
 
             with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
                  mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
@@ -377,30 +384,24 @@ class PushTests(unittest.TestCase):
                     "--sidecar", str(sidecar),
                 ])
             self.assertEqual(rc, 0)
-            # Ciphertext PUT (422) → GET (verify match) → sidecar PUT.
-            self.assertEqual(call_log[0][0], "PUT")
-            self.assertEqual(call_log[1][0], "GET")
-            self.assertEqual(call_log[2][0], "PUT")
-            self.assertTrue(call_log[2][1].endswith(".json"))
+            # Exactly one call: the sidecar existence GET. No PUT.
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0][0], "GET")
+            self.assertTrue(calls[0][1].endswith(".json"))
+            self.assertFalse(any(m == "PUT" for m, _ in calls))
 
-    def test_push_fails_when_existing_ciphertext_differs(self) -> None:
+    def test_push_fails_on_source_collision(self) -> None:
+        # A *different* source already occupies this audit path (different
+        # plaintext digest). That is a genuine collision — hard fail, no PUT.
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
-            ciphertext = self._ciphertext(tmp, b"age-encryption.org/v1\nlocal")
+            ciphertext = self._ciphertext(tmp)
             sidecar = self._partial_sidecar(tmp)
-            wrong_sha = arch._git_blob_sha(b"different bytes")
-
-            already_exists_body = json.dumps({
-                "errors": [{"message": "file already exists"}],
-            }).encode("utf-8")
 
             def fake_urlopen(req, timeout=None):
-                if req.get_method() == "PUT":
-                    raise urllib.error.HTTPError(
-                        req.full_url, 422, "Unprocessable Entity", {},
-                        io.BytesIO(already_exists_body),
-                    )
-                return io.BytesIO(json.dumps({"sha": wrong_sha}).encode())
+                if req.get_method() == "GET" and req.full_url.endswith(".json"):
+                    return io.BytesIO(self._sidecar_meta("b" * 64))
+                raise AssertionError("must not PUT on a colliding archive")
 
             with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
                  mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
@@ -410,18 +411,32 @@ class PushTests(unittest.TestCase):
                         "--ciphertext", str(ciphertext),
                         "--sidecar", str(sidecar),
                     ])
-            self.assertIn("different content", str(ctx.exception).lower())
+            self.assertIn("colliding archive", str(ctx.exception).lower())
 
-    def test_push_omits_verdict_when_summary_missing(self) -> None:
+    def test_push_updates_orphan_ciphertext_when_sidecar_absent(self) -> None:
+        # A prior run uploaded the ciphertext then crashed before the
+        # sidecar. The rerun finds no sidecar (not a no-op) and must update
+        # the orphan ciphertext in place by supplying its sha, rather than
+        # failing the unconditional create with `"sha" wasn't supplied`.
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
-            ciphertext = self._ciphertext(tmp)
+            ciphertext = self._ciphertext(tmp, b"age-encryption.org/v1\nnewbytes")
             sidecar = self._partial_sidecar(tmp)
-            seen_bodies: list[dict] = []
+            orphan_meta = json.dumps({"sha": "orphansha"}).encode("utf-8")
+
+            calls: list[dict] = []
 
             def fake_urlopen(req, timeout=None):
-                seen_bodies.append(json.loads(req.data.decode("utf-8")) if req.data else {})
-                return io.BytesIO(b'{}')
+                method, url = req.get_method(), req.full_url
+                calls.append({
+                    "method": method, "url": url,
+                    "body": json.loads(req.data.decode("utf-8")) if req.data else None,
+                })
+                if method == "GET" and url.endswith(".json"):
+                    raise self._not_found(url)          # no prior sidecar
+                if method == "GET" and url.endswith(".tar.age"):
+                    return io.BytesIO(orphan_meta)        # orphan ciphertext present
+                return io.BytesIO(b'{"content": {"sha": "x"}}')
 
             with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
                  mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
@@ -431,7 +446,34 @@ class PushTests(unittest.TestCase):
                     "--sidecar", str(sidecar),
                 ])
             self.assertEqual(rc, 0)
-            uploaded = json.loads(base64.b64decode(seen_bodies[1]["content"]).decode("utf-8"))
+            ct_put = next(c for c in calls
+                          if c["method"] == "PUT" and c["url"].endswith(".tar.age"))
+            # The orphan's sha is supplied so the PUT updates it in place.
+            self.assertEqual(ct_put["body"].get("sha"), "orphansha")
+
+    def test_push_omits_verdict_when_summary_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            ciphertext = self._ciphertext(tmp)
+            sidecar = self._partial_sidecar(tmp)
+            put_bodies: list[dict] = []
+
+            def fake_urlopen(req, timeout=None):
+                if req.get_method() == "GET":
+                    raise self._not_found(req.full_url)
+                put_bodies.append(json.loads(req.data.decode("utf-8")) if req.data else {})
+                return io.BytesIO(b'{"content": {"sha": "x"}}')
+
+            with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
+                rc = arch.main([
+                    "push",
+                    "--ciphertext", str(ciphertext),
+                    "--sidecar", str(sidecar),
+                ])
+            self.assertEqual(rc, 0)
+            # put_bodies[0] = ciphertext, [1] = sidecar.
+            uploaded = json.loads(base64.b64decode(put_bodies[1]["content"]).decode("utf-8"))
             self.assertNotIn("evaluator_verdict", uploaded)
             self.assertNotIn("problem_ids", uploaded)
 
