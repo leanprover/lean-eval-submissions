@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Community multi-model project": {
+      "jacobian_challenge_diffgeo": {
+        "benchmark_commit": "e0fea56670a02d1079fa5193501a27e086dde966",
+        "issue_number": 334,
+        "production_description": "Multi-agent community project (mrdouglasny/jacobian-challenge) under light human steering; zero human-written Lean. Claude Code with Opus 4.8 and Sonnet 4.6 as the primary models (Claude Fable 5 only in the final ~2 days), Codex/GPT-5.4 rescue passes, and Gemini deep-think axiom vetting; ~8 weeks wall-clock. An independent, complementary solution to Rado Kirov's (the first lean-eval pass): a different construction (period-lattice / H1 route), with explicit positive-genus curve instances (elliptic, hyperelliptic, plane) and a machine-checked finding that Buzzard's 24 requirements are non-categorical, plus the Albanese universal-property repair. All 24 obligations sorry-free and axiom-free [propext, Classical.choice, Quot.sound], confirmed by a local Lean FRO comparator run on main. Builds on Rado Kirov's Dolbeault library (rkirov/jacobian-claude, Apache 2.0, vendored) and Michal Wallace's modules (tangentstorm/JacobianChallenge, MIT).",
+        "solved_at": "2026-06-15T05:24:09Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "044b419b1bb4365b32cb4f575b386e34f25b9cb5",
+        "submission_repo": "mrdouglasny/jacobian-challenge"
+      }
+    }
+  },
+  "user": "mrdouglasny"
+}
