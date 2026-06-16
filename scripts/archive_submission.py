@@ -288,6 +288,27 @@ def _validate_sidecar(sidecar: dict) -> None:
         sys.exit(f"sidecar.size_bytes_plaintext_tar must be a non-negative integer, got {size_plain!r}")
 
 
+# The stable identity of an archived submission. Two sidecars describe the
+# same source iff every one of these fields matches. Comparing the whole tuple
+# (not just the plaintext digest) means a stale or misplaced sidecar that
+# happens to share a digest but names a different submission is treated as a
+# collision, not a re-archive no-op.
+_IDENTITY_FIELDS = (
+    "submitter",
+    "issue",
+    "submission_repo",
+    "submission_ref",
+    "sha256_plaintext_tar",
+)
+
+
+def _same_source(existing: dict, ours: dict) -> bool:
+    return all(
+        existing.get(f) is not None and existing.get(f) == ours.get(f)
+        for f in _IDENTITY_FIELDS
+    )
+
+
 def _push(args: argparse.Namespace) -> int:
     token = os.environ.get("ARCHIVER_TOKEN") or ""
     if not token:
@@ -364,12 +385,42 @@ def _push(args: argparse.Namespace) -> int:
         f"({sidecar['submission_repo']}@{_short_ref(sidecar['submission_ref'])})"
     )
 
+    # Re-evaluation safety. The audit path is keyed on the submission's
+    # identity (submitter, issue, source ref), but the ciphertext is not
+    # reproducible: age picks a fresh file key per run, so re-archiving the
+    # same source yields different bytes at the same path. Decide by the
+    # *plaintext* digest, which IS stable for a given source and is recorded
+    # in the sidecar. A matching digest means this exact source is already
+    # archived (no-op); a different digest at the same path is a genuine
+    # collision for an operator to investigate. Doing this here keeps the
+    # immutable first ciphertext in place rather than overwriting it.
+    existing_sidecar = _get_remote_sidecar(
+        audit_repo=audit_repo, token=token, path=sidecar_remote
+    )
+    if existing_sidecar is not None:
+        if _same_source(existing_sidecar, sidecar):
+            print(
+                f"archive: {sidecar_remote} already records this source "
+                f"(plaintext {sidecar['sha256_plaintext_tar']}); idempotent no-op"
+            )
+            print(f"archived: {audit_repo}:{ciphertext_remote}")
+            print(f"          {audit_repo}:{sidecar_remote}")
+            return 0
+        existing_identity = {f: existing_sidecar.get(f) for f in _IDENTITY_FIELDS}
+        ours_identity = {f: sidecar.get(f) for f in _IDENTITY_FIELDS}
+        sys.exit(
+            f"audit path {base_path!r} already exists in {audit_repo} for a "
+            f"different source (existing {existing_identity} vs ours "
+            f"{ours_identity}). This indicates a colliding archive — "
+            f"investigate before retrying."
+        )
+
     # Upload ciphertext before sidecar. If the workflow is killed between
     # the two, a rerun on the same submission encounters the existing
-    # ciphertext at the predicted path; _put_contents handles that
-    # idempotently (returns success if existing bytes match, fails hard
-    # if they differ). The sidecar-first ordering would risk publishing
-    # an archive entry whose ciphertext was never uploaded — much worse.
+    # ciphertext at the predicted path; _put_contents updates it in place.
+    # The sidecar-first ordering would risk publishing an archive entry
+    # whose ciphertext was never uploaded — much worse. (A present sidecar
+    # implies a present ciphertext, so the re-eval no-op above is safe.)
     _put_contents(
         audit_repo=audit_repo,
         token=token,
@@ -413,6 +464,44 @@ def _api_get(*, audit_repo: str, token: str, path: str) -> dict | None:
         sys.exit(f"Contents API GET {path} failed ({exc.code}):\n{body}")
 
 
+def _get_remote_sidecar(*, audit_repo: str, token: str, path: str) -> dict | None:
+    """Fetch and decode the JSON sidecar at `path`. None if it doesn't exist.
+
+    The Contents API returns small files inline as newline-wrapped base64;
+    `base64.b64decode` ignores the newlines. Sidecars are well under the 1 MB
+    inline limit, so a missing/`none` encoding is unexpected and treated as a
+    hard error rather than silently skipped (skipping would defeat the
+    re-archive collision check in `_push`).
+    """
+    meta = _api_get(audit_repo=audit_repo, token=token, path=path)
+    if meta is None:
+        return None
+    content = meta.get("content")
+    if not isinstance(content, str) or meta.get("encoding") != "base64":
+        sys.exit(
+            f"existing sidecar {path} in {audit_repo} has unexpected encoding "
+            f"{meta.get('encoding')!r}; cannot verify re-archive safety"
+        )
+    try:
+        return json.loads(base64.b64decode(content).decode("utf-8"))
+    except (ValueError, json.JSONDecodeError) as exc:
+        sys.exit(f"could not decode existing sidecar {path} in {audit_repo}: {exc}")
+
+
+def _is_sha_conflict(body: str) -> bool:
+    """True if a 422 PUT response means the path is already populated.
+
+    A create (PUT without `sha`) over an existing file returns 422 with
+    `"sha" wasn't supplied`; some responses phrase it `already exists`. Any
+    *other* 422 — a malformed path, oversize content, branch-protection
+    rejection, generic validation error — is a real failure that must not be
+    retried as a sha race (doing so would mask it as a misleading
+    "exhausted retries" error).
+    """
+    low = body.lower()
+    return ("sha" in low and "supplied" in low) or "already exists" in low
+
+
 def _retry_after_seconds(exc: urllib.error.HTTPError) -> float | None:
     """Parse a Retry-After response header in seconds. None if absent/unusable."""
     ra = exc.headers.get("Retry-After") if exc.headers else None
@@ -432,28 +521,45 @@ def _put_contents(
     content: bytes,
     message: str,
 ) -> None:
-    """Upload a single file to the audit repo via the Contents API.
+    """Create or update a single file in the audit repo via the Contents API.
 
-    Idempotent: if a file already exists at `path` whose Git blob SHA
-    matches `_git_blob_sha(content)`, treats the operation as a no-op
-    success. If a file exists but its content differs, fails hard —
-    that's an operator-investigatable collision, not something we
-    silently overwrite. Retries transient transport / 5xx / rate-limit
-    failures with exponential backoff and jitter, honoring `Retry-After`
-    when present.
+    Upsert: a file that does not exist is created; one that already exists
+    whose Git blob SHA matches `_git_blob_sha(content)` is a no-op success;
+    otherwise the existing blob SHA is supplied so the PUT updates the file
+    in place. The Contents API rejects an update that omits `sha` with a
+    422 `"sha" wasn't supplied` — which is exactly what an unconditional
+    create hits when the path is already populated (e.g. a re-evaluation of
+    a previously archived submission), so we must fetch and pass the sha.
+
+    This primitive does not adjudicate whether overwriting is *semantically*
+    safe; callers that must distinguish a benign re-archive from a genuine
+    path collision do so beforehand (see `_push`, which compares the
+    plaintext digest recorded in the sidecar). Retries transient transport
+    / 5xx / rate-limit / sha-race failures with exponential backoff and
+    jitter, honoring `Retry-After` when present.
     """
     api_url = f"https://api.github.com/repos/{audit_repo}/contents/{path}"
     expected_sha = _git_blob_sha(content)
-    body = json.dumps({
-        "message": message,
-        "content": base64.b64encode(content).decode("ascii"),
-    }).encode("utf-8")
+    existing = _api_get(audit_repo=audit_repo, token=token, path=path)
+    if existing is not None and existing.get("sha") == expected_sha:
+        print(
+            f"archive: {path} already present with matching content; idempotent no-op",
+            file=sys.stderr,
+        )
+        return
+    existing_sha = existing.get("sha") if existing is not None else None
     last_err: Exception | None = None
     for attempt in range(1, PUSH_RETRY_ATTEMPTS + 1):
+        payload: dict[str, str] = {
+            "message": message,
+            "content": base64.b64encode(content).decode("ascii"),
+        }
+        if existing_sha is not None:
+            payload["sha"] = existing_sha
         req = urllib.request.Request(
             api_url,
             method="PUT",
-            data=body,
+            data=json.dumps(payload).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/vnd.github+json",
@@ -468,31 +574,28 @@ def _put_contents(
             return
         except urllib.error.HTTPError as exc:
             err_body = exc.read().decode("utf-8", errors="replace")
-            if exc.code == 422 and "already exists" in err_body:
-                # Idempotency path: confirm the existing bytes are ours.
-                # If they are, this is a workflow rerun after the prior
-                # attempt got partway through; treat it as success. If
-                # they aren't, two different submissions are racing into
-                # the same audit path — fail and let an operator look.
-                existing = _api_get(audit_repo=audit_repo, token=token, path=path)
-                if existing is None:
-                    # The file disappeared between the PUT and the GET.
-                    # Retry as a normal transient.
-                    last_err = exc
-                elif existing.get("sha") == expected_sha:
+            if exc.code == 409 or (exc.code == 422 and _is_sha_conflict(err_body)):
+                # The path's state changed between our GET and this PUT: a
+                # 422 `"sha" wasn't supplied` means it now exists though we
+                # thought it absent; a 409 means our sha went stale under a
+                # sibling write. Other 422s are real validation failures
+                # (bad path, oversize content, ...) and fall through to the
+                # hard-fail branch below rather than being retried as a race.
+                # Re-fetch the current sha and retry; if it has converged to
+                # our content, we're done.
+                refreshed = _api_get(audit_repo=audit_repo, token=token, path=path)
+                if refreshed is None:
+                    existing_sha = None
+                elif refreshed.get("sha") == expected_sha:
                     print(
-                        f"archive: {path} already exists with matching content; idempotent no-op",
+                        f"archive: {path} converged to matching content; idempotent no-op",
                         file=sys.stderr,
                     )
                     return
                 else:
-                    sys.exit(
-                        f"audit path {path!r} already exists in {audit_repo} "
-                        f"with different content (existing sha {existing.get('sha')!r} "
-                        f"vs expected {expected_sha!r}). This indicates a colliding "
-                        f"archive — investigate before retrying."
-                    )
-            elif exc.code in (409, 429, 500, 502, 503, 504) and attempt < PUSH_RETRY_ATTEMPTS:
+                    existing_sha = refreshed.get("sha")
+                last_err = exc
+            elif exc.code in (429, 500, 502, 503, 504) and attempt < PUSH_RETRY_ATTEMPTS:
                 last_err = exc
             else:
                 sys.exit(f"Contents API PUT {path} failed ({exc.code}):\n{err_body}")

@@ -59,16 +59,29 @@ Two new pieces live inside the existing `submission.yml`:
    gated on this job succeeding: if archive fails, no leaderboard
    update happens.
 
-   The Contents API upload is **idempotent**. A workflow rerun after a
-   partial failure that uploaded the ciphertext but not the sidecar
-   encounters the existing ciphertext at the predicted path; the
-   script fetches the file's Git blob SHA and compares it with the
-   blob SHA of the local bytes. On match, the existing upload is
-   treated as success and the workflow proceeds to the sidecar upload.
-   On mismatch, the push fails hard — two different submissions racing
-   into the same `audit/YYYY/MM/{submitter}-{issue}-{ref8}` path is an
-   operator-investigatable collision, not something to silently
-   resolve.
+   The push is **idempotent on the source**, which matters because a
+   submission can be re-evaluated (e.g. after a benchmark toolchain bump)
+   and the ciphertext is *not* reproducible — `age` picks a fresh file
+   key per run, so re-encrypting the same source yields different bytes
+   at the same `audit/YYYY/MM/{submitter}-{issue}-{ref8}` path. The
+   script therefore decides on the **recorded submission identity** —
+   the stable tuple `(submitter, issue, submission_repo, submission_ref,
+   sha256_plaintext_tar)` in the sidecar, not the ciphertext bytes.
+   Before uploading it reads any existing sidecar: if the full identity
+   matches, this exact source is already archived, the push is a no-op,
+   and the original (immutable) ciphertext is left untouched. Any
+   mismatch — including a stale sidecar that shares the plaintext digest
+   but names a different submission — is an operator-investigatable
+   collision and fails hard, not something to silently resolve.
+
+   The per-file Contents API call is a create-or-update: it fetches any
+   existing file's Git blob SHA and supplies it on the PUT, so a rerun
+   that finds an orphan ciphertext (uploaded by a prior run that crashed
+   before the sidecar) updates it in place rather than failing the
+   create with the API's `"sha" wasn't supplied` 422. That 422 is only
+   treated as a benign already-exists conflict when the body says so; any
+   other 422 (malformed path, oversize content, branch protection) is a
+   real validation failure and fails fast.
 
    `evaluate` exposes `audit_ciphertext_ready` as a job output, set to
    `'true'` only when both the encrypt step and the ciphertext-artifact
