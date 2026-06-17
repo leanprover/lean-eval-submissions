@@ -72,6 +72,16 @@
         "submission_ref": "00b32807abe0d286c4638daf888c739e1bb4b90c",
         "submission_repo": "LorenzoLuccioli/lean-eval"
       },
+      "cauchy_kovalevskaya": {
+        "benchmark_commit": "e0fea56670a02d1079fa5193501a27e086dde966",
+        "issue_number": 336,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-17T11:40:29Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "26eed9d0bef7d813410b2d7b3ebe54b99467c2ae",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "choquet_representation_theorem": {
         "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
         "issue_number": 310,
@@ -101,6 +111,16 @@
         "submission_public": true,
         "submission_ref": "945a650516082dfeba205b6b4c2ffab1515b0669",
         "submission_repo": "LorenzoLuccioli/lean-eval"
+      },
+      "darboux": {
+        "benchmark_commit": "e0fea56670a02d1079fa5193501a27e086dde966",
+        "issue_number": 336,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-17T11:40:29Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "26eed9d0bef7d813410b2d7b3ebe54b99467c2ae",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "def_hole_example": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
@@ -670,6 +690,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "08b5700fc39fe1aea00c915f6945d02973a5b7be",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
+      "strong_subadditivity": {
+        "benchmark_commit": "e0fea56670a02d1079fa5193501a27e086dde966",
+        "issue_number": 336,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-17T11:40:29Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "26eed9d0bef7d813410b2d7b3ebe54b99467c2ae",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "sturm_separation": {
