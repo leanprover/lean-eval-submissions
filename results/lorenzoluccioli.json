@@ -342,6 +342,16 @@
         "submission_ref": "eecd3cf9fbc94c47ab6471dc4d44070e1d033174",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "kam_invariant_curve": {
+        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+        "issue_number": 351,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-18T23:06:55Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "e9a13bf2f2d56e98bdcf7bdece397f40361d586b",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "kolmogorov_arnold_superposition": {
         "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
         "issue_number": 310,
