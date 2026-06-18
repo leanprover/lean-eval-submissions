@@ -11,6 +11,15 @@
         "submission_ref": "83c8d6ca60463a2173d012ca80c2e248900eb5dc",
         "submission_repo": "doxtor6/lean-eval"
       },
+      "boone_higman_simple": {
+        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+        "issue_number": 350,
+        "solved_at": "2026-06-18T21:36:23Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b6512d79e4e06e15493362ce6159961fd55a4f85",
+        "submission_repo": "doxtor6/lean-eval"
+      },
       "brauer_character_in_cyclotomic": {
         "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
         "issue_number": 156,
@@ -110,6 +119,15 @@
         "submission_ref": "f618450a980860000f8dfbb0fb5b964c23ed0dd0",
         "submission_repo": "doxtor6/lean-eval"
       },
+      "hippocrates_lunes": {
+        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+        "issue_number": 350,
+        "solved_at": "2026-06-18T21:36:23Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b6512d79e4e06e15493362ce6159961fd55a4f85",
+        "submission_repo": "doxtor6/lean-eval"
+      },
       "linear_ode_asymptotic_stability": {
         "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
         "issue_number": 187,
@@ -117,6 +135,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "f618450a980860000f8dfbb0fb5b964c23ed0dd0",
+        "submission_repo": "doxtor6/lean-eval"
+      },
+      "lp_maximum_principle": {
+        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+        "issue_number": 350,
+        "solved_at": "2026-06-18T21:36:23Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b6512d79e4e06e15493362ce6159961fd55a4f85",
         "submission_repo": "doxtor6/lean-eval"
       },
       "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
@@ -216,6 +243,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "dc1319fc2c043e76b9cadb61b84f501d19a9c48e",
+        "submission_repo": "doxtor6/lean-eval"
+      },
+      "wiener_atom_detection": {
+        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+        "issue_number": 350,
+        "solved_at": "2026-06-18T21:36:23Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b6512d79e4e06e15493362ce6159961fd55a4f85",
         "submission_repo": "doxtor6/lean-eval"
       }
     }
