@@ -98,6 +98,16 @@
         "submission_ref": "a111ea0d8d4bb6b9b003d8e3484fe6bda32dd6e5",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "dirichlet_eigenvalues_eq_nat_sq": {
+        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+        "issue_number": 361,
+        "production_description": "_no_response_",
+        "solved_at": "2026-06-19T07:44:50Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "9150fc93e9e727e658747738498c0fb70b2bb965",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 353,
