@@ -34,6 +34,16 @@
         "submission_ref": "f7dcca3aa6a6db9a12583e28de1723ec8af8c2cd",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius": {
+        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+        "issue_number": 367,
+        "production_description": "Copied from a public accepted Lean Eval submission, repackaged into a commit-pinned workspace, then checked locally with `lake build Submission`, `lake env lean Submission.lean`, and a solver-owned forbidden-token scan.",
+        "solved_at": "2026-06-19T08:02:39Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "46f608570d392c51f3291bcb6c983943592f9072",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 362,
