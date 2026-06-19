@@ -297,6 +297,16 @@
         "submission_ref": "49e0a31b1b3daf57b314f6ad33097af36ebd4aa7",
         "submission_repo": "rishistyping/lean-eval-sturm-submission"
       },
+      "sturm_separation": {
+        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+        "issue_number": 354,
+        "production_description": "_no_response_",
+        "solved_at": "2026-06-19T06:55:40Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b1cf59c5b3dbf67b222354cdee218c1c27710768",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "symplectic_matrix_det": {
         "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
         "issue_number": 165,
