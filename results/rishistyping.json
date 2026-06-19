@@ -54,6 +54,16 @@
         "submission_ref": "e34117c9eff9137a23369297f457dee6c910cdc9",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "rouche_zero_count_eq": {
+        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+        "issue_number": 369,
+        "production_description": "Copied from a public accepted Lean Eval submission, repackaged into a commit-pinned workspace, then checked locally with `lake build Submission`, `lake env lean Submission.lean`, and a solver-owned forbidden-token scan.",
+        "solved_at": "2026-06-19T08:02:04Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "166f5fea87258baa5547435750c03ae788e707d1",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "substInv_X_sub_X_sq_eq_catalan": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 365,
