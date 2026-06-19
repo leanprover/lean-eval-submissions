@@ -14,6 +14,16 @@
       }
     },
     "Public accepted source + Codex packaging": {
+      "exists_complementary_polynomial_on_unit_circle": {
+        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+        "issue_number": 366,
+        "production_description": "Copied from a public accepted Lean Eval submission, repackaged into a commit-pinned workspace, then checked locally with `lake build Submission`, `lake env lean Submission.lean`, and a solver-owned forbidden-token scan.",
+        "solved_at": "2026-06-19T08:01:52Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "ceb68d2f701fbcd55568ae57fb98159cdfbcaa87",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "heat_kernel_solves_heat_equation": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 364,
