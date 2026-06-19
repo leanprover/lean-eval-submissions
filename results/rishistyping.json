@@ -13,6 +13,18 @@
         "submission_repo": "rishistyping/lean-eval-symplectic-matrix-det-submission"
       }
     },
+    "Public accepted source + Codex packaging": {
+      "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
+        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+        "issue_number": 362,
+        "production_description": "Copied from a public accepted Lean Eval submission, repackaged into a commit-pinned workspace, then checked locally with `lake build Submission`, `lake env lean Submission.lean`, and a solver-owned forbidden-token scan.",
+        "solved_at": "2026-06-19T08:00:30Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "5be34ed4edc2c6eb1e22d5d7a1731857803277dc",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      }
+    },
     "Stealth Model": {
       "balanceable_bounded_partitions": {
         "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
