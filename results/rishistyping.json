@@ -86,6 +86,16 @@
       }
     },
     "Stealth Model": {
+      "baer_suzuki": {
+        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+        "issue_number": 374,
+        "production_description": "_no_response_",
+        "solved_at": "2026-06-19T09:41:28Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "fcc2004b1e0b90642314bdfb1e2e15f7f9aa2006",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "balanceable_bounded_partitions": {
         "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
         "issue_number": 202,
