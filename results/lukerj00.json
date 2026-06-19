@@ -200,6 +200,15 @@
         "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow": {
+        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+        "issue_number": 400,
+        "solved_at": "2026-06-19T22:03:41Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "52668bb7743b3e0ffb6791c5764db18126673be2",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "fraser_kakeya_fourier_decay": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 344,
@@ -450,6 +459,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
+      "parallel_postulate_independent": {
+        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+        "issue_number": 400,
+        "solved_at": "2026-06-19T22:03:41Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "52668bb7743b3e0ffb6791c5764db18126673be2",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
       "pascal": {
