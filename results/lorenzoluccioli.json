@@ -262,6 +262,16 @@
         "submission_ref": "01c8a3f7fd7d8796a92d1b6978f7cbe8773b7dc6",
         "submission_repo": "LorenzoLuccioli/lean-eval"
       },
+      "golod_shafarevich_inequality": {
+        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+        "issue_number": 403,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-20T18:44:02Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "28fec6a25c1a8f9d4b3dc63ffbc77d9bd7c09bd6",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "halmos_generic_weak_mixing": {
         "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
         "issue_number": 326,
@@ -471,6 +481,16 @@
         "submission_public": true,
         "submission_ref": "945a650516082dfeba205b6b4c2ffab1515b0669",
         "submission_repo": "LorenzoLuccioli/lean-eval"
+      },
+      "mergelyan_theorem": {
+        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+        "issue_number": 403,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-20T18:44:02Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "28fec6a25c1a8f9d4b3dc63ffbc77d9bd7c09bd6",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "monge_kantorovich": {
         "benchmark_commit": "2d226240c2a18f5d359215b5146d9d753a265690",
