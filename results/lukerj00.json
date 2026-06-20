@@ -227,6 +227,15 @@
         "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "glAction_range_eq_centralizer_symAction": {
+        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+        "issue_number": 402,
+        "solved_at": "2026-06-20T10:57:32Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "7919817fbb616703f6c3479a184254d81ed191f2",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "hausdorff_absolute_continuity": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 344,
@@ -567,6 +576,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
+      "stable_unstable_manifolds": {
+        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+        "issue_number": 402,
+        "solved_at": "2026-06-20T10:57:32Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "7919817fbb616703f6c3479a184254d81ed191f2",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
       "sturm": {
