@@ -192,6 +192,16 @@
         "submission_ref": "945a650516082dfeba205b6b4c2ffab1515b0669",
         "submission_repo": "LorenzoLuccioli/lean-eval"
       },
+      "families_of_maps_b01": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 426,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-21T15:54:17Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "88b11415e878cf73906ac5f9c72382c28cb867ae",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "fang_xia_tiling_partition_transitive": {
         "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
         "issue_number": 261,
