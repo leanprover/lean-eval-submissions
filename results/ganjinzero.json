@@ -846,6 +846,16 @@
         "submission_ref": "a07c161df9739152497b19ba0437be662b7754c2",
         "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
       },
+      "trace_cayley_hamilton_newton": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 422,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-21T13:23:48Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f3d41900cbbfad4c2478cecb946451a95e3320e6",
+        "submission_repo": "GanjinZero/trace_cayley_hamilton_newton"
+      },
       "tverberg_theorem": {
         "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
         "issue_number": 275,
