@@ -286,6 +286,36 @@
         "submission_ref": "ff0585c9b9773f987d5eccd29e006943fab13575",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "hausdorff_absolute_continuity": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 407,
+        "production_description": "_no_response_",
+        "solved_at": "2026-06-21T09:40:35Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "9df98861454823d913476710707a33d4d839f453",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
+      "hausdorff_hildebrandt_schoenberg": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 407,
+        "production_description": "_no_response_",
+        "solved_at": "2026-06-21T09:40:35Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "9df98861454823d913476710707a33d4d839f453",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
+      "hausdorff_positivity_criterion": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 407,
+        "production_description": "_no_response_",
+        "solved_at": "2026-06-21T09:40:35Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "9df98861454823d913476710707a33d4d839f453",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "hippocrates_lunes": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 378,
