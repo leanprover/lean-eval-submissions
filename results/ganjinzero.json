@@ -739,6 +739,16 @@
         "submission_ref": "e3ab99a7ffd1ae258b28da8903003eed7ec2d5c5",
         "submission_repo": "GanjinZero/schauder_fixed_point"
       },
+      "shannon_capacity_pentagon": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 417,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-21T12:51:05Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "823b7858c4830c1a9015c463929d095c824717f4",
+        "submission_repo": "GanjinZero/shannon_capacity_pentagon"
+      },
       "sobolev_embedding_morrey": {
         "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
         "issue_number": 210,
