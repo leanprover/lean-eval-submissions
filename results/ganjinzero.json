@@ -924,6 +924,16 @@
         "submission_public": false,
         "submission_ref": "1c42fc33dc9a7bab5550f0e5bf40ec868388d139",
         "submission_repo": "GanjinZero/wiener_atom_detection"
+      },
+      "wiener_inverse_closed": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 425,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-21T14:41:31Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "d6e89382c3e1e6b6389c9888fdf0f43e81a1ec56",
+        "submission_repo": "GanjinZero/wiener_inverse_closed"
       }
     }
   },
