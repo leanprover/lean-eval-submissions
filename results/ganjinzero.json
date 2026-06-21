@@ -574,6 +574,16 @@
         "submission_ref": "a07c161df9739152497b19ba0437be662b7754c2",
         "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
       },
+      "nyquist_shannon_sampling": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 416,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-21T12:50:54Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "138045da891605c9067a83ebdbc916e03af2bb7f",
+        "submission_repo": "GanjinZero/nyquist_shannon_sampling"
+      },
       "oppenheim_inequality": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 12,
