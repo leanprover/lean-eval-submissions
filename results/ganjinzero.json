@@ -643,6 +643,16 @@
         "submission_ref": "63833f93c145d0b70524284340739a23f77f13e5",
         "submission_repo": "GanjinZero/0610-v2"
       },
+      "peano_existence": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 420,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-21T13:24:31Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "2729c457daeb32e302b6977d95d83e450d7110b4",
+        "submission_repo": "GanjinZero/peano_existence"
+      },
       "pell_solution_convergent": {
         "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
         "issue_number": 159,
