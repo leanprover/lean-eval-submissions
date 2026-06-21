@@ -290,6 +290,16 @@
         "submission_ref": "f67c723737d8db97eac9cfe9f652c0b9b9626b69",
         "submission_repo": "GanjinZero/furstenberg_topological"
       },
+      "gauss_wantzel_constructible_polygon": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 419,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-21T13:24:06Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "0d1a0dacedc30733009faaa90b5a81c483747e86",
+        "submission_repo": "GanjinZero/gauss_wantzel_constructible_polygon"
+      },
       "glAction_range_eq_centralizer_symAction": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 11,
