@@ -218,6 +218,15 @@
         "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "frobenius_kernel_isNormal": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 411,
+        "solved_at": "2026-06-21T11:55:44Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "cfe589d62d5cf8743bda0bc7350b5c36a3473bb1",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "furstenberg_topological": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 342,
@@ -351,6 +360,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
+      "lindemann_weierstrass": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 411,
+        "solved_at": "2026-06-21T11:55:44Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "cfe589d62d5cf8743bda0bc7350b5c36a3473bb1",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
       "linear_ode_asymptotic_stability": {
