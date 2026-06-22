@@ -252,6 +252,16 @@
         "submission_ref": "f6ad7207305f6beb1629e11f0ad0ae51a473acd6",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "frobenius_group_determinant": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 438,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-22T18:46:50Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "dc42003682e35a0543d83792680255816f0399e0",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "frobenius_kernel_isNormal": {
         "benchmark_commit": "80c130e15221cb7bc5312c5d19237be92081afb0",
         "issue_number": 97,
@@ -930,6 +940,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "ad7e5343ae5c09756ca9c7a0b8fe545bf705a886",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
+      "wiener_inverse_closed": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 438,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-22T18:46:50Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "dc42003682e35a0543d83792680255816f0399e0",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "wigner_semicircle": {
