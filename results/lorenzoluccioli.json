@@ -662,6 +662,16 @@
         "submission_ref": "3b77889dca2f55c0f29178fd5b1a87de54e2c602",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "rado_riemannSurface": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 434,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-22T13:46:34Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "1bbb4aef52dec36cb73e719fb533a55512bdaef5",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "radon_transform_inversion": {
         "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
         "issue_number": 322,
@@ -791,6 +801,16 @@
         "submission_public": true,
         "submission_ref": "945a650516082dfeba205b6b4c2ffab1515b0669",
         "submission_repo": "LorenzoLuccioli/lean-eval"
+      },
+      "turing_recursive_equiv": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 434,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-22T13:46:34Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "1bbb4aef52dec36cb73e719fb533a55512bdaef5",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "tverberg_theorem": {
         "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
