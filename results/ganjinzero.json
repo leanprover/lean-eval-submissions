@@ -886,6 +886,16 @@
         "submission_ref": "f3d41900cbbfad4c2478cecb946451a95e3320e6",
         "submission_repo": "GanjinZero/trace_cayley_hamilton_newton"
       },
+      "turing_recursive_equiv": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 431,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-22T01:03:28Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "309338f05ed8f8a59d836dba03059c77d6f14ac0",
+        "submission_repo": "GanjinZero/turing_recursive_equiv"
+      },
       "tverberg_theorem": {
         "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
         "issue_number": 275,
