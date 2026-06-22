@@ -139,6 +139,15 @@
         "submission_ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
         "submission_repo": "test1-deepthought/lean-eval-solutions"
       },
+      "multi_hole_helpers_example": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 436,
+        "solved_at": "2026-06-22T15:18:05Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "5ee01db2fe00133ca0322cdaf0fd95ff5eb37fca",
+        "submission_repo": "test1-deepthought/lean-eval-solutions"
+      },
       "pell_solution_convergent": {
         "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
         "issue_number": 270,
