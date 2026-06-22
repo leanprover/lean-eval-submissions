@@ -72,6 +72,16 @@
         "submission_ref": "00b32807abe0d286c4638daf888c739e1bb4b90c",
         "submission_repo": "LorenzoLuccioli/lean-eval"
       },
+      "brun_constant_converges": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 437,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-22T16:58:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "88d69e1f31888a5f2ebf1305e42b09a9d74c2af4",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "cauchy_kovalevskaya": {
         "benchmark_commit": "e0fea56670a02d1079fa5193501a27e086dde966",
         "issue_number": 336,
@@ -272,6 +282,16 @@
         "submission_ref": "b3b8e4096a02ab124f24326526ec6d500a3828b3",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "gauss_wantzel_constructible_polygon": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 437,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-22T16:58:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "88d69e1f31888a5f2ebf1305e42b09a9d74c2af4",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "glAction_range_eq_centralizer_symAction": {
         "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
         "issue_number": 238,
@@ -380,6 +400,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "e9a13bf2f2d56e98bdcf7bdece397f40361d586b",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
+      "kirk_normal_structure": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 437,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-22T16:58:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "88d69e1f31888a5f2ebf1305e42b09a9d74c2af4",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "kolmogorov_arnold_superposition": {
@@ -492,6 +522,16 @@
         "submission_ref": "8ddbd90e158b16c4b65c78a5adefc03877ffdbcb",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "margulis_ruelle": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 437,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-22T16:58:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "88d69e1f31888a5f2ebf1305e42b09a9d74c2af4",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 178,
@@ -570,6 +610,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "eecd3cf9fbc94c47ab6471dc4d44070e1d033174",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
+      "normal_spectral_theorem": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 437,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-22T16:58:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "88d69e1f31888a5f2ebf1305e42b09a9d74c2af4",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "nyquist_shannon_sampling": {
@@ -811,6 +861,16 @@
         "submission_public": true,
         "submission_ref": "945a650516082dfeba205b6b4c2ffab1515b0669",
         "submission_repo": "LorenzoLuccioli/lean-eval"
+      },
+      "trace_cayley_hamilton_newton": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 437,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-22T16:58:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "88d69e1f31888a5f2ebf1305e42b09a9d74c2af4",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
       "turing_recursive_equiv": {
         "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
