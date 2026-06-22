@@ -260,6 +260,16 @@
         "submission_ref": "3f7d303b8a2075f8839d5ec03b93b3149160a735",
         "submission_repo": "GanjinZero/fraser_kakeya_fourier_decay"
       },
+      "frobenius_group_determinant": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 430,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-22T01:06:16Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "99f6dc44cf13f3b10000257775d1b485bb3638c6",
+        "submission_repo": "GanjinZero/frobenius_group_determinant"
+      },
       "frobenius_kernel_isNormal": {
         "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
         "issue_number": 117,
