@@ -622,6 +622,16 @@
         "submission_ref": "eecd3cf9fbc94c47ab6471dc4d44070e1d033174",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "peano_existence": {
+        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+        "issue_number": 435,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-22T14:26:01Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "4c3c5c01722b86ee6593c14c31e94a269620968f",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "pell_solution_convergent": {
         "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
         "issue_number": 167,
