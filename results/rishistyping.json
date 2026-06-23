@@ -511,6 +511,16 @@
         "submission_ref": "eebcfc0b152377f95aa1d4ee5ad410d39de31f44",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "runge_theorem": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 445,
+        "production_description": "No Description",
+        "solved_at": "2026-06-23T11:55:12Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "d1be3d1e2403f9ec50460bf477eca25e578fb93a",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "schauder_fixed_point": {
         "benchmark_commit": "dc0a77053f401986e3f8431d713b20b5c4cbe5d8",
         "issue_number": 89,
