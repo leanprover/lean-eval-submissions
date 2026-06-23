@@ -849,6 +849,16 @@
         "submission_ref": "8e1e59fa6455a001efec9359dbd77a8300660af3",
         "submission_repo": "GanjinZero/stable_unstable_manifolds"
       },
+      "strong_subadditivity": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 447,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-23T12:36:00Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "e6e8bb5d71330d1f983f0361a5a49ddebd7c604b",
+        "submission_repo": "GanjinZero/strong_subadditivity"
+      },
       "sturm": {
         "benchmark_commit": "dc0a77053f401986e3f8431d713b20b5c4cbe5d8",
         "issue_number": 87,
