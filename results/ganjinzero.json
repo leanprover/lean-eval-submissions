@@ -477,6 +477,16 @@
         "submission_ref": "35aa04e11998c35c494abc62388a1e512911323d",
         "submission_repo": "GanjinZero/lax_approximation"
       },
+      "levi_civita_exists_unique": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 452,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-23T15:45:23Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "2a5017fd1967601a537a3585f33fac245fa5876c",
+        "submission_repo": "GanjinZero/levi_civita_exists_unique"
+      },
       "lidskii_inequality": {
         "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
         "issue_number": 120,
