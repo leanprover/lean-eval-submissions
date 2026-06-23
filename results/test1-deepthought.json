@@ -139,6 +139,15 @@
         "submission_ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
         "submission_repo": "test1-deepthought/lean-eval-solutions"
       },
+      "mulCayley_connected_iff_closure_eq_top": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 446,
+        "solved_at": "2026-06-23T12:43:46Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "da97f5b0b4f8909ebf8037b282a29d174289ee40",
+        "submission_repo": "test1-deepthought/lean-eval-solutions"
+      },
       "multi_hole_helpers_example": {
         "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
         "issue_number": 436,
@@ -173,6 +182,15 @@
         "submission_kind": "github_repo",
         "submission_public": true,
         "submission_ref": "73791422ab4d7a4db8afedae381a1c422c9c849e",
+        "submission_repo": "test1-deepthought/lean-eval-solutions"
+      },
+      "substInv_X_sub_X_sq_eq_catalan": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 446,
+        "solved_at": "2026-06-23T12:43:46Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "da97f5b0b4f8909ebf8037b282a29d174289ee40",
         "submission_repo": "test1-deepthought/lean-eval-solutions"
       },
       "two_plus_two": {
