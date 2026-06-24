@@ -819,6 +819,16 @@
         "submission_ref": "e3ab99a7ffd1ae258b28da8903003eed7ec2d5c5",
         "submission_repo": "GanjinZero/schauder_fixed_point"
       },
+      "semilinear_poisson_radial_symmetry": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 454,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-24T00:54:29Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "6d5a59d80bc2e030660f7086da47d1efa2c41011",
+        "submission_repo": "GanjinZero/semilinear_poisson_radial_symmetry"
+      },
       "shannon_capacity_pentagon": {
         "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
         "issue_number": 417,
