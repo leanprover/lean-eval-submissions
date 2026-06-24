@@ -2,6 +2,16 @@
   "schema_version": 1,
   "solved": {
     "Seed Prover (ByteDance)": {
+      "H1_not_closedComplemented": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 455,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-24T07:00:53Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "27e812fd87f4f12aa014c0d763be211507b9413a",
+        "submission_repo": "GanjinZero/H1_not_closedComplemented"
+      },
       "abel_ruffini": {
         "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
         "issue_number": 172,
