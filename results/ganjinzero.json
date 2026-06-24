@@ -994,6 +994,16 @@
         "submission_public": false,
         "submission_ref": "d6e89382c3e1e6b6389c9888fdf0f43e81a1ec56",
         "submission_repo": "GanjinZero/wiener_inverse_closed"
+      },
+      "wiener_levy_analytic_calculus": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 453,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-24T00:54:46Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "29f9c120fca66b230773c189d100bbe3d639775b",
+        "submission_repo": "GanjinZero/wiener_levy_analytic_calculus"
       }
     }
   },
