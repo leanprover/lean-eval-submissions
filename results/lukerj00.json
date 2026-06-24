@@ -110,6 +110,15 @@
         "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "compact_group_semisimple": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 457,
+        "solved_at": "2026-06-24T12:07:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f8e90cdb788ab27c2c506ae5356660ad992d698a",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "contractibleSpace_houseWithTwoRooms": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 382,
@@ -522,6 +531,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
+      "peano_existence": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 457,
+        "solved_at": "2026-06-24T12:07:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f8e90cdb788ab27c2c506ae5356660ad992d698a",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
       "pell_solution_convergent": {
