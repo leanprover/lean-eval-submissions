@@ -731,6 +731,15 @@
         "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "trace_cayley_hamilton_newton": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 465,
+        "solved_at": "2026-06-25T13:22:37Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f51e08f7bed7d6263dad49a476ed40962c6ba069",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "tverberg_theorem": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 343,
