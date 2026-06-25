@@ -506,6 +506,15 @@
         "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "normal_spectral_theorem": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 464,
+        "solved_at": "2026-06-25T12:37:23Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "a95af5b474eb932731d93b16f3d862040adbe813",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "oppenheim_inequality": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 342,
@@ -623,6 +632,15 @@
         "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "runge_theorem": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 464,
+        "solved_at": "2026-06-25T12:37:23Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "a95af5b474eb932731d93b16f3d862040adbe813",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "sard_theorem": {
         "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
         "issue_number": 449,
@@ -639,6 +657,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "f3362656a8a62cb13589d8d95438703c6d23e7f6",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
+      "shannon_capacity_pentagon": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 464,
+        "solved_at": "2026-06-25T12:37:23Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "a95af5b474eb932731d93b16f3d862040adbe813",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
       "solvable_by_radicals_converse": {
