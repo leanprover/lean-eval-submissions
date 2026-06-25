@@ -2,6 +2,15 @@
   "schema_version": 1,
   "solved": {
     "MerLean-Prover": {
+      "abel_ruffini": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 469,
+        "solved_at": "2026-06-25T19:56:07Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "7b3bc037db402c14c0515366491c1ea1bc35dbc9",
+        "submission_repo": "doxtor6/lean-eval"
+      },
       "banach_alaoglu_bourbaki": {
         "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
         "issue_number": 287,
@@ -216,6 +225,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "905cfa940566afe283ac0f4d7be05c2a0d6bc9e4",
+        "submission_repo": "doxtor6/lean-eval"
+      },
+      "schauder_fixed_point": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 469,
+        "solved_at": "2026-06-25T19:56:07Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "7b3bc037db402c14c0515366491c1ea1bc35dbc9",
         "submission_repo": "doxtor6/lean-eval"
       },
       "sturm_separation": {
