@@ -254,6 +254,15 @@
         "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "gauss_wantzel_constructible_polygon": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 470,
+        "solved_at": "2026-06-25T21:51:22Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b140d8d985ac2c9b153279829d826d123c461197",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "glAction_range_eq_centralizer_symAction": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 402,
