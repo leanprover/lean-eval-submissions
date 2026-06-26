@@ -1,5 +1,5 @@
 # Safety net for the Submission workflow: if an issue is labeled
-# `submission` but no bot comment has appeared within 2 hours, post a
+# `submission` but no bot comment has appeared within 7 hours, post a
 # generic orphan-notice and close. Catches cases the in-workflow
 # handlers cannot:
 #   - workflow administratively disabled (run conclusion = skipped)
@@ -7,8 +7,8 @@
 #   - runner died before the `if: failure()` step ran in `fetch`
 #   - the `notify` job itself failed
 #
-# 2h threshold > evaluate's 90 min timeout, so legitimate long runs are
-# not closed prematurely.
+# 7h threshold > evaluate's 6h GitHub-runner job limit, so legitimate
+# long runs are not closed prematurely.
 name: Submission reconciler
 
 on:

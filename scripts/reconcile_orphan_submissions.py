@@ -9,7 +9,7 @@ import os
 import subprocess
 import sys
 
-ORPHAN_THRESHOLD = dt.timedelta(hours=2)
+ORPHAN_THRESHOLD = dt.timedelta(hours=7)
 BOT_AUTHORS = {"github-actions[bot]", "lean-eval-bot[bot]"}
 SUBMISSION_WORKFLOW = "submission.yml"
 

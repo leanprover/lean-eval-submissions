@@ -44,7 +44,8 @@ jobs:
   evaluate:
     if: github.event.label.name == 'submission'
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # No explicit timeout: fall back to GitHub's 6-hour per-job runner
+    # limit so genuinely long proofs are not cut off mid-evaluation.
     # `issues: write` is needed by the in-job fetch-failure / evaluate-failure
     # commenters below. The default `GITHUB_TOKEN` is *not* placed into the
     # env of any step that runs untrusted Lean: it only appears in the
