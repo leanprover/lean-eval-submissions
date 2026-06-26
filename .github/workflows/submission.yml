@@ -44,8 +44,10 @@ jobs:
   evaluate:
     if: github.event.label.name == 'submission'
     runs-on: ubuntu-latest
-    # No explicit timeout: fall back to GitHub's 6-hour per-job runner
-    # limit so genuinely long proofs are not cut off mid-evaluation.
+    # 360 minutes is GitHub's per-job ceiling for hosted runners; set it
+    # explicitly so genuinely long proofs run to the platform limit rather
+    # than being cut off, and so the intended cap stays visible here.
+    timeout-minutes: 360
     # `issues: write` is needed by the in-job fetch-failure / evaluate-failure
     # commenters below. The default `GITHUB_TOKEN` is *not* placed into the
     # env of any step that runs untrusted Lean: it only appears in the
