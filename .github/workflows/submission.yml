@@ -107,18 +107,22 @@ jobs:
       # them from nixpkgs and prepending to PATH. python / lean / elan /
       # lake / git / gh are already on the runner; elan provides the
       # pinned toolchain. nix-ld lets the resulting prebuilt binaries run.
-      - name: Provision go + age + elan via nix (self-hosted)
+      - name: Provision tools via nix (self-hosted)
         # The chonk runner's service PATH is curated (it has python and git
-        # but not go, age, or the Lean toolchain). Supply the rest from
-        # nixpkgs and prepend to PATH for every later step. The `elan`
+        # but not go, age, the Lean toolchain, or `which`). Supply the rest
+        # from nixpkgs and prepend to PATH for every later step. The `elan`
         # package ships the `lake`/`lean` shims, which resolve the pinned
         # toolchain per `lean-toolchain`; nix-ld runs the fetched binaries.
+        # `which` is needed by EvalTools' comparator-installation check,
+        # which shells out to `which landrun` / `which lean`. The `^out`
+        # output selector keeps multi-output packages (which) to one path.
         if: runner.environment != 'github-hosted'
         run: |
           {
-            echo "$(nix build --no-link --print-out-paths nixpkgs#go)/bin"
-            echo "$(nix build --no-link --print-out-paths nixpkgs#age)/bin"
-            echo "$(nix build --no-link --print-out-paths nixpkgs#elan)/bin"
+            echo "$(nix build --no-link --print-out-paths 'nixpkgs#go^out')/bin"
+            echo "$(nix build --no-link --print-out-paths 'nixpkgs#age^out')/bin"
+            echo "$(nix build --no-link --print-out-paths 'nixpkgs#elan^out')/bin"
+            echo "$(nix build --no-link --print-out-paths 'nixpkgs#which^out')/bin"
           } >> "$GITHUB_PATH"
 
       # actions/setup-python pinned to a26af69b (= refs/tags/v5.6.0 as of 2026-05-04).
