@@ -61,18 +61,21 @@ Two new pieces live inside the existing `submission.yml`:
 
    The push is **idempotent on the source**, which matters because a
    submission can be re-evaluated (e.g. after a benchmark toolchain bump)
-   and the ciphertext is *not* reproducible — `age` picks a fresh file
-   key per run, so re-encrypting the same source yields different bytes
-   at the same `audit/YYYY/MM/{submitter}-{issue}-{ref8}` path. The
-   script therefore decides on the **recorded submission identity** —
-   the stable tuple `(submitter, issue, submission_repo, submission_ref,
-   sha256_plaintext_tar)` in the sidecar, not the ciphertext bytes.
-   Before uploading it reads any existing sidecar: if the full identity
-   matches, this exact source is already archived, the push is a no-op,
-   and the original (immutable) ciphertext is left untouched. Any
-   mismatch — including a stale sidecar that shares the plaintext digest
-   but names a different submission — is an operator-investigatable
-   collision and fails hard, not something to silently resolve.
+   and neither the ciphertext nor the plaintext tar is reproducible —
+   `age` picks a fresh file key per run, and gzip/tar packaging varies, so
+   re-fetching the same source yields different bytes at the same
+   `audit/YYYY/MM/{submitter}-{issue}-{ref8}` path. The script therefore
+   decides on the **recorded submission identity** — the stable tuple
+   `(submitter, issue, submission_repo, submission_ref)` in the sidecar.
+   `submission_ref` is a 40-char git SHA, which immutably pins the source
+   tree content, so no digest is needed to identify the source (and
+   including the non-reproducible `sha256_plaintext_tar` would misclassify
+   a legitimate re-evaluation as a collision). Before uploading it reads
+   any existing sidecar: if the identity matches, this exact source is
+   already archived, the push is a no-op, and the original (immutable)
+   ciphertext is left untouched. A path collision with a *different*
+   identity is an operator-investigatable collision and fails hard, not
+   something to silently resolve.
 
    The per-file Contents API call is a create-or-update: it fetches any
    existing file's Git blob SHA and supplies it on the PUT, so a rerun
