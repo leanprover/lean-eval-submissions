@@ -115,9 +115,11 @@ jobs:
         # toolchain per `lean-toolchain`; nix-ld runs the fetched binaries.
         if: runner.environment != 'github-hosted'
         run: |
-          echo "$(nix build --no-link --print-out-paths nixpkgs#go)/bin" >> "$GITHUB_PATH"
-          echo "$(nix build --no-link --print-out-paths nixpkgs#age)/bin" >> "$GITHUB_PATH"
-          echo "$(nix build --no-link --print-out-paths nixpkgs#elan)/bin" >> "$GITHUB_PATH"
+          {
+            echo "$(nix build --no-link --print-out-paths nixpkgs#go)/bin"
+            echo "$(nix build --no-link --print-out-paths nixpkgs#age)/bin"
+            echo "$(nix build --no-link --print-out-paths nixpkgs#elan)/bin"
+          } >> "$GITHUB_PATH"
 
       # actions/setup-python pinned to a26af69b (= refs/tags/v5.6.0 as of 2026-05-04).
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
