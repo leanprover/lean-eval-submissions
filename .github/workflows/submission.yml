@@ -159,6 +159,16 @@ jobs:
           private-key: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
           owner: ${{ steps.owner.outputs.owner }}
 
+      - name: Clean scratch dirs (self-hosted runner reuse)
+        # Self-hosted chonk runners persist /tmp across jobs, unlike the
+        # ephemeral hosted runners this workflow was written for. Stale
+        # scratch state breaks fetch's checkout ("untracked working tree
+        # files would be overwritten ... Aborting") and could otherwise
+        # leak one submission's source into the next job's build. Wipe the
+        # scratch dirs at job start; on hosted runners they do not exist
+        # yet, so the rm is a harmless no-op.
+        run: rm -rf /tmp/fetch-out /tmp/submission-src /tmp/evaluate-out /tmp/audit-encrypt
+
       - name: Fetch submission
         id: fetch
         env:
