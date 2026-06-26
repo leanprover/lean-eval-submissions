@@ -43,14 +43,16 @@ concurrency:
 jobs:
   evaluate:
     if: github.event.label.name == 'submission'
-    # TEMPORARY: self-hosted chonk pool. Even ubuntu-latest-large (64 GB)
-    # SIGTERM'd (exit 143) at ~99% of issue #467's multi-hour build, hitting
-    # the hosted per-job memory cap. chonk has the memory headroom to finish.
-    # This routes UNTRUSTED submission Lean onto self-hosted hardware; it is
-    # acceptable only because the comparator runs inside the landrun sandbox
-    # (--ro /, verified by the "Probe sandbox is engaged" step). Revert to a
-    # GitHub-hosted runner once #467 is through. See docs/audit-archive.md.
-    runs-on: [self-hosted, chonk]
+    # Default: GitHub-hosted runner. The self-hosted chonk path is fully
+    # wired and dormant — every chonk-specific step is guarded by
+    # `runner.environment != 'github-hosted'`, so it activates automatically
+    # when this runs on chonk. To run a memory-heavy submission that OOMs on
+    # hosted runners (as issue #467's ~10k-module build did, even on
+    # ubuntu-latest-large, SIGTERM exit 143 at ~99%), flip THIS ONE LINE to:
+    #   runs-on: [self-hosted, chonk]
+    # chonk has the memory headroom; the comparator still runs inside the
+    # landrun sandbox there. See docs/audit-archive.md.
+    runs-on: ubuntu-latest
     # 360 minutes is GitHub's per-job ceiling for hosted runners; set it
     # explicitly so genuinely long proofs run to the platform limit rather
     # than being cut off, and so the intended cap stays visible here.
