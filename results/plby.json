@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Codex (with human in the loop)": {
+      "erdos_unit_distance_conjecture_false": {
+        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+        "issue_number": 467,
+        "solved_at": "2026-06-26T12:44:02Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "2c7ace40d681d9696fbc15c54c9edca9a2ad9f07",
+        "submission_repo": "plby/Erdos90"
+      }
+    }
+  },
+  "user": "plby"
+}
