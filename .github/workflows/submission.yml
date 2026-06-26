@@ -43,7 +43,11 @@ concurrency:
 jobs:
   evaluate:
     if: github.event.label.name == 'submission'
-    runs-on: ubuntu-latest
+    # Larger hosted runner: heavy multi-hour proofs exhausted the memory of
+    # the default ubuntu-latest (4 vCPU / 16 GB) and were SIGTERM'd mid-run.
+    # Must stay a GitHub-hosted (ephemeral) runner, not self-hosted: this job
+    # elaborates untrusted submission Lean. See docs/audit-archive.md threat model.
+    runs-on: ubuntu-latest-large
     # 360 minutes is GitHub's per-job ceiling for hosted runners; set it
     # explicitly so genuinely long proofs run to the platform limit rather
     # than being cut off, and so the intended cap stays visible here.

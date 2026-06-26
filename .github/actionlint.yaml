@@ -1,0 +1,12 @@
+# actionlint configuration.
+#
+# Register the organization's custom GitHub-hosted larger-runner labels so
+# `runs-on:` referencing them does not trip actionlint's runner-label check.
+# These are GitHub-hosted (ephemeral) larger runners provisioned at the org
+# level, not self-hosted machines; `self-hosted-runner.labels` is just
+# actionlint's mechanism for declaring any non-default runner label.
+self-hosted-runner:
+  labels:
+    - ubuntu-latest-large
+    - windows-latest-large
+    - windows-2022-large
