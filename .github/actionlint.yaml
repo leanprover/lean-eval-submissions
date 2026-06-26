@@ -10,3 +10,5 @@ self-hosted-runner:
     - ubuntu-latest-large
     - windows-latest-large
     - windows-2022-large
+    # Self-hosted Linux runner pool (chonk-1 / chonk-2).
+    - chonk

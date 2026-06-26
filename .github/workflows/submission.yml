@@ -43,11 +43,14 @@ concurrency:
 jobs:
   evaluate:
     if: github.event.label.name == 'submission'
-    # Larger hosted runner: heavy multi-hour proofs exhausted the memory of
-    # the default ubuntu-latest (4 vCPU / 16 GB) and were SIGTERM'd mid-run.
-    # Must stay a GitHub-hosted (ephemeral) runner, not self-hosted: this job
-    # elaborates untrusted submission Lean. See docs/audit-archive.md threat model.
-    runs-on: ubuntu-latest-large
+    # TEMPORARY: self-hosted chonk pool. Even ubuntu-latest-large (64 GB)
+    # SIGTERM'd (exit 143) at ~99% of issue #467's multi-hour build, hitting
+    # the hosted per-job memory cap. chonk has the memory headroom to finish.
+    # This routes UNTRUSTED submission Lean onto self-hosted hardware; it is
+    # acceptable only because the comparator runs inside the landrun sandbox
+    # (--ro /, verified by the "Probe sandbox is engaged" step). Revert to a
+    # GitHub-hosted runner once #467 is through. See docs/audit-archive.md.
+    runs-on: [self-hosted, chonk]
     # 360 minutes is GitHub's per-job ceiling for hosted runners; set it
     # explicitly so genuinely long proofs run to the platform limit rather
     # than being cut off, and so the intended cap stays visible here.
@@ -275,6 +278,10 @@ jobs:
         # several GB and we hold it twice (repo root + per-workspace).
         # Strip Android, .NET, Haskell, and other preinstalled caches we
         # do not need. Frees ~30GB.
+        # GitHub-hosted only: on a self-hosted runner this action would
+        # delete the host's Docker images and system toolchains. chonk has
+        # ample disk, so skip it there.
+        if: runner.environment == 'github-hosted'
         # jlumbroso/free-disk-space pinned to 54081f13 (= refs/tags/v1.3.1, also main HEAD as of 2026-05-04).
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
         with:
