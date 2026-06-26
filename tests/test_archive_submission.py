@@ -371,10 +371,12 @@ class PushTests(unittest.TestCase):
             self.assertEqual(puts[0]["headers"]["Authorization"], "Bearer xxx")
 
     def test_push_idempotent_on_reeval_same_source(self) -> None:
-        # Re-evaluating an already-archived submission. The sidecar exists
-        # and records the same plaintext digest; age is non-deterministic so
-        # the fresh ciphertext bytes differ, but the source is identical.
-        # The push must be a no-op and must NOT overwrite the first copy.
+        # Re-evaluating an already-archived submission. The sidecar exists for
+        # the same identity (submitter, issue, repo, ref) but records a
+        # DIFFERENT plaintext digest: gzip/tar packaging is not reproducible,
+        # so re-fetching the same git ref yields different tar bytes for
+        # identical content. The push must still be a no-op keyed on the
+        # immutable ref, and must NOT overwrite the first copy.
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             ciphertext = self._ciphertext(tmp, b"age-encryption.org/v1\nfreshly-rekeyed")
@@ -386,7 +388,8 @@ class PushTests(unittest.TestCase):
                 method = req.get_method()
                 calls.append((method, req.full_url))
                 if method == "GET" and req.full_url.endswith(".json"):
-                    return io.BytesIO(self._sidecar_meta())
+                    # Same identity, different (non-reproducible) tar digest.
+                    return io.BytesIO(self._sidecar_meta(sha256_plaintext_tar="b" * 64))
                 raise AssertionError(f"unexpected {method} {req.full_url}")
 
             with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
@@ -404,8 +407,11 @@ class PushTests(unittest.TestCase):
             self.assertFalse(any(m == "PUT" for m, _ in calls))
 
     def test_push_fails_on_source_collision(self) -> None:
-        # A *different* source already occupies this audit path (different
-        # plaintext digest). That is a genuine collision — hard fail, no PUT.
+        # A *different* source already occupies this audit path: same
+        # submitter/issue/ref8 (so the same path) but a different source repo.
+        # That is a genuine collision — hard fail, no PUT. A differing
+        # plaintext digest alone is NOT a collision (see the idempotent test);
+        # only a differing identity field is.
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             ciphertext = self._ciphertext(tmp)
@@ -413,7 +419,7 @@ class PushTests(unittest.TestCase):
 
             def fake_urlopen(req, timeout=None):
                 if req.get_method() == "GET" and req.full_url.endswith(".json"):
-                    return io.BytesIO(self._sidecar_meta(sha256_plaintext_tar="b" * 64))
+                    return io.BytesIO(self._sidecar_meta(submission_repo="mallory/proofs"))
                 raise AssertionError("must not PUT on a colliding archive")
 
             with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}, clear=False), \
@@ -426,10 +432,10 @@ class PushTests(unittest.TestCase):
                     ])
             self.assertIn("colliding archive", str(ctx.exception).lower())
 
-    def test_push_fails_on_identity_collision_with_matching_digest(self) -> None:
-        # Stale/misplaced sidecar: same plaintext digest but a different
-        # submission identity. Comparing the full identity tuple (not the
-        # digest alone) must still flag this as a collision rather than no-op.
+    def test_push_fails_on_identity_collision_different_submitter(self) -> None:
+        # Stale/misplaced sidecar at the same path but a different submitter.
+        # A mismatch in any identity field must be flagged as a collision
+        # rather than treated as a re-archive no-op.
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             ciphertext = self._ciphertext(tmp)
@@ -437,7 +443,7 @@ class PushTests(unittest.TestCase):
 
             def fake_urlopen(req, timeout=None):
                 if req.get_method() == "GET" and req.full_url.endswith(".json"):
-                    # Digest matches; submitter does not.
+                    # Same path, different submitter.
                     return io.BytesIO(self._sidecar_meta(submitter="mallory"))
                 raise AssertionError("must not PUT on an identity collision")
 

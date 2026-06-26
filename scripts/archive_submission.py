@@ -289,16 +289,18 @@ def _validate_sidecar(sidecar: dict) -> None:
 
 
 # The stable identity of an archived submission. Two sidecars describe the
-# same source iff every one of these fields matches. Comparing the whole tuple
-# (not just the plaintext digest) means a stale or misplaced sidecar that
-# happens to share a digest but names a different submission is treated as a
-# collision, not a re-archive no-op.
+# same source iff every one of these fields matches. `submission_ref` is a
+# 40-char git SHA, which immutably pins the source tree content, so
+# (submitter, issue, repo, ref) is a complete and stable identity. The
+# plaintext-tar digest is deliberately NOT part of it: gzip/tar packaging is
+# not byte-reproducible, so re-fetching the same ref yields a different
+# `sha256_plaintext_tar` for identical content — including it would
+# misclassify a legitimate re-evaluation as a colliding archive.
 _IDENTITY_FIELDS = (
     "submitter",
     "issue",
     "submission_repo",
     "submission_ref",
-    "sha256_plaintext_tar",
 )
 
 
@@ -386,14 +388,15 @@ def _push(args: argparse.Namespace) -> int:
     )
 
     # Re-evaluation safety. The audit path is keyed on the submission's
-    # identity (submitter, issue, source ref), but the ciphertext is not
-    # reproducible: age picks a fresh file key per run, so re-archiving the
-    # same source yields different bytes at the same path. Decide by the
-    # *plaintext* digest, which IS stable for a given source and is recorded
-    # in the sidecar. A matching digest means this exact source is already
-    # archived (no-op); a different digest at the same path is a genuine
-    # collision for an operator to investigate. Doing this here keeps the
-    # immutable first ciphertext in place rather than overwriting it.
+    # identity (submitter, issue, source ref). Neither the ciphertext nor the
+    # plaintext tar is reproducible: age picks a fresh file key per run, and
+    # gzip/tar packaging varies, so re-archiving the same source yields
+    # different bytes at the same path. Decide by the immutable submission
+    # identity — the git ref pins the source tree content — not by any digest.
+    # A matching identity means this exact source is already archived (no-op);
+    # a path collision with a different identity is a genuine collision for an
+    # operator to investigate. Doing this here keeps the immutable first
+    # ciphertext in place rather than overwriting it.
     existing_sidecar = _get_remote_sidecar(
         audit_repo=audit_repo, token=token, path=sidecar_remote
     )
@@ -401,7 +404,8 @@ def _push(args: argparse.Namespace) -> int:
         if _same_source(existing_sidecar, sidecar):
             print(
                 f"archive: {sidecar_remote} already records this source "
-                f"(plaintext {sidecar['sha256_plaintext_tar']}); idempotent no-op"
+                f"({sidecar['submission_repo']}@{_short_ref(sidecar['submission_ref'])}); "
+                f"idempotent no-op"
             )
             print(f"archived: {audit_repo}:{ciphertext_remote}")
             print(f"          {audit_repo}:{sidecar_remote}")
