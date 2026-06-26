@@ -316,10 +316,24 @@ jobs:
         run: rm -rf .git lean-eval/.git
 
       # leanprover/lean-action pinned to 38fbc41a (= refs/tags/v1.5.0, also v1 HEAD as of 2026-05-04).
+      # github-hosted only: lean-action's helper scripts use a /bin/bash
+      # shebang that does not exist on NixOS (bad interpreter, exit 126).
       - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
+        if: runner.environment == 'github-hosted'
         with:
           lake-package-directory: lean-eval
           use-mathlib-cache: true
+
+      - name: Lean toolchain + mathlib cache (self-hosted)
+        # Self-hosted nix equivalent of lean-action above: elan (on PATH)
+        # resolves the pinned toolchain, `cache get` fetches Mathlib oleans,
+        # and `lake build` builds the harness. nix-ld lets the elan-fetched
+        # toolchain binaries run.
+        if: runner.environment != 'github-hosted'
+        working-directory: lean-eval
+        run: |
+          lake exe cache get
+          lake build
 
       # actions/setup-go pinned to d35c59ab (= refs/tags/v5.5.0 as of 2026-05-04).
       # github-hosted only: on self-hosted nix, go is provisioned above.
