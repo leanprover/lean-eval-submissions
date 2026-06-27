@@ -371,6 +371,15 @@
         "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "kirk_normal_structure": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 496,
+        "solved_at": "2026-06-27T20:14:43Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "ac9510dfb329b1e2518f6592d061026f5e0e72aa",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "koszul_formula": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 344,
