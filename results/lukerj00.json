@@ -191,6 +191,15 @@
         "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "exists_nonisotopic_link": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 495,
+        "solved_at": "2026-06-27T18:46:50Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "adf512c4dbb1b3426e233b2fa724dd8f465ca470",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "fang_xia_tiling_partition_transitive": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 344,
