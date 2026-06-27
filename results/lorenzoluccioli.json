@@ -2,6 +2,16 @@
   "schema_version": 1,
   "solved": {
     "Aristotle (Harmonic)": {
+      "H1_not_closedComplemented": {
+        "benchmark_commit": "a1175bedc0d1c04b70ef51569137bc39ae0e60de",
+        "issue_number": 491,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-27T09:39:56Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b7acef140f3d5ef652f4595a32b5bb8627116107",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "abel_ruffini": {
         "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
         "issue_number": 167,
