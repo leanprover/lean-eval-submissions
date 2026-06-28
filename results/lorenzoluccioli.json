@@ -872,6 +872,16 @@
         "submission_ref": "08b5700fc39fe1aea00c915f6945d02973a5b7be",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "semilinear_poisson_radial_symmetry": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 499,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-06-28T13:57:19Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "66669d530a4b82c10bf2f76488c6465ef0f92139",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "shannon_capacity_pentagon": {
         "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
         "issue_number": 424,
