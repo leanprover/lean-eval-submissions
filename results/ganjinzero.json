@@ -780,6 +780,16 @@
         "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "rado_riemannSurface": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 498,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-28T10:07:41Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "6ae15a1fc1fb9ac2cbb53ba5e341b89c377e0a09",
+        "submission_repo": "GanjinZero/rado_riemannSurface"
+      },
       "radon_transform_inversion": {
         "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
         "issue_number": 323,
