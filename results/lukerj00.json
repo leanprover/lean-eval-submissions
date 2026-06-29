@@ -533,6 +533,15 @@
         "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "nash_equilibrium_exists": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 506,
+        "solved_at": "2026-06-29T16:01:14Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "938abfb770a3a45f60a343fc5a92e28e32da96fd",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "noncomputable_hole_example": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 382,
