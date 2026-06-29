@@ -2,6 +2,15 @@
   "schema_version": 1,
   "solved": {
     "Aristotle (Harmonic)": {
+      "pi3_sphere_two_mulEquiv_int": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 505,
+        "solved_at": "2026-06-29T13:51:39Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "45d60dd28e02f279a7a3a13296b934472cf2d67a",
+        "submission_repo": "adrianmartir/lean-eval-private"
+      },
       "pin_sphere_n_mulEquiv_int": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 503,
