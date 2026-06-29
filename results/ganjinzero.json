@@ -447,6 +447,16 @@
         "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "jordan_brouwer": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 500,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-29T01:34:14Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "4a760880507c12df77f859ba3f1b41a399c04a88",
+        "submission_repo": "GanjinZero/jordan_brouwer"
+      },
       "jordan_normal_form": {
         "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
         "issue_number": 275,
