@@ -767,6 +767,15 @@
         "submission_ref": "f3362656a8a62cb13589d8d95438703c6d23e7f6",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "semilinear_poisson_radial_symmetry": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 510,
+        "solved_at": "2026-06-30T16:44:10Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "5d7d097323b53327ea8d2956ddfcbdc891d01eb3",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "shannon_capacity_pentagon": {
         "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
         "issue_number": 464,
