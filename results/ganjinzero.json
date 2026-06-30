@@ -71,6 +71,16 @@
         "submission_ref": "6620bc6eb0982d55826fb725cf54272da9bbf827",
         "submission_repo": "GanjinZero/bauer_extreme_point_uniqueness"
       },
+      "bezout_projective_multiplicity": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 508,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-06-30T15:22:03Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "1e807eb2277514c539d0bbc2132372ea0e1059f8",
+        "submission_repo": "GanjinZero/bezout_projective_multiplicity"
+      },
       "boone_higman_embedding": {
         "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
         "issue_number": 274,
