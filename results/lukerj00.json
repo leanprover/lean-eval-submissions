@@ -2,6 +2,15 @@
   "schema_version": 1,
   "solved": {
     "Tau (caj.al)": {
+      "H1_not_closedComplemented": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 507,
+        "solved_at": "2026-06-30T12:17:07Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "12b75df12d63181ded65fff316d81cb614637f40",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "abel_ruffini": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 344,
@@ -9,6 +18,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
+      "anosov_bowen_shadowing": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 507,
+        "solved_at": "2026-06-30T12:17:07Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "12b75df12d63181ded65fff316d81cb614637f40",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
       "baer_suzuki": {
@@ -243,6 +261,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
+      "frobenius_group_determinant": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 507,
+        "solved_at": "2026-06-30T12:17:07Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "12b75df12d63181ded65fff316d81cb614637f40",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
       "frobenius_kernel_isNormal": {
@@ -641,6 +668,15 @@
         "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "poincare_siegel_linearisation": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 507,
+        "solved_at": "2026-06-30T12:17:07Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "12b75df12d63181ded65fff316d81cb614637f40",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "posSemidef_map_exp": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 343,
@@ -666,6 +702,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "73734406eb8cf95cee5c0a6a8f17001680ee08fa",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
+      "riesz_brothers_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 507,
+        "solved_at": "2026-06-30T12:17:07Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "12b75df12d63181ded65fff316d81cb614637f40",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
       "rising_sun_lemma": {
