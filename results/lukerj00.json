@@ -443,6 +443,15 @@
         "submission_ref": "24e81a9b0abea4272eeb721a43cec332c932b9c3",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "levi_civita_exists_unique": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 519,
+        "solved_at": "2026-07-01T19:22:08Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "e9f1e6cbebfbd5b4a59e627b84224ceb6ff7695e",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "lidskii_inequality": {
         "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
         "issue_number": 484,
