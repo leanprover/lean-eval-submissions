@@ -521,6 +521,16 @@
         "submission_ref": "eebcfc0b152377f95aa1d4ee5ad410d39de31f44",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "rokhlin_lemma": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 514,
+        "production_description": "_no_response_",
+        "solved_at": "2026-07-01T10:08:49Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "ca9f07294d2d47f394191debb7d5d4e78aecc81b",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "runge_theorem": {
         "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
         "issue_number": 445,
