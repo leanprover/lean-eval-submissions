@@ -840,6 +840,16 @@
         "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
         "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
       },
+      "riesz_brothers_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 512,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-01T04:07:45Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "abcb4ad3857adb5886fe4302757ca830d7bc8f2b",
+        "submission_repo": "GanjinZero/riesz_brothers_theorem"
+      },
       "rising_sun_lemma": {
         "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
         "issue_number": 274,
