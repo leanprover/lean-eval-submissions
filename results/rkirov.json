@@ -231,6 +231,28 @@
         "submission_ref": "906335fb5e24909782b204a3fbd2ec5cf96f8ffb",
         "submission_repo": "rkirov/jacobian-claude"
       }
+    },
+    "Claude Opus 4.8 (1M context)": {
+      "jordan_curve": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 520,
+        "production_description": "~1 week of grinding on $100/month subscription. Minimal human intervention.",
+        "solved_at": "2026-07-01T19:53:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "ae084a7bebb07f1c27a6ed3a2d732b6957be2091",
+        "submission_repo": "rkirov/jordan_pick"
+      },
+      "pick": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 520,
+        "production_description": "~1 week of grinding on $100/month subscription. Minimal human intervention.",
+        "solved_at": "2026-07-01T19:53:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "ae084a7bebb07f1c27a6ed3a2d732b6957be2091",
+        "submission_repo": "rkirov/jordan_pick"
+      }
     }
   },
   "user": "rkirov"
