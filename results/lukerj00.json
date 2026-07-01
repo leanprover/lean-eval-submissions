@@ -937,6 +937,15 @@
         "submission_public": false,
         "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
+      "wiener_inverse_closed": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 521,
+        "solved_at": "2026-07-01T20:19:46Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "644491683ed467266bd35c16b4406dc0d36fb8e0",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
       }
     }
   },
