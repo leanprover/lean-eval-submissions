@@ -875,6 +875,15 @@
         "submission_ref": "f51e08f7bed7d6263dad49a476ed40962c6ba069",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "turing_recursive_equiv": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 518,
+        "solved_at": "2026-07-01T19:19:18Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "8dc09844f870221d45119e90e17562a8cf2099b5",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "tverberg_theorem": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 343,
