@@ -772,6 +772,16 @@
         "submission_ref": "ab59a22800a79ebe758985955313e62a2f7c92f7",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "poincare_bendixson": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 515,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-07-01T13:01:44Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f944b44652a248059aeb6e96029a8583a7458e96",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "poincare_siegel_linearisation": {
         "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
         "issue_number": 291,
