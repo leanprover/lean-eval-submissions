@@ -86,6 +86,15 @@
       }
     },
     "Stealth Model": {
+      "abel_ruffini": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 526,
+        "solved_at": "2026-07-04T00:06:17Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "32b7cc87a9425385a003a94843a295df666b8ee8",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "baer_suzuki": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 374,
