@@ -173,6 +173,15 @@
         "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "darboux": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 531,
+        "solved_at": "2026-07-04T12:45:53Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "6f7c617b13e7ce45df3ff08c362f1a3bee0b0fd9",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "def_hole_example": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 382,
@@ -288,6 +297,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "cfe589d62d5cf8743bda0bc7350b5c36a3473bb1",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
+      "fundamental_topos_theory": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 531,
+        "solved_at": "2026-07-04T12:45:53Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "6f7c617b13e7ce45df3ff08c362f1a3bee0b0fd9",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
       "furstenberg_topological": {
@@ -954,6 +972,15 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "06c939ca4227451ef45f2e162320ead3557536c3",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
+      "wigner_semicircle": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 531,
+        "solved_at": "2026-07-04T12:45:53Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "6f7c617b13e7ce45df3ff08c362f1a3bee0b0fd9",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       }
     }
