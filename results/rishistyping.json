@@ -382,6 +382,16 @@
         "submission_ref": "d373a6d4126c78dae25c6017a89a671cbf0bf86a",
         "submission_repo": "rishistyping/lean-eval-jacobian-challenge-diffgeo"
       },
+      "jordan_curve": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 533,
+        "production_description": "No Description",
+        "solved_at": "2026-07-05T01:31:55Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "a014c93120d655d4c14bd06611e6c9883646955c",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "kakutani_fixed_point": {
         "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
         "issue_number": 101,
@@ -519,6 +529,16 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "43b19dd7cadd5d9f6cd9dd6af293b7f773f1b6d7",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
+      "pick": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 533,
+        "production_description": "No Description",
+        "solved_at": "2026-07-05T01:31:55Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "a014c93120d655d4c14bd06611e6c9883646955c",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
       "posSemidef_map_exp": {
