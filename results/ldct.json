@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Claude Opus 4.8 + Fable 5 (multi-agent)": {
+      "chudnovsky_formula_for_pi_inv": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 558,
+        "production_description": "Formalization of Mathlib's chudnovskySum = \u03c0\u207b\u00b9 following Milla's complex-analytic proof (arXiv:1809.00533v6). Produced by Claude Opus 4.8 and Fable 5 (Claude Code) via multi-agent, file-parallel orchestration across multiple sessions; human direction/review at the architecture level (statement pinning, wave planning, output review). ~20.8k lines across 30 modules under Submission/Pi/. Axiom-clean: #print axioms yields exactly [propext, Classical.choice, Quot.sound] (no sorryAx). Toolchain leanprover/lean4:v4.32.0-rc1, Mathlib rev 360da6f.",
+        "solved_at": "2026-07-05T14:53:26Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "4a7505195632d378c8b5cb888864b344621e1d4d",
+        "submission_repo": "ldct/lean-eval-chudnovsky"
+      }
+    }
+  },
+  "user": "ldct"
+}
