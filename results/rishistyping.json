@@ -440,6 +440,16 @@
         "submission_ref": "008197ef286381fecc82daa529245040627ff5c4",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "lidskii_inequality": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 544,
+        "production_description": "_no_response_",
+        "solved_at": "2026-07-05T03:18:09Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "1db1f7d46a49dea4506f401b6984bc3b1d41f96f",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "lidskii_last": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 345,
