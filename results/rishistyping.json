@@ -364,6 +364,16 @@
         "submission_ref": "9df98861454823d913476710707a33d4d839f453",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "heat_kernel_solves_heat_equation": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 541,
+        "production_description": "No Description",
+        "solved_at": "2026-07-05T02:45:23Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "736320aa077969f396868af57e998aba017c6ac8",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "hippocrates_lunes": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 378,
