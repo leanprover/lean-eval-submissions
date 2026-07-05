@@ -714,6 +714,16 @@
         "submission_ref": "d83872b902c71c04973666f922933536b0dd7885",
         "submission_repo": "rishistyping/lean-eval-symplectic-matrix-det-stealth-submission"
       },
+      "trace_cayley_hamilton_newton": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 566,
+        "production_description": "No Description",
+        "solved_at": "2026-07-05T19:44:45Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "a26f1ff89327128e5f67b7a8384bb86e307a1184",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "turing_recursive_equiv": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 532,
