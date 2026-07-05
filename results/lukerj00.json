@@ -821,6 +821,15 @@
         "submission_ref": "a95af5b474eb932731d93b16f3d862040adbe813",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "sobolev_embedding_morrey": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 559,
+        "solved_at": "2026-07-05T15:03:33Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "bbfc2104ba956513b2215cb73f6971f7d61759b1",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "solvable_by_radicals_converse": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 342,
