@@ -478,6 +478,15 @@
         "submission_ref": "744a8f42a8baedda6bc7a2d09c686b2fae6d7256",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "lindemann": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 582,
+        "solved_at": "2026-07-05T23:39:09Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b1fefc2dc5f912be1d5fe64f38e0aed0ce36d1dd",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "linear_ode_asymptotic_stability": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 401,
