@@ -543,6 +543,16 @@
         "submission_ref": "47bfd6e9eeeb40a9a09928198c862ab0cdb3311a",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "normal_spectral_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 569,
+        "production_description": "No Description",
+        "solved_at": "2026-07-05T20:21:05Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "bfb40cfdbea172ff6b8d87be35ad97af8d2b6161",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "oppenheim_inequality": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 535,
