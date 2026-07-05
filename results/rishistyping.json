@@ -760,6 +760,16 @@
         "submission_public": false,
         "submission_ref": "a5f863f9b78604802ed0a449a42a60f9315b9b91",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
+      "wiener_inverse_closed": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 561,
+        "production_description": "No Description",
+        "solved_at": "2026-07-05T16:14:12Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "111ebecf7582da7f343c12fb3c71f9e131f27431",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       }
     },
     "Stealth model": {
