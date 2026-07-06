@@ -200,6 +200,16 @@
         "submission_ref": "da19ed34ff1271b062d5a1f056b17ab1421e42dc",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "compact_group_semisimple": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 583,
+        "production_description": "No Description",
+        "solved_at": "2026-07-06T01:38:13Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b739c04a1583d6ffb703aae20c83dd18626ed41a",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "contractibleSpace_houseWithTwoRooms": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 371,
