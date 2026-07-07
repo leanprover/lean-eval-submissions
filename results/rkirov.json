@@ -1,6 +1,17 @@
 {
   "schema_version": 1,
   "solved": {
+    "Claude Fable 5": {
+      "jacobian_challenge_diffgeo": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 588,
+        "solved_at": "2026-07-07T04:46:27Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "d01da40b8545310b63aa59e750bc7a7bdbb5c593",
+        "submission_repo": "rkirov/jacobian-fable"
+      }
+    },
     "Claude Opus 4.7": {
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "48b8530beb9ff567d8932326aaec1e1acb67b749",
