@@ -811,6 +811,16 @@
         "submission_ref": "000517f69000cbb4b209cc5fc70b279967d8b685",
         "submission_repo": "GanjinZero/pi3_sphere_two_mulEquiv_int"
       },
+      "pin_sphere_n_mulEquiv_int": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 594,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-08T16:54:21Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "c4d0fe8aad6f023ebd658e5c8bb35e2d1f28b2af",
+        "submission_repo": "GanjinZero/pin_sphere_n_mulEquiv_int"
+      },
       "poincare_siegel_linearisation": {
         "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
         "issue_number": 412,
