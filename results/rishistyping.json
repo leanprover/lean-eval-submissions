@@ -353,6 +353,15 @@
         "submission_ref": "e48fa03f1283d5a243c30f8b3e371493450b8d6c",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "gauss_wantzel_constructible_polygon": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 598,
+        "solved_at": "2026-07-08T21:56:18Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "03b8312b442b11a9b9b64c2b35d53cec7eff1c4d",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "glAction_range_eq_centralizer_symAction": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 396,
