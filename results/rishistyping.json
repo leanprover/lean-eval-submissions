@@ -723,6 +723,15 @@
         "submission_ref": "f8984c05f818c6779211c4850db9477ab728309a",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "stable_unstable_manifolds": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 595,
+        "solved_at": "2026-07-08T17:30:36Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "6e5dece1d5d5dacbfab17fdbc17e2a3b7f7549e8",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "sturm": {
         "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
         "issue_number": 226,
