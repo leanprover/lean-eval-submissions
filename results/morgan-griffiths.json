@@ -128,6 +128,15 @@
         "submission_public": true,
         "submission_ref": "65af68184fe56b242024c8f09452b314de54077f",
         "submission_repo": "Morgan-Griffiths/3c5d89f05eafef6dc114d92a1e4d95a9"
+      },
+      "boone_higman_simple": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 609,
+        "solved_at": "2026-07-09T00:13:29Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "73caf238a3e1a09007a2ec1add120a2f754e41ca",
+        "submission_repo": "Morgan-Griffiths/214e146d1fcd8773c5b1e6cd88bdb0de"
       }
     }
   },
