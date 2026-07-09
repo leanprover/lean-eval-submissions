@@ -173,6 +173,15 @@
         "submission_public": true,
         "submission_ref": "151e5ddffa73450f4b29b260a6d2d386d99b8424",
         "submission_repo": "Morgan-Griffiths/99767ba4d2e88708ce9b70b690509719"
+      },
+      "furstenberg_topological": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 614,
+        "solved_at": "2026-07-09T00:21:56Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "90fbd330586bb51cb8caa4c4fdf7bcaa6be6529f",
+        "submission_repo": "Morgan-Griffiths/a06c4da996c1e02a0e72c8119117ce4e"
       }
     }
   },
