@@ -272,6 +272,15 @@
         "submission_public": true,
         "submission_ref": "dc991b32fcdcaac5525d483a9973a71276c8b33d",
         "submission_repo": "Morgan-Griffiths/71eeb5ba681cde3561b6f966a90a660f"
+      },
+      "trace_cayley_hamilton_newton": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 625,
+        "solved_at": "2026-07-09T00:45:51Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "c072ed0afa440cbeb6d4d4c3b4d3015c0fdacc2a",
+        "submission_repo": "Morgan-Griffiths/8f516932d0cdadccff14f619865d1608"
       }
     }
   },
