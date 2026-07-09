@@ -263,6 +263,15 @@
         "submission_public": true,
         "submission_ref": "9b9b408a36de489841229bc6b2722eea4d03a5b4",
         "submission_repo": "Morgan-Griffiths/f25d92dc77b9dc55b5996f5bd8cee03c"
+      },
+      "substInv_X_sub_X_sq_eq_catalan": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 624,
+        "solved_at": "2026-07-09T00:41:54Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "dc991b32fcdcaac5525d483a9973a71276c8b33d",
+        "submission_repo": "Morgan-Griffiths/71eeb5ba681cde3561b6f966a90a660f"
       }
     }
   },
