@@ -110,6 +110,15 @@
         "submission_public": true,
         "submission_ref": "061d2d2ef30798ca3ab613640310a458a44186da",
         "submission_repo": "Morgan-Griffiths/25f682c5be2f9770bc3c9ec197eec218"
+      },
+      "boone_higman_embedding": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 608,
+        "solved_at": "2026-07-09T00:09:41Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "65af68184fe56b242024c8f09452b314de54077f",
+        "submission_repo": "Morgan-Griffiths/3c5d89f05eafef6dc114d92a1e4d95a9"
       }
     }
   },
