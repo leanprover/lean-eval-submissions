@@ -200,6 +200,15 @@
         "submission_public": true,
         "submission_ref": "9b7f84fedb04e5a8f80252683f52bc5321b0a9ae",
         "submission_repo": "Morgan-Griffiths/a21fc47d6f492abd13e6957f13910414"
+      },
+      "lindemann": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 617,
+        "solved_at": "2026-07-09T00:29:45Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "c1a511ed44edd253896dfe9dadcf6570dccc8449",
+        "submission_repo": "Morgan-Griffiths/deadfcf9d6e7a188fdec33c27e079729"
       }
     }
   },
