@@ -281,6 +281,15 @@
         "submission_public": true,
         "submission_ref": "c072ed0afa440cbeb6d4d4c3b4d3015c0fdacc2a",
         "submission_repo": "Morgan-Griffiths/8f516932d0cdadccff14f619865d1608"
+      },
+      "wiener_atom_detection": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 626,
+        "solved_at": "2026-07-09T00:46:22Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "843b65672ca974ca7718ed6b8986e89db44f14d5",
+        "submission_repo": "Morgan-Griffiths/c5a10aa4d5091ccbb6abbc3bd086fc14"
       }
     }
   },
