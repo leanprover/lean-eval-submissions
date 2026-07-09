@@ -209,6 +209,15 @@
         "submission_public": true,
         "submission_ref": "c1a511ed44edd253896dfe9dadcf6570dccc8449",
         "submission_repo": "Morgan-Griffiths/deadfcf9d6e7a188fdec33c27e079729"
+      },
+      "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 618,
+        "solved_at": "2026-07-09T00:30:02Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "02cc9f15e3151571959fb4a78b36669e93e68702",
+        "submission_repo": "Morgan-Griffiths/67c4cbeca2d3a7346c826ca7d182d9d4"
       }
     }
   },
