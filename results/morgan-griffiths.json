@@ -164,6 +164,15 @@
         "submission_public": true,
         "submission_ref": "9a33b713eaf0ca2fa6e0d33b7c661481af141734",
         "submission_repo": "Morgan-Griffiths/29ea9d24ba2fec3771fd5f5e8b7635ed"
+      },
+      "finite_graph_ramsey_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 613,
+        "solved_at": "2026-07-09T00:20:49Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "151e5ddffa73450f4b29b260a6d2d386d99b8424",
+        "submission_repo": "Morgan-Griffiths/99767ba4d2e88708ce9b70b690509719"
       }
     }
   },
