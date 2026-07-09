@@ -137,6 +137,15 @@
         "submission_public": true,
         "submission_ref": "73caf238a3e1a09007a2ec1add120a2f754e41ca",
         "submission_repo": "Morgan-Griffiths/214e146d1fcd8773c5b1e6cd88bdb0de"
+      },
+      "brauer_character_in_cyclotomic": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 610,
+        "solved_at": "2026-07-09T00:14:41Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "731503ba44fd2d5577b73ecdae648c4cb328ae95",
+        "submission_repo": "Morgan-Griffiths/5adae5ecbe042f4af8ff161c19130718"
       }
     }
   },
