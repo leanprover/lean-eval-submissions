@@ -100,6 +100,17 @@
         "submission_ref": "f6fbbec44403ca1deb935e418096d549b3667820",
         "submission_repo": "Morgan-Griffiths/ed35c85db9f1469c0d65d88810a4ed46"
       }
+    },
+    "GPT-5.6": {
+      "banach_alaoglu_bourbaki": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 606,
+        "solved_at": "2026-07-09T00:02:23Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "061d2d2ef30798ca3ab613640310a458a44186da",
+        "submission_repo": "Morgan-Griffiths/25f682c5be2f9770bc3c9ec197eec218"
+      }
     }
   },
   "user": "Morgan-Griffiths"
