@@ -219,6 +219,15 @@
         "submission_ref": "02cc9f15e3151571959fb4a78b36669e93e68702",
         "submission_repo": "Morgan-Griffiths/67c4cbeca2d3a7346c826ca7d182d9d4"
       },
+      "monge_kantorovich": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 619,
+        "solved_at": "2026-07-09T00:34:08Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "e15345ad33050099449c851e918a113e5c623008",
+        "submission_repo": "Morgan-Griffiths/db45800bb5a0ea2810c0bbb455d802c3"
+      },
       "mulCayley_connected_iff_closure_eq_top": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 620,
