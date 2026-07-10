@@ -408,6 +408,15 @@
         "submission_ref": "dc991b32fcdcaac5525d483a9973a71276c8b33d",
         "submission_repo": "Morgan-Griffiths/71eeb5ba681cde3561b6f966a90a660f"
       },
+      "symAction_range_eq_centralizer_glAction": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 660,
+        "solved_at": "2026-07-10T08:50:00Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "92bb36d3e61dcd27962c1a21f7b8ea77b7a40de0",
+        "submission_repo": "Morgan-Griffiths/623c02ac757b2afc312af8607fa5a6d8"
+      },
       "trace_cayley_hamilton_newton": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 625,
