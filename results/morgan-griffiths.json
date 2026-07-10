@@ -219,6 +219,15 @@
         "submission_ref": "d86004c71135982567ea2c6473974bd4a95876fb",
         "submission_repo": "Morgan-Griffiths/64cee9e7405b2a2d72b51a55b7c440e9"
       },
+      "exists_complementary_polynomial_on_unit_circle": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 702,
+        "solved_at": "2026-07-10T19:52:27Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "8a8032266c2e902939e46eb7a704ef01929e266c",
+        "submission_repo": "Morgan-Griffiths/fe88ea3081ebae519d6f8007c7d2f863"
+      },
       "exists_nonisotopic_link": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 691,
