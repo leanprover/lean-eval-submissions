@@ -516,6 +516,15 @@
         "submission_ref": "c072ed0afa440cbeb6d4d4c3b4d3015c0fdacc2a",
         "submission_repo": "Morgan-Griffiths/8f516932d0cdadccff14f619865d1608"
       },
+      "vonNeumann_doubleCommutant_tfae": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 675,
+        "solved_at": "2026-07-10T09:24:53Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "7e2c7304a396429cc97ebc9b3e56abc330bc0bc0",
+        "submission_repo": "Morgan-Griffiths/8f1e9b44ec572b340e15cdbdd79b2947"
+      },
       "wiener_atom_detection": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 626,
