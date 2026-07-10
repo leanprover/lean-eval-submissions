@@ -12,6 +12,16 @@
         "submission_ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
         "submission_repo": "rwst/lean-eval"
       },
+      "cubic_decay_asymptotic": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 681,
+        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: /lean4:prove Submission.lean . Then only giving permissions that were asked for. When the context reached 60% of the window the commands \"Prepare for compaction\", \"/compact\", \"continue\" were given. Used one hour of a $20/month subscription.",
+        "solved_at": "2026-07-10T11:07:53Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "31793aa34225d12440d2ded270af408e71f2dfb3",
+        "submission_repo": "rwst/lean-eval"
+      },
       "def_hole_example": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 584,
