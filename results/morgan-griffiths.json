@@ -327,6 +327,15 @@
         "submission_ref": "f1f54b51a26594f700a76a33881e8e30c5d361e3",
         "submission_repo": "Morgan-Griffiths/8d90abaa8d5124f6888bfb159b197f3f"
       },
+      "hippocrates_lunes": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 695,
+        "solved_at": "2026-07-10T19:09:55Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "c0021eb1278b192b1b130428a50fc66e7192908a",
+        "submission_repo": "Morgan-Griffiths/7d0261d5f4d2c238b562a1b42927014e"
+      },
       "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 646,
