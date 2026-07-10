@@ -201,6 +201,15 @@
         "submission_ref": "70c279d1732fb56710cfc5805a32bef1929fd8c5",
         "submission_repo": "Morgan-Griffiths/80ae1ccc77ca273c9c1833bb1b960a8f"
       },
+      "dvd_card_connectedComponent_markoffGraph": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 661,
+        "solved_at": "2026-07-10T08:53:44Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "69ba98236173e47d48344ade80c618ebe46f4687",
+        "submission_repo": "Morgan-Griffiths/3943a5e83e745b931be846b7489d8bb9"
+      },
       "euler_lagrange_equation": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 640,
