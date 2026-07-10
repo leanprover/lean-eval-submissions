@@ -228,6 +228,15 @@
         "submission_ref": "151e5ddffa73450f4b29b260a6d2d386d99b8424",
         "submission_repo": "Morgan-Griffiths/99767ba4d2e88708ce9b70b690509719"
       },
+      "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 663,
+        "solved_at": "2026-07-10T08:59:11Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "7c5c2363bea9731ec1af3f9fb8891a0f20891601",
+        "submission_repo": "Morgan-Griffiths/7282b8c5e0428998922f897e6ffc50cc"
+      },
       "fourier_dirichlet_fejer": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 643,
