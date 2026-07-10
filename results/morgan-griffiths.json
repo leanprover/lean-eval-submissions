@@ -372,6 +372,15 @@
         "submission_ref": "9cddf6bbcc366e5ed969c2ce0ba5951ad372e7e3",
         "submission_repo": "Morgan-Griffiths/43a200a8bf1d5dc6c3ecd8f49ff93803"
       },
+      "solvable_by_radicals_converse": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 657,
+        "solved_at": "2026-07-10T08:45:16Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "3e1df889cc28a618ad3752bb92a041deffdab6ab",
+        "submission_repo": "Morgan-Griffiths/55a1e09afeaaf73fbbf94bd414c0e74a"
+      },
       "sturm": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 623,
