@@ -453,6 +453,15 @@
         "submission_ref": "5a0bbc2bde67160764a2f7ac8fdcdbf6c5b9a6de",
         "submission_repo": "Morgan-Griffiths/5be82f906fcb2fa4b830079c0f6ce2d3"
       },
+      "morley_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 703,
+        "solved_at": "2026-07-10T19:56:51Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "7a3787b5be045c9321696992a41927e8b26ef313",
+        "submission_repo": "Morgan-Griffiths/9930e79d4171e6a3f1291fec2d8450dc"
+      },
       "mountain_pass": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 671,
