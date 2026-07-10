@@ -562,6 +562,15 @@
         "submission_ref": "5be34ed4edc2c6eb1e22d5d7a1731857803277dc",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "monge_kantorovich": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 656,
+        "solved_at": "2026-07-10T08:40:34Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "6d6a619036c9c5239701af1d27c933278541a419",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "mulCayley_connected_iff_closure_eq_top": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 346,
