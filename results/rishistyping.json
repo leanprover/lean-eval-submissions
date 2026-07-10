@@ -686,6 +686,16 @@
         "submission_ref": "bfb40cfdbea172ff6b8d87be35ad97af8d2b6161",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "nyquist_shannon_sampling": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 689,
+        "production_description": "No Description",
+        "solved_at": "2026-07-10T17:04:44Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "a87a6094dce4b6dc89073f9638b74db2be2b974c",
+        "submission_repo": "Morgan-Griffiths/d06fc6691006559f507b2b5e4195bb49"
+      },
       "oppenheim_inequality": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 535,
