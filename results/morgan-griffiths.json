@@ -282,6 +282,15 @@
         "submission_ref": "a9a989589d25306407ae110bd2351723e05b3ecc",
         "submission_repo": "Morgan-Griffiths/eae644c3d41694260ee3b1f751165acc"
       },
+      "heat_kernel_solves_heat_equation": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 668,
+        "solved_at": "2026-07-10T09:08:17Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "f1f54b51a26594f700a76a33881e8e30c5d361e3",
+        "submission_repo": "Morgan-Griffiths/8d90abaa8d5124f6888bfb159b197f3f"
+      },
       "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 646,
