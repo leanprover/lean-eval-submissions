@@ -498,6 +498,15 @@
         "submission_ref": "92bb36d3e61dcd27962c1a21f7b8ea77b7a40de0",
         "submission_repo": "Morgan-Griffiths/623c02ac757b2afc312af8607fa5a6d8"
       },
+      "symplectic_matrix_det": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 674,
+        "solved_at": "2026-07-10T09:21:52Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "368d6470379ba525e783e4cd594c0fe1943883e3",
+        "submission_repo": "Morgan-Griffiths/540d938ce971aabb2511aae2ea81e911"
+      },
       "trace_cayley_hamilton_newton": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 625,
