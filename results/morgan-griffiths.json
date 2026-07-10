@@ -255,6 +255,15 @@
         "submission_ref": "1c946921291ae4422636e1a20f913d20f969a96f",
         "submission_repo": "Morgan-Griffiths/516ffdc4fda3a02f51e18d641a9e2f17"
       },
+      "kirk_normal_structure": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 647,
+        "solved_at": "2026-07-10T08:23:49Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "5169ee192001ff8f384ddc6b61ab63f83b7db9f3",
+        "submission_repo": "Morgan-Griffiths/ef738adc32b5c688156c5ac7cf800d7b"
+      },
       "koszul_formula": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 615,
