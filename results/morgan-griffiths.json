@@ -183,6 +183,15 @@
         "submission_ref": "53b7f928b22a425284845940d093274726dccf49",
         "submission_repo": "Morgan-Griffiths/c1632c5bd608e583fc20d39a0b60081b"
       },
+      "cyclotomic_integer_house_le_two": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 638,
+        "solved_at": "2026-07-10T08:02:57Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "43b1483b9f1e8bdafda30761f41ae28d3b9ee4c4",
+        "submission_repo": "Morgan-Griffiths/27ca726e09266653cfceeb599848d828"
+      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 613,
