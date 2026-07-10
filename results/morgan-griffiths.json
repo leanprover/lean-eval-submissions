@@ -219,6 +219,15 @@
         "submission_ref": "151e5ddffa73450f4b29b260a6d2d386d99b8424",
         "submission_repo": "Morgan-Griffiths/99767ba4d2e88708ce9b70b690509719"
       },
+      "fourier_dirichlet_fejer": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 643,
+        "solved_at": "2026-07-10T08:15:18Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "30bb0035fb46e0e50dbf9d4a4b36d5be0f9558c8",
+        "submission_repo": "Morgan-Griffiths/f7aebe5e692e4849494404f3eec2ef1a"
+      },
       "furstenberg_topological": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 614,
