@@ -498,6 +498,15 @@
         "submission_ref": "a87a6094dce4b6dc89073f9638b74db2be2b974c",
         "submission_repo": "Morgan-Griffiths/d06fc6691006559f507b2b5e4195bb49"
       },
+      "oppenheim_inequality": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 704,
+        "solved_at": "2026-07-10T19:57:01Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "d16c718b3406fc5af545ce3d882eca17f2d39f6d",
+        "submission_repo": "Morgan-Griffiths/0db860bef27b738b80454f4a8c50249e"
+      },
       "pascal": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 621,
