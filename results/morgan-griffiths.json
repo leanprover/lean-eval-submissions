@@ -192,6 +192,15 @@
         "submission_ref": "43b1483b9f1e8bdafda30761f41ae28d3b9ee4c4",
         "submission_repo": "Morgan-Griffiths/27ca726e09266653cfceeb599848d828"
       },
+      "dirichlet_eigenvalues_eq_nat_sq": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 639,
+        "solved_at": "2026-07-10T08:06:22Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "70c279d1732fb56710cfc5805a32bef1929fd8c5",
+        "submission_repo": "Morgan-Griffiths/80ae1ccc77ca273c9c1833bb1b960a8f"
+      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 613,
