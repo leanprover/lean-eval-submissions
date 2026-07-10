@@ -237,6 +237,15 @@
         "submission_ref": "30bb0035fb46e0e50dbf9d4a4b36d5be0f9558c8",
         "submission_repo": "Morgan-Griffiths/f7aebe5e692e4849494404f3eec2ef1a"
       },
+      "fraser_kakeya_fourier_decay": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 664,
+        "solved_at": "2026-07-10T08:59:08Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "e2fa6e048d4722483d7e01bfc068d9d6f4cf7b61",
+        "submission_repo": "Morgan-Griffiths/6fc76b0e84111e805981c7c8b8713718"
+      },
       "furstenberg_topological": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 614,
