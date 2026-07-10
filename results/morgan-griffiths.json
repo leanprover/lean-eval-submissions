@@ -246,6 +246,15 @@
         "submission_ref": "6feb0202b4e6a482c9dd1257dee4b55138da43b3",
         "submission_repo": "Morgan-Griffiths/18af9dc302297145e74591c05626ee96"
       },
+      "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 646,
+        "solved_at": "2026-07-10T08:19:30Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "1c946921291ae4422636e1a20f913d20f969a96f",
+        "submission_repo": "Morgan-Griffiths/516ffdc4fda3a02f51e18d641a9e2f17"
+      },
       "koszul_formula": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 615,
