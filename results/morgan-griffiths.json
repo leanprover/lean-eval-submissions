@@ -318,6 +318,15 @@
         "submission_ref": "db914ee50d478dc11a007a35afbda357fa1ff641",
         "submission_repo": "Morgan-Griffiths/8a4017b23fb42306a9aa770842982639"
       },
+      "landsberg_schaar": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 669,
+        "solved_at": "2026-07-10T09:12:51Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "bda82a78e6406dc29f54ee6569dc188160eca9a2",
+        "submission_repo": "Morgan-Griffiths/c8e3b90b163954206462e8c39337164d"
+      },
       "lidskii_last": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 616,
