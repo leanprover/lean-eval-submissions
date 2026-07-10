@@ -282,6 +282,15 @@
         "submission_ref": "90fbd330586bb51cb8caa4c4fdf7bcaa6be6529f",
         "submission_repo": "Morgan-Griffiths/a06c4da996c1e02a0e72c8119117ce4e"
       },
+      "gauss_wantzel_constructible_polygon": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 693,
+        "solved_at": "2026-07-10T19:05:50Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "3111c22d3f295f28a38d994cfa6fcaa88320b702",
+        "submission_repo": "Morgan-Griffiths/f3f0a9f626c34b424579e80a45cd7283"
+      },
       "glAction_range_eq_centralizer_symAction": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 644,
