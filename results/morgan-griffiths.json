@@ -399,6 +399,15 @@
         "submission_ref": "e825ce028029fcb16af64e4897fcfab5131eeac1",
         "submission_repo": "Morgan-Griffiths/dd5bc3397b34432fdb94651f0968774c"
       },
+      "lp_maximum_principle": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 697,
+        "solved_at": "2026-07-10T19:14:19Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "2720e6deee9b83edb1b607cecd6d9a276009f2a5",
+        "submission_repo": "Morgan-Griffiths/e910a41543dbc28daaccd33bb32c65fd"
+      },
       "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 618,
