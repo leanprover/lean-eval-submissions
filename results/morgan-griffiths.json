@@ -390,6 +390,15 @@
         "submission_ref": "c1a511ed44edd253896dfe9dadcf6570dccc8449",
         "submission_repo": "Morgan-Griffiths/deadfcf9d6e7a188fdec33c27e079729"
       },
+      "linear_ode_asymptotic_stability": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 696,
+        "solved_at": "2026-07-10T19:10:26Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "e825ce028029fcb16af64e4897fcfab5131eeac1",
+        "submission_repo": "Morgan-Griffiths/dd5bc3397b34432fdb94651f0968774c"
+      },
       "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 618,
