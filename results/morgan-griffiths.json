@@ -228,6 +228,15 @@
         "submission_ref": "aab228f3ab4d93aa9873141fc2527ef71d7c0ec7",
         "submission_repo": "Morgan-Griffiths/f256ad4d78f9bb5649d8a52a1f2a4d56"
       },
+      "fang_xia_tiling_partition_transitive": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 692,
+        "solved_at": "2026-07-10T19:00:43Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "269baf4059a45e056df561c5192fe08b83199f5e",
+        "submission_repo": "Morgan-Griffiths/d36712362b2f41b41a87a49100ef8cdd"
+      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 613,
