@@ -10,6 +10,33 @@
         "submission_public": true,
         "submission_ref": "d01da40b8545310b63aa59e750bc7a7bdbb5c593",
         "submission_repo": "rkirov/jacobian-fable"
+      },
+      "jordan_curve": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 631,
+        "solved_at": "2026-07-10T01:45:44Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "b141748187099368d1b564de5fc6601026255378",
+        "submission_repo": "rkirov/jordan_pick"
+      },
+      "pick": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 631,
+        "solved_at": "2026-07-10T01:45:44Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "b141748187099368d1b564de5fc6601026255378",
+        "submission_repo": "rkirov/jordan_pick"
+      },
+      "rado_riemannSurface": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 631,
+        "solved_at": "2026-07-10T01:45:44Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "b141748187099368d1b564de5fc6601026255378",
+        "submission_repo": "rkirov/jordan_pick"
       }
     },
     "Claude Opus 4.7": {
