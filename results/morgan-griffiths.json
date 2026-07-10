@@ -201,6 +201,15 @@
         "submission_ref": "70c279d1732fb56710cfc5805a32bef1929fd8c5",
         "submission_repo": "Morgan-Griffiths/80ae1ccc77ca273c9c1833bb1b960a8f"
       },
+      "euler_lagrange_equation": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 640,
+        "solved_at": "2026-07-10T08:07:38Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "d86004c71135982567ea2c6473974bd4a95876fb",
+        "submission_repo": "Morgan-Griffiths/64cee9e7405b2a2d72b51a55b7c440e9"
+      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 613,
