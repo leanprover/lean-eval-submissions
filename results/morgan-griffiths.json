@@ -390,6 +390,15 @@
         "submission_ref": "4bea25dea4d3b4553cf1b114fdec1210096b9a29",
         "submission_repo": "Morgan-Griffiths/c3190745d7e99c5759588c981477eb62"
       },
+      "normal_spectral_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 672,
+        "solved_at": "2026-07-10T09:17:17Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "56eceecc63adc11fc6af4e6210bc5dfc453bc891",
+        "submission_repo": "Morgan-Griffiths/6912ec18a341f14c5cbc7fdfb8023b59"
+      },
       "nyquist_shannon_sampling": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 650,
