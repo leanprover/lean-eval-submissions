@@ -190,6 +190,15 @@
         "submission_ref": "ecc4efac57bb03fc5a1231001645f2dd89c0785e",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "choquet_representation_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 659,
+        "solved_at": "2026-07-10T08:50:05Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "f28fb56086d6ddc48e5e49c63cd3f2779e8a612f",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "chudnovsky_formula_for_pi_inv": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 574,
