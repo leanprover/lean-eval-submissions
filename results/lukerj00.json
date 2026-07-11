@@ -434,6 +434,15 @@
         "submission_ref": "ac9510dfb329b1e2518f6592d061026f5e0e72aa",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "kolmogorov_arnold_superposition": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 713,
+        "solved_at": "2026-07-11T19:15:11Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "0aa952414cb675750e84cdff6ca0398f273c1286",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "koszul_formula": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 344,
