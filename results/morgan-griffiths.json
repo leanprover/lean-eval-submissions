@@ -435,6 +435,15 @@
         "submission_ref": "1c946921291ae4422636e1a20f913d20f969a96f",
         "submission_repo": "Morgan-Griffiths/516ffdc4fda3a02f51e18d641a9e2f17"
       },
+      "kakutani_fixed_point": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 739,
+        "solved_at": "2026-07-12T21:54:26Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "6b21d754372f3f216db37250b80d86037cf7b81b",
+        "submission_repo": "Morgan-Griffiths/c4ae4962a94f8ff4d8bd5615990ce8f2"
+      },
       "kirk_normal_structure": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 647,
