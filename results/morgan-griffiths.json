@@ -453,6 +453,15 @@
         "submission_ref": "5169ee192001ff8f384ddc6b61ab63f83b7db9f3",
         "submission_repo": "Morgan-Griffiths/ef738adc32b5c688156c5ac7cf800d7b"
       },
+      "kolmogorov_arnold_superposition": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 740,
+        "solved_at": "2026-07-12T21:58:14Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "076fed46419ca5eb201668f044cb030ef3a9f837",
+        "submission_repo": "Morgan-Griffiths/1fcb6a0659c9da2dd5f61d0b106d103b"
+      },
       "koszul_formula": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 615,
