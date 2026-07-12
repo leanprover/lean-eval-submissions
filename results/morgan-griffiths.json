@@ -777,6 +777,15 @@
         "submission_ref": "c7ecb5d4e7f12df4b21e74894ee5a835d31ef6c8",
         "submission_repo": "Morgan-Griffiths/9fc61a5e9dc970c89c66508af027caba"
       },
+      "shannon_capacity_pentagon": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 754,
+        "solved_at": "2026-07-12T22:27:50Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "e8310813b56515bb402a1398774b860f53412acb",
+        "submission_repo": "Morgan-Griffiths/2e46890de40418e9707464131d862539"
+      },
       "solvable_by_radicals_converse": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 657,
