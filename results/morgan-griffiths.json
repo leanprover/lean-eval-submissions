@@ -678,6 +678,15 @@
         "submission_ref": "3d573dd3d0815b0b57b248556eb1e789976b575c",
         "submission_repo": "Morgan-Griffiths/71c61eb47b97f5d6e4b34134ddb57d3a"
       },
+      "poincare_siegel_linearisation": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 747,
+        "solved_at": "2026-07-12T22:12:07Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "c63a46ec067b68ab857a09945459609779e4ee02",
+        "submission_repo": "Morgan-Griffiths/99f1fce622758e70d1cad5cdde4449d3"
+      },
       "posSemidef_map_exp": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 705,
