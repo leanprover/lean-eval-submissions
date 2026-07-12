@@ -12,6 +12,16 @@
         "submission_ref": "a6e695305cd467da272c1d58148eb02cba64822b",
         "submission_repo": "rwst/lean-eval"
       },
+      "finite_graph_ramsey_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 728,
+        "production_description": "Setup: Opencode with lean-lsp MCP installed, model \"DeepSeek V4 Flash Free\" (under \"Opencode Zen\"). Prompt: \"prove Submission.lean\", adding the informal solution. Solve time: 45 min. Cost: $0.00.",
+        "solved_at": "2026-07-12T16:45:47Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "f6947c8e2b6f91ae67ba75d47bc6ea1cd6846560",
+        "submission_repo": "rwst/lean-eval"
+      },
       "substInv_X_sub_X_sq_eq_catalan": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 726,
