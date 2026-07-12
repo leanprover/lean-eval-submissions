@@ -588,6 +588,15 @@
         "submission_ref": "e825ce028029fcb16af64e4897fcfab5131eeac1",
         "submission_repo": "Morgan-Griffiths/dd5bc3397b34432fdb94651f0968774c"
       },
+      "liouville_arnold": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 772,
+        "solved_at": "2026-07-12T23:40:11Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "ded4137b13836423747a5e2df85e8a846852804c",
+        "submission_repo": "Morgan-Griffiths/d5d60a2332c5b25a8f5c999e9c98a372"
+      },
       "lp_maximum_principle": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 697,
