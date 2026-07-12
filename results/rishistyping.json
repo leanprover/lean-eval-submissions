@@ -1038,6 +1038,15 @@
         "submission_public": false,
         "submission_ref": "111ebecf7582da7f343c12fb3c71f9e131f27431",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
+      "wiener_levy_analytic_calculus": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 716,
+        "solved_at": "2026-07-12T00:06:41Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "91e6bfe797634dc7b588a6282d1e1b549d5cd0ec",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       }
     },
     "Stealth model": {
