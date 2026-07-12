@@ -867,6 +867,15 @@
         "submission_ref": "c072ed0afa440cbeb6d4d4c3b4d3015c0fdacc2a",
         "submission_repo": "Morgan-Griffiths/8f516932d0cdadccff14f619865d1608"
       },
+      "turing_recursive_equiv": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 765,
+        "solved_at": "2026-07-12T22:50:59Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "e4b10cf1dd1bf34a2ceaa5b58ef927616203c0e7",
+        "submission_repo": "Morgan-Griffiths/352dfcb64d9ced421d332bae7000964d"
+      },
       "tverberg_theorem": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 757,
