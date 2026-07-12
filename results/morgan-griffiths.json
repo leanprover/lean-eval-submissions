@@ -318,6 +318,15 @@
         "submission_ref": "e2fa6e048d4722483d7e01bfc068d9d6f4cf7b61",
         "submission_repo": "Morgan-Griffiths/6fc76b0e84111e805981c7c8b8713718"
       },
+      "frobenius_group_determinant": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 733,
+        "solved_at": "2026-07-12T21:41:48Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "88d74e2e07a0b5508c1cc395af4ad2ec5d5313ec",
+        "submission_repo": "Morgan-Griffiths/f87791b394cdf020cb3acdc49159697a"
+      },
       "furstenberg_topological": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 614,
