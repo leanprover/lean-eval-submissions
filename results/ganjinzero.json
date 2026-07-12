@@ -841,6 +841,16 @@
         "submission_ref": "c4d0fe8aad6f023ebd658e5c8bb35e2d1f28b2af",
         "submission_repo": "GanjinZero/pin_sphere_n_mulEquiv_int"
       },
+      "poincare_bendixson": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 723,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-12T13:21:39Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "0f7f8dbd531d3778bb91b82bb9ae6c4b0c9b69e7",
+        "submission_repo": "GanjinZero/poincare_bendixson"
+      },
       "poincare_siegel_linearisation": {
         "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
         "issue_number": 412,
