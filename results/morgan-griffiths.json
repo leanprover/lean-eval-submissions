@@ -480,6 +480,15 @@
         "submission_ref": "bda82a78e6406dc29f54ee6569dc188160eca9a2",
         "submission_repo": "Morgan-Griffiths/c8e3b90b163954206462e8c39337164d"
       },
+      "lidskii_inequality": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 743,
+        "solved_at": "2026-07-12T22:03:11Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "60c24e87556c539ce3612a355fda74b92685f879",
+        "submission_repo": "Morgan-Griffiths/452e55e7d6d38cbeba192c9c0f012c65"
+      },
       "lidskii_last": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 616,
