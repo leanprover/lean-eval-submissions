@@ -120,6 +120,15 @@
         "submission_ref": "65c67bd01510786eeccadb5fd5d7de8c3cc97d2d",
         "submission_repo": "Morgan-Griffiths/8b08d1d260bc7bcd5e9a60be7b2c1008"
       },
+      "anosov_bowen_shadowing": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 766,
+        "solved_at": "2026-07-12T23:10:38Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "4439ba4f1a8acfd2a242688ca434a1f1cefcb18d",
+        "submission_repo": "Morgan-Griffiths/0261071fa866f1f0673da54117d8e421"
+      },
       "balanceable_bounded_partitions": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 730,
