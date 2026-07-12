@@ -327,6 +327,15 @@
         "submission_ref": "88d74e2e07a0b5508c1cc395af4ad2ec5d5313ec",
         "submission_repo": "Morgan-Griffiths/f87791b394cdf020cb3acdc49159697a"
       },
+      "frobenius_kernel_isNormal": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 734,
+        "solved_at": "2026-07-12T21:45:35Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "f98d96062469094da87ae7b213eaea505c145695",
+        "submission_repo": "Morgan-Griffiths/ab8cc1cf0b7849889ba367776f371c61"
+      },
       "fundamental_topos_theory": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 735,
