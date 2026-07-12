@@ -858,6 +858,15 @@
         "submission_ref": "c072ed0afa440cbeb6d4d4c3b4d3015c0fdacc2a",
         "submission_repo": "Morgan-Griffiths/8f516932d0cdadccff14f619865d1608"
       },
+      "tverberg_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 757,
+        "solved_at": "2026-07-12T22:35:48Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "1120b835da746c8ceeb23ed0efa6ba7d345432d9",
+        "submission_repo": "Morgan-Griffiths/c2735374fbad7602f670548053eeb926"
+      },
       "vonNeumann_doubleCommutant_tfae": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 675,
