@@ -1,6 +1,18 @@
 {
   "schema_version": 1,
   "solved": {
+    "Hy3": {
+      "substInv_X_sub_X_sq_eq_catalan": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 719,
+        "production_description": "Setup: Opencode with lean-lsp MCP installed, model \"Hy3 Free\" (under \"Opencode Zen\". Prompt: \"prove Submission.lean\". Solve time: 2 hours. Cost: $0.00.",
+        "solved_at": "2026-07-12T08:29:14Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "1759e0460ee8a7df046a31e5b1be9f7ca0441e7d",
+        "submission_repo": "rwst/lean-eval"
+      }
+    },
     "Kimi K2.7": {
       "ci_regenerate_main_check": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
