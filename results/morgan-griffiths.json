@@ -795,6 +795,15 @@
         "submission_ref": "3e1df889cc28a618ad3752bb92a041deffdab6ab",
         "submission_repo": "Morgan-Griffiths/55a1e09afeaaf73fbbf94bd414c0e74a"
       },
+      "stable_unstable_manifolds": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 755,
+        "solved_at": "2026-07-12T22:31:19Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "85d5d859906b3107bdf07c59a84f5d2462634c13",
+        "submission_repo": "Morgan-Griffiths/cf48f3535b6ce451c51ce3b3e5b5f161"
+      },
       "sturm": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 623,
