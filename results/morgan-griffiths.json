@@ -444,6 +444,15 @@
         "submission_ref": "c0021eb1278b192b1b130428a50fc66e7192908a",
         "submission_repo": "Morgan-Griffiths/7d0261d5f4d2c238b562a1b42927014e"
       },
+      "hurewicz_h1_abelianization": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 771,
+        "solved_at": "2026-07-12T23:35:18Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "2a127c6475611992612fa228ca879480766948b1",
+        "submission_repo": "Morgan-Griffiths/b23e5d9675d44891a9567acd67d658ac"
+      },
       "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 646,
