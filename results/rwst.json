@@ -2,6 +2,16 @@
   "schema_version": 1,
   "solved": {
     "DeepSeek V4 Flash": {
+      "cubic_decay_asymptotic": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 727,
+        "production_description": "Setup: Opencode with lean-lsp MCP installed, model \"DeepSeek V4 Flash Free\" (under \"Opencode Zen\"). Prompt: \"prove Submission.lean\". Solve time: 40 minutes. Cost: $0.00.",
+        "solved_at": "2026-07-12T15:46:59Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "a6e695305cd467da272c1d58148eb02cba64822b",
+        "submission_repo": "rwst/lean-eval"
+      },
       "substInv_X_sub_X_sq_eq_catalan": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 726,
