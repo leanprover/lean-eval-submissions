@@ -507,6 +507,15 @@
         "submission_ref": "bda82a78e6406dc29f54ee6569dc188160eca9a2",
         "submission_repo": "Morgan-Griffiths/c8e3b90b163954206462e8c39337164d"
       },
+      "lax_approximation": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 768,
+        "solved_at": "2026-07-12T23:18:02Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "9abccf6e7221db1fd584d6a8f015d589a478d49c",
+        "submission_repo": "Morgan-Griffiths/4bdee1299a2cb3e5ad3ee11129659885"
+      },
       "levi_civita_exists_unique": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 742,
