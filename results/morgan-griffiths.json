@@ -192,6 +192,15 @@
         "submission_ref": "653a3624adecc8bff6b7741c54817e807bf39444",
         "submission_repo": "Morgan-Griffiths/a99039e8cb5f299ca69e4e35f32ca59d"
       },
+      "choquet_representation_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 732,
+        "solved_at": "2026-07-12T21:40:16Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "b9e43711649bf21f73d6d316b358a2e280f41f61",
+        "submission_repo": "Morgan-Griffiths/d4402e0c405f79cadca5e9fc0462df7f"
+      },
       "compact_group_semisimple": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 612,
