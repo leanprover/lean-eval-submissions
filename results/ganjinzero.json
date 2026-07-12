@@ -645,6 +645,16 @@
         "submission_ref": "e2f7eec0791dbaa6e5f8b3c85b8be0ff35540e63",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "mergelyan_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 720,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-12T11:31:32Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "9544f6bb51f23f5ad64d26892fd1f525fb1d3f48",
+        "submission_repo": "GanjinZero/mergelyan"
+      },
       "monge_kantorovich": {
         "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
         "issue_number": 168,
