@@ -588,6 +588,15 @@
         "submission_ref": "4bea25dea4d3b4553cf1b114fdec1210096b9a29",
         "submission_repo": "Morgan-Griffiths/c3190745d7e99c5759588c981477eb62"
       },
+      "nash_equilibrium_exists": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 745,
+        "solved_at": "2026-07-12T22:07:28Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "44d92e9c926e63b74b73fb86229b800cbd59eba2",
+        "submission_repo": "Morgan-Griffiths/6157b449862f609a3b6496abd9536345"
+      },
       "normal_spectral_theorem": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 672,
