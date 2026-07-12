@@ -111,6 +111,15 @@
         "submission_ref": "65c67bd01510786eeccadb5fd5d7de8c3cc97d2d",
         "submission_repo": "Morgan-Griffiths/8b08d1d260bc7bcd5e9a60be7b2c1008"
       },
+      "balanceable_bounded_partitions": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 730,
+        "solved_at": "2026-07-12T21:36:06Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "e5a056dd2d69ade1ae63496460d4d083c001e900",
+        "submission_repo": "Morgan-Griffiths/1414b07ada2da6174faf83a5ec3bfe88"
+      },
       "banach_alaoglu_bourbaki": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 606,
