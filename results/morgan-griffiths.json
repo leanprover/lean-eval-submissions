@@ -102,6 +102,15 @@
       }
     },
     "GPT-5.6": {
+      "H1_not_closedComplemented": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 736,
+        "solved_at": "2026-07-12T21:50:05Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "52e07d7521d93fdad3e9d350278c107d0178460c",
+        "submission_repo": "Morgan-Griffiths/2f0ba88293a3bd2fda5eba4ea4f18de7"
+      },
       "abel_ruffini": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 701,
