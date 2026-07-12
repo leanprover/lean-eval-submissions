@@ -705,6 +705,15 @@
         "submission_ref": "5fb5493af4bdfd54cd003412ec4316b46f1c34f8",
         "submission_repo": "Morgan-Griffiths/339b0a809919a3948830cf821d56fce8"
       },
+      "regular_value_ae": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 748,
+        "solved_at": "2026-07-12T22:16:15Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "92c730bf577ff3696a149a4645cfce67b972e68d",
+        "submission_repo": "Morgan-Griffiths/6c6dcc377a262995ccf517357f691e8d"
+      },
       "riesz_brothers_theorem": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 700,
