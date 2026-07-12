@@ -750,6 +750,15 @@
         "submission_ref": "077f02f82fde9b1136f368f446abe8106ce31ed1",
         "submission_repo": "Morgan-Griffiths/8378138f7fbb292e87c02e38e494c4db"
       },
+      "sard_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 751,
+        "solved_at": "2026-07-12T22:21:05Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "532c8124f570a0a8b7684d05e05f31142585a72a",
+        "submission_repo": "Morgan-Griffiths/fa7499915002fdf2211ad111372c4cda"
+      },
       "solvable_by_radicals_converse": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 657,
