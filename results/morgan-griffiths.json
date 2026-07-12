@@ -768,6 +768,15 @@
         "submission_ref": "edba23c7ecc5ce88495b385cdb696961439f9bab",
         "submission_repo": "Morgan-Griffiths/9696b2ac9d473ab1f3a267a98507992e"
       },
+      "semilinear_poisson_radial_symmetry": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 753,
+        "solved_at": "2026-07-12T22:26:25Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "c7ecb5d4e7f12df4b21e74894ee5a835d31ef6c8",
+        "submission_repo": "Morgan-Griffiths/9fc61a5e9dc970c89c66508af027caba"
+      },
       "solvable_by_radicals_converse": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 657,
