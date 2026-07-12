@@ -379,6 +379,16 @@
         "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "gleason_theorem_separable": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 722,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-12T12:10:25Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "58bee05e19ad7ac6a14e04080de5ba4d56820157",
+        "submission_repo": "GanjinZero/gleason_theorem_separable"
+      },
       "golod_shafarevich_inequality": {
         "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
         "issue_number": 466,
