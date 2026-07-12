@@ -1,6 +1,18 @@
 {
   "schema_version": 1,
   "solved": {
+    "DeepSeek V4 Flash": {
+      "substInv_X_sub_X_sq_eq_catalan": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 726,
+        "production_description": "Setup: Opencode with lean-lsp MCP installed, model \"DeepSeek V4 Flash Free\" (under \"Opencode Zen\"). Prompt: \"prove Submission.lean\". Solve time: 1 hours. Cost: $0.00.",
+        "solved_at": "2026-07-12T14:56:47Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "fef72b0175764d2dfdae4e4596f5ca5520b517ba",
+        "submission_repo": "rwst/lean-eval"
+      }
+    },
     "Hy3": {
       "substInv_X_sub_X_sq_eq_catalan": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
