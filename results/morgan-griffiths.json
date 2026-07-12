@@ -327,6 +327,15 @@
         "submission_ref": "88d74e2e07a0b5508c1cc395af4ad2ec5d5313ec",
         "submission_repo": "Morgan-Griffiths/f87791b394cdf020cb3acdc49159697a"
       },
+      "fundamental_topos_theory": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 735,
+        "solved_at": "2026-07-12T21:45:30Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "52bb27df52fb40fc6a859ae96acb8f5b796dd239",
+        "submission_repo": "Morgan-Griffiths/37a70e6d246ae30dfa991068601a641f"
+      },
       "furstenberg_topological": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 614,
