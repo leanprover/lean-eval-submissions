@@ -413,6 +413,16 @@
         "submission_ref": "e2fa6e048d4722483d7e01bfc068d9d6f4cf7b61",
         "submission_repo": "Morgan-Griffiths/6fc76b0e84111e805981c7c8b8713718"
       },
+      "frobenius_group_determinant": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 798,
+        "production_description": "No Description",
+        "solved_at": "2026-07-13T21:34:52Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "6c2f58039a47b77892b7e6d31036fe5c877d9808",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "frobenius_kernel_isNormal": {
         "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
         "issue_number": 290,
