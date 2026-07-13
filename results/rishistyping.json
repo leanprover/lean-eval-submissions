@@ -965,6 +965,16 @@
         "submission_ref": "d1be3d1e2403f9ec50460bf477eca25e578fb93a",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "sard_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 794,
+        "production_description": "No Description",
+        "solved_at": "2026-07-13T21:24:00Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "cc705c3e812a410ac3c9e250ee450e1ec5d65ddb",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "schauder_fixed_point": {
         "benchmark_commit": "dc0a77053f401986e3f8431d713b20b5c4cbe5d8",
         "issue_number": 89,
