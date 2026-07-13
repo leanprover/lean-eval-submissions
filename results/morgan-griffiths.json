@@ -237,6 +237,15 @@
         "submission_ref": "9a33b713eaf0ca2fa6e0d33b7c661481af141734",
         "submission_repo": "Morgan-Griffiths/29ea9d24ba2fec3771fd5f5e8b7635ed"
       },
+      "contractibleSpace_houseWithTwoRooms": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 785,
+        "solved_at": "2026-07-13T20:09:47Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "c982ce24b5fe275623527ff91d33e7ab29991c00",
+        "submission_repo": "Morgan-Griffiths/b1bee672ea506137b8a2621cba0106be"
+      },
       "cubic_decay_asymptotic": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 637,
