@@ -868,6 +868,16 @@
         "submission_ref": "a014c93120d655d4c14bd06611e6c9883646955c",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "poincare_siegel_linearisation": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 793,
+        "production_description": "No Description",
+        "solved_at": "2026-07-13T21:19:51Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f83ec03e5e674b0e34913bcc4a24719cba2bf04b",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "posSemidef_map_exp": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 355,
