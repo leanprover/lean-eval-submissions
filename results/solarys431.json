@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "UNICO/NOUS pipeline - Claude (Anthropic)": {
+      "morley_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 780,
+        "production_description": "Produced by an autonomous theorem-proving and certification pipeline built with Claude Code, directed and operated by a non-mathematician developer. All mathematics is AI-generated (Claude by Anthropic); exact polynomial cofactors for the `linear_combination` steps were computed symbolically with sympy and verified before kernel certification. The pipeline accepts nothing unless the local Lean kernel certifies it; this workspace was additionally verified locally with the official comparator at the CI-pinned tool commits (landrun `5ed4a3db`, lean4export `3de59f10`, comparator `71b52ec2`) on the pinned toolchain (v4.32.0-rc1): \"Your solution is okay!\".\n\nThe proof is independent of all previously recorded solutions (none were consulted). It transports the benchmark's unoriented-angle configuration, via barycentric coordinates that recover the orientation sign from the convex-hull hypothesis, onto an oriented-ray complex-plane Morley development (Connes-style algebraic core closed by `linear_combination` with exact cofactors; ray-intersection master lemma; `Complex.arg` toolkit). A standalone statement with existence/uniqueness and non-degeneracy companions lives in the same repository (`UnicoProofs/Morley.lean`). Axioms: `propext`, `Classical.choice`, `Quot.sound` only - no `sorry`, no `native_decide`.\n\nEstimated cost: one afternoon of wall-clock time end-to-end (bridge design + proof + hardening, ~25 local kernel verdicts), subscription-based model usage, consumer Apple Silicon hardware. Human role: direction, operation and review of process - not of the mathematics. Context: announced on the Lean Zulip (\"Morley's theorem (#84): AI-generated proof, please check\", 2026-07-13, #AI authored projects), where Jeremy Chen kindly pointed us to this benchmark.",
+        "solved_at": "2026-07-13T15:49:22Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "a5f503014a635623ec2d2de8ab0f6c00030d9028",
+        "submission_repo": "Solarys431/unico-lean-proofs"
+      }
+    }
+  },
+  "user": "Solarys431"
+}
