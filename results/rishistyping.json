@@ -813,6 +813,16 @@
         "submission_ref": "47bfd6e9eeeb40a9a09928198c862ab0cdb3311a",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "nonlinear_three_manifold_group": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 806,
+        "production_description": "No Description",
+        "solved_at": "2026-07-13T23:44:29Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "fd36e54d2b057620b4eeaf3afa1495f3d2986a7d",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "normal_spectral_theorem": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 569,
