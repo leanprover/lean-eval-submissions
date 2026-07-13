@@ -1053,6 +1053,16 @@
         "submission_ref": "f1c281fa2e5a510a42d5128e5afe3525ed58e3d0",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "sobolev_embedding_morrey": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 801,
+        "production_description": "No Description",
+        "solved_at": "2026-07-13T21:43:25Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "9d6e1d62ef514523512c5b9862c233c955d49d93",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "solvable_by_radicals_converse": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 597,
