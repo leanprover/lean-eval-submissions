@@ -1135,6 +1135,16 @@
         "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "wallpaper_groups_17": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 777,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-13T10:51:54Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "ebdd57967236606f9db04d299dff7778c0427951",
+        "submission_repo": "GanjinZero/wallpaper_groups_17"
+      },
       "wieferich_g_three": {
         "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
         "issue_number": 309,
