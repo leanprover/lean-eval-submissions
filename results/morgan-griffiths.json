@@ -219,6 +219,15 @@
         "submission_ref": "653a3624adecc8bff6b7741c54817e807bf39444",
         "submission_repo": "Morgan-Griffiths/a99039e8cb5f299ca69e4e35f32ca59d"
       },
+      "cauchy_kovalevskaya": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 786,
+        "solved_at": "2026-07-13T20:13:46Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "4d215e47c8980d027cf5251698ebbfe02529a2d0",
+        "submission_repo": "Morgan-Griffiths/e6a6e9a37e0157e6060c4a1d50409481"
+      },
       "choquet_representation_theorem": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 732,
