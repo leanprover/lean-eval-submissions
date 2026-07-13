@@ -379,6 +379,16 @@
         "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
         "submission_repo": "GanjinZero/SeedProver-lean-eval"
       },
+      "gleason_theorem_finite": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 775,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-13T01:30:48Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "3649d4e645ce9a2c9c9ec4358d31538711bb5d39",
+        "submission_repo": "GanjinZero/gleason_theorem_finite"
+      },
       "gleason_theorem_separable": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 722,
