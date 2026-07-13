@@ -555,6 +555,16 @@
         "submission_ref": "5169ee192001ff8f384ddc6b61ab63f83b7db9f3",
         "submission_repo": "Morgan-Griffiths/ef738adc32b5c688156c5ac7cf800d7b"
       },
+      "kolmogorov_arnold_superposition": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 792,
+        "production_description": "No Description",
+        "solved_at": "2026-07-13T21:19:31Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "a2cae375ebb6fc959d5e8d9e1f2d3a91a03b26fa",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "koszul_formula": {
         "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
         "issue_number": 102,
