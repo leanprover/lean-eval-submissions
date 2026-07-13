@@ -432,6 +432,16 @@
         "submission_ref": "b7d530ed045c2b8c329d5b2db2e24ad02b5a0fa6",
         "submission_repo": "rishistyping/lean-eval-frobenius-kernel-isnormal"
       },
+      "fundamental_topos_theory": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 799,
+        "production_description": "No Description",
+        "solved_at": "2026-07-13T21:38:16Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "157115296d73e3067da1c311debbaf22e2f77297",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "furstenberg_topological": {
         "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
         "issue_number": 186,
