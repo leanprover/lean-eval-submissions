@@ -1159,6 +1159,16 @@
         "submission_ref": "15d61297c088450fd10520e93fb8b4494ef4ac17",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "tverberg_theorem": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 803,
+        "production_description": "No Description",
+        "solved_at": "2026-07-13T21:46:54Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "85d35ac5dbff969410fc3d42b45266bd74c364df",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "two_plus_two": {
         "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
         "issue_number": 166,
