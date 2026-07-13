@@ -219,6 +219,16 @@
         "submission_ref": "ecc4efac57bb03fc5a1231001645f2dd89c0785e",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "cauchy_kovalevskaya": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 796,
+        "production_description": "No Description",
+        "solved_at": "2026-07-13T21:30:00Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "a86493abab21ec3c833ad1ec8cd4cdabc5cad464",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "choquet_representation_theorem": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 659,
