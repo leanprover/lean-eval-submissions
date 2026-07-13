@@ -696,6 +696,15 @@
         "submission_ref": "44d92e9c926e63b74b73fb86229b800cbd59eba2",
         "submission_repo": "Morgan-Griffiths/6157b449862f609a3b6496abd9536345"
       },
+      "nonlinear_three_manifold_group": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 805,
+        "solved_at": "2026-07-13T22:52:25Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "6f82a6d95d269d05a82b971392a2771dc25cd916",
+        "submission_repo": "Morgan-Griffiths/bde6a33aa213727d89552987ce5136ac"
+      },
       "normal_spectral_theorem": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 672,
