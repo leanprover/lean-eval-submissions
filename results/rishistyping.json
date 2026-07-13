@@ -924,6 +924,15 @@
         "submission_ref": "f8984c05f818c6779211c4850db9477ab728309a",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "shannon_capacity_pentagon": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 778,
+        "solved_at": "2026-07-13T13:06:02Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "f1c281fa2e5a510a42d5128e5afe3525ed58e3d0",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "solvable_by_radicals_converse": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 597,
