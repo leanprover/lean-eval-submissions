@@ -851,6 +851,16 @@
         "submission_ref": "000517f69000cbb4b209cc5fc70b279967d8b685",
         "submission_repo": "GanjinZero/pi3_sphere_two_mulEquiv_int"
       },
+      "pick": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 812,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-14T12:32:57Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "459a9ab7df4c7a08571dffdb339337a475856cca",
+        "submission_repo": "GanjinZero/pick"
+      },
       "pin_sphere_n_mulEquiv_int": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 594,
