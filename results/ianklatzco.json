@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Claude Fable 5 (orchestrating Opus/Sonnet 4.8)": {
+      "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 809,
+        "production_description": "Claude Fable 5 orchestrating fresh subagents (Fable/Sonnet implementers, adversarial reviewers per task) under human direction (Ian Klatzco, Rado Kirov). Clean-room w.r.t. the seven prior leaderboard solutions.",
+        "solved_at": "2026-07-14T05:23:30Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "22f7b889b7919c0487057b928079b79baf4f2e00",
+        "submission_repo": "ianklatzco/odd-order-lean"
+      }
+    }
+  },
+  "user": "ianklatzco"
+}
