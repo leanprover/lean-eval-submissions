@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "GPT-5.6 (human-in-the-loop)": {
+      "m23_irrep_tensor_square_decomp": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 814,
+        "production_description": "Running GPT-5.6-sol in opencode with some minimal human guidance. Used most of a $20 Codex sub's weekly limit with estimated API cost of $106.",
+        "solved_at": "2026-07-14T18:29:18Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "d70ca7195dc931f5afb4c949aa197f93f376e566",
+        "submission_repo": "matthewjasper/m23_irrep_tensor_square_decomp"
+      }
+    }
+  },
+  "user": "matthewjasper"
+}
