@@ -1234,6 +1234,15 @@
         "submission_public": true,
         "submission_ref": "91e6bfe797634dc7b588a6282d1e1b549d5cd0ec",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
+      "wigner_semicircle": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 810,
+        "solved_at": "2026-07-14T06:00:43Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "39454283bffcadf978fca95b6668c90d72b6acbb",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       }
     },
     "Stealth model": {
