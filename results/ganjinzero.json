@@ -282,6 +282,16 @@
         "submission_ref": "2b5d22a9fec2aad7fa841313a2f29773fcc39af1",
         "submission_repo": "GanjinZero/fang_xia_tiling_partition_transitive"
       },
+      "fatou_julia_dichotomy": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 817,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-15T01:46:47Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "d4aadff9fb106949dad39034c9ade5553173b207",
+        "submission_repo": "GanjinZero/fatou_julia_dichotomy"
+      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 12,
