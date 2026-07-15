@@ -426,6 +426,15 @@
         "submission_ref": "6feb0202b4e6a482c9dd1257dee4b55138da43b3",
         "submission_repo": "Morgan-Griffiths/18af9dc302297145e74591c05626ee96"
       },
+      "golod_shafarevich_inequality": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 820,
+        "solved_at": "2026-07-15T06:06:49Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "e00d8ef0fa1dac1f04c75e6e35b1c2a6850f11ad",
+        "submission_repo": "Morgan-Griffiths/798e0d455c559794ea8020f44fd3b57a"
+      },
       "halmos_generic_weak_mixing": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 819,
