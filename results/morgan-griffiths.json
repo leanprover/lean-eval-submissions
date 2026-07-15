@@ -750,6 +750,15 @@
         "submission_ref": "d16c718b3406fc5af545ce3d882eca17f2d39f6d",
         "submission_repo": "Morgan-Griffiths/0db860bef27b738b80454f4a8c50249e"
       },
+      "ornstein_weiss_rokhlin": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 825,
+        "solved_at": "2026-07-15T23:34:11Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "087195f22207f721509ee0a4b3f5f10169bea96c",
+        "submission_repo": "Morgan-Griffiths/lean-eval-submission-ornstein-weiss-rokhlin"
+      },
       "parallel_postulate_independent": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 823,
