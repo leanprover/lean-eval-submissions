@@ -426,6 +426,15 @@
         "submission_ref": "6feb0202b4e6a482c9dd1257dee4b55138da43b3",
         "submission_repo": "Morgan-Griffiths/18af9dc302297145e74591c05626ee96"
       },
+      "halmos_generic_weak_mixing": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 819,
+        "solved_at": "2026-07-15T06:05:40Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "d009cfa385246c8806db58c074f042771b34f205",
+        "submission_repo": "Morgan-Griffiths/82c28da480c21ecb0bb221bfda2f8376"
+      },
       "hausdorff_absolute_continuity": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 694,
