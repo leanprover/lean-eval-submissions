@@ -470,6 +470,24 @@
         "submission_ref": "ff0585c9b9773f987d5eccd29e006943fab13575",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "golod_shafarevich_inequality": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 822,
+        "solved_at": "2026-07-15T15:25:27Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "e9d4c8509e881e27eeafd03710c64cb6b8a31c06",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
+      "halmos_generic_weak_mixing": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 822,
+        "solved_at": "2026-07-15T15:25:27Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "e9d4c8509e881e27eeafd03710c64cb6b8a31c06",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "hausdorff_absolute_continuity": {
         "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
         "issue_number": 407,
