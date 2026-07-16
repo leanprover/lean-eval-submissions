@@ -336,6 +336,15 @@
         "submission_ref": "aab228f3ab4d93aa9873141fc2527ef71d7c0ec7",
         "submission_repo": "Morgan-Griffiths/f256ad4d78f9bb5649d8a52a1f2a4d56"
       },
+      "families_of_maps_b01": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 837,
+        "solved_at": "2026-07-16T21:01:59Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "9c5123c91fd4a835c990f4028a363235bf8ef331",
+        "submission_repo": "Morgan-Griffiths/f0cba1ee07411cfa88e89fe110c3dfc7"
+      },
       "fang_xia_tiling_partition_transitive": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 692,
