@@ -38,6 +38,15 @@
         "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
         "submission_repo": "lukerj00/tau-lean-eval-submission"
       },
+      "balanceable_bounded_partitions": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 833,
+        "solved_at": "2026-07-16T12:48:11Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "ee9d43d6193893c2b2afc67ac3b88b23c0294320",
+        "submission_repo": "lukerj00/tau-lean-eval-submission"
+      },
       "banach_alaoglu_bourbaki": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
         "issue_number": 342,
