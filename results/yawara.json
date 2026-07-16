@@ -12,6 +12,18 @@
         "submission_ref": "70b7cf773979bb3a037442ff832f353457bf62f3",
         "submission_repo": "yawara/lean-eval-submissions"
       }
+    },
+    "Various models ( with human in the loop )": {
+      "feit_thompson": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 828,
+        "production_description": "This submission was produced with assistance from Codex 5.5 and 5.6, and Claude Code using Opus 4.7, Opus 4.8, and Fable 5, with human direction, review, and integration throughout.",
+        "solved_at": "2026-07-16T02:11:22Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "27813a1e5e239db17206ae5b1e8492ec5b378d90",
+        "submission_repo": "yawara/odd-order-submission"
+      }
     }
   },
   "user": "yawara"
