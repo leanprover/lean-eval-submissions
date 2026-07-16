@@ -129,6 +129,15 @@
         "submission_ref": "4439ba4f1a8acfd2a242688ca434a1f1cefcb18d",
         "submission_repo": "Morgan-Griffiths/0261071fa866f1f0673da54117d8e421"
       },
+      "baer_suzuki": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 836,
+        "solved_at": "2026-07-16T21:01:10Z",
+        "submission_kind": "gist",
+        "submission_public": true,
+        "submission_ref": "b1b571d9f5b0b9f484d8f4b452a4183e190e2d25",
+        "submission_repo": "Morgan-Griffiths/20323aef3e1f7f8207efc7c31ac573e1"
+      },
       "balanceable_bounded_partitions": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 730,
