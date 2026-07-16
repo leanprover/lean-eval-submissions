@@ -1126,6 +1126,16 @@
         "submission_ref": "a07c161df9739152497b19ba0437be662b7754c2",
         "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
       },
+      "thue_siegel_roth": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 831,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-16T08:51:52Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "ebc3d0214a849605693204d73610c445a8f542be",
+        "submission_repo": "GanjinZero/thue_siegel_roth"
+      },
       "trace_cayley_hamilton_newton": {
         "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
         "issue_number": 422,
