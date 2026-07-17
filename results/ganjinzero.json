@@ -498,6 +498,16 @@
         "submission_ref": "e9ffb41d5fe057c556c3e18d3061b11333758589",
         "submission_repo": "GanjinZero/hippocrates_lunes"
       },
+      "hopf_umlaufsatz": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 844,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-17T09:34:08Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "37174bed125f61977824fd3b52e4505905fb25a9",
+        "submission_repo": "GanjinZero/hopf_umlaufsatz"
+      },
       "hurewicz_h1_abelianization": {
         "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
         "issue_number": 275,
