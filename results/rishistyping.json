@@ -365,6 +365,15 @@
         "submission_ref": "c2d4c3815f6db1649c74f50ef36d58f476b55439",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "families_of_maps_b01": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 843,
+        "solved_at": "2026-07-17T09:07:58Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "c3a7d5472e7fc6fb69fbd89b4c17e4790484f2e4",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "fang_xia_tiling_partition_transitive": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 708,
@@ -373,6 +382,15 @@
         "submission_kind": "github_repo",
         "submission_public": true,
         "submission_ref": "b8700b467ed68c12e6185ed6646312628088adda",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
+      "feit_thompson": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 843,
+        "solved_at": "2026-07-17T09:07:58Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "c3a7d5472e7fc6fb69fbd89b4c17e4790484f2e4",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
       "finite_graph_ramsey_theorem": {
