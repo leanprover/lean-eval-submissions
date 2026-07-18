@@ -432,6 +432,16 @@
         "submission_ref": "945a650516082dfeba205b6b4c2ffab1515b0669",
         "submission_repo": "LorenzoLuccioli/lean-eval"
       },
+      "ising_2d_phase_transition": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 848,
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with orchestration and submission by Lorenzo Luccioli.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
+        "solved_at": "2026-07-18T01:14:33Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "e6caacf853381fc7cd22459955ff3742f999d438",
+        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+      },
       "jordan_brouwer": {
         "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
         "issue_number": 468,
