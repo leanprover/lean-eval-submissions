@@ -226,6 +226,16 @@
         "submission_ref": "afd9760db81c89577549712eb6578103d8efcd7f",
         "submission_repo": "GanjinZero/darboux"
       },
+      "dehn_sommerville": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 849,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-19T03:46:13Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "64d448f9e173bcb92e90e257bf2e3c1dd1868e3d",
+        "submission_repo": "GanjinZero/dehn_sommerville"
+      },
       "dirichlet_eigenvalues_eq_nat_sq": {
         "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
         "issue_number": 12,
