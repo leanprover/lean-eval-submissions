@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Seed Prover (ByteDance)": {
+      "m23_irrep_tensor_square_decomp": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 850,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-19T18:12:57Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "523a7e402ed832a3d2982d11f5370eed6c081474",
+        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    }
+  },
+  "user": "hanwenzhu"
+}
