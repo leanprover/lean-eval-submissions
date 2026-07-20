@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Trellis": {
+      "unit_distance_upper_bound": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 851,
+        "production_description": "Trellis ran autonomously for 3 weeks, from 6/29/2026 through 7/20/2026 on the usage budget of a single ChatGPT Pro account.  The only input was a 16-page .tex manuscript based on Sz\u00e9kely's paper, \u201cCrossing Numbers and Hard Erd\u0151s Problems in Discrete Geometry,\" but including detailed plane graph preliminaries.\n\nThe public Trellis repo for this formalization is at https://github.com/wpegden/crossing-consequences/\nIt includes a cycle-by-cycle view of every edit made over time to the formalization by the Trellis process.  The reference paper (prepared by ChatGPT Pro) is also available there.\n\nThis single Trellis run formalized the following theorems (all consequences of the Crossing Lemma, below):\n*) Szemer\u00e9di\u2013Trotter / Point-line incidences:\nThere is an absolute constant C such that for any n points and \u2113 lines in the plane, the number of point-line incidences is at most C\u00b7((n\u2113)^(2/3) + n + \u2113).\n  \n*) Rich lines:\nThere is an absolute constant C such that, for 2 \u2264 k \u2264 \u221an, the number of lines containing at least k points from an n-point set is at most C\u00b7n\u00b2/k\u00b3.\n  \n*) Unit distances (the challenge target)\nThere is an absolute constant C such that every set of n points in the plane determines at most C\u00b7n^(4/3) unit distances.\n\nTrellis formalized these by defining plane drawings of graphs with polygonal edges and formalizing the Crossing Lemma with respect to polygonal drawings:\n  For a simple graph with n \u2265 1 vertices and e edges, if e \u2265 4n then the crossing number satisfies cr(G) \u2265 e\u00b3/(100n\u00b2).\n\nFrom the time Trellis started the challenge to when it finished, the pinned mathlib version changed from v4.30.0-rc2 to v4.32.0-rc1.  Thus, after the autonomous run completed, minor edits were necessary to make the project still build against the new challenge mathlib version.  These were made by a single codex agent outside the Trellis formalization, given precisely that task.  The version before these edits can be seen either at the public repo linked above or as the first commit of this challenge repo.",
+        "solved_at": "2026-07-20T18:47:21Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "fe9deb3c76358cbaa9149129d1552ebe929b84cc",
+        "submission_repo": "wpegden/unitdistance_challenge"
+      }
+    }
+  },
+  "user": "wpegden"
+}
