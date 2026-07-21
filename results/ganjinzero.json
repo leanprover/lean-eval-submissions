@@ -169,6 +169,16 @@
         "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
         "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
       },
+      "chudnovsky_formula_for_pi_inv": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 852,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-21T04:28:06Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "4b50665945f35f848fdb3942d2515732f36b1426",
+        "submission_repo": "GanjinZero/chudnovsky_formula_for_pi_inv"
+      },
       "commProb_closed": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 821,
