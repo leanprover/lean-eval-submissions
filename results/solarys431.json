@@ -12,6 +12,18 @@
         "submission_ref": "a5f503014a635623ec2d2de8ab0f6c00030d9028",
         "submission_repo": "Solarys431/unico-lean-proofs"
       }
+    },
+    "UNICO/NOUS: Claude (Fable 5 + Opus 4.8) + GPT-5.6-Sol": {
+      "platonic_classification": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 858,
+        "production_description": "Produced by UNICO/NOUS, a multi-model pipeline: Claude Fable 5 as the orchestrator in the main loop, with GPT-5.6-Sol (via Codex CLI) and Claude Opus 4.8 as prover/builder agents. A Python numerical scout computed exact golden-ratio data (flags, exposing functionals, wall reflections of the 24-cell, 600-cell and 120-cell) that guided the Lean formalization; every step was then proved from scratch and kernel-checked. Human direction throughout (strategy, adversarial review gates, final audits). The final theorem depends only on [propext, Classical.choice, Quot.sound]; no sorry, axiom or native_decide anywhere in the submission. Solved 2026-07-18 to 2026-07-21. (Third attempt: the repo is now structured as a generated workspace importing ChallengeDeps, root theorem in the Submission namespace; Solution.lean builds in a local replica of the CI environment.)",
+        "solved_at": "2026-07-21T15:55:26Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "0742f2ff516619b3afebfeebd0f1473fe0b5ef57",
+        "submission_repo": "Solarys431/lean-eval-platonic-classification"
+      }
     }
   },
   "user": "Solarys431"
