@@ -33,6 +33,18 @@
         "submission_repo": "rwst/lean-eval"
       }
     },
+    "Grok 4.5": {
+      "cubic_decay_asymptotic": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 864,
+        "production_description": "Setup: Grok CLI, picking up lean4-skills and lean-lsp MCP. Prompt: \"/lean4:prove @Submission.lean --commit=never --golf=yes\". Time: 40 min. Cost: 0$ (currently free).",
+        "solved_at": "2026-07-22T18:26:11Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "b8806118473eabebd19b9abefc099393c8f77c6f",
+        "submission_repo": "rwst/lean-eval"
+      }
+    },
     "Hy3": {
       "substInv_X_sub_X_sq_eq_catalan": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
