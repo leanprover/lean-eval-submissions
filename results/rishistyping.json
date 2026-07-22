@@ -1224,6 +1224,15 @@
         "submission_ref": "d732ef6dcf75ea68c58e3597ba30c111689612d8",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
+      "unit_distance_upper_bound": {
+        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "issue_number": 862,
+        "solved_at": "2026-07-22T11:32:56Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "041a3a5a304996b7feb2df8c24de7eb5cc12fca6",
+        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
+      },
       "variable_binder_example": {
         "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
         "issue_number": 58,
