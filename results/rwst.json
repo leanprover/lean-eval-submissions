@@ -43,6 +43,26 @@
         "submission_public": true,
         "submission_ref": "b8806118473eabebd19b9abefc099393c8f77c6f",
         "submission_repo": "rwst/lean-eval"
+      },
+      "finite_graph_ramsey_theorem": {
+        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+        "issue_number": 873,
+        "production_description": "Setup: Grok CLI, picking up lean4-skills and lean-lsp MCP. Prompt: \"/lean4:prove @Submission.lean --commit=never --golf=yes\". Time: 15 min. Cost: 0$ (currently free).",
+        "solved_at": "2026-07-23T11:30:48Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "36a1b7a9ae93bd54a32b99c8d52d8c7d35874aed",
+        "submission_repo": "rwst/lean-eval"
+      },
+      "substInv_X_sub_X_sq_eq_catalan": {
+        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+        "issue_number": 873,
+        "production_description": "Setup: Grok CLI, picking up lean4-skills and lean-lsp MCP. Prompt: \"/lean4:prove @Submission.lean --commit=never --golf=yes\". Time: 15 min. Cost: 0$ (currently free).",
+        "solved_at": "2026-07-23T11:30:48Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "36a1b7a9ae93bd54a32b99c8d52d8c7d35874aed",
+        "submission_repo": "rwst/lean-eval"
       }
     },
     "Hy3": {
