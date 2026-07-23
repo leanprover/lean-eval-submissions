@@ -32,6 +32,16 @@
         "submission_ref": "4c1f86215b77936805fb9177f9a3949184b52673",
         "submission_repo": "hanwenzhu/lean-eval-seedprover"
       },
+      "upper_bound_simplicial_spheres": {
+        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+        "issue_number": 867,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-23T01:02:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "fb301196723762095a8dd882172e1f67ac3f828d",
+        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+      },
       "weak_morse_inequality": {
         "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
         "issue_number": 866,
