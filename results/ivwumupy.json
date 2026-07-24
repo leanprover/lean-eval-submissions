@@ -1,6 +1,26 @@
 {
   "schema_version": 1,
   "solved": {
+    "deepseek-v4 and gpt-5.x": {
+      "brauer_suzuki": {
+        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+        "issue_number": 880,
+        "solved_at": "2026-07-24T04:58:03Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "31219ea62ffac44c137cb10919e1e4ae566ebe2b",
+        "submission_repo": "Qiuzhen-CFSG/CFSG"
+      },
+      "feit_thompson": {
+        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+        "issue_number": 880,
+        "solved_at": "2026-07-24T04:58:03Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "31219ea62ffac44c137cb10919e1e4ae566ebe2b",
+        "submission_repo": "Qiuzhen-CFSG/CFSG"
+      }
+    },
     "various model (deepseek-v4, gpt-5.*)": {
       "feit_thompson": {
         "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
