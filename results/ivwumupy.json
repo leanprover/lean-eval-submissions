@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "various model (deepseek-v4, gpt-5.*)": {
+      "feit_thompson": {
+        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+        "issue_number": 878,
+        "solved_at": "2026-07-24T01:03:46Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "1b9ceeb20c204831188548a8e80996aed7907adf",
+        "submission_repo": "Qiuzhen-CFSG/CFSG"
+      }
+    }
+  },
+  "user": "ivwumupy"
+}
