@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Fable 5 and GPT-5.6": {
+      "neukirch_uchida": {
+        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+        "issue_number": 881,
+        "solved_at": "2026-07-25T02:45:00Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "1c1b74841a9193936c38cc2085194d579500e190",
+        "submission_repo": "adamtopaz/NeukirchUchida"
+      }
+    }
+  },
+  "user": "adamtopaz"
+}
