@@ -114,16 +114,6 @@
         "submission_ref": "d45ab32464cce6516cb4e74df9ffb70e17983e38",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
-      "baer_suzuki": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 374,
-        "production_description": "_no_response_",
-        "solved_at": "2026-06-19T09:41:28Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "fcc2004b1e0b90642314bdfb1e2e15f7f9aa2006",
-        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
       "balanceable_bounded_partitions": {
         "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
         "issue_number": 202,
@@ -384,15 +374,6 @@
         "submission_ref": "b8700b467ed68c12e6185ed6646312628088adda",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
-      "feit_thompson": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 843,
-        "solved_at": "2026-07-17T09:07:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "c3a7d5472e7fc6fb69fbd89b4c17e4790484f2e4",
-        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
         "issue_number": 353,
@@ -410,26 +391,6 @@
         "submission_public": false,
         "submission_ref": "c2a45650283d4ef9078475861a978958b58ed95d",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
-      "fourier_dirichlet_fejer": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 376,
-        "production_description": "_no_response_",
-        "solved_at": "2026-06-19T09:45:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "8f15e6b673279dba95b7966d5bc1be32333c5015",
-        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
-      "fraser_kakeya_fourier_decay": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 684,
-        "production_description": "No Description",
-        "solved_at": "2026-07-10T16:31:29Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "e2fa6e048d4722483d7e01bfc068d9d6f4cf7b61",
-        "submission_repo": "Morgan-Griffiths/6fc76b0e84111e805981c7c8b8713718"
       },
       "frobenius_group_determinant": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
@@ -546,16 +507,6 @@
         "submission_ref": "736320aa077969f396868af57e998aba017c6ac8",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
-      "hippocrates_lunes": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 378,
-        "production_description": "_no_response_",
-        "solved_at": "2026-06-19T09:44:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7cae28dd4e1ef01986e18b7d4b49ed0db88f9496",
-        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
       "hopf_umlaufsatz": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 790,
@@ -594,25 +545,6 @@
         "submission_ref": "0ed22ee11f524fe1f63b164a4574f055ed315f68",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
-      "jacobian_challenge_diffgeo": {
-        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
-        "issue_number": 296,
-        "solved_at": "2026-06-13T10:32:21Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "d373a6d4126c78dae25c6017a89a671cbf0bf86a",
-        "submission_repo": "rishistyping/lean-eval-jacobian-challenge-diffgeo"
-      },
-      "jordan_curve": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 533,
-        "production_description": "No Description",
-        "solved_at": "2026-07-05T01:31:55Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a014c93120d655d4c14bd06611e6c9883646955c",
-        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
       "jordan_normal_form": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 721,
@@ -630,16 +562,6 @@
         "submission_public": false,
         "submission_ref": "8a5a6c1379ede05ad0faf6351c74a073276e039b",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
-      "kirk_normal_structure": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 685,
-        "production_description": "No Description",
-        "solved_at": "2026-07-10T16:41:28Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "5169ee192001ff8f384ddc6b61ab63f83b7db9f3",
-        "submission_repo": "Morgan-Griffiths/ef738adc32b5c688156c5ac7cf800d7b"
       },
       "kolmogorov_arnold_superposition": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
@@ -659,16 +581,6 @@
         "submission_public": false,
         "submission_ref": "58ad2cd9a4eee6605049974c9aee1f5cff8870b3",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
-      "landsberg_schaar": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 686,
-        "production_description": "No Description",
-        "solved_at": "2026-07-10T16:47:10Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "bda82a78e6406dc29f54ee6569dc188160eca9a2",
-        "submission_repo": "Morgan-Griffiths/c8e3b90b163954206462e8c39337164d"
       },
       "lax_approximation": {
         "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
@@ -782,16 +694,6 @@
         "submission_ref": "6d6a619036c9c5239701af1d27c933278541a419",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
-      "moran_equality_affine": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 687,
-        "production_description": "No Description",
-        "solved_at": "2026-07-10T16:53:36Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "5a0bbc2bde67160764a2f7ac8fdcdbf6c5b9a6de",
-        "submission_repo": "Morgan-Griffiths/5be82f906fcb2fa4b830079c0f6ce2d3"
-      },
       "morley_theorem": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 708,
@@ -801,16 +703,6 @@
         "submission_public": true,
         "submission_ref": "b8700b467ed68c12e6185ed6646312628088adda",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
-      "mountain_pass": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 688,
-        "production_description": "No Description",
-        "solved_at": "2026-07-10T16:59:30Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "12acb37d53c11afc4d2bef90fc2bb937bf0ce271",
-        "submission_repo": "Morgan-Griffiths/d2ffe99cdf5c509904bbed4191e42fb0"
       },
       "mulCayley_connected_iff_closure_eq_top": {
         "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
@@ -868,16 +760,6 @@
         "submission_public": false,
         "submission_ref": "bfb40cfdbea172ff6b8d87be35ad97af8d2b6161",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
-      "nyquist_shannon_sampling": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 689,
-        "production_description": "No Description",
-        "solved_at": "2026-07-10T17:04:44Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "a87a6094dce4b6dc89073f9638b74db2be2b974c",
-        "submission_repo": "Morgan-Griffiths/d06fc6691006559f507b2b5e4195bb49"
       },
       "oppenheim_inequality": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
@@ -954,16 +836,6 @@
         "submission_ref": "43b19dd7cadd5d9f6cd9dd6af293b7f773f1b6d7",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
-      "pick": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 533,
-        "production_description": "No Description",
-        "solved_at": "2026-07-05T01:31:55Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a014c93120d655d4c14bd06611e6c9883646955c",
-        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
       "poincare_siegel_linearisation": {
         "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
         "issue_number": 793,
@@ -993,16 +865,6 @@
         "submission_public": true,
         "submission_ref": "b8700b467ed68c12e6185ed6646312628088adda",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
-      "radon_transform_inversion": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 690,
-        "production_description": "No Description",
-        "solved_at": "2026-07-10T17:09:04Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "5fb5493af4bdfd54cd003412ec4316b46f1c34f8",
-        "submission_repo": "Morgan-Griffiths/339b0a809919a3948830cf821d56fce8"
       },
       "regular_value_ae": {
         "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
@@ -1166,16 +1028,6 @@
         "submission_ref": "5f3a1ba8e70a5a2e0e5003007fc124ae3b9f0fea",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
-      "symAction_range_eq_centralizer_glAction": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 397,
-        "production_description": "_no_response_",
-        "solved_at": "2026-06-19T13:55:13Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "2514290b786879a6cf46d40cedaf376f973d6035",
-        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
       "symplectic_matrix_det": {
         "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
         "issue_number": 165,
@@ -1222,15 +1074,6 @@
         "submission_kind": "github_repo",
         "submission_public": true,
         "submission_ref": "d732ef6dcf75ea68c58e3597ba30c111689612d8",
-        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
-      "unit_distance_upper_bound": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 862,
-        "solved_at": "2026-07-22T11:32:56Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "041a3a5a304996b7feb2df8c24de7eb5cc12fca6",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       },
       "variable_binder_example": {
@@ -1287,28 +1130,6 @@
         "submission_kind": "github_repo",
         "submission_public": false,
         "submission_ref": "39454283bffcadf978fca95b6668c90d72b6acbb",
-        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      }
-    },
-    "Stealth model": {
-      "jordan_curve": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 523,
-        "production_description": "no_response",
-        "solved_at": "2026-07-03T22:45:57Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a014c93120d655d4c14bd06611e6c9883646955c",
-        "submission_repo": "rishistyping/autoformalization-machine-intelligence"
-      },
-      "pick": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 523,
-        "production_description": "no_response",
-        "solved_at": "2026-07-03T22:45:57Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a014c93120d655d4c14bd06611e6c9883646955c",
         "submission_repo": "rishistyping/autoformalization-machine-intelligence"
       }
     },
