@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "gpt-5.6-Sol": {
+      "coherent_cohomology_finite_dimensional": {
+        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+        "issue_number": 883,
+        "production_description": "Produced autonomously by GPT-5.6 Sol in Codex, directed by Vasily Ilin. The formalization run took about 26 hours and goal tracking reported 21,345,162 tokens.",
+        "solved_at": "2026-07-26T05:54:12Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "dc38ff1ed439dda5da5e07e380f80c8d7dccc9d9",
+        "submission_repo": "Vilin97/lean-eval-coherent-cohomology-finite-dimensional"
+      }
+    }
+  },
+  "user": "Vilin97"
+}
