@@ -32,6 +32,16 @@
         "submission_ref": "f827d8c61408d89356903b15e83183a7f476b4d2",
         "submission_repo": "hanwenzhu/lean-eval-seedprover"
       },
+      "hopf_rinow": {
+        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+        "issue_number": 886,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-26T19:36:14Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "81d1ddc833df4a6661e4be53cf44e5a8a7b4b6da",
+        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+      },
       "kam_invariant_curve": {
         "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
         "issue_number": 871,
