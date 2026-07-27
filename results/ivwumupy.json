@@ -19,6 +19,15 @@
         "submission_public": true,
         "submission_ref": "31219ea62ffac44c137cb10919e1e4ae566ebe2b",
         "submission_repo": "Qiuzhen-CFSG/CFSG"
+      },
+      "glauberman_zStar": {
+        "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
+        "issue_number": 887,
+        "solved_at": "2026-07-27T16:55:37Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "c3503435e1e303497ab3698f240f38ff23c57f23",
+        "submission_repo": "Qiuzhen-CFSG/CFSG"
       }
     },
     "various model (deepseek-v4, gpt-5.*)": {
