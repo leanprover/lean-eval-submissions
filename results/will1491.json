@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Claude Fable 5": {
+      "uniformization": {
+        "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
+        "issue_number": 888,
+        "solved_at": "2026-07-28T05:39:41Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "94644fc8ed2cdcaa4881fbdf6cf1e7ade37fd90b",
+        "submission_repo": "will1491/uniformization"
+      }
+    }
+  },
+  "user": "will1491"
+}
