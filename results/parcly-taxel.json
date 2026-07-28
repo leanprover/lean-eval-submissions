@@ -10,6 +10,15 @@
         "submission_public": false,
         "submission_ref": "742a46c15bb0e180fe6abdfbe5e75586e5b734e2",
         "submission_repo": "Parcly-Taxel/lean-eval-bbp"
+      },
+      "kepler_conjecture": {
+        "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
+        "issue_number": 890,
+        "solved_at": "2026-07-28T11:02:29Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "6e365ae4e7c5fd1093643f7419b35ccae7843fd2",
+        "submission_repo": "Parcly-Taxel/lean-eval-bbp"
       }
     }
   },
