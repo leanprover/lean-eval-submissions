@@ -125,6 +125,11 @@ jobs:
             echo "$(nix build --no-link --print-out-paths 'nixpkgs#age^out')/bin"
             echo "$(nix build --no-link --print-out-paths 'nixpkgs#elan^out')/bin"
             echo "$(nix build --no-link --print-out-paths 'nixpkgs#which^out')/bin"
+            # cargo/rustc/gcc: build the pinned nanoda external checker (Build
+            # nanoda step below). gcc supplies the `cc` linker rustc invokes.
+            echo "$(nix build --no-link --print-out-paths 'nixpkgs#cargo^out')/bin"
+            echo "$(nix build --no-link --print-out-paths 'nixpkgs#rustc^out')/bin"
+            echo "$(nix build --no-link --print-out-paths 'nixpkgs#gcc^out')/bin"
           } >> "$GITHUB_PATH"
 
       # actions/setup-python pinned to a26af69b (= refs/tags/v5.6.0 as of 2026-05-04).
@@ -396,6 +401,24 @@ jobs:
           git checkout 71b52ec29e06d4b7d882726553b1ceb99a2499e0  # pin-audit: exempt -- SHA, see comment
           lake build comparator
           echo "$PWD/.lake/build/bin" >> "$GITHUB_PATH"
+
+      - name: Build nanoda
+        run: |
+          set -euo pipefail
+          # The external checker. WorkspaceTest forces `enable_nanoda: true`
+          # when it invokes comparator, so every scored Solution is replayed
+          # through nanoda's independent kernel and rejected unless `nanoda_bin`
+          # is on PATH. cargo is preinstalled on github-hosted runners and
+          # provisioned via nix above on self-hosted. The trust boundary is the
+          # pinned source commit, not the Rust compiler version.
+          git clone https://github.com/robsimmons/nanoda_lib.git .ci/nanoda
+          cd .ci/nanoda
+          # nanoda pinned to 68d5ca9 (robsimmons/nanoda_lib HEAD as of 2026-07-29,
+          # the fork comparator-live deploys). Bump procedure: leanprover/lean-eval
+          # SECURITY.md > "Bumping pinned dependencies".
+          git checkout 68d5ca9db226849b41a6fff59d796ff19d0a8840  # pin-audit: exempt -- SHA, see comment
+          cargo build --release
+          echo "$PWD/target/release" >> "$GITHUB_PATH"
 
       # SECURITY: probes that gate every submission. A regression here
       # (sandbox not engaged, or env-var leak) means we cannot trust any
