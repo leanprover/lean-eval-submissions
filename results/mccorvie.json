@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "mostly ChatGPT 5.6 Sol": {
+      "topological_classification_of_surfaces": {
+        "benchmark_commit": "43fc8cf16396a3b0f789fe5bea65837e866aba15",
+        "issue_number": 898,
+        "production_description": "This is a collaborative project of the SF LEAN meetup, undertaken as an exercise in autoformalization.  The proof strategies and source materials were selected by the human participants.   Coordination was achieved via discord and github.   Primarily formalized via ChatGPT 5.6 Sol, though not insignificant chunks were done by Claude Fable and a handful of older models.  Multiple contributors pooled their tokens and subscriptions to generate the full proof.  The project took four weeks to complete with contributors participating in their spare time.  The formalization used the equivalent of approximately one ChatGPT Pro 5x subscriptions for one month ($100).  Total agent work time was ~80 hours. \n\nIf you are in the bay area, come to the [weekly meetup](https://luma.com/yi9idc15).",
+        "solved_at": "2026-07-30T08:56:23Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "27a86a3c266b142af60610f68672b90ad4743214",
+        "submission_repo": "mccorvie/tcos-submission"
+      }
+    }
+  },
+  "user": "mccorvie"
+}
