@@ -69,7 +69,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # runner with the untrusted build; neither may leave an
         # authenticated remote in .git/config.
         checkout_uses = self.text.count(
-            "uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683"
+            "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
         )
         self.assertGreaterEqual(checkout_uses, 2, "expected >=2 checkout steps")
         # The two evaluate-job checkouts must each set persist-credentials:false.
