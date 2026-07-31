@@ -608,6 +608,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           token: ${{ steps.recorder_token.outputs.token }}
+          # The push-retry loop below authenticates through .git/config.
+          persist-credentials: true
           path: results-store
 
       - name: Configure git identity

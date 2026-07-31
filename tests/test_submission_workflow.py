@@ -68,15 +68,24 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # The submissions checkout and the lean-eval checkout share the
         # runner with the untrusted build; neither may leave an
         # authenticated remote in .git/config.
-        checkout_uses = self.text.count(
-            "uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+        checkout_sha = "3d3c42e5aac5ba805825da76410c181273ba90b1"
+        checkout_shas = set(
+            re.findall(r"uses: actions/checkout@([0-9a-f]{40})", self.text)
         )
-        self.assertGreaterEqual(checkout_uses, 2, "expected >=2 checkout steps")
+        self.assertEqual(checkout_shas, {checkout_sha})
+        self.assertEqual(
+            self.text.count("uses: actions/checkout@"), 5, "expected 5 checkout steps"
+        )
         # The two evaluate-job checkouts must each set persist-credentials:false.
         self.assertGreaterEqual(
             self.text.count("persist-credentials: false"),
             2,
             "both evaluate-job checkouts must set persist-credentials: false",
+        )
+        self.assertIn(
+            "persist-credentials: true",
+            self.text,
+            "results-store checkout must retain the App token for its push-retry loop",
         )
 
     def test_git_state_stripped_from_both_checkouts(self) -> None:

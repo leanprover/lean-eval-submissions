@@ -82,7 +82,7 @@ properties of `submission.yml`'s structure that we do not actively probe:
 first, third, and fourth bullets — a workflow refactor that regresses
 them fails CI.
 
-`actions/create-github-app-token` does write the token to
+The pinned `actions/create-github-app-token` v3.2.0 writes the token to
 `$RUNNER_TEMP/_runner_file_commands/{set_output,save_state}_<uuid>`
 during the mint step, but actions/runner's `FileCommandManager` deletes
 the previous step's files at the start of every step, so by the time
