@@ -174,7 +174,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         )
 
     def test_archive_uses_archiver_app_scoped_to_audit_repo(self) -> None:
-        self.assertIn("LEAN_EVAL_ARCHIVER_APP_ID", self.text)
+        self.assertIn("LEAN_EVAL_ARCHIVER_CLIENT_ID", self.text)
         self.assertIn("LEAN_EVAL_ARCHIVER_PRIVATE_KEY", self.text)
         # The installation token must be scoped to the audit repo only,
         # not to the entire org. `actions/create-github-app-token`
@@ -183,6 +183,29 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             self.text,
             r"repositories:\s*lean-eval-audit\b",
             "the archiver token must be scoped to lean-eval-audit only",
+        )
+
+    def test_app_tokens_use_client_ids(self) -> None:
+        # create-github-app-token v3 deprecates app-id. Bind each Client
+        # ID to the matching private key so a secret-name swap cannot
+        # produce an invalid JWT in production.
+        pairs = re.findall(
+            r"^\s+client-id: \$\{\{ secrets\.(LEAN_EVAL_\w+)_CLIENT_ID \}\}\n"
+            r"\s+private-key: \$\{\{ secrets\.(LEAN_EVAL_\w+)_PRIVATE_KEY \}\}$",
+            self.text,
+            re.MULTILINE,
+        )
+        self.assertEqual(
+            pairs,
+            [
+                ("LEAN_EVAL_BOT", "LEAN_EVAL_BOT"),
+                ("LEAN_EVAL_ARCHIVER", "LEAN_EVAL_ARCHIVER"),
+                ("LEAN_EVAL_RECORDER", "LEAN_EVAL_RECORDER"),
+            ],
+        )
+        self.assertNotRegex(
+            self.text,
+            re.compile(r"^\s+app-id:", re.MULTILINE),
         )
 
     def test_size_cap_is_ten_mib(self) -> None:

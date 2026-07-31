@@ -14,16 +14,23 @@ is unrelated to this pipeline.
 
 | Item | Type | Stored as | Used by |
 | --- | --- | --- | --- |
-| `lean-eval-bot` | GitHub App | `LEAN_EVAL_BOT_APP_ID`, `LEAN_EVAL_BOT_PRIVATE_KEY` | `submission.yml` (fetch) |
-| `lean-eval-recorder` | GitHub App | `LEAN_EVAL_RECORDER_APP_ID`, `LEAN_EVAL_RECORDER_PRIVATE_KEY` | `submission.yml` (record) |
-| `lean-eval-archiver` | GitHub App | `LEAN_EVAL_ARCHIVER_APP_ID`, `LEAN_EVAL_ARCHIVER_PRIVATE_KEY` | `submission.yml` (archive) |
+| `lean-eval-bot` | GitHub App | `LEAN_EVAL_BOT_CLIENT_ID`, `LEAN_EVAL_BOT_PRIVATE_KEY` | `submission.yml` (fetch) |
+| `lean-eval-recorder` | GitHub App | `LEAN_EVAL_RECORDER_CLIENT_ID`, `LEAN_EVAL_RECORDER_PRIVATE_KEY` | `submission.yml` (record) |
+| `lean-eval-archiver` | GitHub App | `LEAN_EVAL_ARCHIVER_CLIENT_ID`, `LEAN_EVAL_ARCHIVER_PRIVATE_KEY` | `submission.yml` (archive) |
 | `LEADERBOARD_WRITE_TOKEN` | Fine-grained PAT | `LEADERBOARD_WRITE_TOKEN` | `submission.yml` (leaderboard redeploy dispatch) |
 | Ruleset `main protection` | Repository Ruleset | (config in this file, applied via API) | branch protection on `main` |
+
+The legacy `LEAN_EVAL_{BOT,RECORDER,ARCHIVER}_APP_ID` secrets were
+superseded by the Client ID secrets on 2026-07-31. Delete each legacy
+secret after the first successful submission on the Client ID workflow.
 
 To check the live state at any time:
 
 ```bash
 gh secret list -R leanprover/lean-eval-submissions
+for app in lean-eval-bot lean-eval-recorder lean-eval-archiver; do
+  gh api "/apps/$app" --jq '{slug, id, client_id}'
+done
 gh api /repos/leanprover/lean-eval-submissions/rules/branches/main --jq '[.[].type]'
 ```
 
@@ -36,6 +43,7 @@ repositories (which may be private).
 ### App settings
 
 - Owner account: `kim-em` (User account).
+- App ID: `3346375` (public identifier used for installation metadata).
 - Webhook: deactivated.
 - Repository permissions:
   - `Contents: Read`
@@ -44,7 +52,8 @@ repositories (which may be private).
 
 ### Repository secrets (in `leanprover/lean-eval-submissions`)
 
-- `LEAN_EVAL_BOT_APP_ID` — the App ID number.
+- `LEAN_EVAL_BOT_CLIENT_ID` — the app's Client ID. It is public, but
+  stored as a secret to keep the workflow's app inputs together.
 - `LEAN_EVAL_BOT_PRIVATE_KEY` — the full PEM contents of a private key
   generated for the app.
 
@@ -74,13 +83,13 @@ from-scratch rebuild:
    - Webhook → Active: unchecked
    - Repository permissions → Contents: Read
    - Where can this GitHub App be installed: **Any account**
-3. Save → record the App ID.
+3. Save → record both the App ID and Client ID.
 4. Generate a private key, download the `.pem`.
 5. Install the app on `leanprover/lean-eval-submissions` (so the workflow
    has an installation to mint tokens against).
 6. Set the secrets:
    ```bash
-   gh secret set LEAN_EVAL_BOT_APP_ID -R leanprover/lean-eval-submissions --body <APP_ID>
+   gh secret set LEAN_EVAL_BOT_CLIENT_ID -R leanprover/lean-eval-submissions --body <CLIENT_ID>
    gh secret set LEAN_EVAL_BOT_PRIVATE_KEY -R leanprover/lean-eval-submissions < path/to/key.pem
    ```
 
@@ -93,6 +102,7 @@ repo's `main`, bypassing branch protection.
 ### App settings
 
 - Owner account: `kim-em` (User account).
+- App ID: `3769615` (public identifier used by the ruleset bypass actor).
 - Webhook: deactivated.
 - Repository permissions:
   - `Contents: Read and write`
@@ -109,7 +119,8 @@ installable on third-party repos.
 
 ### Repository secrets (in `leanprover/lean-eval-submissions`)
 
-- `LEAN_EVAL_RECORDER_APP_ID` — the App ID number.
+- `LEAN_EVAL_RECORDER_CLIENT_ID` — the app's Client ID. It is public,
+  but stored as a secret to keep the workflow's app inputs together.
 - `LEAN_EVAL_RECORDER_PRIVATE_KEY` — the full PEM contents of a private
   key generated for the app.
 
@@ -138,12 +149,13 @@ workflow has the app's secrets.
    - Repository permissions → Contents: Read and write (everything else
      stays "No access")
    - Where can this GitHub App be installed: **Any account**
-3. Save → record the App ID.
+3. Save → record both the App ID (for the ruleset bypass actor) and the
+   Client ID (for token minting).
 4. Generate a private key, download the `.pem`.
 5. Install the app on `leanprover/lean-eval-submissions` only.
 6. Set the secrets:
    ```bash
-   gh secret set LEAN_EVAL_RECORDER_APP_ID -R leanprover/lean-eval-submissions --body <APP_ID>
+   gh secret set LEAN_EVAL_RECORDER_CLIENT_ID -R leanprover/lean-eval-submissions --body <CLIENT_ID>
    gh secret set LEAN_EVAL_RECORDER_PRIVATE_KEY -R leanprover/lean-eval-submissions < path/to/key.pem
    ```
 7. Add the App ID to the `main` ruleset's bypass list (see Ruleset
@@ -159,6 +171,7 @@ See [`docs/audit-archive.md`](audit-archive.md) for the design.
 ### App settings
 
 - Owner account: `kim-em` (User account).
+- App ID: `3856297` (public identifier used for installation metadata).
 - Webhook: deactivated.
 - Repository permissions:
   - `Contents: Read and write`
@@ -180,7 +193,8 @@ on purpose:
 
 ### Repository secrets (in `leanprover/lean-eval-submissions`)
 
-- `LEAN_EVAL_ARCHIVER_APP_ID` — the App ID number.
+- `LEAN_EVAL_ARCHIVER_CLIENT_ID` — the app's Client ID. It is public,
+  but stored as a secret to keep the workflow's app inputs together.
 - `LEAN_EVAL_ARCHIVER_PRIVATE_KEY` — the full PEM contents of a private
   key generated for the app.
 
@@ -208,12 +222,12 @@ token is never co-resident with an attacker-influenced process. See
    - Repository permissions → Contents: Read and write (everything else
      stays "No access")
    - Where can this GitHub App be installed: **Only on this account**
-3. Save → record the App ID.
+3. Save → record both the App ID and Client ID.
 4. Generate a private key, download the `.pem`.
 5. Install the app on `leanprover/lean-eval-audit` only.
 6. Set the secrets:
    ```bash
-   gh secret set LEAN_EVAL_ARCHIVER_APP_ID -R leanprover/lean-eval-submissions < <(printf '%s' "<APP_ID>")
+   gh secret set LEAN_EVAL_ARCHIVER_CLIENT_ID -R leanprover/lean-eval-submissions --body <CLIENT_ID>
    gh secret set LEAN_EVAL_ARCHIVER_PRIVATE_KEY -R leanprover/lean-eval-submissions < path/to/key.pem
    ```
 
@@ -272,7 +286,8 @@ gh api "/repos/leanprover/lean-eval-submissions/rulesets/<ID>" \
 
 ### Ruleset payload (canonical)
 
-The `<RECORDER_APP_ID>` placeholder is the `lean-eval-recorder` App ID.
+The `<RECORDER_APP_ID>` placeholder is the `lean-eval-recorder` App ID
+(currently `3769615`, verified by the live-state command above).
 `integration_id: 15368` pins the `verify` status check to the GitHub
 Actions app, so a hostile third-party app can't satisfy it with a bogus
 check of the same name.
