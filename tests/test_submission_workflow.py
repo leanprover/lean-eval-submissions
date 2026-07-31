@@ -88,6 +88,41 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             "results-store checkout must retain the App token for its push-retry loop",
         )
 
+    def test_evaluate_disables_unwritable_github_cache(self) -> None:
+        # lean-action still fetches Mathlib's independent cache, but must not
+        # attempt a GitHub cache save in the untrusted-execution job.
+        self.assertRegex(
+            self.text,
+            re.compile(
+                r"^      - uses: leanprover/lean-action@[0-9a-f]{40}\n"
+                r"        if: runner\.environment == 'github-hosted'\n"
+                r"        with:\n"
+                r"          lake-package-directory: lean-eval\n"
+                r"          use-mathlib-cache: true\n"
+                r"(?:          #.*\n)*"
+                r"          use-github-cache: false$",
+                re.MULTILINE,
+            ),
+        )
+
+    def test_evaluate_job_permissions_stay_minimal(self) -> None:
+        # An explicit permissions block sets every unlisted scope, including
+        # Actions cache writes, to none. Keep the untrusted-execution job at
+        # exactly the two scopes it needs.
+        evaluate_block = self.text.split("\n  evaluate:", 1)[1].split(
+            "\n  archive:", 1
+        )[0]
+        match = re.search(
+            r"^    permissions:\n((?:^      [^\n]+\n?)+)",
+            evaluate_block,
+            re.MULTILINE,
+        )
+        self.assertIsNotNone(match)
+        permissions = [
+            line.strip() for line in match.group(1).splitlines()
+        ]
+        self.assertEqual(permissions, ["contents: read", "issues: write"])
+
     def test_git_state_stripped_from_both_checkouts(self) -> None:
         self.assertIn(
             "rm -rf .git lean-eval/.git",

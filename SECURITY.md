@@ -122,12 +122,16 @@ sandbox (see `leanprover/lean-eval`'s `SECURITY.md` §3 for the full
 3. Fetches the submission with the step-scoped `lean-eval-bot` token.
 4. Strips `.git` from both checkouts.
 5. Builds landrun / lean4export / comparator / the `lean-eval` CLI.
-6. Runs the sandbox-engaged and env-allowlist probes **from the
+6. Fetches Mathlib's independent cache, but does not restore from or save
+   to the repository's GitHub Actions cache. The evaluate job deliberately
+   omits `actions: write`, so artifacts from a runner that executes
+   untrusted submitter code never enter a shared mutable cache scope.
+7. Runs the sandbox-engaged and env-allowlist probes **from the
    `leanprover/lean-eval` checkout** (`lean-eval/scripts/...`). Those
    probes live in the benchmark repo because they guard against sandbox
    regressions introduced by *benchmark-repo* changes; this pipeline
    re-runs them as a per-submission pre-flight gate.
-7. Runs `evaluate_submission.py`, which overlays the submission onto a
+8. Runs `evaluate_submission.py`, which overlays the submission onto a
    pristine `generated/<id>/` workspace and invokes comparator.
 
 The `record` job then writes the result. It uses **two checkouts of this
