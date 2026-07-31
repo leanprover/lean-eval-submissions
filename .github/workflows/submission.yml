@@ -352,6 +352,11 @@ jobs:
         with:
           lake-package-directory: lean-eval
           use-mathlib-cache: true
+          # The evaluate job deliberately omits actions:write. Disable the
+          # futile GitHub cache save (and its warning) instead of broadening
+          # the token available to the job that runs untrusted Lean.
+          # Mathlib's independent `lake exe cache get` remains enabled above.
+          use-github-cache: false
 
       - name: Lean toolchain + mathlib cache (self-hosted)
         # Self-hosted nix equivalent of lean-action above: elan (on PATH)
