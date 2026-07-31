@@ -62,6 +62,16 @@
         "submission_ref": "81d1ddc833df4a6661e4be53cf44e5a8a7b4b6da",
         "submission_repo": "hanwenzhu/lean-eval-seedprover"
       },
+      "isoperimetric_inequality": {
+        "benchmark_commit": "344d00f6d9c2740b740106bc88e40d0e24089992",
+        "issue_number": 903,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-31T07:21:44Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "c98aa42f364c6875a568ce3a2cc0fc31b467dd84",
+        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+      },
       "kam_invariant_curve": {
         "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
         "issue_number": 871,
