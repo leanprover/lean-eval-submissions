@@ -12,6 +12,16 @@
         "submission_ref": "5ac3c256103c9ab0358df952b480d2d90c14327a",
         "submission_repo": "hanwenzhu/lean-eval-seedprover"
       },
+      "deBranges_theorem": {
+        "benchmark_commit": "24a03a21451dc039556ee55ade1d2d788842636e",
+        "issue_number": 901,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-07-31T00:01:11Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b5948b4f899e3114c471a13983534fda6aecbd50",
+        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+      },
       "exists_chiral_knot": {
         "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
         "issue_number": 868,
