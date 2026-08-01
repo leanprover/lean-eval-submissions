@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "GPT-5.6 terra": {
+      "two_plus_two": {
+        "benchmark_commit": "3f3786f3b4d9a4b64a5859b3036aca190cd25613",
+        "issue_number": 906,
+        "production_description": "Pipeline test on two_plus_two. GPT-5.6 terra proposed the norm_num proof; Codex generated and compiled the workspace in Kenta Kitamura's local environment.",
+        "solved_at": "2026-08-01T03:59:11Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "a7cf16eead7f54a3eae4099c154eb80b0f520c92",
+        "submission_repo": "KitaKen1/lean-eval-two-plus-two"
+      }
+    }
+  },
+  "user": "KitaKen1"
+}
