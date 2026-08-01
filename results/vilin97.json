@@ -11,6 +11,16 @@
         "submission_public": true,
         "submission_ref": "dc38ff1ed439dda5da5e07e380f80c8d7dccc9d9",
         "submission_repo": "Vilin97/lean-eval-coherent-cohomology-finite-dimensional"
+      },
+      "green_tao": {
+        "benchmark_commit": "3f3786f3b4d9a4b64a5859b3036aca190cd25613",
+        "issue_number": 907,
+        "production_description": "Produced autonomously by gpt-5.6-Sol in Codex, with human direction. Builds on Mathlib and LeanEval's transference/majorant framework, adding a source-full ordered hypergraph-removal assembly. The submitted source contains no sorry, admit, added axioms, set_option, or native_decide.",
+        "solved_at": "2026-08-01T07:07:21Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "0c5d3337c3ebb59c318ab9030e31b835826141f8",
+        "submission_repo": "Vilin97/lean-eval-green-tao"
       }
     }
   },
