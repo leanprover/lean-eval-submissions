@@ -1092,6 +1092,15 @@
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
         "submission_repo": "humanfia/lean-eval"
       },
+      "pin_sphere_n_mulEquiv_int": {
+        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+        "issue_number": 908,
+        "solved_at": "2026-08-02T06:15:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "8d0d0b2838788642a1d76373ce5b26ae7f43499f",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "poincare_bendixson": {
         "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
         "issue_number": 891,
@@ -1210,6 +1219,15 @@
         "submission_kind": "github_repo",
         "submission_public": true,
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
+        "submission_repo": "humanfia/lean-eval"
+      },
+      "schlafli_classification": {
+        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+        "issue_number": 908,
+        "solved_at": "2026-08-02T06:15:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "8d0d0b2838788642a1d76373ce5b26ae7f43499f",
         "submission_repo": "humanfia/lean-eval"
       },
       "semilinear_poisson_radial_symmetry": {
@@ -1380,6 +1398,33 @@
         "submission_kind": "github_repo",
         "submission_public": true,
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
+        "submission_repo": "humanfia/lean-eval"
+      },
+      "wallpaper_groups_17": {
+        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+        "issue_number": 908,
+        "solved_at": "2026-08-02T06:15:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "8d0d0b2838788642a1d76373ce5b26ae7f43499f",
+        "submission_repo": "humanfia/lean-eval"
+      },
+      "wiener_atom_detection": {
+        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+        "issue_number": 908,
+        "solved_at": "2026-08-02T06:15:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "8d0d0b2838788642a1d76373ce5b26ae7f43499f",
+        "submission_repo": "humanfia/lean-eval"
+      },
+      "wiener_inverse_closed": {
+        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+        "issue_number": 908,
+        "solved_at": "2026-08-02T06:15:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "8d0d0b2838788642a1d76373ce5b26ae7f43499f",
         "submission_repo": "humanfia/lean-eval"
       }
     }
