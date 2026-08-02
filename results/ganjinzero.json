@@ -120,6 +120,16 @@
         "submission_ref": "52c6d202fdfaa7e168450703f027562ac1636a8f",
         "submission_repo": "GanjinZero/brauer_fowler"
       },
+      "brauer_suzuki": {
+        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+        "issue_number": 909,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-08-02T07:12:39Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "c9bc6168c860e79148fe98fc4a499b96891ec0a7",
+        "submission_repo": "GanjinZero/brauer_suzuki"
+      },
       "brouwer_fixed_point": {
         "benchmark_commit": "ecb1fbd7f00983159c06053260e5e8741786ebb4",
         "issue_number": 86,
