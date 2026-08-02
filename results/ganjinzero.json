@@ -1089,6 +1089,16 @@
         "submission_ref": "e3ab99a7ffd1ae258b28da8903003eed7ec2d5c5",
         "submission_repo": "GanjinZero/schauder_fixed_point"
       },
+      "schlafli_classification": {
+        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+        "issue_number": 910,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-08-02T11:36:21Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "2924250ef013c40facd4c32ae6dea9a3665802f6",
+        "submission_repo": "GanjinZero/schlafli_classification"
+      },
       "semilinear_poisson_radial_symmetry": {
         "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
         "issue_number": 454,
