@@ -140,6 +140,15 @@
         "submission_ref": "0fe948ca4291478bad75ae77f1d337bc43a42528",
         "submission_repo": "humanfia/lean-eval"
       },
+      "brauer_suzuki": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 922,
+        "solved_at": "2026-08-03T13:59:34Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "49a336d3bae6a38949720ae508fb6e64782c6d96",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "brouwer_fixed_point": {
         "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
         "issue_number": 891,
