@@ -12,6 +12,16 @@
         "submission_ref": "dc38ff1ed439dda5da5e07e380f80c8d7dccc9d9",
         "submission_repo": "Vilin97/lean-eval-coherent-cohomology-finite-dimensional"
       },
+      "furstenberg_measure": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 929,
+        "production_description": "Produced by gpt-5.6-Sol in Codex with user-directed autonomous implementation and review. The proof reuses the accepted arbitrary-rank ordered hypergraph-removal and finite Szemer\u00e9di machinery from the preceding public Szemer\u00e9di submission, then adds a 557-line benchmark-facing finite correspondence argument: a uniform dense-prefix endpoint, finite orbit-return averaging, countable witness extraction, and removal of the initial shift by measure preservation. Mathlib, Lean Pool, Tau Ceti, APAP, Formal Conjectures, and adjacent accepted submissions were surveyed before target selection. The proof and its detailed informal proof/Lean blueprint were independently audited; a pristine evaluator-style overlay passed a warnings-fatal 8,750-job build with 6.56 GB peak RSS.",
+        "solved_at": "2026-08-03T17:47:13Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "111a08f63ea9d70fe8b2ce20be673309d3eb128d",
+        "submission_repo": "Vilin97/lean-eval-furstenberg-measure"
+      },
       "green_tao": {
         "benchmark_commit": "3f3786f3b4d9a4b64a5859b3036aca190cd25613",
         "issue_number": 907,
