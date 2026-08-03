@@ -2,6 +2,16 @@
   "schema_version": 1,
   "solved": {
     "Seed Prover (ByteDance)": {
+      "alternating_sign_matrix_count": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 930,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-08-03T19:00:17Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "d41d7856a8aaf300b20615f794602fecb3b23abc",
+        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+      },
       "brauer_splitting_field": {
         "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
         "issue_number": 892,
