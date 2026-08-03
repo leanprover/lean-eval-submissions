@@ -22,6 +22,15 @@
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
         "submission_repo": "humanfia/lean-eval"
       },
+      "alternating_sign_matrix_count": {
+        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+        "issue_number": 912,
+        "solved_at": "2026-08-03T02:36:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "0fe948ca4291478bad75ae77f1d337bc43a42528",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "anosov_bowen_shadowing": {
         "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
         "issue_number": 891,
@@ -120,6 +129,15 @@
         "submission_kind": "github_repo",
         "submission_public": true,
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
+        "submission_repo": "humanfia/lean-eval"
+      },
+      "brauer_splitting_field": {
+        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+        "issue_number": 912,
+        "solved_at": "2026-08-03T02:36:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "0fe948ca4291478bad75ae77f1d337bc43a42528",
         "submission_repo": "humanfia/lean-eval"
       },
       "brouwer_fixed_point": {
@@ -230,6 +248,15 @@
         "submission_kind": "github_repo",
         "submission_public": true,
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
+        "submission_repo": "humanfia/lean-eval"
+      },
+      "cyclotomic_integer_house_between_two_and_76_33": {
+        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+        "issue_number": 912,
+        "solved_at": "2026-08-03T02:36:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "0fe948ca4291478bad75ae77f1d337bc43a42528",
         "submission_repo": "humanfia/lean-eval"
       },
       "cyclotomic_integer_house_le_two": {
@@ -832,6 +859,15 @@
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
         "submission_repo": "humanfia/lean-eval"
       },
+      "mandelbrot_connected": {
+        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+        "issue_number": 912,
+        "solved_at": "2026-08-03T02:36:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "0fe948ca4291478bad75ae77f1d337bc43a42528",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "margulis_ruelle": {
         "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
         "issue_number": 891,
@@ -1099,6 +1135,15 @@
         "submission_kind": "github_repo",
         "submission_public": true,
         "submission_ref": "8d0d0b2838788642a1d76373ce5b26ae7f43499f",
+        "submission_repo": "humanfia/lean-eval"
+      },
+      "platonic_classification": {
+        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+        "issue_number": 912,
+        "solved_at": "2026-08-03T02:36:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "0fe948ca4291478bad75ae77f1d337bc43a42528",
         "submission_repo": "humanfia/lean-eval"
       },
       "poincare_bendixson": {
@@ -1378,6 +1423,15 @@
         "submission_kind": "github_repo",
         "submission_public": true,
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
+        "submission_repo": "humanfia/lean-eval"
+      },
+      "unit_distance_upper_bound": {
+        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+        "issue_number": 912,
+        "solved_at": "2026-08-03T02:36:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "0fe948ca4291478bad75ae77f1d337bc43a42528",
         "submission_repo": "humanfia/lean-eval"
       },
       "variable_binder_example": {
