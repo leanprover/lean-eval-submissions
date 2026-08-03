@@ -21,6 +21,16 @@
         "submission_public": false,
         "submission_ref": "0c5d3337c3ebb59c318ab9030e31b835826141f8",
         "submission_repo": "Vilin97/lean-eval-green-tao"
+      },
+      "szemeredi": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 917,
+        "production_description": "Produced by OpenAI Codex gpt-5.6-Sol with user-directed multi-agent scouting and lean-lsp-mcp verification. Reuses the submitter's comparator-accepted Green\u2013Tao ordered hypergraph-removal development; this submission adds the upper-density/limsup bridge, collision-free finite-prefix embedding into ZMod, off-diagonal extraction, short-interval lift, and final Szemer\u00e9di assembly. The proof was fully rebuilt, warning-cleaned, source-audited, and documented in one agent session.",
+        "solved_at": "2026-08-03T09:22:50Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "47adeca65ae9f90308ec44cec64c5318c06fad17",
+        "submission_repo": "Vilin97/lean-eval-green-tao"
       }
     }
   },
