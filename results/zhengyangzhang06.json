@@ -1480,6 +1480,15 @@
         "submission_public": true,
         "submission_ref": "8d0d0b2838788642a1d76373ce5b26ae7f43499f",
         "submission_repo": "humanfia/lean-eval"
+      },
+      "wiener_levy_analytic_calculus": {
+        "benchmark_commit": "191847ff7b096764651c139dc80a9a838182f845",
+        "issue_number": 914,
+        "solved_at": "2026-08-03T04:52:44Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "d4de79b5716e09710cd2dccbb54fadb03458f06a",
+        "submission_repo": "humanfia/lean-eval"
       }
     }
   },
