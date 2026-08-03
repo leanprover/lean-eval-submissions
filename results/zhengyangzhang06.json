@@ -1325,6 +1325,15 @@
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
         "submission_repo": "humanfia/lean-eval"
       },
+      "strong_mason_conjecture": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 920,
+        "solved_at": "2026-08-03T12:14:21Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "76190b0c991ac3f41709a99d2a082a314d6d95cb",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "strong_subadditivity": {
         "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
         "issue_number": 891,
