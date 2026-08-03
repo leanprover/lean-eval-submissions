@@ -2,6 +2,26 @@
   "schema_version": 1,
   "solved": {
     "mostly ChatGPT 5.6 Sol": {
+      "jordan_curve": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 915,
+        "production_description": "This is an extension of a previous submission for the classification of surfaces to encompass two additional lean-eval challenge problems, the Jordan Curve Theorem and the Schoenflies theorem.   JCT was vendored from rkirov/jordan_pick, and Schoenflies was built atop JCT and foundational work done for the classification of surfaces.  Incremental work for Schoenflies was ~40hrs of mostly ChatGPT Sol xhigh with an assist from Fable.",
+        "solved_at": "2026-08-03T07:42:08Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "544b0844fd58ffd23285dd39cfe6d6f83d942f57",
+        "submission_repo": "mccorvie/classification-of-surfaces"
+      },
+      "schoenflies": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 915,
+        "production_description": "This is an extension of a previous submission for the classification of surfaces to encompass two additional lean-eval challenge problems, the Jordan Curve Theorem and the Schoenflies theorem.   JCT was vendored from rkirov/jordan_pick, and Schoenflies was built atop JCT and foundational work done for the classification of surfaces.  Incremental work for Schoenflies was ~40hrs of mostly ChatGPT Sol xhigh with an assist from Fable.",
+        "solved_at": "2026-08-03T07:42:08Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "544b0844fd58ffd23285dd39cfe6d6f83d942f57",
+        "submission_repo": "mccorvie/classification-of-surfaces"
+      },
       "topological_classification_of_surfaces": {
         "benchmark_commit": "43fc8cf16396a3b0f789fe5bea65837e866aba15",
         "issue_number": 898,
