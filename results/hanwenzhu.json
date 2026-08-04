@@ -162,6 +162,16 @@
         "submission_ref": "fcf5141145bab13be5096232fbc7515af312db8f",
         "submission_repo": "hanwenzhu/lean-eval-seedprover"
       },
+      "strong_mason_conjecture": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 943,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-08-04T21:09:14Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "6466150f543bd9b3597cafea5978ad21a9992d30",
+        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+      },
       "upper_bound_simplicial_spheres": {
         "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
         "issue_number": 867,
