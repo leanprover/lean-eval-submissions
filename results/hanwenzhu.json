@@ -62,6 +62,16 @@
         "submission_ref": "c803b859ba13ea7d01b0c01c158c081e286aad84",
         "submission_repo": "hanwenzhu/lean-eval-seedprover"
       },
+      "furstenberg_measure": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 942,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solved_at": "2026-08-04T19:40:35Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "51a4a939400cc1575ccd8c5f92a75fc00bea9052",
+        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+      },
       "higman_infinite_simple": {
         "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
         "issue_number": 885,
