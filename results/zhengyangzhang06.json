@@ -548,6 +548,15 @@
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
         "submission_repo": "humanfia/lean-eval"
       },
+      "gleason_theorem_separable": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 936,
+        "solved_at": "2026-08-04T15:06:34Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "7a24bda6c9423c1d712fdcbe843070d8176d1343",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "golod_shafarevich_inequality": {
         "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
         "issue_number": 891,
