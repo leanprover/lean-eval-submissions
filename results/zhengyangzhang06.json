@@ -1479,6 +1479,15 @@
         "submission_ref": "0fe948ca4291478bad75ae77f1d337bc43a42528",
         "submission_repo": "humanfia/lean-eval"
       },
+      "upper_bound_simplicial_spheres": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 938,
+        "solved_at": "2026-08-04T15:17:00Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "914e2dae8eeebca1a981d67935afdcfc68cdb06e",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "variable_binder_example": {
         "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
         "issue_number": 891,
