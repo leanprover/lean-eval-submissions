@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "OpenAI Codex (GPT-5.6 Sol), Claude Code (Opus 5 and Opus 4.8)": {
+      "schoenflies": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 933,
+        "production_description": "Produced with OpenAI Codex (GPT-5.6 Sol), following initial evaluator-format investigation with Claude Opus 5 / 4.8. The proof builds on TauCeti and Jordan curve theorem ports. Human involvement focused on direction, review, and submission approval.\n  Approximate effort: 4 hours human time and 4 days AI harness runtime; token and monetary costs were not tracked.",
+        "solved_at": "2026-08-04T03:53:02Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "18cc079e62e45c203a710bd72f5a503959621ff8",
+        "submission_repo": "rigwild/lean-math-problems"
+      }
+    }
+  },
+  "user": "rigwild"
+}
