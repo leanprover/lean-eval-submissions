@@ -886,6 +886,15 @@
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
         "submission_repo": "humanfia/lean-eval"
       },
+      "m23_irrep_tensor_square_decomp": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 937,
+        "solved_at": "2026-08-04T15:15:51Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "56df59d9c4df39e44f31fa0b51496c6c5942dbf1",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "mandelbrot_connected": {
         "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
         "issue_number": 912,
