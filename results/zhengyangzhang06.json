@@ -1481,6 +1481,15 @@
         "submission_ref": "8d0d0b2838788642a1d76373ce5b26ae7f43499f",
         "submission_repo": "humanfia/lean-eval"
       },
+      "wieferich_g_three": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 934,
+        "solved_at": "2026-08-04T05:59:12Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "814fd94d8a35bd976a62d3aabcb9e8b83f503919",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "wiener_atom_detection": {
         "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
         "issue_number": 908,
