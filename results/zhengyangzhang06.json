@@ -677,6 +677,15 @@
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
         "submission_repo": "humanfia/lean-eval"
       },
+      "ising_2d_phase_transition": {
+        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+        "issue_number": 939,
+        "solved_at": "2026-08-04T15:11:10Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "94f9d8968c714f133385f00c7095fb173a8065e7",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "isoperimetric_inequality": {
         "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
         "issue_number": 891,
