@@ -1,6 +1,17 @@
 {
   "schema_version": 1,
   "solved": {
+    "Opus-5": {
+      "adoCharZero": {
+        "benchmark_commit": "cd571907f9aa410137683e75cebf8cca7d3587ec",
+        "issue_number": 945,
+        "solved_at": "2026-08-05T06:43:54Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "00c64353b2c6ae47951bcea1218eabe1635b2b02",
+        "submission_repo": "Vilin97/lean-eval-ado"
+      }
+    },
     "gpt-5.6-Sol": {
       "coherent_cohomology_finite_dimensional": {
         "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
