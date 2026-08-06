@@ -24,6 +24,8 @@ OWNER_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9._-]+$")
 LOGIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$")
 SUBMISSION_KINDS = ("github_repo", "gist")
 PRODUCTION_DESCRIPTION_MAX_LEN = 4000
+SOLUTION_PUBLICATION_STATUSES = ("private", "planned", "published")
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 class UpdateError(Exception):
@@ -50,6 +52,48 @@ def _require_submission_kind(value: str) -> None:
 def _require_login(value: str) -> None:
     if not LOGIN_RE.fullmatch(value):
         raise UpdateError(f"Invalid GitHub login: {value!r}")
+
+
+def _validate_solution_publication(
+    status: str | None, date: str | None, submission_public: bool
+) -> None:
+    if status is None:
+        if date is not None:
+            raise UpdateError(
+                "solution-publication-date requires solution-publication-status"
+            )
+        return
+    if status not in SOLUTION_PUBLICATION_STATUSES:
+        raise UpdateError(
+            "solution-publication-status must be one of "
+            f"{SOLUTION_PUBLICATION_STATUSES}, got {status!r}"
+        )
+    if status == "published" and not submission_public:
+        raise UpdateError(
+            "solution-publication-status published requires a public submission"
+        )
+    if status in {"private", "planned"} and submission_public:
+        raise UpdateError(
+            f"solution-publication-status {status} requires a private submission"
+        )
+    if status == "private":
+        if date is not None:
+            raise UpdateError(
+                "solution-publication-date must be absent when status is private"
+            )
+        return
+    if date is None:
+        raise UpdateError(
+            f"solution-publication-date is required when status is {status}"
+        )
+    if not DATE_RE.fullmatch(date):
+        raise UpdateError("solution-publication-date must use YYYY-MM-DD format")
+    try:
+        datetime.date.fromisoformat(date)
+    except ValueError as exc:
+        raise UpdateError(
+            f"solution-publication-date is not a valid calendar date: {date!r}"
+        ) from exc
 
 
 def _load_existing(target_path: pathlib.Path, user: str) -> dict:
@@ -108,6 +152,8 @@ def update_leaderboard(
     issue_number: int,
     now: str,
     production_description: str | None = None,
+    solution_publication_status: str | None = None,
+    solution_publication_date: str | None = None,
 ) -> dict:
     _require_login(user)
     _require_sha("benchmark-commit", benchmark_commit)
@@ -118,6 +164,11 @@ def update_leaderboard(
         raise UpdateError(f"issue-number must be positive, got {issue_number}")
     if not model.strip():
         raise UpdateError("model must be a non-empty string")
+    _validate_solution_publication(
+        solution_publication_status,
+        solution_publication_date,
+        submission_public,
+    )
     if production_description is not None:
         if "\x00" in production_description:
             raise UpdateError("production-description must not contain NUL bytes")
@@ -148,6 +199,10 @@ def update_leaderboard(
         }
         if production_description is not None:
             record["production_description"] = production_description
+        if solution_publication_status is not None:
+            record["solution_publication_status"] = solution_publication_status
+            if solution_publication_date is not None:
+                record["solution_publication_date"] = solution_publication_date
         model_bucket[problem_id] = record
         added.append(problem_id)
 
@@ -220,6 +275,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Optional free-form description of how the solution was produced.",
     )
     parser.add_argument(
+        "--solution-publication-status",
+        choices=SOLUTION_PUBLICATION_STATUSES,
+        default=None,
+        help="Submission-time exact-solution publication declaration.",
+    )
+    parser.add_argument(
+        "--solution-publication-date",
+        default=None,
+        help="Actual (published) or intended (planned) date in YYYY-MM-DD format.",
+    )
+    parser.add_argument(
         "--now",
         default=None,
         help="Override the ISO 8601 timestamp. Tests use this.",
@@ -244,6 +310,8 @@ def main(argv: list[str] | None = None) -> int:
             model=args.model,
             issue_number=args.issue_number,
             production_description=args.production_description,
+            solution_publication_status=args.solution_publication_status,
+            solution_publication_date=args.solution_publication_date,
             now=now,
         )
     except UpdateError as exc:

@@ -647,6 +647,8 @@ jobs:
           SUBMISSION_REF=$(python -c "import json,sys; print(json.load(open(sys.argv[1]))['submission_ref'])" "$METADATA_PATH")
           SUBMISSION_PUBLIC=$(python -c "import json,sys; print(str(json.load(open(sys.argv[1]))['submission_public']).lower())" "$METADATA_PATH")
           PRODUCTION_DESCRIPTION=$(python -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('production_description') or '')" "$METADATA_PATH")
+          SOLUTION_PUBLICATION_STATUS=$(python -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('solution_publication_status') or '')" "$METADATA_PATH")
+          SOLUTION_PUBLICATION_DATE=$(python -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('solution_publication_date') or '')" "$METADATA_PATH")
           if [ "$SUBMISSION_PUBLIC" = "true" ]; then
             PUBLIC_FLAG="--submission-public"
           else
@@ -655,6 +657,13 @@ jobs:
           DESCRIPTION_ARGS=()
           if [ -n "$PRODUCTION_DESCRIPTION" ]; then
             DESCRIPTION_ARGS+=(--production-description "$PRODUCTION_DESCRIPTION")
+          fi
+          PUBLICATION_ARGS=()
+          if [ -n "$SOLUTION_PUBLICATION_STATUS" ]; then
+            PUBLICATION_ARGS+=(--solution-publication-status "$SOLUTION_PUBLICATION_STATUS")
+          fi
+          if [ -n "$SOLUTION_PUBLICATION_DATE" ]; then
+            PUBLICATION_ARGS+=(--solution-publication-date "$SOLUTION_PUBLICATION_DATE")
           fi
 
           MAX_ATTEMPTS=5
@@ -673,7 +682,8 @@ jobs:
               $PUBLIC_FLAG \
               --model "$MODEL" \
               --issue-number "${{ github.event.issue.number }}" \
-              "${DESCRIPTION_ARGS[@]}")
+              "${DESCRIPTION_ARGS[@]}" \
+              "${PUBLICATION_ARGS[@]}")
 
             CHANGED=$(python -c "import json,sys; print(json.loads(sys.argv[1])['changed'])" "$OUTPUT")
             if [ "$CHANGED" != "True" ]; then

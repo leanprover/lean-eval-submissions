@@ -36,6 +36,9 @@ already produces — the same bytes the evaluator sees. Encryption uses
 records the SHA-256 of both plaintext-tar and ciphertext so an
 operator can verify integrity at decrypt time (against the plaintext
 digest) and without decrypting (against the ciphertext digest).
+For submissions made after publication disclosure was added, it also
+preserves the submitter's `solution_publication_status` and optional
+`solution_publication_date` snapshot.
 
 ## Workflow integration
 

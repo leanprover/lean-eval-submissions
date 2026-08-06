@@ -20,6 +20,7 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "submission.yml"
+ISSUE_FORM = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "submit.yml"
 
 
 class SubmissionWorkflowStructureTests(unittest.TestCase):
@@ -275,6 +276,17 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # would silently omit the verdict from every sidecar.
         self.assertIn("--summary /tmp/results-in/summary.json", self.text)
         self.assertNotIn("--results /tmp/results-in/results.json", self.text)
+
+
+class SubmissionIssueFormTests(unittest.TestCase):
+    def test_publication_tradeoff_and_snapshot_fields_are_present(self) -> None:
+        text = ISSUE_FORM.read_text(encoding="utf-8")
+        self.assertIn("LeanEval supports open science", text)
+        self.assertIn("id: solution_publication_status", text)
+        self.assertIn("id: publication_date", text)
+        self.assertIn("id: intended_publication_date", text)
+        self.assertIn("YYYY-MM-DD", text)
+        self.assertIn("There is no required embargo", text)
 
 
 if __name__ == "__main__":

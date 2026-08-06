@@ -109,6 +109,30 @@ class EncryptTests(unittest.TestCase):
             self.assertNotIn("archived_at", sidecar)
             self.assertNotIn("evaluator_verdict", sidecar)
 
+    def test_encrypt_preserves_publication_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            source_tar = _make_source_tar(tmp)
+            metadata = _make_metadata(
+                tmp,
+                solution_publication_status="planned",
+                solution_publication_date="2027-01-15",
+            )
+            recipients = _make_recipients(tmp)
+            out = tmp / "out"
+            with mock.patch.object(arch.subprocess, "run", side_effect=_fake_age):
+                rc = arch.main([
+                    "encrypt",
+                    "--source-tar", str(source_tar),
+                    "--metadata", str(metadata),
+                    "--recipients", str(recipients),
+                    "--output-dir", str(out),
+                ])
+            self.assertEqual(rc, 0)
+            sidecar = json.loads((out / "sidecar.partial.json").read_text())
+            self.assertEqual(sidecar["solution_publication_status"], "planned")
+            self.assertEqual(sidecar["solution_publication_date"], "2027-01-15")
+
     def test_encrypt_rejects_oversize_source(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
