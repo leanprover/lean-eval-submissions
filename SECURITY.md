@@ -28,14 +28,11 @@ The attacker controls:
   source is consumed.
 - The freeform `model` and `production_description` fields in the issue
   body.
+- Whether they submit through the web Issue Form or the GitHub API. A
+  well-formed submission can trigger evaluation through either path.
 
 The attacker does not control:
 
-- Whether the `submission` label gets applied — that requires triage
-  permission on `leanprover/lean-eval-submissions`. The issue form lists
-  the label, but GitHub only applies a form's labels for an author who
-  has triage permission; for everyone else a maintainer must apply it.
-  That is the trust gate.
 - `Challenge.lean`, `Solution.lean`, `lakefile.toml`, `lean-toolchain`,
   `config.json`, `WorkspaceTest.lean` in the generated workspace. These
   are taken from a pristine `generated/<id>/` checkout of
@@ -49,6 +46,14 @@ The attacker does not control:
 
 The goal we resist: **a submitter receiving credit on the leaderboard
 for a theorem they have not actually proved.**
+
+The `submission` label is a routing signal, not an authorization boundary.
+The web Issue Form applies it directly. For API-created issues, the `intake`
+job validates the current form shape, required publication declaration,
+supported source URL, and three checked acknowledgements before applying the
+label and allowing evaluation. Malformed API issues stay unlabeled. The
+security boundary remains the pristine benchmark overlay and comparator's
+landrun sandbox, not the intake label.
 
 ## 2. Submission confidentiality
 
@@ -173,9 +178,11 @@ Submission-pipeline soft spots. Comparator/sandbox soft spots are in
 2. **Freeform `model` length.** `update_leaderboard.py` validates
    `production_description` length but not `model`. A pathological
    `model` value cannot grant credit, but can pollute the results JSON.
-3. **The `submission` label is a triage gate.** Anyone with triage
-   access on `leanprover/lean-eval-submissions` can trigger the workflow
-   against any submission URL. Repository admin hygiene matters.
+3. **Public intake can consume CI capacity.** Anyone can submit a
+   well-formed issue through the web form or API and trigger evaluation.
+   Intake validation rejects malformed API issues but is not an
+   authorization or anti-abuse boundary; repository Actions limits and
+   operator moderation remain the resource-abuse controls.
 4. **Cross-repo benchmark drift.** The pipeline scores against
    `leanprover/lean-eval@main` HEAD while the leaderboard site renders a
    catalog pinned by its own `benchmark-snapshot/`. A result can be

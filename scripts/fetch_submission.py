@@ -63,7 +63,7 @@ PUBLICATION_STATUS_VALUES = {
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
-def _find_section(body_text: str, heading: str) -> str | None:
+def find_issue_section(body_text: str, heading: str) -> str | None:
     pattern = re.compile(
         rf"^###\s+{re.escape(heading)}\s*\n+(?P<value>.+?)(?=\n+###\s|\Z)",
         re.MULTILINE | re.DOTALL,
@@ -75,7 +75,7 @@ def _find_section(body_text: str, heading: str) -> str | None:
 
 
 def _optional_section(body_text: str, heading: str) -> str | None:
-    value = _find_section(body_text, heading)
+    value = find_issue_section(body_text, heading)
     if value is None or not value or value.startswith("_No response_"):
         return None
     return value
@@ -166,7 +166,7 @@ def parse_issue_body(body_text: str) -> dict[str, str | None]:
     """
     fields: dict[str, str | None] = {}
     for field_key, heading in (("source_url", "Submission URL"), ("model", "Model")):
-        value = _find_section(body_text, heading)
+        value = find_issue_section(body_text, heading)
         if value is None:
             raise FetchError(
                 f"Could not find `{heading}` section in issue body. "
@@ -176,7 +176,7 @@ def parse_issue_body(body_text: str) -> dict[str, str | None]:
             raise FetchError(f"`{heading}` field is empty.")
         fields[field_key] = value
 
-    description = _find_section(body_text, PRODUCTION_DESCRIPTION_HEADING)
+    description = find_issue_section(body_text, PRODUCTION_DESCRIPTION_HEADING)
     if description is None or not description or description.startswith("_No response_"):
         fields["production_description"] = None
     else:

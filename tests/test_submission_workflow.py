@@ -49,8 +49,8 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         ]
         self.assertEqual(
             job_headers,
-            ["  evaluate:", "  archive:", "  record:", "  notify:"],
-            "expected exactly the evaluate/archive/record/notify jobs",
+            ["  intake:", "  evaluate:", "  archive:", "  record:", "  notify:"],
+            "expected exactly the intake/evaluate/archive/record/notify jobs",
         )
         self.assertNotIn(
             "name: submission-source",
@@ -75,7 +75,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         )
         self.assertEqual(checkout_shas, {checkout_sha})
         self.assertEqual(
-            self.text.count("uses: actions/checkout@"), 5, "expected 5 checkout steps"
+            self.text.count("uses: actions/checkout@"), 6, "expected 6 checkout steps"
         )
         # The two evaluate-job checkouts must each set persist-credentials:false.
         self.assertGreaterEqual(
@@ -123,6 +123,29 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             line.strip() for line in match.group(1).splitlines()
         ]
         self.assertEqual(permissions, ["contents: read", "issues: write"])
+
+    def test_api_intake_validates_then_labels_and_evaluates_same_run(self) -> None:
+        self.assertIn("types: [opened, labeled]", self.text)
+        intake_block = self.text.split("\n  intake:", 1)[1].split(
+            "\n  evaluate:", 1
+        )[0]
+        self.assertIn("python scripts/validate_submission_intake.py", intake_block)
+        self.assertIn("--add-label submission", intake_block)
+        self.assertIn(
+            "!contains(github.event.issue.labels.*.name, 'submission')",
+            intake_block,
+        )
+        self.assertLess(
+            intake_block.index("python scripts/validate_submission_intake.py"),
+            intake_block.index("--add-label submission"),
+        )
+        self.assertIn("issues: write", intake_block)
+        evaluate_header = self.text.split("\n  evaluate:", 1)[1].split(
+            "\n    # Default:", 1
+        )[0]
+        self.assertIn("needs: intake", evaluate_header)
+        self.assertIn("needs.intake.outputs.evaluate == 'true'", evaluate_header)
+        self.assertIn("github.event.label.name == 'submission'", evaluate_header)
 
     def test_git_state_stripped_from_both_checkouts(self) -> None:
         self.assertIn(
