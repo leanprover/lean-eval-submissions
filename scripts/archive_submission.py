@@ -55,6 +55,8 @@ SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
 # shape produced by fetch_submission.py:submission_repo_identifier.
 REPO_IDENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$")
 ALLOWED_SUBMISSION_KINDS = ("github_repo", "gist")
+ALLOWED_SOLUTION_PUBLICATION_STATUSES = ("private", "planned", "published")
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _sha256_of_file(path: pathlib.Path) -> str:
@@ -176,6 +178,54 @@ def _encrypt(args: argparse.Namespace) -> int:
     if issue_number <= 0:
         sys.exit(f"issue_number must be a positive integer, got {issue_number!r}")
 
+    publication_status = metadata.get("solution_publication_status")
+    publication_date = metadata.get("solution_publication_date")
+    if publication_status is not None:
+        if not isinstance(publication_status, str):
+            sys.exit(
+                "metadata.json field 'solution_publication_status' must be a "
+                "string when present"
+            )
+        if publication_status not in ALLOWED_SOLUTION_PUBLICATION_STATUSES:
+            sys.exit(
+                "metadata.json field 'solution_publication_status' must be one "
+                f"of {ALLOWED_SOLUTION_PUBLICATION_STATUSES!r}"
+            )
+        if publication_status == "published" and not submission_public:
+            sys.exit(
+                "metadata.json published solution status requires a public submission"
+            )
+        if publication_status in {"private", "planned"} and submission_public:
+            sys.exit(
+                "metadata.json private/planned solution status requires a private "
+                "submission"
+            )
+    if publication_date is not None:
+        if publication_status not in {"planned", "published"}:
+            sys.exit(
+                "metadata.json field 'solution_publication_date' requires a "
+                "planned or published status"
+            )
+        if not isinstance(publication_date, str) or not DATE_RE.fullmatch(
+            publication_date
+        ):
+            sys.exit(
+                "metadata.json field 'solution_publication_date' must use "
+                "YYYY-MM-DD format"
+            )
+        try:
+            dt.date.fromisoformat(publication_date)
+        except ValueError:
+            sys.exit(
+                "metadata.json field 'solution_publication_date' is not a valid "
+                f"calendar date: {publication_date!r}"
+            )
+    elif publication_status in {"planned", "published"}:
+        sys.exit(
+            "metadata.json field 'solution_publication_date' is required for "
+            f"status {publication_status!r}"
+        )
+
     args.output_dir.mkdir(parents=True, exist_ok=True)
     ciphertext = args.output_dir / "source.tar.gz.age"
     partial_sidecar = args.output_dir / "sidecar.partial.json"
@@ -222,6 +272,10 @@ def _encrypt(args: argparse.Namespace) -> int:
         if not isinstance(production_description, str):
             sys.exit("metadata.json field 'production_description' must be a string when present")
         sidecar["production_description"] = production_description
+    if publication_status is not None:
+        sidecar["solution_publication_status"] = publication_status
+        if publication_date is not None:
+            sidecar["solution_publication_date"] = publication_date
 
     partial_sidecar.write_text(
         json.dumps(sidecar, indent=2, sort_keys=True) + "\n",
@@ -286,6 +340,46 @@ def _validate_sidecar(sidecar: dict) -> None:
     size_plain = sidecar.get("size_bytes_plaintext_tar")
     if not isinstance(size_plain, int) or isinstance(size_plain, bool) or size_plain < 0:
         sys.exit(f"sidecar.size_bytes_plaintext_tar must be a non-negative integer, got {size_plain!r}")
+    publication_status = sidecar.get("solution_publication_status")
+    publication_date = sidecar.get("solution_publication_date")
+    submission_public = sidecar["submission_public"]
+    if publication_status is not None:
+        if publication_status not in ALLOWED_SOLUTION_PUBLICATION_STATUSES:
+            sys.exit(
+                "sidecar.solution_publication_status must be one of "
+                f"{ALLOWED_SOLUTION_PUBLICATION_STATUSES!r}, got "
+                f"{publication_status!r}"
+            )
+        if publication_status == "published" and not submission_public:
+            sys.exit("sidecar published solution status requires a public submission")
+        if publication_status in {"private", "planned"} and submission_public:
+            sys.exit(
+                "sidecar private/planned solution status requires a private submission"
+            )
+    if publication_date is not None:
+        if publication_status not in {"planned", "published"}:
+            sys.exit(
+                "sidecar.solution_publication_date requires a planned or "
+                "published status"
+            )
+        if not isinstance(publication_date, str) or not DATE_RE.fullmatch(
+            publication_date
+        ):
+            sys.exit(
+                "sidecar.solution_publication_date must use YYYY-MM-DD format"
+            )
+        try:
+            dt.date.fromisoformat(publication_date)
+        except ValueError:
+            sys.exit(
+                "sidecar.solution_publication_date is not a valid calendar date: "
+                f"{publication_date!r}"
+            )
+    elif publication_status in {"planned", "published"}:
+        sys.exit(
+            "sidecar.solution_publication_date is required for status "
+            f"{publication_status!r}"
+        )
 
 
 # The stable identity of an archived submission. Two sidecars describe the

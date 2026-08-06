@@ -30,6 +30,8 @@ def default_call(
     issue_number: int = 42,
     benchmark_commit: str = BENCHMARK_COMMIT,
     production_description: str | None = None,
+    solution_publication_status: str | None = None,
+    solution_publication_date: str | None = None,
 ) -> dict:
     return ul.update_leaderboard(
         user=user,
@@ -43,6 +45,8 @@ def default_call(
         model=model,
         issue_number=issue_number,
         production_description=production_description,
+        solution_publication_status=solution_publication_status,
+        solution_publication_date=solution_publication_date,
         now=now,
     )
 
@@ -167,6 +171,58 @@ class UpdateLeaderboardTests(unittest.TestCase):
             data = json.loads((lb / "results" / "alice.json").read_text())
             record = data["solved"]["Claude Opus 4.6"]["secret"]
             self.assertFalse(record["submission_public"])
+
+    def test_published_solution_snapshot_is_recorded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            lb = pathlib.Path(tmp)
+            default_call(
+                leaderboard_dir=lb,
+                passed=["x"],
+                solution_publication_status="published",
+                solution_publication_date="2026-08-05",
+            )
+            data = json.loads((lb / "results" / "alice.json").read_text())
+            record = data["solved"]["Claude Opus 4.6"]["x"]
+            self.assertEqual(record["solution_publication_status"], "published")
+            self.assertEqual(record["solution_publication_date"], "2026-08-05")
+
+    def test_planned_solution_snapshot_is_recorded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            lb = pathlib.Path(tmp)
+            default_call(
+                leaderboard_dir=lb,
+                passed=["x"],
+                submission_public=False,
+                solution_publication_status="planned",
+                solution_publication_date="2027-01-15",
+            )
+            data = json.loads((lb / "results" / "alice.json").read_text())
+            record = data["solved"]["Claude Opus 4.6"]["x"]
+            self.assertEqual(record["solution_publication_status"], "planned")
+            self.assertEqual(record["solution_publication_date"], "2027-01-15")
+
+    def test_publication_status_must_match_detected_visibility(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            lb = pathlib.Path(tmp)
+            with self.assertRaisesRegex(ul.UpdateError, "requires a public submission"):
+                default_call(
+                    leaderboard_dir=lb,
+                    passed=["x"],
+                    submission_public=False,
+                    solution_publication_status="published",
+                    solution_publication_date="2026-08-05",
+                )
+
+    def test_invalid_publication_date_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            lb = pathlib.Path(tmp)
+            with self.assertRaisesRegex(ul.UpdateError, "valid calendar date"):
+                default_call(
+                    leaderboard_dir=lb,
+                    passed=["x"],
+                    solution_publication_status="published",
+                    solution_publication_date="2026-02-30",
+                )
 
     def test_duplicates_in_passed_list_are_deduped(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

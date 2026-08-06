@@ -35,6 +35,21 @@ body:
         `lean-eval-bot` GitHub App on it so the CI can clone it. The install
         link is in this repository's README.
 
+        ### Publishing exact solutions
+
+        LeanEval supports open science and does not prohibit publishing exact
+        solutions. Making solutions public can help library development and
+        let others study and build on your work. However, it also lets
+        solutions be copied directly and may cause them to enter future model
+        training data, reducing our ability to treat those problems as unseen
+        evaluation data.
+
+        Please consider these tradeoffs when deciding whether and when to
+        publish. You can freely publish methods, tooling, prompts, aggregate
+        results, and reusable library contributions without publishing the
+        exact benchmark solutions. There is no required embargo: the decision
+        remains yours.
+
   - type: input
     id: source_url
     attributes:
@@ -58,6 +73,36 @@ body:
       placeholder: Claude Opus 4.6
     validations:
       required: true
+
+  - type: dropdown
+    id: solution_publication_status
+    attributes:
+      label: Exact solution publication status
+      description: Choose the status of the submitted source at the time of this submission.
+      options:
+        - Public
+        - Private, but publication is planned
+        - Private, with no current publication plan
+    validations:
+      required: true
+
+  - type: input
+    id: publication_date
+    attributes:
+      label: Publication date (if public)
+      description: Required when the exact solutions are public. Use YYYY-MM-DD; otherwise leave blank.
+      placeholder: YYYY-MM-DD
+    validations:
+      required: false
+
+  - type: input
+    id: intended_publication_date
+    attributes:
+      label: Intended publication date (if planned)
+      description: Required when publication is planned. Give your current best estimate in YYYY-MM-DD format. This records your intention at submission time and is not a commitment; otherwise leave blank.
+      placeholder: YYYY-MM-DD
+    validations:
+      required: false
 
   - type: textarea
     id: production_description

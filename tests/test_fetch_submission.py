@@ -31,6 +31,25 @@ Claude Opus 4.6
 """
 
 
+def with_publication_fields(
+    body: str,
+    *,
+    status: str,
+    publication_date: str = "_No response_",
+    intended_date: str = "_No response_",
+) -> str:
+    return (
+        body.rstrip()
+        + "\n\n### Exact solution publication status\n\n"
+        + status
+        + "\n\n### Publication date (if public)\n\n"
+        + publication_date
+        + "\n\n### Intended publication date (if planned)\n\n"
+        + intended_date
+        + "\n"
+    )
+
+
 class ParseIssueBodyTests(unittest.TestCase):
     def test_extracts_url_and_model(self) -> None:
         fields = fs.parse_issue_body(SAMPLE_BODY)
@@ -86,6 +105,65 @@ class ParseIssueBodyTests(unittest.TestCase):
             f"### How this solution was produced (optional)\n\n{oversize}\n"
         )
         with self.assertRaisesRegex(fs.FetchError, "longer than"):
+            fs.parse_issue_body(body)
+
+    def test_legacy_issue_has_no_publication_declaration(self) -> None:
+        fields = fs.parse_issue_body(SAMPLE_BODY)
+        self.assertIsNone(fields["solution_publication_status"])
+        self.assertIsNone(fields["solution_publication_date"])
+
+    def test_public_status_requires_and_extracts_actual_date(self) -> None:
+        fields = fs.parse_issue_body(
+            with_publication_fields(
+                SAMPLE_BODY,
+                status="Public",
+                publication_date="2026-08-05",
+            )
+        )
+        self.assertEqual(fields["solution_publication_status"], "published")
+        self.assertEqual(fields["solution_publication_date"], "2026-08-05")
+
+    def test_planned_status_requires_and_extracts_intended_date(self) -> None:
+        fields = fs.parse_issue_body(
+            with_publication_fields(
+                SAMPLE_BODY,
+                status="Private, but publication is planned",
+                intended_date="2027-01-15",
+            )
+        )
+        self.assertEqual(fields["solution_publication_status"], "planned")
+        self.assertEqual(fields["solution_publication_date"], "2027-01-15")
+
+    def test_private_status_has_no_date(self) -> None:
+        fields = fs.parse_issue_body(
+            with_publication_fields(
+                SAMPLE_BODY,
+                status="Private, with no current publication plan",
+            )
+        )
+        self.assertEqual(fields["solution_publication_status"], "private")
+        self.assertIsNone(fields["solution_publication_date"])
+
+    def test_public_status_without_date_is_fatal(self) -> None:
+        body = with_publication_fields(SAMPLE_BODY, status="Public")
+        with self.assertRaisesRegex(fs.FetchError, "Publication date.*required"):
+            fs.parse_issue_body(body)
+
+    def test_planned_status_without_date_is_fatal(self) -> None:
+        body = with_publication_fields(
+            SAMPLE_BODY,
+            status="Private, but publication is planned",
+        )
+        with self.assertRaisesRegex(fs.FetchError, "Intended publication date.*required"):
+            fs.parse_issue_body(body)
+
+    def test_invalid_calendar_date_is_fatal(self) -> None:
+        body = with_publication_fields(
+            SAMPLE_BODY,
+            status="Public",
+            publication_date="2026-02-30",
+        )
+        with self.assertRaisesRegex(fs.FetchError, "valid calendar date"):
             fs.parse_issue_body(body)
 
 
@@ -457,6 +535,52 @@ class FetchSubmissionEndToEndTests(unittest.TestCase):
                 metadata["production_description"],
                 "Custom orchestrator + Claude Opus 4.7; ~30 min human review.",
             )
+
+    def test_dry_run_emits_publication_snapshot(self) -> None:
+        body = with_publication_fields(
+            SAMPLE_BODY,
+            status="Public",
+            publication_date="2026-08-05",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            event = {
+                "issue": {
+                    "number": 42,
+                    "user": {"login": "alice"},
+                    "body": body,
+                }
+            }
+            with patch("fetch_submission.resolve_repo_visibility", return_value=True):
+                metadata = fs.fetch_submission(
+                    event_payload=event,
+                    output_dir=pathlib.Path(tmp),
+                    app_token=None,
+                    skip_clone=True,
+                )
+        self.assertEqual(metadata["solution_publication_status"], "published")
+        self.assertEqual(metadata["solution_publication_date"], "2026-08-05")
+
+    def test_public_source_with_private_declaration_is_rejected(self) -> None:
+        body = with_publication_fields(
+            SAMPLE_BODY,
+            status="Private, with no current publication plan",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            event = {
+                "issue": {
+                    "number": 42,
+                    "user": {"login": "alice"},
+                    "body": body,
+                }
+            }
+            with patch("fetch_submission.resolve_repo_visibility", return_value=True):
+                with self.assertRaisesRegex(fs.FetchError, "source is public"):
+                    fs.fetch_submission(
+                        event_payload=event,
+                        output_dir=pathlib.Path(tmp),
+                        app_token=None,
+                        skip_clone=True,
+                    )
 
     def test_dry_run_emits_gist_kind_for_gist_submission(self) -> None:
         gist_body = SAMPLE_BODY.replace(

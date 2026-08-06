@@ -15,6 +15,7 @@ re-parse the issue body.
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import os
 import pathlib
@@ -51,6 +52,15 @@ class SourceDescriptor:
 
 PRODUCTION_DESCRIPTION_HEADING = "How this solution was produced (optional)"
 PRODUCTION_DESCRIPTION_MAX_LEN = 4000
+PUBLICATION_STATUS_HEADING = "Exact solution publication status"
+PUBLICATION_DATE_HEADING = "Publication date (if public)"
+INTENDED_PUBLICATION_DATE_HEADING = "Intended publication date (if planned)"
+PUBLICATION_STATUS_VALUES = {
+    "Public": "published",
+    "Private, but publication is planned": "planned",
+    "Private, with no current publication plan": "private",
+}
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
 def _find_section(body_text: str, heading: str) -> str | None:
@@ -64,13 +74,95 @@ def _find_section(body_text: str, heading: str) -> str | None:
     return match.group("value").strip()
 
 
+def _optional_section(body_text: str, heading: str) -> str | None:
+    value = _find_section(body_text, heading)
+    if value is None or not value or value.startswith("_No response_"):
+        return None
+    return value
+
+
+def _validate_date(value: str, heading: str) -> None:
+    if not DATE_RE.fullmatch(value):
+        raise FetchError(f"`{heading}` must use YYYY-MM-DD format.")
+    try:
+        datetime.date.fromisoformat(value)
+    except ValueError as exc:
+        raise FetchError(f"`{heading}` is not a valid calendar date: {value!r}.") from exc
+
+
+def _parse_publication_fields(
+    body_text: str, fields: dict[str, str | None]
+) -> None:
+    status_value = _optional_section(body_text, PUBLICATION_STATUS_HEADING)
+    publication_date = _optional_section(body_text, PUBLICATION_DATE_HEADING)
+    intended_date = _optional_section(body_text, INTENDED_PUBLICATION_DATE_HEADING)
+
+    # Issues opened before these fields were deployed must remain replayable.
+    if status_value is None:
+        if publication_date is not None or intended_date is not None:
+            raise FetchError(
+                f"`{PUBLICATION_STATUS_HEADING}` is required when a publication "
+                "date is supplied."
+            )
+        fields["solution_publication_status"] = None
+        fields["solution_publication_date"] = None
+        return
+
+    status = PUBLICATION_STATUS_VALUES.get(status_value)
+    if status is None:
+        raise FetchError(
+            f"`{PUBLICATION_STATUS_HEADING}` has an unrecognized value: "
+            f"{status_value!r}."
+        )
+    if publication_date is not None:
+        _validate_date(publication_date, PUBLICATION_DATE_HEADING)
+    if intended_date is not None:
+        _validate_date(intended_date, INTENDED_PUBLICATION_DATE_HEADING)
+
+    if status == "published":
+        if publication_date is None:
+            raise FetchError(
+                f"`{PUBLICATION_DATE_HEADING}` is required when exact solutions "
+                "are public."
+            )
+        if intended_date is not None:
+            raise FetchError(
+                f"Leave `{INTENDED_PUBLICATION_DATE_HEADING}` blank when exact "
+                "solutions are already public."
+            )
+        selected_date = publication_date
+    elif status == "planned":
+        if intended_date is None:
+            raise FetchError(
+                f"`{INTENDED_PUBLICATION_DATE_HEADING}` is required when "
+                "publication is planned."
+            )
+        if publication_date is not None:
+            raise FetchError(
+                f"Leave `{PUBLICATION_DATE_HEADING}` blank when publication is "
+                "only planned."
+            )
+        selected_date = intended_date
+    else:
+        if publication_date is not None or intended_date is not None:
+            raise FetchError(
+                "Leave both publication-date fields blank when there is no "
+                "current publication plan."
+            )
+        selected_date = None
+
+    fields["solution_publication_status"] = status
+    fields["solution_publication_date"] = selected_date
+
+
 def parse_issue_body(body_text: str) -> dict[str, str | None]:
     """Extract submission fields from a GitHub Issue Form's rendered body.
 
     Issue Forms render as markdown with section headers like
     `### Submission URL\\n\\n<value>\\n\\n### Model\\n\\n<value>`.
     `source_url` and `model` are required; missing or empty values raise
-    FetchError. `production_description` is optional and may be `None`.
+    FetchError. Publication fields are validated when present, but are absent
+    on legacy issues. `production_description` is optional and may be `None`.
     """
     fields: dict[str, str | None] = {}
     for field_key, heading in (("source_url", "Submission URL"), ("model", "Model")):
@@ -94,6 +186,7 @@ def parse_issue_body(body_text: str) -> dict[str, str | None]:
                 f"{PRODUCTION_DESCRIPTION_MAX_LEN} characters."
             )
         fields["production_description"] = description
+    _parse_publication_fields(body_text, fields)
     return fields
 
 
@@ -392,6 +485,20 @@ def fetch_submission(
             "App-accessible private GitHub repository."
         )
 
+    publication_status = fields["solution_publication_status"]
+    if publication_status == "published" and not submission_public:
+        raise FetchError(
+            "The submission source is private, but its publication status is "
+            "`Public`. Choose a private publication status, or make the source "
+            "public before submitting."
+        )
+    if publication_status in {"planned", "private"} and submission_public:
+        raise FetchError(
+            "The submission source is public, but its publication status is "
+            "private. Choose `Public` and provide its publication date, or make "
+            "the source private before submitting."
+        )
+
     source_dir = output_dir / "source"
     if not skip_clone:
         clone_at_sha(clone_url, sha, source_dir)
@@ -422,6 +529,12 @@ def fetch_submission(
     }
     if fields["production_description"] is not None:
         metadata["production_description"] = fields["production_description"]
+    if publication_status is not None:
+        metadata["solution_publication_status"] = publication_status
+        if fields["solution_publication_date"] is not None:
+            metadata["solution_publication_date"] = fields[
+                "solution_publication_date"
+            ]
     metadata_path = output_dir / "metadata.json"
     metadata_path.parent.mkdir(parents=True, exist_ok=True)
     metadata_path.write_text(

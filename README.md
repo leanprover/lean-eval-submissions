@@ -36,6 +36,27 @@ If your submission lives in a **private** repository, install the
 `lean-eval-bot` GitHub App on it so the CI can clone it:
 **<https://github.com/apps/lean-eval-bot>**.
 
+### Publishing exact solutions
+
+LeanEval supports open science and does not prohibit publishing exact
+solutions. Public solutions can help library development and let others
+study and build on the work. They can also be copied directly or enter
+future model-training data, reducing our ability to treat those problems
+as unseen evaluation data.
+
+The submission form asks you to choose one of three statuses:
+
+- **Public**, with the actual publication date in `YYYY-MM-DD` format.
+- **Private, but publication is planned**, with your current best estimate
+  of the intended publication date in `YYYY-MM-DD` format. This is a
+  submission-time snapshot, not a commitment.
+- **Private, with no current publication plan**.
+
+There is no required embargo. Please consider the tradeoffs when deciding
+whether and when to publish. Methods, tooling, prompts, aggregate results,
+and reusable library contributions can be published without publishing the
+exact benchmark solutions.
+
 ### Audit archive
 
 Every evaluated submission's compressed source tarball is retained
@@ -85,6 +106,8 @@ the same user no longer proves it.
         "submission_repo": "kim-em/22bad2dccd67bcca0df87c01d072ef39",
         "submission_ref": "567b8d1feebbc6ccbb1f8ebb0a7bbcf5e914f135",
         "submission_public": true,
+        "solution_publication_status": "published",
+        "solution_publication_date": "2026-05-01",
         "issue_number": 45,
         "production_description": "..."
       }
@@ -110,6 +133,8 @@ form. Each value maps `<problem_id>` to a record:
 | `submission_repo` | string | `owner/repo` for a repository, `user/gist-id` for a gist. |
 | `submission_ref` | string | 40-char SHA pinning the submission at evaluation time. |
 | `submission_public` | boolean | Whether the submission source was public at evaluation time. |
+| `solution_publication_status` | string \| absent | Submitter's snapshot declaration: `private`, `planned`, or `published`. Absent on submissions made before this field existed. |
+| `solution_publication_date` | string \| absent | `YYYY-MM-DD` actual publication date for `published`, or intended date for `planned`. Absent for `private` and legacy records. |
 | `issue_number` | integer | The `leanprover/lean-eval-submissions` issue that triggered the evaluation. |
 | `production_description` | string \| absent | Optional free-form description from the form. |
 
