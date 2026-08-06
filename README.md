@@ -36,6 +36,20 @@ If your submission lives in a **private** repository, install the
 `lean-eval-bot` GitHub App on it so the CI can clone it:
 **<https://github.com/apps/lean-eval-bot>**.
 
+### Submitting through the GitHub API
+
+API-created issues are supported. Create an issue whose title starts with
+`[submission] ` and whose body uses the same rendered Markdown sections as
+the [submission Issue Form](.github/ISSUE_TEMPLATE/submit.yml). For example,
+`gh issue create --repo leanprover/lean-eval-submissions --title
+'[submission] my proof' --body-file submission.md` uses the GitHub API.
+
+The body must include the required `Submission URL`, `Model`, exact-solution
+publication fields, and all three checked acknowledgements. Do not depend on
+the API request's `labels` field: GitHub drops labels requested by issue
+authors without triage permission. The intake workflow validates a complete
+submission body, applies the `submission` label, and starts evaluation.
+
 ### Publishing exact solutions
 
 LeanEval supports open science and does not prohibit publishing exact
@@ -160,7 +174,8 @@ file whose `schema_version` they do not know.
 
 ```
 submission issue on lean-eval-submissions
-  → submission.yml: checkout leanprover/lean-eval (problem set + probes), evaluate
+  → submission.yml: validate/label API intake if needed
+  → checkout leanprover/lean-eval (problem set + probes), evaluate
   → write results/<login>.json here, push
   → repository_dispatch results-advanced → lean-eval-leaderboard redeploys
 ```

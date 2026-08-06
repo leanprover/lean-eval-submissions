@@ -27,7 +27,7 @@ name: Submission
 
 on:
   issues:
-    types: [labeled]
+    types: [opened, labeled]
 
 concurrency:
   # Per-issue concurrency: each submission issue gets its own group so
@@ -41,8 +41,69 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The web Issue Form applies `submission` itself. GitHub's issue API drops
+  # labels requested by authors without triage permission, so an API-created
+  # issue arrives unlabeled. For opened issues only, validate the current form
+  # shape and restore the routing label before allowing this same run to
+  # evaluate it. GITHUB_TOKEN-authored events do not recursively start another
+  # workflow run, hence the explicit output consumed by `evaluate` below.
+  intake:
+    if: >-
+      github.event.action == 'opened' &&
+      startsWith(github.event.issue.title, '[submission]') &&
+      !contains(github.event.issue.labels.*.name, 'submission')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      evaluate: ${{ steps.label.outputs.evaluate }}
+    steps:
+      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      # Issue Form labels can land just after the opened event. Query current
+      # state so the UI's ordinary labeled-event run remains the sole evaluator.
+      - name: Check current submission label
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          gh issue view "$ISSUE_NUMBER" --repo "$REPOSITORY" \
+            --json labels --jq 'any(.labels[]; .name == "submission")' \
+            | sed 's/^/labeled=/' >> "$GITHUB_OUTPUT"
+
+      - name: Validate API-created submission
+        if: steps.current.outputs.labeled != 'true'
+        run: python scripts/validate_submission_intake.py --event-path "$GITHUB_EVENT_PATH"
+
+      - name: Apply submission label
+        id: label
+        if: steps.current.outputs.labeled != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPOSITORY" --add-label submission
+          echo "evaluate=true" >> "$GITHUB_OUTPUT"
+
   evaluate:
-    if: github.event.label.name == 'submission'
+    needs: intake
+    if: >-
+      always() &&
+      ((github.event.action == 'labeled' && github.event.label.name == 'submission') ||
+       (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))
     # Default: GitHub-hosted runner. The self-hosted chonk path is fully
     # wired and dormant — every chonk-specific step is guarded by
     # `runner.environment != 'github-hosted'`, so it activates automatically
