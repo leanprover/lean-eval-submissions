@@ -11,6 +11,18 @@
         "submission_public": true,
         "submission_ref": "f4e380bf0aacec7eb1720bbbe64e3695a5e857d0",
         "submission_repo": "KitaKen1/lean-eval-conway-schneeberger-fifteen"
+      },
+      "pi_succ_sphere_n_mulEquiv_zmod_two": {
+        "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
+        "issue_number": 957,
+        "production_description": "This submission was developed by KitaKen1 (Kenta Kitamura) in a human-in-the-loop\nworkflow using GPT-5.6 and Fable 5.\n\nThe immutable Submission URL above is the exact artifact evaluated by Lean-Eval.\nA maintained version is available here:\nhttps://github.com/KitaKen1/lean-eval-pi-succ-sphere-n-mulequiv-zmod-two\n\nRe-files #956. There, `evaluate` passed with\n`{\"passed\": [\"pi_succ_sphere_n_mulEquiv_zmod_two\"]}` but `intake` was skipped\n(the issue form applies the `submission` label at creation, while `intake`\nrequires that label to be absent at `opened`), so `record` was skipped as well.\nThis issue is created via the API without labels so that `intake` can run.",
+        "solution_publication_date": "2026-08-06",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-06T11:25:59Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "5bef8d13ebee0f36b74d525ca968a88ab097d0f4",
+        "submission_repo": "KitaKen1/lean-eval-pi-succ-sphere-n-mulequiv-zmod-two"
       }
     },
     "GPT-5.6 terra": {
