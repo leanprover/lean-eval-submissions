@@ -39,6 +39,16 @@
         "submission_public": true,
         "submission_ref": "08e15387a7d1e8c066ceb916e384d44c5e76296b",
         "submission_repo": "parabamoghv/lean-eval"
+      },
+      "weak_morse_inequality": {
+        "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
+        "issue_number": 969,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-07T17:50:19Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "cbc6888d6d1568b2769822e1f3f0e1df07126541",
+        "submission_repo": "parabamoghv/lean-eval-private"
       }
     }
   },
