@@ -1,6 +1,20 @@
 {
   "schema_version": 1,
   "solved": {
+    "GPT-5.6 Codex (public-proof reproduction)": {
+      "pi_succ_sphere_n_mulEquiv_zmod_two": {
+        "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
+        "issue_number": 962,
+        "production_description": "This is a provenance-explicit reproduction of Kenta Kitamura's public Apache-2.0 proof, originally accepted by lean-eval in issue #957 from commit `5bef8d13ebee0f36b74d525ca968a88ab097d0f4`. Codex orchestrated subagents to transplant that proof to benchmark commit `5334853`, apply mechanical Lean 4.32.2 linter/deprecation cleanups, and verify it. No claim of original proof authorship is made.",
+        "solution_publication_date": "2026-08-07",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-07T10:51:52Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "c43a1da699279ed20c7ce2171add71c16199218c",
+        "submission_repo": "Vilin97/lean-eval-pi-succ-sphere-n-mulequiv-zmod-two"
+      }
+    },
     "Opus-5": {
       "adoCharZero": {
         "benchmark_commit": "cd571907f9aa410137683e75cebf8cca7d3587ec",
