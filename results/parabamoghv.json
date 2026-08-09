@@ -52,6 +52,16 @@
         "submission_ref": "3fd53ed5d047eab29f4d046368fdda62e16b3cc8",
         "submission_repo": "parabamoghv/lean-eval"
       },
+      "hopf_umlaufsatz": {
+        "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
+        "issue_number": 978,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-09T21:14:45Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "460696bfc10bebdb8b41fecd6535b4145738e0f7",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "jordan_curve": {
         "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
         "issue_number": 979,
