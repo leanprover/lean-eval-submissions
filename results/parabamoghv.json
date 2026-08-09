@@ -2,6 +2,16 @@
   "schema_version": 1,
   "solved": {
     "Aristotle (Harmonic)": {
+      "adoCharZero": {
+        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+        "issue_number": 984,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-09T23:15:54Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "6cc218f3fc4961bf49452d383e6c74b8c322e295",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "brauer_fowler": {
         "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
         "issue_number": 103,
