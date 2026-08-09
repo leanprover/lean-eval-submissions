@@ -111,6 +111,16 @@
         "submission_ref": "0fd6757519437214451709b32dca6225eac7bc6b",
         "submission_repo": "parabamoghv/lean-eval"
       },
+      "strong_mason_conjecture": {
+        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+        "issue_number": 983,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-09T23:17:55Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "7e61d07e373299ef940d295a584d689d16708eae",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "symAction_range_eq_centralizer_glAction": {
         "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
         "issue_number": 220,
