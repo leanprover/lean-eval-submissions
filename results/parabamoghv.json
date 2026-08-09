@@ -22,6 +22,16 @@
         "submission_ref": "0dad7fa7d61c547f18e6eee7fdb812f03d162a11",
         "submission_repo": "parabamoghv/lean-eval-private"
       },
+      "gleason_theorem_finite": {
+        "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
+        "issue_number": 976,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-09T21:06:43Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "b0b2cc0964028acdd40e6578f1fd28e6542d0045",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "hippocrates_lunes": {
         "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
         "issue_number": 269,
