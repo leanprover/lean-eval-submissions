@@ -12,6 +12,16 @@
         "submission_ref": "03a356c462f76d0244af5b2e9e1aa00b21a3004e",
         "submission_repo": "LorenzoLuccioli/lean-eval-private"
       },
+      "fatou_julia_dichotomy": {
+        "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
+        "issue_number": 975,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-09T20:59:10Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "0dad7fa7d61c547f18e6eee7fdb812f03d162a11",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "hippocrates_lunes": {
         "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
         "issue_number": 269,
