@@ -150,6 +150,16 @@
         "submission_ref": "08e15387a7d1e8c066ceb916e384d44c5e76296b",
         "submission_repo": "parabamoghv/lean-eval"
       },
+      "unit_distance_upper_bound": {
+        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+        "issue_number": 985,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-10T03:01:43Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "9b8ea935c19e5dd73b4ee69a9649205b869f7bad",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "weak_morse_inequality": {
         "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
         "issue_number": 969,
