@@ -12,6 +12,16 @@
         "submission_ref": "6cc218f3fc4961bf49452d383e6c74b8c322e295",
         "submission_repo": "parabamoghv/lean-eval-private"
       },
+      "adoIwasawa": {
+        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+        "issue_number": 988,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-10T15:47:50Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "5af5fda8fc47a2390fdeac01ed6f28ac5e89f037",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "alternating_sign_matrix_count": {
         "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
         "issue_number": 980,
