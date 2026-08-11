@@ -152,6 +152,16 @@
         "submission_ref": "16121947818f88a18370e0d3dd4f078bd9ea0df8",
         "submission_repo": "parabamoghv/lean-eval-private"
       },
+      "nonlinear_three_manifold_group": {
+        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+        "issue_number": 1000,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-11T22:00:09Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "14e69dbe28dbf165682d255bff4617f4cc6519f1",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "rokhlin_lemma": {
         "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
         "issue_number": 268,
