@@ -1,6 +1,20 @@
 {
   "schema_version": 1,
   "solved": {
+    "GPT-5 Codex": {
+      "mulCayley_connected_iff_closure_eq_top": {
+        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+        "issue_number": 1008,
+        "production_description": "Produced autonomously by OpenAI Codex in a user-directed lean-eval session. The proof characterizes the identity component of the multiplicative Cayley graph as the subgroup closure: walks preserve closure membership, while reachability is closed under generators, multiplication, and inverses via left-translation graph homomorphisms. Verified warning-free with Lean 4.32.2 and accepted end-to-end by comparator, the Lean kernel, and nanoda.",
+        "solution_publication_date": "2026-08-12",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-12T06:35:41Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "24346c008da7050a4a53ffc2a30485cefe6e7bde",
+        "submission_repo": "Vilin97/lean-eval"
+      }
+    },
     "GPT-5.6 Codex (public-proof reproduction)": {
       "pi_succ_sphere_n_mulEquiv_zmod_two": {
         "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
