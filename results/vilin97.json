@@ -103,6 +103,18 @@
         "submission_ref": "0c5d3337c3ebb59c318ab9030e31b835826141f8",
         "submission_repo": "Vilin97/lean-eval-green-tao"
       },
+      "list_append_singleton_length": {
+        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+        "issue_number": 1010,
+        "production_description": "Produced autonomously by gpt-5.6-Sol in a user-directed Codex lean-eval session. Adds comparator-checked solutions for list_append_singleton_length, two_plus_two, and variable_binder_example; the commit also retains the previously submitted mulCayley_connected_iff_closure_eq_top proof. Each new solution was checked locally with the generated challenge and accepted by comparator, the Lean kernel, and nanoda. Solver-owned files are warning-clean.",
+        "solution_publication_date": "2026-08-12",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-12T06:59:36Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "e95d097cc671fa34f4fc6d286078c4dce8cffe3f",
+        "submission_repo": "Vilin97/lean-eval"
+      },
       "mulCayley_connected_iff_closure_eq_top": {
         "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
         "issue_number": 1009,
@@ -124,6 +136,30 @@
         "submission_public": false,
         "submission_ref": "47adeca65ae9f90308ec44cec64c5318c06fad17",
         "submission_repo": "Vilin97/lean-eval-green-tao"
+      },
+      "two_plus_two": {
+        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+        "issue_number": 1010,
+        "production_description": "Produced autonomously by gpt-5.6-Sol in a user-directed Codex lean-eval session. Adds comparator-checked solutions for list_append_singleton_length, two_plus_two, and variable_binder_example; the commit also retains the previously submitted mulCayley_connected_iff_closure_eq_top proof. Each new solution was checked locally with the generated challenge and accepted by comparator, the Lean kernel, and nanoda. Solver-owned files are warning-clean.",
+        "solution_publication_date": "2026-08-12",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-12T06:59:36Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "e95d097cc671fa34f4fc6d286078c4dce8cffe3f",
+        "submission_repo": "Vilin97/lean-eval"
+      },
+      "variable_binder_example": {
+        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+        "issue_number": 1010,
+        "production_description": "Produced autonomously by gpt-5.6-Sol in a user-directed Codex lean-eval session. Adds comparator-checked solutions for list_append_singleton_length, two_plus_two, and variable_binder_example; the commit also retains the previously submitted mulCayley_connected_iff_closure_eq_top proof. Each new solution was checked locally with the generated challenge and accepted by comparator, the Lean kernel, and nanoda. Solver-owned files are warning-clean.",
+        "solution_publication_date": "2026-08-12",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-12T06:59:36Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "e95d097cc671fa34f4fc6d286078c4dce8cffe3f",
+        "submission_repo": "Vilin97/lean-eval"
       }
     }
   },
