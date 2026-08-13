@@ -43,6 +43,17 @@
         "submission_ref": "5182208fe23b845b6862651afb783fbfb8cf5ff4",
         "submission_repo": "hanwenzhu/lean-eval-seedprover"
       },
+      "conway_schneeberger_fifteen": {
+        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+        "issue_number": 1023,
+        "production_description": "Automatically proved by Seed Prover.",
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-13T21:04:56Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "9b98ab81f687179ebcaf5d58e5be3847d5f22992",
+        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+      },
       "deBranges_theorem": {
         "benchmark_commit": "24a03a21451dc039556ee55ade1d2d788842636e",
         "issue_number": 901,
