@@ -29,6 +29,20 @@
         "submission_repo": "Vilin97/lean-eval-pi-succ-sphere-n-mulequiv-zmod-two"
       }
     },
+    "OpenAI Codex (GPT-5)": {
+      "mihailescu": {
+        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+        "issue_number": 1025,
+        "production_description": "Produced by OpenAI Codex (GPT-5) in a persistent multi-agent coding session, with the user specifying the theorem, formal constraints, and official-submission requirement. The primary agent integrated parallel mathlib/API scouting, proof development, and independent case audits. The development includes a complete formal proof, a detailed informal proof, and a dependency blueprint; final validation used warnings-as-errors, prohibited-token scans, project target builds, repository policy validation, and an axiom audit showing only `propext`, `Classical.choice`, and `Quot.sound`. Approximately 33 hours of agent wall-clock work and 33 million model tokens were used.",
+        "solution_publication_date": "2026-08-13",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-13T19:04:18Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "95654821cb19e57846448c46fc7d88c8c3356215",
+        "submission_repo": "Vilin97/lean-eval-mihailescu"
+      }
+    },
     "Opus-5": {
       "adoCharZero": {
         "benchmark_commit": "cd571907f9aa410137683e75cebf8cca7d3587ec",
