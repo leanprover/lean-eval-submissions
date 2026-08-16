@@ -22,6 +22,17 @@
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
         "submission_repo": "humanfia/lean-eval"
       },
+      "adoIwasawa": {
+        "benchmark_commit": "8cdf39e15cda5b001ad8e4416829e748b70bb2c2",
+        "issue_number": 1067,
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned",
+        "solved_at": "2026-08-16T10:31:58Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "8f5f08663218461af841782ed651015579129ab4",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "alternating_sign_matrix_count": {
         "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
         "issue_number": 912,
