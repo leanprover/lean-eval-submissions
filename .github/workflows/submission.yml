@@ -628,6 +628,15 @@ jobs:
     # mechanisms are independent, but our policy is that a recorded
     # leaderboard entry implies a durable archived copy of the source.
     needs: [evaluate, archive]
+    # Labeled-event runs intentionally skip `intake`. Without an explicit
+    # status function here, Actions' implicit `success()` also sees that
+    # skipped ancestor and silently suppresses `record`, even after both
+    # direct dependencies succeed. Override the implicit check while keeping
+    # the evaluation-and-archive policy explicit.
+    if: |
+      always()
+      && needs.evaluate.result == 'success'
+      && needs.archive.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

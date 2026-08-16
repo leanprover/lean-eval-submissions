@@ -232,6 +232,20 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             "record must depend on both evaluate and archive",
         )
 
+    def test_record_overrides_skipped_intake_without_weakening_gates(self) -> None:
+        # Ordinary Issue Form submissions evaluate from the `labeled` event,
+        # where `intake` is intentionally skipped. GitHub's implicit
+        # `success()` otherwise propagates that skipped ancestor through
+        # `evaluate` and `archive` and silently skips `record`. The explicit
+        # condition must bypass only that implicit guard: both direct jobs
+        # still have to succeed before any leaderboard write can run.
+        record_header = self.text.split("\n  record:", 1)[1].split(
+            "\n    runs-on:", 1
+        )[0]
+        self.assertIn("always()", record_header)
+        self.assertIn("needs.evaluate.result == 'success'", record_header)
+        self.assertIn("needs.archive.result == 'success'", record_header)
+
     def test_archive_uses_archiver_app_scoped_to_audit_repo(self) -> None:
         self.assertIn("LEAN_EVAL_ARCHIVER_CLIENT_ID", self.text)
         self.assertIn("LEAN_EVAL_ARCHIVER_PRIVATE_KEY", self.text)
