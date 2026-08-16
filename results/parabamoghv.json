@@ -162,6 +162,16 @@
         "submission_ref": "14e69dbe28dbf165682d255bff4617f4cc6519f1",
         "submission_repo": "parabamoghv/lean-eval-private"
       },
+      "pesin_formula": {
+        "benchmark_commit": "f349b7123ee1a41c879eba33faf092eab862e4d4",
+        "issue_number": 1073,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-16T16:40:05Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "87ca3be9728dcab663e052844a4a2eb3fa38357a",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "rokhlin_lemma": {
         "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
         "issue_number": 268,
