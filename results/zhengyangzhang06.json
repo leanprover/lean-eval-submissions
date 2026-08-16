@@ -1509,6 +1509,17 @@
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
         "submission_repo": "humanfia/lean-eval"
       },
+      "vinogradov_mean_value": {
+        "benchmark_commit": "8cdf39e15cda5b001ad8e4416829e748b70bb2c2",
+        "issue_number": 1053,
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned",
+        "solved_at": "2026-08-16T10:28:11Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "0781734bb1ba0fdaa724b177d088299cc558abb7",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "vonNeumann_doubleCommutant_tfae": {
         "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
         "issue_number": 891,
