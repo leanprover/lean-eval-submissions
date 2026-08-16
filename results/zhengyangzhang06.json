@@ -582,6 +582,17 @@
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
         "submission_repo": "humanfia/lean-eval"
       },
+      "glauberman_zStar": {
+        "benchmark_commit": "8cdf39e15cda5b001ad8e4416829e748b70bb2c2",
+        "issue_number": 1070,
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned",
+        "solved_at": "2026-08-16T16:30:42Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "cb8e9deb0100d9d0c7f0042c4e12a40975ac2505",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "gleason_theorem_finite": {
         "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
         "issue_number": 891,
