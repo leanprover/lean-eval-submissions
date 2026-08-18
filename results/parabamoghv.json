@@ -122,6 +122,16 @@
         "submission_ref": "60b30b278396edb17dfb9381a8770df8be5400cf",
         "submission_repo": "parabamoghv/lean-eval-private"
       },
+      "higman_infinite_simple": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1098,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-18T17:53:15Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "0e88375d59594a018f5fbd7f3c0ab42d16cd5d90",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "hippocrates_lunes": {
         "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
         "issue_number": 269,
