@@ -72,6 +72,16 @@
         "submission_ref": "86ab7f85a13630feab761d39616591dc2388b0ba",
         "submission_repo": "parabamoghv/lean-eval-private"
       },
+      "duffin_schaeffer": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1101,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-18T17:52:39Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "e45c0521e15a0a7ac4cc69c223796c9db40354fe",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "fary_milnor": {
         "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
         "issue_number": 1097,
