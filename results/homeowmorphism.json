@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "Claude Fable 5 (Claude Code)": {
+      "annals_conjecture_of_marton": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1103,
+        "production_description": "Claude Fable 5 running in Claude Code, directed by a human. The mathematical content is the public [teorth/pfr](https://github.com/teorth/pfr) project \u2014 the Lean 4 formalization of Gowers\u2013Green\u2013Manners\u2013Tao, *On a conjecture of Marton*, led by Terence Tao with many contributors. The agent vendored the import closure of `PFR.Main` (41 modules, pfr commit `7d6404b79b`, Lean v4.33.0, Apache 2.0, license and attribution included) under `Submission/PFR/` with imports renamed `PFR.*` \u2192 `Submission.PFR.*`, then wrote a ~12-line glue proof bridging `PFR_conjecture` to the benchmark statement (`Submodule (ZMod 2)` \u2192 `AddSubgroup`, finite cover \u2192 `Finset` for `CovByVAdd`, `K ^ (12 : \u211d)` rpow \u2192 `K ^ (12 : \u2115)`). All credit for the mathematics and formalization belongs to the paper's authors and the pfr contributors; this submission is an integration, not an original proof. Roughly 1.5 hours wall clock end to end, including selecting the target and verifying axioms (`propext`, `Classical.choice`, `Quot.sound` only).",
+        "solution_publication_date": "2026-08-18",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-18T19:34:45Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "5ad6a06a31b95cd673466641da443d3a761f7fd8",
+        "submission_repo": "homeowmorphism/lean-eval-annals-marton"
+      }
+    }
+  },
+  "user": "homeowmorphism"
+}
