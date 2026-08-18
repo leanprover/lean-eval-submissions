@@ -1530,6 +1530,18 @@
         "submission_ref": "c8f70aae07b59f4d605e5683f69ab1d833ba3b2d",
         "submission_repo": "humanfia/lean-eval"
       },
+      "sphere_theorem_topological": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1084,
+        "production_description": "Lean 4.33.0 port of an existing Humanifa + GPT 5.6 sol solution.",
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned",
+        "solved_at": "2026-08-18T13:25:37Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f09015b78e6e6b34bdb26e479a402c17293777a2",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "stable_unstable_manifolds": {
         "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
         "issue_number": 891,
