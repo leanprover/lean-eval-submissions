@@ -172,6 +172,16 @@
         "submission_ref": "7210b4c835851c0605799f5fde27234b9b4798ce",
         "submission_repo": "parabamoghv/lean-eval-private"
       },
+      "m23_irrep_tensor_square_decomp": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1102,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-18T19:13:36Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "9a1543ef6646f631ed727d2e21a69a38bb46c460",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "mandelbrot_connected": {
         "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
         "issue_number": 971,
