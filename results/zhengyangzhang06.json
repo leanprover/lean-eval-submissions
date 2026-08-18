@@ -77,6 +77,18 @@
         "submission_ref": "58e40336ba10b75b22084b2b90551839fa3e0c81",
         "submission_repo": "humanfia/lean-eval"
       },
+      "annals_unit_conjecture": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1085,
+        "production_description": "Produced using gpt-5.6-sol through the Humanize iterative implementation and independent review workflow, with a natural-language proof written before Lean implementation and validation under Lean 4.33.0.",
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned",
+        "solved_at": "2026-08-18T12:53:33Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "85cc3a15068f0e2425399baa2a4388a38060c0c7",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "anosov_bowen_shadowing": {
         "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
         "issue_number": 891,
