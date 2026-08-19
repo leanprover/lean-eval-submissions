@@ -96,7 +96,6 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             self.text,
             re.compile(
                 r"^      - uses: leanprover/lean-action@[0-9a-f]{40}\n"
-                r"        if: runner\.environment == 'github-hosted'\n"
                 r"        with:\n"
                 r"          lake-package-directory: lean-eval\n"
                 r"          use-mathlib-cache: true\n"

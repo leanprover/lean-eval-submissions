@@ -104,45 +104,17 @@ jobs:
       always() &&
       ((github.event.action == 'labeled' && github.event.label.name == 'submission') ||
        (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))
-    # GitHub-hosted by default; per-issue opt-in to the self-hosted chonk
-    # pool via the `chonk` label. The chonk path is fully wired: every
-    # chonk-specific step is guarded by `runner.environment !=
-    # 'github-hosted'`, so it activates automatically when this lands on
-    # chonk, and the comparator still runs inside the landrun sandbox
-    # there. See docs/audit-archive.md.
-    #
-    # A memory-heavy submission that is SIGTERM-killed at exit 143 on the
-    # 16 GB hosted runner (as #467's ~10k-module build was, and #1077's
-    # 9.4k-module one with a measured 17.81 GB peak) needs chonk. Label
-    # that ONE issue `chonk` and re-apply its `submission` label to
-    # re-evaluate. Labels are maintainer-only in practice — GitHub drops
-    # labels requested by an author without triage permission, which is
-    # what the `intake` job above exists to work around — so a submitter
-    # cannot route their own build onto the self-hosted machine.
-    #
-    # CHECK THE POOL IS ALIVE FIRST. As of 2026-08-19 chonk is out of
-    # commission: a job labelled onto it went 1 h 20 min unclaimed and had
-    # to be force-cancelled. A queued self-hosted job is not an error, it
-    # just sits until it expires 24 h later, so confirm a runner is idle at
-    # github.com/organizations/leanprover/settings/actions/runners before
-    # labelling, and tell the submitter if it is not.
-    #
-    # This used to be a global flip of this one line, which quietly put
-    # every submission filed during the long build onto the experimental
-    # runner too. Keep it per-issue.
-    #
-    # Do NOT reach for `ubuntu-latest-large` as a middle step: measured on
-    # this org's pool (2026-08-19, issue #1078), it reports the same 4
-    # cores / 15 GiB / 3 GiB swap as `ubuntu-latest`. It buys no memory
-    # headroom, which is why #467 died there too.
-    runs-on: ${{ contains(github.event.issue.labels.*.name, 'chonk') && fromJSON('["self-hosted", "chonk"]') || 'ubuntu-latest' }}
+    # 16 GB of RAM is the ceiling a submission has to fit under. A build
+    # that exceeds it is SIGTERM-killed mid-elaboration with exit 143 and
+    # no Lean error, which reads as a compile failure but is not one.
+    # `ubuntu-latest-large` is not an escape hatch: measured on this org's
+    # pool (2026-08-19, issue #1078) it reports the same 4 cores / 15 GiB
+    # / 3 GiB swap as `ubuntu-latest`.
+    runs-on: ubuntu-latest
     # 360 minutes is GitHub's per-job ceiling for hosted runners; set it
     # explicitly so genuinely long proofs run to the platform limit rather
-    # than being cut off, and so the intended cap stays visible here. That
-    # ceiling is a hosted-runner property and does not apply on chonk,
-    # where the builds routed there are precisely the ones most likely to
-    # need longer than six hours.
-    timeout-minutes: ${{ contains(github.event.issue.labels.*.name, 'chonk') && 720 || 360 }}
+    # than being cut off, and so the intended cap stays visible here.
+    timeout-minutes: 360
     # `issues: write` is needed by the in-job fetch-failure / evaluate-failure
     # commenters below. The default `GITHUB_TOKEN` is *not* placed into the
     # env of any step that runs untrusted Lean: it only appears in the
@@ -187,40 +159,8 @@ jobs:
         id: benchmark
         run: echo "sha=$(git -C lean-eval rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      # Self-hosted (NixOS chonk) provisioning. The GitHub-hosted setup-*
-      # actions and the apt `Install age` step below are guarded to
-      # github-hosted only; on nix they cannot work (no FHS prebuilts /
-      # no apt). Supply the two tools the job is missing here — go (for
-      # `go install` landrun) and age (audit encryption) — by building
-      # them from nixpkgs and prepending to PATH. python / lean / elan /
-      # lake / git / gh are already on the runner; elan provides the
-      # pinned toolchain. nix-ld lets the resulting prebuilt binaries run.
-      - name: Provision tools via nix (self-hosted)
-        # The chonk runner's service PATH is curated (it has python and git
-        # but not go, age, the Lean toolchain, or `which`). Supply the rest
-        # from nixpkgs and prepend to PATH for every later step. The `elan`
-        # package ships the `lake`/`lean` shims, which resolve the pinned
-        # toolchain per `lean-toolchain`; nix-ld runs the fetched binaries.
-        # `which` is needed by EvalTools' comparator-installation check,
-        # which shells out to `which landrun` / `which lean`. The `^out`
-        # output selector keeps multi-output packages (which) to one path.
-        if: runner.environment != 'github-hosted'
-        run: |
-          {
-            echo "$(nix build --no-link --print-out-paths 'nixpkgs#go^out')/bin"
-            echo "$(nix build --no-link --print-out-paths 'nixpkgs#age^out')/bin"
-            echo "$(nix build --no-link --print-out-paths 'nixpkgs#elan^out')/bin"
-            echo "$(nix build --no-link --print-out-paths 'nixpkgs#which^out')/bin"
-            # cargo/rustc/gcc: build the pinned nanoda external checker (Build
-            # nanoda step below). gcc supplies the `cc` linker rustc invokes.
-            echo "$(nix build --no-link --print-out-paths 'nixpkgs#cargo^out')/bin"
-            echo "$(nix build --no-link --print-out-paths 'nixpkgs#rustc^out')/bin"
-            echo "$(nix build --no-link --print-out-paths 'nixpkgs#gcc^out')/bin"
-          } >> "$GITHUB_PATH"
-
       # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
-        if: runner.environment == 'github-hosted'
         with:
           python-version: '3.11.10'
 
@@ -264,14 +204,13 @@ jobs:
           private-key: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
           owner: ${{ steps.owner.outputs.owner }}
 
-      - name: Clean scratch dirs (self-hosted runner reuse)
-        # Self-hosted chonk runners persist /tmp across jobs, unlike the
-        # ephemeral hosted runners this workflow was written for. Stale
-        # scratch state breaks fetch's checkout ("untracked working tree
-        # files would be overwritten ... Aborting") and could otherwise
-        # leak one submission's source into the next job's build. Wipe the
-        # scratch dirs at job start; on hosted runners they do not exist
-        # yet, so the rm is a harmless no-op.
+      - name: Clean scratch dirs
+        # A no-op on the ephemeral hosted runners this workflow targets,
+        # where /tmp starts empty. Kept as defence in depth: on any runner
+        # that persisted /tmp across jobs, stale scratch state would break
+        # fetch's checkout ("untracked working tree files would be
+        # overwritten ... Aborting") and could leak one submission's source
+        # into the next job's build.
         run: rm -rf /tmp/fetch-out /tmp/submission-src /tmp/evaluate-out /tmp/audit-encrypt
 
       - name: Fetch submission
@@ -355,8 +294,7 @@ jobs:
           gh issue close ${{ github.event.issue.number }} --repo "${{ github.repository }}" --reason "not planned" || true
 
       - name: Install age (audit encryption)
-        # github-hosted only: on self-hosted nix, age is provisioned above.
-        if: runner.environment == 'github-hosted' && steps.size_check.outcome == 'success'
+        if: steps.size_check.outcome == 'success'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq age
 
       - name: Encrypt submission for audit archive
@@ -409,10 +347,6 @@ jobs:
         # several GB and we hold it twice (repo root + per-workspace).
         # Strip Android, .NET, Haskell, and other preinstalled caches we
         # do not need. Frees ~30GB.
-        # GitHub-hosted only: on a self-hosted runner this action would
-        # delete the host's Docker images and system toolchains. chonk has
-        # ample disk, so skip it there.
-        if: runner.environment == 'github-hosted'
         # jlumbroso/free-disk-space pinned to 54081f13 (= refs/tags/v1.3.1, also main HEAD as of 2026-05-04).
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
         with:
@@ -431,10 +365,7 @@ jobs:
         run: rm -rf .git lean-eval/.git
 
       # leanprover/lean-action pinned to 38fbc41a (= refs/tags/v1.5.0, also v1 HEAD as of 2026-05-04).
-      # github-hosted only: lean-action's helper scripts use a /bin/bash
-      # shebang that does not exist on NixOS (bad interpreter, exit 126).
       - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
-        if: runner.environment == 'github-hosted'
         with:
           lake-package-directory: lean-eval
           use-mathlib-cache: true
@@ -444,21 +375,8 @@ jobs:
           # Mathlib's independent `lake exe cache get` remains enabled above.
           use-github-cache: false
 
-      - name: Lean toolchain + mathlib cache (self-hosted)
-        # Self-hosted nix equivalent of lean-action above: elan (on PATH)
-        # resolves the pinned toolchain, `cache get` fetches Mathlib oleans,
-        # and `lake build` builds the harness. nix-ld lets the elan-fetched
-        # toolchain binaries run.
-        if: runner.environment != 'github-hosted'
-        working-directory: lean-eval
-        run: |
-          lake exe cache get
-          lake build
-
       # actions/setup-go pinned to b7ad1dad (= refs/tags/v7.0.0 as of 2026-07-30).
-      # github-hosted only: on self-hosted nix, go is provisioned above.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
-        if: runner.environment == 'github-hosted'
         with:
           # Concrete Go version, not `stable`, so a runner-image bump cannot
           # silently change the toolchain we install landrun with.
@@ -502,9 +420,8 @@ jobs:
           # The external checker. WorkspaceTest forces `enable_nanoda: true`
           # when it invokes comparator, so every scored Solution is replayed
           # through nanoda's independent kernel and rejected unless `nanoda_bin`
-          # is on PATH. cargo is preinstalled on github-hosted runners and
-          # provisioned via nix above on self-hosted. The trust boundary is the
-          # pinned source commit, not the Rust compiler version.
+          # is on PATH. cargo is preinstalled on the runner image. The trust
+          # boundary is the pinned source commit, not the Rust compiler version.
           git clone https://github.com/robsimmons/nanoda_lib.git .ci/nanoda
           cd .ci/nanoda
           # nanoda pinned to 68d5ca9 (robsimmons/nanoda_lib HEAD as of 2026-07-29,
