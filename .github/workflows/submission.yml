@@ -114,12 +114,12 @@ jobs:
     # chonk has the memory headroom; the comparator still runs inside the
     # landrun sandbox there. See docs/audit-archive.md.
     #
-    # TEMPORARY (issue #1078): flipped to the org's GitHub-hosted larger
-    # runner for a one-off re-evaluation of #1077
-    # (e8_irrep_tensor_square_decomp), whose ~9.4k-module build peaks at a
-    # measured 17.81 GB and is SIGTERM-killed on the 16 GB default. REVERT
-    # TO `ubuntu-latest` once that run finishes.
-    runs-on: ubuntu-latest-large
+    # Do NOT reach for `ubuntu-latest-large` as a middle step: measured on
+    # this org's pool (2026-08-19, issue #1078), it reports the same 4
+    # cores / 15 GiB / 3 GiB swap as `ubuntu-latest`. It buys no memory
+    # headroom, which is why #467 died there too. chonk is the only path
+    # for a build that does not fit in 16 GB.
+    runs-on: ubuntu-latest
     # 360 minutes is GitHub's per-job ceiling for hosted runners; set it
     # explicitly so genuinely long proofs run to the platform limit rather
     # than being cut off, and so the intended cap stays visible here.
@@ -147,15 +147,6 @@ jobs:
       audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}
       benchmark_commit: ${{ steps.benchmark.outputs.sha }}
     steps:
-      # TEMPORARY (issue #1078): the runner's RAM ceiling is not otherwise
-      # visible in the logs, and when a build is killed for memory the VM
-      # dies before it can report anything. Record it up front so an exit
-      # 143 can be attributed. Remove along with the runs-on flip above.
-      - name: Report runner resources
-        run: |
-          nproc
-          free -h
-
       # This repo (lean-eval-submissions): supplies the pipeline scripts.
       # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
