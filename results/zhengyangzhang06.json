@@ -53,6 +53,17 @@
         "submission_ref": "0fe948ca4291478bad75ae77f1d337bc43a42528",
         "submission_repo": "humanfia/lean-eval"
       },
+      "annals_conjecture_of_marton": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1107,
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned",
+        "solved_at": "2026-08-19T00:00:34Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "73928130f9f7fca258290ecb858ab1d8c726397b",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "annals_equiangular_lines_fixed_angle": {
         "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
         "issue_number": 1095,
