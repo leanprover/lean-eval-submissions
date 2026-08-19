@@ -75,6 +75,17 @@
         "submission_ref": "682e3958917a0d6c4c8d6df3496b98d070394301",
         "submission_repo": "humanfia/lean-eval"
       },
+      "annals_flat_littlewood_poly": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1114,
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned",
+        "solved_at": "2026-08-19T05:54:23Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "21ed005b35e834e270346583ab99e3d4983e6948",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "annals_fractional_expectation_thresholds": {
         "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
         "issue_number": 1087,
