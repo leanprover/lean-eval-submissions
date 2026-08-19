@@ -1909,6 +1909,19 @@
         "submission_ref": "c7d183cbea1802ef14b550ace0beceae151e8368",
         "submission_repo": "humanfia/lean-eval"
       }
+    },
+    "Humanize2 flame chase: GPT-5.6-sol + Claude Opus 5": {
+      "annals_duffin_schaeffer_conjecture": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1124,
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned",
+        "solved_at": "2026-08-19T18:13:05Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "0d086a9b4644b081f3d2166e6f5ae047a75c1b4d",
+        "submission_repo": "humanfia/lean-eval"
+      }
     }
   },
   "user": "ZhengyangZhang06"
