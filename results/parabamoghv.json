@@ -242,6 +242,16 @@
         "submission_ref": "14e69dbe28dbf165682d255bff4617f4cc6519f1",
         "submission_repo": "parabamoghv/lean-eval-private"
       },
+      "novikov_unsolvable": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1109,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-19T03:42:06Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "62e4533488b36297f3c6b7f41eaa24ae72e7d820",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "pesin_formula": {
         "benchmark_commit": "f349b7123ee1a41c879eba33faf092eab862e4d4",
         "issue_number": 1073,
