@@ -176,6 +176,17 @@
         "submission_ref": "58e40336ba10b75b22084b2b90551839fa3e0c81",
         "submission_repo": "humanfia/lean-eval"
       },
+      "annals_supremum_of_selector_processes": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1116,
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned",
+        "solved_at": "2026-08-19T06:34:52Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "ed70ca1ef783210b2a1242eb35f1e9f5e4659d74",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "annals_unit_conjecture": {
         "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
         "issue_number": 1085,
