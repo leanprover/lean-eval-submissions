@@ -104,26 +104,38 @@ jobs:
       always() &&
       ((github.event.action == 'labeled' && github.event.label.name == 'submission') ||
        (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))
-    # Default: GitHub-hosted runner. The self-hosted chonk path is fully
-    # wired and dormant — every chonk-specific step is guarded by
-    # `runner.environment != 'github-hosted'`, so it activates automatically
-    # when this runs on chonk. To run a memory-heavy submission that OOMs on
-    # hosted runners (as issue #467's ~10k-module build did, even on
-    # ubuntu-latest-large, SIGTERM exit 143 at ~99%), flip THIS ONE LINE to:
-    #   runs-on: [self-hosted, chonk]
-    # chonk has the memory headroom; the comparator still runs inside the
-    # landrun sandbox there. See docs/audit-archive.md.
+    # GitHub-hosted by default; per-issue opt-in to the self-hosted chonk
+    # pool via the `chonk` label. The chonk path is fully wired: every
+    # chonk-specific step is guarded by `runner.environment !=
+    # 'github-hosted'`, so it activates automatically when this lands on
+    # chonk, and the comparator still runs inside the landrun sandbox
+    # there. See docs/audit-archive.md.
+    #
+    # A memory-heavy submission that is SIGTERM-killed at exit 143 on the
+    # 16 GB hosted runner (as #467's ~10k-module build was, and #1077's
+    # 9.4k-module one with a measured 17.81 GB peak) needs chonk. Label
+    # that ONE issue `chonk` and re-apply its `submission` label to
+    # re-evaluate. Labels are maintainer-only in practice — GitHub drops
+    # labels requested by an author without triage permission, which is
+    # what the `intake` job above exists to work around — so a submitter
+    # cannot route their own build onto the self-hosted machine.
+    #
+    # This used to be a global flip of this one line, which quietly put
+    # every submission filed during the long build onto the experimental
+    # runner too. Keep it per-issue.
     #
     # Do NOT reach for `ubuntu-latest-large` as a middle step: measured on
     # this org's pool (2026-08-19, issue #1078), it reports the same 4
     # cores / 15 GiB / 3 GiB swap as `ubuntu-latest`. It buys no memory
-    # headroom, which is why #467 died there too. chonk is the only path
-    # for a build that does not fit in 16 GB.
-    runs-on: ubuntu-latest
+    # headroom, which is why #467 died there too.
+    runs-on: ${{ contains(github.event.issue.labels.*.name, 'chonk') && fromJSON('["self-hosted", "chonk"]') || 'ubuntu-latest' }}
     # 360 minutes is GitHub's per-job ceiling for hosted runners; set it
     # explicitly so genuinely long proofs run to the platform limit rather
-    # than being cut off, and so the intended cap stays visible here.
-    timeout-minutes: 360
+    # than being cut off, and so the intended cap stays visible here. That
+    # ceiling is a hosted-runner property and does not apply on chonk,
+    # where the builds routed there are precisely the ones most likely to
+    # need longer than six hours.
+    timeout-minutes: ${{ contains(github.event.issue.labels.*.name, 'chonk') && 720 || 360 }}
     # `issues: write` is needed by the in-job fetch-failure / evaluate-failure
     # commenters below. The default `GITHUB_TOKEN` is *not* placed into the
     # env of any step that runs untrusted Lean: it only appears in the
