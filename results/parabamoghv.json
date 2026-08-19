@@ -32,6 +32,16 @@
         "submission_ref": "fad86081e6551a69dcac3266bfe47f76287dd585",
         "submission_repo": "parabamoghv/lean-eval-private"
       },
+      "annals_equiangular_lines_fixed_angle": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1123,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-19T16:19:11Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f695bd2482d71ca32958e5c6ee79b37eea9d0caa",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "annals_fractional_expectation_thresholds": {
         "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
         "issue_number": 1122,
