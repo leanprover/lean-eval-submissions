@@ -7,7 +7,12 @@ controls, and replay key design have passed their rollout gates.
 
 The first implemented primitive is append-only Git state. Each durable event is
 stored in its own `events/<id-prefix>/<event-id>.json` file. The ID-derived
-partition makes retries independent of wall-clock date. A write reads one
+partition makes retries independent of wall-clock date. Event IDs are random
+UUIDv7 values; an API retry must retain the originally allocated event and
+submission IDs. The Worker decoder intentionally accepts only
+`system.initialized` and `submission.received`, the root events it is permitted
+to append. The State repository owns the broader causal lifecycle registry.
+A write reads one
 branch head, creates a tree and commit, and advances `main` with a non-forced
 reference update. A competing writer causes the whole decision to be retried
 from the new head; an uncertain GitHub response is checked for reachability and

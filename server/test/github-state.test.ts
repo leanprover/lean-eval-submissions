@@ -15,10 +15,11 @@ const NEW_COMMIT = "4".repeat(40);
 
 const EVENT: StateEvent = {
   schema_version: 1,
-  event_id: "a".repeat(64),
+  event_id: "0198abcd-0000-7000-8000-000000000001",
   event_type: "system.initialized",
   occurred_at: "2026-08-20T06:07:08.000Z",
   subject_id: "state_staging",
+  causation_event_id: null,
   actor: { kind: "system" },
   payload: { environment: "staging" },
 };
@@ -61,7 +62,7 @@ describe("atomic Git State append", () => {
 
     await expect(repository(fetcher).appendEvent(EVENT)).resolves.toEqual({
       commit: NEW_COMMIT,
-      path: `events/aa/${"a".repeat(64)}.json`,
+      path: `events/01/${EVENT.event_id}.json`,
     });
 
     const calls = fetcher.mock.calls;
@@ -94,6 +95,7 @@ describe("atomic Git State append", () => {
     const reordered = {
       payload: EVENT.payload,
       actor: EVENT.actor,
+      causation_event_id: EVENT.causation_event_id,
       subject_id: EVENT.subject_id,
       occurred_at: EVENT.occurred_at,
       event_type: EVENT.event_type,
@@ -107,7 +109,7 @@ describe("atomic Git State append", () => {
     ]);
     await expect(repository(fetcher).appendEvent(EVENT)).resolves.toEqual({
       commit: HEAD,
-      path: `events/aa/${"a".repeat(64)}.json`,
+      path: `events/01/${EVENT.event_id}.json`,
     });
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
@@ -130,7 +132,7 @@ describe("atomic Git State append", () => {
 
     await expect(repository(fetcher).appendEvent(EVENT)).resolves.toEqual({
       commit: "8".repeat(40),
-      path: `events/aa/${"a".repeat(64)}.json`,
+      path: `events/01/${EVENT.event_id}.json`,
     });
     expect(fetcher).toHaveBeenCalledTimes(12);
   });
@@ -149,7 +151,7 @@ describe("atomic Git State append", () => {
 
     await expect(repository(fetcher).appendEvent(EVENT)).resolves.toEqual({
       commit: NEW_COMMIT,
-      path: `events/aa/${"a".repeat(64)}.json`,
+      path: `events/01/${EVENT.event_id}.json`,
     });
   });
 
