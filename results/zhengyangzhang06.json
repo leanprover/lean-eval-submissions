@@ -1933,6 +1933,17 @@
       }
     },
     "Humanize2 flame chase: GPT-5.6-sol + Claude Opus 5": {
+      "annals_algebraic_integers": {
+        "benchmark_commit": "5aa9a51e2f423e7aeb164e40641e2ee08acf9567",
+        "issue_number": 1170,
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned",
+        "solved_at": "2026-08-20T19:36:43Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "e3f93f6dbed76f45f76ebcc8ab56cbff1ff2d07b",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "annals_duffin_schaeffer_conjecture": {
         "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
         "issue_number": 1124,
