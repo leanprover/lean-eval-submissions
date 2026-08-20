@@ -120,6 +120,17 @@
         "submission_ref": "d04036fdcb3b66b10a45ae776b5ebaf7daae265c",
         "submission_repo": "humanfia/lean-eval"
       },
+      "annals_lorentzian_polynomials": {
+        "benchmark_commit": "50c3e360839a44e7ca3b19aa9097333d44a9c704",
+        "issue_number": 1159,
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned",
+        "solved_at": "2026-08-20T06:56:35Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "9cd74022a39bb3cbdb3bd32834ca2b147d697c9c",
+        "submission_repo": "humanfia/lean-eval"
+      },
       "annals_on_approximation_of_reals": {
         "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
         "issue_number": 1108,
