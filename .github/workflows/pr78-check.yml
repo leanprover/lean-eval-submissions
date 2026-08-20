@@ -1,12 +1,12 @@
-# TEMPORARY. Checks leanprover/comparator#78 (PID-namespace containment of
-# sandbox descendants) against the two runner types lean-eval can reach.
+# TEMPORARY. Diagnosing why leanprover/comparator#78 fails on Namespace.
 #
-# #78 runs each landrun invocation as PID 1 of a fresh user + PID + mount
-# namespace. Unprivileged user namespaces are restricted on Ubuntu 24.04,
-# and #78's own CI works around that with
-# `sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`. This measures
-# what actually happens on our runners with and without that sysctl, since
-# lean-eval-submissions would have to adopt the same workaround.
+# #78's wrapper exits 126 from exactly one place: the child failing either
+# `mount(NULL, "/", MS_REC|MS_PRIVATE)` or `mount("proc", "/proc", "proc", ...)`.
+# Namespace jobs run inside Docker, which masks paths under /proc with bind
+# mounts; those become locked mounts in a new user namespace and can block
+# mounting a fresh procfs over /proc. This tests that, and whether the
+# containment still works without the /proc remount, since the teardown
+# guarantee comes from the PID namespace rather than from procfs.
 name: comparator PR78 check
 
 on:
@@ -24,31 +24,71 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
-      - name: Baseline
+      - name: Baseline, and relax the Ubuntu userns restriction if present
         run: |
           set +e
           uname -a
-          echo "--- apparmor userns knob ---"
-          cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>&1 || echo "(knob absent)"
-          echo "--- unprivileged userns available? ---"
+          if [[ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
           unshare -Ur --map-root-user true; echo "unshare -Ur exit=$?"
+
+      # Stock `unshare` reproduces #78's shape without needing to build
+      # anything, and separates the two mounts.
+      - name: Which half fails?
+        run: |
+          set +e
+          echo "=== userns + pidns + mountns, NO proc remount ==="
+          unshare -U -p -m -f -r true
+          echo "  exit=$? (0 wanted: this is the containment primitive)"
+          echo "=== the same, WITH --mount-proc (what #78 does) ==="
+          unshare -U -p -m -f -r --mount-proc true
+          echo "  exit=$? (non-zero here isolates the failure to the /proc remount)"
+
+      - name: mount() errno, precisely
+        run: |
+          python3 - <<'PY'
+          import ctypes, os
+          libc = ctypes.CDLL("libc.so.6", use_errno=True)
+          MS_REC, MS_PRIVATE = 0x4000, 0x40000
+          MS_NOSUID, MS_NODEV, MS_NOEXEC = 2, 4, 8
+          CLONE_NEWNS, CLONE_NEWUSER = 0x00020000, 0x10000000
+
+          uid, gid = os.getuid(), os.getgid()
+          if libc.unshare(CLONE_NEWUSER | CLONE_NEWNS) != 0:
+              print("unshare FAILED:", os.strerror(ctypes.get_errno())); raise SystemExit
+          # Map ourselves to root inside the new user namespace.
+          try:
+              open("/proc/self/setgroups", "w").write("deny")
+          except OSError:
+              pass
+          open("/proc/self/uid_map", "w").write(f"0 {uid} 1\n")
+          open("/proc/self/gid_map", "w").write(f"0 {gid} 1\n")
+
+          ctypes.set_errno(0)
+          r = libc.mount(None, b"/", None, MS_REC | MS_PRIVATE, None)
+          print(f"mount(/, MS_REC|MS_PRIVATE) -> {r}", "" if r == 0 else os.strerror(ctypes.get_errno()))
+
+          ctypes.set_errno(0)
+          r = libc.mount(b"proc", b"/proc", b"proc", MS_NOSUID | MS_NODEV | MS_NOEXEC, None)
+          print(f"mount(proc on /proc)         -> {r}", "" if r == 0 else os.strerror(ctypes.get_errno()))
+          PY
+
+      - name: Masked and read-only mounts under /proc
+        run: |
+          grep ' /proc' /proc/self/mountinfo | sed 's/ - .*//' | head -20
+          echo "--- count ---"; grep -c ' /proc' /proc/self/mountinfo
 
       - name: Check out comparator PR 78
         run: |
           git clone -q https://github.com/leanprover/comparator.git comparator
-          cd comparator
-          git fetch -q origin pull/78/head:pr78
-          git checkout -q pr78
-          git log --oneline -1
+          cd comparator && git fetch -q origin pull/78/head:pr78 && git checkout -q pr78
 
-      - name: Install elan
+      - name: Install elan and landrun
         run: |
           curl -sSfL https://github.com/leanprover/elan/releases/download/v4.1.2/elan-x86_64-unknown-linux-gnu.tar.gz | tar xz
           ./elan-init -y --default-toolchain none
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
-
-      - name: Install landrun
-        run: |
           go install github.com/zouuup/landrun/cmd/landrun@5ed4a3db3a4ad930d577215c6b9abaa19df7f99f
           GOBIN="$(go env GOPATH)/bin"
           echo "$GOBIN" >> "$GITHUB_PATH"
@@ -62,37 +102,38 @@ jobs:
           echo "$PWD/lean4export/.lake/build/bin" >> "$GITHUB_PATH"
           echo "$PWD/comparator/.lake/build/bin" >> "$GITHUB_PATH"
 
-      # The question that matters for lean-eval: does #78 work as shipped,
-      # before anyone relaxes a kernel hardening control?
-      - name: descendant_cleanup WITHOUT the sysctl workaround
+      - name: descendant_cleanup as shipped
         run: |
           set +e
           cd comparator
-          lean --run runtests.lean descendant_cleanup 2>&1 | tail -25
+          lean --run runtests.lean descendant_cleanup 2>&1 | tail -12
           echo "EXIT=${PIPESTATUS[0]}"
 
-      - name: Apply #78's CI workaround
-        run: |
-          set +e
-          if [[ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
-            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-            echo "sysctl exit=$?"
-          else
-            echo "knob absent, nothing to relax"
-          fi
-          unshare -Ur --map-root-user true; echo "unshare -Ur now exit=$?"
-
-      - name: descendant_cleanup WITH the sysctl workaround
+      # If the /proc remount is what fails, does the containment guarantee
+      # survive without it? The kernel reaps the PID namespace when its
+      # init exits regardless of what procfs is mounted.
+      - name: descendant_cleanup with the /proc remount made non-fatal
         run: |
           set +e
           cd comparator
-          lean --run runtests.lean descendant_cleanup 2>&1 | tail -25
+          python3 - <<'PY'
+          import re
+          path = "c/pid_namespace.c"
+          src = open(path).read()
+          # Make only the /proc remount non-fatal; keep the MS_PRIVATE
+          # remount fatal, since that one is what makes the mount namespace
+          # actually private.
+          pat = re.compile(r'if \(mount\(NULL, "/".*?_exit\(126\);\n    \}', re.S)
+          assert pat.search(src), "patch target moved"
+          repl = (
+              'if (mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) != 0) {\n'
+              '        _exit(126);\n'
+              '    }\n'
+              '    mount("proc", "/proc", "proc", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL);'
+          )
+          open(path, "w").write(pat.sub(repl, src, count=1))
+          print("patched: /proc remount is now best-effort")
+          PY
+          lake build comparator 2>&1 | tail -3
+          lean --run runtests.lean descendant_cleanup 2>&1 | tail -12
           echo "EXIT=${PIPESTATUS[0]}"
-
-      # A submission that can create user namespaces has more kernel surface
-      # to attack than one that cannot. Record whether relaxing the control
-      # to gain containment also hands that to the payload.
-      - name: Does the relaxation also reach unprivileged callers?
-        run: |
-          set +e
-          unshare -Urm true; echo "unshare -Urm exit=$? (0 means any process here can now do this)"
