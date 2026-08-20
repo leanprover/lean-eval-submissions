@@ -44,6 +44,8 @@ jobs:
       - run: npm ci
       - name: Validate rollback inputs
         env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           TARGET_VERSION: ${{ inputs.version_id }}
         run: |
@@ -51,10 +53,37 @@ jobs:
             echo "expected_commit must be a full lowercase Git SHA" >&2
             exit 1
           fi
-          if [[ ! "$TARGET_VERSION" =~ ^[0-9a-f-]+$ ]]; then
-            echo "version_id must contain only lowercase hexadecimal digits and hyphens" >&2
+          if [[ ! "$TARGET_VERSION" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            echo "version_id must be a canonical lowercase UUID" >&2
             exit 1
           fi
+
+          version_json=$(mktemp)
+          trap 'rm -f "$version_json"' EXIT
+          npx wrangler versions view "$TARGET_VERSION" --env production --json \
+            > "$version_json"
+          python - "$version_json" <<'PY'
+          import json
+          import os
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as source:
+              version = json.load(source)
+          bindings = version.get("resources", {}).get("bindings", [])
+          expected = {
+              "DEPLOYED_COMMIT": os.environ["EXPECTED_COMMIT"],
+              "DEPLOYMENT_ENVIRONMENT": "production",
+          }
+          for name, wanted in expected.items():
+              matches = [binding for binding in bindings if binding.get("name") == name]
+              if len(matches) != 1:
+                  raise SystemExit(f"target version has no unique {name} binding")
+              actual = matches[0].get("text", matches[0].get("value"))
+              if actual != wanted:
+                  raise SystemExit(
+                      f"target version records {name}={actual!r}, not {wanted!r}"
+                  )
+          PY
 
       - name: Roll back production
         env:
