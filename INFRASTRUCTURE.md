@@ -92,6 +92,8 @@ are already ancestors of the latest tested commit.
 
 The security boundary and evidence required before intake is enabled are in
 [`docs/intake-threat-model.md`](docs/intake-threat-model.md).
+The decision register and copy/pasteable bootstrap sequence are in
+[`docs/overhaul-rollout-runbook.md`](docs/overhaul-rollout-runbook.md).
 
 ## Worker secrets and GitHub state access
 
