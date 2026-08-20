@@ -350,6 +350,16 @@
         "submission_ref": "9b8ea935c19e5dd73b4ee69a9649205b869f7bad",
         "submission_repo": "parabamoghv/lean-eval-private"
       },
+      "upper_bound_simplicial_spheres": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1148,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-20T04:00:02Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "79d90c4c559533a3ae4bebd0901f7640a0ae28e6",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "weak_morse_inequality": {
         "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
         "issue_number": 969,
