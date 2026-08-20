@@ -580,7 +580,11 @@ jobs:
       && needs.evaluate.result == 'success'
       && needs.archive.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # A live schema migration installs a durable Git lock. Evaluation and
+    # archival remain live while this credentialed writer waits its turn.
+    timeout-minutes: 45
+    env:
+      RESULTS_STORE_WRITER_GROUP: results-store-writer
     permissions:
       contents: read
       issues: write
@@ -680,8 +684,26 @@ jobs:
 
           MAX_ATTEMPTS=5
           for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            git -C results-store fetch origin main
-            git -C results-store reset --hard origin/main
+            # GitHub Actions concurrency groups are not FIFO: a third queued
+            # run cancels the older pending run. Use the named durable lock
+            # for record jobs instead, while migration workflow runs with the
+            # same results-store-writer contract. A push race is safe: either
+            # this record lands first or its push is rejected and the next
+            # iteration observes the lock.
+            for wait_attempt in $(seq 1 120); do
+              git -C results-store fetch origin main
+              git -C results-store reset --hard origin/main
+              if [ ! -f results-store/.results-store-writer-lock.json ]; then
+                break
+              fi
+              python -c 'import json,os; d=json.load(open("results-store/.results-store-writer-lock.json")); assert d["group"] == os.environ["RESULTS_STORE_WRITER_GROUP"]'
+              echo "results migration holds $RESULTS_STORE_WRITER_GROUP; waiting ($wait_attempt/120)"
+              sleep 15
+            done
+            if [ -f results-store/.results-store-writer-lock.json ]; then
+              echo "timed out waiting for $RESULTS_STORE_WRITER_GROUP"
+              exit 1
+            fi
 
             OUTPUT=$(python code/scripts/update_leaderboard.py \
               --user "$SUBMITTED_BY" \

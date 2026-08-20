@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import json
 import io
+import json
 import pathlib
 import sys
 import tempfile
-import textwrap
 import unittest
 from contextlib import redirect_stderr
 from unittest import mock
@@ -59,20 +58,30 @@ def _write_submitter_workspace(
     return target
 
 
-def _write_manifest(manifest_dir: pathlib.Path, problem_ids: list[str]) -> None:
+def _write_manifest(
+    manifest_dir: pathlib.Path,
+    problem_ids: list[str],
+    *,
+    statement_revision: int | None = None,
+) -> None:
     manifest_dir.mkdir(parents=True, exist_ok=True)
     for pid in problem_ids:
+        lines = [
+            f'id = "{pid}"',
+            f'title = "{pid}"',
+            "test = false",
+        ]
+        if statement_revision is not None:
+            lines.append(f"statement_revision = {statement_revision}")
+        lines.extend(
+            [
+                f'module = "Fake.{pid}"',
+                f'holes = ["{pid}"]',
+                'submitter = "tester"',
+            ]
+        )
         (manifest_dir / f"{pid}.toml").write_text(
-            textwrap.dedent(
-                f"""\
-                id = "{pid}"
-                title = "{pid}"
-                test = false
-                module = "Fake.{pid}"
-                holes = ["{pid}"]
-                submitter = "tester"
-                """
-            ),
+            "\n".join(lines) + "\n",
             encoding="utf-8",
         )
 
@@ -372,7 +381,36 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
             )
             self.assertEqual(result["results"]["passed"], ["two_plus_two"])
             disk_results = json.loads((output / "results.json").read_text())
-            self.assertEqual(disk_results, {"passed": ["two_plus_two"]})
+            self.assertEqual(
+                disk_results,
+                {
+                    "passed": ["two_plus_two"],
+                    "statement_revisions": {"two_plus_two": 1},
+                },
+            )
+
+    def test_statement_revision_is_frozen_into_results_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, manifest_dir = self._setup_repo_like(tmp_path)
+            _write_pristine(generated, "two_plus_two")
+            _write_manifest(
+                manifest_dir, ["two_plus_two"], statement_revision=3
+            )
+            src = tmp_path / "src"
+            _write_submitter_workspace(src, ".", "two_plus_two")
+            output = tmp_path / "out"
+            result = ev.evaluate_submission(
+                source_dir=src,
+                generated_root=generated,
+                manifest_dir=manifest_dir,
+                output_dir=output,
+                repo_root=tmp_path,
+                run_eval_runner=_fake_runner_factory(["two_plus_two"]),
+            )
+            self.assertEqual(
+                result["results"]["statement_revisions"], {"two_plus_two": 3}
+            )
 
     def test_multi_problem_mixed_results(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

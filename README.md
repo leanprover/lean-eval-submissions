@@ -101,69 +101,51 @@ results/
 One file per submitter; filenames use the lowercased GitHub login. Users
 without a successful submission have no file.
 
-Successes are **sticky**: once a `(user, model, problem)` triple is
+Successes are **sticky**: once a `(user, declared model, problem, statement
+revision)` tuple is
 recorded it is never modified or removed, even if a later submission from
 the same user no longer proves it.
 
-### Record schema (v1)
+### Record schema (v2)
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "user": "kim-em",
-  "solved": {
-    "Claude Opus 4.7": {
-      "two_plus_two": {
-        "solved_at": "2026-05-01T03:16:18Z",
-        "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
-        "submission_kind": "gist",
-        "submission_repo": "kim-em/22bad2dccd67bcca0df87c01d072ef39",
-        "submission_ref": "567b8d1feebbc6ccbb1f8ebb0a7bbcf5e914f135",
-        "submission_public": true,
-        "solution_publication_status": "published",
-        "solution_publication_date": "2026-05-01",
-        "issue_number": 45,
-        "production_description": "..."
-      }
+  "results": [
+    {
+      "result_id": "r2_...",
+      "problem_id": "two_plus_two",
+      "statement_revision": 1,
+      "declared_model": "Claude Opus 4.7",
+      "accepted_at": "2026-05-01T03:16:18Z",
+      "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
+      "intake": {"kind": "issue", "issue_number": 45},
+      "submission": {
+        "kind": "gist",
+        "repo": "kim-em/22bad2dccd67bcca0df87c01d072ef39",
+        "ref": "567b8d1feebbc6ccbb1f8ebb0a7bbcf5e914f135",
+        "public": true
+      },
+      "production_metadata": {}
     }
-  }
+  ]
 }
 ```
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `schema_version` | integer | Currently `1`. |
-| `user` | string | GitHub login, original case preserved. |
-| `solved` | object | Map from model name to per-problem records. Never empty. |
-
-The keys of `solved` are free-form model identifiers from the submission
-form. Each value maps `<problem_id>` to a record:
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `solved_at` | string | ISO 8601 UTC timestamp the record was first written. |
-| `benchmark_commit` | string | 40-char SHA of the `leanprover/lean-eval` commit evaluated against. |
-| `submission_kind` | string | `github_repo` or `gist`. |
-| `submission_repo` | string | `owner/repo` for a repository, `user/gist-id` for a gist. |
-| `submission_ref` | string | 40-char SHA pinning the submission at evaluation time. |
-| `submission_public` | boolean | Whether the submission source was public at evaluation time. |
-| `solution_publication_status` | string \| absent | Submitter's snapshot declaration: `private`, `planned`, or `published`. Absent on submissions made before this field existed. |
-| `solution_publication_date` | string \| absent | `YYYY-MM-DD` actual publication date for `published`, or intended date for `planned`. Absent for `private` and legacy records. |
-| `issue_number` | integer | The `leanprover/lean-eval-submissions` issue that triggered the evaluation. |
-| `production_description` | string \| absent | Optional free-form description from the form. |
-
-> **`issue_number` provenance.** Records written by this repository refer
-> to `leanprover/lean-eval-submissions` issues. Records dated before the
-> submission pipeline moved here refer to `leanprover/lean-eval` issues.
+The exact identifier contract, full field definitions, v1 mapping, language-
+neutral fixtures, and guarded migration procedure are documented in
+[`docs/results-schema-v2.md`](docs/results-schema-v2.md). Readers accept v1
+and v2 during migration; every newly changed file is written as v2.
 
 ### Write semantics
 
 When the submission CI records a successful submission:
 
-1. It reads `results/<login>.json`, or starts from an empty `solved` map.
-2. The submission carries one model name; that is the bucket key.
-3. For each problem that passed: if `solved[<model>][<problem_id>]`
-   already exists, do nothing (sticky no-op); otherwise add a record.
+1. It reads and validates v1 or v2, or starts an empty v2 array.
+2. It computes the stable ID from login, verbatim model, problem, and the
+   statement revision frozen into the evaluation artifact.
+3. If that ID exists, it does nothing; otherwise it appends a v2 record.
 4. If at least one new record was added, the CI commits and pushes;
    otherwise it makes no commit.
 

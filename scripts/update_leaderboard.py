@@ -3,7 +3,8 @@
 Merge comparator results into the lean-eval-submissions results store.
 
 Implements the sticky-no-op semantics documented in this repository's
-README (results record schema v1). Does not run git; the caller is
+README (results record schema v2). Reads v1 or v2 and always writes v2.
+Does not run git; the caller is
 responsible for checking out the results store, committing the modified
 file, and pushing.
 """
@@ -17,8 +18,14 @@ import pathlib
 import re
 import sys
 
+from results_schema import (
+    SCHEMA_VERSION,
+    ResultsSchemaError,
+    canonical_file_bytes,
+    read_results_file,
+    result_id,
+)
 
-SCHEMA_VERSION = 1
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 OWNER_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9._-]+$")
 LOGIN_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$")
@@ -98,35 +105,25 @@ def _validate_solution_publication(
 
 def _load_existing(target_path: pathlib.Path, user: str) -> dict:
     if not target_path.is_file():
-        return {"schema_version": SCHEMA_VERSION, "user": user, "solved": {}}
+        return {"schema_version": SCHEMA_VERSION, "user": user, "results": []}
     try:
-        data = json.loads(target_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
-        raise UpdateError(f"Invalid JSON in {target_path}: {exc}") from exc
-    version = data.get("schema_version")
-    if version != SCHEMA_VERSION:
+        data, _source_version = read_results_file(target_path)
+    except ResultsSchemaError as exc:
+        raise UpdateError(str(exc)) from exc
+    if data["user"].lower() != user.lower():
         raise UpdateError(
-            f"{target_path} has schema_version {version!r}; this script only knows {SCHEMA_VERSION}"
+            f"{target_path} belongs to user {data['user']!r}, not {user!r}"
         )
-    if not isinstance(data.get("user"), str):
-        raise UpdateError(f"{target_path} is missing a 'user' string")
-    solved = data.get("solved")
-    if not isinstance(solved, dict):
-        raise UpdateError(f"{target_path} is missing a 'solved' object")
-    for model_key, problems in solved.items():
-        if not isinstance(model_key, str) or not model_key.strip():
-            raise UpdateError(f"{target_path} 'solved' has a non-string or empty model key")
-        if not isinstance(problems, dict):
-            raise UpdateError(
-                f"{target_path} 'solved[{model_key!r}]' must be an object of problem records"
-            )
     return data
 
 
 def _write_json(path: pathlib.Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    contents = json.dumps(data, indent=2, sort_keys=True) + "\n"
-    path.write_text(contents, encoding="utf-8")
+    try:
+        contents = canonical_file_bytes(data)
+    except ResultsSchemaError as exc:
+        raise UpdateError(str(exc)) from exc
+    path.write_bytes(contents)
 
 
 def _commit_message(user: str, added: list[str], model: str, benchmark_commit: str) -> str:
@@ -151,6 +148,7 @@ def update_leaderboard(
     model: str,
     issue_number: int,
     now: str,
+    statement_revisions: dict[str, int] | None = None,
     production_description: str | None = None,
     solution_publication_status: str | None = None,
     solution_publication_date: str | None = None,
@@ -164,6 +162,10 @@ def update_leaderboard(
         raise UpdateError(f"issue-number must be positive, got {issue_number}")
     if not model.strip():
         raise UpdateError("model must be a non-empty string")
+    if statement_revisions is None:
+        statement_revisions = {problem_id: 1 for problem_id in passed}
+    if not isinstance(statement_revisions, dict):
+        raise UpdateError("statement-revisions must be an object")
     _validate_solution_publication(
         solution_publication_status,
         solution_publication_date,
@@ -182,34 +184,53 @@ def update_leaderboard(
 
     target = leaderboard_target_path(leaderboard_dir, user)
     existing = _load_existing(target, user)
-    solved = existing["solved"]
-    model_bucket = solved.setdefault(model, {})
+    known_ids = {record["result_id"] for record in existing["results"]}
     added: list[str] = []
     for problem_id in list(dict.fromkeys(passed)):
-        if problem_id in model_bucket:
+        if problem_id not in statement_revisions:
+            raise UpdateError(f"missing statement revision for {problem_id!r}")
+        revision = statement_revisions[problem_id]
+        if not isinstance(revision, int) or isinstance(revision, bool) or revision <= 0:
+            raise UpdateError(
+                f"statement revision for {problem_id!r} must be a positive integer"
+            )
+        try:
+            identifier = result_id(existing["user"], model, problem_id, revision)
+        except ResultsSchemaError as exc:
+            raise UpdateError(str(exc)) from exc
+        if identifier in known_ids:
             continue
         record = {
-            "solved_at": now,
+            "result_id": identifier,
+            "problem_id": problem_id,
+            "statement_revision": revision,
+            "declared_model": model,
+            "accepted_at": now,
             "benchmark_commit": benchmark_commit,
-            "submission_kind": submission_kind,
-            "submission_repo": submission_repo,
-            "submission_ref": submission_ref,
-            "submission_public": submission_public,
-            "issue_number": issue_number,
+            "intake": {"kind": "issue", "issue_number": issue_number},
+            "submission": {
+                "kind": submission_kind,
+                "repo": submission_repo,
+                "ref": submission_ref,
+                "public": submission_public,
+            },
+            "production_metadata": {},
         }
         if production_description is not None:
-            record["production_description"] = production_description
+            record["production_metadata"][
+                "production_description"
+            ] = production_description
         if solution_publication_status is not None:
-            record["solution_publication_status"] = solution_publication_status
+            record["production_metadata"][
+                "solution_publication_status"
+            ] = solution_publication_status
             if solution_publication_date is not None:
-                record["solution_publication_date"] = solution_publication_date
-        model_bucket[problem_id] = record
+                record["production_metadata"][
+                    "solution_publication_date"
+                ] = solution_publication_date
+        existing["results"].append(record)
+        known_ids.add(identifier)
         added.append(problem_id)
-
-    if not model_bucket:
-        # Nothing was added and the bucket we just inserted is empty
-        # (model name had no new solves). Drop it to keep the file tidy.
-        del solved[model]
 
     if added:
         _write_json(target, existing)
@@ -217,11 +238,13 @@ def update_leaderboard(
     return {
         "changed": bool(added),
         "added": added,
-        "commit_message": _commit_message(user, added, model, benchmark_commit) if added else "",
+        "commit_message": (
+            _commit_message(user, added, model, benchmark_commit) if added else ""
+        ),
     }
 
 
-def _load_passed(path: pathlib.Path) -> list[str]:
+def _load_evaluation_results(path: pathlib.Path) -> tuple[list[str], dict[str, int]]:
     if not path.is_file():
         raise UpdateError(f"Results JSON not found: {path}")
     try:
@@ -233,7 +256,26 @@ def _load_passed(path: pathlib.Path) -> list[str]:
     passed = data["passed"]
     if not isinstance(passed, list) or not all(isinstance(p, str) for p in passed):
         raise UpdateError(f"'passed' in {path} must be a list of strings")
-    return passed
+    revisions = data.get("statement_revisions")
+    if revisions is None:
+        # Compatibility with in-flight artifacts created before schema v2.
+        revisions = {problem_id: 1 for problem_id in passed}
+    if not isinstance(revisions, dict) or not all(
+        isinstance(problem_id, str)
+        and isinstance(revision, int)
+        and not isinstance(revision, bool)
+        and revision > 0
+        for problem_id, revision in revisions.items()
+    ):
+        raise UpdateError(
+            f"'statement_revisions' in {path} must map strings to positive integers"
+        )
+    missing = set(passed) - set(revisions)
+    if missing:
+        raise UpdateError(
+            f"'statement_revisions' in {path} is missing: {', '.join(sorted(missing))}"
+        )
+    return passed, revisions
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -249,7 +291,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--results-json",
         required=True,
         type=pathlib.Path,
-        help="Path to a JSON file of the form {'passed': [problem_id, ...]}.",
+        help="Evaluation JSON containing passed IDs and statement revisions.",
     )
     parser.add_argument("--benchmark-commit", required=True)
     parser.add_argument(
@@ -296,8 +338,10 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     try:
         args = _parse_args(argv)
-        passed = _load_passed(args.results_json)
-        now = args.now or datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        passed, statement_revisions = _load_evaluation_results(args.results_json)
+        now = args.now or datetime.datetime.now(datetime.timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
         result = update_leaderboard(
             user=args.user,
             leaderboard_dir=args.leaderboard_dir,
@@ -313,6 +357,7 @@ def main(argv: list[str] | None = None) -> int:
             solution_publication_status=args.solution_publication_status,
             solution_publication_date=args.solution_publication_date,
             now=now,
+            statement_revisions=statement_revisions,
         )
     except UpdateError as exc:
         print(str(exc), file=sys.stderr)

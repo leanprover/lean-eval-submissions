@@ -29,7 +29,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
-from typing import Iterable
+from collections.abc import Iterable
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -48,26 +48,36 @@ class WorkspaceMatch:
     skip_reason: str | None = None
 
 
-def _load_manifest_ids(manifest_dir: pathlib.Path) -> set[str]:
-    """Read `manifests/problems/*.toml` and return the set of problem ids.
+def _load_manifest_revisions(manifest_dir: pathlib.Path) -> dict[str, int]:
+    """Read problem ids and statement revisions from manifests.
 
     Each problem lives in its own top-level-key TOML file at
-    `manifests/problems/<id>.toml`. We parse just enough to extract `id`
-    from each file; full validation (filename-↔-id, schema, uniqueness)
-    lives in `lake exe lean-eval validate-manifest`.
+    `manifests/problems/<id>.toml`. Legacy manifests without the lifecycle
+    field are revision 1.  Full validation (filename↔id, schema,
+    uniqueness) lives in `lake exe lean-eval validate-manifest`.
     """
     if not manifest_dir.is_dir():
         raise EvaluateError(f"Manifest directory not found: {manifest_dir}")
-    ids: set[str] = set()
+    revisions: dict[str, int] = {}
     for path in sorted(manifest_dir.glob("*.toml")):
         with path.open("rb") as handle:
             data = tomllib.load(handle)
         problem_id = data.get("id")
         if isinstance(problem_id, str) and problem_id.strip():
-            ids.add(problem_id.strip())
-    if not ids:
+            problem_id = problem_id.strip()
+            revision = data.get("statement_revision", 1)
+            if (
+                not isinstance(revision, int)
+                or isinstance(revision, bool)
+                or revision <= 0
+            ):
+                raise EvaluateError(
+                    f"Manifest {path} has invalid statement_revision {revision!r}"
+                )
+            revisions[problem_id] = revision
+    if not revisions:
         raise EvaluateError(f"No problems found in {manifest_dir}")
-    return ids
+    return revisions
 
 
 def _is_inside(path: pathlib.Path, root: pathlib.Path) -> bool:
@@ -587,8 +597,10 @@ def evaluate_submission(
     repo's `.lake/packages`) that per-workspace builds can reuse instead of
     re-unpacking Mathlib for each.
     """
-    manifest_ids = _load_manifest_ids(manifest_dir)
-    matches = detect_matches(source_dir, manifest_ids, generated_root=generated_root)
+    manifest_revisions = _load_manifest_revisions(manifest_dir)
+    matches = detect_matches(
+        source_dir, set(manifest_revisions), generated_root=generated_root
+    )
 
     overlay_records: list[dict] = []
     # Create the tempdir as an immediate child of repo_root so that:
@@ -650,7 +662,12 @@ def evaluate_submission(
     passed = _extract_passed(run_eval_output)
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    results = {"passed": passed}
+    results = {
+        "passed": passed,
+        "statement_revisions": {
+            problem_id: manifest_revisions[problem_id] for problem_id in passed
+        },
+    }
     (output_dir / "results.json").write_text(
         json.dumps(results, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

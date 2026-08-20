@@ -1,0 +1,137 @@
+# Guarded one-time migration of the public results store. A dry run is always
+# produced first. `apply` additionally installs a durable Git writer lock so
+# independently running submission workflows wait without GitHub concurrency's
+# lossy "one pending run" behavior.
+name: Migrate results schema v2
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Rewrite results after verifying the fresh dry-run report
+        required: true
+        default: false
+        type: boolean
+      resume_locked_migration:
+        description: Resume after reviewing a lock left by a failed apply run
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: results-store-writer
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      RESULTS_STORE_WRITER_GROUP: results-store-writer
+    steps:
+      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          path: results-store
+
+      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Mint lean-eval-recorder installation token
+        if: inputs.apply
+        id: recorder_token
+        # actions/create-github-app-token pinned to bcd2ba49 (= refs/tags/v3.2.0 as of 2026-07-30).
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ secrets.LEAN_EVAL_RECORDER_CLIENT_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_RECORDER_PRIVATE_KEY }}
+
+      - name: Configure authenticated writer
+        if: inputs.apply
+        env:
+          RECORDER_TOKEN: ${{ steps.recorder_token.outputs.token }}
+        run: |
+          git -C results-store config user.email "lean-eval-bot@users.noreply.github.com"
+          git -C results-store config user.name "lean-eval-bot"
+          git -C results-store remote set-url origin \
+            "https://x-access-token:${RECORDER_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+      - name: Acquire durable writer lock
+        if: inputs.apply
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RESUME_LOCKED_MIGRATION: ${{ inputs.resume_locked_migration }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 5); do
+            git -C results-store fetch origin main
+            git -C results-store reset --hard origin/main
+            if [ -f results-store/.results-store-writer-lock.json ]; then
+              python -c 'import json,os; d=json.load(open("results-store/.results-store-writer-lock.json")); assert d["group"] == os.environ["RESULTS_STORE_WRITER_GROUP"]'
+              if [ "$RESUME_LOCKED_MIGRATION" != "true" ]; then
+                echo "a results-store writer lock already exists; review it and explicitly resume"
+                exit 1
+              fi
+              echo "resuming the operator-reviewed locked migration"
+              break
+            fi
+            SOURCE_COMMIT=$(git -C results-store rev-parse HEAD)
+            SOURCE_COMMIT="$SOURCE_COMMIT" python -c 'import json,os,pathlib; pathlib.Path("results-store/.results-store-writer-lock.json").write_text(json.dumps({"group": os.environ["RESULTS_STORE_WRITER_GROUP"], "source_commit": os.environ["SOURCE_COMMIT"], "workflow_run_url": os.environ["RUN_URL"]}, indent=2, sort_keys=True) + "\n")'
+            git -C results-store add .results-store-writer-lock.json
+            git -C results-store commit -m "migration: acquire results-v2 writer lock"
+            if git -C results-store push origin HEAD:main; then
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "could not acquire results-store writer lock"
+              exit 1
+            fi
+          done
+
+      - name: Create fresh migration report
+        id: report
+        run: |
+          set -euo pipefail
+          SOURCE_COMMIT=$(git -C results-store rev-parse HEAD)
+          python results-store/scripts/migrate_results_v2.py \
+            --results-dir results-store/results \
+            --source-commit "$SOURCE_COMMIT" \
+            --report /tmp/results-v2-report.json
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          report = json.load(open("/tmp/results-v2-report.json"))
+          print(f"source_digest={report['source_digest']}")
+          print(f"record_count={report['source_record_count']}")
+          print(f"output_digest={report['canonical_output_digest']}")
+          PY
+
+      - name: Apply exactly the reviewed in-run report
+        if: inputs.apply
+        run: |
+          set -euo pipefail
+          python results-store/scripts/migrate_results_v2.py \
+            --results-dir results-store/results \
+            --source-commit "$(git -C results-store rev-parse HEAD)" \
+            --apply \
+            --expect-source-digest "${{ steps.report.outputs.source_digest }}" \
+            --expect-record-count "${{ steps.report.outputs.record_count }}" \
+            --expect-output-digest "${{ steps.report.outputs.output_digest }}" \
+            --report /tmp/results-v2-applied-report.json
+          git -C results-store add results/
+          git -C results-store rm .results-store-writer-lock.json
+          git -C results-store commit -m "migration: rewrite results store as schema v2"
+          git -C results-store push origin HEAD:main
+
+      # actions/upload-artifact pinned to 043fb46d (= refs/tags/v7.0.1 as of 2026-07-30).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: results-v2-migration-report-${{ github.run_id }}
+          path: /tmp/results-v2-*-report.json
+          if-no-files-found: error
+          retention-days: 30
