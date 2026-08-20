@@ -38,6 +38,18 @@
         "submission_ref": "42808fea2b805402ea022106b4150d355de77948",
         "submission_repo": "mlgraham/lean-eval-submission"
       },
+      "cubic_decay_asymptotic": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1150,
+        "production_description": "Retry of cubic_decay_asymptotic, which failed evaluation in #1145 with no error detail while\nthe eight sibling workspaces passed in the same run. This is the same evaluator memory\npattern we hit and fixed in #1142 (see also #1078): the resubmission replaces `import\nMathlib` with minimal targeted imports (and one tactic call with an explicit term); the\nproof is otherwise identical and builds locally. Original proof by Claude Fable 5 (Claude\nCode) under human direction; method described in #1145; no published lean-eval solution\nconsulted. (Other workspaces on this branch are already recorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-20T04:10:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "fbc41ae6c87bb920db42d92f3a4711e8db0d56f0",
+        "submission_repo": "mlgraham/lean-eval-submission"
+      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
         "issue_number": 1129,
