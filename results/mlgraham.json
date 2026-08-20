@@ -13,6 +13,18 @@
         "submission_public": true,
         "submission_ref": "8d44d31c6bb221bed45749804fa18ec7fec79d71",
         "submission_repo": "mlgraham/lean-eval-submission"
+      },
+      "mulCayley_connected_iff_closure_eq_top": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1130,
+        "production_description": "Original proofs (batch of 2: bvp_comparison, mulCayley_connected_iff_closure_eq_top), produced\nfor a pre-registered research gate. Claude Fable 5 (Claude Code), under human direction, worked\nfrom each problem's Challenge.lean, the workspace's pinned Mathlib (source search), and compiler\nfeedback only \u2014 no published lean-eval solution to any problem was consulted. bvp_comparison:\nw := u - v has w'' >= 0, so w is convex on [0,1] (convexOn_of_deriv2_nonneg) and bounded by its\nendpoint values. mulCayley: closure-membership transfers along walks (forward); closure_induction\nwith left-translation as a graph homomorphism (backward). Cost: 3 and 1 compile iterations,\n~20 and ~15 minutes of model loop time respectively, ~$0 marginal spend. (The previously\nsubmitted finite_graph_ramsey_theorem workspace is also on this branch; its result is sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-20T01:41:08Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "8f92249fd1b60e2f734e6688cce0d113c177bb6b",
+        "submission_repo": "mlgraham/lean-eval-submission"
       }
     },
     "github.com/mlgraham \u2014 public accepted source, packaged (Claude Fable 5)": {
