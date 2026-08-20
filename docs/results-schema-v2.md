@@ -66,7 +66,8 @@ login case is deliberately folded; all other strings are preserved exactly.
 ```
 
 `intake.kind` is `issue` with a positive `issue_number`, or `server` with a
-`submission_id`. `submission.kind` is `github_repo` or `gist`. The structured
+canonical lowercase UUIDv7 `submission_id`. `submission.kind` is `github_repo`
+or `gist`. The structured
 `production_metadata` object preserves submission-time declarations; changes
 after acceptance are events.
 

@@ -92,6 +92,29 @@ class ResultsSchemaTests(unittest.TestCase):
         with self.assertRaisesRegex(rs.ResultsSchemaError, "duplicate result_id"):
             rs.validate_v2(duplicate)
 
+    def test_server_intake_requires_canonical_lowercase_uuidv7(self) -> None:
+        converted = rs.convert_v1(self.v1)
+        record = converted["results"][0]
+        record["intake"] = {
+            "kind": "server",
+            "submission_id": "0198cafe-1234-7abc-8def-000000000000",
+        }
+        rs.validate_v2(converted)
+
+        for invalid in (
+            "submission-123",
+            "0198cafe-1234-4abc-8def-000000000000",
+            "0198CAFE-1234-7ABC-8DEF-000000000000",
+            "0198cafe-1234-7abc-7def-000000000000",
+        ):
+            with self.subTest(invalid=invalid):
+                rejected = copy.deepcopy(converted)
+                rejected["results"][0]["intake"]["submission_id"] = invalid
+                with self.assertRaisesRegex(
+                    rs.ResultsSchemaError, "canonical lowercase UUIDv7"
+                ):
+                    rs.validate_v2(rejected)
+
     def test_canonical_bytes_are_deterministic(self) -> None:
         converted = rs.convert_v1(self.v1)
         first = rs.canonical_file_bytes(converted)
