@@ -390,6 +390,16 @@
         "submission_ref": "79d90c4c559533a3ae4bebd0901f7640a0ae28e6",
         "submission_repo": "parabamoghv/lean-eval-private"
       },
+      "vinogradov_mean_value": {
+        "benchmark_commit": "547b00ed345bc0737dd94847d6b67cb681b6178a",
+        "issue_number": 1169,
+        "solution_publication_status": "private",
+        "solved_at": "2026-08-20T17:06:38Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "258cbfa04a2788d18df69883d699fa28c8f9be67",
+        "submission_repo": "parabamoghv/lean-eval-private"
+      },
       "weak_morse_inequality": {
         "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
         "issue_number": 969,
