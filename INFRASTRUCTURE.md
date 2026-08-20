@@ -184,12 +184,12 @@ identifier, and administrators here before provisioning dispatch credentials.
 The Worker rejects a branch name, raw SHA,
 or differently named tag with `503`.
 
-The approved production design uses separate organization-owned GitHub Apps
-for State writing and source-verification/workflow-dispatch authority, reached
-through a narrow token broker. Static fine-grained personal access tokens are
-permitted only for an intake-disabled bootstrap because installation tokens
-expire after about one hour and must not be stored as long-lived Worker
-secrets.
+The approved D9 design uses separate organization-owned GitHub Apps for source
+verification and workflow dispatch, reached through a narrow token broker.
+The D5 intake-disabled State bootstrap uses separate, single-repository
+fine-grained personal access tokens; those are not substitutes for either D9
+App. Installation tokens expire after about one hour and must not be stored as
+long-lived Worker secrets.
 
 Temporary OAuth callback URLs are exactly
 `https://lean-eval-submission-server-staging.lean-eval.workers.dev/api/v1/oauth/callback`
@@ -224,12 +224,12 @@ separate launch gate and must correlate `archive_path` to the UUID.
 
 | Field | Staging | Production |
 | --- | --- | --- |
-| Credential type | GitHub App installation token via broker | GitHub App installation token via broker |
+| Credential type | Fine-grained PAT bootstrap | Fine-grained PAT bootstrap |
 | Machine owner | Kim Morrison | Kim Morrison |
 | Credential owner | Kim Morrison | Kim Morrison |
-| Created / expires | **TO BE RECORDED AT APP CREATION; installation tokens <=1 hour** | **TO BE RECORDED AT APP CREATION; installation tokens <=1 hour** |
-| Rotation owner / deadline | Kim Morrison / App private-key rotation | Kim Morrison / App private-key rotation |
-| Intake gate | App/broker provisioned and verified | App/broker provisioned and verified |
+| Created / expires | **TO BE RECORDED AT CREATION; <=90 days** | **TO BE RECORDED AT CREATION; <=90 days** |
+| Rotation owner / deadline | Kim Morrison / >=14 days before expiry | Kim Morrison / >=14 days before expiry |
+| Intake gate | D9 Apps/broker provisioned; bootstrap PAT reviewed | D9 Apps/broker provisioned; bootstrap PAT reviewed |
 
 The internet-facing Worker token must not write workflow files, modify
 repository settings, reach `lean-eval-submissions`, or reach the other

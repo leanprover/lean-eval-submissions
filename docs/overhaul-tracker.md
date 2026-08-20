@@ -105,7 +105,7 @@ one issue per lane.
 
 ## External coordination
 
-- [ ] Coordinate the published generator contract through lean-eval#533 and
+- [x] Coordinate the published generator contract through lean-eval#533 and
       formal-conjectures#4951.
 - [ ] Validate FC answer-slot types under LeanEval's pinned target environment.
 - [ ] Reproduce the FC100 dependency audit before import.
