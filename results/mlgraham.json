@@ -25,6 +25,18 @@
         "submission_public": true,
         "submission_ref": "8f92249fd1b60e2f734e6688cce0d113c177bb6b",
         "submission_repo": "mlgraham/lean-eval-submission"
+      },
+      "symplectic_matrix_det": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1133,
+        "production_description": "symplectic_matrix_det: a direct citation \u2014 the statement is Mathlib's own\nSymplecticGroup.det_eq_one, applied in one line. Found via Mathlib source search by Claude\nFable 5 (Claude Code) under human direction, for a pre-registered research gate; no published\nlean-eval solution consulted. Disclosed as a citation rather than a new proof. Cost: 2 compile\niterations (one namespace fix), ~5 minutes. (Earlier workspaces on this branch are already\nrecorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-20T02:00:53Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "bfcda9d27292a86888305aea32e819c114849884",
+        "submission_repo": "mlgraham/lean-eval-submission"
       }
     },
     "github.com/mlgraham \u2014 public accepted source, packaged (Claude Fable 5)": {
