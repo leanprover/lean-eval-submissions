@@ -8,7 +8,7 @@
   },
   "scripts": {
     "check": "npm run types:check && npm run lint && npm test && npm run deploy:dry-run",
-    "deploy:dry-run": "wrangler deploy --dry-run --env staging",
+    "deploy:dry-run": "wrangler deploy --dry-run --env staging && wrangler deploy --dry-run --env production",
     "dev": "wrangler dev --env staging",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",

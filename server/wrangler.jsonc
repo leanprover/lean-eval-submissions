@@ -12,7 +12,7 @@
   },
   "env": {
     "staging": {
-      "name": "lean-eval-submission-staging",
+      "name": "lean-eval-submission-server-staging",
       "workers_dev": false,
       "preview_urls": false,
       "routes": [
@@ -29,7 +29,7 @@
       }
     },
     "production": {
-      "name": "lean-eval-submission-production",
+      "name": "lean-eval-submission-server",
       "workers_dev": false,
       "preview_urls": false,
       "routes": [

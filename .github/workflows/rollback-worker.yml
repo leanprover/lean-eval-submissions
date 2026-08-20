@@ -1,0 +1,71 @@
+name: Roll back submission Worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_id:
+        description: Cloudflare Worker version ID to restore
+        required: true
+        type: string
+      expected_commit:
+        description: Full Git commit recorded by that Worker version
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: submission-worker-main
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: server
+
+jobs:
+  rollback-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: cloudflare-production
+    steps:
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # actions/setup-node pinned to v6.5.0.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.6.0'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+      - name: Roll back production
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TARGET_VERSION: ${{ inputs.version_id }}
+        run: >-
+          npx wrangler rollback "$TARGET_VERSION" --env production
+          --message "Manual rollback by $GITHUB_ACTOR from $GITHUB_SHA"
+
+      - name: Verify restored production version
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "expected_commit must be a full lowercase Git SHA" >&2
+            exit 1
+          fi
+          body=$(curl --fail --retry 6 --retry-all-errors --retry-delay 5 \
+            https://eval-submit.lean-lang.org/healthz)
+          HEALTH_BODY="$body" python - <<'PY'
+          import json, os
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["status"] == "ok"
+          assert body["environment"] == "production"
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          assert body["intake_enabled"] is False
+          PY

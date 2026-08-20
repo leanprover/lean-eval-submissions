@@ -15,8 +15,8 @@ provisioned). Owner: leanprover organization administrators. Service code:
 
 | Resource | Desired identifier | Environment | Status |
 | --- | --- | --- | --- |
-| Cloudflare Worker | `lean-eval-submission-staging` | staging | **TO BE PROVISIONED** |
-| Cloudflare Worker | `lean-eval-submission-production` | production | **TO BE PROVISIONED** |
+| Cloudflare Worker | `lean-eval-submission-server-staging` | staging | **TO BE PROVISIONED** |
+| Cloudflare Worker | `lean-eval-submission-server` | production | **TO BE PROVISIONED** |
 | Worker custom domain | `eval-submit-staging.lean-lang.org` | staging | **TO BE PROVISIONED** |
 | Worker custom domain | `eval-submit.lean-lang.org` | production | **TO BE PROVISIONED** |
 | GitHub state repository | `leanprover/lean-eval-state-staging` | staging | **TO BE CREATED** |
@@ -193,11 +193,13 @@ Minimum launch monitors:
 - delayed-release eligibility and publication failures.
 
 Rollback changes only Worker code/configuration. It does not revert GitHub
-State or other resources. To roll back code, identify the last known-good
-deployment, run `npx wrangler rollback --env production`, smoke-test
-`https://eval-submit.lean-lang.org/healthz`, and record the incident and version
-IDs here. Never rewrite State to match an older Worker; deploy a compatibility
-fix or append a corrective event.
+State or other resources. Use the manual
+[`rollback-worker.yml`](.github/workflows/rollback-worker.yml) workflow with a
+reviewed version ID and the commit marker expected from that version. It runs
+under the protected production environment, performs a noninteractive Wrangler
+rollback, and verifies the complete health payload. Record the incident and
+version IDs here. Never rewrite State to match an older Worker; deploy a
+compatibility fix or append a corrective event.
 
 | Drill / incident | Date | Result / link |
 | --- | --- | --- |
