@@ -136,9 +136,12 @@ disabled. These choices are not needed to deploy a health-only Worker with
 
 ### D7: live results-v2 migration
 
-The last local dry run preserved 1,275 of 1,275 records with no duplicate IDs
-and output digest
-`55038fddde2f16e850c64877117f58ce99bff620f3ba6fd1073f9abf2987336f`.
+The latest local dry run preserved 1,279 of 1,279 records at submissions commit
+`9d3fa0a138aa5bb667669b6c10dbe0c2d101b2bc`, with no duplicate IDs,
+source digest
+`8472888c040a40acfaaa2e596b3acd6a1ebfe62f4effdb2e519c17acf4f16e8c`, and
+output digest
+`30dd95781809d13791f0de2d5bd935b4fc77c4fac28d26a23373e370e878d988`.
 That evidence becomes stale if `main` changes.
 
 Authorization must name the fresh workflow run and approve its exact source
