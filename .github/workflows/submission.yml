@@ -110,14 +110,7 @@ jobs:
     # `ubuntu-latest-large` is not an escape hatch: measured on this org's
     # pool (2026-08-19, issue #1078) it reports the same 4 cores / 15 GiB
     # / 3 GiB swap as `ubuntu-latest`.
-    #
-    # TEMPORARY (issue #1078): #1077 alone is routed to a Namespace 32
-    # vCPU / 64 GB runner for a one-off evaluation, to get it scored and
-    # to measure what its build actually peaks at when lake parallelises
-    # across 32 cores. Pinned to the one issue number so no other
-    # submission is swept onto a paid runner while it builds. REVERT both
-    # this and the memory sampler below once that run finishes.
-    runs-on: ${{ github.event.issue.number == 1077 && 'nscloud-ubuntu-24.04-amd64-32x64' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     # 360 minutes is GitHub's per-job ceiling for hosted runners; set it
     # explicitly so genuinely long proofs run to the platform limit rather
     # than being cut off, and so the intended cap stays visible here.
@@ -145,15 +138,6 @@ jobs:
       audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}
       benchmark_commit: ${{ steps.benchmark.outputs.sha }}
     steps:
-      # TEMPORARY (issue #1078): record the runner shape and sample memory
-      # every 15s for the life of the job, so the build's real peak is
-      # known rather than inferred. Remove with the runs-on pin above.
-      - name: Start memory sampler
-        run: |
-          nproc
-          free -h
-          nohup bash -c 'while sleep 15; do head -3 /proc/meminfo; echo ---; done' > /tmp/mem.log 2>&1 &
-
       # This repo (lean-eval-submissions): supplies the pipeline scripts.
       # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -481,28 +465,6 @@ jobs:
             --output-dir /tmp/evaluate-out \
             --repo-root lean-eval \
             --shared-packages lean-eval/.lake/packages
-
-      # TEMPORARY (issue #1078): see the sampler at the top of this job.
-      - name: Report memory peak
-        if: always()
-        run: |
-          python3 - <<'PY'
-          import re
-          total = None
-          used = []
-          for block in open('/tmp/mem.log').read().split('---'):
-              t = re.search(r'MemTotal:\s+(\d+)', block)
-              a = re.search(r'MemAvailable:\s+(\d+)', block)
-              if t and a:
-                  total = int(t.group(1))
-                  used.append(total - int(a.group(1)))
-          if used:
-              print(f"samples: {len(used)} over {len(used) * 15 / 60:.0f} min")
-              print(f"runner total: {total / 1048576:.2f} GB")
-              print(f"peak used:    {max(used) / 1048576:.2f} GB")
-          else:
-              print("no samples collected")
-          PY
 
       - name: Copy frozen metadata through to record
         if: always()
