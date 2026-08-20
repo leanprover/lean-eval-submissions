@@ -14,6 +14,18 @@
         "submission_ref": "c81843f5adcb7e34c8e46e748465bfa4dfcfbcda",
         "submission_repo": "mlgraham/lean-eval-submission"
       },
+      "bvp_comparison": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1142,
+        "production_description": "Retry of bvp_comparison and sturm_separation, which failed evaluation in #1130/#1131 with no\nerror detail while sibling workspaces passed \u2014 consistent with the runner memory issue\ndocumented in #1078. This resubmission replaces `import Mathlib` with minimal targeted\nimports in both Submission.lean files to shrink the build/export footprint; the proofs are\nbyte-identical otherwise. Both are original proofs by Claude Fable 5 (Claude Code) under\nhuman direction (methods described in #1130/#1131); no published lean-eval solution\nconsulted. (Other workspaces on this branch are already recorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-20T02:42:13Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "42808fea2b805402ea022106b4150d355de77948",
+        "submission_repo": "mlgraham/lean-eval-submission"
+      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
         "issue_number": 1129,
@@ -36,6 +48,30 @@
         "submission_kind": "github_repo",
         "submission_public": true,
         "submission_ref": "8f92249fd1b60e2f734e6688cce0d113c177bb6b",
+        "submission_repo": "mlgraham/lean-eval-submission"
+      },
+      "posSemidef_map_exp": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1142,
+        "production_description": "Retry of bvp_comparison and sturm_separation, which failed evaluation in #1130/#1131 with no\nerror detail while sibling workspaces passed \u2014 consistent with the runner memory issue\ndocumented in #1078. This resubmission replaces `import Mathlib` with minimal targeted\nimports in both Submission.lean files to shrink the build/export footprint; the proofs are\nbyte-identical otherwise. Both are original proofs by Claude Fable 5 (Claude Code) under\nhuman direction (methods described in #1130/#1131); no published lean-eval solution\nconsulted. (Other workspaces on this branch are already recorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-20T02:42:13Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "42808fea2b805402ea022106b4150d355de77948",
+        "submission_repo": "mlgraham/lean-eval-submission"
+      },
+      "sturm_separation": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1142,
+        "production_description": "Retry of bvp_comparison and sturm_separation, which failed evaluation in #1130/#1131 with no\nerror detail while sibling workspaces passed \u2014 consistent with the runner memory issue\ndocumented in #1078. This resubmission replaces `import Mathlib` with minimal targeted\nimports in both Submission.lean files to shrink the build/export footprint; the proofs are\nbyte-identical otherwise. Both are original proofs by Claude Fable 5 (Claude Code) under\nhuman direction (methods described in #1130/#1131); no published lean-eval solution\nconsulted. (Other workspaces on this branch are already recorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-20T02:42:13Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "42808fea2b805402ea022106b4150d355de77948",
         "submission_repo": "mlgraham/lean-eval-submission"
       },
       "symplectic_matrix_det": {
