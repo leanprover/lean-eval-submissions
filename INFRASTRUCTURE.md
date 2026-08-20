@@ -119,13 +119,18 @@ GitHub environment `cloudflare-staging` must contain:
 | Name | Kind | Required scope |
 | --- | --- | --- |
 | `CLOUDFLARE_ACCOUNT_ID` | secret | Cloudflare account identifier |
-| `CLOUDFLARE_API_TOKEN` | secret | Workers Scripts edit for the new temporary account; no zone or DNS permission |
+| `CLOUDFLARE_API_TOKEN` | secret | Workers Scripts edit for the dedicated Lean Eval account; no zone or DNS permission |
 
 `cloudflare-production` contains the same names backed by a **different API
-token**, restricted to the production Worker as narrowly as Cloudflare
-permits. Each deployment token must cover only its environment's intake and
-broker Workers. Neither token may administer zones or unrelated account
-products. GitHub environment secrets are not exposed to pull-request checks.
+token**. Cloudflare's Workers Scripts permission is account-scoped, not
+script-scoped, so both tokens can edit the four Workers in this dedicated Lean
+Eval account. Environment separation still gives independent revocation and
+rotation, while the dedicated account keeps unrelated services outside that
+authority. Neither token may administer zones or other account products.
+GitHub environment secrets are not exposed to pull-request checks. See
+Cloudflare's [GitHub Actions authentication
+guide](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
+and [permission reference](https://developers.cloudflare.com/fundamentals/api/reference/permissions/).
 
 Both Cloudflare environments are restricted to protected branches. The
 `submission-dispatch-promotion` environment requires review by `kim-em`, is

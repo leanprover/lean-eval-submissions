@@ -5,6 +5,10 @@ credential operations that require a maintainer. It supplements
 [`INFRASTRUCTURE.md`](../INFRASTRUCTURE.md); the infrastructure ledger remains
 the source of truth after resources are created.
 
+For the short, current list of UI and secret-entry work, use
+[`overhaul-manual-setup.md`](overhaul-manual-setup.md). The longer sections
+below retain decision rationale and the full rollout sequence.
+
 Do not put token values, private keys, recovery material, or OAuth client
 secrets in this file, an issue, a pull request, or a terminal transcript.
 
@@ -450,8 +454,11 @@ tokens. Custom domains can be added later without changing the API contracts.
    Stop unless the selected account ID is present.
 
 2. In the Cloudflare dashboard, create distinct staging and production API
-   tokens. Restrict them to the selected account and Workers Scripts edit. Do
-   not grant zone permissions or reuse a personal global API key.
+   tokens. Restrict them to the dedicated `lean-eval` account and grant only
+   Workers Scripts edit. That permission is account-scoped rather than
+   per-script, so the dedicated account—not a fictitious per-Worker resource
+   filter—is the isolation boundary. Do not grant zone permissions or reuse a
+   personal global API key.
 
 3. Create the protected GitHub environments:
 
