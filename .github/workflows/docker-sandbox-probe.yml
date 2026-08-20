@@ -96,6 +96,25 @@ jobs:
           echo "containers still alive:"; docker ps --format '{{.Names}}' | grep -c sandbox-probe || true
           echo "stray sleeps on the host:"; pgrep -c -f 'sleep 300' || true
 
+      # The load-bearing assumption behind proposing a `fail_closed` config
+      # field for comparator: that landrun WITHOUT --best-effort refuses to
+      # run rather than running unconfined. --best-effort was documented as
+      # degrading silently and we still only found out by measuring, so
+      # measure this too.
+      - name: Does landrun fail closed without --best-effort?
+        run: |
+          set +e
+          go install github.com/zouuup/landrun/cmd/landrun@5ed4a3db3a4ad930d577215c6b9abaa19df7f99f
+          GOBIN="$(go env GOPATH)/bin"
+          export PATH="$GOBIN:$PATH"
+          mkdir -p /tmp/lr-work
+          echo "=== control: with --best-effort (what comparator passes today) ==="
+          landrun --best-effort --ro / --rwx /tmp/lr-work -- /usr/bin/true
+          echo "  best-effort exit=$? (0 everywhere; says nothing about confinement)"
+          echo "=== strict: without --best-effort ==="
+          landrun --ro / --rwx /tmp/lr-work -- /usr/bin/true
+          echo "  strict exit=$? (0 where Landlock works; NON-ZERO is what we need where it does not)"
+
       - name: Resource limits
         run: |
           set +e
