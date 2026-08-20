@@ -21,7 +21,7 @@ primary checkout is not the integration workspace.
 | `lean-eval-releases` | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` on `main`; publication disabled |
 | catalog, generator consumer, software verification | merged as `lean-eval#540`; merge commit `547b00ed345bc0737dd94847d6b67cb681b6178a` |
 | results v2, intake server, replay contracts | `lean-eval-submissions#1165` |
-| leaderboard v2 preview | `lean-eval-leaderboard#69` |
+| leaderboard v2 preview | merged as `lean-eval-leaderboard#69`; merge commit `8150f8e556743bb1b1773bc441c90258f0bc7e03` |
 
 The private broker and intake Workers are deployed in staging and production
 from commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`, with intake disabled and App,

@@ -121,6 +121,8 @@ one issue per lane.
       extractions pass and 87/89 of those build at LeanEval pins. Keep import
       blocked on the 11 extraction failures, two target incompatibilities,
       quoted-module decoder fix, unique-ID fix, and corrected 92-open set.
-- [ ] Reproduce the FC100 dependency audit before import.
+- [x] Reproduce the FC100 dependency audit before import: 100/100 declarations
+      resolved, 280 closure edges, no target-to-target dependency, and one
+      fail-closed `Erdos324.erdos_324.match_1` orphan recorded upstream.
 - [ ] Launch FC100/open-conjectures only after the FC-owned importer supplies a
       compatible output contract.
