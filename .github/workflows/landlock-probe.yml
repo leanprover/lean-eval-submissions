@@ -87,7 +87,7 @@ jobs:
           echo "--- virt ---"
           systemd-detect-virt 2>&1; systemd-detect-virt -c 2>&1
           echo "--- /.dockerenv ---"; ls -la /.dockerenv 2>&1
-          echo "--- pid 1 cgroup ---"; cat /proc/1/cgroup 2>&1 | head -5
+          echo "--- pid 1 cgroup ---"; head -5 /proc/1/cgroup 2>&1
           echo "--- pid 1 comm ---"; cat /proc/1/comm 2>&1
           echo "--- can we make an unprivileged userns? ---"
           unshare -Ur --map-root-user true; echo "unshare -Ur exit=$?"
