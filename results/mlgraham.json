@@ -1,6 +1,20 @@
 {
   "schema_version": 1,
   "solved": {
+    "github.com/mlgraham (Claude Fable 5)": {
+      "finite_graph_ramsey_theorem": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1129,
+        "production_description": "Original proof, produced for a pre-registered research gate. Claude Fable 5 (Claude Code),\nunder human direction, worked from the problem's Challenge.lean, the workspace's pinned\nMathlib (source search), and compiler feedback only \u2014 no published lean-eval solution to any\nproblem was consulted. (The same submitter maintains a separately-labeled packaging entry;\nthe buckets and branches are kept disjoint on purpose.) Method: a Finset-strengthened Ramsey\nstatement proved by double induction on r and s with the pivot-vertex pigeonhole\n(R(r+1,s+1) \u2264 R(r,s+1) + R(r+1,s) + 1), all within a single vertex type, then specialized to\nFin n with A = univ. Mathlib at this pin has no Ramsey theorem. Cost: 2 compile iterations,\n~17 minutes of model loop time, ~$0 marginal spend.",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-20T01:08:51Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "8d44d31c6bb221bed45749804fa18ec7fec79d71",
+        "submission_repo": "mlgraham/lean-eval-submission"
+      }
+    },
     "github.com/mlgraham \u2014 public accepted source, packaged (Claude Fable 5)": {
       "substInv_X_sub_X_sq_eq_catalan": {
         "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
