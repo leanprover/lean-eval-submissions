@@ -19,8 +19,8 @@ Target owner: leanprover organization administrators. Service code:
 | Cloudflare account | `lean-eval` (`a46b90978a1c29cc4795f30677e7e4b8`) | temporary shared | **PROVISIONED 2026-08-20** |
 | Cloudflare Worker | `lean-eval-submission-server-staging` | staging | **PROVISIONED 2026-08-20; INTAKE DISABLED** |
 | Cloudflare Worker | `lean-eval-submission-server` | production | **PROVISIONED 2026-08-20; INTAKE DISABLED** |
-| Private GitHub broker Worker | `lean-eval-github-broker-staging` | staging | **CODED; APP SECRETS AND DEPLOYMENT PENDING** |
-| Private GitHub broker Worker | `lean-eval-github-broker-production` | production | **CODED; APP SECRETS AND DEPLOYMENT PENDING** |
+| Private GitHub broker Worker | `lean-eval-github-broker-staging` | staging | **PROVISIONED 2026-08-20; APP SECRETS PENDING** |
+| Private GitHub broker Worker | `lean-eval-github-broker-production` | production | **PROVISIONED 2026-08-20; APP SECRETS PENDING** |
 | Temporary Worker route | `lean-eval-submission-server-staging.lean-eval.workers.dev` | staging | **ACTIVE 2026-08-20; INTAKE DISABLED** |
 | Temporary Worker route | `lean-eval-submission-server.lean-eval.workers.dev` | production | **ACTIVE 2026-08-20; INTAKE DISABLED** |
 | Target Worker custom domain | `eval-submit-staging.lean-lang.org` | staging | **DEFERRED; ZONE ABSENT** |

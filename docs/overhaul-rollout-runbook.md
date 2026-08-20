@@ -10,27 +10,25 @@ secrets in this file, an issue, a pull request, or a terminal transcript.
 
 ## Current implementation checkpoint
 
-The foundation commits are isolated from the user's primary checkout. Active
-Wave 2 work may remain as a reviewed working-tree diff until local commit
-authorization is given:
+The reviewed foundations and active pull requests are published. The user's
+primary checkout is not the integration workspace.
 
-| Repository / lane | Commit |
+| Repository / lane | Published commit or pull request |
 | --- | --- |
-| `lean-eval`, catalog | `2c4dc5395366306b24465a56f375d891ab599f8d` |
-| `lean-eval`, software-verification drafts | `7a85e1c9e1f10b963fab400018b0463e95ce64f4` |
-| `lean-eval`, extracted-generator consumer | `6168f7bcc1a3cf5bd5a2d7b776cc054b02fd9140` |
-| `lean-eval`, combined local integration | `24d5d9d` |
-| `lean-eval-generator` | `a726789` |
-| `lean-eval-submissions`, results v2 | `530925bb29e90123ba6052e81654091445e45c42` |
-| `lean-eval-submissions`, current integration | `529d685` plus the pending UUIDv7 archive bridge and this runbook |
-| production State | `8699eeddb248137ca33e002019554d61923528ca` |
-| staging State | `841911ef662d3856d254e33459d83bed3143d5b2` |
-| releases | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` |
-| leaderboard preview | `a21a9cd438c3ffaadbd04d5166a83713ca224ac5` |
+| `lean-eval-generator` | `a726789593eeac5c32ad82760061cd5bf6cae662` on `main` |
+| production State | `89cdf9bd163f451fa51c7695c14388e11e1d609d` on private `main` |
+| staging State | `6bfc9eb633c6c8bbaa2937708183d70fca7668fa` on private `main` |
+| `lean-eval-releases` | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` on `main`; publication disabled |
+| catalog, generator consumer, software verification | `lean-eval#540`, head `ff965b963691a123e1c6275771aa5d7b058423fc` |
+| results v2, intake server, replay contracts | `lean-eval-submissions#1165`, head `305813cd8746fad082c6f3c340f2cd135eebce10` |
+| leaderboard v2 preview | `lean-eval-leaderboard#69`, head `96a449ef6c000f4bed79b49eb4d52889cbe4bb69` |
 
-These are local commit identifiers until their repositories or branches are
-published. “Pending” content is not yet a commit. No live results migration or
-Cloudflare deployment has occurred.
+The private broker and intake Workers are deployed in staging and production
+from commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`, with intake disabled and App,
+OAuth, and State-writer credentials absent. Exact Worker version identifiers
+are recorded in `INFRASTRUCTURE.md`. The live results store has not been
+migrated: D7 still requires a fresh post-merge dry run and explicit approval of
+its exact source commit, record count, and output digest.
 
 ## Decisions required from maintainers
 
