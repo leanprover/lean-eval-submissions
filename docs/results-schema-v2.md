@@ -86,6 +86,12 @@ output digest, changed files, duplicate IDs, and an exact v1 projection check.
 `--expect-output-digest`. This makes applying a report to different live data
 fail closed.
 
+Run the workflow once with `apply=false` and review its report artifact. A
+later `apply=true` dispatch requires the report's exact source commit, source
+digest, record count, and output digest as workflow inputs. The apply run
+recomputes the report after acquiring the writer lock and refuses any mismatch;
+it never treats a report generated inside the apply run as human approval.
+
 The apply workflow and record jobs share the logical writer group
 `results-store-writer`. GitHub Actions concurrency is used to serialize
 migration runs, but not record jobs: Actions keeps only one pending run per

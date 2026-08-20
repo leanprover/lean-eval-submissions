@@ -17,6 +17,22 @@ on:
         required: true
         default: false
         type: boolean
+      expected_source_commit:
+        description: Exact source commit from the reviewed dry-run report (required for apply)
+        required: false
+        type: string
+      expected_source_digest:
+        description: Exact source digest from the reviewed dry-run report (required for apply)
+        required: false
+        type: string
+      expected_record_count:
+        description: Exact record count from the reviewed dry-run report (required for apply)
+        required: false
+        type: string
+      expected_output_digest:
+        description: Exact output digest from the reviewed dry-run report (required for apply)
+        required: false
+        type: string
 
 concurrency:
   group: results-store-writer
@@ -97,7 +113,11 @@ jobs:
         id: report
         run: |
           set -euo pipefail
-          SOURCE_COMMIT=$(git -C results-store rev-parse HEAD)
+          if [ -f results-store/.results-store-writer-lock.json ]; then
+            SOURCE_COMMIT=$(python -c 'import json; print(json.load(open("results-store/.results-store-writer-lock.json"))["source_commit"])')
+          else
+            SOURCE_COMMIT=$(git -C results-store rev-parse HEAD)
+          fi
           python results-store/scripts/migrate_results_v2.py \
             --results-dir results-store/results \
             --source-commit "$SOURCE_COMMIT" \
@@ -110,17 +130,46 @@ jobs:
           print(f"output_digest={report['canonical_output_digest']}")
           PY
 
-      - name: Apply exactly the reviewed in-run report
+      - name: Verify reviewed report expectations
+        if: inputs.apply
+        env:
+          EXPECTED_SOURCE_COMMIT: ${{ inputs.expected_source_commit }}
+          EXPECTED_SOURCE_DIGEST: ${{ inputs.expected_source_digest }}
+          EXPECTED_RECORD_COUNT: ${{ inputs.expected_record_count }}
+          EXPECTED_OUTPUT_DIGEST: ${{ inputs.expected_output_digest }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+
+          report = json.load(open("/tmp/results-v2-report.json"))
+          expected = {
+              "source_commit": os.environ["EXPECTED_SOURCE_COMMIT"],
+              "source_digest": os.environ["EXPECTED_SOURCE_DIGEST"],
+              "source_record_count": os.environ["EXPECTED_RECORD_COUNT"],
+              "canonical_output_digest": os.environ["EXPECTED_OUTPUT_DIGEST"],
+          }
+          for field, value in expected.items():
+              if not value:
+                  raise SystemExit(f"missing reviewed expectation for {field}")
+              actual = str(report[field])
+              if value != actual:
+                  raise SystemExit(
+                      f"reviewed {field} changed: expected {value!r}, got {actual!r}"
+                  )
+          PY
+
+      - name: Apply exactly the reviewed dry-run report
         if: inputs.apply
         run: |
           set -euo pipefail
           python results-store/scripts/migrate_results_v2.py \
             --results-dir results-store/results \
-            --source-commit "$(git -C results-store rev-parse HEAD)" \
+            --source-commit "${{ inputs.expected_source_commit }}" \
             --apply \
-            --expect-source-digest "${{ steps.report.outputs.source_digest }}" \
-            --expect-record-count "${{ steps.report.outputs.record_count }}" \
-            --expect-output-digest "${{ steps.report.outputs.output_digest }}" \
+            --expect-source-digest "${{ inputs.expected_source_digest }}" \
+            --expect-record-count "${{ inputs.expected_record_count }}" \
+            --expect-output-digest "${{ inputs.expected_output_digest }}" \
             --report /tmp/results-v2-applied-report.json
           git -C results-store add results/
           git -C results-store rm .results-store-writer-lock.json

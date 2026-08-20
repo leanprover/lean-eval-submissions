@@ -30,6 +30,12 @@ class MigrationWorkflowStructureTests(unittest.TestCase):
         self.assertIn("--report /tmp/results-v2-report.json", MIGRATION)
 
     def test_apply_is_bound_to_fresh_report_and_removes_lock(self) -> None:
+        self.assertIn("expected_source_commit:", MIGRATION)
+        self.assertIn("expected_source_digest:", MIGRATION)
+        self.assertIn("expected_record_count:", MIGRATION)
+        self.assertIn("expected_output_digest:", MIGRATION)
+        self.assertIn("Verify reviewed report expectations", MIGRATION)
+        self.assertIn("missing reviewed expectation", MIGRATION)
         self.assertIn("--expect-source-digest", MIGRATION)
         self.assertIn("--expect-record-count", MIGRATION)
         self.assertIn("--expect-output-digest", MIGRATION)
@@ -43,7 +49,11 @@ class MigrationWorkflowStructureTests(unittest.TestCase):
         )
         self.assertLess(
             MIGRATION.index("Create fresh migration report"),
-            MIGRATION.index("Apply exactly the reviewed in-run report"),
+            MIGRATION.index("Verify reviewed report expectations"),
+        )
+        self.assertLess(
+            MIGRATION.index("Verify reviewed report expectations"),
+            MIGRATION.index("Apply exactly the reviewed dry-run report"),
         )
 
     def test_only_recorder_app_can_push_migration(self) -> None:
