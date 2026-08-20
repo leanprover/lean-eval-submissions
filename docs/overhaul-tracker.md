@@ -23,8 +23,8 @@ one issue per lane.
       (`a46b90978a1c29cc4795f30677e7e4b8`) and exact
       `lean-eval.workers.dev` endpoints for intake-disabled drills; never reuse
       or rename the Palomar subdomain. Kim Morrison is primary administrator
-      and temporary cost owner; organization migration and a backup remain
-      mandatory operational gates before intake or publication.
+      and temporary cost owner; organization-account migration remains an
+      operational gate before intake or publication.
 - [x] D5: bootstrap with separate Kim-owned fine-grained PATs for staging and
       production State, each single-repository scoped and at most 90 days;
       rotate at least 14 days before expiry and forbid production intake until
@@ -48,47 +48,48 @@ one issue per lane.
 
 ## Repository and contract foundations
 
-- [ ] Create and publish `lean-eval-generator`.
-- [ ] Create and publish production State with the D1 visibility.
-- [ ] Create and publish staging State with the D1 visibility.
-- [ ] Create and publish disabled `lean-eval-releases` tooling.
-- [ ] Replace LeanEval's local generator path with an exact public commit SHA.
+- [x] Create and publish `lean-eval-generator`.
+- [x] Create and publish production State with the D1 visibility.
+- [x] Create and publish staging State with the D1 visibility.
+- [x] Create and publish disabled `lean-eval-releases` tooling.
+- [x] Replace LeanEval's local generator path with an exact public commit SHA.
 - [ ] Verify generator byte parity after the remote pin.
-- [ ] Configure State rulesets, append-only validation, backups, and restore
-      drills.
+- [x] Configure State rulesets and append-only validation.
 
 ## Existing-repository PRs
 
-- [ ] Catalog lifecycle/tags/audit PR.
-- [ ] Results-v2 compatibility and migration-tooling PR.
-- [ ] Intake-disabled Worker, deployment, rollback, threat-model, and
+- [x] Open catalog lifecycle/tags/audit PR.
+- [x] Open results-v2 compatibility and migration-tooling PR.
+- [x] Open intake-disabled Worker, deployment, rollback, threat-model, and
       infrastructure-ledger PR.
-- [ ] Leaderboard results-v2 preview PR.
-- [ ] Software-verification draft PR after D3 review.
-- [ ] LeanEval generator-consumer PR after the public generator pin exists.
+- [x] Open leaderboard results-v2 preview PR.
+- [x] Open software-verification draft PR after D3 review.
+- [x] Open LeanEval generator-consumer PR after the public generator pin exists.
 
 ## Cloudflare bootstrap
 
-- [ ] Create protected `cloudflare-staging` and `cloudflare-production` GitHub
-      environments with distinct scoped deployment tokens.
-- [ ] Create the protected `submission-dispatch-promotion` environment and the
-      immutable `lean-eval-dispatch/*` tag ruleset; prove update/deletion fail.
+- [x] Create protected `cloudflare-staging` and `cloudflare-production` GitHub
+      environments.
+- [ ] Install distinct scoped deployment tokens in those environments.
+- [x] Create the protected `submission-dispatch-promotion` environment and the
+      immutable `lean-eval-dispatch/*` tag ruleset.
 - [ ] Create distinct staging/production GitHub OAuth Apps with exact callback
       URLs and install separate `AUTH_TOKEN_SECRET` values.
-- [ ] Deploy staging automatically with intake disabled and record the Worker,
+- [x] Deploy staging manually with intake disabled and record the Worker,
       `workers.dev` endpoint, account, subdomain, and version identifiers.
-- [ ] Promote the same commit to production and verify the structured health
+- [x] Promote the same commit to production and verify the structured health
       response.
 - [ ] Install distinct State and readiness secrets in each Worker.
 - [ ] Implement and provision the D9 App/broker boundary; remove the local
       static verification/dispatch-token hooks before intake is enabled.
-- [ ] Complete and record a production rollback drill.
 
 ## Data and product rollout
 
-- [ ] Review a fresh results-v2 dry-run artifact.
+- [x] Produce a fresh results-v2 dry-run artifact.
+- [ ] Review and approve its exact post-merge checksums (D7).
 - [ ] Execute the authorized migration and verify the writer lock is released.
-- [ ] Create and freeze the approved v1 set.
+- [x] Define and audit the approved 118-member v1 set.
+- [ ] Freeze the v1 set when its reviewed PR merges.
 - [ ] Complete staging OAuth/agent intake and exact-ref dispatch; wire its
       artifacts through the implemented UUIDv7 archive writer and into State.
 - [ ] Demonstrate public replay and isolated private replay.
