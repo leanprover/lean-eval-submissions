@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "solved": {
+    "github.com/mlgraham \u2014 public accepted source, packaged (Claude Fable 5)": {
+      "substInv_X_sub_X_sq_eq_catalan": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1128,
+        "production_description": "This is a packaged copy of a published, previously accepted solution \u2014 not an original proof.\nSource: the `savarin-6-hour-gpt-5.6-speedrun` entry's public repository\n(savarin/lean-eval-speedrun @ ab459a1ea7a89ec6db93da77d522ea384a45d0aa, Apache-2.0, published\n2026-08-17), whose solution to this problem was accepted by the comparator. Claude Fable 5\n(Claude Code), under human direction, located the published source via the public results\nstore, verified its Apache-2.0 license, regenerated a fresh workspace from the current\nleanprover/lean-eval benchmark, copied `Submission.lean`/`Submission/Helpers.lean` unmodified,\nand rebuilt locally against the current trusted `Challenge.lean` (`lake build`; the full\ncomparator replay was left to this pipeline because `landrun` is Linux-only). The original\nLICENSE is included in the submission repository. Purpose: pipeline validation for a\npre-registered research gate; est. cost ~$0 API spend, <1h combined human/AI time for this\nproblem.",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-20T00:08:13Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "2d317a57a82c688aabfa9c872c156fd87706b21e",
+        "submission_repo": "mlgraham/lean-eval-submission"
+      }
+    }
+  },
+  "user": "mlgraham"
+}
