@@ -42,6 +42,20 @@ jobs:
           cache-dependency-path: server/package-lock.json
 
       - run: npm ci
+      - name: Validate rollback inputs
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          TARGET_VERSION: ${{ inputs.version_id }}
+        run: |
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "expected_commit must be a full lowercase Git SHA" >&2
+            exit 1
+          fi
+          if [[ ! "$TARGET_VERSION" =~ ^[0-9a-f-]+$ ]]; then
+            echo "version_id must contain only lowercase hexadecimal digits and hyphens" >&2
+            exit 1
+          fi
+
       - name: Roll back production
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -49,16 +63,13 @@ jobs:
           TARGET_VERSION: ${{ inputs.version_id }}
         run: >-
           npx wrangler rollback "$TARGET_VERSION" --env production
+          --yes
           --message "Manual rollback by $GITHUB_ACTOR from $GITHUB_SHA"
 
       - name: Verify restored production version
         env:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
         run: |
-          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
-            echo "expected_commit must be a full lowercase Git SHA" >&2
-            exit 1
-          fi
           body=$(curl --fail --retry 6 --retry-all-errors --retry-delay 5 \
             https://eval-submit.lean-lang.org/healthz)
           HEALTH_BODY="$body" python - <<'PY'
