@@ -56,7 +56,7 @@ required.
 
 At the 2026-08-20 audit snapshot there are 289 visible formalization problems:
 
-- 94 have no accepted solve;
+- 91 have no accepted solve;
 - 174 have fewer than five accepted solves;
 - 121 have fewer than five accepted solves **and no recorded public
   submission**;
