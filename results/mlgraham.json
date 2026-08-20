@@ -50,6 +50,18 @@
         "submission_ref": "fbc41ae6c87bb920db42d92f3a4711e8db0d56f0",
         "submission_repo": "mlgraham/lean-eval-submission"
       },
+      "dirichlet_eigenvalues_eq_nat_sq": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1156,
+        "production_description": "Original proof of dirichlet_eigenvalues_eq_nat_sq. Claude Fable 5 (Claude Code), under human\ndirection, from the Challenge, Mathlib source search, and compiler feedback only; no published\nlean-eval solution consulted. Method: a second-order IVP uniqueness lemma obtained by passing\nto the first-order system in R x R with a continuous-linear vector field and Gronwall's\ntrajectory estimate (dist_le_of_trajectories_ODE); then trichotomy on lam with explicit\ncomparison solutions (sinh / linear / sine scaled by the initial slope), so the boundary\ncondition at pi forces either a vanishing initial slope (contradicting the interior\nnonvanishing point) or sin(sqrt(lam) pi) = 0, giving lam = n^2 via sin_eq_zero_iff; the\nconverse exhibits sin(n x). Slim imports per the evaluator-memory finding. Cost: 3 compile\niterations, ~50 minutes of model loop time. (Earlier workspaces on this branch are already\nrecorded; results are sticky.)\n\nNote: this is a retry of #1153, whose evaluation was canceled mid-run (workflow logs show\n`Run evaluate_submission.py: The operation was canceled` after ~45 min, plus an early\n`Mint lean-eval-bot installation token: Not Found` error) \u2014 the generic overlay-collision\ncomment appears to be the catch-all failure message. The submission content is unchanged.",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-20T05:57:01Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "d561d4168e59d26ac7da7e25d65ea41580e440a6",
+        "submission_repo": "mlgraham/lean-eval-submission"
+      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
         "issue_number": 1129,
