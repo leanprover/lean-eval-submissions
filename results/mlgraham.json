@@ -2,6 +2,18 @@
   "schema_version": 1,
   "solved": {
     "github.com/mlgraham (Claude Fable 5)": {
+      "banach_alaoglu_bourbaki": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1139,
+        "production_description": "Original proof of banach_alaoglu_bourbaki (Bourbaki's locally convex extension of\nBanach-Alaoglu, absent from Mathlib per the problem's own docstring). Claude Fable 5 (Claude\nCode), under human direction, worked from the Challenge, Mathlib source search, and compiler\nfeedback only; no published lean-eval solution consulted. Method: choose an open absolutely\nconvex V inside the given neighborhood (nhds_hasBasis_absConvex_open), take p := gaugeSeminorm\nof V, build a type synonym of E carrying p as a SeminormedAddCommGroup/NormedSpace structure,\napply Mathlib's seminormed Banach-Alaoglu (WeakDual.isCompact_polar) to the unit ball there,\nand transport compactness through the pointwise-continuous inclusion of the p-dual into\nWeakDual of E; the weak-star polar of U is closed and contained in that compact image. Cost:\n9 compile iterations, ~45 minutes of model loop time, ~$0 marginal spend. (Earlier workspaces\non this branch are already recorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-20T02:20:18Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "c81843f5adcb7e34c8e46e748465bfa4dfcfbcda",
+        "submission_repo": "mlgraham/lean-eval-submission"
+      },
       "finite_graph_ramsey_theorem": {
         "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
         "issue_number": 1129,
