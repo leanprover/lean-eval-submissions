@@ -38,6 +38,7 @@ import {
   GitHubProviderError,
   type GitHubIdentity,
 } from "./github-provider";
+import { githubBrokerFetch } from "./github-broker-client";
 import { type WritableStateEvent } from "./state-event";
 import {
   type DispatchOutbox,
@@ -55,6 +56,7 @@ export type RuntimeEnv = Omit<
   | "DISPATCH_WORKFLOW"
   | "DISPATCH_WORKFLOW_REF"
   | "GITHUB_DISPATCH_TOKEN"
+  | "GITHUB_BROKER"
   | "GITHUB_OAUTH_CLIENT_ID"
   | "GITHUB_OAUTH_CLIENT_SECRET"
   | "GITHUB_STATE_TOKEN"
@@ -74,6 +76,7 @@ export type RuntimeEnv = Omit<
     DISPATCH_WORKFLOW?: string;
     DISPATCH_WORKFLOW_REF?: string;
     GITHUB_DISPATCH_TOKEN?: string;
+    GITHUB_BROKER?: Fetcher;
     GITHUB_OAUTH_CLIENT_ID?: string;
     GITHUB_OAUTH_CLIENT_SECRET?: string;
     GITHUB_STATE_TOKEN?: string;
@@ -265,7 +268,13 @@ function nowSeconds(dependencies: ApiDependencies): number {
 }
 
 function provider(env: RuntimeEnv, dependencies: ApiDependencies): GitHubProvider {
-  return dependencies.provider ?? new GitHubProvider(undefined, env.GITHUB_VERIFICATION_TOKEN);
+  if (dependencies.provider) return dependencies.provider;
+  return new GitHubProvider(
+    undefined,
+    env.GITHUB_VERIFICATION_TOKEN,
+    env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "source") : undefined,
+    env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "dispatch") : undefined,
+  );
 }
 
 function state(env: RuntimeEnv, dependencies: ApiDependencies): StateAccess {
@@ -357,7 +366,7 @@ function requireDispatchConfiguration(env: RuntimeEnv, dependencies: ApiDependen
   if (!/^lean-eval-dispatch\/[0-9a-f]{40}$/.test(env.DISPATCH_WORKFLOW_REF ?? "")) {
     throw new GitHubProviderError(503, "immutable dispatch workflow tag is not configured");
   }
-  if (!dependencies.dispatch && !env.GITHUB_DISPATCH_TOKEN) {
+  if (!dependencies.dispatch && !env.GITHUB_DISPATCH_TOKEN && !env.GITHUB_BROKER) {
     throw new GitHubProviderError(503, "exact-ref dispatch is not configured");
   }
 }

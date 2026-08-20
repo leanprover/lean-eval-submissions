@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lean-eval-github-broker",
+  "main": "src/broker-entry.ts",
+  "compatibility_date": "2026-08-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "env": {
+    "staging": {
+      "workers_dev": false,
+      "preview_urls": false,
+      "vars": {
+        "DEPLOYED_COMMIT": "development",
+        "DEPLOYMENT_ENVIRONMENT": "staging",
+        "DISPATCH_REPOSITORY": "leanprover/lean-eval-submissions",
+        "DISPATCH_WORKFLOW": "submission.yml"
+      }
+    },
+    "production": {
+      "workers_dev": false,
+      "preview_urls": false,
+      "vars": {
+        "DEPLOYED_COMMIT": "development",
+        "DEPLOYMENT_ENVIRONMENT": "production",
+        "DISPATCH_REPOSITORY": "leanprover/lean-eval-submissions",
+        "DISPATCH_WORKFLOW": "submission.yml"
+      }
+    }
+  }
+}

@@ -53,7 +53,8 @@ one issue per lane.
 - [x] Create and publish staging State with the D1 visibility.
 - [x] Create and publish disabled `lean-eval-releases` tooling.
 - [x] Replace LeanEval's local generator path with an exact public commit SHA.
-- [ ] Verify generator byte parity after the remote pin.
+- [x] Verify generator byte parity after the remote pin (theorem- and
+      definition-hole fixtures, 10/10 files each).
 - [x] Configure State rulesets and append-only validation.
 
 ## Existing-repository PRs
@@ -82,8 +83,12 @@ one issue per lane.
 - [x] Promote the same commit to production and verify the structured health
       response.
 - [ ] Install distinct State and readiness secrets in each Worker.
-- [ ] Implement and provision the D9 App/broker boundary; remove the local
-      static verification/dispatch-token hooks before intake is enabled.
+- [x] Implement the D9 private service-binding broker and separate source and
+      dispatch authority paths.
+- [ ] Create/install the two Apps and provision their broker secrets; keep the
+      local static verification/dispatch-token hooks absent in production.
+- [ ] Replace or separately authorize the private-gist headless-agent proof;
+      installation tokens cannot read submitter-owned private gists.
 
 ## Data and product rollout
 

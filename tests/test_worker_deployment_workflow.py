@@ -11,6 +11,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEPLOY = (ROOT / ".github/workflows/deploy-worker.yml").read_text(encoding="utf-8")
 ROLLBACK = (ROOT / ".github/workflows/rollback-worker.yml").read_text(encoding="utf-8")
 WRANGLER = json.loads((ROOT / "server/wrangler.jsonc").read_text(encoding="utf-8"))
+BROKER_WRANGLER = json.loads(
+    (ROOT / "server/wrangler.broker.jsonc").read_text(encoding="utf-8")
+)
 WORKER_APP = (ROOT / "server/src/app.ts").read_text(encoding="utf-8")
 WORKER_ENTRYPOINT = (ROOT / "server/src/index.ts").read_text(encoding="utf-8")
 
@@ -70,6 +73,31 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertEqual(production["triggers"]["crons"], ["* * * * *"])
         self.assertIn("env.API_RATE_LIMITER.limit({ key })", WORKER_APP)
         self.assertIn("handleScheduled(env, controller.scheduledTime)", WORKER_ENTRYPOINT)
+
+    def test_private_brokers_are_bound_and_deployed_before_intake_workers(self) -> None:
+        for environment in ("staging", "production"):
+            with self.subTest(environment=environment):
+                service = WRANGLER["env"][environment]["services"]
+                self.assertEqual(
+                    service,
+                    [
+                        {
+                            "binding": "GITHUB_BROKER",
+                            "service": f"lean-eval-github-broker-{environment}",
+                        }
+                    ],
+                )
+                broker = BROKER_WRANGLER["env"][environment]
+                self.assertIs(broker["workers_dev"], False)
+                self.assertIs(broker["preview_urls"], False)
+                self.assertNotIn("routes", broker)
+                self.assertNotIn("SOURCE_APP_PRIVATE_KEY", broker["vars"])
+                self.assertNotIn("DISPATCH_APP_PRIVATE_KEY", broker["vars"])
+                deploy_block = DEPLOY.split(
+                    f"- name: Deploy {environment} GitHub broker", 1
+                )[1].split(f"- name: Deploy {environment} submission Worker", 1)[0]
+                self.assertIn("wrangler.broker.jsonc", deploy_block)
+                self.assertIn(f"--env {environment}", deploy_block)
 
     def test_temporary_workers_dev_routes_are_exact_and_intake_disabled(self) -> None:
         staging = WRANGLER["env"]["staging"]

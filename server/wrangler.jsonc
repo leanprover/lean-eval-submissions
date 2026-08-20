@@ -22,6 +22,12 @@
           "simple": { "limit": 30, "period": 60 }
         }
       ],
+      "services": [
+        {
+          "binding": "GITHUB_BROKER",
+          "service": "lean-eval-github-broker-staging"
+        }
+      ],
       "triggers": { "crons": ["* * * * *"] },
       "vars": {
         "DEPLOYED_COMMIT": "development",
@@ -43,6 +49,12 @@
           "name": "API_RATE_LIMITER",
           "namespace_id": "24012002",
           "simple": { "limit": 30, "period": 60 }
+        }
+      ],
+      "services": [
+        {
+          "binding": "GITHUB_BROKER",
+          "service": "lean-eval-github-broker-production"
         }
       ],
       "triggers": { "crons": ["* * * * *"] },

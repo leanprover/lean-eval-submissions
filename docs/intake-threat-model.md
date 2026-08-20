@@ -57,11 +57,11 @@ publicly attributable State events.
 | --- | --- |
 | OAuth login CSRF or callback substitution | One-time state bound to the initiating session, exact callback allowlist, expiry, and reuse tests. |
 | Stolen browser token | Minimal scopes, immediate verification, never log or persist the token, redact upstream bodies. |
-| Agent impersonation | Commit/tag/gist challenge proof, owner equality, signed expiry, nonce-consumption race test. |
+| Agent impersonation | The current commit/tag/gist challenge remains disabled because installation tokens cannot read private gists; enable only after a reviewed App-verifiable replacement, with owner equality, signed expiry, and nonce-consumption race tests. |
 | Ref movement or repository swap | Resolve and record the source's exact 40-character commit. GitHub dispatch accepts only branch/tag refs, so the workflow uses a protected `lean-eval-dispatch/<commit>` tag, carries the embedded commit as an input, and checks it against `GITHUB_SHA` before any source access. |
 | SSRF through source metadata | Worker never fetches source; downstream fetcher accepts only canonical GitHub repository or gist forms already validated by the secure pipeline. |
 | Duplicate or ambiguous requests | Stable idempotency key, immutable ID-derived event path, byte-equivalent replay success, non-forced compare-and-swap update. |
-| State corruption | Exact event schemas, causal/state-transition materialization, append-only PR and push monitoring, protected branch, off-platform backup. |
+| State corruption | Exact event schemas, causal/state-transition materialization, append-only validation, and protected branches. |
 | Credential escalation | Separate least-privilege staging/production credentials scoped to one State repository; no workflow/repository administration permission. |
 | Readiness denial of service | Secret-authenticated readiness, short cache, bounded GitHub requests, monitoring. |
 | Intake abuse | Cloudflare Rate Limiting binding keyed by route and a hashed credential or multi-signal anonymous actor key; distinct staging/production namespaces; binding denial or error fails closed with `429`. |
@@ -70,15 +70,16 @@ publicly attributable State events.
 | Private-source disclosure | Worker never handles source; encrypted archival precedes evaluation; no plaintext artifacts; release requires the separate embargo/key gate. |
 | Direct workflow-dispatch bypass | Server-only inputs are exact-field decoded again in Python; workflow-tag commit, source visibility, and source commit are revalidated; only the requested problem/revision is recordable; UUID archive locator is mandatory. |
 
-## Credential decision still required
+## Credential provisioning still required
 
 Agent tag verification for private repositories and server workflow dispatch
-cannot use the discarded browser OAuth token. Production must choose either a
-narrow service-binding GitHub App token broker (preferred) or reviewed
-in-Worker App JWT/token minting. Static verification/dispatch token hooks are
-local-contract scaffolding only. With those credentials absent, requests fail
-with `503`; with `INTAKE_ENABLED=false`, every `/api/` route fails before auth
-or provider work. Broadening OAuth to `repo` is not an acceptable fallback.
+cannot use the discarded browser OAuth token. The selected implementation is a
+private Cloudflare service-binding broker with separate source-reader and
+workflow-dispatch Apps. Static verification/dispatch token hooks are
+local-contract scaffolding only. The Apps and secrets still require operator
+creation; with those credentials absent, requests fail with `503`, and with
+`INTAKE_ENABLED=false`, every `/api/` route fails before auth or provider work.
+Broadening OAuth to `repo` or `gist` is not an acceptable fallback.
 
 ## Launch gates
 
@@ -89,10 +90,9 @@ Before `INTAKE_ENABLED` changes to `true`, reviewers must have evidence for:
 2. end-to-end synthetic staging intake through archive, evaluation, results v2,
    and State materialization;
 3. abuse controls and metadata size/encoding limits;
-4. the combined per-submission replay/release key design and recovery drill;
-5. State backup and restore, Worker rollback, credential rotation, and CAS
-   contention drills; and
-6. an incident owner and alert path recorded in `INFRASTRUCTURE.md`.
+4. the combined per-submission replay/release key design;
+5. State validation and CAS-contention tests; and
+6. an operational owner recorded in `INFRASTRUCTURE.md`.
 
 Issue intake remains available throughout the shadow period. Enabling the
 Worker does not authorize closing the issue form; the four-week and adoption

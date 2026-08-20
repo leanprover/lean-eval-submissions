@@ -56,10 +56,19 @@ async function jsonResponse(response: Response, label: string): Promise<Record<s
 export class GitHubProvider {
   readonly #fetcher: ProviderFetch;
   readonly #verificationToken: string | undefined;
+  readonly #verificationFetcher: ProviderFetch | undefined;
+  readonly #dispatchFetcher: ProviderFetch | undefined;
 
-  constructor(fetcher: ProviderFetch = fetch, verificationToken?: string) {
+  constructor(
+    fetcher: ProviderFetch = fetch,
+    verificationToken?: string,
+    verificationFetcher?: ProviderFetch,
+    dispatchFetcher?: ProviderFetch,
+  ) {
     this.#fetcher = fetcher;
     this.#verificationToken = verificationToken;
+    this.#verificationFetcher = verificationFetcher;
+    this.#dispatchFetcher = dispatchFetcher;
   }
 
   async exchangeOAuth(
@@ -106,10 +115,10 @@ export class GitHubProvider {
   }
 
   async repository(repository: string): Promise<GitHubRepository> {
-    if (!this.#verificationToken) {
+    if (!this.#verificationToken && !this.#verificationFetcher) {
       throw new GitHubProviderError(503, "source verification credential is not configured");
     }
-    const response = await this.#fetcher(`${API}/repos/${repository}`, {
+    const response = await (this.#verificationFetcher ?? this.#fetcher)(`${API}/repos/${repository}`, {
       headers: providerHeaders(this.#verificationToken),
       signal: AbortSignal.timeout(5000),
     });
@@ -124,14 +133,16 @@ export class GitHubProvider {
   }
 
   async verifyTag(repository: string, tag: string, expectedCommit: string): Promise<void> {
-    if (!this.#verificationToken) {
+    if (!this.#verificationToken && !this.#verificationFetcher) {
       throw new GitHubProviderError(503, "source verification credential is not configured");
     }
     if (!/^lean-eval\/[0-9a-f-]{36}$/.test(tag) || !COMMIT.test(expectedCommit)) {
       throw new GitHubProviderError(400, "tag proof fields are invalid");
     }
     const headers = providerHeaders(this.#verificationToken);
-    const refResponse = await this.#fetcher(`${API}/repos/${repository}/git/ref/tags/${encodeURIComponent(tag)}`, {
+    headers.set("x-lean-eval-expected-commit", expectedCommit);
+    const verifiedFetch = this.#verificationFetcher ?? this.#fetcher;
+    const refResponse = await verifiedFetch(`${API}/repos/${repository}/git/ref/tags/${encodeURIComponent(tag)}`, {
       headers,
       signal: AbortSignal.timeout(5000),
     });
@@ -142,7 +153,7 @@ export class GitHubProvider {
       if (typeof target.sha !== "string" || !COMMIT.test(target.sha)) {
         throw new GitHubProviderError(502, "annotated tag object was invalid");
       }
-      const tagResponse = await this.#fetcher(`${API}/repos/${repository}/git/tags/${target.sha}`, {
+      const tagResponse = await verifiedFetch(`${API}/repos/${repository}/git/tags/${target.sha}`, {
         headers,
         signal: AbortSignal.timeout(5000),
       });
@@ -159,7 +170,10 @@ export class GitHubProvider {
   }
 
   async verifySecretGist(gistId: string, login: string, challenge: string): Promise<GitHubIdentity> {
-    const response = await this.#fetcher(`${API}/gists/${gistId}`, {
+    if (!this.#verificationToken && !this.#verificationFetcher) {
+      throw new GitHubProviderError(503, "source verification credential is not configured");
+    }
+    const response = await (this.#verificationFetcher ?? this.#fetcher)(`${API}/gists/${gistId}`, {
       headers: providerHeaders(this.#verificationToken),
       signal: AbortSignal.timeout(5000),
     });
@@ -183,9 +197,12 @@ export class GitHubProvider {
   }
 
   async dispatch(token: string, request: Request): Promise<void> {
+    if (!token && !this.#dispatchFetcher) {
+      throw new GitHubProviderError(503, "workflow dispatch credential is not configured");
+    }
     const headers = providerHeaders(token);
     headers.set("content-type", "application/json");
-    const response = await this.#fetcher(request.url, {
+    const response = await (this.#dispatchFetcher ?? this.#fetcher)(request.url, {
       method: request.method,
       headers,
       body: await request.text(),

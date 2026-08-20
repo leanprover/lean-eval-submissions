@@ -42,10 +42,9 @@ Environments named `cloudflare-staging` and `cloudflare-production` hold their
 own deployment credentials. See [`../INFRASTRUCTURE.md`](../INFRASTRUCTURE.md)
 for the complete inventory, ownership, setup, and recovery record.
 The temporary intake-disabled rollout uses the isolated `lean-eval.workers.dev`
-account subdomain. Preview URLs remain disabled. These endpoints exist only
-for deployment and rollback drills; custom-domain routing and every drill must
-be repeated after the service moves to the organization-controlled
-`lean-lang.org` zone account.
+account subdomain. Preview URLs remain disabled. The provider-neutral API,
+State, archive, and broker contracts allow a later move to an organization
+account or another provider without changing stable identities.
 The authentication and source-boundary design is recorded in
 [`../docs/intake-threat-model.md`](../docs/intake-threat-model.md); every launch
 gate there remains mandatory while intake is disabled.
@@ -97,17 +96,33 @@ the matching `authentication.nonce_consumed`,
 `submission.metadata_amended`, and `submission.publication_changed` schemas
 and materializer before this Worker can be enabled.
 
-## Deliberately unresolved credential choice
+## GitHub App broker boundary
 
-Private-repository visibility/tag verification and Actions dispatch require a
-short-lived GitHub App credential or a broker. The product decision is whether
-to use a narrowly scoped service-binding token broker (recommended) or mint
-installation tokens in the Worker. Static `GITHUB_VERIFICATION_TOKEN` and
-`GITHUB_DISPATCH_TOKEN` hooks exist only to make the local contract testable;
-they are not an approved production credential design. The safe default is to
-leave both absent: submission routes return `503`, and Wrangler keeps
-`INTAKE_ENABLED=false`. Do not request broad OAuth `repo` scope as a shortcut;
-browser OAuth intentionally requests only `read:user`.
+The approved implementation puts separate source-reader and workflow-dispatch
+GitHub App private keys in a private `lean-eval-github-broker-{environment}`
+Worker. The public intake Worker reaches it only through the `GITHUB_BROKER`
+service binding and sends a strict v1 request containing an audience,
+authority, repository, operation, and immutable workflow/source commit where
+applicable. The broker mints repository-scoped, one-hour-or-shorter
+installation tokens, rejects every non-allowlisted GitHub path, and never
+returns a token to intake. Its HTTP protocol is deliberately provider-neutral
+at the intake boundary: a later provider can implement the same two authority
+operations without changing submission IDs, State, or API routes.
+
+Static `GITHUB_VERIFICATION_TOKEN` and `GITHUB_DISPATCH_TOKEN` hooks remain only
+for local contract tests; they are not an approved production credential
+design. The two Apps and their broker secrets are not yet provisioned, so the
+safe default remains `503` with `INTAKE_ENABLED=false`. Do not request broad
+OAuth `repo` scope as a shortcut; browser OAuth intentionally requests only
+`read:user`.
+
+GitHub App installation tokens cannot read a submitter's private gist. The
+current headless-agent gist proof therefore remains launch-disabled rather
+than silently requesting user-token or broad gist authority. Browser OAuth
+intake and repository/tag verification do not depend on that proof. Before
+agent intake is enabled, replace it with an explicitly reviewed proof that the
+source-reader App can verify, or separately approve a GitHub App user-token
+flow.
 
 The local workflow emits a digest-verified archive locator artifact, but no
 Actions credential is authorized to append the corresponding archive event to

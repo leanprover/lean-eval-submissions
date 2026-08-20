@@ -132,13 +132,12 @@ Wrangler is currently authenticated to account
 `d789bf36d237e0cb313be59b927c82bd` (`Kim@lean-fro.org's Account`). That does
 not establish ownership of the `lean-lang.org` zone.
 
-Recommended choice: deploy from an organization-controlled Cloudflare account
-that owns `lean-lang.org`, with named primary and backup administrators and a
-documented cost owner. Do not deploy these production hostnames into a personal
-account.
+Recommended long-term choice: deploy from an organization-controlled account
+that owns `lean-lang.org`. The temporary dedicated Lean Eval account keeps this
+work isolated from unrelated services.
 
-Decision to record: Cloudflare account name and ID, zone ID, primary and backup
-administrators, and cost owner.
+Decision to record: Cloudflare account name and ID, zone ID, administrator, and
+cost owner.
 
 **Temporary account choice resolved 2026-08-20:** the initially selected
 `Kim@lean-fro.org's Account`
@@ -147,19 +146,12 @@ administrators, and cost owner.
 Workers, so renaming it or publishing Lean Eval beneath it creates the wrong
 ownership boundary. The separate Free account `lean-eval`
 (`a46b90978a1c29cc4795f30677e7e4b8`) with subdomain
-`lean-eval.workers.dev` now isolates the temporary drills without changing
-Palomar URLs. It still accepts personal ownership and later-migration risk: do
-not enable production intake, private replay, or publication until resources
-move to an organization-controlled account that owns `lean-lang.org`, has at
-least two human administrators, and has repeated all deployment and rollback
-drills.
+`lean-eval.workers.dev` now isolates the intake-disabled bootstrap without
+changing Palomar URLs. The checked-in provider-neutral contracts preserve a
+later move to an organization-controlled account or a different provider.
 
-**Personnel recorded 2026-08-20:** primary administrator and temporary cost
-owner are Kim Morrison (`kim@lean-fro.org`). There is currently no backup
-administrator. That accepted bootstrap risk does not block an intake-disabled
-deployment, but adding a separate human Super Administrator is a mandatory
-precondition for enabling intake or publication and must be tested as an
-account-recovery path. The zone ID and migration deadline remain open.
+**Personnel recorded 2026-08-20:** administrator and temporary cost owner are
+Kim Morrison (`kim@lean-fro.org`). The zone ID and migration date remain open.
 
 **Account inventory recorded 2026-08-20:** read-only Cloudflare API queries
 returned no `lean-lang.org` zone and found four existing Palomar Workers in the
@@ -170,8 +162,7 @@ current account: `palomar-data`, `palomar-data-staging`,
 either the current or new temporary account. The checked-in Wrangler
 environments now enable only the two exact `lean-eval.workers.dev` routes;
 preview URLs and intake remain disabled.
-Any `workers.dev` drill would not validate DNS/custom-domain routing and must be
-repeated after migration.
+The custom domains will be configured when the organization account is ready.
 
 **Temporary endpoint choice resolved 2026-08-20:** use
 `lean-eval-submission-server-staging.lean-eval.workers.dev` and
@@ -203,7 +194,7 @@ Kim Morrison, one for staging State and one for production State. Each token is
 restricted to its single private State repository with Contents read/write and
 Metadata read, expires no more than 90 days after creation, and is rotated by
 Kim Morrison no later than 14 days before expiry. Record the exact token owner,
-creation date, expiry date, and successful rotation drill in
+creation date and expiry date in
 `INFRASTRUCTURE.md` when each repository and token exists. Never reuse either
 token across environments or grant workflow/repository administration. These
 PATs authorize bootstrap State writes only: production intake remains forbidden
@@ -285,8 +276,7 @@ The Worker implementation deliberately keeps production intake disabled while
 hooks. A long-lived PAT in either binding is not an approved production design.
 The server needs two distinct capabilities:
 
-- read repository metadata, immutable source bytes, tags, and the submitter's
-  secret proof gist for source verification; and
+- read repository metadata and tags for source verification; and
 - dispatch only `submission.yml` at the reviewed immutable
   `lean-eval-dispatch/<commit>` tag in `lean-eval-submissions`.
 
@@ -307,6 +297,11 @@ Do not substitute a user PAT merely to avoid this choice.
 Use two Apps: one source reader and one workflow dispatcher. Record App IDs,
 installations, exact permissions, and broker identifiers when provisioned;
 private keys never enter this ledger.
+
+Implementation note: installation tokens cannot read a submitter-owned private
+gist. The broker therefore rejects the existing private-gist agent proof and
+agent intake stays disabled pending an App-verifiable proof or a separately
+approved user-token design. This does not broaden browser OAuth or either App.
 
 ### D10: embargo and issue-intake transition policy
 
@@ -435,10 +430,7 @@ For each State repository:
    human changes, and requires the repository's validation check.
 3. Put only the environment-specific writer principal or writer team in the
    ruleset bypass list. Do not grant the other environment's writer access.
-4. Enable secret scanning, dependency alerts, and audit-log review.
-5. Configure an off-platform mirror/backup and record its destination in
-   `INFRASTRUCTURE.md`.
-6. Run the repository validator and one restore drill before enabling intake.
+4. Run the repository validator before enabling intake.
 
 Create each fine-grained PAT in GitHub's UI so its value never appears in a
 command history or transcript. Select only its State repository, Metadata read,
@@ -550,11 +542,11 @@ CNAME exists first.
    Worker secrets. Exercise one successful login, state mismatch, expired
    state, replayed callback, and logout/session-expiry case in staging.
 
-9. After D9, create the source-verification and dispatch GitHub Apps with only
-   the recorded permissions and installations. If the broker design is chosen,
-   deploy the broker separately, bind only the matching staging/production
-   service identity, and replace the two local static-token hooks in the Worker
-   before enabling intake. Prove in staging that source App A cannot dispatch,
+9. Create the source-verification and dispatch GitHub Apps with only the
+   recorded permissions and installations. Deploy the implemented broker
+   separately, bind only the matching staging/production service identity, and
+   leave the two local static-token hooks absent in the Worker. Prove in staging
+   that source App A cannot dispatch,
    dispatch App B cannot read an unrelated source repository, and neither App
    can mutate State or dispatch an unreviewed ref.
 
@@ -588,15 +580,15 @@ After the results-v2 tooling PR is merged:
 3. Publish the generator first; replace the local consumer pin with its exact
    SHA and reverify parity.
 4. Publish State, staging State, and disabled releases tooling; configure State
-   rulesets and backups.
+   rulesets.
 5. Publish draft PRs for catalog, results-v2/Worker, leaderboard preview, and
    software-verification statements.
 6. Create Cloudflare GitHub environments and credentials.
-7. Merge/deploy the intake-disabled Worker, run staging/production health and
-   rollback drills, and update the infrastructure ledger.
+7. Merge/deploy the intake-disabled Worker, verify staging/production health,
+   and update the infrastructure ledger.
 8. Approve and execute the fresh results-v2 migration.
 9. Freeze the maintainer-approved v1 set.
 10. Continue OAuth/agent intake, wire it to the implemented UUIDv7 archive
     writer/State locator, and complete replay implementation in staging;
     do not enable production intake or releases until D6 and the documented
-    security drills are complete.
+    implementation gates are complete.

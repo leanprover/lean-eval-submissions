@@ -19,6 +19,8 @@ Target owner: leanprover organization administrators. Service code:
 | Cloudflare account | `lean-eval` (`a46b90978a1c29cc4795f30677e7e4b8`) | temporary shared | **PROVISIONED 2026-08-20** |
 | Cloudflare Worker | `lean-eval-submission-server-staging` | staging | **PROVISIONED 2026-08-20; INTAKE DISABLED** |
 | Cloudflare Worker | `lean-eval-submission-server` | production | **PROVISIONED 2026-08-20; INTAKE DISABLED** |
+| Private GitHub broker Worker | `lean-eval-github-broker-staging` | staging | **CODED; APP SECRETS AND DEPLOYMENT PENDING** |
+| Private GitHub broker Worker | `lean-eval-github-broker-production` | production | **CODED; APP SECRETS AND DEPLOYMENT PENDING** |
 | Temporary Worker route | `lean-eval-submission-server-staging.lean-eval.workers.dev` | staging | **ACTIVE 2026-08-20; INTAKE DISABLED** |
 | Temporary Worker route | `lean-eval-submission-server.lean-eval.workers.dev` | production | **ACTIVE 2026-08-20; INTAKE DISABLED** |
 | Target Worker custom domain | `eval-submit-staging.lean-lang.org` | staging | **DEFERRED; ZONE ABSENT** |
@@ -47,7 +49,7 @@ placeholder in the inventory below and recording a verification date.
 | Zone ID | not applicable until organization-account migration |
 | Billing plan / cost owner | Free / Kim Morrison (temporary) |
 | Primary administrator | Kim Morrison (`kim@lean-fro.org`) |
-| Backup administrator | none; **REQUIRED BEFORE INTAKE OR PUBLICATION** |
+| Additional administrator | none; optional for the temporary account |
 
 Worker configuration is declarative in [`server/wrangler.jsonc`](server/wrangler.jsonc):
 
@@ -60,6 +62,8 @@ Worker configuration is declarative in [`server/wrangler.jsonc`](server/wrangler
   outbox reconciliation;
 - distinct Worker names, exact temporary `workers.dev` routes, variables,
   credentials, and state repositories for staging and production;
+- a private `GITHUB_BROKER` service binding in each environment; the broker
+  Workers have no public route and hold the two D9 App private keys;
 - intake disabled by default and enabled only through a reviewed configuration
   change after the rollout gates pass.
 
@@ -93,14 +97,11 @@ and locality semantics follow Cloudflare's
 Cron Triggers are managed only through Wrangler as documented by
 [Cloudflare](https://developers.cloudflare.com/workers/configuration/cron-triggers/).
 
-The temporary `workers.dev` endpoints are public and are not the production
-hostname design. They exist only for intake-disabled deployment and rollback
-drills. The temporary account has no `lean-lang.org` zone,
-so these drills do not test
-custom-domain DNS or routing. Before intake, migrate to an
-organization-controlled account, add a separate backup administrator, disable
-`workers.dev`, restore the two target custom domains, rotate credentials, and
-repeat every deployment, OAuth, and rollback drill.
+The temporary `workers.dev` endpoints are public and are not the permanent
+hostname design. They exist for the intake-disabled bootstrap. The temporary
+account has no `lean-lang.org` zone. A later provider or account migration uses
+the documented Worker bindings and broker protocol; it does not change stable
+submission IDs, State events, archive locators, or the public API.
 
 ## Deployment automation
 
@@ -109,8 +110,9 @@ deployment path. A change under `server/` merged to protected `main` runs:
 
 1. locked dependency install, generated binding types, typecheck, lint, tests,
    dependency audit, and Wrangler dry run;
-2. staging deploy and `GET /healthz` smoke test;
-3. production deploy and `GET /healthz` smoke test.
+2. staging broker deploy, intake Worker deploy, and `GET /healthz` smoke test;
+3. production broker deploy, intake Worker deploy, and `GET /healthz` smoke
+   test.
 
 GitHub environment `cloudflare-staging` must contain:
 
@@ -121,7 +123,8 @@ GitHub environment `cloudflare-staging` must contain:
 
 `cloudflare-production` contains the same names backed by a **different API
 token**, restricted to the production Worker as narrowly as Cloudflare
-permits. Neither token may administer zones or unrelated account
+permits. Each deployment token must cover only its environment's intake and
+broker Workers. Neither token may administer zones or unrelated account
 products. GitHub environment secrets are not exposed to pull-request checks.
 
 Both Cloudflare environments are restricted to protected branches. The
@@ -158,6 +161,15 @@ Each Worker environment has a distinct Wrangler secret:
 | `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | each | Environment-specific GitHub OAuth application | `read:user` only; callback listed below |
 | `GITHUB_VERIFICATION_TOKEN` | each | **LOCAL CONTRACT ONLY; not approved for production** source visibility/tag/gist verification | Unprovisioned pending broker/App decision |
 | `GITHUB_DISPATCH_TOKEN` | each | **LOCAL CONTRACT ONLY; not approved for production** exact-ref workflow dispatch | Unprovisioned pending broker/App decision |
+
+Each private broker environment instead receives four Wrangler secrets:
+
+| Secret | Purpose | Status |
+| --- | --- | --- |
+| `SOURCE_APP_ID` | Source-reader GitHub App identifier | **PENDING APP CREATION** |
+| `SOURCE_APP_PRIVATE_KEY` | Mint repository-scoped source-reader installation tokens | **PENDING APP CREATION** |
+| `DISPATCH_APP_ID` | Workflow-dispatch GitHub App identifier | **PENDING APP CREATION** |
+| `DISPATCH_APP_PRIVATE_KEY` | Mint a token scoped to `leanprover/lean-eval-submissions` | **PENDING APP CREATION** |
 
 `READINESS_TOKEN` and `AUTH_TOKEN_SECRET` were installed with distinct random
 values in both Workers on 2026-08-20. The matching readiness value is also an
@@ -200,14 +212,21 @@ OAuth Apps requesting only `read:user`. Replace both Apps or their exact
 callbacks with the reviewed `lean-lang.org` URLs during migration; wildcard or
 multi-environment callbacks are forbidden.
 
-The production source-verification and dispatch credential mechanism remains
-an explicit product/security decision. A narrowly scoped token broker reached
-through a Cloudflare service binding is recommended: one operation verifies
-repository visibility/tag/gist metadata, and one dispatches the pinned
-workflow. The alternative is reviewed in-Worker GitHub App JWT signing and
-installation-token refresh. Do not provision the static local-contract token
-hooks, do not grant browser OAuth broad `repo` scope, and do not enable intake
-until one design is selected, implemented, rotated, and recorded here.
+The production source-verification and dispatch mechanism is the implemented
+private Cloudflare service-binding broker. One App can read repository
+metadata and tags; the other can dispatch only the pinned workflow in
+`leanprover/lean-eval-submissions`. The broker validates an exact v1 audience,
+authority, operation, repository, and immutable commit, mints scoped
+installation tokens, and never returns them to intake. This internal protocol
+is the provider seam: another provider can replace the broker without changing
+public API, State, archive, or result identifiers. Do not provision the static
+local-contract token hooks and do not grant browser OAuth broad `repo` scope.
+
+Installation tokens cannot read submitter-owned private gists. The existing
+headless-agent gist proof therefore remains disabled until it is replaced with
+an App-verifiable proof or a separate user-token design is approved. Browser
+intake is unaffected. Do not expand either installation App merely to bypass
+this limit.
 
 The Worker owns durable dispatch reconciliation independently of the credential
 choice. The intake CAS writes the immutable event batch, a validated targeted
@@ -309,8 +328,8 @@ SHA-256 of the stored ciphertext bytes in State. `archive_submission.py`
 implements that UUIDv7 mode while preserving the issue-derived legacy layout;
 it emits a versioned State-locator handoff only after reading the ciphertext
 back at the recorded immutable commit and verifying its digest. Wiring the
-server pipeline to that mode, appending the causally linked `archive.completed`
-event, and completing the decrypt/bundle-linkage drill remain launch gates.
+server pipeline to that mode and appending the causally linked
+`archive.completed` event remain launch gates.
 
 ## Public releases
 
@@ -331,20 +350,7 @@ proposed manifest and hashes regular bundle files beneath the release root.
 Self-declared clocks, symlinks, provenance mismatches, and unverified bundle
 digests are rejected.
 
-## Monitoring and recovery
-
-Minimum launch monitors:
-
-- Worker exception and non-2xx rate split by environment;
-- staging and production `/healthz` synthetic checks;
-- authenticated `/readyz` alerting once intake is enabled; readiness responses
-  are briefly cached to protect the GitHub API dependency;
-- GitHub API rate-limit and ref-contention alerts;
-- Worker `rate_limited` responses and dispatch-outbox age/attempt alerts;
-- State tree validation and backup freshness;
-- deployment failure notifications;
-- replay VM creation, destruction, and capability-expiry audit events;
-- delayed-release eligibility and publication failures.
+## Recovery
 
 Rollback changes only Worker code/configuration. It does not revert GitHub
 State or other resources. Use the manual
@@ -359,7 +365,7 @@ compatibility fix or append a corrective event.
 | --- | --- | --- |
 | Staging deploy and smoke | 2026-08-20 | current `fee3146e-d190-4f76-a25b-7859a35fe692`; exact commit and intake-disabled assertions passed |
 | Production deploy and smoke | 2026-08-20 | current `e72d3f5b-ae08-4386-a6c0-2a64a5cba049`; exact commit and intake-disabled assertions passed |
-| Worker rollback | not run | A second known-good version does not yet exist; no synthetic drill required |
+| Worker rollback | not run | Use only if an actual deployment needs rollback |
 | Replay decrypt and destruction | blocked | D6 key/provider work intentionally not provisioned |
 | Release reconstruction | blocked | Publication remains disabled |
 
