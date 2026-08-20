@@ -77,14 +77,14 @@ There is no Terraform layer. Wrangler configuration plus this reviewed ledger
 is the chosen infrastructure record. Resource identifiers created outside
 Wrangler must be copied here immediately.
 
-The first intake-disabled deployment was performed manually with Wrangler
-OAuth from exact commit `d3983722972585be761877498b7e7125578948ed` while the
-dedicated automation tokens are pending. The recorded Worker versions are:
+The intake-disabled bootstrap was performed manually with Wrangler OAuth while
+the dedicated automation tokens are pending. Current versions all use exact
+commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`:
 
-| Environment | Code-upload version | Current version after secret installation | Health verification |
+| Environment | Private broker version | Intake Worker version | Health verification |
 | --- | --- | --- | --- |
-| staging | `ee1ac267-c092-4f67-887f-8b9fa808aaf8` | `fee3146e-d190-4f76-a25b-7859a35fe692` | environment `staging`, intake `false`, exact commit |
-| production | `fe99f916-5e6a-4883-b85f-32adb7fc9ec9` | `e72d3f5b-ae08-4386-a6c0-2a64a5cba049` | environment `production`, intake `false`, exact commit |
+| staging | `073e7532-d86d-4dad-9280-f413ff970dab` | `0669c5a2-9cf6-445c-98ce-dacab8f72af0` | environment `staging`, intake `false`, exact commit |
+| production | `b658a77b-f7e8-4bd2-9268-a7862af07122` | `759d75ab-971d-4b93-ba69-ce0ac5319e04` | environment `production`, intake `false`, exact commit |
 
 This manual bootstrap does not replace deployment automation. Before the first
 post-merge automatic deployment, add `CLOUDFLARE_ACCOUNT_ID` and a distinct,
@@ -363,8 +363,8 @@ compatibility fix or append a corrective event.
 
 | Verification / incident | Date | Result / link |
 | --- | --- | --- |
-| Staging deploy and smoke | 2026-08-20 | current `fee3146e-d190-4f76-a25b-7859a35fe692`; exact commit and intake-disabled assertions passed |
-| Production deploy and smoke | 2026-08-20 | current `e72d3f5b-ae08-4386-a6c0-2a64a5cba049`; exact commit and intake-disabled assertions passed |
+| Staging deploy and smoke | 2026-08-20 | broker `073e7532-d86d-4dad-9280-f413ff970dab`, intake `0669c5a2-9cf6-445c-98ce-dacab8f72af0`; exact commit and intake-disabled assertions passed |
+| Production deploy and smoke | 2026-08-20 | broker `b658a77b-f7e8-4bd2-9268-a7862af07122`, intake `759d75ab-971d-4b93-ba69-ce0ac5319e04`; exact commit and intake-disabled assertions passed |
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
 | Replay decrypt and destruction | blocked | D6 key/provider work intentionally not provisioned |
 | Release reconstruction | blocked | Publication remains disabled |
