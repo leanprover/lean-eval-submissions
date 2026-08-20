@@ -81,16 +81,47 @@ jobs:
           set -e
           test -e /tmp/ESCAPED && echo "RESULT: sandbox NOT engaged (escape succeeded)" || echo "RESULT: sandbox engaged (escape denied)"
 
+      - name: Is this a container or a bare VM?
+        run: |
+          set +e
+          echo "--- virt ---"
+          systemd-detect-virt 2>&1; systemd-detect-virt -c 2>&1
+          echo "--- /.dockerenv ---"; ls -la /.dockerenv 2>&1
+          echo "--- pid 1 cgroup ---"; head -5 /proc/1/cgroup 2>&1
+          echo "--- pid 1 comm ---"; cat /proc/1/comm 2>&1
+          echo "--- can we make an unprivileged userns? ---"
+          unshare -Ur --map-root-user true; echo "unshare -Ur exit=$?"
+          unshare -Urm true; echo "unshare -Urm (mount ns) exit=$?"
+
       - name: Would bubblewrap work here instead?
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
-          set -x
-          echo "--- unprivileged user namespaces ---"
+          echo "--- userns knobs ---"
           cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || echo "(knob absent)"
           cat /proc/sys/user/max_user_namespaces 2>/dev/null || echo "(knob absent)"
           cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo "(knob absent)"
           set +e
-          bwrap --ro-bind / / --tmpfs /tmp --unshare-all -- /usr/bin/touch /tmp/bwrap-inside
-          echo "bwrap basic exit=$?"
-          bwrap --ro-bind / / --tmpfs /tmp --unshare-all -- /usr/bin/touch /etc/ESCAPED
-          echo "bwrap write-to-ro exit=$? (non-zero is correct: read-only bind held)"
+          mkdir -p /tmp/bw-work
+          # Build up from the simplest thing that could work. The previous
+          # iteration jumped straight to `--unshare-all`, which failed on
+          # BOTH runners for two different reasons and so measured nothing:
+          # loopback setup needs privileges we lack, and `--ro-bind / /`
+          # wants a pivot_root that a containerised runner may refuse.
+          echo "=== 1. userns only, no remount ==="
+          bwrap --unshare-user --uid 0 --gid 0 --bind / / -- /usr/bin/true
+          echo "  exit=$?"
+          echo "=== 2. ro root + writable workspace (the shape we need) ==="
+          bwrap --unshare-user --ro-bind / / --bind /tmp/bw-work /tmp/bw-work \
+            -- /usr/bin/touch /tmp/bw-work/inside
+          echo "  inside-write exit=$? (0 wanted)"
+          bwrap --unshare-user --ro-bind / / --bind /tmp/bw-work /tmp/bw-work \
+            -- /usr/bin/touch /etc/ESCAPED
+          echo "  escape exit=$? (non-zero wanted)"
+          test -e /etc/ESCAPED && echo "  RESULT: bwrap did NOT confine" || echo "  RESULT: bwrap confined the write"
+          echo "=== 3. can the payload still reach a shell? ==="
+          bwrap --unshare-user --ro-bind / / -- /bin/sh -c 'echo reached-sh'
+          echo "  sh exit=$? (0 means an exec allowlist is NOT implied by bwrap)"
+          echo "=== 4. hiding sh from the mount namespace ==="
+          bwrap --unshare-user --ro-bind /usr/lib /usr/lib --ro-bind /lib /lib \
+            --tmpfs /bin --tmpfs /usr/bin -- /bin/sh -c 'echo reached-sh'
+          echo "  sh-with-tmpfs-bin exit=$? (non-zero wanted)"
