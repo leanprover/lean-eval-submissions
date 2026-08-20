@@ -83,8 +83,8 @@ commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`:
 
 | Environment | Private broker version | Intake Worker version | Health verification |
 | --- | --- | --- | --- |
-| staging | `073e7532-d86d-4dad-9280-f413ff970dab` | `0669c5a2-9cf6-445c-98ce-dacab8f72af0` | environment `staging`, intake `false`, exact commit |
-| production | `b658a77b-f7e8-4bd2-9268-a7862af07122` | `759d75ab-971d-4b93-ba69-ce0ac5319e04` | environment `production`, intake `false`, exact commit |
+| staging | `073e7532-d86d-4dad-9280-f413ff970dab` | `92aa9ac5-4305-47ab-85f2-8495c6935123` | environment `staging`, intake `false`, exact commit |
+| production | `b658a77b-f7e8-4bd2-9268-a7862af07122` | `46ef4231-1ace-4343-9f16-ce9ea60e194e` | environment `production`, intake `false`, exact commit |
 
 This manual bootstrap does not replace deployment automation. Before the first
 post-merge automatic deployment, add `CLOUDFLARE_ACCOUNT_ID` and a distinct,
@@ -370,6 +370,7 @@ compatibility fix or append a corrective event.
 | --- | --- | --- |
 | Staging deploy and smoke | 2026-08-20 | broker `073e7532-d86d-4dad-9280-f413ff970dab`, intake `0669c5a2-9cf6-445c-98ce-dacab8f72af0`; exact commit and intake-disabled assertions passed |
 | Production deploy and smoke | 2026-08-20 | broker `b658a77b-f7e8-4bd2-9268-a7862af07122`, intake `759d75ab-971d-4b93-ba69-ce0ac5319e04`; exact commit and intake-disabled assertions passed |
+| Readiness-secret rotation | 2026-08-20 | distinct staging/production values rotated in both Workers and matching protected GitHub environment secrets; current intake versions `92aa9ac5-4305-47ab-85f2-8495c6935123` / `46ef4231-1ace-4343-9f16-ce9ea60e194e`; health remained commit-exact and intake-disabled |
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
 | Replay decrypt and destruction | blocked | D6 key/provider work intentionally not provisioned |
 | Release reconstruction | blocked | Publication remains disabled |
