@@ -36,3 +36,6 @@ smoke test, then deploy production and run the same smoke test. GitHub
 Environments named `cloudflare-staging` and `cloudflare-production` hold their
 own deployment credentials. See [`../INFRASTRUCTURE.md`](../INFRASTRUCTURE.md)
 for the complete inventory, ownership, setup, and recovery record.
+The authentication and source-boundary design is recorded in
+[`../docs/intake-threat-model.md`](../docs/intake-threat-model.md); every launch
+gate there remains mandatory while intake is disabled.

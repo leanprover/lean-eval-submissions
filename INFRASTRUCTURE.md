@@ -90,6 +90,9 @@ then production only after the smoke gate succeeds. Deployment workflow
 concurrency is intentionally latest-main-wins: skipped intermediate commits
 are already ancestors of the latest tested commit.
 
+The security boundary and evidence required before intake is enabled are in
+[`docs/intake-threat-model.md`](docs/intake-threat-model.md).
+
 ## Worker secrets and GitHub state access
 
 Each Worker environment has a distinct Wrangler secret:
