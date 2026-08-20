@@ -116,7 +116,10 @@ one issue per lane.
 
 - [x] Coordinate the published generator contract through lean-eval#533 and
       formal-conjectures#4951.
-- [ ] Validate FC answer-slot types under LeanEval's pinned target environment.
+- [x] Reproduce the whole-FC100 answer-slot/target audit: 89/100 source
+      extractions pass and 87/89 of those build at LeanEval pins. Keep import
+      blocked on the 11 extraction failures, two target incompatibilities,
+      quoted-module decoder fix, unique-ID fix, and corrected 92-open set.
 - [ ] Reproduce the FC100 dependency audit before import.
 - [ ] Launch FC100/open-conjectures only after the FC-owned importer supplies a
       compatible output contract.
