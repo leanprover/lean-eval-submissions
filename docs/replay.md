@@ -15,8 +15,8 @@ for the replay job, then destroys the VM in an `always()` cleanup path.
 
 The replay VM may receive only:
 
-- one encrypted archive, pinned by repository, object path, Git blob SHA, and
-  ciphertext SHA-256;
+- one encrypted archive, pinned by repository, Git commit, canonical object
+  path, and ciphertext SHA-256;
 - a short-lived, single-use capability authorizing unwrap of that archive's
   data key only;
 - public benchmark and evaluator commits pinned by SHA;
@@ -39,8 +39,9 @@ all of these fields:
   "request_id": "<globally unique replay request>",
   "submission_id": "<exact State subject>",
   "archive_repository": "leanprover/lean-eval-audit",
-  "archive_path": "<exact ciphertext path>",
-  "archive_sha256": "<64 lowercase hexadecimal characters>",
+  "archive_commit": "<40 lowercase hexadecimal characters>",
+  "archive_path": "archives/<first two UUID hex>/<submission UUID>.tar.age",
+  "archive_ciphertext_sha256": "<SHA-256 of the exact encrypted blob bytes>",
   "data_key_id": "<exact envelope key identifier>",
   "runner_nonce": "<exact disposable runner nonce>",
   "issued_at": "<canonical UTC milliseconds>",
