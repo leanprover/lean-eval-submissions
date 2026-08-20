@@ -5,13 +5,22 @@ second intake path, a batch decryption service, or a place to give general
 archive keys to CI. No replay workflow is enabled yet; the key service and
 disposable-runner controls below are launch gates.
 
+The local-only Wave 2 public planner, verdict contract, and disposable-VM
+operator sequence are documented in
+[`replay-orchestrator.md`](replay-orchestrator.md). That foundation deliberately
+leaves the private path nonterminally blocked and does not provision an
+execution backend.
+
 ## Trust boundary
 
-The existing chonk runner is the orchestrator. It does not decrypt submission
-source and it does not execute that source. For each approved replay it creates
-a fresh VM, registers that VM as a one-job ephemeral GitHub runner with labels
-including `self-hosted`, `chonk`, `lean-eval-replay`, and a request nonce, waits
-for the replay job, then destroys the VM in an `always()` cleanup path.
+The orchestrator is a Lean-Eval-owned controller behind a provider-neutral
+disposable-executor interface. It does not reuse another project's runner. For
+each approved replay it creates a fresh isolated instance from a
+pinned image, assigns a unique instance identity and request nonce, executes
+exactly one request, and destroys the instance in an unconditional cleanup
+path. Whether the eventual adapter uses a local hypervisor, hosted VM API,
+sandbox service, or another mechanism is deliberately not part of the stable
+request, State, or verdict contracts.
 
 The replay VM may receive only:
 
@@ -24,8 +33,8 @@ The replay VM may receive only:
 
 It must not receive the archive identity/master key, Worker State token,
 submission-fetch App credential, results-writer credential, release-publisher
-credential, or access to another submission. The chonk host must not mount a
-persistent workspace into the VM.
+credential, or access to another submission. The controller must not mount a
+persistent workspace into the instance.
 
 ## Capability contract
 
@@ -68,9 +77,9 @@ boundary and is not sufficient for automated replay.
    records the incident, audit, or recovery reason.
 2. A trusted preparation job resolves the immutable State event, ciphertext
    object, digests, evaluator commit, benchmark commit, and authorization.
-3. Chonk creates a fresh VM and registers a one-job ephemeral runner using a
-   nonce-specific label. A persistent generic replay runner is a configuration
-   error.
+3. The Lean Eval controller creates a fresh isolated instance with a
+   nonce-specific identity. A persistent or shared generic replay runner is a
+   configuration error.
 4. The replay job fetches only pinned public code with
    `persist-credentials:false`, downloads the exact ciphertext, verifies its
    digest, consumes the one-use unwrap capability inside the VM, and decrypts
@@ -81,9 +90,9 @@ boundary and is not sufficient for automated replay.
    output that could reproduce source are excluded from logs and artifacts.
 6. The job publishes only the reviewed result/audit projection. It shreds the
    plaintext filesystem key and requests immediate VM shutdown.
-7. A separate `always()` teardown on chonk destroys the VM and verifies that
-   the runner registration disappeared. Failure to confirm destruction is an
-   incident and blocks another replay.
+7. An unconditional controller teardown destroys the instance and verifies
+   that its execution identity disappeared. Failure to confirm destruction is
+   an incident and blocks another replay.
 
 No source artifact crosses jobs. Fetch, decrypt, evaluate, and plaintext cleanup
 therefore remain in the same disposable replay job, matching the existing
@@ -95,21 +104,20 @@ Replay remains unavailable until all gates have evidence linked from
 `INFRASTRUCTURE.md`:
 
 - threat-model review covers malicious Lean, malicious archive metadata,
-  compromised VM, compromised chonk orchestrator, replay, confused deputy,
+  compromised instance, compromised Lean Eval controller, replay, confused deputy,
   lost provider responses, clock skew, and teardown failure;
 - the key service enforces the exact one-use contract above and its root has a
-  documented recovery quorum;
-- chonk demonstrates nonce-specific disposable VM creation, runner
+  documented no-provider-recovery risk acceptance;
+- the selected backend demonstrates nonce-specific disposable instance creation,
   deregistration, network egress policy, and no persistent mount;
 - an end-to-end drill recovers one test archive, proves a second unwrap fails,
   proves a different archive fails, and verifies VM destruction;
-- a restore drill proves the root can be recovered without copying it into CI;
 - workflow review confirms no master identity or broad repository credential
   is available to the replay job or untrusted Lean;
 - observability alerts on expired/reused capabilities, digest mismatch,
   teardown failure, and unexpected runner reuse.
 
-Cloudflare Sandbox SDK is deliberately not used here. The project already has
-a hardened self-hosted execution path and the security boundary depends on
-trusted orchestration plus a fresh per-job VM, not on moving archive keys into
-the internet-facing Worker platform.
+No execution provider is selected here. A future adapter must satisfy the same
+fresh-instance, credential-isolation, network-isolation, teardown, and
+attestation contract without changing the provider-neutral request or verdict
+formats.

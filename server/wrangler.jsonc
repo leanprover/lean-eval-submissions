@@ -13,35 +13,47 @@
   "env": {
     "staging": {
       "name": "lean-eval-submission-server-staging",
-      "workers_dev": false,
+      "workers_dev": true,
       "preview_urls": false,
-      "routes": [
+      "ratelimits": [
         {
-          "pattern": "eval-submit-staging.lean-lang.org",
-          "custom_domain": true
+          "name": "API_RATE_LIMITER",
+          "namespace_id": "24012001",
+          "simple": { "limit": 30, "period": 60 }
         }
       ],
+      "triggers": { "crons": ["* * * * *"] },
       "vars": {
         "DEPLOYED_COMMIT": "development",
         "DEPLOYMENT_ENVIRONMENT": "staging",
         "INTAKE_ENABLED": "false",
+        "BROWSER_SUCCESS_URL": "/",
+        "DISPATCH_REPOSITORY": "leanprover/lean-eval-submissions",
+        "DISPATCH_WORKFLOW": "submission.yml",
+        "OAUTH_CALLBACK_URL": "https://lean-eval-submission-server-staging.lean-eval.workers.dev/api/v1/oauth/callback",
         "STATE_REPOSITORY": "leanprover/lean-eval-state-staging"
       }
     },
     "production": {
       "name": "lean-eval-submission-server",
-      "workers_dev": false,
+      "workers_dev": true,
       "preview_urls": false,
-      "routes": [
+      "ratelimits": [
         {
-          "pattern": "eval-submit.lean-lang.org",
-          "custom_domain": true
+          "name": "API_RATE_LIMITER",
+          "namespace_id": "24012002",
+          "simple": { "limit": 30, "period": 60 }
         }
       ],
+      "triggers": { "crons": ["* * * * *"] },
       "vars": {
         "DEPLOYED_COMMIT": "development",
         "DEPLOYMENT_ENVIRONMENT": "production",
         "INTAKE_ENABLED": "false",
+        "BROWSER_SUCCESS_URL": "/",
+        "DISPATCH_REPOSITORY": "leanprover/lean-eval-submissions",
+        "DISPATCH_WORKFLOW": "submission.yml",
+        "OAUTH_CALLBACK_URL": "https://lean-eval-submission-server.lean-eval.workers.dev/api/v1/oauth/callback",
         "STATE_REPOSITORY": "leanprover/lean-eval-state"
       }
     }

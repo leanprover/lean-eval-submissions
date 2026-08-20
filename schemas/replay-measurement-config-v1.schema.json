@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/replay-measurement-config-v1.schema.json",
+  "title": "LeanEval replay measurement configuration v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "wall_time_limit_ms", "memory_limit_bytes", "retired_instructions"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "wall_time_limit_ms": { "type": "integer", "minimum": 1 },
+    "memory_limit_bytes": { "type": "integer", "minimum": 1 },
+    "retired_instructions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "perf_event"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "perf_event": { "const": "instructions:u" }
+      }
+    }
+  }
+}

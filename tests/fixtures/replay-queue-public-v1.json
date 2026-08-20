@@ -1,0 +1,34 @@
+{
+  "environment": "staging",
+  "schema_version": 1,
+  "source_digest": "1111111111111111111111111111111111111111111111111111111111111111",
+  "source_event_count": 7,
+  "tasks": [
+    {
+      "archive_ciphertext_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "archive_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "archive_path": "archives/01/0198abcd-1111-7000-8000-000000000001.tar.age",
+      "archive_repository": "leanprover/lean-eval-audit",
+      "attempt": 0,
+      "benchmark_commit": "dddddddddddddddddddddddddddddddddddddddd",
+      "benchmark_repository": "leanprover/lean-eval",
+      "checker": "nanoda",
+      "event_id": "0198abcd-0000-7000-8000-000000000007",
+      "execution_profile_digest": "d31da7be61bb566e2bec708fcc7e8dec71ca4c6f0cbde93a6befa9c1b1b54c31",
+      "measurement_config_digest": "48dc8fb9e1e713f46784b6910604657849bf8fba4313eab350cfa287448f4bee",
+      "occurred_at": "2026-08-20T06:07:07.000Z",
+      "problem_id": "two_plus_two",
+      "replay_task_id": "rt1_18648187548dc56592b3befe69f5d380edd839bfeb255d7712269a02066c7e1a",
+      "result_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "result_id": "r2_80f02f892fb0b90474675aa0b572252a8758faf74b95400521e9da724583931f",
+      "result_tree_digest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "source_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_repository": "example/public-submission",
+      "source_visibility": "public",
+      "statement_revision": 1,
+      "status": "queued",
+      "submission_id": "0198abcd-1111-7000-8000-000000000001",
+      "toolchain": "leanprover/lean4:v4.32.0"
+    }
+  ]
+}

@@ -27,7 +27,19 @@ audit/
     MM/
       {submitter}-{issue}-{ref8}.tar.age   # age-encrypted gzipped tar of source
       {submitter}-{issue}-{ref8}.json      # sidecar (issue, submitter, model, digests, verdict)
+
+archives/
+  {uuid-prefix}/
+    {submission-uuidv7}.tar.age            # server-intake ciphertext
+    {submission-uuidv7}.json               # v2 UUID-keyed sidecar
 ```
+
+The first layout is retained for existing GitHub Issue intake. Server intake
+uses a canonical lowercase UUIDv7 and the second layout, where `uuid-prefix`
+is the first two hexadecimal digits of the UUID with hyphens removed. The two
+identity modes are deliberately unambiguous: a legacy metadata record has an
+`issue_number`; a server metadata record has a `submission_id`; neither may
+carry both.
 
 The tarball is the same `source.tar.gz` that `fetch_submission.py`
 already produces — the same bytes the evaluator sees. Encryption uses
@@ -88,6 +100,33 @@ Two new pieces live inside the existing `submission.yml`:
    treated as a benign already-exists conflict when the body says so; any
    other 422 (malformed path, oversize content, branch protection) is a
    real validation failure and fails fast.
+
+   For server intake, `push` additionally requires `--locator-output`. It
+   writes a durable handoff governed by
+   [`archive-locator-v1.schema.json`](../schemas/archive-locator-v1.schema.json).
+   Its archive fields are the exact payload for
+   State's `archive.completed` event; `submission_id` becomes that event's
+   subject:
+
+   ```json
+   {
+     "schema_version": 1,
+     "submission_id": "0198c4ee-7d2d-7b35-8d20-cd5db8aa9a6f",
+     "archive_repository": "leanprover/lean-eval-audit",
+     "archive_commit": "0123456789abcdef0123456789abcdef01234567",
+     "archive_path": "archives/01/0198c4ee-7d2d-7b35-8d20-cd5db8aa9a6f.tar.age",
+     "archive_ciphertext_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+     "encrypted": true
+   }
+   ```
+
+   `archive_commit` is the immutable audit-repository commit containing the
+   uploaded sidecar. Before emitting the locator, the archiver reads the
+   ciphertext back at that exact commit and checks its SHA-256 against the
+   sidecar. This makes a racing or partially completed pair fail closed rather
+   than allowing State to record a locator whose bytes do not match its
+   digest. An idempotent replay uses the existing sidecar's last-changing
+   commit and performs the same byte check.
 
    `evaluate` exposes `audit_ciphertext_ready` as a job output, set to
    `'true'` only when both the encrypt step and the ciphertext-artifact

@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/replay-execution-profile-v1.schema.json",
+  "title": "LeanEval replay execution profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "runner_profile", "vm_image_digest", "toolchain",
+    "go_toolchain", "rust_toolchain", "cpu_model", "architecture",
+    "kernel_release", "cache_state", "measurement_command", "components"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "runner_profile": { "type": "string", "minLength": 1 },
+    "vm_image_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "toolchain": {
+      "type": "string",
+      "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "go_toolchain": { "type": "string", "pattern": "^go[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "rust_toolchain": {
+      "type": "string",
+      "pattern": "^rustc-[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "cpu_model": { "type": "string", "minLength": 1 },
+    "architecture": { "enum": ["aarch64", "x86_64"] },
+    "kernel_release": { "type": "string", "minLength": 1 },
+    "cache_state": { "enum": ["cold", "warm"] },
+    "measurement_command": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["comparator", "landrun", "lean4export", "nanoda"],
+      "properties": {
+        "comparator": { "$ref": "#/$defs/component" },
+        "landrun": { "$ref": "#/$defs/component" },
+        "lean4export": { "$ref": "#/$defs/component" },
+        "nanoda": { "$ref": "#/$defs/component" }
+      }
+    }
+  },
+  "$defs": {
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit"],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+        },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    }
+  }
+}

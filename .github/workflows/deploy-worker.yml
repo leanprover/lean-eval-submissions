@@ -49,9 +49,64 @@ jobs:
       - run: npm audit --package-lock-only --audit-level=high
       - run: npm run deploy:dry-run
 
-  deploy-staging:
+  promote-dispatch-ref:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: submission-dispatch-promotion
+    permissions:
+      contents: write
+    outputs:
+      ref: ${{ steps.promote.outputs.ref }}
+    steps:
+      - name: Create or verify immutable workflow-dispatch tag
+        id: promote
+        env:
+          APPROVAL_GUARD: ${{ secrets.DISPATCH_PROMOTION_APPROVAL_GUARD }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$APPROVAL_GUARD" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "reviewed dispatch-promotion environment is not configured" >&2
+            exit 1
+          fi
+          if [[ ! "$WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "workflow commit is not a full lowercase SHA" >&2
+            exit 1
+          fi
+          status=$(gh api "repos/$REPOSITORY/compare/$WORKFLOW_COMMIT...main" --jq .status)
+          if [ "$status" != "ahead" ] && [ "$status" != "identical" ]; then
+            echo "workflow commit is not reachable from protected main" >&2
+            exit 1
+          fi
+          gh api "repos/$REPOSITORY/contents/.github/workflows/submission.yml?ref=$WORKFLOW_COMMIT" \
+            --jq .sha >/dev/null
+
+          tag="lean-eval-dispatch/$WORKFLOW_COMMIT"
+          if existing=$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq .object.sha 2>/dev/null); then
+            if [ "$existing" != "$WORKFLOW_COMMIT" ]; then
+              echo "dispatch tag collision: $tag resolves to $existing" >&2
+              exit 1
+            fi
+          else
+            gh api "repos/$REPOSITORY/git/refs" \
+              -X POST \
+              -f "ref=refs/tags/$tag" \
+              -f "sha=$WORKFLOW_COMMIT" >/dev/null
+          fi
+          resolved=$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq .object.sha)
+          if [ "$resolved" != "$WORKFLOW_COMMIT" ]; then
+            echo "dispatch tag read-back did not resolve to the reviewed commit" >&2
+            exit 1
+          fi
+          echo "ref=$tag" >> "$GITHUB_OUTPUT"
+
+  deploy-staging:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: promote-dispatch-ref
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: cloudflare-staging
@@ -69,14 +124,18 @@ jobs:
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: npx wrangler deploy --env staging --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+          DISPATCH_WORKFLOW_REF: ${{ needs.promote-dispatch-ref.outputs.ref }}
+        run: >-
+          npx wrangler deploy --env staging
+          --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+          --var "DISPATCH_WORKFLOW_REF:$DISPATCH_WORKFLOW_REF"
       - name: Smoke-test staging
         env:
           EXPECTED_COMMIT: ${{ github.sha }}
           EXPECTED_ENVIRONMENT: staging
         run: |
           body=$(curl --fail --retry 6 --retry-all-errors --retry-delay 5 \
-            https://eval-submit-staging.lean-lang.org/healthz)
+            https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz)
           HEALTH_BODY="$body" python - <<'PY'
           import json, os
           body = json.loads(os.environ["HEALTH_BODY"])
@@ -87,7 +146,7 @@ jobs:
           PY
 
   deploy-production:
-    needs: deploy-staging
+    needs: [deploy-staging, promote-dispatch-ref]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: cloudflare-production
@@ -105,14 +164,18 @@ jobs:
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: npx wrangler deploy --env production --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+          DISPATCH_WORKFLOW_REF: ${{ needs.promote-dispatch-ref.outputs.ref }}
+        run: >-
+          npx wrangler deploy --env production
+          --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+          --var "DISPATCH_WORKFLOW_REF:$DISPATCH_WORKFLOW_REF"
       - name: Smoke-test production
         env:
           EXPECTED_COMMIT: ${{ github.sha }}
           EXPECTED_ENVIRONMENT: production
         run: |
           body=$(curl --fail --retry 6 --retry-all-errors --retry-delay 5 \
-            https://eval-submit.lean-lang.org/healthz)
+            https://lean-eval-submission-server.lean-eval.workers.dev/healthz)
           HEALTH_BODY="$body" python - <<'PY'
           import json, os
           body = json.loads(os.environ["HEALTH_BODY"])

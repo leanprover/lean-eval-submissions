@@ -33,6 +33,9 @@ SUBMISSION_KINDS = ("github_repo", "gist")
 PRODUCTION_DESCRIPTION_MAX_LEN = 4000
 SOLUTION_PUBLICATION_STATUSES = ("private", "planned", "published")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+UUIDV7_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+)
 
 
 class UpdateError(Exception):
@@ -146,10 +149,12 @@ def update_leaderboard(
     submission_ref: str,
     submission_public: bool,
     model: str,
-    issue_number: int,
+    issue_number: int | None,
     now: str,
+    submission_id: str | None = None,
     statement_revisions: dict[str, int] | None = None,
     production_description: str | None = None,
+    production_metadata: dict | None = None,
     solution_publication_status: str | None = None,
     solution_publication_date: str | None = None,
 ) -> dict:
@@ -158,8 +163,12 @@ def update_leaderboard(
     _require_sha("submission-ref", submission_ref)
     _require_submission_kind(submission_kind)
     _require_owner_name(submission_repo)
-    if issue_number <= 0:
+    if (issue_number is None) == (submission_id is None):
+        raise UpdateError("exactly one of issue-number or submission-id is required")
+    if issue_number is not None and issue_number <= 0:
         raise UpdateError(f"issue-number must be positive, got {issue_number}")
+    if submission_id is not None and not UUIDV7_RE.fullmatch(submission_id):
+        raise UpdateError("submission-id must be a canonical lowercase UUIDv7")
     if not model.strip():
         raise UpdateError("model must be a non-empty string")
     if statement_revisions is None:
@@ -181,6 +190,12 @@ def update_leaderboard(
             )
         if not production_description.strip():
             production_description = None
+    if production_metadata is None:
+        production_metadata = {}
+    if not isinstance(production_metadata, dict) or not all(
+        isinstance(key, str) for key in production_metadata
+    ):
+        raise UpdateError("production-metadata must be a JSON object with string keys")
 
     target = leaderboard_target_path(leaderboard_dir, user)
     existing = _load_existing(target, user)
@@ -207,14 +222,18 @@ def update_leaderboard(
             "declared_model": model,
             "accepted_at": now,
             "benchmark_commit": benchmark_commit,
-            "intake": {"kind": "issue", "issue_number": issue_number},
+            "intake": (
+                {"kind": "issue", "issue_number": issue_number}
+                if issue_number is not None
+                else {"kind": "server", "submission_id": submission_id}
+            ),
             "submission": {
                 "kind": submission_kind,
                 "repo": submission_repo,
                 "ref": submission_ref,
                 "public": submission_public,
             },
-            "production_metadata": {},
+            "production_metadata": dict(production_metadata),
         }
         if production_description is not None:
             record["production_metadata"][
@@ -287,6 +306,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=pathlib.Path,
         help="Path to a checkout of the lean-eval-submissions results store.",
     )
+    parser.add_argument("--production-metadata-json", default=None)
+    parser.add_argument("--expected-problem-id", default=None)
+    parser.add_argument("--expected-statement-revision", type=int, default=None)
     parser.add_argument(
         "--results-json",
         required=True,
@@ -310,7 +332,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Use --submission-public or --no-submission-public.",
     )
     parser.add_argument("--model", required=True)
-    parser.add_argument("--issue-number", required=True, type=int)
+    intake = parser.add_mutually_exclusive_group(required=True)
+    intake.add_argument("--issue-number", type=int)
+    intake.add_argument("--submission-id")
     parser.add_argument(
         "--production-description",
         default=None,
@@ -339,6 +363,32 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = _parse_args(argv)
         passed, statement_revisions = _load_evaluation_results(args.results_json)
+        if (args.expected_problem_id is None) != (
+            args.expected_statement_revision is None
+        ):
+            raise UpdateError(
+                "expected-problem-id and expected-statement-revision must be provided together"
+            )
+        if args.expected_problem_id is not None:
+            if args.expected_statement_revision <= 0:
+                raise UpdateError("expected-statement-revision must be positive")
+            if args.expected_problem_id in passed:
+                actual_revision = statement_revisions.get(args.expected_problem_id)
+                if actual_revision != args.expected_statement_revision:
+                    raise UpdateError("evaluated statement revision does not match server intake")
+                passed = [args.expected_problem_id]
+                statement_revisions = {
+                    args.expected_problem_id: args.expected_statement_revision
+                }
+            else:
+                passed = []
+                statement_revisions = {}
+        production_metadata = None
+        if args.production_metadata_json is not None:
+            try:
+                production_metadata = json.loads(args.production_metadata_json)
+            except json.JSONDecodeError as exc:
+                raise UpdateError("production-metadata-json is invalid JSON") from exc
         now = args.now or datetime.datetime.now(datetime.timezone.utc).strftime(
             "%Y-%m-%dT%H:%M:%SZ"
         )
@@ -353,7 +403,9 @@ def main(argv: list[str] | None = None) -> int:
             submission_public=args.submission_public,
             model=args.model,
             issue_number=args.issue_number,
+            submission_id=args.submission_id,
             production_description=args.production_description,
+            production_metadata=production_metadata,
             solution_publication_status=args.solution_publication_status,
             solution_publication_date=args.solution_publication_date,
             now=now,

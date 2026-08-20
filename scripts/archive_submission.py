@@ -37,11 +37,14 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 
 SIZE_CAP_BYTES = 10 * 1024 * 1024  # 10 MiB. Matches the workflow.
 SIDECAR_SCHEMA_VERSION = 1
+SERVER_SIDECAR_SCHEMA_VERSION = 2
+ARCHIVE_LOCATOR_SCHEMA_VERSION = 1
 DEFAULT_AUDIT_REPO = "leanprover/lean-eval-audit"
 PUSH_RETRY_ATTEMPTS = 5
 
@@ -57,6 +60,9 @@ REPO_IDENT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$")
 ALLOWED_SUBMISSION_KINDS = ("github_repo", "gist")
 ALLOWED_SOLUTION_PUBLICATION_STATUSES = ("private", "planned", "published")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+UUIDV7_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+)
 
 
 def _sha256_of_file(path: pathlib.Path) -> str:
@@ -82,7 +88,10 @@ def _git_blob_sha(content: bytes) -> str:
 
 
 def _read_json(path: pathlib.Path) -> dict:
-    return json.loads(path.read_text(encoding="utf-8"))
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        sys.exit(f"JSON root must be an object: {path}")
+    return value
 
 
 def _short_ref(sha: str) -> str:
@@ -93,6 +102,11 @@ SUBMITTER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*$")
 
 
 def _audit_path(sidecar: dict, archived_at: dt.datetime) -> str:
+    if sidecar.get("schema_version") == SERVER_SIDECAR_SCHEMA_VERSION:
+        submission_id = str(sidecar["submission_id"])
+        prefix = submission_id.replace("-", "")[:2]
+        return f"archives/{prefix}/{submission_id}"
+
     # Path layout: audit/YYYY/MM/{submitter}-{issue}-{ref8}.{tar.age,json}.
     # Including the submitter login is what guarantees uniqueness: backfilled
     # records carry their original `leanprover/lean-eval` issue numbers (see
@@ -121,7 +135,10 @@ def _require_type(metadata: dict, key: str, expected: type | tuple[type, ...]) -
     string `"false"` into `True` — a silently wrong sidecar field.
     """
     value = metadata[key]
-    if not isinstance(value, expected):
+    accepts_int = expected is int or (
+        isinstance(expected, tuple) and int in expected
+    )
+    if not isinstance(value, expected) or (accepts_int and isinstance(value, bool)):
         type_name = (
             expected.__name__ if isinstance(expected, type)
             else "/".join(t.__name__ for t in expected)
@@ -153,8 +170,8 @@ def _encrypt(args: argparse.Namespace) -> int:
         sys.exit(f"recipients file is empty: {recipients}")
 
     metadata = _read_json(args.metadata)
-    required = ("issue_number", "submission_ref", "submission_repo",
-                "submission_kind", "submission_public", "submitted_by", "model")
+    required = ("submission_ref", "submission_repo", "submission_kind",
+                "submission_public", "submitted_by", "model")
     missing = [key for key in required if key not in metadata]
     if missing:
         sys.exit(f"metadata.json missing required fields: {missing!r}")
@@ -162,7 +179,6 @@ def _encrypt(args: argparse.Namespace) -> int:
     # Strict typing — the sidecar is later read by `push` and (eventually)
     # by people reading the archive; loose-typed fields here silently
     # produce wrong sidecars (e.g. `bool("false") is True`).
-    issue_number = _require_type(metadata, "issue_number", int)
     submission_ref = _require_type(metadata, "submission_ref", str)
     submission_repo = _require_type(metadata, "submission_repo", str)
     submission_kind = _require_type(metadata, "submission_kind", str)
@@ -175,8 +191,21 @@ def _encrypt(args: argparse.Namespace) -> int:
         sys.exit(f"submission_repo has unexpected shape: {submission_repo!r}")
     if submission_kind not in ALLOWED_SUBMISSION_KINDS:
         sys.exit(f"submission_kind must be one of {ALLOWED_SUBMISSION_KINDS!r}, got {submission_kind!r}")
-    if issue_number <= 0:
-        sys.exit(f"issue_number must be a positive integer, got {issue_number!r}")
+    submission_id = metadata.get("submission_id")
+    if submission_id is None:
+        if "issue_number" not in metadata:
+            sys.exit("metadata.json missing required legacy field: 'issue_number'")
+        issue_number = _require_type(metadata, "issue_number", int)
+        if issue_number <= 0:
+            sys.exit(f"issue_number must be a positive integer, got {issue_number!r}")
+    else:
+        if "issue_number" in metadata:
+            sys.exit("metadata.json must not contain both submission_id and issue_number")
+        if not isinstance(submission_id, str) or not UUIDV7_RE.fullmatch(submission_id):
+            sys.exit(
+                "submission_id must be a canonical lowercase UUIDv7, got "
+                f"{submission_id!r}"
+            )
 
     publication_status = metadata.get("solution_publication_status")
     publication_date = metadata.get("solution_publication_date")
@@ -256,8 +285,11 @@ def _encrypt(args: argparse.Namespace) -> int:
         sys.exit(f"age output does not have the expected v1 header: {header!r}")
 
     sidecar = {
-        "schema_version": SIDECAR_SCHEMA_VERSION,
-        "issue": issue_number,
+        "schema_version": (
+            SERVER_SIDECAR_SCHEMA_VERSION
+            if submission_id is not None
+            else SIDECAR_SCHEMA_VERSION
+        ),
         "submission_repo": submission_repo,
         "submission_ref": submission_ref,
         "submission_kind": submission_kind,
@@ -267,6 +299,10 @@ def _encrypt(args: argparse.Namespace) -> int:
         "size_bytes_plaintext_tar": size_bytes,
         "sha256_plaintext_tar": plaintext_sha,
     }
+    if submission_id is not None:
+        sidecar["submission_id"] = submission_id
+    else:
+        sidecar["issue"] = issue_number
     production_description = metadata.get("production_description")
     if production_description:
         if not isinstance(production_description, str):
@@ -302,7 +338,32 @@ def _recipient_lines(path: pathlib.Path) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def _validate_sidecar(sidecar: dict) -> None:
+_COMMON_SIDECAR_FIELDS = {
+    "schema_version",
+    "submission_repo",
+    "submission_ref",
+    "submission_kind",
+    "submission_public",
+    "submitter",
+    "model",
+    "size_bytes_plaintext_tar",
+    "sha256_plaintext_tar",
+    "production_description",
+    "solution_publication_status",
+    "solution_publication_date",
+}
+_FINAL_SIDECAR_FIELDS = {
+    "sha256_ciphertext",
+    "size_bytes_ciphertext",
+    "archived_at",
+    "benchmark_commit",
+    "archiver_workflow_run",
+    "problem_ids",
+    "evaluator_verdict",
+}
+
+
+def _validate_sidecar(sidecar: dict, *, finalized: bool = False) -> None:
     """Strict schema check on the partial sidecar read by `push`.
 
     `push` interpolates `submission_ref` into the upload path and trusts
@@ -311,14 +372,42 @@ def _validate_sidecar(sidecar: dict) -> None:
     junk metadata. Re-validating here is defense in depth against a
     corrupted artifact or a future caller that bypasses `encrypt`.
     """
-    if sidecar.get("schema_version") != SIDECAR_SCHEMA_VERSION:
+    schema_version = sidecar.get("schema_version")
+    if type(schema_version) is not int or schema_version not in (
+        SIDECAR_SCHEMA_VERSION,
+        SERVER_SIDECAR_SCHEMA_VERSION,
+    ):
         sys.exit(
-            f"sidecar schema_version must be {SIDECAR_SCHEMA_VERSION}, "
-            f"got {sidecar.get('schema_version')!r}"
+            "sidecar schema_version must be "
+            f"{SIDECAR_SCHEMA_VERSION} or {SERVER_SIDECAR_SCHEMA_VERSION}, "
+            f"got {schema_version!r}"
         )
-    issue = sidecar.get("issue")
-    if not isinstance(issue, int) or isinstance(issue, bool) or issue <= 0:
-        sys.exit(f"sidecar.issue must be a positive integer, got {issue!r}")
+    identity_field = (
+        "submission_id"
+        if schema_version == SERVER_SIDECAR_SCHEMA_VERSION
+        else "issue"
+    )
+    allowed_fields = _COMMON_SIDECAR_FIELDS | {identity_field}
+    if finalized:
+        allowed_fields |= _FINAL_SIDECAR_FIELDS
+    unknown_fields = sorted(set(sidecar) - allowed_fields)
+    if unknown_fields:
+        sys.exit(f"sidecar has unknown fields: {unknown_fields!r}")
+    if schema_version == SIDECAR_SCHEMA_VERSION:
+        issue = sidecar.get("issue")
+        if not isinstance(issue, int) or isinstance(issue, bool) or issue <= 0:
+            sys.exit(f"sidecar.issue must be a positive integer, got {issue!r}")
+        if "submission_id" in sidecar:
+            sys.exit("legacy sidecar must not contain submission_id")
+    else:
+        submission_id = sidecar.get("submission_id")
+        if not isinstance(submission_id, str) or not UUIDV7_RE.fullmatch(submission_id):
+            sys.exit(
+                "sidecar.submission_id must be a canonical lowercase UUIDv7, got "
+                f"{submission_id!r}"
+            )
+        if "issue" in sidecar:
+            sys.exit("server sidecar must not contain issue")
     submission_ref = sidecar.get("submission_ref")
     if not isinstance(submission_ref, str) or not SHA40_RE.fullmatch(submission_ref):
         sys.exit(f"sidecar.submission_ref must be a 40-char lowercase hex SHA, got {submission_ref!r}")
@@ -340,6 +429,12 @@ def _validate_sidecar(sidecar: dict) -> None:
     size_plain = sidecar.get("size_bytes_plaintext_tar")
     if not isinstance(size_plain, int) or isinstance(size_plain, bool) or size_plain < 0:
         sys.exit(f"sidecar.size_bytes_plaintext_tar must be a non-negative integer, got {size_plain!r}")
+    production_description = sidecar.get("production_description")
+    if production_description is not None and (
+        not isinstance(production_description, str)
+        or not production_description.strip()
+    ):
+        sys.exit("sidecar.production_description must be a non-empty string")
     publication_status = sidecar.get("solution_publication_status")
     publication_date = sidecar.get("solution_publication_date")
     submission_public = sidecar["submission_public"]
@@ -380,6 +475,55 @@ def _validate_sidecar(sidecar: dict) -> None:
             "sidecar.solution_publication_date is required for status "
             f"{publication_status!r}"
         )
+    if finalized:
+        ciphertext_sha = sidecar.get("sha256_ciphertext")
+        if not isinstance(ciphertext_sha, str) or not SHA256_HEX_RE.fullmatch(
+            ciphertext_sha
+        ):
+            sys.exit(
+                "final sidecar.sha256_ciphertext must be 64-char lowercase hex"
+            )
+        ciphertext_size = sidecar.get("size_bytes_ciphertext")
+        if (
+            not isinstance(ciphertext_size, int)
+            or isinstance(ciphertext_size, bool)
+            or ciphertext_size <= 0
+        ):
+            sys.exit("final sidecar.size_bytes_ciphertext must be a positive integer")
+        archived_at = sidecar.get("archived_at")
+        if not isinstance(archived_at, str) or re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", archived_at
+        ) is None:
+            sys.exit("final sidecar.archived_at must use canonical UTC seconds")
+        benchmark_commit = sidecar.get("benchmark_commit")
+        if benchmark_commit is not None and (
+            not isinstance(benchmark_commit, str)
+            or not SHA40_RE.fullmatch(benchmark_commit)
+        ):
+            sys.exit("final sidecar.benchmark_commit must be a lowercase commit SHA")
+        workflow_run = sidecar.get("archiver_workflow_run")
+        if workflow_run is not None and (
+            not isinstance(workflow_run, str) or not workflow_run.strip()
+        ):
+            sys.exit("final sidecar.archiver_workflow_run must be a non-empty string")
+        problem_ids = sidecar.get("problem_ids")
+        if problem_ids is not None and (
+            not isinstance(problem_ids, list)
+            or not all(isinstance(value, str) and value for value in problem_ids)
+            or problem_ids != sorted(set(problem_ids))
+        ):
+            sys.exit("final sidecar.problem_ids must be sorted unique strings")
+        verdict = sidecar.get("evaluator_verdict")
+        if verdict is not None and (
+            not isinstance(verdict, dict)
+            or not all(
+                isinstance(key, str)
+                and key
+                and value in {"pass", "fail", "skipped"}
+                for key, value in verdict.items()
+            )
+        ):
+            sys.exit("final sidecar.evaluator_verdict has invalid entries")
 
 
 # The stable identity of an archived submission. Two sidecars describe the
@@ -390,19 +534,113 @@ def _validate_sidecar(sidecar: dict) -> None:
 # not byte-reproducible, so re-fetching the same ref yields a different
 # `sha256_plaintext_tar` for identical content — including it would
 # misclassify a legitimate re-evaluation as a colliding archive.
-_IDENTITY_FIELDS = (
+_LEGACY_IDENTITY_FIELDS = (
     "submitter",
     "issue",
     "submission_repo",
     "submission_ref",
 )
+_SERVER_IDENTITY_FIELDS = (
+    "submission_id",
+    "submitter",
+    "submission_repo",
+    "submission_ref",
+)
+
+
+def _identity_fields(sidecar: dict) -> tuple[str, ...]:
+    if sidecar.get("schema_version") == SERVER_SIDECAR_SCHEMA_VERSION:
+        return _SERVER_IDENTITY_FIELDS
+    return _LEGACY_IDENTITY_FIELDS
 
 
 def _same_source(existing: dict, ours: dict) -> bool:
+    fields = _identity_fields(ours)
+    if existing.get("schema_version") != ours.get("schema_version"):
+        return False
     return all(
         existing.get(f) is not None and existing.get(f) == ours.get(f)
-        for f in _IDENTITY_FIELDS
+        for f in fields
     )
+
+
+def _write_locator(
+    path: pathlib.Path,
+    *,
+    sidecar: dict,
+    audit_repo: str,
+    archive_commit: str,
+    archive_path: str,
+) -> None:
+    if not SHA40_RE.fullmatch(archive_commit):
+        sys.exit(
+            "GitHub did not return a 40-char lowercase commit SHA for the "
+            f"archive write: {archive_commit!r}"
+        )
+    digest = sidecar.get("sha256_ciphertext")
+    if not isinstance(digest, str) or not SHA256_HEX_RE.fullmatch(digest):
+        sys.exit(
+            "archived sidecar has no valid sha256_ciphertext; cannot emit State locator"
+        )
+    locator = {
+        "schema_version": ARCHIVE_LOCATOR_SCHEMA_VERSION,
+        "submission_id": sidecar["submission_id"],
+        "archive_repository": audit_repo,
+        "archive_commit": archive_commit,
+        "archive_path": archive_path,
+        "archive_ciphertext_sha256": digest,
+        "encrypted": True,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(locator, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _verify_ciphertext_at_commit(
+    *,
+    audit_repo: str,
+    token: str,
+    archive_commit: str,
+    archive_path: str,
+    expected_sha256: str,
+) -> None:
+    """Prove the immutable commit named in State contains the expected bytes."""
+    query = urllib.parse.urlencode({"ref": archive_commit})
+    api_url = (
+        f"https://api.github.com/repos/{audit_repo}/contents/{archive_path}?{query}"
+    )
+    req = urllib.request.Request(
+        api_url,
+        method="GET",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github.raw+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "lean-eval-archiver",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            archived_bytes = resp.read()
+    except urllib.error.HTTPError as exc:
+        try:
+            body = exc.read().decode("utf-8", errors="replace")
+        finally:
+            exc.close()
+        sys.exit(
+            f"could not verify archived ciphertext at {archive_commit}:{archive_path} "
+            f"({exc.code}): {body}"
+        )
+    except urllib.error.URLError as exc:
+        sys.exit(
+            f"could not verify archived ciphertext at {archive_commit}:{archive_path}: {exc}"
+        )
+    actual_sha256 = hashlib.sha256(archived_bytes).hexdigest()
+    if actual_sha256 != expected_sha256:
+        sys.exit(
+            "archive commit does not contain the ciphertext recorded by its sidecar: "
+            f"expected {expected_sha256}, got {actual_sha256} at "
+            f"{archive_commit}:{archive_path}"
+        )
 
 
 def _push(args: argparse.Namespace) -> int:
@@ -419,6 +657,10 @@ def _push(args: argparse.Namespace) -> int:
     sidecar = _read_json(sidecar_path)
 
     _validate_sidecar(sidecar)
+
+    is_server_submission = sidecar["schema_version"] == SERVER_SIDECAR_SCHEMA_VERSION
+    if is_server_submission and args.locator_output is None:
+        sys.exit("--locator-output is required for a server-submission archive")
 
     sidecar["sha256_ciphertext"] = _sha256_of_file(ciphertext)
     sidecar["size_bytes_ciphertext"] = ciphertext.stat().st_size
@@ -476,8 +718,15 @@ def _push(args: argparse.Namespace) -> int:
     ciphertext_bytes = ciphertext.read_bytes()
 
     audit_repo = args.audit_repo
+    if not REPO_IDENT_RE.fullmatch(audit_repo):
+        sys.exit(f"--audit-repo has unexpected shape: {audit_repo!r}")
+    identity_label = (
+        f"submission {sidecar['submission_id']}"
+        if is_server_submission
+        else f"issue {sidecar['issue']}"
+    )
     commit_message = (
-        f"archive: issue {sidecar['issue']} "
+        f"archive: {identity_label} "
         f"({sidecar['submission_repo']}@{_short_ref(sidecar['submission_ref'])})"
     )
 
@@ -501,11 +750,40 @@ def _push(args: argparse.Namespace) -> int:
                 f"({sidecar['submission_repo']}@{_short_ref(sidecar['submission_ref'])}); "
                 f"idempotent no-op"
             )
+            if is_server_submission:
+                _validate_sidecar(existing_sidecar, finalized=True)
+                archive_commit = _latest_path_commit(
+                    audit_repo=audit_repo,
+                    token=token,
+                    path=sidecar_remote,
+                )
+                archived_digest = existing_sidecar.get("sha256_ciphertext")
+                if not isinstance(archived_digest, str) or not SHA256_HEX_RE.fullmatch(
+                    archived_digest
+                ):
+                    sys.exit(
+                        "existing server sidecar has no valid sha256_ciphertext"
+                    )
+                _verify_ciphertext_at_commit(
+                    audit_repo=audit_repo,
+                    token=token,
+                    archive_commit=archive_commit,
+                    archive_path=ciphertext_remote,
+                    expected_sha256=archived_digest,
+                )
+                _write_locator(
+                    args.locator_output,
+                    sidecar=existing_sidecar,
+                    audit_repo=audit_repo,
+                    archive_commit=archive_commit,
+                    archive_path=ciphertext_remote,
+                )
             print(f"archived: {audit_repo}:{ciphertext_remote}")
             print(f"          {audit_repo}:{sidecar_remote}")
             return 0
-        existing_identity = {f: existing_sidecar.get(f) for f in _IDENTITY_FIELDS}
-        ours_identity = {f: sidecar.get(f) for f in _IDENTITY_FIELDS}
+        identity_fields = _identity_fields(sidecar)
+        existing_identity = {f: existing_sidecar.get(f) for f in identity_fields}
+        ours_identity = {f: sidecar.get(f) for f in identity_fields}
         sys.exit(
             f"audit path {base_path!r} already exists in {audit_repo} for a "
             f"different source (existing {existing_identity} vs ours "
@@ -526,13 +804,35 @@ def _push(args: argparse.Namespace) -> int:
         content=ciphertext_bytes,
         message=commit_message,
     )
-    _put_contents(
+    archive_commit = _put_contents(
         audit_repo=audit_repo,
         token=token,
         path=sidecar_remote,
         content=sidecar_bytes,
         message=commit_message + " (sidecar)",
     )
+
+    if is_server_submission:
+        if archive_commit is None:
+            archive_commit = _latest_path_commit(
+                audit_repo=audit_repo,
+                token=token,
+                path=sidecar_remote,
+            )
+        _verify_ciphertext_at_commit(
+            audit_repo=audit_repo,
+            token=token,
+            archive_commit=archive_commit,
+            archive_path=ciphertext_remote,
+            expected_sha256=sidecar["sha256_ciphertext"],
+        )
+        _write_locator(
+            args.locator_output,
+            sidecar=sidecar,
+            audit_repo=audit_repo,
+            archive_commit=archive_commit,
+            archive_path=ciphertext_remote,
+        )
 
     print(f"archived: {audit_repo}:{ciphertext_remote}")
     print(f"          {audit_repo}:{sidecar_remote}")
@@ -563,6 +863,42 @@ def _api_get(*, audit_repo: str, token: str, path: str) -> dict | None:
         finally:
             exc.close()
         sys.exit(f"Contents API GET {path} failed ({exc.code}):\n{body}")
+
+
+def _latest_path_commit(*, audit_repo: str, token: str, path: str) -> str:
+    api_url = (
+        f"https://api.github.com/repos/{audit_repo}/commits"
+        f"?path={urllib.parse.quote(path, safe='')}&per_page=1"
+    )
+    req = urllib.request.Request(
+        api_url,
+        method="GET",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "lean-eval-archiver",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        try:
+            body = exc.read().decode("utf-8", errors="replace")
+        finally:
+            exc.close()
+        sys.exit(
+            f"Commits API GET for {path} failed ({exc.code}): {body}"
+        )
+    except urllib.error.URLError as exc:
+        sys.exit(f"Commits API GET for {path} failed: {exc}")
+    if not isinstance(payload, list) or not payload:
+        sys.exit(f"Commits API returned no commit for archived path {path!r}")
+    commit_sha = payload[0].get("sha") if isinstance(payload[0], dict) else None
+    if not isinstance(commit_sha, str) or not SHA40_RE.fullmatch(commit_sha):
+        sys.exit(f"Commits API returned an invalid commit SHA for {path!r}: {commit_sha!r}")
+    return commit_sha
 
 
 def _get_remote_sidecar(*, audit_repo: str, token: str, path: str) -> dict | None:
@@ -621,7 +957,7 @@ def _put_contents(
     path: str,
     content: bytes,
     message: str,
-) -> None:
+) -> str | None:
     """Create or update a single file in the audit repo via the Contents API.
 
     Upsert: a file that does not exist is created; one that already exists
@@ -647,7 +983,7 @@ def _put_contents(
             f"archive: {path} already present with matching content; idempotent no-op",
             file=sys.stderr,
         )
-        return
+        return None
     existing_sha = existing.get("sha") if existing is not None else None
     last_err: Exception | None = None
     for attempt in range(1, PUSH_RETRY_ATTEMPTS + 1):
@@ -671,8 +1007,10 @@ def _put_contents(
         )
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
-                resp.read()
-            return
+                response = json.loads(resp.read().decode("utf-8"))
+            commit = response.get("commit") if isinstance(response, dict) else None
+            commit_sha = commit.get("sha") if isinstance(commit, dict) else None
+            return commit_sha if isinstance(commit_sha, str) else None
         except urllib.error.HTTPError as exc:
             try:
                 err_body = exc.read().decode("utf-8", errors="replace")
@@ -695,7 +1033,7 @@ def _put_contents(
                         f"archive: {path} converged to matching content; idempotent no-op",
                         file=sys.stderr,
                     )
-                    return
+                    return None
                 else:
                     existing_sha = refreshed.get("sha")
                 last_err = exc
@@ -745,6 +1083,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p_push.add_argument("--benchmark-commit", default="")
     p_push.add_argument("--workflow-run-url", default="")
     p_push.add_argument("--audit-repo", default=DEFAULT_AUDIT_REPO)
+    p_push.add_argument(
+        "--locator-output",
+        type=pathlib.Path,
+        default=None,
+        help=(
+            "Write the immutable State archive locator (required for "
+            "UUIDv7 server submissions)."
+        ),
+    )
     p_push.set_defaults(func=_push)
 
     return parser.parse_args(argv)

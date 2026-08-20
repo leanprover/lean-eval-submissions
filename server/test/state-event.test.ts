@@ -49,7 +49,7 @@ describe("State event contract", () => {
     expect(() =>
       validateStateEvent({
         schema_version: 1,
-        event_id: "0198abcd-0000-7000-8000-000000000002",
+        event_id: "0198abcd-1111-7000-8000-000000000001",
         event_type: "submission.received",
         occurred_at: "2026-08-20T06:07:09.000Z",
         subject_id: "0198abcd-1111-7000-8000-000000000001",
@@ -73,5 +73,48 @@ describe("State event contract", () => {
         subject_id: "submission_abc",
       }),
     ).toThrow(/UUIDv7/);
+    expect(() => validateStateEvent({
+      schema_version: 1,
+      event_id: "0198abcd-1111-7000-8000-000000000001",
+      event_type: "submission.received",
+      occurred_at: "2026-08-20T06:07:09.000Z",
+      subject_id: "0198abcd-1111-7000-8000-000000000001",
+      causation_event_id: null,
+      actor: { kind: "github", login: "kim-em" },
+      payload: {
+        problem_id: "two_plus_two", statement_revision: 1, declared_model: "é".repeat(129),
+        source_repository: "example/submission", source_commit: "a".repeat(40),
+        source_visibility: "private", publication_choice: "scheduled",
+      },
+    })).toThrow(/256 bytes/);
+  });
+
+  it("accepts the exact expanded Wave-2 replay terminal payload", () => {
+    const terminal = {
+      schema_version: 1,
+      event_id: "0198abcd-2222-7000-8000-000000000003",
+      event_type: "replay.crashed",
+      occurred_at: "2026-08-20T06:07:10.000Z",
+      subject_id: `rt1_${"a".repeat(64)}`,
+      causation_event_id: "0198abcd-2222-7000-8000-000000000002",
+      actor: { kind: "system" },
+      payload: {
+        attempt: 1,
+        checker: "lean-checker-v1",
+        checker_wall_time_ms: 123,
+        checker_retired_instructions: null,
+        checker_retired_instructions_unavailable_reason: "counter_not_supported",
+        build_wall_time_ms: 456,
+        build_retired_instructions: 789,
+        build_retired_instructions_unavailable_reason: null,
+        lines_of_code: 12,
+        file_count: 2,
+      },
+    } as const;
+    expect(() => validateStateEvent(terminal)).not.toThrow();
+    expect(() => validateStateEvent({
+      ...terminal,
+      payload: { ...terminal.payload, build_retired_instructions_unavailable_reason: "counter_not_reported" },
+    })).toThrow(/measured counter/);
   });
 });

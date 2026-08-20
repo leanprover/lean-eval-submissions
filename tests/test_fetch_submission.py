@@ -560,6 +560,68 @@ class FetchSubmissionEndToEndTests(unittest.TestCase):
         self.assertEqual(metadata["solution_publication_status"], "published")
         self.assertEqual(metadata["solution_publication_date"], "2026-08-05")
 
+
+class ServerDispatchTests(unittest.TestCase):
+    def _inputs(self, **overrides: str) -> dict[str, str]:
+        values = {
+            "archive_locator_required": "true",
+            "archive_sidecar_schema": "2",
+            "declared_model": "Example Model",
+            "problem_group": "formalization-evaluation",
+            "problem_id": "two_plus_two",
+            "production_metadata_json": '{"input_tokens":123,"web_access":false}',
+            "publication_choice": "scheduled",
+            "source_commit": "a" * 40,
+            "source_repository": "alice/proofs",
+            "source_visibility": "private",
+            "statement_revision": "2",
+            "submission_id": "0198abcd-1111-7000-8000-000000000001",
+            "submitted_by": "alice",
+            "workflow_commit": "b" * 40,
+        }
+        values.update(overrides)
+        return values
+
+    def test_server_dispatch_preserves_exact_ref_and_uuid_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as td, patch.object(
+            fs, "resolve_repo_visibility", return_value=False
+        ):
+            metadata = fs.fetch_server_submission(
+                inputs=self._inputs(),
+                output_dir=pathlib.Path(td),
+                app_token="installation-token",
+                skip_clone=True,
+            )
+        self.assertEqual(metadata["schema_version"], 2)
+        self.assertEqual(
+            metadata["submission_id"], "0198abcd-1111-7000-8000-000000000001"
+        )
+        self.assertEqual(metadata["submission_ref"], "a" * 40)
+        self.assertEqual(metadata["problem_id"], "two_plus_two")
+        self.assertEqual(metadata["statement_revision"], 2)
+        self.assertEqual(metadata["production_metadata"]["input_tokens"], 123)
+
+    def test_server_dispatch_rejects_drift_and_unknown_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as td, patch.object(
+            fs, "resolve_repo_visibility", return_value=True
+        ):
+            with self.assertRaisesRegex(fs.FetchError, "visibility changed"):
+                fs.fetch_server_submission(
+                    inputs=self._inputs(),
+                    output_dir=pathlib.Path(td),
+                    app_token="installation-token",
+                    skip_clone=True,
+                )
+        bad = self._inputs(production_metadata_json='{"surprise":true}')
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaisesRegex(fs.FetchError, "unknown fields"):
+                fs.fetch_server_submission(
+                    inputs=bad,
+                    output_dir=pathlib.Path(td),
+                    app_token="installation-token",
+                    skip_clone=True,
+                )
+
     def test_public_source_with_private_declaration_is_rejected(self) -> None:
         body = with_publication_fields(
             SAMPLE_BODY,

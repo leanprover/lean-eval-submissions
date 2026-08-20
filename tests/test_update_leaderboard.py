@@ -92,6 +92,33 @@ def v1_file() -> dict:
 
 
 class UpdateLeaderboardTests(unittest.TestCase):
+    def test_server_intake_records_uuid_and_structured_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            result = ul.update_leaderboard(
+                user="alice",
+                leaderboard_dir=root,
+                passed=["two_plus_two"],
+                benchmark_commit="b" * 40,
+                submission_kind="github_repo",
+                submission_repo="alice/proofs",
+                submission_ref="a" * 40,
+                submission_public=False,
+                model="Example Model",
+                issue_number=None,
+                submission_id="0198abcd-1111-7000-8000-000000000001",
+                now="2026-08-20T00:00:00Z",
+                statement_revisions={"two_plus_two": 2},
+                production_metadata={"input_tokens": 123},
+            )
+            self.assertTrue(result["changed"])
+            records = json.loads((root / "results" / "alice.json").read_text())["results"]
+            self.assertEqual(records[0]["intake"], {
+                "kind": "server",
+                "submission_id": "0198abcd-1111-7000-8000-000000000001",
+            })
+            self.assertEqual(records[0]["production_metadata"]["input_tokens"], 123)
+
     def test_first_write_creates_flat_schema_v2(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)

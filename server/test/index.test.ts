@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { handleRequest, type RuntimeEnv } from "../src/app";
 
 const ENV = {
+  API_RATE_LIMITER: { limit: () => Promise.resolve({ success: true }) },
   DEPLOYED_COMMIT: "test-commit",
   DEPLOYMENT_ENVIRONMENT: "staging",
   INTAKE_ENABLED: "false",

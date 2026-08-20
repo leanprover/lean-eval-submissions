@@ -7,6 +7,7 @@ import {
   StateUpdateOutcomeUnknownError,
 } from "../src/github-state";
 import type { StateEvent } from "../src/state-event";
+import type { SubmissionView } from "../src/submission-view";
 
 const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
@@ -22,6 +23,71 @@ const EVENT: StateEvent = {
   causation_event_id: null,
   actor: { kind: "system" },
   payload: { environment: "staging" },
+};
+
+const SUBMISSION_ID = "0198abcd-1111-7000-8000-000000000001";
+const METADATA_ID = "0198abcd-1111-7000-8000-000000000002";
+const RECEIVED: StateEvent = {
+  schema_version: 1,
+  event_id: SUBMISSION_ID,
+  event_type: "submission.received",
+  occurred_at: "2026-08-20T06:07:08.000Z",
+  subject_id: SUBMISSION_ID,
+  causation_event_id: null,
+  actor: { kind: "github", login: "alice" },
+  payload: {
+    problem_id: "two_plus_two",
+    statement_revision: 2,
+    declared_model: "Example Model",
+    source_repository: "alice/proofs",
+    source_commit: "a".repeat(40),
+    source_visibility: "private",
+    publication_choice: "scheduled",
+  },
+};
+const METADATA: StateEvent = {
+  schema_version: 1,
+  event_id: METADATA_ID,
+  event_type: "submission.metadata_amended",
+  occurred_at: "2026-08-20T06:07:08.001Z",
+  subject_id: SUBMISSION_ID,
+  causation_event_id: SUBMISSION_ID,
+  actor: { kind: "github", login: "alice" },
+  payload: { production_metadata: { web_access: false } },
+};
+const VIEW: SubmissionView = {
+  schema_version: 1,
+  submission_id: SUBMISSION_ID,
+  owner_login: "alice",
+  received_event_id: SUBMISSION_ID,
+  mutation_event_id: METADATA_ID,
+  metadata_event_id: METADATA_ID,
+  publication_event_id: null,
+  accepted_at: "2026-08-20T06:07:08.000Z",
+  submission: {
+    problem_id: "two_plus_two",
+    problem_group: "formalization-evaluation",
+    statement_revision: 2,
+    declared_model: "Example Model",
+    source_repository: "alice/proofs",
+    source_commit: "a".repeat(40),
+    source_visibility: "private",
+    publication_choice: "scheduled",
+    production_metadata: { web_access: false },
+  },
+  production_metadata: { web_access: false },
+  publication_choice: "scheduled",
+  archive: { status: "pending" },
+  evaluation: { status: "pending" },
+  result_id: null,
+  dispatch: {
+    status: "succeeded",
+    attempts: 1,
+    requested_at: "2026-08-20T06:07:08.000Z",
+    updated_at: "2026-08-20T06:07:08.003Z",
+    workflow_ref: `lean-eval-dispatch/${"b".repeat(40)}`,
+    last_error_code: null,
+  },
 };
 
 function json(value: unknown, status = 200): Response {
@@ -50,6 +116,35 @@ function repository(fetcher: GitHubFetch): GitHubStateRepository {
 }
 
 describe("atomic Git State append", () => {
+  it("target-reads one submission view and only its referenced immutable events", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      contents(VIEW),
+      contents(RECEIVED),
+      contents(METADATA),
+    ]);
+    await expect(repository(fetcher).readSubmission(SUBMISSION_ID)).resolves.toEqual(VIEW);
+    const urls = fetcher.mock.calls.map((call) => {
+      const input = call[0];
+      return typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    });
+    expect(urls).toHaveLength(5);
+    expect(urls.some((url) => url.includes("recursive=1") || url.includes("/git/blobs/"))).toBe(false);
+    expect(urls.filter((url) => url.includes("/contents/events/"))).toHaveLength(2);
+  });
+
+  it("fails closed when a targeted view disagrees with a referenced event", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      contents({ ...VIEW, owner_login: "mallory" }),
+      contents(RECEIVED),
+      contents(METADATA),
+    ]);
+    await expect(repository(fetcher).readSubmission(SUBMISSION_ID)).rejects.toMatchObject({ status: 502 });
+  });
+
   it("publishes a create-only event with a non-forced ref update", async () => {
     const fetcher = sequence([
       json({ object: { sha: HEAD } }),
@@ -62,6 +157,7 @@ describe("atomic Git State append", () => {
 
     await expect(repository(fetcher).appendEvent(EVENT)).resolves.toEqual({
       commit: NEW_COMMIT,
+      created: true,
       path: `events/01/${EVENT.event_id}.json`,
     });
 
@@ -109,6 +205,7 @@ describe("atomic Git State append", () => {
     ]);
     await expect(repository(fetcher).appendEvent(EVENT)).resolves.toEqual({
       commit: HEAD,
+      created: false,
       path: `events/01/${EVENT.event_id}.json`,
     });
     expect(fetcher).toHaveBeenCalledTimes(3);
@@ -132,6 +229,7 @@ describe("atomic Git State append", () => {
 
     await expect(repository(fetcher).appendEvent(EVENT)).resolves.toEqual({
       commit: "8".repeat(40),
+      created: true,
       path: `events/01/${EVENT.event_id}.json`,
     });
     expect(fetcher).toHaveBeenCalledTimes(12);
@@ -151,6 +249,7 @@ describe("atomic Git State append", () => {
 
     await expect(repository(fetcher).appendEvent(EVENT)).resolves.toEqual({
       commit: NEW_COMMIT,
+      created: true,
       path: `events/01/${EVENT.event_id}.json`,
     });
   });

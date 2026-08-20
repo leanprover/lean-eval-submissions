@@ -1,4 +1,17 @@
-import { stateEventPath, type StateEvent, validateStateEvent } from "./state-event";
+import {
+  stateEventPath,
+  type StateEvent,
+  type WritableStateEvent,
+  validateStateEvent,
+} from "./state-event";
+import {
+  decodeDispatchOutbox,
+  decodeSubmissionView,
+  dispatchOutboxPath,
+  submissionViewPath,
+  type DispatchOutbox,
+  type SubmissionView,
+} from "./submission-view";
 
 const API = "https://api.github.com";
 const STATE_BRANCH = "main";
@@ -27,6 +40,8 @@ type BranchSnapshot = Readonly<{
   headSha: string;
   treeSha: string;
 }>;
+
+type TreeWrite = Readonly<{ path: string; value: unknown }>;
 
 export class GitHubStateError extends Error {
   readonly status: number;
@@ -173,8 +188,9 @@ async function createCommit(
   config: GitHubStateConfig,
   fetcher: GitHubFetch,
   snapshot: BranchSnapshot,
-  path: string,
-  event: StateEvent,
+  events: readonly WritableStateEvent[],
+  writes: readonly TreeWrite[] = [],
+  message?: string,
 ): Promise<string> {
   const tree = await jsonCall(config, fetcher, "/git/trees", {
     method: "POST",
@@ -182,12 +198,15 @@ async function createCommit(
     body: JSON.stringify({
       base_tree: snapshot.treeSha,
       tree: [
-        {
-          path,
+        ...events.map((event) => ({
+          path: stateEventPath(event),
           mode: "100644",
           type: "blob",
           content: `${JSON.stringify(event, null, 2)}\n`,
-        },
+        })),
+        ...writes.map((write) => write.value === null
+          ? { path: write.path, mode: "100644", type: "blob", sha: null }
+          : { path: write.path, mode: "100644", type: "blob", content: `${JSON.stringify(write.value, null, 2)}\n` }),
       ],
     }),
   });
@@ -196,7 +215,9 @@ async function createCommit(
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({
-      message: `Record ${event.event_type} ${event.event_id}`,
+      message: message ?? (events.length === 1
+        ? `Record ${events[0]?.event_type ?? "State event"} ${events[0]?.event_id ?? ""}`
+        : `Record atomic State event batch for ${events[0]?.subject_id ?? "unknown subject"}`),
       parents: [snapshot.headSha],
       tree: treeSha,
     }),
@@ -271,6 +292,96 @@ function pause(attempt: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
+async function readEventAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  eventId: string,
+  commit: string,
+): Promise<StateEvent> {
+  const path = `events/${eventId.replaceAll("-", "").slice(0, 2)}/${eventId}.json`;
+  const entry = await readPathAt(config, fetcher, path, commit);
+  if (!entry.found) throw new GitHubStateError(502, `${path} referenced by submission view is missing`);
+  try {
+    validateStateEvent(entry.value);
+  } catch (error) {
+    throw new GitHubStateError(502, `${path} referenced by submission view is invalid: ${String(error)}`);
+  }
+  if (stateEventPath(entry.value) !== path) throw new GitHubStateError(502, `${path} event identity disagrees with its path`);
+  return entry.value;
+}
+
+async function readSubmissionAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  submissionId: string,
+  commit: string,
+): Promise<SubmissionView | null> {
+  const path = submissionViewPath(submissionId);
+  const entry = await readPathAt(config, fetcher, path, commit);
+  if (!entry.found) return null;
+  let view: SubmissionView;
+  try {
+    view = decodeSubmissionView(entry.value);
+  } catch (error) {
+    throw new GitHubStateError(502, `${path} is invalid: ${String(error)}`);
+  }
+  if (view.submission_id !== submissionId) throw new GitHubStateError(502, `${path} has the wrong submission identity`);
+  const eventIds = new Set([
+    view.received_event_id,
+    view.metadata_event_id,
+    ...(view.publication_event_id === null ? [] : [view.publication_event_id]),
+  ]);
+  const events = await Promise.all([...eventIds].map((eventId) => readEventAt(config, fetcher, eventId, commit)));
+  const received = events.find((event) => event.event_id === view.received_event_id);
+  if (
+    received?.event_type !== "submission.received" ||
+    received.subject_id !== submissionId ||
+    received.actor.login !== view.owner_login
+  ) {
+    throw new GitHubStateError(502, `${path} does not match its submission.received event`);
+  }
+  const expectedReceived = {
+    problem_id: view.submission.problem_id,
+    statement_revision: view.submission.statement_revision,
+    declared_model: view.submission.declared_model,
+    source_repository: view.submission.source_repository,
+    source_commit: view.submission.source_commit,
+    source_visibility: view.submission.source_visibility,
+    publication_choice: received.payload.publication_choice,
+  };
+  if (canonicalJson(received.payload) !== canonicalJson(expectedReceived)) {
+    throw new GitHubStateError(502, `${path} submission input does not match its received event`);
+  }
+  const metadata = events.find((event) => event.event_id === view.metadata_event_id);
+  if (
+    metadata?.event_type !== "submission.metadata_amended" ||
+    metadata.subject_id !== submissionId ||
+    metadata.actor.login !== view.owner_login ||
+    canonicalJson(metadata.payload.production_metadata) !== canonicalJson(view.production_metadata)
+  ) {
+    throw new GitHubStateError(502, `${path} does not match its metadata event`);
+  }
+  if (view.publication_event_id === null) {
+    if (view.publication_choice !== received.payload.publication_choice) {
+      throw new GitHubStateError(502, `${path} publication choice does not match intake`);
+    }
+  } else {
+    const publication = events.find((event) => event.event_id === view.publication_event_id);
+    if (
+      publication?.event_type !== "submission.publication_changed" ||
+      publication.subject_id !== submissionId ||
+      publication.actor.login !== view.owner_login ||
+      publication.payload.publication_choice !== view.publication_choice
+    ) {
+      throw new GitHubStateError(502, `${path} does not match its publication event`);
+    }
+  }
+  if (!eventIds.has(view.mutation_event_id)) {
+    throw new GitHubStateError(502, `${path} mutation head is not a referenced owner mutation`);
+  }
+  return view;
+}
+
 export class GitHubStateRepository {
   readonly #config: GitHubStateConfig;
   readonly #fetcher: GitHubFetch;
@@ -295,32 +406,208 @@ export class GitHubStateRepository {
     await branchSnapshot(this.#config, this.#fetcher);
   }
 
-  async appendEvent(event: StateEvent): Promise<{ commit: string; path: string }> {
-    validateStateEvent(event);
-    const path = stateEventPath(event);
+  async readSubmission(submissionId: string): Promise<SubmissionView | null> {
+    const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+    return readSubmissionAt(this.#config, this.#fetcher, submissionId, snapshot.headSha);
+  }
+
+  async acceptSubmission(
+    events: readonly WritableStateEvent[],
+    view: SubmissionView,
+    outbox: DispatchOutbox,
+  ): Promise<{ commit: string; created: boolean; view: SubmissionView }> {
+    if (events.length !== 3) throw new TypeError("submission acceptance requires exactly three State events");
+    for (const event of events) validateStateEvent(event);
+    const decodedView = decodeSubmissionView(view);
+    const decodedOutbox = decodeDispatchOutbox(outbox);
+    if (decodedView.submission_id !== decodedOutbox.submission_id || decodedView.submission_id !== events[1]?.subject_id) {
+      throw new TypeError("submission acceptance identities disagree");
+    }
+    const paths = events.map(stateEventPath);
+    const viewPath = submissionViewPath(view.submission_id);
+    const outboxPath = dispatchOutboxPath(view.submission_id);
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
       const snapshot = await branchSnapshot(this.#config, this.#fetcher);
-      const existing = await readPathAt(this.#config, this.#fetcher, path, snapshot.headSha);
-      if (existing.found) {
-        try {
-          validateStateEvent(existing.value);
-        } catch {
-          throw new StateEventConflictError(path);
-        }
-        if (canonicalJson(existing.value) === canonicalJson(event)) {
-          return { commit: snapshot.headSha, path };
-        }
-        throw new StateEventConflictError(path);
+      const current = await readSubmissionAt(this.#config, this.#fetcher, view.submission_id, snapshot.headSha);
+      if (current !== null) return { commit: snapshot.headSha, created: false, view: current };
+      const existing = await Promise.all(
+        [...paths, outboxPath].map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)),
+      );
+      if (existing.some((entry) => entry.found)) {
+        throw new StateEventConflictError(paths[existing.findIndex((entry) => entry.found)] ?? viewPath);
       }
       const commit = await createCommit(
         this.#config,
         this.#fetcher,
         snapshot,
-        path,
-        event,
+        events,
+        [
+          { path: viewPath, value: decodedView },
+          { path: outboxPath, value: decodedOutbox },
+        ],
+        `Accept submission ${view.submission_id} and enqueue dispatch`,
       );
       if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
-        return { commit, path };
+        return { commit, created: true, view: decodedView };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) throw new GitHubStateError(409, "State branch kept changing during submission acceptance");
+      await pause(attempt);
+    }
+    throw new Error("unreachable submission acceptance attempt");
+  }
+
+  async appendSubmissionMutation(
+    event: WritableStateEvent,
+    expectedMutationEventId: string,
+    nextView: SubmissionView,
+  ): Promise<{ commit: string; created: boolean; view: SubmissionView }> {
+    validateStateEvent(event);
+    if (event.event_type !== "submission.metadata_amended" && event.event_type !== "submission.publication_changed") {
+      throw new TypeError("only owner submission mutations may update a submission view");
+    }
+    const decodedView = decodeSubmissionView(nextView);
+    const path = stateEventPath(event);
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+      const current = await readSubmissionAt(this.#config, this.#fetcher, event.subject_id, snapshot.headSha);
+      if (current === null) throw new GitHubStateError(404, "submission view does not exist");
+      if (current.mutation_event_id === event.event_id) {
+        const existing = await readPathAt(this.#config, this.#fetcher, path, snapshot.headSha);
+        if (!existing.found || canonicalJson(existing.value) !== canonicalJson(event) || canonicalJson(current) !== canonicalJson(decodedView)) {
+          throw new StateEventConflictError(path);
+        }
+        return { commit: snapshot.headSha, created: false, view: current };
+      }
+      if (current.mutation_event_id !== expectedMutationEventId) throw new StateEventConflictError(path);
+      const existing = await readPathAt(this.#config, this.#fetcher, path, snapshot.headSha);
+      if (existing.found) throw new StateEventConflictError(path);
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        [event],
+        [{ path: submissionViewPath(event.subject_id), value: decodedView }],
+        `Record owner mutation ${event.event_id} and refresh submission view`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return { commit, created: true, view: decodedView };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) throw new GitHubStateError(409, "State branch kept changing during owner mutation");
+      await pause(attempt);
+    }
+    throw new Error("unreachable owner mutation attempt");
+  }
+
+  async updateDispatch(
+    nextView: SubmissionView,
+    expectedAttempts: number,
+    nextOutbox: DispatchOutbox | null,
+  ): Promise<{ commit: string; view: SubmissionView }> {
+    const decodedView = decodeSubmissionView(nextView);
+    const decodedOutbox = nextOutbox === null ? null : decodeDispatchOutbox(nextOutbox);
+    if (decodedOutbox !== null && decodedOutbox.submission_id !== decodedView.submission_id) {
+      throw new TypeError("dispatch view and outbox identities disagree");
+    }
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+      const current = await readSubmissionAt(this.#config, this.#fetcher, nextView.submission_id, snapshot.headSha);
+      if (current === null) throw new GitHubStateError(404, "submission view does not exist");
+      if (current.dispatch.status === "succeeded") return { commit: snapshot.headSha, view: current };
+      if (current.dispatch.attempts !== expectedAttempts) throw new StateEventConflictError(submissionViewPath(nextView.submission_id));
+      const outboxPath = dispatchOutboxPath(nextView.submission_id);
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        [],
+        [
+          { path: submissionViewPath(nextView.submission_id), value: decodedView },
+          { path: outboxPath, value: decodedOutbox },
+        ],
+        `Record dispatch ${decodedView.dispatch.status} for ${nextView.submission_id}`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return { commit, view: decodedView };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) throw new GitHubStateError(409, "State branch kept changing during dispatch update");
+      await pause(attempt);
+    }
+    throw new Error("unreachable dispatch update attempt");
+  }
+
+  async listDispatchOutbox(shard: string): Promise<readonly DispatchOutbox[]> {
+    if (!/^[0-9a-f]{2}$/.test(shard)) throw new TypeError("dispatch outbox shard must be two lowercase hexadecimal digits");
+    const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+    const directory = `views/dispatch-outbox/${shard}`;
+    const query = new URLSearchParams({ ref: snapshot.headSha });
+    const listing = await jsonCall(this.#config, this.#fetcher, `/contents/${directory}?${query.toString()}`);
+    if (listing === null) return [];
+    if (!Array.isArray(listing) || listing.length > 1000) {
+      throw new GitHubStateError(503, "dispatch outbox shard is invalid or exceeds its hard bound");
+    }
+    const paths = listing.map((raw) => {
+      const entry = object(raw, "dispatch outbox directory entry");
+      if (entry.type !== "file" || typeof entry.path !== "string" || !new RegExp(`^${directory}/[0-9a-f-]{36}\\.json$`).test(entry.path)) {
+        throw new GitHubStateError(502, "dispatch outbox directory contains an unexpected entry");
+      }
+      return entry.path;
+    });
+    return Promise.all(paths.map(async (path) => {
+      const entry = await readPathAt(this.#config, this.#fetcher, path, snapshot.headSha);
+      if (!entry.found) throw new GitHubStateError(502, `${path} disappeared from the pinned State snapshot`);
+      let outbox: DispatchOutbox;
+      try {
+        outbox = decodeDispatchOutbox(entry.value);
+      } catch (error) {
+        throw new GitHubStateError(502, `${path} is invalid: ${String(error)}`);
+      }
+      if (dispatchOutboxPath(outbox.submission_id) !== path) throw new GitHubStateError(502, `${path} has the wrong submission identity`);
+      return outbox;
+    }));
+  }
+
+  async appendEvents(events: readonly WritableStateEvent[]): Promise<{
+    commit: string;
+    paths: readonly string[];
+    created: boolean;
+  }> {
+    if (events.length === 0 || events.length > 4) {
+      throw new TypeError("State append batch must contain between one and four events");
+    }
+    for (const event of events) validateStateEvent(event);
+    const paths = events.map(stateEventPath);
+    if (new Set(paths).size !== paths.length) throw new TypeError("State append paths must be unique");
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+      const existing = await Promise.all(
+        paths.map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)),
+      );
+      const found = existing.filter((entry) => entry.found).length;
+      if (found > 0) {
+        if (found !== events.length) throw new StateEventConflictError(paths[existing.findIndex((entry) => entry.found)] ?? paths[0] ?? "events");
+        for (let index = 0; index < events.length; index += 1) {
+          const entry = existing[index];
+          const event = events[index];
+          if (!entry?.found || !event) throw new Error("unreachable State batch comparison");
+          try {
+            validateStateEvent(entry.value);
+          } catch {
+            throw new StateEventConflictError(paths[index] ?? "events");
+          }
+          if (canonicalJson(entry.value) !== canonicalJson(event)) {
+            throw new StateEventConflictError(paths[index] ?? "events");
+          }
+        }
+        return { commit: snapshot.headSha, paths, created: false };
+      }
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        events,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return { commit, paths, created: true };
       }
       if (attempt === MAX_WRITE_ATTEMPTS) {
         throw new GitHubStateError(409, "State branch kept changing underneath the append");
@@ -328,5 +615,12 @@ export class GitHubStateRepository {
       await pause(attempt);
     }
     throw new Error("unreachable State append attempt");
+  }
+
+  async appendEvent(event: WritableStateEvent): Promise<{ commit: string; path: string; created: boolean }> {
+    const outcome = await this.appendEvents([event]);
+    const path = outcome.paths[0];
+    if (!path) throw new Error("unreachable empty State append outcome");
+    return { commit: outcome.commit, path, created: outcome.created };
   }
 }

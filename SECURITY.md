@@ -4,6 +4,13 @@ The planned encrypted-source recovery path has a separate, currently disabled
 security contract in [`docs/replay.md`](docs/replay.md). It must not weaken the
 same-job, no-plaintext-artifact invariants documented below.
 
+The local-only Wave 2 public-source planner and disposable-VM handoff are
+specified in [`docs/replay-orchestrator.md`](docs/replay-orchestrator.md). The
+execution request admits no credentials or ambient environment and disables
+network access before untrusted Lean runs; structural tests guard those
+properties. Private replay remains nonterminally blocked pending D6; it stays
+queued and does not emit `replay.unavailable`.
+
 This document explains why we believe the lean-eval submission pipeline
 is resistant to adversarial submissions, what assumptions it depends on,
 and where a future red-teamer should look first.
@@ -116,6 +123,13 @@ and the "Audit archive" section of the README. See
 and key custody story. The `record` job is gated on the `archive` job
 succeeding, so a recorded leaderboard entry always implies a durable
 encrypted archive of the source.
+
+The future server intake uses the same encryption boundary but keys the
+archive by its canonical UUIDv7 under `archives/<prefix>/<uuid>.tar.age`.
+Before State may receive `archive.completed`, the archiver emits an immutable
+repository/commit/path/ciphertext-digest locator and verifies the encrypted
+bytes at that exact commit. Issue-based intake retains its existing archive
+layout and behavior.
 
 ## 3. The two-checkout evaluation workflow
 

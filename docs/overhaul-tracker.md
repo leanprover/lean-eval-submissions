@@ -10,17 +10,41 @@ one issue per lane.
 
 ## Decisions
 
-- [ ] D1: choose public or private raw production/staging State repositories.
-- [ ] D2: approve the v1 cutoff, mechanical membership rule, exceptions, and
-      freeze date.
-- [ ] D3: approve, revise, or reject each software-verification statement.
-- [ ] D4: record the organization-controlled Cloudflare account and
-      administrators for `lean-lang.org`.
-- [ ] D5: approve the initial State-writer credential model and rotation owners.
-- [ ] D6: approve key recovery, one-submission capability, contributor
-      acknowledgement, and license wording before private intake/release.
+- [x] D1: keep raw production and staging State private and publish a
+      reproducible, schema-validated public projection.
+- [x] D2: mechanical rule selected: visible formalization-evaluation problems
+      with fewer than three accepted solves and no public submission (118 at
+      the audited snapshot); use a fresh pre-merge audit, documented exclusions
+      only, no additions, and freeze irreversibly when the reviewed PR merges.
+- [x] D3: approve both software-verification statements; retain both problems,
+      apply the researched title/prose/citation corrections, and add the three
+      agreed anti-vacuity requirements before publication.
+- [x] D4: use isolated temporary account `lean-eval`
+      (`a46b90978a1c29cc4795f30677e7e4b8`) and exact
+      `lean-eval.workers.dev` endpoints for intake-disabled drills; never reuse
+      or rename the Palomar subdomain. Kim Morrison is primary administrator
+      and temporary cost owner; organization migration and a backup remain
+      mandatory operational gates before intake or publication.
+- [x] D5: bootstrap with separate Kim-owned fine-grained PATs for staging and
+      production State, each single-repository scoped and at most 90 days;
+      rotate at least 14 days before expiry and forbid production intake until
+      the D9 GitHub App/broker replacement is live and the PATs are revoked.
+- [x] D6: approve key lifecycle, one-submission capability, contributor
+      acknowledgement, and license wording before private intake/release. D6a
+      selects a new dedicated AWS account with AWS KMS behind a
+      provider-neutral wrap/unwrap adapter; migration rewraps identities without
+      changing archives or stable IDs. D6b accepts no provider-loss recovery.
+      The capability implementation is delegated to the implementation review;
+      concise contributor/release wording is approved.
 - [ ] D7: approve a fresh results-v2 migration report's exact source commit,
       record count, and output digest.
+- [x] D8: acknowledge UUID-prefix State paths and the durable Git writer lock
+      as correctness-preserving deviations from the literal program text.
+- [x] D9: use two least-privilege GitHub Apps behind an organization-operated
+      token broker; implementation identifiers are recorded when provisioned.
+- [x] D10: use a two-UTC-calendar-month embargo and initially plan a four-week
+      issue-intake overlap. A later explicit maintainer decision may shorten
+      the issue overlap and must be announced before closure.
 
 ## Repository and contract foundations
 
@@ -47,11 +71,17 @@ one issue per lane.
 
 - [ ] Create protected `cloudflare-staging` and `cloudflare-production` GitHub
       environments with distinct scoped deployment tokens.
+- [ ] Create the protected `submission-dispatch-promotion` environment and the
+      immutable `lean-eval-dispatch/*` tag ruleset; prove update/deletion fail.
+- [ ] Create distinct staging/production GitHub OAuth Apps with exact callback
+      URLs and install separate `AUTH_TOKEN_SECRET` values.
 - [ ] Deploy staging automatically with intake disabled and record the Worker,
-      route, account, zone, and version identifiers.
+      `workers.dev` endpoint, account, subdomain, and version identifiers.
 - [ ] Promote the same commit to production and verify the structured health
       response.
 - [ ] Install distinct State and readiness secrets in each Worker.
+- [ ] Implement and provision the D9 App/broker boundary; remove the local
+      static verification/dispatch-token hooks before intake is enabled.
 - [ ] Complete and record a production rollback drill.
 
 ## Data and product rollout
@@ -59,11 +89,11 @@ one issue per lane.
 - [ ] Review a fresh results-v2 dry-run artifact.
 - [ ] Execute the authorized migration and verify the writer lock is released.
 - [ ] Create and freeze the approved v1 set.
-- [ ] Complete staging OAuth/agent intake, exact-ref dispatch, UUID archive
-      writing, and State event linkage.
+- [ ] Complete staging OAuth/agent intake and exact-ref dispatch; wire its
+      artifacts through the implemented UUIDv7 archive writer and into State.
 - [ ] Demonstrate public replay and isolated private replay.
-- [ ] Complete key recovery, decrypt, VM destruction, and release reconstruction
-      drills.
+- [ ] Verify single-submission decrypt, VM destruction, and release
+      reconstruction before enabling those features.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
       window.
 - [ ] Complete leaderboard preview review and cut over with rollback retained.

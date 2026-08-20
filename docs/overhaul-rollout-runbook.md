@@ -10,7 +10,9 @@ secrets in this file, an issue, a pull request, or a terminal transcript.
 
 ## Current implementation checkpoint
 
-The local implementation is committed in isolated, clean worktrees:
+The foundation commits are isolated from the user's primary checkout. Active
+Wave 2 work may remain as a reviewed working-tree diff until local commit
+authorization is given:
 
 | Repository / lane | Commit |
 | --- | --- |
@@ -20,14 +22,15 @@ The local implementation is committed in isolated, clean worktrees:
 | `lean-eval`, combined local integration | `24d5d9d` |
 | `lean-eval-generator` | `a726789` |
 | `lean-eval-submissions`, results v2 | `530925bb29e90123ba6052e81654091445e45c42` |
-| `lean-eval-submissions`, integrated Worker | `ab722e1` plus this runbook |
+| `lean-eval-submissions`, current integration | `529d685` plus the pending UUIDv7 archive bridge and this runbook |
 | production State | `8699eeddb248137ca33e002019554d61923528ca` |
 | staging State | `841911ef662d3856d254e33459d83bed3143d5b2` |
 | releases | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` |
 | leaderboard preview | `a21a9cd438c3ffaadbd04d5166a83713ca224ac5` |
 
 These are local commit identifiers until their repositories or branches are
-published. No live results migration or Cloudflare deployment has occurred.
+published. “Pending” content is not yet a commit. No live results migration or
+Cloudflare deployment has occurred.
 
 ## Decisions required from maintainers
 
@@ -52,6 +55,11 @@ Decision to record: `production State = public|private`,
 `staging State = public|private`, and whether a separate public projection is
 required.
 
+**Resolved 2026-08-20:** production State and staging State are private. A
+reproducible, schema-validated public projection is required. Raw events remain
+the authority; the projection must carry its source commit and event count and
+fail closed rather than publish an incomplete materialization.
+
 ### D2: v1 membership and cutoff
 
 At the 2026-08-20 audit snapshot there are 289 visible formalization problems:
@@ -68,6 +76,22 @@ Recommended starting rule: include the 121 problems with `visible = true`,
 review that candidate for misformalizations and explicit exceptions. This
 implements the stated intent that already-common or publicly leaked problems
 do not enter v1 without reducing v1 to only never-solved problems.
+
+**Mechanical rule resolved 2026-08-20:** include problems with
+`visible = true`, `group = "formalization-evaluation"`, `solve_count < 3`, and
+`public_submission_count = 0`. This selects 118 candidates in the audit over
+1,279 accepted records at results commit
+`9d3fa0a138aa5bb667669b6c10dbe0c2d101b2bc`. The exact count and digest must be
+recomputed at the final freeze commit; cutoff, exceptions, and freeze timing
+remain to be recorded.
+
+**Freeze procedure resolved 2026-08-20:** open the freeze PR from a named
+results commit, review the stable candidate list, rerun against the latest
+results commit immediately before merge, and review any delta. Record the final
+commit, record count, candidate digest, and documented exclusions. No additions
+outside the mechanical rule are permitted for v1. Membership becomes
+irreversible when the reviewed PR merges; later defects are represented by
+status/history rather than rewriting the set.
 
 Decision to record:
 
@@ -89,6 +113,19 @@ implementation satisfies the interface, and whether the prose makes a claim
 stronger than the Lean statement. Approval moves the manifest from `draft` to
 `active`; it does not authorize agent-written hints.
 
+**Resolved 2026-08-20:** approve both statements and move both manifests to
+`active`. Research and an independent Fable review found no mathematical or
+encoding defect in either formal core. Retain both problems. Rename the RCF
+problem to “Quantifier elimination for the theory of real closed fields” and
+correct its free-variable, enumeration, generalization, and prior-CAD prose.
+Describe the CoC system precisely as non-cumulative Π-only CCω, correct the λC
+warm-up, and acknowledge prior mechanizations and semantic models. At the
+maintainer's direction, add three conservative anti-vacuity requirements:
+`typing_polyId_app`, `step_polyId_app`, and `holds_ex_sq`. These exercise
+application typing, beta substitution, and the RCF de Bruijn semantics. All
+three statements were mechanically proved before inclusion. Because neither
+draft has been published, these edits retain `statement_revision = 1`.
+
 ### D4: Cloudflare ownership
 
 Wrangler is currently authenticated to account
@@ -102,6 +139,48 @@ account.
 
 Decision to record: Cloudflare account name and ID, zone ID, primary and backup
 administrators, and cost owner.
+
+**Temporary account choice resolved 2026-08-20:** the initially selected
+`Kim@lean-fro.org's Account`
+(`d789bf36d237e0cb313be59b927c82bd`) must not host Lean Eval. Its
+`palomar-server.workers.dev` subdomain already serves four unrelated Palomar
+Workers, so renaming it or publishing Lean Eval beneath it creates the wrong
+ownership boundary. The separate Free account `lean-eval`
+(`a46b90978a1c29cc4795f30677e7e4b8`) with subdomain
+`lean-eval.workers.dev` now isolates the temporary drills without changing
+Palomar URLs. It still accepts personal ownership and later-migration risk: do
+not enable production intake, private replay, or publication until resources
+move to an organization-controlled account that owns `lean-lang.org`, has at
+least two human administrators, and has repeated all deployment and rollback
+drills.
+
+**Personnel recorded 2026-08-20:** primary administrator and temporary cost
+owner are Kim Morrison (`kim@lean-fro.org`). There is currently no backup
+administrator. That accepted bootstrap risk does not block an intake-disabled
+deployment, but adding a separate human Super Administrator is a mandatory
+precondition for enabling intake or publication and must be tested as an
+account-recovery path. The zone ID and migration deadline remain open.
+
+**Account inventory recorded 2026-08-20:** read-only Cloudflare API queries
+returned no `lean-lang.org` zone and found four existing Palomar Workers in the
+current account: `palomar-data`, `palomar-data-staging`,
+`palomar-domain-redirect`, and `palomar-server`. The planned
+`eval-submit-staging.lean-lang.org` and
+`eval-submit.lean-lang.org` custom domains therefore cannot be deployed from
+either the current or new temporary account. The checked-in Wrangler
+environments now enable only the two exact `lean-eval.workers.dev` routes;
+preview URLs and intake remain disabled.
+Any `workers.dev` drill would not validate DNS/custom-domain routing and must be
+repeated after migration.
+
+**Temporary endpoint choice resolved 2026-08-20:** use
+`lean-eval-submission-server-staging.lean-eval.workers.dev` and
+`lean-eval-submission-server.lean-eval.workers.dev` for the two
+intake-disabled environments; never use `palomar-server.workers.dev`. The
+environment routes, exact OAuth callbacks, CI smoke URLs, and rollback URL are
+configured in lockstep. These public development endpoints do not authorize
+deployment by themselves and must be replaced by the reviewed `lean-lang.org`
+custom domains during the organization-account migration.
 
 ### D5: initial State writer credential
 
@@ -119,35 +198,129 @@ Decision to record: credential model, machine owner for each environment,
 expiration, rotation owner, and whether production intake is forbidden until
 the GitHub App replacement exists.
 
-### D6: publication, key recovery, and license policy
+**Resolved 2026-08-20:** bootstrap with two distinct fine-grained PATs owned by
+Kim Morrison, one for staging State and one for production State. Each token is
+restricted to its single private State repository with Contents read/write and
+Metadata read, expires no more than 90 days after creation, and is rotated by
+Kim Morrison no later than 14 days before expiry. Record the exact token owner,
+creation date, expiry date, and successful rotation drill in
+`INFRASTRUCTURE.md` when each repository and token exists. Never reuse either
+token across environments or grant workflow/repository administration. These
+PATs authorize bootstrap State writes only: production intake remains forbidden
+until D9's GitHub App/broker replacement is implemented, its short-lived token
+flow is tested, the PATs are revoked, and the infrastructure ledger records the
+cutover.
 
-Before replay, private-source intake, or automatic releases are enabled, humans
-must select and approve:
+### D6: publication, key lifecycle, and license policy
 
-- the KMS/HSM or equivalent root and per-submission envelope format;
-- two-maintainer recovery and rotation responsibility;
-- the one-use replay/release capability issuer;
-- the exact contributor acknowledgement and Apache-2.0 release wording;
-- the emergency purge and release-history cleanup authority.
+**D6a resolved 2026-08-20:** use AWS KMS in a new dedicated AWS account. AWS is
+an implementation choice, not part of the stable data model. Each submission
+keeps an ordinary `age` archive and a small provider-neutral envelope containing
+the submission ID, archive digest, recipient, adapter name, and opaque wrapped
+identity. AWS-specific identifiers stay inside the AWS adapter. Stable archive
+paths, State subjects, result IDs, replay IDs, and capability claims do not
+contain AWS identifiers.
 
-The release repository and validator may be published while publication stays
-disabled. These choices are not needed to deploy a health-only Worker with
-`INTAKE_ENABLED=false`.
+Replay and release code use a small wrap/unwrap interface. A later provider
+migration, while AWS is still available, unwraps each small identity with the
+AWS adapter and wraps it with the replacement adapter; archives and stable IDs
+do not change. No new State event or dual-provider scheme is required.
+
+**D6b resolved 2026-08-20:** there is no provider-loss recovery mechanism. If
+AWS becomes permanently unavailable before migration, the affected private
+archives may be unrecoverable. This is an accepted simplification.
+
+No AWS resources need to be created during this design pass. When the account
+and key are eventually created, record their identifiers in
+`INFRASTRUCTURE.md`. The remaining D6 choices are the execution/capability
+implementation, which is delegated to implementation review.
+
+**Contributor acknowledgement approved 2026-08-20:** “By submitting, I confirm
+that I have authority to provide this source. I authorize Lean Eval to store
+and run it privately for evaluation, publish evaluation metadata and results,
+and, two UTC calendar months after acceptance, publish the submitted source
+under the Apache License 2.0. I will not submit secrets or material I am not
+authorized to disclose.” Keep this acknowledgement adjacent to the submit
+action rather than expanding it into a separate policy questionnaire.
 
 ### D7: live results-v2 migration
 
-The latest local dry run preserved 1,279 of 1,279 records at submissions commit
-`9d3fa0a138aa5bb667669b6c10dbe0c2d101b2bc`, with no duplicate IDs,
+The latest local dry run preserved 1,281 of 1,281 records at submissions commit
+`269c4dc9e3d264fe6b06e7d5d2fd1b0d86ac17e4`, with no duplicate IDs,
 source digest
-`8472888c040a40acfaaa2e596b3acd6a1ebfe62f4effdb2e519c17acf4f16e8c`, and
+`e80db05a35c6de75c2ae7d93e718f649b1a38580ada967b54d0611cb213a3ea5`, and
 output digest
-`30dd95781809d13791f0de2d5bd935b4fc77c4fac28d26a23373e370e878d988`.
+`b5121617730302ec25d35e24fdb68fbd36f1e301b593ae9e82245d97d7f6c44d`.
 That evidence becomes stale if `main` changes.
 
 Authorization must name the fresh workflow run and approve its exact source
 commit, record count, and output digest. `apply=true` is a separate decision
 from merging the migration tooling. After the first v2-only record lands,
 repairs are forward-only.
+
+### D8: two correctness-preserving plan deviations
+
+The implementation intentionally differs from two literal details in the
+public program:
+
+1. State events use `events/<uuid-prefix>/<event-id>.json`, not a date-derived
+   path. An event ID therefore has exactly one possible path even if a retry is
+   reconstructed on another UTC day. UUIDv7 still carries sortable time, while
+   the event's canonical `occurred_at` remains authoritative.
+2. Record jobs do not share a static Actions concurrency group with migration.
+   [The default concurrency queue retains only one pending run](https://docs.github.com/en/actions/concepts/workflows-and-actions/concurrency),
+   and even the newer `queue: max` mode has a finite queue. Instead, migration installs a
+   durable compare-and-swap Git lock in the results store; every record job
+   waits on that lock and retains its independent per-submission run. The
+   workflow still names the logical `results-store-writer` contract.
+
+**Approved 2026-08-20:** both deviations preserve the intended
+single-path/idempotency and no-dropped-writer invariants more strongly than the
+literal mechanisms.
+
+### D9: GitHub App and token-broker boundary
+
+The Worker implementation deliberately keeps production intake disabled while
+`GITHUB_VERIFICATION_TOKEN` and `GITHUB_DISPATCH_TOKEN` are only local contract
+hooks. A long-lived PAT in either binding is not an approved production design.
+The server needs two distinct capabilities:
+
+- read repository metadata, immutable source bytes, tags, and the submitter's
+  secret proof gist for source verification; and
+- dispatch only `submission.yml` at the reviewed immutable
+  `lean-eval-dispatch/<commit>` tag in `lean-eval-submissions`.
+
+**Approved 2026-08-20:** create separate least-privilege GitHub Apps and let an
+organization-operated broker mint their short-lived installation tokens. Reach
+the broker through an authenticated Cloudflare service binding or equivalent
+private machine-to-machine channel. The Worker must send an explicit audience,
+operation, repository, and immutable commit; the broker must reject every
+permission or repository outside the corresponding App installation. This
+keeps App private keys out of the public intake Worker and prevents the source
+reader from acquiring workflow-dispatch authority.
+
+The alternative is in-Worker App JWT signing. Choosing it authorizes a design
+change to store separate App IDs, installation IDs, and private keys as Worker
+secrets and to implement token minting, expiry caching, and 401 refresh there.
+Do not substitute a user PAT merely to avoid this choice.
+
+Use two Apps: one source reader and one workflow dispatcher. Record App IDs,
+installations, exact permissions, and broker identifiers when provisioned;
+private keys never enter this ledger.
+
+### D10: embargo and issue-intake transition policy
+
+The disabled release tooling currently implements the plan's proposal as two
+UTC calendar months from `accepted_at` (not a fixed 60-day duration). The plan
+also proposes keeping issue intake open for four weeks after production server
+intake begins. Neither proposal should silently become policy through code.
+
+**Approved 2026-08-20:** use two UTC calendar months and initially plan a
+four-week issue-intake overlap after server intake begins. Four weeks is a
+target, not an irrevocable minimum: a later explicit maintainer decision may
+close issue intake earlier, provided the closure is announced and the server
+path is functioning. Project maintainers may pause intake or releases when
+needed.
 
 ## External actions that require explicit authorization
 
@@ -165,6 +338,59 @@ others:
 8. deploy either Cloudflare Worker;
 9. execute the results migration with `apply=true`;
 10. enable intake, replay, or publication.
+11. restore the accidentally advanced local leaderboard branch from
+    `1ab445c2fc96bd7aa252ec9c86cd7c99a40c0f3e` to its recorded pre-accident
+    head `66a80478bb2af07693ccdb394d7e24dc9115298b` (after creating a backup ref).
+
+**Authorization recorded 2026-08-20:** the maintainer authorized repository
+creation and publication, tracker creation, implementation branch pushes,
+draft pull requests, merges after required checks, infrastructure provisioning,
+intake-disabled Worker deployment, eventual feature enablement after their
+documented safety gates, and the backed-up leaderboard-branch repair. D7 remains
+separately bound to a fresh, named migration report because the maintainer asked
+for clarification before the irreversible rewrite. Secret values and manual
+account actions still require the operator walkthrough at the point of use.
+
+## Maintainer response template
+
+Copy this block into the tracker and replace every placeholder. A blank answer
+means the dependent rollout step stays disabled.
+
+```text
+D1 State: production=<public|private>, staging=<public|private>,
+          public projection=<yes|no>
+D2 v1: cutoff=<UTC timestamp>, results commit=<SHA>,
+       rule=<rule>, exceptions=<list/link>, freeze date=<date>
+D3 statements: coc_strong_normalization=<approve|revise|reject>,
+               rcf_quantifier_elimination=<approve|revise|reject>
+D4 Cloudflare: account=<name/id>, zone=<id>, primary admin=<name>,
+               backup admin=<name>, cost owner=<name>
+D5 State writer: <fine-grained PAT bootstrap|GitHub App>,
+                 staging owner/expiry=<...>, production owner/expiry=<...>,
+                 rotation owner=<name>
+D6 security/legal: KMS/HSM=<provider/account/key>, issuer=<design>,
+                   provider-loss recovery=none, legal wording=<approved link>
+D7 migration: workflow run=<URL>, source commit=<SHA>, count=<integer>,
+              output digest=<SHA-256>, apply=<authorized|not authorized>
+D8 deviations: UUID-prefix State paths=<approved|rejected>,
+               durable Git writer lock=<approved|rejected>
+D9 GitHub Apps: architecture=<broker|in-Worker signing>,
+                source App/installation=<...>, dispatch App/installation=<...>,
+                broker identity/audience=<...>, rotation owner/date=<...>
+D10 policy: embargo=<two UTC calendar months|replacement>,
+            issue window=<four weeks|replacement>, approvers=<...>,
+            announcement/notification=<...>, emergency pause owner=<...>
+
+External authorization (answer each yes/no):
+- create repositories: <yes|no>
+- push new-repository histories: <yes|no>
+- create tracker issue: <yes|no>
+- push existing-repository branches: <yes|no>
+- open draft PRs: <yes|no>
+- provision GitHub/Cloudflare resources: <yes|no>
+- deploy intake-disabled Worker: <yes|no>
+- restore accidental leaderboard branch: <yes|no>
+```
 
 ## Repository bootstrap walkthrough
 
@@ -255,7 +481,34 @@ CNAME exists first.
    `main` is the human authorization and production follows automatically only
    after staging passes.
 
-4. Add `CLOUDFLARE_ACCOUNT_ID` and the environment-specific
+4. Create the `submission-dispatch-promotion` GitHub environment, require a
+   maintainer reviewer, and restrict it to protected `main`. In repository
+   Actions settings, permit workflows to request read/write `GITHUB_TOKEN`
+   access; the promotion job itself narrows that token to only
+   `contents: write`. Add a distinct 32-byte lowercase-hex
+   `DISPATCH_PROMOTION_APPROVAL_GUARD` secret to this environment only (never
+   at repository or organization scope). The value grants no API access; its
+   sole purpose is to make a missing or accidentally auto-created unprotected
+   environment fail closed before tag creation.
+
+   Create an active tag ruleset whose target is
+   `refs/tags/lean-eval-dispatch/*`. Allow tag creation, but block updates and
+   deletion; do not grant the Worker, deployment token, dispatch broker, or
+   ordinary maintainers a bypass. Record the ruleset ID and required-reviewer
+   owners in `INFRASTRUCTURE.md`, then use a disposable test tag to prove an
+   update and deletion are both rejected before merging the Worker PR.
+
+   After `check` succeeds, `deploy-worker.yml` enters that environment and uses
+   its least-privilege `GITHUB_TOKEN` to create
+   `lean-eval-dispatch/<GITHUB_SHA>`. It first proves the commit is reachable
+   from `main` and contains `submission.yml`. If the tag already exists, the
+   job succeeds only when it resolves to the same commit; a collision fails the
+   deployment. The tag is read back and passed as `DISPATCH_WORKFLOW_REF` to
+   both Wrangler deployments. Missing approval, insufficient token policy,
+   missing ruleset setup, collision, or read-back mismatch stops deployment;
+   intake remains false.
+
+5. Add `CLOUDFLARE_ACCOUNT_ID` and the environment-specific
    `CLOUDFLARE_API_TOKEN` as GitHub **environment secrets**. Enter values from a
    protected local file or interactive prompt; never use `echo` or paste them
    into an issue:
@@ -271,11 +524,11 @@ CNAME exists first.
      --repo leanprover/lean-eval-submissions --env cloudflare-production
    ```
 
-5. Merge the reviewed Worker PR with `INTAKE_ENABLED=false`. The workflow
+6. Merge the reviewed Worker PR with `INTAKE_ENABLED=false`. The workflow
    automatically deploys staging, validates its commit/environment/health body,
    and then deploys production from the same commit.
 
-6. Set distinct runtime secrets interactively after the Workers exist:
+7. Set distinct runtime secrets interactively after the Workers exist:
 
    ```bash
    cd server
@@ -285,7 +538,27 @@ CNAME exists first.
    npx wrangler secret put READINESS_TOKEN --env production
    ```
 
-7. Verify secret names without printing values, exercise authenticated
+   Also generate a different 32-byte-or-longer random `AUTH_TOKEN_SECRET` for
+   each environment and enter it with `wrangler secret put`. Never reuse it as
+   a GitHub, Cloudflare, or readiness credential.
+
+8. Create two GitHub OAuth Apps owned by the organization, one for staging and
+   one for production. Set their callback URLs exactly to the two HTTPS
+   `/api/v1/oauth/callback` URLs in `wrangler.jsonc`; do not configure wildcard
+   callbacks. Record the non-secret client IDs in `INFRASTRUCTURE.md`, then set
+   each client ID and client secret interactively as environment-specific
+   Worker secrets. Exercise one successful login, state mismatch, expired
+   state, replayed callback, and logout/session-expiry case in staging.
+
+9. After D9, create the source-verification and dispatch GitHub Apps with only
+   the recorded permissions and installations. If the broker design is chosen,
+   deploy the broker separately, bind only the matching staging/production
+   service identity, and replace the two local static-token hooks in the Worker
+   before enabling intake. Prove in staging that source App A cannot dispatch,
+   dispatch App B cannot read an unrelated source repository, and neither App
+   can mutate State or dispatch an unreviewed ref.
+
+10. Verify secret names without printing values, exercise authenticated
    readiness, record account/zone IDs and the deployment version IDs in
    `INFRASTRUCTURE.md`, and run the guarded rollback workflow once while intake
    remains disabled.
@@ -310,7 +583,7 @@ After the results-v2 tooling PR is merged:
 
 ## Immediate rollout order
 
-1. Resolve D1, D2, D4, and D5.
+1. Resolve D1, D2, D4, D5, D8, D9, and D10.
 2. Authorize repository creation, initial pushes, and tracker creation.
 3. Publish the generator first; replace the local consumer pin with its exact
    SHA and reverify parity.
@@ -323,6 +596,7 @@ After the results-v2 tooling PR is merged:
    rollback drills, and update the infrastructure ledger.
 8. Approve and execute the fresh results-v2 migration.
 9. Freeze the maintainer-approved v1 set.
-10. Continue OAuth/agent intake and archive/replay implementation in staging;
+10. Continue OAuth/agent intake, wire it to the implemented UUIDv7 archive
+    writer/State locator, and complete replay implementation in staging;
     do not enable production intake or releases until D6 and the documented
     security drills are complete.

@@ -1,0 +1,9 @@
+{
+  "memory_limit_bytes": 17179869184,
+  "retired_instructions": {
+    "perf_event": "instructions:u",
+    "required": false
+  },
+  "schema_version": 1,
+  "wall_time_limit_ms": 21600000
+}

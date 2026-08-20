@@ -41,6 +41,88 @@ smoke test, then deploy production and run the same smoke test. GitHub
 Environments named `cloudflare-staging` and `cloudflare-production` hold their
 own deployment credentials. See [`../INFRASTRUCTURE.md`](../INFRASTRUCTURE.md)
 for the complete inventory, ownership, setup, and recovery record.
+The temporary intake-disabled rollout uses the isolated `lean-eval.workers.dev`
+account subdomain. Preview URLs remain disabled. These endpoints exist only
+for deployment and rollback drills; custom-domain routing and every drill must
+be repeated after the service moves to the organization-controlled
+`lean-lang.org` zone account.
 The authentication and source-boundary design is recorded in
 [`../docs/intake-threat-model.md`](../docs/intake-threat-model.md); every launch
 gate there remains mandatory while intake is disabled.
+
+## Local `/api/v1` contract
+
+The intake-disabled build implements these routes for local workerd and
+contract testing:
+
+- `GET /api/v1/oauth/start` and `GET /api/v1/oauth/callback` perform a
+  session-bound, ten-minute GitHub OAuth flow. The provider token exists only
+  while `/user` is verified and is then discarded. A one-hour, HttpOnly,
+  same-origin session is signed by the Worker.
+- `POST /api/v1/browser/submission-grants` allocates a signed, expiring,
+  single-use UUIDv7 grant; `POST /api/v1/browser/submissions` consumes it.
+- `POST /api/v1/agent/challenges` binds an asserted lowercase login, secret
+  gist ID, repository, exact commit, prescribed tag, expiry, nonce, and
+  preallocated UUIDv7s. `POST /api/v1/agent/submissions` requires the private
+  `lean-eval-proof.txt` gist owned by that identity to contain the exact signed
+  challenge and the prescribed tag to resolve directly to the submitted
+  commit (annotated tags are dereferenced once).
+- `GET /api/v1/submissions/<uuid>`,
+  `PATCH /api/v1/submissions/<uuid>/metadata`, and
+  `PUT /api/v1/submissions/<uuid>/publication` require the base record's
+  owning identity. Mutations also require a canonical UUIDv7
+  `Idempotency-Key`; cookie-authenticated mutations are same-origin.
+
+All JSON objects use exact-field decoders, request bodies are limited to 16
+KiB, and submitter-controlled text has explicit Unicode/control-character and
+size rules. Formalization-evaluation and software-verification sources must be
+private; open-conjecture sources must be public. GitHub's observed visibility
+must equal the declaration. GitHub accepts only a branch or tag name as the
+`workflow_dispatch` `ref`, so dispatch uses an immutable tag named
+`lean-eval-dispatch/<40-character-commit>` and carries that commit as a
+required input. The first server-only workflow step compares the input to
+`GITHUB_SHA` before checkout, source access, or evaluation. Repository rules
+must reject updates and deletion for these tags. The lane revalidates the
+exact source commit and visibility, archives under the canonical submission
+UUID path, and requires the verified locator defined by
+`../schemas/archive-locator-v1.schema.json` before recording.
+
+Consumed nonces are committed atomically with intake when applicable. Their
+`occurred_at` is the actual first-accept/callback time, not the earlier grant
+issuance time; retries read the targeted stored view rather than reconstructing
+different event timestamps. State
+stores only `SHA256("lean-eval-auth-nonce-v1\\0" + purpose + "\\0" + nonce)`;
+the raw nonce and signed token never enter State. Production State must deploy
+the matching `authentication.nonce_consumed`,
+`submission.metadata_amended`, and `submission.publication_changed` schemas
+and materializer before this Worker can be enabled.
+
+## Deliberately unresolved credential choice
+
+Private-repository visibility/tag verification and Actions dispatch require a
+short-lived GitHub App credential or a broker. The product decision is whether
+to use a narrowly scoped service-binding token broker (recommended) or mint
+installation tokens in the Worker. Static `GITHUB_VERIFICATION_TOKEN` and
+`GITHUB_DISPATCH_TOKEN` hooks exist only to make the local contract testable;
+they are not an approved production credential design. The safe default is to
+leave both absent: submission routes return `503`, and Wrangler keeps
+`INTAKE_ENABLED=false`. Do not request broad OAuth `repo` scope as a shortcut;
+browser OAuth intentionally requests only `read:user`.
+
+The local workflow emits a digest-verified archive locator artifact, but no
+Actions credential is authorized to append the corresponding archive event to
+State. Dispatch persistence is local and credential-independent: the intake
+CAS adds a strict per-submission view and outbox, request retries reuse it, and
+a one-minute scheduled handler reconciles bounded UUIDv7-tail shards. Owner
+routes target that view plus its referenced immutable events and never scan the
+complete ledger. Provider success removes the outbox; provider failure records
+a bounded backoff. State validation must deploy the matching view/outbox
+contract before intake is enabled. Correlating the locator's `archive_path` to
+its UUID before the archive lifecycle append remains a launch gate. The safe
+current behavior is `INTAKE_ENABLED=false`; do not treat a queued State record
+or locator artifact alone as a completed pipeline.
+
+Operational view v1 deliberately covers intake, owner mutations, and dispatch;
+its archive/evaluation/result fields remain `pending`/`null`. Before lifecycle
+writers are enabled, State and Worker must review and deploy a shared v2 view
+that materializes those events without weakening targeted-read validation.

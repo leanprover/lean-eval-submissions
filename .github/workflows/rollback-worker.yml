@@ -47,6 +47,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
           TARGET_VERSION: ${{ inputs.version_id }}
         run: |
           if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
@@ -55,6 +57,12 @@ jobs:
           fi
           if [[ ! "$TARGET_VERSION" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
             echo "version_id must be a canonical lowercase UUID" >&2
+            exit 1
+          fi
+          dispatch_ref="lean-eval-dispatch/$EXPECTED_COMMIT"
+          resolved=$(gh api "repos/$REPOSITORY/git/ref/tags/$dispatch_ref" --jq .object.sha)
+          if [ "$resolved" != "$EXPECTED_COMMIT" ]; then
+            echo "rollback dispatch tag does not resolve to expected_commit" >&2
             exit 1
           fi
 
@@ -73,6 +81,7 @@ jobs:
           expected = {
               "DEPLOYED_COMMIT": os.environ["EXPECTED_COMMIT"],
               "DEPLOYMENT_ENVIRONMENT": "production",
+              "DISPATCH_WORKFLOW_REF": "lean-eval-dispatch/" + os.environ["EXPECTED_COMMIT"],
           }
           for name, wanted in expected.items():
               matches = [binding for binding in bindings if binding.get("name") == name]
@@ -100,7 +109,7 @@ jobs:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
         run: |
           body=$(curl --fail --retry 6 --retry-all-errors --retry-delay 5 \
-            https://eval-submit.lean-lang.org/healthz)
+            https://lean-eval-submission-server.lean-eval.workers.dev/healthz)
           HEALTH_BODY="$body" python - <<'PY'
           import json, os
           body = json.loads(os.environ["HEALTH_BODY"])

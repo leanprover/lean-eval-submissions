@@ -53,7 +53,10 @@ jobs:
         # most likely to break (two checkouts, persist-credentials, the
         # benchmark-commit source, probe paths, the separate results-store
         # checkout). See tests/test_submission_workflow.py.
-        run: python -m unittest tests.test_submission_workflow
+        run: >-
+          python -m unittest
+          tests.test_submission_workflow
+          tests.test_worker_deployment_workflow
 
       - name: Submission intake tests
         run: python -m unittest tests.test_validate_submission_intake

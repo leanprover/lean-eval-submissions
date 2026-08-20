@@ -170,6 +170,8 @@ etc.).
 
 - Secrets, GitHub Apps, and branch protection: [`docs/ci-secrets.md`](docs/ci-secrets.md).
 - Security model / threat analysis: [`SECURITY.md`](SECURITY.md).
+- Local-only replay planner and disposable-VM contract:
+  [`docs/replay-orchestrator.md`](docs/replay-orchestrator.md).
 - `ci.yml` runs the Python test suite, `actionlint`, the workflow-pin
   audit, and `tests/test_submission_workflow.py` (a structural guard on
   `submission.yml`'s security-critical shape).
