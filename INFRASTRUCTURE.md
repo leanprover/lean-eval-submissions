@@ -164,6 +164,14 @@ operator recovery, and a successful restore/decrypt drill. Cloudflare Sandbox
 SDK is not part of this design: replay runs trusted pipeline code around
 untrusted Lean on existing hardened self-hosted infrastructure.
 
+New UUIDv7 intakes must archive ciphertext at
+`archives/<first-two-submission-UUID-hex>/<submission-UUID>.tar.age`. The
+archive writer must record the repository, final Git commit, exact path, and
+SHA-256 of the stored ciphertext bytes in State. The existing issue-derived
+legacy audit path does not satisfy this contract; adapting the writer and
+testing download, digest verification, decryption, and bundle linkage are
+launch gates before any `archive.completed` event is emitted.
+
 ## Public releases
 
 `leanprover/lean-eval-releases` owns public two-month-delayed source bundles,
@@ -176,10 +184,12 @@ The exact license wording and the interaction with contributor rights are a
 separate legal/documentation review gate. No release job is enabled before that
 text is approved.
 
-Release validation takes its acceptance timestamp and archive digest from a
-trusted State snapshot, receives the publication time from the workflow rather
-than the proposed manifest, and hashes regular bundle files beneath the release
-root. Self-declared clocks, symlinks, and unverified bundle digests are rejected.
+Release validation takes its acceptance timestamp and immutable archive
+repository, commit, canonical path, and ciphertext digest from a trusted State
+snapshot. It receives the publication time from the workflow rather than the
+proposed manifest and hashes regular bundle files beneath the release root.
+Self-declared clocks, symlinks, provenance mismatches, and unverified bundle
+digests are rejected.
 
 ## Monitoring and recovery
 
