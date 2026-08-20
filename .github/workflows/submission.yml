@@ -816,33 +816,87 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # `actions: read` lets the classifier below read the evaluate job's step
+    # list and log; `contents: read` is for the checkout that supplies it.
     permissions:
       issues: write
+      contents: read
+      actions: read
     steps:
-      - name: Comment on workflow failure and close issue
+      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      # Work out what actually went wrong before telling the submitter
+      # anything. A failing `evaluate` job is never the plain compile error
+      # this comment used to assert: a submission whose proof does not
+      # compile exits 0 with `succeeded: false` and gets the ordinary
+      # per-problem result comment from `record` instead. See
+      # scripts/classify_evaluate_failure.py.
+      - name: Explain the evaluate failure
+        id: why
+        if: needs.evaluate.result != 'success' && needs.evaluate.outputs.audit_ciphertext_ready == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          gh api "repos/$REPOSITORY/actions/runs/$RUN_ID/jobs" > /tmp/jobs.json
+          JOB_ID=$(python -c "import json, sys; print(next((j['id'] for j in json.load(open('/tmp/jobs.json')).get('jobs', []) if j.get('name') == 'evaluate'), ''))")
+          # `gh run view --log`, not `gh api .../logs`: the latter refuses to
+          # print a log containing terminal escape sequences, which every
+          # log with Lean's coloured build output does, and would leave an
+          # empty file behind. Death-by-signal is recorded ONLY in this log,
+          # so an empty one silently loses the memory-kill case entirely.
+          # A miss is still survivable: blob storage is not always populated
+          # the instant a job ends, and the classifier then falls back to
+          # the step list.
+          if [ -n "$JOB_ID" ]; then
+            gh run view --repo "$REPOSITORY" --job "$JOB_ID" --log > /tmp/evaluate.log 2>/dev/null || true
+          fi
+          python scripts/classify_evaluate_failure.py \
+            --jobs /tmp/jobs.json \
+            --log /tmp/evaluate.log >> "$GITHUB_OUTPUT"
+
+      - name: Comment on workflow failure
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVALUATE_RESULT: ${{ needs.evaluate.result }}
           ARCHIVE_RESULT: ${{ needs.archive.result }}
           RECORD_RESULT: ${{ needs.record.result }}
           # Audit-encrypt failure also fails the evaluate job, so check
-          # it first — otherwise the submitter would see "Submission.lean
-          # failed to compile" for what was really an infrastructure
-          # failure unrelated to their proof.
+          # it first — otherwise the submitter would be told about an
+          # evaluation that never began.
           AUDIT_CIPHERTEXT_READY: ${{ needs.evaluate.outputs.audit_ciphertext_ready }}
+          EVALUATE_WHY: ${{ steps.why.outputs.message }}
+          BLAMES_SUBMISSION: ${{ steps.why.outputs.blames_submission }}
+          LOGS: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          # Close only when the submitter is the one who has to act. An
+          # infrastructure failure closed as "not planned" reads as a
+          # verdict on their proof and buries the failure from operators.
+          CLOSE=false
           if [ "$AUDIT_CIPHERTEXT_READY" != "true" ]; then
-            BODY="❌ Audit encryption of the submission did not complete; the submission was not evaluated and the leaderboard was not updated. An operator will need to investigate. See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            BODY="❌ Audit encryption of the submission did not complete; the submission was not evaluated and the leaderboard was not updated. An operator will need to investigate. See the workflow logs: $LOGS"
           elif [ "$EVALUATE_RESULT" != "success" ]; then
-            BODY="❌ Submission evaluation did not produce results (evaluate job: $EVALUATE_RESULT). The most common cause is that \`Submission.lean\` failed to compile. See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            BODY="❌ Submission evaluation did not produce results. $EVALUATE_WHY See the workflow logs: $LOGS"
+            CLOSE="$BLAMES_SUBMISSION"
           elif [ "$ARCHIVE_RESULT" != "success" ]; then
-            BODY="❌ Audit archival did not complete (archive job: $ARCHIVE_RESULT); the leaderboard was not updated. An operator will need to investigate. See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            BODY="❌ Audit archival did not complete (archive job: $ARCHIVE_RESULT); the leaderboard was not updated. An operator will need to investigate. See the workflow logs: $LOGS"
           else
-            BODY="❌ Recording the submission to the leaderboard did not complete (record job: $RECORD_RESULT). See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            BODY="❌ Recording the submission to the leaderboard did not complete (record job: $RECORD_RESULT). An operator will need to investigate. See the workflow logs: $LOGS"
           fi
           gh issue comment ${{ github.event.issue.number }} \
             --repo "${{ github.repository }}" \
             --body "$BODY"
-          gh issue close ${{ github.event.issue.number }} \
-            --repo "${{ github.repository }}" \
-            --reason "not planned" || true
+          if [ "$CLOSE" = "true" ]; then
+            gh issue close ${{ github.event.issue.number }} \
+              --repo "${{ github.repository }}" \
+              --reason "not planned" || true
+          fi
