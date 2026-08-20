@@ -1,0 +1,47 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lean-eval-submission",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "env": {
+    "staging": {
+      "name": "lean-eval-submission-staging",
+      "workers_dev": false,
+      "preview_urls": false,
+      "routes": [
+        {
+          "pattern": "eval-submit-staging.lean-lang.org",
+          "custom_domain": true
+        }
+      ],
+      "vars": {
+        "DEPLOYMENT_ENVIRONMENT": "staging",
+        "INTAKE_ENABLED": "false",
+        "STATE_REPOSITORY": "leanprover/lean-eval-state-staging"
+      }
+    },
+    "production": {
+      "name": "lean-eval-submission-production",
+      "workers_dev": false,
+      "preview_urls": false,
+      "routes": [
+        {
+          "pattern": "eval-submit.lean-lang.org",
+          "custom_domain": true
+        }
+      ],
+      "vars": {
+        "DEPLOYMENT_ENVIRONMENT": "production",
+        "INTAKE_ENABLED": "false",
+        "STATE_REPOSITORY": "leanprover/lean-eval-state"
+      }
+    }
+  }
+}

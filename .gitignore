@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+node_modules/
+.wrangler/
+server/.dev.vars
+server/coverage/

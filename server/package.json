@@ -1,0 +1,26 @@
+{
+  "name": "@leanprover/lean-eval-submission-worker",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "check": "npm run types && npm run lint && npm test && npm run deploy:dry-run",
+    "deploy:dry-run": "wrangler deploy --dry-run --env staging",
+    "dev": "wrangler dev --env staging",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run",
+    "types": "wrangler types --env-interface CloudflareEnv && tsc --noEmit"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.2.0",
+    "eslint": "10.0.1",
+    "typescript": "5.9.2",
+    "typescript-eslint": "8.67.0",
+    "vitest": "4.1.11",
+    "wrangler": "4.124.0"
+  }
+}

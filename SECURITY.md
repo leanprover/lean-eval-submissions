@@ -1,5 +1,9 @@
 # Security model: the lean-eval submission pipeline
 
+The planned encrypted-source recovery path has a separate, currently disabled
+security contract in [`docs/replay.md`](docs/replay.md). It must not weaken the
+same-job, no-plaintext-artifact invariants documented below.
+
 This document explains why we believe the lean-eval submission pipeline
 is resistant to adversarial submissions, what assumptions it depends on,
 and where a future red-teamer should look first.
