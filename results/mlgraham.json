@@ -14,6 +14,18 @@
         "submission_ref": "c81843f5adcb7e34c8e46e748465bfa4dfcfbcda",
         "submission_repo": "mlgraham/lean-eval-submission"
       },
+      "brauer_character_in_cyclotomic": {
+        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+        "issue_number": 1144,
+        "production_description": "Original proof of brauer_character_in_cyclotomic. Claude Fable 5 (Claude Code), under human\ndirection, from the Challenge, Mathlib source search, and compiler feedback only; no published\nlean-eval solution consulted. Method: embed CyclotomicField (exponent G) into C via\nIsAlgClosed.lift; rho(g)^exp = 1, so the trace equals the sum of charpoly roots\n(trace_eq_sum_roots_charpoly), each root is an eigenvalue (hasEigenvalue_iff_isRoot_charpoly)\nwhose eigenvector forces mu^exp = 1, hence each root is a power of the image of zeta\n(IsPrimitiveRoot.eq_pow_of_pow_eq_one) and lies in the embedding's range, a subring. Cost:\n3 compile iterations, ~35 minutes of model loop time, ~$0 marginal spend. (Earlier workspaces\non this branch are already recorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published",
+        "solved_at": "2026-08-20T02:54:43Z",
+        "submission_kind": "github_repo",
+        "submission_public": true,
+        "submission_ref": "9a2fc4415453a08097b73ba72af19cb7ee340f0d",
+        "submission_repo": "mlgraham/lean-eval-submission"
+      },
       "bvp_comparison": {
         "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
         "issue_number": 1142,
