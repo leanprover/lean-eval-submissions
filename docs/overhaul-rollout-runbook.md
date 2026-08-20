@@ -19,7 +19,7 @@ primary checkout is not the integration workspace.
 | production State | `89cdf9bd163f451fa51c7695c14388e11e1d609d` on private `main` |
 | staging State | `6bfc9eb633c6c8bbaa2937708183d70fca7668fa` on private `main` |
 | `lean-eval-releases` | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` on `main`; publication disabled |
-| catalog, generator consumer, software verification | `lean-eval#540` |
+| catalog, generator consumer, software verification | merged as `lean-eval#540`; merge commit `547b00ed345bc0737dd94847d6b67cb681b6178a` |
 | results v2, intake server, replay contracts | `lean-eval-submissions#1165` |
 | leaderboard v2 preview | `lean-eval-leaderboard#69` |
 

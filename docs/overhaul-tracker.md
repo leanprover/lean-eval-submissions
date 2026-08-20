@@ -100,7 +100,8 @@ one issue per lane.
 - [ ] Review and approve its exact post-merge checksums (D7).
 - [ ] Execute the authorized migration and verify the writer lock is released.
 - [x] Define and audit the approved 118-member v1 set.
-- [ ] Freeze the v1 set when its reviewed PR merges.
+- [x] Freeze the v1 set when its reviewed PR merges (`lean-eval#540`,
+      merge commit `547b00ed345bc0737dd94847d6b67cb681b6178a`).
 - [ ] Complete staging OAuth/agent intake and exact-ref dispatch; wire its
       artifacts through the implemented UUIDv7 archive writer and into State.
 - [ ] Demonstrate public replay and isolated private replay.
