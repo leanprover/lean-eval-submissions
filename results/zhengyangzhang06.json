@@ -1965,6 +1965,17 @@
         "submission_public": false,
         "submission_ref": "0b372364c129daaf3f08d915f76f5dfddd12a4ab",
         "submission_repo": "humanfia/lean-eval"
+      },
+      "annals_van_der_waerden_conjecture": {
+        "benchmark_commit": "50c3e360839a44e7ca3b19aa9097333d44a9c704",
+        "issue_number": 1163,
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned",
+        "solved_at": "2026-08-20T08:13:06Z",
+        "submission_kind": "github_repo",
+        "submission_public": false,
+        "submission_ref": "f08be1a97d39650807d22504eae930e3eff04653",
+        "submission_repo": "humanfia/lean-eval"
       }
     }
   },
