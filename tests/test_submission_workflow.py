@@ -74,8 +74,11 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             re.findall(r"uses: actions/checkout@([0-9a-f]{40})", self.text)
         )
         self.assertEqual(checkout_shas, {checkout_sha})
+        # 7: two in evaluate, one each in archive and record's results
+        # store, the record checkout, and notify's, which supplies
+        # scripts/classify_evaluate_failure.py.
         self.assertEqual(
-            self.text.count("uses: actions/checkout@"), 6, "expected 6 checkout steps"
+            self.text.count("uses: actions/checkout@"), 7, "expected 7 checkout steps"
         )
         # The two evaluate-job checkouts must each set persist-credentials:false.
         self.assertGreaterEqual(
@@ -104,6 +107,30 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
                 re.MULTILINE,
             ),
         )
+
+    def test_notify_does_not_assert_a_compile_error(self) -> None:
+        # A submission whose proof does not compile exits 0 with
+        # `succeeded: false` and is reported by `record`. So a failing
+        # `evaluate` job is never that, and saying so sent submitters to
+        # debug proofs that had built fine (issue #1078).
+        self.assertNotIn("failed to compile", self.text)
+        self.assertIn("classify_evaluate_failure.py", self.text)
+
+    def test_notify_fetches_the_log_in_a_way_that_survives_escape_sequences(self) -> None:
+        # `gh api .../actions/jobs/<id>/logs` refuses to print a log
+        # containing terminal escape sequences, which every log with Lean's
+        # coloured build output has, and leaves an empty file. That silently
+        # loses the death-by-signal evidence, which lives only in the log.
+        notify = self.text.split("\n  notify:", 1)[1]
+        self.assertIn("gh run view --repo", notify)
+        self.assertNotIn("/logs\"", notify)
+
+    def test_notify_closes_the_issue_only_when_the_submitter_must_act(self) -> None:
+        # Closing an infrastructure failure as "not planned" reads as a
+        # verdict on the submission and hides the failure from operators.
+        notify = self.text.split("\n  notify:", 1)[1]
+        self.assertIn('CLOSE="$BLAMES_SUBMISSION"', notify)
+        self.assertIn('if [ "$CLOSE" = "true" ]; then', notify)
 
     def test_evaluate_job_permissions_stay_minimal(self) -> None:
         # An explicit permissions block sets every unlisted scope, including
