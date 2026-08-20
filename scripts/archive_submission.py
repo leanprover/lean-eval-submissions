@@ -556,9 +556,12 @@ def _api_get(*, audit_repo: str, token: str, path: str) -> dict | None:
         with urllib.request.urlopen(req, timeout=60) as resp:
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            return None
-        body = exc.read().decode("utf-8", errors="replace")
+        try:
+            if exc.code == 404:
+                return None
+            body = exc.read().decode("utf-8", errors="replace")
+        finally:
+            exc.close()
         sys.exit(f"Contents API GET {path} failed ({exc.code}):\n{body}")
 
 
@@ -671,7 +674,10 @@ def _put_contents(
                 resp.read()
             return
         except urllib.error.HTTPError as exc:
-            err_body = exc.read().decode("utf-8", errors="replace")
+            try:
+                err_body = exc.read().decode("utf-8", errors="replace")
+            finally:
+                exc.close()
             if exc.code == 409 or (exc.code == 422 and _is_sha_conflict(err_body)):
                 # The path's state changed between our GET and this PUT: a
                 # 422 `"sha" wasn't supplied` means it now exists though we
