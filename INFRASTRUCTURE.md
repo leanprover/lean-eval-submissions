@@ -1,7 +1,7 @@
 # lean-eval infrastructure inventory
 
 This file is the source of truth for externally hosted lean-eval
-infrastructure. A change to Cloudflare, GitHub Apps, deployment credentials,
+infrastructure. A change to Cloudflare, GitHub credentials, deployment credentials,
 state repositories, runner topology, DNS, or release storage is incomplete
 until this ledger changes in the same pull request or an immediately linked
 operations pull request. Secret **names, owners, scopes, and rotation dates**
@@ -52,6 +52,12 @@ Worker configuration is declarative in [`server/wrangler.jsonc`](server/wrangler
 - intake disabled by default and enabled only through a reviewed configuration
   change after the rollout gates pass.
 
+Every deployment injects `DEPLOYED_COMMIT` from the Git commit being deployed.
+The smoke gate validates that marker, the target environment, and the expected
+intake setting, so a healthy stale or misrouted Worker cannot be promoted. The
+smoke assertion that intake is false must change in the same reviewed rollout
+that enables intake.
+
 There is no Terraform layer. Wrangler configuration plus this reviewed ledger
 is the chosen infrastructure record. Resource identifiers created outside
 Wrangler must be copied here immediately.
@@ -92,15 +98,21 @@ Each Worker environment has a distinct Wrangler secret:
 | --- | --- | --- | --- |
 | `GITHUB_STATE_TOKEN` | staging | Atomically append staging events | `lean-eval-state-staging`, Contents write and Metadata read |
 | `GITHUB_STATE_TOKEN` | production | Atomically append production events | `lean-eval-state`, Contents write and Metadata read |
+| `READINESS_TOKEN` | staging | Authenticate operational readiness probes | No GitHub access |
+| `READINESS_TOKEN` | production | Authenticate operational readiness probes | No GitHub access |
 
-Prefer separate GitHub Apps installations over personal access tokens. Record
-the App slug, installation ID, credential owner, creation date, expiry, and last
-rotation below when provisioned:
+The initial implementation uses separate, organization-owned fine-grained
+personal access tokens because a GitHub App installation token expires after
+about one hour and the Worker does not yet mint replacements. Tokens must be
+scoped to one State repository, expire in at most 90 days, and be rotated
+independently. Migrating to GitHub Apps requires a reviewed broker or in-Worker
+JWT exchange and must not store an expiring installation token as a static
+Worker secret.
 
 | Field | Staging | Production |
 | --- | --- | --- |
-| GitHub App slug | **TO BE RECORDED** | **TO BE RECORDED** |
-| Installation ID | **TO BE RECORDED** | **TO BE RECORDED** |
+| Credential type | Fine-grained PAT | Fine-grained PAT |
+| Machine owner | **TO BE RECORDED** | **TO BE RECORDED** |
 | Credential owner | **TO BE RECORDED** | **TO BE RECORDED** |
 | Created / expires | **TO BE RECORDED** | **TO BE RECORDED** |
 | Last rotation drill | **TO BE RECORDED** | **TO BE RECORDED** |
@@ -113,15 +125,16 @@ of `refs/heads/main`; repository administration is not needed at runtime.
 ## State repository controls
 
 Both state repositories are private operational ledgers. Each immutable event
-occupies exactly one file under `events/YYYY/MM/DD/`. Configure:
+occupies exactly one file under `events/<id-prefix>/<event-id>.json`. Configure:
 
 - default branch `main`;
 - deletion and force-push protection;
 - required pull request and status checks for human-authored changes;
 - no broad Actions write token;
-- a ruleset bypass limited to the environment-specific state-writer App;
+- a ruleset bypass limited to the environment-specific state-writer principal;
 - secret scanning and dependency alerts;
-- scheduled validation of the whole event tree and an off-platform backup;
+- validation of append-only history on pull requests and direct writer pushes;
+- scheduled validation of the whole event tree, alerting, and an off-platform backup;
 - audit-log review after credential rotation or unexplained ref contention.
 
 Record ruleset IDs and backup destination after creation:
@@ -160,13 +173,19 @@ The exact license wording and the interaction with contributor rights are a
 separate legal/documentation review gate. No release job is enabled before that
 text is approved.
 
+Release validation takes its acceptance timestamp and archive digest from a
+trusted State snapshot, receives the publication time from the workflow rather
+than the proposed manifest, and hashes regular bundle files beneath the release
+root. Self-declared clocks, symlinks, and unverified bundle digests are rejected.
+
 ## Monitoring and recovery
 
 Minimum launch monitors:
 
 - Worker exception and non-2xx rate split by environment;
 - staging and production `/healthz` synthetic checks;
-- `/readyz` alerting once intake is enabled;
+- authenticated `/readyz` alerting once intake is enabled; readiness responses
+  are briefly cached to protect the GitHub API dependency;
 - GitHub API rate-limit and ref-contention alerts;
 - State tree validation and backup freshness;
 - deployment failure notifications;
@@ -195,7 +214,7 @@ At least quarterly, and after every infrastructure change:
 
 1. compare Cloudflare Worker names, domains, routes, compatibility settings,
    observability, and secrets metadata to this file and `wrangler.jsonc`;
-2. compare GitHub environments, secret names, Apps, installations, permissions,
+2. compare GitHub environments, secret names, credentials, permissions,
    repository visibility, rulesets, and runner labels to this file;
 3. verify staging cannot reach production State and vice versa;
 4. rotate one non-production credential and complete a staging deploy;

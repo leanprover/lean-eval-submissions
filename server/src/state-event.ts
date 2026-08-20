@@ -1,52 +1,86 @@
 const EVENT_ID = /^[0-9a-f]{64}$/;
-const SUBJECT_ID = /^[a-z][a-z0-9_-]{2,127}$/;
+const TOP_LEVEL_FIELDS = [
+  "actor",
+  "event_id",
+  "event_type",
+  "occurred_at",
+  "payload",
+  "schema_version",
+  "subject_id",
+] as const;
 
 export const STATE_EVENT_SCHEMA_VERSION = 1 as const;
 
 export type StateEvent = Readonly<{
   schema_version: typeof STATE_EVENT_SCHEMA_VERSION;
   event_id: string;
-  event_type: string;
+  event_type: "system.initialized";
   occurred_at: string;
-  subject_id: string;
-  actor: Readonly<{
-    kind: "github" | "system";
-    login?: string;
-  }>;
-  payload: Readonly<Record<string, unknown>>;
+  subject_id: "state_staging" | "state_production";
+  actor: Readonly<{ kind: "system" }>;
+  payload: Readonly<{ environment: "staging" | "production" }>;
 }>;
+
+function object(value: unknown, label: string): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(`${label} must be an object`);
+  }
+  return value as Record<string, unknown>;
+}
+
+function exactFields(
+  value: Record<string, unknown>,
+  fields: readonly string[],
+  label: string,
+): void {
+  const actual = Object.keys(value).sort();
+  const expected = [...fields].sort();
+  if (actual.length !== expected.length || actual.some((key, index) => key !== expected[index])) {
+    throw new TypeError(`${label} fields do not match schema version 1`);
+  }
+}
 
 function isCanonicalUtcTimestamp(value: string): boolean {
   const date = new Date(value);
-  return !Number.isNaN(date.valueOf()) && date.toISOString() === value;
+  return (
+    !value.startsWith("0000-") &&
+    !Number.isNaN(date.valueOf()) &&
+    date.toISOString() === value
+  );
 }
 
-export function validateStateEvent(event: StateEvent): void {
-  if (!EVENT_ID.test(event.event_id)) {
+export function validateStateEvent(value: unknown): asserts value is StateEvent {
+  const event = object(value, "State event");
+  exactFields(event, TOP_LEVEL_FIELDS, "State event");
+  if (event.schema_version !== STATE_EVENT_SCHEMA_VERSION) {
+    throw new TypeError("unsupported State event schema version");
+  }
+  if (typeof event.event_id !== "string" || !EVENT_ID.test(event.event_id)) {
     throw new TypeError("State event id must be 64 lowercase hexadecimal characters");
   }
-  if (!/^[a-z][a-z0-9.]{2,127}$/.test(event.event_type)) {
-    throw new TypeError("State event type is not canonical");
+  if (event.event_type !== "system.initialized") {
+    throw new TypeError("State event type is not registered");
   }
-  if (!isCanonicalUtcTimestamp(event.occurred_at)) {
-    throw new TypeError("State event timestamp must be canonical UTC ISO 8601");
+  if (typeof event.occurred_at !== "string" || !isCanonicalUtcTimestamp(event.occurred_at)) {
+    throw new TypeError("State event timestamp must be canonical UTC ISO 8601 milliseconds");
   }
-  if (!SUBJECT_ID.test(event.subject_id)) {
-    throw new TypeError("State event subject id is not canonical");
+  const actor = object(event.actor, "State event actor");
+  exactFields(actor, ["kind"], "State event actor");
+  if (actor.kind !== "system") throw new TypeError("system.initialized actor must be system");
+
+  const payload = object(event.payload, "State event payload");
+  exactFields(payload, ["environment"], "State event payload");
+  if (payload.environment !== "staging" && payload.environment !== "production") {
+    throw new TypeError("system.initialized environment must be staging or production");
   }
-  if (event.actor.kind === "github") {
-    if (!event.actor.login || !/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/.test(event.actor.login)) {
-      throw new TypeError("GitHub actor login must be lowercase and canonical");
-    }
-  } else if (event.actor.login !== undefined) {
-    throw new TypeError("system actors cannot carry a GitHub login");
+  if (event.subject_id !== `state_${payload.environment}`) {
+    throw new TypeError("State event subject id must match its environment");
   }
 }
 
 export function stateEventPath(event: StateEvent): string {
   validateStateEvent(event);
-  const date = event.occurred_at.slice(0, 10).replaceAll("-", "/");
-  return `events/${date}/${event.event_id}.json`;
+  return `events/${event.event_id.slice(0, 2)}/${event.event_id}.json`;
 }
 
 export async function eventIdForIdempotencyKey(key: string): Promise<string> {

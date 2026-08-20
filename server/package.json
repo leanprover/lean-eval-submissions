@@ -7,14 +7,16 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "check": "npm run types && npm run lint && npm test && npm run deploy:dry-run",
+    "check": "npm run types:check && npm run lint && npm test && npm run deploy:dry-run",
     "deploy:dry-run": "wrangler deploy --dry-run --env staging",
     "dev": "wrangler dev --env staging",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
-    "types": "wrangler types --env-interface CloudflareEnv && tsc --noEmit"
+    "types": "wrangler types --env-interface CloudflareEnv && tsc --noEmit",
+    "types:check": "wrangler types --env-interface CloudflareEnv --check && tsc --noEmit"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.22.0",
     "@eslint/js": "10.0.1",
     "@types/node": "26.2.0",
     "eslint": "10.0.1",

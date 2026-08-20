@@ -1,7 +1,7 @@
 import { handleRequest, type RuntimeEnv } from "./app";
 
 export default {
-  fetch(request, env): Promise<Response> {
-    return handleRequest(request, env);
+  fetch(request, env, context): Promise<Response> {
+    return handleRequest(request, env, context);
   },
 } satisfies ExportedHandler<RuntimeEnv>;

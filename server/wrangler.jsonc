@@ -22,6 +22,7 @@
         }
       ],
       "vars": {
+        "DEPLOYED_COMMIT": "development",
         "DEPLOYMENT_ENVIRONMENT": "staging",
         "INTAKE_ENABLED": "false",
         "STATE_REPOSITORY": "leanprover/lean-eval-state-staging"
@@ -38,6 +39,7 @@
         }
       ],
       "vars": {
+        "DEPLOYED_COMMIT": "development",
         "DEPLOYMENT_ENVIRONMENT": "production",
         "INTAKE_ENABLED": "false",
         "STATE_REPOSITORY": "leanprover/lean-eval-state"

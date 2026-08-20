@@ -4,11 +4,18 @@ const API = "https://api.github.com";
 const STATE_BRANCH = "main";
 const MAX_WRITE_ATTEMPTS = 8;
 const SHA = /^[0-9a-f]{40}$/i;
+const GITHUB_TIMEOUT_MS = 5000;
 
 export type GitHubFetch = (
   input: RequestInfo | URL,
   init?: RequestInit,
 ) => Promise<Response>;
+
+const defaultGitHubFetch: GitHubFetch = (input, init) =>
+  fetch(input, {
+    ...init,
+    signal: init?.signal ?? AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+  });
 
 type GitHubStateConfig = Readonly<{
   repository: string;
@@ -111,16 +118,55 @@ async function branchSnapshot(
   return { headSha, treeSha };
 }
 
-async function pathExistsAt(
+function decodeInlineJson(value: unknown, path: string): unknown {
+  const data = object(value, `${path} contents response`);
+  if (data.encoding !== "base64" || typeof data.content !== "string") {
+    throw new GitHubStateError(502, `${path} did not contain inline base64 JSON`);
+  }
+  try {
+    const binary = atob(data.content.replaceAll("\n", ""));
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes)) as unknown;
+  } catch (error) {
+    throw new GitHubStateError(502, `${path} contained invalid JSON: ${String(error)}`);
+  }
+}
+
+async function readPathAt(
   config: GitHubStateConfig,
   fetcher: GitHubFetch,
   path: string,
   commit: string,
-): Promise<boolean> {
+): Promise<{ found: false } | { found: true; value: unknown }> {
   const query = new URLSearchParams({ ref: commit });
-  return (
-    (await jsonCall(config, fetcher, `/contents/${encodeURI(path)}?${query.toString()}`)) !== null
+  const value = await jsonCall(
+    config,
+    fetcher,
+    `/contents/${encodeURI(path)}?${query.toString()}`,
   );
+  return value === null
+    ? { found: false }
+    : { found: true, value: decodeInlineJson(value, path) };
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+      .join(",")}}`;
+  }
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "string"
+  ) {
+    return JSON.stringify(value);
+  }
+  throw new TypeError("State event is not JSON serializable");
 }
 
 async function createCommit(
@@ -229,7 +275,7 @@ export class GitHubStateRepository {
   readonly #config: GitHubStateConfig;
   readonly #fetcher: GitHubFetch;
 
-  constructor(config: GitHubStateConfig, fetcher: GitHubFetch = fetch) {
+  constructor(config: GitHubStateConfig, fetcher: GitHubFetch = defaultGitHubFetch) {
     if (!/^[A-Za-z\d_.-]+\/[A-Za-z\d_.-]+$/.test(config.repository)) {
       throw new TypeError("State repository must be an owner/name pair");
     }
@@ -238,6 +284,14 @@ export class GitHubStateRepository {
   }
 
   async assertAvailable(): Promise<void> {
+    const repository = object(
+      await jsonCall(this.#config, this.#fetcher, ""),
+      "State repository",
+    );
+    const permissions = object(repository.permissions, "State repository permissions");
+    if (permissions.push !== true) {
+      throw new GitHubStateError(403, "State credential does not have push permission");
+    }
     await branchSnapshot(this.#config, this.#fetcher);
   }
 
@@ -246,7 +300,16 @@ export class GitHubStateRepository {
     const path = stateEventPath(event);
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
       const snapshot = await branchSnapshot(this.#config, this.#fetcher);
-      if (await pathExistsAt(this.#config, this.#fetcher, path, snapshot.headSha)) {
+      const existing = await readPathAt(this.#config, this.#fetcher, path, snapshot.headSha);
+      if (existing.found) {
+        try {
+          validateStateEvent(existing.value);
+        } catch {
+          throw new StateEventConflictError(path);
+        }
+        if (canonicalJson(existing.value) === canonicalJson(event)) {
+          return { commit: snapshot.headSha, path };
+        }
         throw new StateEventConflictError(path);
       }
       const commit = await createCommit(
