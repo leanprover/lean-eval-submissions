@@ -19,9 +19,9 @@ primary checkout is not the integration workspace.
 | production State | `89cdf9bd163f451fa51c7695c14388e11e1d609d` on private `main` |
 | staging State | `6bfc9eb633c6c8bbaa2937708183d70fca7668fa` on private `main` |
 | `lean-eval-releases` | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` on `main`; publication disabled |
-| catalog, generator consumer, software verification | `lean-eval#540`, head `ff965b963691a123e1c6275771aa5d7b058423fc` |
-| results v2, intake server, replay contracts | `lean-eval-submissions#1165`, head `305813cd8746fad082c6f3c340f2cd135eebce10` |
-| leaderboard v2 preview | `lean-eval-leaderboard#69`, head `96a449ef6c000f4bed79b49eb4d52889cbe4bb69` |
+| catalog, generator consumer, software verification | `lean-eval#540` |
+| results v2, intake server, replay contracts | `lean-eval-submissions#1165` |
+| leaderboard v2 preview | `lean-eval-leaderboard#69` |
 
 The private broker and intake Workers are deployed in staging and production
 from commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`, with intake disabled and App,
