@@ -249,8 +249,11 @@ CNAME exists first.
      repos/leanprover/lean-eval-submissions/environments/cloudflare-production
    ```
 
-   Configure required reviewers on production before the first merge that can
-   deploy.
+   Restrict both environments to deployments from protected `main`. Do not add
+   a second production reviewer gate unless the deployment policy is
+   deliberately changed: under the approved design, merging to protected
+   `main` is the human authorization and production follows automatically only
+   after staging passes.
 
 4. Add `CLOUDFLARE_ACCOUNT_ID` and the environment-specific
    `CLOUDFLARE_API_TOKEN` as GitHub **environment secrets**. Enter values from a
