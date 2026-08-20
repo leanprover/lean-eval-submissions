@@ -1,0 +1,96 @@
+# TEMPORARY diagnostic for issue #1078. Delete once the question is settled.
+#
+# comparator invokes landrun with `--best-effort`, which silently runs
+# WITHOUT a sandbox when the kernel lacks Landlock support. On the Namespace
+# runner every forbidden write in `sandbox_engaged_probe` came back ALLOWED,
+# which is what that degradation looks like. This asks the kernel directly,
+# on both runner types, so the diagnosis rests on a measurement.
+name: Landlock probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, nscloud-ubuntu-24.04-amd64-32x64]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - name: Kernel and LSM state
+        run: |
+          echo "=== runner: ${{ matrix.os }} ==="
+          uname -a
+          nproc
+          free -h
+          echo "--- /sys/kernel/security/lsm ---"
+          cat /sys/kernel/security/lsm 2>&1 || echo "(unreadable)"
+          echo "--- securityfs ---"
+          ls /sys/kernel/security/ 2>&1 || echo "(unreadable)"
+          echo "--- kernel config, if exposed ---"
+          (zgrep -i landlock /proc/config.gz 2>/dev/null || grep -i landlock "/boot/config-$(uname -r)" 2>/dev/null || echo "(no kernel config exposed)")
+
+      - name: Ask the kernel for the Landlock ABI version
+        run: |
+          python3 - <<'PY'
+          import ctypes, os
+
+          # landlock_create_ruleset(NULL, 0, LANDLOCK_CREATE_RULESET_VERSION)
+          # returns the supported ABI version, or -1 with:
+          #   ENOSYS      38  kernel has no Landlock at all
+          #   EOPNOTSUPP  95  compiled in but disabled (not in lsm= list)
+          NR_LANDLOCK_CREATE_RULESET = 444  # x86_64
+          LANDLOCK_CREATE_RULESET_VERSION = 1
+
+          libc = ctypes.CDLL("libc.so.6", use_errno=True)
+          ctypes.set_errno(0)
+          res = libc.syscall(
+              ctypes.c_long(NR_LANDLOCK_CREATE_RULESET),
+              ctypes.c_void_p(None),
+              ctypes.c_size_t(0),
+              ctypes.c_uint32(LANDLOCK_CREATE_RULESET_VERSION),
+          )
+          err = ctypes.get_errno()
+          if res >= 0:
+              print(f"LANDLOCK: available, ABI version {res}")
+          else:
+              print(f"LANDLOCK: NOT available (errno {err}, {os.strerror(err)})")
+          PY
+
+      - name: Does landrun actually confine?
+        run: |
+          set -x
+          go install github.com/zouuup/landrun/cmd/landrun@5ed4a3db3a4ad930d577215c6b9abaa19df7f99f
+          GOBIN="$(go env GOPATH)/bin"
+          export PATH="$GOBIN:$PATH"
+          mkdir -p /tmp/sandbox-inside
+          set +e
+          # Mirrors comparator's shape: read-only root, one writable dir.
+          # A confined process must NOT be able to write outside it.
+          landrun --best-effort --ro / --rwx /tmp/sandbox-inside \
+            --add-exec /usr/bin/touch -- /usr/bin/touch /tmp/ESCAPED
+          echo "exit=$? (0 here means the write outside the sandbox SUCCEEDED)"
+          landrun --best-effort --ro / --rwx /tmp/sandbox-inside \
+            --add-exec /usr/bin/touch -- /usr/bin/touch /tmp/sandbox-inside/ok
+          echo "inside-write exit=$?"
+          set -e
+          test -e /tmp/ESCAPED && echo "RESULT: sandbox NOT engaged (escape succeeded)" || echo "RESULT: sandbox engaged (escape denied)"
+
+      - name: Would bubblewrap work here instead?
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+          set -x
+          echo "--- unprivileged user namespaces ---"
+          cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null || echo "(knob absent)"
+          cat /proc/sys/user/max_user_namespaces 2>/dev/null || echo "(knob absent)"
+          cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo "(knob absent)"
+          set +e
+          bwrap --ro-bind / / --tmpfs /tmp --unshare-all -- /usr/bin/touch /tmp/bwrap-inside
+          echo "bwrap basic exit=$?"
+          bwrap --ro-bind / / --tmpfs /tmp --unshare-all -- /usr/bin/touch /etc/ESCAPED
+          echo "bwrap write-to-ro exit=$? (non-zero is correct: read-only bind held)"
