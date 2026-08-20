@@ -21,10 +21,11 @@ one issue per lane.
       agreed anti-vacuity requirements before publication.
 - [x] D4: use isolated temporary account `lean-eval`
       (`a46b90978a1c29cc4795f30677e7e4b8`) and exact
-      `lean-eval.workers.dev` endpoints for intake-disabled drills; never reuse
-      or rename the Palomar subdomain. Kim Morrison is primary administrator
-      and temporary cost owner; organization-account migration remains an
-      operational gate before intake or publication.
+      `lean-eval.workers.dev` endpoints for the intake-disabled bootstrap;
+      never reuse or rename the Palomar subdomain. Kim Morrison is
+      administrator and temporary cost owner. A later organization-account or
+      provider migration is supported by the stable contracts, not required
+      for this bootstrap.
 - [x] D5: bootstrap with separate Kim-owned fine-grained PATs for staging and
       production State, each single-repository scoped and at most 90 days;
       rotate at least 14 days before expiry and forbid production intake until
@@ -82,9 +83,12 @@ one issue per lane.
       `workers.dev` endpoint, account, subdomain, and version identifiers.
 - [x] Promote the same commit to production and verify the structured health
       response.
-- [ ] Install distinct State and readiness secrets in each Worker.
+- [x] Install distinct readiness secrets in each Worker.
+- [ ] Install distinct State-writer credentials in each Worker.
 - [x] Implement the D9 private service-binding broker and separate source and
       dispatch authority paths.
+- [x] Deploy both private brokers and bind the intake-disabled staging and
+      production Workers to them.
 - [ ] Create/install the two Apps and provision their broker secrets; keep the
       local static verification/dispatch-token hooks absent in production.
 - [ ] Replace or separately authorize the private-gist headless-agent proof;
