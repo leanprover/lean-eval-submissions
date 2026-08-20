@@ -70,11 +70,13 @@ one issue per lane.
 
 - [x] Create protected `cloudflare-staging` and `cloudflare-production` GitHub
       environments.
-- [ ] Install distinct scoped deployment tokens in those environments.
+- [x] Install the Cloudflare account ID in both environments.
+- [ ] Install distinct scoped deployment API tokens in those environments.
 - [x] Create the protected `submission-dispatch-promotion` environment and the
       immutable `lean-eval-dispatch/*` tag ruleset.
+- [x] Install distinct random `AUTH_TOKEN_SECRET` and `READINESS_TOKEN` values.
 - [ ] Create distinct staging/production GitHub OAuth Apps with exact callback
-      URLs and install separate `AUTH_TOKEN_SECRET` values.
+      URLs and install their credentials.
 - [x] Deploy staging manually with intake disabled and record the Worker,
       `workers.dev` endpoint, account, subdomain, and version identifiers.
 - [x] Promote the same commit to production and verify the structured health

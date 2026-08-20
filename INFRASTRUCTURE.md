@@ -27,8 +27,8 @@ Target owner: leanprover organization administrators. Service code:
 | GitHub state repository | `leanprover/lean-eval-state` | production | **CREATED PRIVATE 2026-08-20** |
 | GitHub generator repository | `leanprover/lean-eval-generator` | shared | **CREATED PUBLIC 2026-08-20** |
 | GitHub release repository | `leanprover/lean-eval-releases` | production | **CREATED PUBLIC 2026-08-20; PUBLICATION DISABLED** |
-| GitHub Environment | `cloudflare-staging` (`20259250422`) | staging | **CREATED 2026-08-20; DEPLOY SECRETS PENDING** |
-| GitHub Environment | `cloudflare-production` (`20259250928`) | production | **CREATED 2026-08-20; DEPLOY SECRETS PENDING** |
+| GitHub Environment | `cloudflare-staging` (`20259250422`) | staging | **CREATED 2026-08-20; ACCOUNT ID SET; API TOKEN PENDING** |
+| GitHub Environment | `cloudflare-production` (`20259250928`) | production | **CREATED 2026-08-20; ACCOUNT ID SET; API TOKEN PENDING** |
 | GitHub Environment | `submission-dispatch-promotion` (`20259251430`) | shared | **CREATED 2026-08-20; REVIEW + GUARD CONFIGURED** |
 | Replay execution backend | Lean-Eval-owned disposable executor | production | **TO BE DESIGNED AND PROVISIONED** |
 
@@ -77,10 +77,10 @@ The first intake-disabled deployment was performed manually with Wrangler
 OAuth from exact commit `d3983722972585be761877498b7e7125578948ed` while the
 dedicated automation tokens are pending. The recorded Worker versions are:
 
-| Environment | Worker version | Created (UTC) | Health verification |
+| Environment | Code-upload version | Current version after secret installation | Health verification |
 | --- | --- | --- | --- |
-| staging | `ee1ac267-c092-4f67-887f-8b9fa808aaf8` | 2026-08-20 13:52:26 | environment `staging`, intake `false`, exact commit |
-| production | `fe99f916-5e6a-4883-b85f-32adb7fc9ec9` | 2026-08-20 13:53:05 | environment `production`, intake `false`, exact commit |
+| staging | `ee1ac267-c092-4f67-887f-8b9fa808aaf8` | `fee3146e-d190-4f76-a25b-7859a35fe692` | environment `staging`, intake `false`, exact commit |
+| production | `fe99f916-5e6a-4883-b85f-32adb7fc9ec9` | `e72d3f5b-ae08-4386-a6c0-2a64a5cba049` | environment `production`, intake `false`, exact commit |
 
 This manual bootstrap does not replace deployment automation. Before the first
 post-merge automatic deployment, add `CLOUDFLARE_ACCOUNT_ID` and a distinct,
@@ -158,6 +158,12 @@ Each Worker environment has a distinct Wrangler secret:
 | `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | each | Environment-specific GitHub OAuth application | `read:user` only; callback listed below |
 | `GITHUB_VERIFICATION_TOKEN` | each | **LOCAL CONTRACT ONLY; not approved for production** source visibility/tag/gist verification | Unprovisioned pending broker/App decision |
 | `GITHUB_DISPATCH_TOKEN` | each | **LOCAL CONTRACT ONLY; not approved for production** exact-ref workflow dispatch | Unprovisioned pending broker/App decision |
+
+`READINESS_TOKEN` and `AUTH_TOKEN_SECRET` were installed with distinct random
+values in both Workers on 2026-08-20. The matching readiness value is also an
+environment secret for future authenticated probes. GitHub State, OAuth,
+verification, and dispatch credentials remain absent, so readiness correctly
+fails closed and no intake route can acquire external authority.
 
 `DISPATCH_WORKFLOW_REF` must stay absent until an operator creates an immutable
 tag named `lean-eval-dispatch/<40-character-commit>` at the reviewed workflow
@@ -351,8 +357,8 @@ compatibility fix or append a corrective event.
 
 | Verification / incident | Date | Result / link |
 | --- | --- | --- |
-| Staging deploy and smoke | 2026-08-20 | `ee1ac267-c092-4f67-887f-8b9fa808aaf8`; exact commit and intake-disabled assertions passed |
-| Production deploy and smoke | 2026-08-20 | `fe99f916-5e6a-4883-b85f-32adb7fc9ec9`; exact commit and intake-disabled assertions passed |
+| Staging deploy and smoke | 2026-08-20 | current `fee3146e-d190-4f76-a25b-7859a35fe692`; exact commit and intake-disabled assertions passed |
+| Production deploy and smoke | 2026-08-20 | current `e72d3f5b-ae08-4386-a6c0-2a64a5cba049`; exact commit and intake-disabled assertions passed |
 | Worker rollback | not run | A second known-good version does not yet exist; no synthetic drill required |
 | Replay decrypt and destruction | blocked | D6 key/provider work intentionally not provisioned |
 | Release reconstruction | blocked | Publication remains disabled |
