@@ -8,7 +8,5 @@
 self-hosted-runner:
   labels:
     - ubuntu-latest-large
-    # Namespace (nscloud) runner, as used by leanprover/lean4 CI.
-    - nscloud-ubuntu-24.04-amd64-32x64
     - windows-latest-large
     - windows-2022-large
