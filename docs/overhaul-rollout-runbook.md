@@ -439,10 +439,8 @@ not the value—in `INFRASTRUCTURE.md`.
 
 ## Cloudflare and GitHub environment walkthrough
 
-These steps require the account selected in D4 and the two scoped deployment
-tokens. Cloudflare Custom Domains create the DNS records and certificates for
-the exact hostnames declared in `server/wrangler.jsonc`; verify no conflicting
-CNAME exists first.
+These steps use the dedicated Lean Eval account and the two scoped deployment
+tokens. Custom domains can be added later without changing the API contracts.
 
 1. Ensure the operator is a member of the correct Cloudflare account, then run:
 
@@ -454,9 +452,8 @@ CNAME exists first.
    Stop unless the selected account ID is present.
 
 2. In the Cloudflare dashboard, create distinct staging and production API
-   tokens. Restrict them to the selected account, Workers Scripts edit, and
-   only the zone/route permissions needed for their respective custom domain.
-   Do not reuse a personal global API key.
+   tokens. Restrict them to the selected account and Workers Scripts edit. Do
+   not grant zone permissions or reuse a personal global API key.
 
 3. Create the protected GitHub environments:
 
@@ -487,8 +484,7 @@ CNAME exists first.
    `refs/tags/lean-eval-dispatch/*`. Allow tag creation, but block updates and
    deletion; do not grant the Worker, deployment token, dispatch broker, or
    ordinary maintainers a bypass. Record the ruleset ID and required-reviewer
-   owners in `INFRASTRUCTURE.md`, then use a disposable test tag to prove an
-   update and deletion are both rejected before merging the Worker PR.
+   owners in `INFRASTRUCTURE.md`.
 
    After `check` succeeds, `deploy-worker.yml` enters that environment and uses
    its least-privilege `GITHUB_TOKEN` to create
@@ -539,21 +535,18 @@ CNAME exists first.
    `/api/v1/oauth/callback` URLs in `wrangler.jsonc`; do not configure wildcard
    callbacks. Record the non-secret client IDs in `INFRASTRUCTURE.md`, then set
    each client ID and client secret interactively as environment-specific
-   Worker secrets. Exercise one successful login, state mismatch, expired
-   state, replayed callback, and logout/session-expiry case in staging.
+   Worker secrets. Verify one successful staging login; the failure cases are
+   covered by the automated Worker tests.
 
 9. Create the source-verification and dispatch GitHub Apps with only the
    recorded permissions and installations. Deploy the implemented broker
    separately, bind only the matching staging/production service identity, and
-   leave the two local static-token hooks absent in the Worker. Prove in staging
-   that source App A cannot dispatch,
-   dispatch App B cannot read an unrelated source repository, and neither App
-   can mutate State or dispatch an unreviewed ref.
+   leave the two local static-token hooks absent in the Worker. The broker's
+   exact-operation and repository allowlists are covered by automated tests.
 
 10. Verify secret names without printing values, exercise authenticated
-   readiness, record account/zone IDs and the deployment version IDs in
-   `INFRASTRUCTURE.md`, and run the guarded rollback workflow once while intake
-   remains disabled.
+   readiness, and record account and deployment version IDs in
+   `INFRASTRUCTURE.md`.
 
 ## Results migration walkthrough
 
