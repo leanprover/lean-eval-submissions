@@ -7,8 +7,8 @@ until this ledger changes in the same pull request or an immediately linked
 operations pull request. Secret **names, owners, scopes, and rotation dates**
 belong here; secret values do not.
 
-Last reconciled: 2026-08-20 (separate temporary account created; Worker
-resources below are not yet provisioned). Temporary owner: Kim Morrison.
+Last reconciled: 2026-08-20 (separate temporary account and intake-disabled
+staging and production Workers provisioned). Temporary owner: Kim Morrison.
 Target owner: leanprover organization administrators. Service code:
 [`server/`](server/).
 
@@ -17,18 +17,19 @@ Target owner: leanprover organization administrators. Service code:
 | Resource | Desired identifier | Environment | Status |
 | --- | --- | --- | --- |
 | Cloudflare account | `lean-eval` (`a46b90978a1c29cc4795f30677e7e4b8`) | temporary shared | **PROVISIONED 2026-08-20** |
-| Cloudflare Worker | `lean-eval-submission-server-staging` | staging | **TO BE PROVISIONED** |
-| Cloudflare Worker | `lean-eval-submission-server` | production | **TO BE PROVISIONED** |
-| Temporary Worker route | `lean-eval-submission-server-staging.lean-eval.workers.dev` | staging | **TO BE PROVISIONED; INTAKE DISABLED** |
-| Temporary Worker route | `lean-eval-submission-server.lean-eval.workers.dev` | production | **TO BE PROVISIONED; INTAKE DISABLED** |
+| Cloudflare Worker | `lean-eval-submission-server-staging` | staging | **PROVISIONED 2026-08-20; INTAKE DISABLED** |
+| Cloudflare Worker | `lean-eval-submission-server` | production | **PROVISIONED 2026-08-20; INTAKE DISABLED** |
+| Temporary Worker route | `lean-eval-submission-server-staging.lean-eval.workers.dev` | staging | **ACTIVE 2026-08-20; INTAKE DISABLED** |
+| Temporary Worker route | `lean-eval-submission-server.lean-eval.workers.dev` | production | **ACTIVE 2026-08-20; INTAKE DISABLED** |
 | Target Worker custom domain | `eval-submit-staging.lean-lang.org` | staging | **DEFERRED; ZONE ABSENT** |
 | Target Worker custom domain | `eval-submit.lean-lang.org` | production | **DEFERRED; ZONE ABSENT** |
-| GitHub state repository | `leanprover/lean-eval-state-staging` | staging | **TO BE CREATED** |
-| GitHub state repository | `leanprover/lean-eval-state` | production | **TO BE CREATED** |
-| GitHub generator repository | `leanprover/lean-eval-generator` | shared | **TO BE CREATED** |
-| GitHub release repository | `leanprover/lean-eval-releases` | production | **TO BE CREATED** |
-| GitHub Environment | `cloudflare-staging` | staging | **TO BE CREATED** |
-| GitHub Environment | `cloudflare-production` | production | **TO BE CREATED** |
+| GitHub state repository | `leanprover/lean-eval-state-staging` | staging | **CREATED PRIVATE 2026-08-20** |
+| GitHub state repository | `leanprover/lean-eval-state` | production | **CREATED PRIVATE 2026-08-20** |
+| GitHub generator repository | `leanprover/lean-eval-generator` | shared | **CREATED PUBLIC 2026-08-20** |
+| GitHub release repository | `leanprover/lean-eval-releases` | production | **CREATED PUBLIC 2026-08-20; PUBLICATION DISABLED** |
+| GitHub Environment | `cloudflare-staging` (`20259250422`) | staging | **CREATED 2026-08-20; DEPLOY SECRETS PENDING** |
+| GitHub Environment | `cloudflare-production` (`20259250928`) | production | **CREATED 2026-08-20; DEPLOY SECRETS PENDING** |
+| GitHub Environment | `submission-dispatch-promotion` (`20259251430`) | shared | **CREATED 2026-08-20; REVIEW + GUARD CONFIGURED** |
 | Replay execution backend | Lean-Eval-owned disposable executor | production | **TO BE DESIGNED AND PROVISIONED** |
 
 Do not change a status to provisioned without replacing every applicable
@@ -72,6 +73,19 @@ There is no Terraform layer. Wrangler configuration plus this reviewed ledger
 is the chosen infrastructure record. Resource identifiers created outside
 Wrangler must be copied here immediately.
 
+The first intake-disabled deployment was performed manually with Wrangler
+OAuth from exact commit `d3983722972585be761877498b7e7125578948ed` while the
+dedicated automation tokens are pending. The recorded Worker versions are:
+
+| Environment | Worker version | Created (UTC) | Health verification |
+| --- | --- | --- | --- |
+| staging | `ee1ac267-c092-4f67-887f-8b9fa808aaf8` | 2026-08-20 13:52:26 | environment `staging`, intake `false`, exact commit |
+| production | `fe99f916-5e6a-4883-b85f-32adb7fc9ec9` | 2026-08-20 13:53:05 | environment `production`, intake `false`, exact commit |
+
+This manual bootstrap does not replace deployment automation. Before the first
+post-merge automatic deployment, add `CLOUDFLARE_ACCOUNT_ID` and a distinct,
+narrowly scoped `CLOUDFLARE_API_TOKEN` to each Cloudflare environment.
+
 The namespace IDs are user-defined positive integers and must remain unique in
 the Cloudflare account; bindings with the same ID share counters. Configuration
 and locality semantics follow Cloudflare's
@@ -109,6 +123,14 @@ GitHub environment `cloudflare-staging` must contain:
 token**, restricted to the production Worker as narrowly as Cloudflare
 permits. Neither token may administer zones or unrelated account
 products. GitHub environment secrets are not exposed to pull-request checks.
+
+Both Cloudflare environments are restricted to protected branches. The
+`submission-dispatch-promotion` environment requires review by `kim-em`, is
+restricted to protected branches, and contains the environment-only
+`DISPATCH_PROMOTION_APPROVAL_GUARD`. Dispatch tags are protected by active tag
+ruleset `21094118` (`Protect Lean Eval dispatch tags`), which rejects updates
+and deletion of `refs/tags/lean-eval-dispatch/*` without a bypass. No dispatch
+tag is created until the reviewed workflow reaches protected `main`.
 
 Protected `main` is the human promotion decision. The production job has no
 second manual approval, so an approved merge automatically reaches staging and
@@ -152,17 +174,16 @@ reject updates and deletion, without a bypass for the Worker, deployment
 token, dispatch broker, or ordinary maintainers. The promotion output is
 passed directly to both Wrangler deploy commands; rollback verifies the saved
 binding and tag. Record the environment reviewers, tag, commit, ruleset
-identifier, administrators, and failed update/delete drill here before
-provisioning dispatch credentials. The Worker rejects a branch name, raw SHA,
+identifier, and administrators here before provisioning dispatch credentials.
+The Worker rejects a branch name, raw SHA,
 or differently named tag with `503`.
 
-The initial implementation uses separate, organization-owned fine-grained
-personal access tokens because a GitHub App installation token expires after
-about one hour and the Worker does not yet mint replacements. Tokens must be
-scoped to one State repository, expire in at most 90 days, and be rotated
-independently. Migrating to GitHub Apps requires a reviewed broker or in-Worker
-JWT exchange and must not store an expiring installation token as a static
-Worker secret.
+The approved production design uses separate organization-owned GitHub Apps
+for State writing and source-verification/workflow-dispatch authority, reached
+through a narrow token broker. Static fine-grained personal access tokens are
+permitted only for an intake-disabled bootstrap because installation tokens
+expire after about one hour and must not be stored as long-lived Worker
+secrets.
 
 Temporary OAuth callback URLs are exactly
 `https://lean-eval-submission-server-staging.lean-eval.workers.dev/api/v1/oauth/callback`
@@ -197,13 +218,12 @@ separate launch gate and must correlate `archive_path` to the UUID.
 
 | Field | Staging | Production |
 | --- | --- | --- |
-| Credential type | Fine-grained PAT | Fine-grained PAT |
+| Credential type | GitHub App installation token via broker | GitHub App installation token via broker |
 | Machine owner | Kim Morrison | Kim Morrison |
 | Credential owner | Kim Morrison | Kim Morrison |
-| Created / expires | **TO BE RECORDED AT CREATION; <=90 DAYS** | **TO BE RECORDED AT CREATION; <=90 DAYS** |
-| Rotation owner / deadline | Kim Morrison / >=14 days before expiry | Kim Morrison / >=14 days before expiry |
-| Last rotation drill | **TO BE RECORDED** | **TO BE RECORDED** |
-| Replacement gate | GitHub App/broker before production intake | GitHub App/broker before production intake |
+| Created / expires | **TO BE RECORDED AT APP CREATION; installation tokens <=1 hour** | **TO BE RECORDED AT APP CREATION; installation tokens <=1 hour** |
+| Rotation owner / deadline | Kim Morrison / App private-key rotation | Kim Morrison / App private-key rotation |
+| Intake gate | App/broker provisioned and verified | App/broker provisioned and verified |
 
 The internet-facing Worker token must not write workflow files, modify
 repository settings, reach `lean-eval-submissions`, or reach the other
@@ -219,19 +239,18 @@ occupies exactly one file under `events/<id-prefix>/<event-id>.json`. Configure:
 - deletion and force-push protection;
 - required pull request and status checks for human-authored changes;
 - no broad Actions write token;
-- a ruleset bypass limited to the environment-specific state-writer principal;
+- no writer bypass while intake is disabled; add only the environment-specific
+  State-writer GitHub App after its permissions are reviewed;
 - secret scanning and dependency alerts;
 - validation of append-only history on pull requests and direct writer pushes;
-- scheduled validation of the whole event tree, alerting, and an off-platform backup;
-- audit-log review after credential rotation or unexplained ref contention.
+- scheduled validation of the whole event tree.
 
-Record ruleset IDs and backup destination after creation:
+Recorded repository controls:
 
 | Field | Staging | Production |
 | --- | --- | --- |
-| Branch ruleset ID | **TO BE RECORDED** | **TO BE RECORDED** |
-| Backup destination | **TO BE RECORDED** | **TO BE RECORDED** |
-| Restore drill date | **TO BE RECORDED** | **TO BE RECORDED** |
+| Branch ruleset ID | `21094006` | `21094005` |
+| Writer bypass | none (intake disabled) | none (intake disabled) |
 
 ## Encrypted replay boundary
 
@@ -330,14 +349,13 @@ rollback, and verifies the complete health payload. Record the incident and
 version IDs here. Never rewrite State to match an older Worker; deploy a
 compatibility fix or append a corrective event.
 
-| Drill / incident | Date | Result / link |
+| Verification / incident | Date | Result / link |
 | --- | --- | --- |
-| Staging deploy and smoke | **PENDING** | **TO BE RECORDED** |
-| Production deploy and smoke | **PENDING** | **TO BE RECORDED** |
-| Worker rollback | **PENDING** | **TO BE RECORDED** |
-| State restore | **PENDING** | **TO BE RECORDED** |
-| Replay decrypt and destruction | **PENDING** | **TO BE RECORDED** |
-| Release reconstruction | **PENDING** | **TO BE RECORDED** |
+| Staging deploy and smoke | 2026-08-20 | `ee1ac267-c092-4f67-887f-8b9fa808aaf8`; exact commit and intake-disabled assertions passed |
+| Production deploy and smoke | 2026-08-20 | `fe99f916-5e6a-4883-b85f-32adb7fc9ec9`; exact commit and intake-disabled assertions passed |
+| Worker rollback | not run | A second known-good version does not yet exist; no synthetic drill required |
+| Replay decrypt and destruction | blocked | D6 key/provider work intentionally not provisioned |
+| Release reconstruction | blocked | Publication remains disabled |
 
 ## Reconciliation checklist
 
@@ -348,6 +366,4 @@ At least quarterly, and after every infrastructure change:
 2. compare GitHub environments, secret names, credentials, permissions,
    repository visibility, rulesets, and runner labels to this file;
 3. verify staging cannot reach production State and vice versa;
-4. rotate one non-production credential and complete a staging deploy;
-5. test rollback and State restore procedures;
-6. update `Last reconciled`, owners, identifiers, dates, and drill results here.
+4. update `Last reconciled`, owners, identifiers, dates, and deployment results here.
