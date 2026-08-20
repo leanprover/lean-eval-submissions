@@ -112,6 +112,10 @@ jobs:
       # If the /proc remount is what fails, does the containment guarantee
       # survive without it? The kernel reaps the PID namespace when its
       # init exits regardless of what procfs is mounted.
+      # Turn "should work" into "does work": make ONLY the /proc remount
+      # non-fatal, keeping the MS_PRIVATE remount and the capability drop
+      # fatal, then re-run. The teardown guarantee comes from the PID
+      # namespace, so containment should be unaffected.
       - name: descendant_cleanup with the /proc remount made non-fatal
         run: |
           set +e
@@ -120,20 +124,21 @@ jobs:
           import re
           path = "c/pid_namespace.c"
           src = open(path).read()
-          # Make only the /proc remount non-fatal; keep the MS_PRIVATE
-          # remount fatal, since that one is what makes the mount namespace
-          # actually private.
-          pat = re.compile(r'if \(mount\(NULL, "/".*?_exit\(126\);\n    \}', re.S)
-          assert pat.search(src), "patch target moved"
-          repl = (
-              'if (mount(NULL, "/", NULL, MS_REC | MS_PRIVATE, NULL) != 0) {\n'
-              '        _exit(126);\n'
-              '    }\n'
-              '    mount("proc", "/proc", "proc", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL);'
-          )
-          open(path, "w").write(pat.sub(repl, src, count=1))
+          pat = re.compile(r'if \(mount\("proc".*?\n    \}\n', re.S)
+          if not pat.search(src):
+              print("PATCH TARGET MOVED; current region follows")
+              i = src.find('mount(NULL, "/"')
+              print(src[max(0, i - 200):i + 600])
+              raise SystemExit(1)
+          src = pat.sub('mount("proc", "/proc", "proc", MS_NOSUID | MS_NODEV | MS_NOEXEC, NULL);\n', src, count=1)
+          open(path, "w").write(src)
           print("patched: /proc remount is now best-effort")
           PY
-          lake build comparator 2>&1 | tail -3
+          echo "PATCH_EXIT=$?"
+          lake build comparator 2>&1 | tail -2
+          echo "--- descendant_cleanup ---"
           lean --run runtests.lean descendant_cleanup 2>&1 | tail -12
-          echo "EXIT=${PIPESTATUS[0]}"
+          echo "CLEANUP_EXIT=${PIPESTATUS[0]}"
+          echo "--- simple_match, to confirm ordinary operation still works ---"
+          lean --run runtests.lean simple_match 2>&1 | tail -8
+          echo "MATCH_EXIT=${PIPESTATUS[0]}"
