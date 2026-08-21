@@ -146,11 +146,17 @@ jobs:
 
       - name: Remove every repository credential and Git metadata
         run: |
-          find . -type d -name .git -prune -exec rm -rf '{}' +
-          if find . -type d -name .git -print -quit | grep -q .; then
-            echo "repository Git metadata survived recursive stripping" >&2
+          find . \
+            -path './lean-eval/.lake/packages' -prune -o \
+            -type d -name .git -prune -exec rm -rf '{}' +
+          if find . \
+              -path './lean-eval/.lake/packages' -prune -o \
+              -type d -name .git -print -quit | grep -q .; then
+            echo "checkout or component Git metadata survived stripping" >&2
             exit 1
           fi
+          python scripts/public_replay_smoke.py validate-public-dependency-git \
+            --root lean-eval/.lake/packages
 
       - name: Prove the untrusted sandbox and environment boundary
         run: |
@@ -182,6 +188,13 @@ jobs:
           fi
           end_ns=$(date +%s%N)
           echo "$(((end_ns - start_ns) / 1000000))" > /tmp/replay-wall-time-ms
+
+      - name: Remove public dependency Git metadata created during replay
+        run: |
+          python scripts/public_replay_smoke.py validate-public-dependency-git \
+            --root lean-eval/.lake/packages
+          find . -type d -name .git -prune -exec rm -rf '{}' +
+          test -z "$(find . -type d -name .git -print -quit)"
 
       - name: Build and validate source-free smoke evidence
         env:

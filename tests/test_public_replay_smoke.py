@@ -22,6 +22,7 @@ from public_replay_smoke import (  # noqa: E402
     build_evidence,
     validate_config,
     validate_evidence,
+    validate_public_dependency_git,
 )
 
 
@@ -30,6 +31,54 @@ def fixture() -> dict:
 
 
 class PublicReplaySmokeTests(unittest.TestCase):
+    def test_public_dependency_git_metadata_is_credential_free(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            config = root / "mathlib" / ".git" / "config"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                '[core]\n\trepositoryformatversion = 0\n'
+                '[remote "origin"]\n'
+                '\turl = https://github.com/leanprover-community/mathlib4.git\n'
+                '\tfetch = +refs/heads/*:refs/remotes/origin/*\n',
+                encoding="utf-8",
+            )
+            validate_public_dependency_git(root)
+
+            config.write_text(
+                config.read_text(encoding="utf-8")
+                + '[http "https://github.com/"]\n\textraheader = AUTHORIZATION: secret\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(SmokeError, "credential-bearing"):
+                validate_public_dependency_git(root)
+
+    def test_dependency_git_rejects_non_public_remote_and_nesting(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            config = root / "package" / ".git" / "config"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                '[remote "origin"]\n\turl = git@github.com:owner/private.git\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(SmokeError, "not public GitHub HTTPS"):
+                validate_public_dependency_git(root)
+
+            config.write_text(
+                '[remote "origin"]\n'
+                '\turl = https://github.com/owner/public.git\n',
+                encoding="utf-8",
+            )
+            nested = root / "package" / "nested" / ".git"
+            nested.mkdir(parents=True)
+            (nested / "config").write_text(
+                '[remote "origin"]\n\turl = https://github.com/owner/public.git\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(SmokeError, "one package deep"):
+                validate_public_dependency_git(root)
+
     def test_tracked_fixture_is_strict_and_public(self) -> None:
         config = validate_config(fixture())
         self.assertEqual(config["problem_id"], "two_plus_two")
