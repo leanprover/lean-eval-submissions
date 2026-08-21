@@ -518,6 +518,7 @@ class PushTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             locator = tmp / "archive-locator.json"
+            completion = tmp / "archive-completion.json"
             puts: list[dict] = []
 
             def fake_urlopen(req, timeout=None):
@@ -541,6 +542,7 @@ class PushTests(unittest.TestCase):
                     "--ciphertext", str(self._ciphertext(tmp)),
                     "--sidecar", str(self._server_sidecar(tmp)),
                     "--locator-output", str(locator),
+                    "--completion-output", str(completion),
                 ])
 
             self.assertEqual(rc, 0)
@@ -560,6 +562,13 @@ class PushTests(unittest.TestCase):
                 ).hexdigest(),
                 "encrypted": True,
             })
+            completion_value = json.loads(completion.read_text())
+            self.assertEqual(completion_value["schema_version"], 1)
+            self.assertRegex(
+                completion_value["occurred_at"],
+                r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.000Z$",
+            )
+            self.assertEqual(completion_value["locator"], value)
 
     def test_push_server_submission_requires_locator_output(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -571,7 +580,10 @@ class PushTests(unittest.TestCase):
                         "--ciphertext", str(self._ciphertext(tmp)),
                         "--sidecar", str(self._server_sidecar(tmp)),
                     ])
-            self.assertIn("--locator-output is required", str(ctx.exception))
+            self.assertIn(
+                "--locator-output and --completion-output are required",
+                str(ctx.exception),
+            )
 
     def test_push_rejects_unknown_partial_sidecar_field(self) -> None:
         with tempfile.TemporaryDirectory() as td:
@@ -589,6 +601,7 @@ class PushTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             locator = tmp / "archive-locator.json"
+            completion = tmp / "archive-completion.json"
 
             def fake_urlopen(req, timeout=None):
                 if req.get_method() == "GET" and "?ref=" in req.full_url:
@@ -607,6 +620,7 @@ class PushTests(unittest.TestCase):
                         "--ciphertext", str(self._ciphertext(tmp)),
                         "--sidecar", str(self._server_sidecar(tmp)),
                         "--locator-output", str(locator),
+                        "--completion-output", str(completion),
                     ])
             self.assertIn("does not contain the ciphertext", str(ctx.exception))
             self.assertFalse(locator.exists())
@@ -615,6 +629,7 @@ class PushTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
             locator = tmp / "archive-locator.json"
+            completion = tmp / "archive-completion.json"
             calls: list[tuple[str, str]] = []
 
             def fake_urlopen(req, timeout=None):
@@ -635,6 +650,7 @@ class PushTests(unittest.TestCase):
                     "--ciphertext", str(self._ciphertext(tmp)),
                     "--sidecar", str(self._server_sidecar(tmp)),
                     "--locator-output", str(locator),
+                    "--completion-output", str(completion),
                 ])
 
             self.assertEqual(rc, 0)
@@ -644,6 +660,10 @@ class PushTests(unittest.TestCase):
             self.assertEqual(
                 value["archive_ciphertext_sha256"],
                 hashlib.sha256(b"age-encryption.org/v1\nexisting").hexdigest(),
+            )
+            self.assertEqual(
+                json.loads(completion.read_text())["locator"],
+                value,
             )
 
     def test_push_idempotent_on_reeval_same_source(self) -> None:
@@ -952,6 +972,13 @@ class GitBlobShaTests(unittest.TestCase):
         )
         self.assertEqual(schema["properties"]["schema_version"], {"const": 1})
         self.assertFalse(schema["additionalProperties"])
+
+    def test_archive_completion_schema_wraps_locator_strictly(self) -> None:
+        schema = json.loads(
+            (REPO_ROOT / "schemas" / "archive-completion-v1.schema.json").read_text()
+        )
+        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(schema["properties"]["locator"]["$ref"], "archive-locator-v1.schema.json")
         self.assertEqual(set(schema["required"]), set(schema["properties"]))
 
     def test_matches_git_hash_object(self) -> None:

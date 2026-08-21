@@ -566,6 +566,8 @@ class ServerDispatchTests(unittest.TestCase):
         values = {
             "archive_locator_required": "true",
             "archive_sidecar_schema": "2",
+            "archive_state_callback_required": "true",
+            "callback_environment": "staging",
             "declared_model": "Example Model",
             "problem_group": "formalization-evaluation",
             "problem_id": "two_plus_two",

@@ -184,7 +184,11 @@ describe("GitHub App broker", () => {
     const upstream = vi.fn<typeof fetch>();
     const body = JSON.stringify({
       ref: `lean-eval-dispatch/${COMMIT}`,
-      inputs: { workflow_commit: "b".repeat(40) },
+      inputs: {
+        workflow_commit: "b".repeat(40),
+        archive_state_callback_required: "true",
+        callback_environment: "staging",
+      },
     });
     const response = await handleBrokerRequest(
       brokerRequest(
@@ -216,7 +220,11 @@ describe("GitHub App broker", () => {
     });
     const body = JSON.stringify({
       ref: `lean-eval-dispatch/${COMMIT}`,
-      inputs: { workflow_commit: COMMIT },
+      inputs: {
+        workflow_commit: COMMIT,
+        archive_state_callback_required: "true",
+        callback_environment: "staging",
+      },
     });
     const response = await handleBrokerRequest(
       brokerRequest(

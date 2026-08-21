@@ -49,6 +49,22 @@ export type AgentChallengeInput = Readonly<{
   source_commit: string;
 }>;
 
+export type ArchiveLocator = Readonly<{
+  schema_version: 1;
+  submission_id: string;
+  archive_repository: string;
+  archive_commit: string;
+  archive_path: string;
+  archive_ciphertext_sha256: string;
+  encrypted: true;
+}>;
+
+export type ArchiveCompletion = Readonly<{
+  schema_version: 1;
+  occurred_at: string;
+  locator: ArchiveLocator;
+}>;
+
 export class ApiDecodeError extends Error {
   constructor(message: string) {
     super(message);
@@ -315,6 +331,55 @@ export function decodePublicationChoice(value: unknown): PublicationChoice {
     throw new ApiDecodeError("publication_choice is invalid");
   }
   return data.publication_choice;
+}
+
+export function decodeArchiveCompletion(value: unknown): ArchiveCompletion {
+  const data = object(value, "archive completion");
+  exactFields(data, ["locator", "occurred_at", "schema_version"], [], "archive completion");
+  if (data.schema_version !== 1 || typeof data.occurred_at !== "string") {
+    throw new ApiDecodeError("archive completion version or timestamp is invalid");
+  }
+  const occurredAt = new Date(data.occurred_at);
+  if (
+    data.occurred_at.startsWith("0000-") ||
+    Number.isNaN(occurredAt.valueOf()) ||
+    occurredAt.toISOString() !== data.occurred_at
+  ) {
+    throw new ApiDecodeError("archive completion timestamp is not canonical UTC milliseconds");
+  }
+  const locator = object(data.locator, "archive locator");
+  exactFields(locator, [
+    "archive_ciphertext_sha256",
+    "archive_commit",
+    "archive_path",
+    "archive_repository",
+    "encrypted",
+    "schema_version",
+    "submission_id",
+  ], [], "archive locator");
+  if (
+    locator.schema_version !== 1 ||
+    typeof locator.submission_id !== "string" ||
+    !UUID_V7.test(locator.submission_id) ||
+    typeof locator.archive_repository !== "string" ||
+    !REPOSITORY.test(locator.archive_repository) ||
+    typeof locator.archive_commit !== "string" ||
+    !COMMIT.test(locator.archive_commit) ||
+    typeof locator.archive_ciphertext_sha256 !== "string" ||
+    !/^[0-9a-f]{64}$/.test(locator.archive_ciphertext_sha256) ||
+    locator.encrypted !== true
+  ) {
+    throw new ApiDecodeError("archive locator fields are invalid");
+  }
+  const expectedPath = `archives/${locator.submission_id.replaceAll("-", "").slice(0, 2)}/${locator.submission_id}.tar.age`;
+  if (locator.archive_path !== expectedPath) {
+    throw new ApiDecodeError("archive locator path does not match its submission");
+  }
+  return {
+    schema_version: 1,
+    occurred_at: data.occurred_at,
+    locator: locator as ArchiveLocator,
+  };
 }
 
 export function assertSourcePolicy(

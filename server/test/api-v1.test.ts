@@ -3,10 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ApiDecodeError,
   assertSourcePolicy,
+  decodeArchiveCompletion,
   decodeSubmissionInput,
   readJson,
 } from "../src/api-contract";
 import {
+  lifecycleEventId,
   makeSubmissionGrant,
   signToken,
   verifyToken,
@@ -29,6 +31,7 @@ const ENV = {
   DISPATCH_WORKFLOW: "submission.yml",
   DISPATCH_WORKFLOW_REF: `lean-eval-dispatch/${"b".repeat(40)}`,
   INTAKE_ENABLED: "true",
+  LIFECYCLE_CALLBACK_TOKEN: "callback-token-with-at-least-thirty-two-bytes",
   STATE_REPOSITORY: "leanprover/state-staging",
 } satisfies RuntimeEnv;
 const LIFECYCLE = { waitUntil: () => undefined };
@@ -114,7 +117,7 @@ function pendingView(
   submissionId: string,
   acceptedAt: string,
   attempts = 0,
-  status: "failed" | "pending" = "pending",
+  status: "failed" | "pending" | "succeeded" = "pending",
 ): SubmissionView {
   const metadataEventId = "0198abcd-1111-7000-8000-000000000002";
   return {
@@ -194,6 +197,7 @@ describe("strict API contract", () => {
       `lean-eval-dispatch/${"b".repeat(40)}`,
       "0198abcd-1111-7000-8000-000000000001",
       "alice",
+      "staging",
       SUBMISSION,
     );
     const body = await request.json<{ ref: string; inputs: Record<string, string> }>();
@@ -203,9 +207,93 @@ describe("strict API contract", () => {
       source_commit: "a".repeat(40),
       archive_locator_required: "true",
       archive_sidecar_schema: "2",
+      archive_state_callback_required: "true",
+      callback_environment: "staging",
       workflow_commit: "b".repeat(40),
     });
-    expect(() => buildDispatchRequest("leanprover/x", "submission.yml", "main", body.inputs.submission_id ?? "", "alice", SUBMISSION)).toThrow(/immutable/);
+    expect(() => buildDispatchRequest("leanprover/x", "submission.yml", "main", body.inputs.submission_id ?? "", "alice", "staging", SUBMISSION)).toThrow(/immutable/);
+  });
+
+  it("strictly decodes the verified archive completion contract", () => {
+    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    const completion = {
+      schema_version: 1,
+      occurred_at: "2026-05-02T03:04:05.000Z",
+      locator: {
+        schema_version: 1,
+        submission_id: submissionId,
+        archive_repository: "leanprover/lean-eval-audit",
+        archive_commit: "a".repeat(40),
+        archive_path: `archives/01/${submissionId}.tar.age`,
+        archive_ciphertext_sha256: "b".repeat(64),
+        encrypted: true,
+      },
+    };
+    expect(decodeArchiveCompletion(completion)).toEqual(completion);
+    expect(() => decodeArchiveCompletion({ ...completion, surprise: true })).toThrow(/unknown/);
+    expect(() => decodeArchiveCompletion({
+      ...completion,
+      locator: { ...completion.locator, archive_path: `archives/ff/${submissionId}.tar.age` },
+    })).toThrow(/path/);
+  });
+
+  it("records authenticated archive completion while public intake is disabled", async () => {
+    const state = new MemoryState();
+    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    state.views.set(submissionId, pendingView(
+      submissionId,
+      "2026-05-01T00:00:00.000Z",
+      1,
+      "succeeded",
+    ));
+    const completion = {
+      schema_version: 1,
+      occurred_at: "2026-05-02T03:04:05.000Z",
+      locator: {
+        schema_version: 1,
+        submission_id: submissionId,
+        archive_repository: "leanprover/lean-eval-audit",
+        archive_commit: "a".repeat(40),
+        archive_path: `archives/01/${submissionId}.tar.age`,
+        archive_ciphertext_sha256: "b".repeat(64),
+        encrypted: true,
+      },
+    };
+    const request = jsonRequest("/internal/v1/archive-completed", completion);
+    request.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+    const response = await handleRequest(
+      request,
+      { ...ENV, INTAKE_ENABLED: "false" },
+      LIFECYCLE,
+      { state },
+    );
+    expect(response.status).toBe(201);
+    const event = state.events.at(-1);
+    expect(event).toMatchObject({
+      event_type: "archive.completed",
+      subject_id: submissionId,
+      causation_event_id: submissionId,
+      actor: { kind: "system" },
+      payload: {
+        archive_repository: completion.locator.archive_repository,
+        archive_commit: completion.locator.archive_commit,
+        archive_path: completion.locator.archive_path,
+        archive_ciphertext_sha256: completion.locator.archive_ciphertext_sha256,
+        encrypted: true,
+      },
+    });
+    expect(event?.event_id).toBe(await lifecycleEventId(
+      "archive.completed",
+      submissionId,
+      completion.occurred_at,
+    ));
+    const unauthorized = await handleRequest(
+      jsonRequest("/internal/v1/archive-completed", completion),
+      { ...ENV, INTAKE_ENABLED: "false" },
+      LIFECYCLE,
+      { state },
+    );
+    expect(unauthorized.status).toBe(401);
   });
 
   it("fails closed with 429 when the Cloudflare limiter denies or errors", async () => {

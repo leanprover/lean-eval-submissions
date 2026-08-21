@@ -270,6 +270,39 @@ export async function nonceDigest(purpose: "agent" | "oauth" | "submission", non
   return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+/** Derive a replay-safe UUIDv7 for one immutable lifecycle fact. */
+export async function lifecycleEventId(
+  eventType: "archive.completed",
+  subjectId: string,
+  occurredAt: string,
+): Promise<string> {
+  if (!isUuidV7(subjectId)) throw new AuthError("lifecycle subject is invalid");
+  const date = new Date(occurredAt);
+  if (
+    occurredAt.startsWith("0000-") ||
+    Number.isNaN(date.valueOf()) ||
+    date.toISOString() !== occurredAt ||
+    date.valueOf() > 0xffffffffffff
+  ) {
+    throw new AuthError("lifecycle timestamp is invalid");
+  }
+  const bytes = new Uint8Array(await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(
+      `lean-eval-lifecycle-event-v1\0${eventType}\0${subjectId}\0${occurredAt}`,
+    ),
+  )).slice(0, 16);
+  let milliseconds = date.valueOf();
+  for (let index = 5; index >= 0; index -= 1) {
+    bytes[index] = milliseconds % 256;
+    milliseconds = Math.floor(milliseconds / 256);
+  }
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x70;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 export async function equalToken(left: string, right: string): Promise<boolean> {
   const [leftDigest, rightDigest] = await Promise.all([
     crypto.subtle.digest("SHA-256", new TextEncoder().encode(left)),

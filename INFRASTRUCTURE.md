@@ -181,6 +181,8 @@ Each Worker environment has a distinct Wrangler secret:
 | `READINESS_TOKEN` | production | Authenticate operational readiness probes | No GitHub access |
 | `AUTH_TOKEN_SECRET` | staging | HMAC-sign OAuth state, sessions, grants, and agent challenges | No GitHub access; random >=32-byte value |
 | `AUTH_TOKEN_SECRET` | production | HMAC-sign OAuth state, sessions, grants, and agent challenges | No GitHub access; distinct from staging |
+| `LIFECYCLE_CALLBACK_TOKEN` | staging | Authenticate the source-free post-archive State callback job | No GitHub access; distinct random value also stored only in `cloudflare-staging` |
+| `LIFECYCLE_CALLBACK_TOKEN` | production | Authenticate the source-free post-archive State callback job | No GitHub access; distinct random value also stored only in `cloudflare-production` |
 | `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | each | Environment-specific GitHub OAuth application | `read:user` only; callback listed below; **SET 2026-08-21** |
 | `GITHUB_VERIFICATION_TOKEN` | each | **LOCAL CONTRACT ONLY; not approved for production** source visibility/tag/gist verification | Intentionally absent; source broker provisioned |
 | `GITHUB_DISPATCH_TOKEN` | each | **LOCAL CONTRACT ONLY; not approved for production** exact-ref workflow dispatch | Intentionally absent; dispatch broker provisioned |
@@ -201,11 +203,9 @@ Recorded GitHub Apps:
 | Lean Eval Source Reader | `lean-eval-source-reader` | `4666604` | Metadata read, Contents read | none; installed per contributor repository on opt-in |
 | Lean Eval Workflow Dispatcher | `lean-eval-workflow-dispatcher` | `4666633` | Metadata read, Contents read, Actions read/write | `155329316` on `leanprover`, repository selection `selected`, exactly `leanprover/lean-eval-submissions` |
 
-Both registrations still publicly report the personal account `kim-em` as
-owner. Ownership transfers to the `leanprover` organization were submitted on
-2026-08-21 and are pending organization-owner acceptance. After acceptance,
-verify the App IDs, private-key authentication, and installation selection
-before assuming that no Worker secret rotation is required. Neither App
+Both registrations publicly report the `leanprover` organization as owner.
+The 2026-08-21 ownership transfers preserved App IDs `4666604` and `4666633`.
+Neither App
 subscribes to any event and neither has a webhook. The source reader
 deliberately has no Actions permission. The dispatcher installation was
 verified on 2026-08-21 by minting an installation token and listing
@@ -309,8 +309,14 @@ at most 20 due entries. The State validator checks view/outbox paths, shapes,
 event references, ownership, and consistency. Workflow concurrency is keyed by
 submission UUID, and deterministic result/State identities remain the final
 duplicate-record guard. The selected broker supplies dispatch authorization;
-it is not the persistence mechanism. Archive-locator consumption remains a
-separate launch gate and must correlate `archive_path` to the UUID.
+it is not the persistence mechanism. The archive job emits a strict completion
+object only after reading the ciphertext back at its immutable commit and
+verifying its digest. A separate source-free `archive_state` job holds only the
+matching environment's callback token and sends that object to the Worker. The
+Worker validates the UUID-derived path, authenticated environment, existing
+dispatched submission, and exact payload before appending an idempotent
+`archive.completed` event. No State credential or callback token enters the
+evaluation or archive job.
 
 | Field | Staging | Production |
 | --- | --- | --- |
@@ -319,20 +325,18 @@ separate launch gate and must correlate `archive_path` to the UUID.
 | Credential owner | Kim Morrison | Kim Morrison |
 | Token name | `lean-eval-state-writer-staging` (`18528992`) | `lean-eval-state-writer-production` (`18529041`) |
 | Created / expires | 2026-08-21 / 2026-11-19 (90 days) | 2026-08-21 / 2026-11-19 (90 days) |
-| Approval state | **PENDING `leanprover` owner approval** | **PENDING `leanprover` owner approval** |
+| Approval state | **APPROVED and preflighted 2026-08-21** | **APPROVED and preflighted 2026-08-21** |
 | Rotation owner / deadline | Kim Morrison / by 2026-11-05 | Kim Morrison / by 2026-11-05 |
 | Intake gate | D9 Apps/broker provisioned; PAT approved and matching bypass tested | D9 Apps/broker provisioned; PAT approved and matching bypass tested |
 
 Each token grants Metadata read and Contents read/write on exactly one
 repository and holds no Actions, Administration, Workflows, or Issues
-permission. Because the temporary owner is an organization member rather than
-an administrator, GitHub issued both tokens in `pending` state; an owner of
-`leanprover` must approve them at
-`https://github.com/organizations/leanprover/settings/personal-access-token-requests`
-before either can reach its State repository. GitHub reveals a fine-grained
-token value only once, so both values were installed into their matching Worker
-at creation and start working when approval lands. Until then each Worker holds
-a credential with no authority, which is safe while `INTAKE_ENABLED` is false.
+permission. Both organization approvals landed on 2026-08-21. Protected-main
+workflow runs `32465890236` (staging) and `32465892118` (production) then proved
+push authority and the matching ruleset bypass by non-forced same-commit ref
+updates. The observed heads were respectively `6bfc9eb633c6c8bbaa2937708183d70fca7668fa`
+and `89cdf9bd163f451fa51c7695c14388e11e1d609d`; neither tree changed and intake
+remained disabled.
 Fine-grained tokens can always read public repositories, so a read of the public
 `lean-eval-submissions` is inherent to the credential type and is not a grant
 made here.
@@ -454,11 +458,12 @@ compatibility fix or append a corrective event.
 | Production deploy and smoke | 2026-08-20 | broker `b658a77b-f7e8-4bd2-9268-a7862af07122`, intake `759d75ab-971d-4b93-ba69-ce0ac5319e04`; exact commit and intake-disabled assertions passed |
 | Readiness-secret rotation | 2026-08-20 | distinct staging/production values rotated in both Workers and matching protected GitHub environment secrets; resulting intake versions `92aa9ac5-4305-47ab-85f2-8495c6935123` / `46ef4231-1ace-4343-9f16-ce9ea60e194e`; health remained commit-exact and intake-disabled |
 | Deployment token provisioning | 2026-08-21 | `lean-eval-deploy-staging` and `lean-eval-deploy-production` created with Workers Scripts: Edit only; each verified active, reaching the four Lean Eval Workers, zero zones, KV denied; installed in the matching protected GitHub environment |
-| State-writer token provisioning | 2026-08-21 | two single-repository fine-grained tokens created, expiring 2026-11-19, installed as `GITHUB_STATE_TOKEN` in the matching Worker; both pending `leanprover` owner approval |
+| State-writer token provisioning | 2026-08-21 | two single-repository fine-grained tokens created, expiring 2026-11-19, installed as `GITHUB_STATE_TOKEN`, approved by `leanprover`, and verified through runs `32465890236` / `32465892118` without changing either State tree |
 | State ruleset bypasses | 2026-08-21 | `kim-em` (`User` 477956) is the sole always-allowed bypass actor on staging ruleset `21094006` and production ruleset `21094005`; all protection rules otherwise unchanged |
 | Browser OAuth App provisioning | 2026-08-21 | two Apps with exact per-environment callbacks; client ID and secret installed in the matching Worker |
 | Broker GitHub App provisioning | 2026-08-21 | source reader `4666604` (Metadata read, Contents read, no installation) and workflow dispatcher `4666633` (Metadata read, Contents read, Actions read/write, installation `155329316` limited to `leanprover/lean-eval-submissions`); four secrets installed in both broker environments |
-| Broker GitHub App ownership transfer | 2026-08-21 | transfer of both existing registrations from `kim-em` to `leanprover` submitted; organization-owner acceptance pending; public App records still report `kim-em` until acceptance |
+| Broker GitHub App ownership transfer | 2026-08-21 | both registrations accepted by `leanprover`; public records confirm unchanged IDs `4666604` / `4666633` and the exact reviewed permission split |
+| Lifecycle callback secret provisioning | 2026-08-21 | distinct random values installed in each intake Worker and its matching protected GitHub environment; values were never logged or recorded |
 | Post-provisioning health check | 2026-08-21 | both Workers report `status ok`, commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`, correct environment, and `intake_enabled false` |
 | Automated deployment verification | 2026-08-21 | run `32437703335` created the protected immutable dispatch tag, deployed broker and intake versions for exact commit `a928be873db6569e2b4ccb3fb8b399d0f19b2e78` to staging then production, and passed both structured intake-disabled smoke checks; PRs `#1172` and `#1174` fixed the checkout-free promotion directory and payload-propagation retry discovered during the first live exercise |
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
