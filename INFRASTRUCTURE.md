@@ -230,8 +230,8 @@ deliberately has no Actions permission. The dispatcher installation was
 verified on 2026-08-21 by minting an installation token and listing
 `/installation/repositories`, which returned exactly one repository.
 
-Recorded browser OAuth Apps, both owned by the personal account `kim-em` for
-the same reason as the two GitHub Apps:
+Recorded browser OAuth Apps, both currently owned by the personal account
+`kim-em`:
 
 | App name | Application ID | Client ID | Callback |
 | --- | --- | --- | --- |
@@ -566,6 +566,7 @@ compatibility fix or append a corrective event.
 | Browser OAuth App provisioning | 2026-08-21 | two Apps with exact per-environment callbacks; client ID and secret installed in the matching Worker |
 | Broker GitHub App provisioning | 2026-08-21 | source reader `4666604` (Metadata read, Contents read, no installation) and workflow dispatcher `4666633` (Metadata read, Contents read, Actions read/write, installation `155329316` limited to `leanprover/lean-eval-submissions`); four secrets installed in both broker environments |
 | Broker GitHub App ownership transfer | 2026-08-21 | both registrations accepted by `leanprover`; public records confirm unchanged IDs `4666604` / `4666633` and the exact reviewed permission split |
+| Staging Source Reader preflight | 2026-08-21 | protected run `32519788255` proved the transferred App private key, staging broker binding, exact installation on `kim-em/lean-eval-intake-fixture`, and private visibility without dispatching or evaluating a submission |
 | Lifecycle callback secret provisioning | 2026-08-21 | distinct random values installed in each intake Worker and its matching protected GitHub environment; values were never logged or recorded |
 | Post-provisioning health check | 2026-08-21 | both Workers report `status ok`, commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`, correct environment, and `intake_enabled false` |
 | Automated deployment verification | 2026-08-21 | run `32437703335` created the protected immutable dispatch tag, deployed broker and intake versions for exact commit `a928be873db6569e2b4ccb3fb8b399d0f19b2e78` to staging then production, and passed both structured intake-disabled smoke checks; PRs `#1172` and `#1174` fixed the checkout-free promotion directory and payload-propagation retry discovered during the first live exercise |
