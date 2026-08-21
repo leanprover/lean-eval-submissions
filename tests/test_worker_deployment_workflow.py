@@ -25,6 +25,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         )[0]
         self.assertIn("environment: submission-dispatch-promotion", block)
         self.assertIn("permissions:\n      contents: write", block)
+        self.assertIn("defaults:\n      run:\n        working-directory: .", block)
         self.assertEqual(block.count("secrets."), 1)
         self.assertIn(
             "APPROVAL_GUARD: ${{ secrets.DISPATCH_PROMOTION_APPROVAL_GUARD }}",
