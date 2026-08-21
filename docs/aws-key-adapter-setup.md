@@ -73,6 +73,19 @@ access key, backup system, alarm system, or recovery provider.
 
 ## 4. Record outputs; do not connect production yet
 
+The six GitHub environment shells already exist:
+
+- `archive-staging` and `archive-production` in
+  `leanprover/lean-eval-submissions`, each restricted to the tag pattern
+  `lean-eval-dispatch/*`;
+- `replay-staging` and `replay-production` in
+  `leanprover/lean-eval-submissions`, each restricted to protected branches;
+- `release-staging` and `release-production` in
+  `leanprover/lean-eval-releases`, each restricted to protected branches.
+
+They are intentionally empty: no secret or variable is installed and they
+grant no AWS authority. Do not recreate or broaden them.
+
 For each stack, copy the seven non-secret outputs into `INFRASTRUCTURE.md`:
 
 - KMS key ARN;
@@ -83,14 +96,9 @@ For each stack, copy the seven non-secret outputs into `INFRASTRUCTURE.md`:
 - release Unwrap controller role ARN; and
 - adapter name (`aws-kms-v1`).
 
-After the outputs exist, configure `archive-{staging,production}` and
-`replay-{staging,production}` in `lean-eval-submissions`, and
-`release-{staging,production}` in `lean-eval-releases`; store the corresponding
-role ARN as a non-secret variable. Archive jobs run from the immutable dispatch
-tag, so the two archive environments must use a selected **tag** policy of
-`lean-eval-dispatch/*`; a “protected branches only” policy would reject the
-real workflow ref. Replay and release environments use protected branches
-only. Then add a staging-only live round trip. Do not wire the production
+After the outputs exist, store each corresponding role ARN as a non-secret
+variable in its existing environment. Recheck rather than change the recorded
+ref policies. Then add a staging-only live round trip. Do not wire the production
 archive workflow, enable private replay/release, or enable production intake
 merely because the stacks exist.
 

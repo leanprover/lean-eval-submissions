@@ -11,7 +11,8 @@ Last reconciled: 2026-08-21 (lifecycle-aware Worker commit `344ae1db` deployed
 and smoke-tested in both environments; staging intake enabled only for the
 end-to-end fixture, production intake disabled; deployment tokens,
 State-writer tokens, browser OAuth Apps, and both broker GitHub Apps remain
-provisioned and preflighted).
+provisioned and preflighted; the six empty AWS workload environment shells and
+their exact ref policies are recorded below).
 Temporary owner: Kim Morrison. Target owner: leanprover organization
 administrators. Service code:
 [`server/`](server/).
@@ -36,6 +37,12 @@ administrators. Service code:
 | GitHub Environment | `cloudflare-staging` (`20259250422`) | staging | **CREATED 2026-08-20; ACCOUNT ID SET; API TOKEN SET 2026-08-21** |
 | GitHub Environment | `cloudflare-production` (`20259250928`) | production | **CREATED 2026-08-20; ACCOUNT ID SET; API TOKEN SET 2026-08-21** |
 | GitHub Environment | `submission-dispatch-promotion` (`20259251430`) | shared | **CREATED 2026-08-20; REVIEW + GUARD CONFIGURED** |
+| GitHub Environment | `archive-staging` (`EN_kwDOSh7OzM8AAAAEu8r2_A`) | staging archive | **CREATED 2026-08-21; TAG POLICY SET; ROLE ARN NOT SET** |
+| GitHub Environment | `archive-production` (`EN_kwDOSh7OzM8AAAAEu8r25w`) | production archive | **CREATED 2026-08-21; TAG POLICY SET; ROLE ARN NOT SET** |
+| GitHub Environment | `replay-staging` (`EN_kwDOSh7OzM8AAAAEu8r21Q`) | staging replay | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
+| GitHub Environment | `replay-production` (`EN_kwDOSh7OzM8AAAAEu8r3MQ`) | production replay | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
+| GitHub Environment | `release-staging` (`EN_kwDOT-oWes8AAAAEu8r3Mw`) | staging release | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
+| GitHub Environment | `release-production` (`EN_kwDOT-oWes8AAAAEu8r3KQ`) | production release | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
 | Replay execution backend | Lean-Eval-owned disposable executor | production | **TO BE DESIGNED AND PROVISIONED** |
 
 Do not change a status to provisioned without replacing every applicable
@@ -421,6 +428,23 @@ created yet:
 | Release controller roles | `lean-eval-release-unwrap-invoker-staging` and `-production` in `lean-eval-releases` (Lambda Invoke only) — **TO BE PROVISIONED** |
 | Function roles | KMS Decrypt + conditional DynamoDB PutItem + logs only — **TO BE PROVISIONED** |
 
+The GitHub environment shells were created before the AWS account so their ref
+boundaries could be verified without granting AWS authority. They currently
+contain no secrets and no variables:
+
+| Repository | Environment | Environment node | Protection rule | Ref policy | Policy ID |
+| --- | --- | --- | --- | --- | --- |
+| `leanprover/lean-eval-submissions` | `archive-staging` | `EN_kwDOSh7OzM8AAAAEu8r2_A` | `63321649` | tag `lean-eval-dispatch/*` | `57914845` |
+| `leanprover/lean-eval-submissions` | `archive-production` | `EN_kwDOSh7OzM8AAAAEu8r25w` | `63321647` | tag `lean-eval-dispatch/*` | `57914846` |
+| `leanprover/lean-eval-submissions` | `replay-staging` | `EN_kwDOSh7OzM8AAAAEu8r21Q` | `63321645` | protected branches only | not applicable |
+| `leanprover/lean-eval-submissions` | `replay-production` | `EN_kwDOSh7OzM8AAAAEu8r3MQ` | `63321654` | protected branches only | not applicable |
+| `leanprover/lean-eval-releases` | `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | `63321653` | protected branches only | not applicable |
+| `leanprover/lean-eval-releases` | `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | `63321651` | protected branches only | not applicable |
+
+After each AWS stack exists, set only its corresponding non-secret role ARN
+variable in these environments. Creating an environment shell does not enable
+a workflow, grant AWS authority, or change intake.
+
 AWS is an initial provider, not a stable protocol dependency. Archives remain
 standard `age` ciphertext. Each archive has a small provider-neutral envelope
 containing its submission ID, ciphertext digest, recipient, adapter name, and
@@ -447,7 +471,7 @@ only synchronous invocation of that environment's versioned Lambda alias. Only
 the Lambda role can conditionally write the environment's one-use table and
 decrypt with its KMS key.
 
-The archive GitHub environments must select the **tag** pattern
+The archive GitHub environments select the **tag** pattern
 `lean-eval-dispatch/*`, because server dispatch runs the reviewed workflow from
 that immutable tag. Replay environments in `lean-eval-submissions` and release
 environments in `lean-eval-releases` select protected branches only. Never
@@ -531,6 +555,7 @@ compatibility fix or append a corrective event.
 | Automated deployment verification | 2026-08-21 | run `32437703335` created the protected immutable dispatch tag, deployed broker and intake versions for exact commit `a928be873db6569e2b4ccb3fb8b399d0f19b2e78` to staging then production, and passed both structured intake-disabled smoke checks; PRs `#1172` and `#1174` fixed the checkout-free promotion directory and payload-propagation retry discovered during the first live exercise |
 | Lifecycle-aware deployment | 2026-08-21 | run `32481684831` promoted immutable tag `lean-eval-dispatch/344ae1dbd5aaf53985b20511a770caa3c52b5626`, deployed that exact commit to staging and production, and passed both structured smoke checks; the State view-v2 prerequisites were already merged and green |
 | Staging E2E intake enable | 2026-08-21 | protected control run `32481885882` redeployed only staging intake version `ac11dee4-4bba-4328-9831-8545535d9b8f` at exact commit `344ae1dbd5aaf53985b20511a770caa3c52b5626`; health reports staging intake `true` while production remains `false` |
+| AWS workload environment shells | 2026-08-21 | created six empty GitHub environments: archive staging/production restricted to tag `lean-eval-dispatch/*`, replay staging/production and release staging/production restricted to protected branches; exact node, protection-rule, and tag-policy IDs are recorded above; no secret, variable, or AWS authority is present |
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
 | Replay decrypt and destruction | blocked | D6 key/provider work intentionally not provisioned |
 | Release reconstruction | blocked | Publication remains disabled |
