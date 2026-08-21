@@ -131,8 +131,9 @@ before the conditional write.
 The linted SAM template at
 `infrastructure/aws-key-adapter/template.yaml` creates separate staging or
 production KMS keys, tables, functions, and roles from the same code. It binds
-GitHub OIDC to exact protected environment subjects and grants no wildcard KMS,
-DynamoDB, or Lambda workload authority.
+GitHub OIDC to exact protected environment subjects: archive/replay in
+`lean-eval-submissions`, and release in `lean-eval-releases`. It grants no
+wildcard KMS, DynamoDB, or Lambda workload authority.
 
 The future workflow must put the Encrypt-only OIDC role in a trusted archive
 job, never in the job that runs untrusted Lean. The archive job independently

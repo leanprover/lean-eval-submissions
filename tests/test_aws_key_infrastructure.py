@@ -29,7 +29,8 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
             "WrapRole",
             "UnwrapFunctionRole",
             "UnwrapFunction",
-            "UnwrapInvokerRole",
+            "ReplayInvokerRole",
+            "ReleaseInvokerRole",
         })
         self.assertNotIn("AWS::Lambda::Url", self.template)
         self.assertNotIn("AWS::ApiGateway", self.template)
@@ -43,7 +44,7 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
             '\tcp scripts/key_capability_contract.py "$(ARTIFACTS_DIR)/key_capability_contract.py"',
         ])
         self.assertNotIn("*", "\n".join(copy_lines))
-        function = _section(self.template, "  UnwrapFunction:\n", "  UnwrapInvokerRole:\n")
+        function = _section(self.template, "  UnwrapFunction:\n", "  ReplayInvokerRole:\n")
         self.assertIn("BuildMethod: makefile", function)
         self.assertIn("CodeUri: ../..", function)
         self.assertIn("Handler: aws_key_adapter.lambda_handler", function)
@@ -64,7 +65,7 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
         self.assertIn("token.actions.githubusercontent.com:aud: sts.amazonaws.com", role)
         self.assertIn(
             "token.actions.githubusercontent.com:sub: !Sub "
-            "repo:${GitHubRepository}:environment:archive-${EnvironmentName}",
+            "repo:${SubmissionGitHubRepository}:environment:archive-${EnvironmentName}",
             role,
         )
         self.assertIn("Action: kms:Encrypt", role)
@@ -85,20 +86,30 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
         self.assertIn("Action: kms:Decrypt", role)
         self.assertNotIn("Action: kms:Encrypt", role)
         self.assertNotIn('Resource: "*"', role)
-        function = _section(self.template, "  UnwrapFunction:\n", "  UnwrapInvokerRole:\n")
+        function = _section(self.template, "  UnwrapFunction:\n", "  ReplayInvokerRole:\n")
         self.assertIn("ReservedConcurrentExecutions: 1", function)
         self.assertIn("AutoPublishAlias: live", function)
         self.assertNotIn("Events:", function)
 
-    def test_controller_role_can_only_invoke_versioned_alias(self) -> None:
-        role = _section(self.template, "  UnwrapInvokerRole:\n", "Outputs:\n")
-        self.assertIn("environment:replay-${EnvironmentName}", role)
-        self.assertIn("environment:release-${EnvironmentName}", role)
-        self.assertIn("Action: lambda:InvokeFunction", role)
-        self.assertIn("Resource: !Sub ${UnwrapFunction.Arn}:live", role)
-        self.assertNotIn("kms:", role)
-        self.assertNotIn("dynamodb:", role)
-        self.assertNotIn('Resource: "*"', role)
+    def test_controller_roles_are_repo_specific_and_invoke_only(self) -> None:
+        replay = _section(self.template, "  ReplayInvokerRole:\n", "  ReleaseInvokerRole:\n")
+        release = _section(self.template, "  ReleaseInvokerRole:\n", "Outputs:\n")
+        self.assertIn(
+            "repo:${SubmissionGitHubRepository}:environment:replay-${EnvironmentName}",
+            replay,
+        )
+        self.assertNotIn("ReleaseGitHubRepository", replay)
+        self.assertIn(
+            "repo:${ReleaseGitHubRepository}:environment:release-${EnvironmentName}",
+            release,
+        )
+        self.assertNotIn("SubmissionGitHubRepository", release)
+        for role in (replay, release):
+            self.assertIn("Action: lambda:InvokeFunction", role)
+            self.assertIn("Resource: !Sub ${UnwrapFunction.Arn}:live", role)
+            self.assertNotIn("kms:", role)
+            self.assertNotIn("dynamodb:", role)
+            self.assertNotIn('Resource: "*"', role)
 
 
 if __name__ == "__main__":

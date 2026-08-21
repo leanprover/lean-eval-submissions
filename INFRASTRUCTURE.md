@@ -417,7 +417,8 @@ created yet:
 | One-use tables | `lean-eval-capability-consumption-staging` and `-production` — **TO BE PROVISIONED** |
 | Unwrap functions | `lean-eval-archive-unwrap-staging` and `-production`, alias `live` — **TO BE PROVISIONED** |
 | Archive roles | `lean-eval-archive-wrap-staging` and `-production` (KMS Encrypt only) — **TO BE PROVISIONED** |
-| Controller roles | `lean-eval-archive-unwrap-invoker-staging` and `-production` (Lambda Invoke only) — **TO BE PROVISIONED** |
+| Replay controller roles | `lean-eval-replay-unwrap-invoker-staging` and `-production` in `lean-eval-submissions` (Lambda Invoke only) — **TO BE PROVISIONED** |
+| Release controller roles | `lean-eval-release-unwrap-invoker-staging` and `-production` in `lean-eval-releases` (Lambda Invoke only) — **TO BE PROVISIONED** |
 | Function roles | KMS Decrypt + conditional DynamoDB PutItem + logs only — **TO BE PROVISIONED** |
 
 AWS is an initial provider, not a stable protocol dependency. Archives remain
@@ -439,16 +440,19 @@ infrastructure is `infrastructure/aws-key-adapter/template.yaml`. Deploy the
 template once for staging and once for production in the dedicated account.
 There is no public endpoint. Protected archive jobs use exact GitHub OIDC
 subjects `archive-staging` or `archive-production` and receive only KMS Encrypt.
-Protected replay/release controllers use `replay-<environment>` or
-`release-<environment>` and receive only synchronous invocation of that
-environment's versioned Lambda alias. Only the Lambda role can conditionally
-write the environment's one-use table and decrypt with its KMS key.
+Protected replay controllers in `lean-eval-submissions` use
+`replay-<environment>`; protected publication controllers in
+`lean-eval-releases` use `release-<environment>`. Their separate roles receive
+only synchronous invocation of that environment's versioned Lambda alias. Only
+the Lambda role can conditionally write the environment's one-use table and
+decrypt with its KMS key.
 
 The archive GitHub environments must select the **tag** pattern
 `lean-eval-dispatch/*`, because server dispatch runs the reviewed workflow from
-that immutable tag. Replay and release environments select protected branches
-only. Never configure the archive environments as “protected branches only” or
-the legitimate dispatch ref will be denied; never configure any of these six
+that immutable tag. Replay environments in `lean-eval-submissions` and release
+environments in `lean-eval-releases` select protected branches only. Never
+configure the archive environments as “protected branches only” or the
+legitimate dispatch ref will be denied; never configure any of these six
 environments with unrestricted branches and tags.
 
 The one-use table's partition key is `capability_digest`; `PutItem` uses
