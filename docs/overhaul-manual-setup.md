@@ -130,7 +130,7 @@ Keep production `INTAKE_ENABLED=false`.
    the similarly named `lean-eval-source-reader` (App ID `4666604`): that
    organization-owned App already covers intake verification, while
    `lean-eval-bot` is the distinct read-only App used by the evaluation
-   workflow after dispatch. Retry workflow run `32478988233` rather than
+   workflow after dispatch. Retry workflow run `32517178838` rather than
    creating a duplicate submission.
 2. Review the live leaderboard at <https://lean-lang.org/eval/preview/> and
    approve or request changes to `lean-eval-leaderboard#70` before cutover.
