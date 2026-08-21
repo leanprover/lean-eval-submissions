@@ -11,9 +11,13 @@ Parameters:
   GitHubOidcProviderArn:
     Type: String
     AllowedPattern: ^arn:aws:iam::[0-9]{12}:oidc-provider/token\.actions\.githubusercontent\.com$
-  GitHubRepository:
+  SubmissionGitHubRepository:
     Type: String
     Default: leanprover/lean-eval-submissions
+    AllowedPattern: ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$
+  ReleaseGitHubRepository:
+    Type: String
+    Default: leanprover/lean-eval-releases
     AllowedPattern: ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$
 
 Resources:
@@ -70,7 +74,7 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepository}:environment:archive-${EnvironmentName}
+                token.actions.githubusercontent.com:sub: !Sub repo:${SubmissionGitHubRepository}:environment:archive-${EnvironmentName}
       Policies:
         - PolicyName: EncryptOneArchiveIdentity
           PolicyDocument:
@@ -161,10 +165,10 @@ Resources:
           LEAN_EVAL_CAPABILITY_TABLE: !Ref CapabilityConsumption
           LEAN_EVAL_ADAPTER_NAME: aws-kms-v1
 
-  UnwrapInvokerRole:
+  ReplayInvokerRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub lean-eval-archive-unwrap-invoker-${EnvironmentName}
+      RoleName: !Sub lean-eval-replay-unwrap-invoker-${EnvironmentName}
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
@@ -176,9 +180,32 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub:
-                  - !Sub repo:${GitHubRepository}:environment:replay-${EnvironmentName}
-                  - !Sub repo:${GitHubRepository}:environment:release-${EnvironmentName}
+                token.actions.githubusercontent.com:sub: !Sub repo:${SubmissionGitHubRepository}:environment:replay-${EnvironmentName}
+      Policies:
+        - PolicyName: InvokeOnlyTheUnwrapAlias
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub ${UnwrapFunction.Arn}:live
+
+  ReleaseInvokerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub lean-eval-release-unwrap-invoker-${EnvironmentName}
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${ReleaseGitHubRepository}:environment:release-${EnvironmentName}
       Policies:
         - PolicyName: InvokeOnlyTheUnwrapAlias
           PolicyDocument:
@@ -199,5 +226,7 @@ Outputs:
     Value: !GetAtt WrapRole.Arn
   UnwrapFunctionAliasArn:
     Value: !Sub ${UnwrapFunction.Arn}:live
-  UnwrapInvokerRoleArn:
-    Value: !GetAtt UnwrapInvokerRole.Arn
+  ReplayInvokerRoleArn:
+    Value: !GetAtt ReplayInvokerRole.Arn
+  ReleaseInvokerRoleArn:
+    Value: !GetAtt ReleaseInvokerRole.Arn

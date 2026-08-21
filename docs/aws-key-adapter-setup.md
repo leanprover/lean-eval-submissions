@@ -73,20 +73,21 @@ access key, backup system, alarm system, or recovery provider.
 
 ## 4. Record outputs; do not connect production yet
 
-For each stack, copy the six non-secret outputs into `INFRASTRUCTURE.md`:
+For each stack, copy the seven non-secret outputs into `INFRASTRUCTURE.md`:
 
 - KMS key ARN;
 - one-use DynamoDB table name;
 - archive Wrap role ARN;
 - versioned Unwrap Lambda alias ARN;
-- Unwrap controller role ARN; and
+- replay Unwrap controller role ARN;
+- release Unwrap controller role ARN; and
 - adapter name (`aws-kms-v1`).
 
-After the outputs exist, configure protected GitHub environments for
-`archive-{staging,production}`, `replay-{staging,production}`, and
-`release-{staging,production}` and store the corresponding role ARN as a
-non-secret variable. Archive jobs run from the immutable dispatch tag, so the
-two archive environments must use a selected **tag** policy of
+After the outputs exist, configure `archive-{staging,production}` and
+`replay-{staging,production}` in `lean-eval-submissions`, and
+`release-{staging,production}` in `lean-eval-releases`; store the corresponding
+role ARN as a non-secret variable. Archive jobs run from the immutable dispatch
+tag, so the two archive environments must use a selected **tag** policy of
 `lean-eval-dispatch/*`; a “protected branches only” policy would reject the
 real workflow ref. Replay and release environments use protected branches
 only. Then add a staging-only live round trip. Do not wire the production
@@ -95,8 +96,9 @@ merely because the stacks exist.
 
 ## Why this is one-use
 
-The archive role can only encrypt. The controller role can only invoke one
-versioned Lambda alias. The Lambda role alone can conditionally insert one
+The archive role can only encrypt. The separate replay and release controller
+roles can only invoke one versioned Lambda alias. The Lambda role alone can
+conditionally insert one
 `uc1_…` digest and decrypt one environment KMS ciphertext. It performs the
 conditional insert before KMS decrypt. DynamoDB rejects a second insert for
 the same digest, so the repeat never reaches KMS. Capability expiry is checked
