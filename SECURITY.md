@@ -4,12 +4,16 @@ The planned encrypted-source recovery path has a separate, currently disabled
 security contract in [`docs/replay.md`](docs/replay.md). It must not weaken the
 same-job, no-plaintext-artifact invariants documented below.
 
-The local-only Wave 2 public-source planner and disposable-VM handoff are
-specified in [`docs/replay-orchestrator.md`](docs/replay-orchestrator.md). The
-execution request admits no credentials or ambient environment and disables
-network access before untrusted Lean runs; structural tests guard those
-properties. Private replay remains nonterminally blocked pending D6; it stays
-queued and does not emit `replay.unavailable`.
+The Wave 2 public-source planner, credential-free historical smoke, and
+disposable-VM handoff are specified in
+[`docs/replay-orchestrator.md`](docs/replay-orchestrator.md). The smoke has only
+contents-read permission, restores public inputs at exact commits, removes all
+credential-bearing checkout/component Git metadata, and uploads only
+source-free JSON after the sandbox probes. The
+authoritative execution request admits no credentials or ambient environment
+and disables network access before untrusted Lean runs; structural tests guard
+those properties. Private replay remains nonterminally blocked pending D6; it
+stays queued and does not emit `replay.unavailable`.
 
 This document explains why we believe the lean-eval submission pipeline
 is resistant to adversarial submissions, what assumptions it depends on,

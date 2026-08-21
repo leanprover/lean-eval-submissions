@@ -2,11 +2,13 @@
 
 Replay is a recovery and audit path for one archived submission. It is not a
 second intake path, a batch decryption service, or a place to give general
-archive keys to CI. No replay workflow is enabled yet; the key service and
-disposable-runner controls below are launch gates.
+archive keys to CI. The only workflow is a credential-free manual smoke for an
+already-public historical source; it has no State/result/archive/release write
+authority. No private or authoritative queue-consuming replay workflow is
+enabled; the key service and disposable-runner controls below are launch gates.
 
-The local-only Wave 2 public planner, verdict contract, and disposable-VM
-operator sequence are documented in
+The Wave 2 public planner, historical smoke, verdict contract, and disposable-
+VM operator sequence are documented in
 [`replay-orchestrator.md`](replay-orchestrator.md). That foundation deliberately
 leaves the private path nonterminally blocked and does not provision an
 execution backend.

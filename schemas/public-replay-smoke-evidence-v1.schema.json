@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/public-replay-smoke-evidence-v1.schema.json",
+  "title": "Lean Eval public replay smoke evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "fixture_sha256",
+    "workflow_commit",
+    "source",
+    "benchmark",
+    "evaluator",
+    "problem_id",
+    "outcome",
+    "runner_observation",
+    "statistics"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "public_replay_smoke"},
+    "fixture_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "workflow_commit": {"$ref": "#/$defs/commit"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "visibility"],
+      "properties": {
+        "repository": {"$ref": "#/$defs/repository"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "visibility": {"const": "public"}
+      }
+    },
+    "benchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "toolchain"],
+      "properties": {
+        "repository": {"$ref": "#/$defs/repository"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "toolchain": {"type": "string", "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+$"}
+      }
+    },
+    "evaluator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "workflow_run_id"],
+      "properties": {
+        "repository": {"$ref": "#/$defs/repository"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "workflow_run_id": {"type": "integer", "minimum": 1}
+      }
+    },
+    "problem_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"},
+    "outcome": {"const": "accepted"},
+    "runner_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image_os", "image_version", "architecture", "kernel_release", "cpu_model", "cache_state", "untrusted_network"],
+      "properties": {
+        "image_os": {"type": "string", "minLength": 1},
+        "image_version": {"type": "string", "minLength": 1},
+        "architecture": {"type": "string", "minLength": 1},
+        "kernel_release": {"type": "string", "minLength": 1},
+        "cpu_model": {"type": "string", "minLength": 1},
+        "cache_state": {"const": "cold"},
+        "untrusted_network": {"const": "disabled_by_landrun"}
+      }
+    },
+    "statistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pipeline_wall_time_ms", "pipeline_retired_instructions", "lines_of_code", "file_count"],
+      "properties": {
+        "pipeline_wall_time_ms": {"type": "integer", "minimum": 1},
+        "pipeline_retired_instructions": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "value"],
+              "properties": {
+                "status": {"const": "measured"},
+                "value": {"type": "integer", "minimum": 0}
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["status", "reason"],
+              "properties": {
+                "status": {"const": "unavailable"},
+                "reason": {"enum": ["counter_not_reported", "counter_not_supported", "counter_permission_denied"]}
+              }
+            }
+          ]
+        },
+        "lines_of_code": {"type": "integer", "minimum": 1},
+        "file_count": {"type": "integer", "minimum": 1}
+      }
+    }
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"}
+  }
+}

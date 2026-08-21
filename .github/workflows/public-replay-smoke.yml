@@ -1,0 +1,220 @@
+name: Public replay smoke
+
+# Credential-free, non-authoritative historical replay of one reviewed public
+# result. This proves exact public source/benchmark/evaluator restoration and
+# the hardened comparator/landrun path. It does not append State, write results,
+# publish a release, or claim the profile-pinned production replay metrics.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: public-replay-smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    environment: replay-staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      FIXTURE: tests/fixtures/public-replay-smoke-v1.json
+      SOURCE_REPOSITORY: KitaKen1/lean-eval-two-plus-two
+      SOURCE_COMMIT: a7cf16eead7f54a3eae4099c154eb80b0f520c92
+      BENCHMARK_REPOSITORY: leanprover/lean-eval
+      BENCHMARK_COMMIT: 3f3786f3b4d9a4b64a5859b3036aca190cd25613
+      EVALUATOR_REPOSITORY: leanprover/lean-eval-submissions
+      EVALUATOR_COMMIT: 7e48191e426c675492c99a93886c26e294dffb34
+      EXPECTED_TOOLCHAIN: leanprover/lean4:v4.32.2
+    steps:
+      # Current repository supplies only the smoke validator and fixture.
+      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # Restore the exact evaluator source revision recorded by the original
+      # successful workflow run, rather than silently using today's scripts.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-submissions
+          ref: 7e48191e426c675492c99a93886c26e294dffb34
+          path: evaluator
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval
+          ref: 3f3786f3b4d9a4b64a5859b3036aca190cd25613
+          path: lean-eval
+          persist-credentials: false
+
+      - name: Verify source repository remains anonymously public
+        run: |
+          curl --proto '=https' --tlsv1.2 --fail-with-body --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${SOURCE_REPOSITORY}" \
+            > /tmp/public-source-repository.json
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+
+          value = json.loads(pathlib.Path("/tmp/public-source-repository.json").read_text())
+          if value.get("full_name") != os.environ["SOURCE_REPOSITORY"]:
+              raise SystemExit("GitHub returned the wrong source repository")
+          if value.get("private") is not False:
+              raise SystemExit("source repository is not anonymously public")
+          PY
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: KitaKen1/lean-eval-two-plus-two
+          ref: a7cf16eead7f54a3eae4099c154eb80b0f520c92
+          path: source
+          persist-credentials: false
+
+      # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0).
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Validate immutable replay identities
+        run: |
+          python scripts/public_replay_smoke.py validate-config --config "$FIXTURE"
+          test "$(git -C evaluator rev-parse HEAD)" = "$EVALUATOR_COMMIT"
+          test "$(git -C lean-eval rev-parse HEAD)" = "$BENCHMARK_COMMIT"
+          test "$(git -C source rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$(cat lean-eval/lean-toolchain)" = "$EXPECTED_TOOLCHAIN"
+
+      # Standard runners do not have enough free space for the old Mathlib
+      # cache plus all three pinned checker builds.
+      # jlumbroso/free-disk-space pinned to 54081f13 (= refs/tags/v1.3.1).
+      - uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      # leanprover/lean-action pinned to 38fbc41a (= refs/tags/v1.5.0).
+      - uses: leanprover/lean-action@38fbc41a8c28c4cbaec22d7f7de508ec2e7c0dd9
+        with:
+          lake-package-directory: lean-eval
+          use-mathlib-cache: true
+          use-github-cache: false
+
+      # actions/setup-go pinned to b7ad1dad (= refs/tags/v7.0.0).
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.25.12'
+          cache: false
+
+      - name: Pin Rust toolchain used to build nanoda
+        run: |
+          rustup toolchain install 1.89.0 --profile minimal
+          rustup default 1.89.0
+          test "$(rustc --version)" = "rustc 1.89.0 (29483883e 2025-08-04)"
+
+      - name: Build pinned sandbox and checker components
+        run: |
+          set -euo pipefail
+          go install github.com/zouuup/landrun/cmd/landrun@5ed4a3db3a4ad930d577215c6b9abaa19df7f99f
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+          git clone https://github.com/leanprover/lean4export.git .ci/lean4export
+          git -C .ci/lean4export checkout 4e7915201d3f9f04470d9eae002fa695f7cdc589
+          cp lean-eval/lean-toolchain .ci/lean4export/lean-toolchain
+          (cd .ci/lean4export && lake build lean4export)
+          echo "$GITHUB_WORKSPACE/.ci/lean4export/.lake/build/bin" >> "$GITHUB_PATH"
+
+          git clone https://github.com/leanprover/comparator.git .ci/comparator
+          git -C .ci/comparator checkout 71b52ec29e06d4b7d882726553b1ceb99a2499e0
+          (cd .ci/comparator && lake build comparator)
+          echo "$GITHUB_WORKSPACE/.ci/comparator/.lake/build/bin" >> "$GITHUB_PATH"
+
+          git clone https://github.com/robsimmons/nanoda_lib.git .ci/nanoda
+          git -C .ci/nanoda checkout 68d5ca9db226849b41a6fff59d796ff19d0a8840
+          cargo build --manifest-path .ci/nanoda/Cargo.toml --release
+          echo "$GITHUB_WORKSPACE/.ci/nanoda/target/release" >> "$GITHUB_PATH"
+
+      - name: Remove every repository credential and Git metadata
+        run: |
+          rm -rf \
+            .git \
+            evaluator/.git \
+            lean-eval/.git \
+            source/.git \
+            .ci/lean4export/.git \
+            .ci/comparator/.git \
+            .ci/nanoda/.git
+          if find evaluator source .ci -type d -name .git -print -quit | grep -q .; then
+            echo "source, evaluator, or component Git metadata survived stripping" >&2
+            exit 1
+          fi
+
+      - name: Prove the untrusted sandbox and environment boundary
+        run: |
+          python lean-eval/scripts/sandbox_engaged_probe.py --require-tools
+          python lean-eval/scripts/security_probes/env_dump_probe.py --require-tools
+
+      - name: Replay exact public source
+        run: |
+          set -euo pipefail
+          start_ns=$(date +%s%N)
+          if perf stat -x, -o /tmp/replay-perf-probe.csv -e instructions:u -- true; then
+            perf stat -x, -o /tmp/replay-perf.csv -e instructions:u -- \
+              python evaluator/scripts/evaluate_submission.py \
+                --source-dir source \
+                --generated-root lean-eval/generated \
+                --manifest-dir lean-eval/manifests/problems \
+                --output-dir /tmp/public-replay-out \
+                --repo-root lean-eval \
+                --shared-packages lean-eval/.lake/packages
+          else
+            cp /tmp/replay-perf-probe.csv /tmp/replay-perf.csv
+            python evaluator/scripts/evaluate_submission.py \
+              --source-dir source \
+              --generated-root lean-eval/generated \
+              --manifest-dir lean-eval/manifests/problems \
+              --output-dir /tmp/public-replay-out \
+              --repo-root lean-eval \
+              --shared-packages lean-eval/.lake/packages
+          fi
+          end_ns=$(date +%s%N)
+          echo "$(((end_ns - start_ns) / 1000000))" > /tmp/replay-wall-time-ms
+
+      - name: Build and validate source-free smoke evidence
+        env:
+          WORKFLOW_COMMIT: ${{ github.sha }}
+        run: |
+          python scripts/public_replay_smoke.py evidence \
+            --config "$FIXTURE" \
+            --results /tmp/public-replay-out/results.json \
+            --summary /tmp/public-replay-out/summary.json \
+            --source-dir source \
+            --workflow-commit "$WORKFLOW_COMMIT" \
+            --wall-time-ms "$(cat /tmp/replay-wall-time-ms)" \
+            --counter /tmp/replay-perf.csv \
+            --output /tmp/public-replay-out/evidence.json
+          python scripts/public_replay_smoke.py validate-evidence \
+            --evidence /tmp/public-replay-out/evidence.json
+
+      # The source is already public, but it is still excluded from the
+      # artifact. Only verdict/evidence JSON crosses the job boundary.
+      # actions/upload-artifact pinned to 043fb46d (= refs/tags/v7.0.1).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: public-replay-smoke-evidence
+          path: |
+            /tmp/public-replay-out/evidence.json
+            /tmp/public-replay-out/results.json
+            /tmp/public-replay-out/summary.json
+          if-no-files-found: error
+          retention-days: 30

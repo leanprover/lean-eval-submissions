@@ -445,6 +445,16 @@ contain no secrets and no variables:
 | `leanprover/lean-eval-releases` | `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | `63321653` | protected branches only | not applicable |
 | `leanprover/lean-eval-releases` | `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | `63321651` | protected branches only | not applicable |
 
+The manual `public-replay-smoke.yml` job uses `replay-staging` but needs and
+receives no environment secret, variable, OIDC permission, State token, archive
+token, or result writer. Its single reviewed fixture restores public source
+`KitaKen1/lean-eval-two-plus-two@a7cf16ee...`, benchmark
+`leanprover/lean-eval@3f3786f3...`, and original evaluator
+`leanprover/lean-eval-submissions@7e48191e...`. The hosted runner's image and
+hardware are observed in the evidence artifact rather than pre-pinned, so this
+is a staging reproducibility smoke only. It cannot consume the State replay
+queue or satisfy the private/authoritative disposable-backend launch gate.
+
 After each AWS stack exists, set only its corresponding non-secret role ARN
 variable in these environments. Creating an environment shell does not enable
 a workflow, grant AWS authority, or change intake.
