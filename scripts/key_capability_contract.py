@@ -152,6 +152,8 @@ def validate_envelope(value: Any) -> dict[str, Any]:
         raise ContractError("envelope.wrapped_identity is not valid base64") from error
     if not decoded:
         raise ContractError("envelope.wrapped_identity must not be empty")
+    if base64.b64encode(decoded).decode("ascii") != wrapped:
+        raise ContractError("envelope.wrapped_identity is not canonical base64")
     return envelope
 
 
@@ -235,17 +237,37 @@ def authorize_once(
     return envelope, capability, digest
 
 
-def kms_encryption_context(envelope_value: Any) -> dict[str, str]:
+def envelope_binding_context(
+    submission_id: str,
+    archive_ciphertext_sha256: str,
+    data_key_identity: str,
+    age_recipient: str,
+) -> dict[str, str]:
     """Return the exact non-secret context every root-key adapter must bind."""
-    envelope = validate_envelope(envelope_value)
-    recipient_digest = hashlib.sha256(envelope["age_recipient"].encode("ascii")).hexdigest()
+    _match(UUID7, submission_id, "submission_id")
+    _match(DIGEST, archive_ciphertext_sha256, "archive_ciphertext_sha256")
+    _match(ARCHIVE_KEY_ID, data_key_identity, "data_key_id")
+    _match(AGE_RECIPIENT, age_recipient, "age_recipient")
+    if data_key_identity != archive_key_id(submission_id, age_recipient):
+        raise ContractError("data_key_id does not match submission and recipient")
+    recipient_digest = hashlib.sha256(age_recipient.encode("ascii")).hexdigest()
     return {
         "contract": "lean-eval-archive-key-v1",
-        "submission_id": envelope["submission_id"],
-        "archive_ciphertext_sha256": envelope["archive_ciphertext_sha256"],
-        "data_key_id": envelope["data_key_id"],
+        "submission_id": submission_id,
+        "archive_ciphertext_sha256": archive_ciphertext_sha256,
+        "data_key_id": data_key_identity,
         "age_recipient_sha256": recipient_digest,
     }
+
+
+def kms_encryption_context(envelope_value: Any) -> dict[str, str]:
+    envelope = validate_envelope(envelope_value)
+    return envelope_binding_context(
+        envelope["submission_id"],
+        envelope["archive_ciphertext_sha256"],
+        envelope["data_key_id"],
+        envelope["age_recipient"],
+    )
 
 
 def _read(path: pathlib.Path) -> Any:

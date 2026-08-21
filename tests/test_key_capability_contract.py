@@ -145,6 +145,12 @@ class KeyCapabilityContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ContractError, "does not match"):
             validate_envelope(changed)
 
+    def test_envelope_rejects_noncanonical_base64_pad_bits(self) -> None:
+        changed = copy.deepcopy(self.envelope)
+        changed["wrapped_identity"] = "Zh=="
+        with self.assertRaisesRegex(ContractError, "canonical base64"):
+            validate_envelope(changed)
+
     def test_post_quantum_age_recipient_is_supported_and_bounded(self) -> None:
         changed = copy.deepcopy(self.envelope)
         changed["age_recipient"] = "age1pq1" + "q" * 1900
