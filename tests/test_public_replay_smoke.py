@@ -33,6 +33,7 @@ class PublicReplaySmokeTests(unittest.TestCase):
     def test_tracked_fixture_is_strict_and_public(self) -> None:
         config = validate_config(fixture())
         self.assertEqual(config["problem_id"], "two_plus_two")
+        self.assertEqual(config["statement_revision"], 1)
         self.assertEqual(config["source"]["visibility"], "public")
 
     def test_unknown_fields_and_private_sources_fail_closed(self) -> None:
@@ -51,10 +52,7 @@ class PublicReplaySmokeTests(unittest.TestCase):
             (root / "Submission").mkdir()
             (root / "Submission.lean").write_text("by\n  norm_num\n", encoding="utf-8")
             (root / "Submission" / "Helpers.lean").write_text("def helper := 4\n", encoding="utf-8")
-            results = {
-                "passed": ["two_plus_two"],
-                "statement_revisions": {"two_plus_two": 1},
-            }
+            results = {"passed": ["two_plus_two"]}
             summary = {
                 "run_eval": {
                     "problems": [
@@ -78,6 +76,7 @@ class PublicReplaySmokeTests(unittest.TestCase):
                 )
             validate_evidence(evidence)
             self.assertEqual(evidence["outcome"], "accepted")
+            self.assertEqual(evidence["statement_revision"], 1)
             self.assertEqual(evidence["statistics"]["file_count"], 2)
             self.assertEqual(evidence["statistics"]["lines_of_code"], 3)
             self.assertEqual(
@@ -116,7 +115,7 @@ class PublicReplaySmokeTests(unittest.TestCase):
             ):
                 evidence = build_evidence(
                     fixture(),
-                    {"passed": ["two_plus_two"], "statement_revisions": {"two_plus_two": 1}},
+                    {"passed": ["two_plus_two"]},
                     {
                         "run_eval": {
                             "problems": [
@@ -137,6 +136,36 @@ class PublicReplaySmokeTests(unittest.TestCase):
                 evidence["statistics"]["pipeline_retired_instructions"],
                 {"status": "measured", "value": 123456},
             )
+
+    def test_historical_results_shape_is_exact(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            (root / "Submission.lean").write_text("by norm_num\n", encoding="utf-8")
+            summary = {
+                "run_eval": {
+                    "problems": [
+                        {"id": "two_plus_two", "succeeded": True, "exit_code": 0}
+                    ]
+                }
+            }
+            with mock.patch.dict(
+                os.environ,
+                {"ImageOS": "ubuntu24", "ImageVersion": "test", "RUNNER_ARCH": "X64"},
+                clear=False,
+            ):
+                with self.assertRaisesRegex(SmokeError, "results fields"):
+                    build_evidence(
+                        fixture(),
+                        {
+                            "passed": ["two_plus_two"],
+                            "statement_revisions": {"two_plus_two": 1},
+                        },
+                        summary,
+                        source_dir=root,
+                        workflow_commit="3" * 40,
+                        wall_time_ms=1,
+                        counter_path=root / "absent-counter.csv",
+                    )
 
 
 if __name__ == "__main__":

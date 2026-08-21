@@ -36,6 +36,7 @@ CONFIG_FIELDS = {
     "submitter",
     "declared_model",
     "problem_id",
+    "statement_revision",
     "solved_at",
     "source",
     "benchmark",
@@ -51,6 +52,7 @@ EVIDENCE_FIELDS = {
     "benchmark",
     "evaluator",
     "problem_id",
+    "statement_revision",
     "outcome",
     "runner_observation",
     "statistics",
@@ -123,6 +125,7 @@ def validate_config(value: Any) -> dict[str, Any]:
     _match(re.compile(r"[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?"), config["submitter"], "submitter")
     _string(config["declared_model"], "declared_model", maximum=256)
     _match(PROBLEM, config["problem_id"], "problem_id")
+    _positive_integer(config["statement_revision"], "statement_revision")
     _match(TIMESTAMP, config["solved_at"], "solved_at")
 
     source = _object(config["source"], "source")
@@ -216,14 +219,14 @@ def build_evidence(
     _match(COMMIT, workflow_commit, "workflow_commit")
     _positive_integer(wall_time_ms, "pipeline_wall_time_ms")
     results = _object(results_value, "results")
-    if set(results) != {"passed", "statement_revisions"}:
+    # The pinned legacy evaluator predates explicit statement revisions.  Its
+    # exact output is therefore only the solved-problem list; revision 1 is
+    # bound by the reviewed fixture under the documented v1 compatibility
+    # rule, rather than being attributed to historical evaluator output.
+    if set(results) != {"passed"}:
         raise SmokeError("results fields are not canonical")
     if results["passed"] != [config["problem_id"]]:
         raise SmokeError("replay did not reproduce exactly the recorded solved problem")
-    revisions = _object(results["statement_revisions"], "statement_revisions")
-    if set(revisions) != {config["problem_id"]}:
-        raise SmokeError("replay statement revision evidence is not exact")
-    _positive_integer(revisions[config["problem_id"]], "statement_revision")
 
     summary = _object(summary_value, "summary")
     run_eval = _object(summary.get("run_eval"), "summary.run_eval")
@@ -256,6 +259,7 @@ def build_evidence(
         "benchmark": config["benchmark"],
         "evaluator": config["evaluator"],
         "problem_id": config["problem_id"],
+        "statement_revision": config["statement_revision"],
         "outcome": "accepted",
         "runner_observation": {
             "image_os": image_os,
@@ -285,6 +289,7 @@ def validate_evidence(value: Any) -> dict[str, Any]:
     if evidence["outcome"] != "accepted":
         raise SmokeError("smoke evidence outcome must be accepted")
     _match(PROBLEM, evidence["problem_id"], "problem_id")
+    _positive_integer(evidence["statement_revision"], "statement_revision")
     # Reuse the strict nested fixture decoder for immutable identities.
     validate_config({
         "schema_version": 1,
@@ -293,6 +298,7 @@ def validate_evidence(value: Any) -> dict[str, Any]:
         "submitter": "evidence",
         "declared_model": "evidence",
         "problem_id": evidence["problem_id"],
+        "statement_revision": evidence["statement_revision"],
         "solved_at": "2026-01-01T00:00:00.000Z",
         "source": evidence["source"],
         "benchmark": evidence["benchmark"],

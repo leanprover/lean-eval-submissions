@@ -15,6 +15,7 @@
   "issue_number": 906,
   "problem_id": "two_plus_two",
   "schema_version": 1,
+  "statement_revision": 1,
   "solved_at": "2026-08-01T03:59:11.000Z",
   "source": {
     "commit": "a7cf16eead7f54a3eae4099c154eb80b0f520c92",
