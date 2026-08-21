@@ -238,18 +238,24 @@ directly into the matching Worker.
 
 `READINESS_TOKEN` and `AUTH_TOKEN_SECRET` were installed with distinct random
 values in both Workers on 2026-08-20. The matching readiness value is also an
-environment secret for future authenticated probes. As of 2026-08-21 the State,
-OAuth, and broker App credentials are installed, while the two State-writer
-tokens await `leanprover` owner approval and therefore still carry no authority.
-`GITHUB_VERIFICATION_TOKEN` and `GITHUB_DISPATCH_TOKEN` remain deliberately
-unprovisioned. `INTAKE_ENABLED` stays false, so no intake route can exercise
-any of these credentials.
+environment secret for authenticated probes. As of 2026-08-21 the State,
+OAuth, and broker App credentials are installed, and both State-writer tokens
+are approved and preflighted. `GITHUB_VERIFICATION_TOKEN` and
+`GITHUB_DISPATCH_TOKEN` remain deliberately unprovisioned. Staging intake is
+enabled only for the fixture exercise; production intake remains disabled.
 
 The authenticated `POST /readyz` State-writer preflight is the exception to
 that last sentence: it is an operator-only credential check that works while
 intake remains disabled. It reads the State branch and submits a non-forced
 same-commit ref update, proving both Contents-write authority and the configured
 ruleset bypass without changing the branch, commit graph, or State tree.
+
+The authenticated staging-only `POST /internal/v1/source-reader-preflight`
+performs one repository-metadata read through the private Source Reader broker.
+Its protected manual workflow fixes the target to
+`kim-em/lean-eval-intake-fixture` and proves the transferred App private key,
+installation selection, broker binding, and private visibility without
+dispatching or evaluating a submission. Production rejects this preflight.
 
 `DISPATCH_WORKFLOW_REF` must stay absent until an operator creates an immutable
 tag named `lean-eval-dispatch/<40-character-commit>` at the reviewed workflow
