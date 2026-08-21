@@ -1,0 +1,105 @@
+name: Set staging intake
+
+on:
+  workflow_dispatch:
+    inputs:
+      state:
+        description: 'Desired staging intake state'
+        required: true
+        type: choice
+        options:
+          - disabled
+          - enabled
+      expected_commit:
+        description: 'Exact protected-main commit to deploy'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: submission-worker-main
+  cancel-in-progress: false
+
+jobs:
+  set-staging-intake:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: cloudflare-staging
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.6.0'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Verify exact reviewed deployment
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || [ "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]; then
+            echo "expected_commit must equal the selected protected-main commit" >&2
+            exit 1
+          fi
+          resolved=$(git rev-parse "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT^{commit}")
+          if [ "$resolved" != "$EXPECTED_COMMIT" ]; then
+            echo "immutable dispatch tag does not match the selected commit" >&2
+            exit 1
+          fi
+
+      - run: npm ci
+
+      - name: Deploy staging intake state
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DESIRED_STATE: ${{ inputs.state }}
+          DISPATCH_WORKFLOW_REF: lean-eval-dispatch/${{ github.sha }}
+        run: |
+          set -euo pipefail
+          case "$DESIRED_STATE" in
+            enabled) intake_enabled=true ;;
+            disabled) intake_enabled=false ;;
+            *) echo "unsupported intake state" >&2; exit 1 ;;
+          esac
+          npx wrangler deploy --env staging \
+            --var "DEPLOYED_COMMIT:$GITHUB_SHA" \
+            --var "DISPATCH_WORKFLOW_REF:$DISPATCH_WORKFLOW_REF" \
+            --var "INTAKE_ENABLED:$intake_enabled"
+
+      - name: Verify staging state
+        env:
+          DESIRED_STATE: ${{ inputs.state }}
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 7); do
+            body=$(curl --fail --silent --show-error --max-time 10 \
+              https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz) || body=""
+            if HEALTH_BODY="$body" python - <<'PY'
+          import json, os
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["status"] == "ok"
+          assert body["environment"] == "staging"
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          assert body["intake_enabled"] is (os.environ["DESIRED_STATE"] == "enabled")
+          PY
+            then
+              exit 0
+            fi
+            if [ "$attempt" -lt 7 ]; then sleep 5; fi
+          done
+          echo "staging health payload did not converge: $body" >&2
+          exit 1

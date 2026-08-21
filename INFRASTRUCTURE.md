@@ -164,6 +164,16 @@ then production only after the smoke gate succeeds. Deployment workflow
 concurrency is intentionally latest-main-wins: skipped intermediate commits
 are already ancestors of the latest tested commit.
 
+Staging intake state is changed only through the protected, manual
+`Set staging intake` workflow. The operator must select `main`, provide the
+exact current protected-main commit, and choose `enabled` or `disabled`. The
+workflow requires that commit's immutable `lean-eval-dispatch/<commit>` tag,
+deploys only the staging intake Worker, and verifies the resulting structured
+health response. It cannot target production. Any later ordinary main
+deployment returns staging to the tracked safe default `INTAKE_ENABLED=false`;
+rerun the manual workflow after reviewing the newly deployed commit if staging
+testing should continue.
+
 The security boundary and evidence required before intake is enabled are in
 [`docs/intake-threat-model.md`](docs/intake-threat-model.md).
 The decision register and copy/pasteable bootstrap sequence are in
