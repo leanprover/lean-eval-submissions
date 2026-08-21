@@ -38,6 +38,11 @@ persistent workspace into the instance.
 
 ## Capability contract
 
+The machine-readable provider-neutral envelope and claims are defined in
+[`key-capability-contract.md`](key-capability-contract.md). Shape/binding
+validation is deliberately separate from the adapter's atomic one-use store;
+no validator command can unwrap an identity.
+
 The reviewed key service must sign or otherwise authenticate a capability with
 all of these fields:
 

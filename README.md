@@ -172,6 +172,8 @@ etc.).
 - Security model / threat analysis: [`SECURITY.md`](SECURITY.md).
 - Local-only replay planner and disposable-VM contract:
   [`docs/replay-orchestrator.md`](docs/replay-orchestrator.md).
+- Provider-neutral archive-key envelope and single-use capability claims:
+  [`docs/key-capability-contract.md`](docs/key-capability-contract.md).
 - `ci.yml` runs the Python test suite, `actionlint`, the workflow-pin
   audit, and `tests/test_submission_workflow.py` (a structural guard on
   `submission.yml`'s security-critical shape).
