@@ -56,6 +56,13 @@ Record each token's owner, creation date, and expiry date in
 append, add only the token's principal to the matching State ruleset bypass;
 never give one environment authority over the other State repository.
 
+After organization approval, run `verify-state-writer.yml` once for staging
+and once for production from protected `main`. The workflow uses the matching
+environment's `READINESS_TOKEN`; it never receives the State credential. The
+Worker proves the stored credential's read/write authority and ruleset bypass
+with a non-forced update of the State branch to its existing commit, so the
+repository graph and tree remain unchanged and intake stays disabled.
+
 ## 3. Browser OAuth Apps
 
 Create two GitHub OAuth Apps, one for each environment. They need only the

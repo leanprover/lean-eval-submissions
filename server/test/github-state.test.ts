@@ -116,6 +116,20 @@ function repository(fetcher: GitHubFetch): GitHubStateRepository {
 }
 
 describe("atomic Git State append", () => {
+  it("proves write authority with a non-forced same-commit ref update", async () => {
+    const fetcher = sequence([
+      json({ permissions: { push: true } }),
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      json({ ref: "refs/heads/main", object: { sha: HEAD } }),
+    ]);
+    await expect(repository(fetcher).assertWritable()).resolves.toBe(HEAD);
+    const [, init] = fetcher.mock.calls[3] ?? [];
+    expect(init?.method).toBe("PATCH");
+    if (typeof init?.body !== "string") throw new TypeError("write probe body must be JSON");
+    expect(JSON.parse(init.body)).toEqual({ force: false, sha: HEAD });
+  });
+
   it("target-reads one submission view and only its referenced immutable events", async () => {
     const fetcher = sequence([
       json({ object: { sha: HEAD } }),
