@@ -8,7 +8,8 @@ operations pull request. Secret **names, owners, scopes, and rotation dates**
 belong here; secret values do not.
 
 Last reconciled: 2026-08-21 (deployment tokens, State-writer tokens, browser
-OAuth Apps, and the two broker GitHub Apps provisioned; intake still disabled).
+OAuth Apps, and the two broker GitHub Apps provisioned; both App ownership
+transfers and both State-token approvals pending; intake still disabled).
 Temporary owner: Kim Morrison. Target owner: leanprover organization
 administrators. Service code:
 [`server/`](server/).
@@ -200,15 +201,15 @@ Recorded GitHub Apps:
 | Lean Eval Source Reader | `lean-eval-source-reader` | `4666604` | Metadata read, Contents read | none; installed per contributor repository on opt-in |
 | Lean Eval Workflow Dispatcher | `lean-eval-workflow-dispatcher` | `4666633` | Metadata read, Contents read, Actions read/write | `155329316` on `leanprover`, repository selection `selected`, exactly `leanprover/lean-eval-submissions` |
 
-Both Apps are owned by the personal account `kim-em` because the temporary
-owner is not an administrator of the `leanprover` organization. Transfer the
-existing registrations to `leanprover` before production intake, then verify
-the App IDs, private-key authentication, and installation selection before
-assuming that no Worker secret rotation is required. Neither App subscribes to
-any event and neither has a webhook. The source reader deliberately has no
-Actions permission. The dispatcher installation was verified on 2026-08-21 by
-minting an installation token and listing `/installation/repositories`, which
-returned exactly one repository.
+Both registrations still publicly report the personal account `kim-em` as
+owner. Ownership transfers to the `leanprover` organization were submitted on
+2026-08-21 and are pending organization-owner acceptance. After acceptance,
+verify the App IDs, private-key authentication, and installation selection
+before assuming that no Worker secret rotation is required. Neither App
+subscribes to any event and neither has a webhook. The source reader
+deliberately has no Actions permission. The dispatcher installation was
+verified on 2026-08-21 by minting an installation token and listing
+`/installation/repositories`, which returned exactly one repository.
 
 Recorded browser OAuth Apps, both owned by the personal account `kim-em` for
 the same reason as the two GitHub Apps:
@@ -451,6 +452,7 @@ compatibility fix or append a corrective event.
 | State ruleset bypasses | 2026-08-21 | `kim-em` (`User` 477956) is the sole always-allowed bypass actor on staging ruleset `21094006` and production ruleset `21094005`; all protection rules otherwise unchanged |
 | Browser OAuth App provisioning | 2026-08-21 | two Apps with exact per-environment callbacks; client ID and secret installed in the matching Worker |
 | Broker GitHub App provisioning | 2026-08-21 | source reader `4666604` (Metadata read, Contents read, no installation) and workflow dispatcher `4666633` (Metadata read, Contents read, Actions read/write, installation `155329316` limited to `leanprover/lean-eval-submissions`); four secrets installed in both broker environments |
+| Broker GitHub App ownership transfer | 2026-08-21 | transfer of both existing registrations from `kim-em` to `leanprover` submitted; organization-owner acceptance pending; public App records still report `kim-em` until acceptance |
 | Post-provisioning health check | 2026-08-21 | both Workers report `status ok`, commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`, correct environment, and `intake_enabled false` |
 | Automated deployment verification | 2026-08-21 | run `32437703335` created the protected immutable dispatch tag, deployed broker and intake versions for exact commit `a928be873db6569e2b4ccb3fb8b399d0f19b2e78` to staging then production, and passed both structured intake-disabled smoke checks; PRs `#1172` and `#1174` fixed the checkout-free promotion directory and payload-propagation retry discovered during the first live exercise |
 | Worker rollback | not run | Use only if an actual deployment needs rollback |

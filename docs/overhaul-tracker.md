@@ -94,6 +94,9 @@ one issue per lane.
 - [x] Create both Apps, install the dispatcher on only the submissions
       repository, and provision both broker environments; keep the local static
       verification/dispatch-token hooks absent in production.
+- [ ] Complete the pending ownership transfers of both broker GitHub Apps to
+      `leanprover`, then verify their App IDs, private keys, and dispatcher
+      installation remain unchanged.
 - [ ] Replace or separately authorize the private-gist headless-agent proof;
       installation tokens cannot read submitter-owned private gists.
 
