@@ -24,18 +24,23 @@ primary checkout is not the integration workspace.
 | staging State | `535774735317a2716e5ce505ebd40fdcdfedaa18` on private `main`; lifecycle-aware view v2 enabled |
 | `lean-eval-releases` | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` on `main`; publication disabled |
 | catalog, generator consumer, software verification | merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; current main `21c6c02178e14cccc54b6e90e4836d1ca0e9c7e6` |
-| results v2, intake server, replay contracts | `lean-eval-submissions#1165`; lifecycle status merged in `#1190` |
+| results v2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198` |
 | leaderboard v2 preview | preview foundation merged as `lean-eval-leaderboard#69`; lifecycle-aware cutover remains reviewable in `#70` and at `https://lean-lang.org/eval/preview/` |
 
 The private broker and intake Workers are deployed in staging and production
-from commit `344ae1dbd5aaf53985b20511a770caa3c52b5626`. Deployment, OAuth,
+from archive-before-evaluation commit
+`b64a30293e82e77cc76da1f74e6f1633747e1bf0`. Deployment, OAuth,
 readiness, authentication, State-writer, and broker App secrets are installed.
 Both State-writer tokens are organization-approved and preflighted, and both
 broker App registrations transferred to `leanprover` without changing their
-IDs or the dispatcher installation. Staging intake is enabled only for the
-end-to-end fixture; production remains disabled. Exact Worker version
-identifiers are recorded in `INFRASTRUCTURE.md`. The live results store has not
-been migrated. Dry-run `32442394883` reports source commit
+IDs or the dispatcher installation. The trusted archive job now persists the
+encrypted snapshot before any evaluation job can start. Staging intake is
+enabled only for the end-to-end fixture; production remains disabled. The
+fixture's Source Reader preflight is green, but the separate `lean-eval-bot`
+installation used by the evaluation workflow still returns a repository-scoped
+404 until that fixture is added to its repository selection. Exact Worker
+version identifiers are recorded in `INFRASTRUCTURE.md`. The live results store
+has not been migrated. Dry-run `32442394883` reports source commit
 `91c55f3c1a515f87f33b3f8c45a4fd4565a0028f`, 44 files / 1,285 records,
 source digest `9c6ab2e17186d4498d33816010b01ba330122d0863efa300d7de6aaf07356db4`,
 output digest `340eaa0cce486aed35874ae1571425cb6e8912009f99822ea75fa945ea931a9e`,

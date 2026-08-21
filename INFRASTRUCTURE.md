@@ -90,13 +90,13 @@ Wrangler must be copied here immediately.
 
 The intake-disabled bootstrap was performed manually with Wrangler OAuth. The
 dedicated deployment tokens are installed and exercised by every normal
-deployment. Current versions use exact commit
-`344ae1dbd5aaf53985b20511a770caa3c52b5626`:
+deployment. Current versions use exact archive-before-evaluation commit
+`b64a30293e82e77cc76da1f74e6f1633747e1bf0`:
 
 | Environment | Private broker version | Intake Worker version | Health verification |
 | --- | --- | --- | --- |
-| staging | `7956e506-b48c-48ca-94fc-0e6495fe30d0` | `ac11dee4-4bba-4328-9831-8545535d9b8f` | environment `staging`, intake `true`, exact commit |
-| production | `1cae6f60-2950-459f-bb25-117f685069e4` | `6948abd5-5033-4864-97af-f3500b5ad5fd` | environment `production`, intake `false`, exact commit |
+| staging | `edeb2d01-5acf-4099-8329-cf3e52f431e1` | `39e8392d-dcc4-46e4-9bc7-afaff28b01a5` | environment `staging`, intake `true`, exact commit; intake version is the protected post-deploy re-enable |
+| production | `1ebdfbe1-57be-4ee4-ba80-23a9bf740fc6` | `3d2658ec-0fda-4bf1-9619-e7500fa61d52` | environment `production`, intake `false`, exact commit |
 
 This manual bootstrap does not replace deployment automation.
 `CLOUDFLARE_ACCOUNT_ID` and a distinct, narrowly scoped
