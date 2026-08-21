@@ -37,7 +37,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertNotIn("'INFRASTRUCTURE.md'", push)
 
     def test_smoke_retries_structured_payload_propagation(self) -> None:
-        self.assertEqual(DEPLOY.count("for attempt in $(seq 1 7); do"), 2)
+        self.assertEqual(DEPLOY.count("for attempt in $(seq 1 13); do"), 2)
         self.assertEqual(DEPLOY.count("health payload did not converge"), 2)
         self.assertNotIn("curl --fail --retry", DEPLOY)
 

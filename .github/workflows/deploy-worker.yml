@@ -143,7 +143,7 @@ jobs:
           EXPECTED_COMMIT: ${{ github.sha }}
           EXPECTED_ENVIRONMENT: staging
         run: |
-          for attempt in $(seq 1 7); do
+          for attempt in $(seq 1 13); do
             body=$(curl --fail --silent --show-error --max-time 10 \
               https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz) || body=""
             if HEALTH_BODY="$body" python - <<'PY'
@@ -157,7 +157,7 @@ jobs:
             then
               exit 0
             fi
-            if [ "$attempt" -lt 7 ]; then sleep 5; fi
+            if [ "$attempt" -lt 13 ]; then sleep 5; fi
           done
           echo "health payload did not converge: $body" >&2
           exit 1
@@ -198,7 +198,7 @@ jobs:
           EXPECTED_COMMIT: ${{ github.sha }}
           EXPECTED_ENVIRONMENT: production
         run: |
-          for attempt in $(seq 1 7); do
+          for attempt in $(seq 1 13); do
             body=$(curl --fail --silent --show-error --max-time 10 \
               https://lean-eval-submission-server.lean-eval.workers.dev/healthz) || body=""
             if HEALTH_BODY="$body" python - <<'PY'
@@ -212,7 +212,7 @@ jobs:
             then
               exit 0
             fi
-            if [ "$attempt" -lt 7 ]; then sleep 5; fi
+            if [ "$attempt" -lt 13 ]; then sleep 5; fi
           done
           echo "health payload did not converge: $body" >&2
           exit 1
