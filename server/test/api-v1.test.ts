@@ -18,8 +18,13 @@ import {
 } from "../src/auth";
 import { handleRequest, handleScheduled, type RuntimeEnv, type StateAccess } from "../src/app";
 import { buildDispatchRequest, GitHubProvider } from "../src/github-provider";
-import type { WritableStateEvent } from "../src/state-event";
-import type { DispatchOutbox, SubmissionView } from "../src/submission-view";
+import { validateStateEvent, type WritableStateEvent } from "../src/state-event";
+import {
+  decodeDispatchOutbox,
+  decodeSubmissionView,
+  type DispatchOutbox,
+  type SubmissionView,
+} from "../src/submission-view";
 
 const SECRET = "test-secret-with-at-least-thirty-two-bytes";
 const NOW_MS = 1_777_777_777_000;
@@ -64,12 +69,18 @@ class MemoryState implements StateAccess {
     view: SubmissionView,
     outbox: DispatchOutbox,
   ): Promise<{ created: boolean; view: SubmissionView }> {
+    events.forEach((event) => validateStateEvent(event));
+    const decodedView = decodeSubmissionView(view);
+    const decodedOutbox = decodeDispatchOutbox(outbox);
+    if (decodedView.submission_id !== decodedOutbox.submission_id) {
+      throw new TypeError("submission acceptance identities disagree");
+    }
     const existing = this.views.get(view.submission_id);
     if (existing !== undefined) return Promise.resolve({ created: false, view: existing });
     this.events.push(...events);
-    this.views.set(view.submission_id, view);
-    this.outbox.set(outbox.submission_id, outbox);
-    return Promise.resolve({ created: this.created, view });
+    this.views.set(decodedView.submission_id, decodedView);
+    this.outbox.set(decodedOutbox.submission_id, decodedOutbox);
+    return Promise.resolve({ created: this.created, view: decodedView });
   }
 
   readSubmission(submissionId: string): Promise<SubmissionView | null> {

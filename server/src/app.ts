@@ -300,6 +300,19 @@ function state(env: RuntimeEnv, dependencies: ApiDependencies): StateAccess {
   return dependencies.state ?? stateRepository(env);
 }
 
+async function submissionStage<T>(stage: string, operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    console.error(JSON.stringify({
+      event: "submission_stage_failed",
+      stage,
+      error_name: error instanceof Error ? error.name : "unknown",
+    }));
+    throw error;
+  }
+}
+
 async function session(request: Request, env: RuntimeEnv, dependencies: ApiDependencies): Promise<BrowserSession> {
   const authorization = request.headers.get("authorization");
   const token = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : cookie(request, SESSION_COOKIE);
@@ -525,19 +538,32 @@ async function acceptSubmission(
 ): Promise<Response> {
   requireDispatchConfiguration(env, dependencies);
   if (grant.login !== identity.login) throw new AuthError("authenticated identity does not match grant");
-  const repository = await provider(env, dependencies).repository(input.source_repository);
+  const repository = await submissionStage(
+    "source_repository_verification",
+    () => provider(env, dependencies).repository(input.source_repository),
+  );
   assertSourcePolicy(input.problem_group, input.source_visibility, repository.private);
   const acceptedAtMilliseconds = dependencies.now?.() ?? Date.now();
   const workflowRef = env.DISPATCH_WORKFLOW_REF ?? "";
+  const consumedNonce = await submissionStage(
+    "state_event_construction",
+    () => nonceEvent(grant.nonce_event_id, grant.nonce, purpose, acceptedAtMilliseconds, grant.expires_at),
+  );
   const events: WritableStateEvent[] = [
-    await nonceEvent(grant.nonce_event_id, grant.nonce, purpose, acceptedAtMilliseconds, grant.expires_at),
+    consumedNonce,
     receivedEvent(grant.submission_id, identity.login, input, acceptedAtMilliseconds + 1),
     metadataEvent(grant.metadata_event_id, grant.submission_id, identity.login, input.production_metadata, acceptedAtMilliseconds + 2),
   ];
   const ledger = state(env, dependencies);
   const proposedView = initialSubmissionView(grant, identity.login, input, acceptedAtMilliseconds, workflowRef);
-  const outcome = await ledger.acceptSubmission(events, proposedView, initialDispatchOutbox(proposedView));
-  const reconciled = await reconcileDispatch(env, dependencies, ledger, outcome.view, acceptedAtMilliseconds + 3);
+  const outcome = await submissionStage(
+    "state_acceptance",
+    () => ledger.acceptSubmission(events, proposedView, initialDispatchOutbox(proposedView)),
+  );
+  const reconciled = await submissionStage(
+    "dispatch_reconciliation",
+    () => reconcileDispatch(env, dependencies, ledger, outcome.view, acceptedAtMilliseconds + 3),
+  );
   return json(
     {
       submission_id: grant.submission_id,
@@ -725,8 +751,14 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
       throw new AuthError("agent challenge is not bound to this exact source");
     }
     const github = provider(env, dependencies);
-    const identity = await github.verifySecretGist(challenge.gist_id, challenge.login, body.challenge);
-    await github.verifyTag(challenge.source_repository, challenge.tag, challenge.source_commit);
+    const identity = await submissionStage(
+      "agent_gist_verification",
+      () => github.verifySecretGist(challenge.gist_id, challenge.login, body.challenge),
+    );
+    await submissionStage(
+      "agent_tag_verification",
+      () => github.verifyTag(challenge.source_repository, challenge.tag, challenge.source_commit),
+    );
     const response = await acceptSubmission(env, dependencies, identity, challenge, body.submission, "agent");
     const agentSession: BrowserSession = { kind: "browser_session", login: identity.login, github_id: identity.id, issued_at: now, expires_at: now + 3600 };
     const responseBody = await response.json<Record<string, unknown>>();
