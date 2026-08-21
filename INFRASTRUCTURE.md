@@ -79,19 +79,19 @@ is the chosen infrastructure record. Resource identifiers created outside
 Wrangler must be copied here immediately.
 
 The intake-disabled bootstrap was performed manually with Wrangler OAuth. The
-dedicated deployment tokens are now installed. The latest pre-merge versions,
-including the versions created when secrets were installed, all use exact
-commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`:
+dedicated deployment tokens are installed and were exercised successfully by
+the first post-merge deployment. Current versions use exact commit
+`a928be873db6569e2b4ccb3fb8b399d0f19b2e78`:
 
 | Environment | Private broker version | Intake Worker version | Health verification |
 | --- | --- | --- | --- |
-| staging | `eee1ee9f-71d2-40aa-9daf-950a991b7b58` | `4b363f1d-e4ed-491a-8009-ea4cf45904c8` | environment `staging`, intake `false`, exact commit |
-| production | `1d9cfd9f-cdf6-4a65-8e62-ad9f7299dd7f` | `a30535bd-8ec6-4de3-b2b9-34aead7434fa` | environment `production`, intake `false`, exact commit |
+| staging | `3d94acd4-ca8f-43cb-b7fa-981aa4c127a3` | `a3c65513-4f41-4d5b-9dfa-0a4634896173` | environment `staging`, intake `false`, exact commit |
+| production | `1468dcea-6180-4683-9f95-5f2a9780930d` | `25da2964-c22e-4857-b60c-c00d7eb95145` | environment `production`, intake `false`, exact commit |
 
 This manual bootstrap does not replace deployment automation.
 `CLOUDFLARE_ACCOUNT_ID` and a distinct, narrowly scoped
-`CLOUDFLARE_API_TOKEN` are installed in each Cloudflare environment. The first
-post-merge deployment is the functional verification of those opaque tokens.
+`CLOUDFLARE_API_TOKEN` are installed in each Cloudflare environment. The
+2026-08-21 post-merge deployment verified both opaque tokens successfully.
 
 The namespace IDs are user-defined positive integers and must remain unique in
 the Cloudflare account; bindings with the same ID share counters. Configuration
@@ -256,8 +256,9 @@ or differently named tag with `503`.
 The protected promotion environment is `submission-dispatch-promotion`
 (`20259251430`) with reviewer `kim-em`. Active tag ruleset `21094118` targets
 `refs/tags/lean-eval-dispatch/*`, rejects updates and deletion, and has no
-bypass. No dispatch tag exists before the first reviewed post-merge deployment;
-record its exact tag and commit after that deployment.
+bypass. Immutable tag
+`lean-eval-dispatch/a928be873db6569e2b4ccb3fb8b399d0f19b2e78`
+resolves exactly to commit `a928be873db6569e2b4ccb3fb8b399d0f19b2e78`.
 
 The approved D9 design uses separate organization-owned GitHub Apps for source
 verification and workflow dispatch, reached through a narrow token broker.
@@ -451,6 +452,7 @@ compatibility fix or append a corrective event.
 | Browser OAuth App provisioning | 2026-08-21 | two Apps with exact per-environment callbacks; client ID and secret installed in the matching Worker |
 | Broker GitHub App provisioning | 2026-08-21 | source reader `4666604` (Metadata read, Contents read, no installation) and workflow dispatcher `4666633` (Metadata read, Contents read, Actions read/write, installation `155329316` limited to `leanprover/lean-eval-submissions`); four secrets installed in both broker environments |
 | Post-provisioning health check | 2026-08-21 | both Workers report `status ok`, commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`, correct environment, and `intake_enabled false` |
+| Automated deployment verification | 2026-08-21 | run `32437703335` created the protected immutable dispatch tag, deployed broker and intake versions for exact commit `a928be873db6569e2b4ccb3fb8b399d0f19b2e78` to staging then production, and passed both structured intake-disabled smoke checks; PRs `#1172` and `#1174` fixed the checkout-free promotion directory and payload-propagation retry discovered during the first live exercise |
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
 | Replay decrypt and destruction | blocked | D6 key/provider work intentionally not provisioned |
 | Release reconstruction | blocked | Publication remains disabled |
