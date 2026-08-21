@@ -1,10 +1,12 @@
 # Manual setup record and remaining actions
 
-The four provisioning procedures below were completed on 2026-08-21. The two
-State-writer tokens remain pending `leanprover` owner approval, and the source
-reader remains deliberately uninstalled until a contributor selects a source
-repository. The Workers remain deployed with intake disabled. Never paste a
-secret value into an issue, pull request, chat, shell argument, or tracked file.
+The four provisioning procedures below were completed on 2026-08-21. Two sets
+of `leanprover` owner actions remain pending: approval of the two State-writer
+tokens, and acceptance of the two broker GitHub App ownership transfers. The
+source reader remains deliberately uninstalled until a contributor selects a
+source repository. The Workers remain deployed with intake disabled. Never
+paste a secret value into an issue, pull request, chat, shell argument, or
+tracked file.
 
 ## 1. Cloudflare deployment tokens
 
@@ -102,13 +104,19 @@ Record App and installation IDs, not private keys, in `INFRASTRUCTURE.md`.
 Headless private-gist proof remains disabled because installation tokens cannot
 read a submitter-owned private gist; this does not block browser OAuth intake.
 
+Ownership transfers for both existing registrations were submitted to
+`leanprover` on 2026-08-21 and await organization-owner acceptance. After
+acceptance, verify that App IDs `4666604` and `4666633` are unchanged, both
+installed private keys still authenticate, and dispatcher installation
+`155329316` still selects only `leanprover/lean-eval-submissions`.
+
 ## After these four tasks
 
-Keep `INTAKE_ENABLED=false` until the pending State tokens are approved and
-tested through their matching `kim-em` ruleset bypasses. Merge the reviewed
-submissions PR, confirm the automatic staging and production deployments,
-install the source reader on one selected test repository, exercise browser
-intake in staging, and finish the archive-locator callback before enabling
-production intake. Results migration D7 is independent: run a fresh post-merge
-dry report and obtain explicit approval of its exact source commit, record
-count, and output digest before `apply=true`.
+Keep `INTAKE_ENABLED=false` until both App transfers are accepted and the
+pending State tokens are approved and tested through their matching `kim-em`
+ruleset bypasses. Confirm the App identities, install the source reader on one
+selected test repository, exercise browser intake in staging, and finish the
+archive-locator callback before enabling production intake. Results migration
+D7 is independent: run a fresh post-merge dry report and obtain explicit
+approval of its exact source commit, record count, and output digest before
+`apply=true`.

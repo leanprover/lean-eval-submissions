@@ -28,11 +28,14 @@ primary checkout is not the integration workspace.
 | leaderboard v2 preview | merged as `lean-eval-leaderboard#69`; snapshot main `a438b83ffd400eecfc5a701115597366ba4809cc` pinned to regenerated LeanEval main |
 
 The private broker and intake Workers are deployed in staging and production
-from commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`, with intake disabled and App,
-OAuth, and State-writer credentials absent. Exact Worker version identifiers
-are recorded in `INFRASTRUCTURE.md`. The live results store has not been
-migrated: D7 still requires a fresh post-merge dry run and explicit approval of
-its exact source commit, record count, and output digest.
+from commit `a928be873db6569e2b4ccb3fb8b399d0f19b2e78`, with intake disabled.
+Deployment, OAuth, readiness, authentication, State-writer, and broker App
+secrets are installed. The State-writer tokens still lack authority pending
+organization approval, and both broker App registrations are pending transfer
+from `kim-em` to `leanprover`. Exact Worker version identifiers are recorded in
+`INFRASTRUCTURE.md`. The live results store has not been migrated: D7 still
+requires a fresh post-merge dry run and explicit approval of its exact source
+commit, record count, and output digest.
 
 ## Decisions required from maintainers
 
