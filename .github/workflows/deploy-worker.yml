@@ -54,6 +54,9 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: .
     environment: submission-dispatch-promotion
     permissions:
       contents: write
