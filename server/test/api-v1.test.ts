@@ -390,7 +390,8 @@ describe("strict API contract", () => {
 
 describe("agent intake in workerd", () => {
   it("reads the exact secret gist anonymously instead of through the source broker", async () => {
-    const anonymousFetch = vi.fn<typeof fetch>((_input, init) => {
+    const anonymousFetch = vi.fn<typeof fetch>(function (this: unknown, _input, init) {
+      expect(this).toBeUndefined();
       expect(new Headers(init?.headers).has("authorization")).toBe(false);
       return Promise.resolve(Response.json({
         public: false,
