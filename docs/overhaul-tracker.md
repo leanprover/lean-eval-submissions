@@ -12,10 +12,10 @@ one issue per lane.
 
 - [x] D1: keep raw production and staging State private and publish a
       reproducible, schema-validated public projection.
-- [x] D2: mechanical rule selected: visible formalization-evaluation problems
-      with fewer than three accepted solves and no public submission (118 at
-      the audited snapshot); use a fresh pre-merge audit, documented exclusions
-      only, no additions, and freeze irreversibly when the reviewed PR merges.
+- [x] D2: mechanical base rule selected: visible formalization-evaluation
+      problems with fewer than three accepted solves and no public submission
+      (118 at the audited snapshot). Ten later merged problems were explicitly
+      approved as additions; the final frozen v1 set has 128 members.
 - [x] D3: approve both software-verification statements; retain both problems,
       apply the researched title/prose/citation corrections, and add the three
       agreed anti-vacuity requirements before publication.
@@ -108,9 +108,11 @@ one issue per lane.
 - [x] Produce a fresh results-v2 dry-run artifact.
 - [ ] Review and approve its exact post-merge checksums (D7).
 - [ ] Execute the authorized migration and verify the writer lock is released.
-- [x] Define and audit the approved 118-member v1 set.
+- [x] Define and audit the approved mechanical 118-member v1 base set.
 - [x] Freeze the v1 set when its reviewed PR merges (`lean-eval#540`,
       merge commit `547b00ed345bc0737dd94847d6b67cb681b6178a`).
+- [x] Add the ten explicitly approved post-audit problems in `lean-eval#548`;
+      final v1 membership is 128 at merge `21c6c021`.
 - [ ] Complete staging OAuth/agent intake and exact-ref dispatch; wire its
       artifacts through the implemented UUIDv7 archive writer and into State.
 - [ ] Demonstrate public replay and isolated private replay.
