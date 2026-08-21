@@ -18,9 +18,9 @@ import platform
 import re
 import shutil
 import sys
-import tomllib
 from typing import Any
 
+import tomllib
 
 COMMIT = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"[0-9a-f]{64}")

@@ -9,7 +9,6 @@ import tempfile
 import unittest
 from unittest import mock
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 FIXTURE = ROOT / "tests" / "fixtures" / "kernel-shadow-smoke-v1.json"
@@ -18,7 +17,7 @@ import sys
 
 sys.path.insert(0, str(SCRIPTS))
 
-from kernel_shadow_smoke import (  # noqa: E402
+from kernel_shadow_smoke import (
     ShadowSmokeError,
     build_evidence,
     canonical_bytes,
@@ -215,14 +214,13 @@ class KernelShadowSmokeTests(unittest.TestCase):
             os.environ,
             {"ImageOS": "ubuntu22", "ImageVersion": "test-image", "RUNNER_ARCH": "X64"},
             clear=False,
-        ):
-            with self.assertRaisesRegex(ShadowSmokeError, "ubuntu24"):
-                build_evidence(
-                    fixture(),
-                    workflow_commit="2" * 40,
-                    pipeline_exit_code=0,
-                    pipeline_wall_time_ms=1,
-                )
+        ), self.assertRaisesRegex(ShadowSmokeError, "ubuntu24"):
+            build_evidence(
+                fixture(),
+                workflow_commit="2" * 40,
+                pipeline_exit_code=0,
+                pipeline_wall_time_ms=1,
+            )
 
 
 if __name__ == "__main__":
