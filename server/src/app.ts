@@ -29,6 +29,7 @@ import {
   type OAuthState,
   type SubmissionGrant,
 } from "./auth";
+import { browserPage, browserScript } from "./browser-ui";
 import {
   type GitHubFetch,
   GitHubStateError,
@@ -800,6 +801,12 @@ export async function handleRequest(
   dependencies: ApiDependencies = {},
 ): Promise<Response> {
   const url = new URL(request.url);
+  if (request.method === "GET" && url.pathname === "/") {
+    return browserPage(env.DEPLOYMENT_ENVIRONMENT, intakeEnabled(env));
+  }
+  if (request.method === "GET" && url.pathname === "/intake.js") {
+    return browserScript();
+  }
   if (request.method === "GET" && url.pathname === "/healthz") {
     return json({ status: "ok", service: "lean-eval-submission", deployed_commit: env.DEPLOYED_COMMIT, environment: env.DEPLOYMENT_ENVIRONMENT, intake_enabled: intakeEnabled(env) });
   }
