@@ -576,6 +576,7 @@ compatibility fix or append a corrective event.
 | Staging intake re-enable after archive deployment | 2026-08-21 | protected control run `32488534189` verified the immutable `b64a3029` tag and deployed staging intake version `39e8392d-dcc4-46e4-9bc7-afaff28b01a5`; final health is staging `true`, production `false`, both at exact commit `b64a3029` |
 | Credential-free public replay | 2026-08-21 | hosted run `32499490261` at workflow commit `757b0831018dd6ad88092eff8a2f4b3245a456d6` restored exact public source/benchmark/evaluator revisions, passed landrun and environment probes, and reproduced `two_plus_two` revision 1 through nanoda and Lean's default kernel; the downloaded three-JSON artifact independently validated with no source payload |
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
+| AWS key-adapter staging round trip | blocked | workflow is implemented; dedicated account, stacks, and staging OIDC role variables are not provisioned |
 | Replay decrypt and destruction | blocked | D6 key/provider work intentionally not provisioned |
 | Release reconstruction | blocked | Publication remains disabled |
 
