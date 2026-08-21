@@ -332,9 +332,9 @@ The Worker owns durable dispatch reconciliation independently of the credential
 choice. The intake CAS writes the immutable event batch, a validated targeted
 submission view, and a per-submission dispatch outbox together. A successful
 dispatch updates the view and deletes the outbox; a failed attempt records a
-  bounded retry and the one-minute Cron Trigger visits one uniformly distributed
-  UUIDv7-tail shard and
-at most 20 due entries. The State validator checks view/outbox paths, shapes,
+bounded retry and the one-minute Cron Trigger visits one uniformly distributed
+UUIDv7-tail shard and at most 20 due entries. The State validator checks
+view/outbox paths, shapes,
 event references, ownership, and consistency. Workflow concurrency is keyed by
 submission UUID, and deterministic result/State identities remain the final
 duplicate-record guard. The selected broker supplies dispatch authorization;
@@ -345,7 +345,11 @@ matching environment's callback token and sends that object to the Worker. The
 Worker validates the UUID-derived path, authenticated environment, existing
 dispatched submission, and exact payload before appending an idempotent
 `archive.completed` event and atomically upgrading the targeted view to v2. A
-second source-free callback job derives its fixed timestamp from the immutable
+successful `archive_state` acknowledgement is a dependency of evaluation, so
+untrusted Lean cannot start before both durable audit persistence and State
+recording. The evaluation job independently refetches the archived source
+commit and fails closed unless its frozen metadata digest matches. A second
+source-free callback job derives its fixed timestamp from the immutable
 archive completion, distinguishes accepted/rejected/pipeline-failed outcomes,
 and appends `evaluation.started` plus its terminal event in one CAS update.
 If source fetch, size validation, encryption, or persistence prevents an

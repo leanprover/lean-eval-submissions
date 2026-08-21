@@ -4,12 +4,14 @@ on:
   pull_request:
     paths:
       - '.github/workflows/deploy-worker.yml'
+      - '.github/workflows/submission.yml'
       - 'INFRASTRUCTURE.md'
       - 'server/**'
   push:
     branches: [main]
     paths:
       - '.github/workflows/deploy-worker.yml'
+      - '.github/workflows/submission.yml'
       - 'server/**'
   workflow_dispatch:
 

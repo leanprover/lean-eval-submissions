@@ -19,14 +19,14 @@ outside a small maintainer set.
 
 One encrypted tarball plus one unencrypted JSON sidecar are pushed to
 [`leanprover/lean-eval-audit`](https://github.com/leanprover/lean-eval-audit)
-per submission, immediately after evaluation.
+per submission before evaluation begins.
 
 ```
 audit/
   YYYY/
     MM/
       {submitter}-{issue}-{ref8}.tar.age   # age-encrypted gzipped tar of source
-      {submitter}-{issue}-{ref8}.json      # sidecar (issue, submitter, model, digests, verdict)
+      {submitter}-{issue}-{ref8}.json      # sidecar (issue, submitter, model, provenance, digests)
 
 archives/
   {uuid-prefix}/
@@ -41,8 +41,10 @@ identity modes are deliberately unambiguous: a legacy metadata record has an
 `issue_number`; a server metadata record has a `submission_id`; neither may
 carry both.
 
-The tarball is the same `source.tar.gz` that `fetch_submission.py`
-already produces — the same bytes the evaluator sees. Encryption uses
+The archive tarball and the evaluator's independent refetch resolve to the
+same immutable source commit. Their gzip/tar bytes need not be reproducible;
+the workflow compares frozen metadata containing the exact commit before any
+untrusted Lean runs. Encryption uses
 [`age`](https://github.com/FiloSottile/age) with recipients listed in
 [`.audit/recipients.txt`](../.audit/recipients.txt). The sidecar
 records the SHA-256 of both plaintext-tar and ciphertext so an
@@ -54,27 +56,27 @@ preserves the submitter's `solution_publication_status` and optional
 
 ## Workflow integration
 
-Two new pieces live inside the existing `submission.yml`:
+Three ordered pieces live inside the existing `submission.yml`:
 
-1. **Size cap + encrypt**, in the `evaluate` job, right after fetch.
-   `fetch_submission.py` writes `source.tar.gz` to `/tmp/fetch-out/`.
-   The workflow rejects the submission if `source.tar.gz` exceeds 10
-   MiB (comments on the issue, closes as `not planned`). Otherwise it
-   shells `age --recipients-file .audit/recipients.txt` over the tar
-   and uploads only the ciphertext as an artifact. The plaintext is
-   read for evaluation in this same job but never crosses the
-   job boundary.
-2. **Archive job**, runs after `evaluate`. Mints an installation token
-   for the `lean-eval-archiver` GitHub App (scoped only to
-   `lean-eval-audit`), downloads the ciphertext + sidecar artifact,
-   merges in the per-problem evaluator verdict from
-   `summary.json["run_eval"]["problems"]` (the raw output of
-   `lake exe lean-eval run-eval --json`), and uploads both objects via
-   the GitHub Contents API. `record` (the leaderboard updater) is
-   gated on this job succeeding: if archive fails, no leaderboard
-   update happens.
+1. **Trusted archive job.** It independently fetches the requested source and
+   the current benchmark, freezes their exact identities, enforces the 10 MiB
+   compressed-source cap, encrypts the source, and pushes the ciphertext and
+   provenance sidecar directly to `lean-eval-audit`. It mints the narrowly
+   scoped archiver App token only after encryption. It runs no submitted code
+   and uploads no source or ciphertext transport artifact.
+2. **State acknowledgement for server intake.** A source-free callback job
+   records the verified immutable locator. Evaluation cannot begin until that
+   acknowledgement succeeds. Issue intake skips this callback but still waits
+   for archive persistence.
+3. **Independent evaluation fetch.** The evaluation job checks out the exact
+   benchmark commit frozen by archive, independently refetches the source, and
+   compares the deterministic metadata digest before running untrusted Lean.
+   The source remains local to that runner. `record` remains gated on archive,
+   evaluation, and the applicable State callbacks.
 
-   The push is **idempotent on the source**, which matters because a
+### Persistence and locator details
+
+The push is **idempotent on the source**, which matters because a
    submission can be re-evaluated (e.g. after a benchmark toolchain bump)
    and neither the ciphertext nor the plaintext tar is reproducible —
    `age` picks a fresh file key per run, and gzip/tar packaging varies, so
@@ -128,10 +130,9 @@ Two new pieces live inside the existing `submission.yml`:
    digest. An idempotent replay uses the existing sidecar's last-changing
    commit and performs the same byte check.
 
-   `evaluate` exposes `audit_ciphertext_ready` as a job output, set to
-   `'true'` only when both the encrypt step and the ciphertext-artifact
-   upload step succeeded. `archive` gates on this output; `notify`
-   branches on it so an audit-encryption failure produces an
+   `archive` exposes `audit_ciphertext_ready` as a job output, set to
+   `'true'` only when encryption succeeded. `notify` branches on it so an
+   audit-encryption failure produces an
    "audit encryption failed" comment rather than the misleading
    "Submission.lean failed to compile" message that would otherwise
    fire from the generic evaluate-failure path.
@@ -144,16 +145,15 @@ private submission leaking out of the maintainer set**.
 Concretely:
 
 - **Public-repo artifacts are downloadable by any authenticated user.**
-  This is why the workflow already forbids `name: submission-source`
-  (see `submission.yml`'s leading comment, and the
-  `test_fetch_and_evaluate_share_one_job` invariant). The ciphertext
-  artifact is safe to upload because anyone who downloads it cannot
-  decrypt without a recipient private key.
+  The workflow therefore forbids both plaintext source transport and the old
+  ciphertext handoff artifact. Archive persists directly; evaluation refetches
+  the frozen commit.
 - **Runners that elaborate untrusted Lean can be compromised.** The
   archiver App's installation token must never appear in the env of
-  any job that runs untrusted Lean. It is therefore minted only in
-  the `archive` job, which runs on a separate runner that has never
-  touched the submitted source.
+  any job that runs untrusted Lean. It is minted only in the trusted `archive`
+  job. That runner necessarily handles the submitted bytes in order to encrypt
+  them, but never executes them; the separate evaluation runner receives no
+  archiver token.
 - **App permission scoping.** `lean-eval-archiver` has `Contents:
   write` only on `leanprover/lean-eval-audit`, and is installed only
   on that repo. The pre-existing `lean-eval-bot` (which reads private

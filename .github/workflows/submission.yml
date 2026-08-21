@@ -4,19 +4,19 @@
 # Security model: untrusted submitter Lean code is ONLY ever elaborated
 # inside comparator's landrun sandbox (invoked from `lake test` via
 # WorkspaceTest.lean). The non-negotiable invariants of this workflow
-# (`APP_INSTALLATION_TOKEN` scoped to the single `Fetch submission`
-# step's env, .git stripped from BOTH checkouts before lake runs,
+# (`APP_INSTALLATION_TOKEN` scoped to each job's single source-fetch
+# step, .git stripped from BOTH evaluation checkouts before lake runs,
 # `_prime_workspace` not pre-building any user-controlled targets, etc.)
 # are documented in SECURITY.md. Read that section before editing this
 # file or `scripts/evaluate_submission.py`.
 #
-# Fetch + evaluate live in a single job on purpose: a previous version
-# uploaded the cloned source as a `submission-source` artifact so a
-# separate `evaluate` job could pick it up, but on a public repo
-# anyone authenticated can download workflow artifacts via the API,
-# which leaked private submissions. Keeping fetch and evaluate
-# co-located removes the cross-runner transport entirely. Do not
-# re-split these jobs.
+# The trusted `archive` job independently fetches, encrypts, and durably
+# persists the exact source before evaluation starts. The `evaluate` job
+# then independently fetches that frozen commit and evaluates it on the
+# same runner. A previous version uploaded cloned source as a workflow
+# artifact, but artifacts from this public repository can expose private
+# submissions. No plaintext source crosses jobs; do not replace either
+# exact fetch with a source artifact.
 #
 # Two checkouts: this repo (lean-eval-submissions) supplies the
 # pipeline scripts; `leanprover/lean-eval` supplies the benchmark
@@ -123,9 +123,11 @@ jobs:
           echo "evaluate=true" >> "$GITHUB_OUTPUT"
 
   evaluate:
-    needs: intake
+    needs: [intake, archive, archive_state]
     if: >-
       always() &&
+      needs.archive.result == 'success' &&
+      (github.event_name == 'issues' || needs.archive_state.result == 'success') &&
       (github.event_name == 'workflow_dispatch' ||
        (github.event.action == 'labeled' && github.event.label.name == 'submission') ||
        (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))
@@ -152,15 +154,10 @@ jobs:
     permissions:
       contents: read
       issues: write
-    # Surfaces whether the fetch step succeeded to the downstream `notify`
-    # job, which otherwise cannot distinguish fetch failure (already
-    # commented inline) from evaluate failure (needs a comment).
-    # `benchmark_commit` is the resolved leanprover/lean-eval@main HEAD the
-    # submission was scored against; the `record` job records it.
+    # The archive job freezes the benchmark and source identities before this
+    # job starts. This job refetches both and fails closed on any mismatch.
     outputs:
       fetch_succeeded: ${{ steps.fetch_status.outputs.succeeded }}
-      size_within_cap: ${{ steps.size_status.outputs.within_cap }}
-      audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}
       benchmark_commit: ${{ steps.benchmark.outputs.sha }}
       toolchain: ${{ steps.benchmark.outputs.toolchain }}
     steps:
@@ -201,15 +198,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval
-          ref: main
+          ref: ${{ needs.archive.outputs.benchmark_commit }}
           path: lean-eval
           persist-credentials: false
 
       - name: Resolve benchmark commit
         id: benchmark
+        env:
+          EXPECTED_BENCHMARK_COMMIT: ${{ needs.archive.outputs.benchmark_commit }}
+          EXPECTED_TOOLCHAIN: ${{ needs.archive.outputs.toolchain }}
         run: |
-          echo "sha=$(git -C lean-eval rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "toolchain=$(cat lean-eval/lean-toolchain)" >> "$GITHUB_OUTPUT"
+          actual_commit=$(git -C lean-eval rev-parse HEAD)
+          actual_toolchain=$(cat lean-eval/lean-toolchain)
+          if [ "$actual_commit" != "$EXPECTED_BENCHMARK_COMMIT" ]; then
+            echo "benchmark checkout does not match the archived commit" >&2
+            exit 1
+          fi
+          if [ "$actual_toolchain" != "$EXPECTED_TOOLCHAIN" ]; then
+            echo "benchmark toolchain does not match the archived toolchain" >&2
+            exit 1
+          fi
+          echo "sha=$actual_commit" >> "$GITHUB_OUTPUT"
+          echo "toolchain=$actual_toolchain" >> "$GITHUB_OUTPUT"
 
       # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
@@ -266,14 +276,14 @@ jobs:
           private-key: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
           owner: ${{ steps.owner.outputs.owner }}
 
-      - name: Clean scratch dirs
+      - name: Clean evaluation scratch dirs
         # A no-op on the ephemeral hosted runners this workflow targets,
         # where /tmp starts empty. Kept as defence in depth: on any runner
         # that persisted /tmp across jobs, stale scratch state would break
         # fetch's checkout ("untracked working tree files would be
         # overwritten ... Aborting") and could leak one submission's source
         # into the next job's build.
-        run: rm -rf /tmp/fetch-out /tmp/submission-src /tmp/evaluate-out /tmp/audit-encrypt
+        run: rm -rf /tmp/fetch-out /tmp/submission-src /tmp/evaluate-out
 
       - name: Fetch submission
         id: fetch
@@ -305,6 +315,21 @@ jobs:
             echo "succeeded=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Verify frozen source identity
+        if: steps.fetch.outcome == 'success'
+        env:
+          EXPECTED_METADATA_SHA256: ${{ needs.archive.outputs.source_metadata_sha256 }}
+        run: |
+          actual=$(sha256sum /tmp/fetch-out/metadata.json | cut -d' ' -f1)
+          if [[ ! "$EXPECTED_METADATA_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "archive did not provide a valid frozen metadata digest" >&2
+            exit 1
+          fi
+          if [ "$actual" != "$EXPECTED_METADATA_SHA256" ]; then
+            echo "evaluation refetch does not match the source archived before evaluation" >&2
+            exit 1
+          fi
+
       - name: Comment on fetch failure
         if: failure() && steps.fetch.outcome == 'failure' && github.event_name == 'issues'
         env:
@@ -314,100 +339,6 @@ jobs:
             --repo "${{ github.repository }}" \
             --body "❌ Submission fetch failed. See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. If your submission repo is private, make sure the \`lean-eval-bot\` GitHub App is installed on it."
           gh issue close ${{ github.event.issue.number }} --repo "${{ github.repository }}" --reason "not planned" || true
-
-      # Audit-archive integration. The compressed source tar produced by
-      # fetch_submission.py is capped at 10 MiB (see docs/audit-archive.md
-      # > "Size cap"), then encrypted with `age` against
-      # `.audit/recipients.txt` and uploaded as a ciphertext-only artifact
-      # for the `archive` job to push to leanprover/lean-eval-audit.
-      #
-      # Order: BEFORE the expensive lean/landrun/comparator setup so that
-      # a size-cap failure rejects the submission fast. The encrypted
-      # artifact is safe to upload even on a public repo because the
-      # plaintext source never appears in it (see SECURITY.md and the
-      # leading comment of this file for why the plaintext source must
-      # NEVER be uploaded as an artifact).
-      - name: Check submission size cap
-        id: size_check
-        if: steps.fetch.outcome == 'success'
-        run: |
-          SIZE_BYTES=$(stat -c %s /tmp/fetch-out/source.tar.gz)
-          CAP_BYTES=$((10 * 1024 * 1024))
-          echo "submission tarball size: ${SIZE_BYTES} bytes (cap: ${CAP_BYTES} bytes / 10 MiB)"
-          if [ "$SIZE_BYTES" -gt "$CAP_BYTES" ]; then
-            echo "::error::source tarball is ${SIZE_BYTES} bytes, over the ${CAP_BYTES}-byte (10 MiB) audit cap"
-            exit 1
-          fi
-
-      - name: Record size-cap status for downstream jobs
-        id: size_status
-        if: always()
-        run: |
-          if [ "${{ steps.size_check.outcome }}" = "success" ]; then
-            echo "within_cap=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "within_cap=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Comment on size cap failure
-        if: failure() && steps.size_check.outcome == 'failure' && github.event_name == 'issues'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          SIZE_KB=$(( $(stat -c %s /tmp/fetch-out/source.tar.gz) / 1024 ))
-          gh issue comment ${{ github.event.issue.number }} \
-            --repo "${{ github.repository }}" \
-            --body "❌ Submission rejected: the compressed source tarball is ${SIZE_KB} KiB, over the 10240 KiB (10 MiB) audit-archive cap. Every evaluated submission is retained in encrypted form for audit (see [docs/audit-archive.md](https://github.com/${{ github.repository }}/blob/main/docs/audit-archive.md)); the cap keeps that archive bounded. Trim build artifacts, large fixtures, or unrelated files from your submission repo before resubmitting."
-          gh issue close ${{ github.event.issue.number }} --repo "${{ github.repository }}" --reason "not planned" || true
-
-      - name: Install age (audit encryption)
-        if: steps.size_check.outcome == 'success'
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq age
-
-      - name: Encrypt submission for audit archive
-        id: encrypt
-        if: steps.size_check.outcome == 'success'
-        run: |
-          mkdir -p /tmp/audit-encrypt
-          python scripts/archive_submission.py encrypt \
-            --source-tar /tmp/fetch-out/source.tar.gz \
-            --metadata /tmp/fetch-out/metadata.json \
-            --recipients .audit/recipients.txt \
-            --output-dir /tmp/audit-encrypt
-
-      - name: Upload audit ciphertext artifact
-        id: upload_audit
-        if: steps.encrypt.outcome == 'success'
-        # actions/upload-artifact pinned to 043fb46d (= refs/tags/v7.0.1 as of 2026-07-30).
-        # Safe to upload on a public repo because the artifact contains
-        # only the age-encrypted ciphertext and the unencrypted sidecar
-        # metadata, never the plaintext source. See docs/audit-archive.md
-        # > "Threat model" and the SECURITY.md note that forbids uploading
-        # the plaintext source.
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: submission-audit-ciphertext
-          path: |
-            /tmp/audit-encrypt/source.tar.gz.age
-            /tmp/audit-encrypt/sidecar.partial.json
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Record audit-ciphertext readiness for downstream jobs
-        id: audit_status
-        if: always()
-        run: |
-          # `archive` and `notify` both branch on this. Without it, an
-          # encrypt or artifact-upload failure would make `archive` start,
-          # fail at download-artifact, and the submitter would see a
-          # generic "evaluation did not produce results" message instead
-          # of the correct "audit encryption failed" one.
-          if [ "${{ steps.encrypt.outcome }}" = "success" ] \
-             && [ "${{ steps.upload_audit.outcome }}" = "success" ]; then
-            echo "ready=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Free disk space for Mathlib cache
         # Standard runners ship with ~14GB free; Mathlib unpacked is
@@ -548,60 +479,236 @@ jobs:
           retention-days: 7
 
   archive:
-    # Pushes the encrypted submission tarball + sidecar JSON to
-    # leanprover/lean-eval-audit using the `lean-eval-archiver` GitHub
-    # App. Runs on a fresh runner — the archiver's write-capable
-    # installation token must not be co-resident with untrusted Lean
-    # elaboration. See docs/audit-archive.md > "Threat model".
-    #
-    # `if: always()` gated on the two evaluate outputs: archive runs
-    # whenever the source was successfully fetched AND was within the
-    # size cap, even if the evaluation step itself later failed (the
-    # ciphertext artifact will exist; archiving the source is still
-    # required for audit). On fetch-failure or size-cap-failure, archive
-    # is skipped and the relevant in-job commenter has already explained
-    # the rejection to the submitter.
-    needs: evaluate
-    if: |
-      always()
-      && needs.evaluate.outputs.fetch_succeeded == 'true'
-      && needs.evaluate.outputs.size_within_cap == 'true'
-      && needs.evaluate.outputs.audit_ciphertext_ready == 'true'
+    # Trusted precondition for evaluation. This job independently fetches the
+    # requested source, freezes the benchmark/source identities, encrypts the
+    # source, and persists it to lean-eval-audit. It never runs untrusted Lean.
+    # Evaluation cannot start until this job succeeds (and, for server intake,
+    # until `archive_state` durably records the verified locator).
+    needs: intake
+    if: >-
+      always() &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.action == 'labeled' && github.event.label.name == 'submission') ||
+       (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
+      issues: write
+    outputs:
+      fetch_succeeded: ${{ steps.fetch_status.outputs.succeeded }}
+      size_within_cap: ${{ steps.size_status.outputs.within_cap }}
+      audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}
+      source_metadata_sha256: ${{ steps.source_identity.outputs.metadata_sha256 }}
+      benchmark_commit: ${{ steps.benchmark.outputs.sha }}
+      toolchain: ${{ steps.benchmark.outputs.toolchain }}
     steps:
-      # This repo (lean-eval-submissions): supplies scripts/archive_submission.py.
+      - name: Assert immutable server workflow ref
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_WORKFLOW_COMMIT: ${{ inputs.workflow_commit }}
+          CALLBACK_ENVIRONMENT: ${{ inputs.callback_environment }}
+          CALLBACK_REQUIRED: ${{ inputs.archive_state_callback_required }}
+        run: |
+          if [[ ! "$EXPECTED_WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "invalid expected workflow commit" >&2
+            exit 1
+          fi
+          if [ "$GITHUB_SHA" != "$EXPECTED_WORKFLOW_COMMIT" ]; then
+            echo "dispatch tag no longer resolves to the expected workflow commit" >&2
+            exit 1
+          fi
+          if [ "$CALLBACK_REQUIRED" != "true" ]; then
+            echo "server dispatch did not require the State lifecycle callback" >&2
+            exit 1
+          fi
+          if [ "$CALLBACK_ENVIRONMENT" != "staging" ] && [ "$CALLBACK_ENVIRONMENT" != "production" ]; then
+            echo "server dispatch selected an invalid callback environment" >&2
+            exit 1
+          fi
+
+      # This repo supplies the frozen fetch and archive implementations.
       # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+
+      # Freeze the benchmark before archiving. Evaluation checks out this
+      # exact commit rather than independently racing lean-eval@main.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval
+          ref: main
+          path: lean-eval
+          persist-credentials: false
+
+      - name: Freeze benchmark identity
+        id: benchmark
+        run: |
+          echo "sha=$(git -C lean-eval rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "toolchain=$(cat lean-eval/lean-toolchain)" >> "$GITHUB_OUTPUT"
 
       # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.11.10'
 
-      # actions/download-artifact pinned to 3e5f45b2 (= refs/tags/v8.0.1 as of 2026-07-30).
-      # Ciphertext artifact is required: archive cannot proceed without it.
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: submission-audit-ciphertext
-          path: /tmp/audit-in
+      - name: Extract source owner from issue body
+        id: archive_owner
+        env:
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          SERVER_SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python - <<'PY'
+          import os, re, sys
+          if os.environ.get("EVENT_NAME") == "workflow_dispatch":
+              repository = os.environ.get("SERVER_SOURCE_REPOSITORY", "")
+              if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+                  sys.exit("invalid server source repository")
+              with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+                  fh.write("kind=github_repo\n")
+                  fh.write(f"owner={repository.split('/', 1)[0]}\n")
+              raise SystemExit(0)
+          body = os.environ.get("ISSUE_BODY", "")
+          m = re.search(
+              r"^###\s+Submission URL\s*\n+(?P<value>.+?)(?=\n+###\s|\Z)",
+              body,
+              re.MULTILINE | re.DOTALL,
+          )
+          if not m:
+              sys.exit("no Submission URL section in issue body")
+          url = m.group("value").strip()
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              repo = re.match(r"https://github\.com/([^/]+)/", url)
+              if repo:
+                  fh.write("kind=github_repo\n")
+                  fh.write(f"owner={repo.group(1)}\n")
+              elif url.startswith("https://gist.github.com/"):
+                  fh.write("kind=gist\n")
+                  fh.write("owner=\n")
+              else:
+                  sys.exit(f"unsupported URL in issue body: {url!r}")
+          PY
 
-      # Results artifact is optional: if evaluate failed mid-run the
-      # results.json may not have been uploaded, but the source archive
-      # should still be recorded (with sidecar.evaluator_verdict omitted).
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        id: results_download
+      - name: Mint lean-eval-bot installation token for archival fetch
+        id: archive_app_token
+        if: steps.archive_owner.outputs.kind == 'github_repo'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         continue-on-error: true
         with:
-          name: submission-results
-          path: /tmp/results-in
+          client-id: ${{ secrets.LEAN_EVAL_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
+          owner: ${{ steps.archive_owner.outputs.owner }}
+
+      - name: Clean archive scratch dirs
+        run: rm -rf /tmp/archive-fetch /tmp/archive-encrypt
+
+      - name: Fetch source for archive
+        id: archive_fetch
+        env:
+          APP_INSTALLATION_TOKEN: ${{ steps.archive_app_token.outputs.token }}
+        run: |
+          SERVER_FLAG=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SERVER_FLAG+=(--server-dispatch)
+          fi
+          python scripts/fetch_submission.py \
+            --event-path "$GITHUB_EVENT_PATH" \
+            "${SERVER_FLAG[@]}" \
+            --output-dir /tmp/archive-fetch
+
+      - name: Record archive fetch status
+        id: fetch_status
+        if: always()
+        run: |
+          if [ "${{ steps.archive_fetch.outcome }}" = "success" ]; then
+            echo "succeeded=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.archive_fetch.outcome }}" = "failure" ]; then
+            echo "succeeded=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "succeeded=not_attempted" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Freeze source identity
+        id: source_identity
+        if: steps.archive_fetch.outcome == 'success'
+        run: |
+          echo "metadata_sha256=$(sha256sum /tmp/archive-fetch/metadata.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Comment on archive fetch failure
+        if: failure() && steps.archive_fetch.outcome == 'failure' && github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment ${{ github.event.issue.number }} \
+            --repo "${{ github.repository }}" \
+            --body "❌ Submission fetch failed before archival, so evaluation did not start. See the workflow logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. If your submission repo is private, make sure the \`lean-eval-bot\` GitHub App is installed on it."
+          gh issue close ${{ github.event.issue.number }} --repo "${{ github.repository }}" --reason "not planned" || true
+
+      - name: Check submission size cap
+        id: size_check
+        if: steps.archive_fetch.outcome == 'success'
+        run: |
+          SIZE_BYTES=$(stat -c %s /tmp/archive-fetch/source.tar.gz)
+          CAP_BYTES=$((10 * 1024 * 1024))
+          echo "submission tarball size: ${SIZE_BYTES} bytes (cap: ${CAP_BYTES} bytes / 10 MiB)"
+          if [ "$SIZE_BYTES" -gt "$CAP_BYTES" ]; then
+            echo "::error::source tarball is ${SIZE_BYTES} bytes, over the ${CAP_BYTES}-byte (10 MiB) audit cap"
+            exit 1
+          fi
+
+      - name: Record size-cap status
+        id: size_status
+        if: always()
+        run: |
+          if [ "${{ steps.size_check.outcome }}" = "success" ]; then
+            echo "within_cap=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.size_check.outcome }}" = "failure" ]; then
+            echo "within_cap=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "within_cap=not_attempted" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment on size cap failure
+        if: failure() && steps.size_check.outcome == 'failure' && github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SIZE_KB=$(( $(stat -c %s /tmp/archive-fetch/source.tar.gz) / 1024 ))
+          gh issue comment ${{ github.event.issue.number }} \
+            --repo "${{ github.repository }}" \
+            --body "❌ Submission rejected: the compressed source tarball is ${SIZE_KB} KiB, over the 10240 KiB (10 MiB) audit-archive cap. The source was not archived or evaluated. Trim build artifacts, large fixtures, or unrelated files before resubmitting."
+          gh issue close ${{ github.event.issue.number }} --repo "${{ github.repository }}" --reason "not planned" || true
+
+      - name: Install age for audit encryption
+        if: steps.size_check.outcome == 'success'
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq age
+
+      - name: Encrypt submission for audit archive
+        id: encrypt
+        if: steps.size_check.outcome == 'success'
+        run: |
+          mkdir -p /tmp/archive-encrypt
+          python scripts/archive_submission.py encrypt \
+            --source-tar /tmp/archive-fetch/source.tar.gz \
+            --metadata /tmp/archive-fetch/metadata.json \
+            --recipients .audit/recipients.txt \
+            --output-dir /tmp/archive-encrypt
+
+      - name: Record audit-ciphertext readiness
+        id: audit_status
+        if: always()
+        run: |
+          if [ "${{ steps.encrypt.outcome }}" = "success" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Mint lean-eval-archiver installation token
         id: archiver_token
+        if: steps.encrypt.outcome == 'success'
         # actions/create-github-app-token pinned to bcd2ba49 (= refs/tags/v3.2.0 as of 2026-07-30).
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
@@ -611,19 +718,12 @@ jobs:
           repositories: lean-eval-audit
 
       - name: Push to lean-eval-audit
+        if: steps.encrypt.outcome == 'success'
         env:
-          # Step-scoped: never in the env of any other step in this job.
-          # Mirrors the lean-eval-bot token scoping pattern in `evaluate`.
+          # Step-scoped and never co-resident with untrusted evaluation.
           ARCHIVER_TOKEN: ${{ steps.archiver_token.outputs.token }}
         run: |
           set -euo pipefail
-          # Per-problem evaluator verdict lives in summary.json under
-          # `run_eval.problems`, not in results.json (which is just
-          # {"passed": [ids]}). See scripts/evaluate_submission.py.
-          SUMMARY_FLAG=()
-          if [ -f /tmp/results-in/summary.json ]; then
-            SUMMARY_FLAG+=(--summary /tmp/results-in/summary.json)
-          fi
           LOCATOR_FLAG=()
           COMPLETION_FLAG=()
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -631,13 +731,12 @@ jobs:
             COMPLETION_FLAG+=(--completion-output /tmp/archive-completion.json)
           fi
           python scripts/archive_submission.py push \
-            --ciphertext /tmp/audit-in/source.tar.gz.age \
-            --sidecar /tmp/audit-in/sidecar.partial.json \
-            --benchmark-commit "${{ needs.evaluate.outputs.benchmark_commit }}" \
+            --ciphertext /tmp/archive-encrypt/source.tar.gz.age \
+            --sidecar /tmp/archive-encrypt/sidecar.partial.json \
+            --benchmark-commit "${{ steps.benchmark.outputs.sha }}" \
             --workflow-run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             "${LOCATOR_FLAG[@]}" \
-            "${COMPLETION_FLAG[@]}" \
-            "${SUMMARY_FLAG[@]}"
+            "${COMPLETION_FLAG[@]}"
 
       - name: Upload verified server archive locator
         if: github.event_name == 'workflow_dispatch'
@@ -658,7 +757,7 @@ jobs:
           retention-days: 7
 
   archive_failure_state:
-    needs: [evaluate, archive]
+    needs: archive
     if: |
       always()
       && github.event_name == 'workflow_dispatch'
@@ -672,11 +771,11 @@ jobs:
     steps:
       - name: Record archive failure in State
         env:
-          AUDIT_CIPHERTEXT_READY: ${{ needs.evaluate.outputs.audit_ciphertext_ready }}
+          AUDIT_CIPHERTEXT_READY: ${{ needs.archive.outputs.audit_ciphertext_ready }}
           CALLBACK_ENVIRONMENT: ${{ inputs.callback_environment }}
-          FETCH_SUCCEEDED: ${{ needs.evaluate.outputs.fetch_succeeded }}
+          FETCH_SUCCEEDED: ${{ needs.archive.outputs.fetch_succeeded }}
           LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}
-          SIZE_WITHIN_CAP: ${{ needs.evaluate.outputs.size_within_cap }}
+          SIZE_WITHIN_CAP: ${{ needs.archive.outputs.size_within_cap }}
           SUBMISSION_ID: ${{ inputs.submission_id }}
         run: |
           set -euo pipefail
@@ -692,13 +791,13 @@ jobs:
               exit 1
               ;;
           esac
-          if [ "$FETCH_SUCCEEDED" != "true" ]; then
+          if [ "$FETCH_SUCCEEDED" = "false" ]; then
             reason_code="source_fetch_failed"
             retryable="true"
-          elif [ "$SIZE_WITHIN_CAP" != "true" ]; then
+          elif [ "$SIZE_WITHIN_CAP" = "false" ]; then
             reason_code="source_size_limit_exceeded"
             retryable="false"
-          elif [ "$AUDIT_CIPHERTEXT_READY" != "true" ]; then
+          elif [ "$SIZE_WITHIN_CAP" = "true" ] && [ "$AUDIT_CIPHERTEXT_READY" != "true" ]; then
             reason_code="archive_encryption_failed"
             retryable="true"
           else
@@ -745,7 +844,7 @@ jobs:
           PY
 
   archive_state:
-    needs: [evaluate, archive]
+    needs: archive
     if: |
       always()
       && github.event_name == 'workflow_dispatch'
@@ -1167,26 +1266,22 @@ jobs:
             --repo "${{ github.repository }}" \
             --reason "completed"
 
-  # Catches the case where fetch succeeded AND the size cap passed but
-  # the pipeline did not complete cleanly — most often the evaluation
-  # steps failing because the submitter's Submission.lean did not
-  # compile, the audit-archive push failing, or the leaderboard
-  # `record` job failing. Without this, the submitter sees no comment.
+  # Catches the case where the archival fetch and size check succeeded but
+  # archive persistence, evaluation, or recording did not complete cleanly.
   #
-  # Gated on `fetch_succeeded` AND `size_within_cap` so we do NOT
-  # duplicate the in-job fetch-failure comment or the size-cap-failure
-  # comment (those rejection paths each have their own dedicated
-  # commenter step in the evaluate job).
+  # Suppressed only for an explicit source-fetch or size-cap rejection so we
+  # do not duplicate those dedicated archive-job comments. A pre-fetch
+  # infrastructure failure remains operator-visible.
   notify:
     needs: [evaluate, archive, record]
     if: |
       always()
       && github.event_name == 'issues'
-      && needs.evaluate.outputs.fetch_succeeded == 'true'
-      && needs.evaluate.outputs.size_within_cap == 'true'
+      && needs.archive.outputs.fetch_succeeded != 'false'
+      && needs.archive.outputs.size_within_cap != 'false'
       && (
-        needs.evaluate.outputs.audit_ciphertext_ready != 'true'
-        || needs.archive.result != 'success'
+        needs.archive.result != 'success'
+        || needs.evaluate.result != 'success'
         || needs.record.result != 'success'
       )
     runs-on: ubuntu-latest
@@ -1216,7 +1311,7 @@ jobs:
       # scripts/classify_evaluate_failure.py.
       - name: Explain the evaluate failure
         id: why
-        if: needs.evaluate.result != 'success' && needs.evaluate.outputs.audit_ciphertext_ready == 'true'
+        if: needs.archive.result == 'success' && needs.evaluate.result != 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
@@ -1245,10 +1340,10 @@ jobs:
           EVALUATE_RESULT: ${{ needs.evaluate.result }}
           ARCHIVE_RESULT: ${{ needs.archive.result }}
           RECORD_RESULT: ${{ needs.record.result }}
-          # Audit-encrypt failure also fails the evaluate job, so check
-          # it first — otherwise the submitter would be told about an
-          # evaluation that never began.
-          AUDIT_CIPHERTEXT_READY: ${{ needs.evaluate.outputs.audit_ciphertext_ready }}
+          # Audit-encrypt failure prevents evaluation from starting.
+          AUDIT_CIPHERTEXT_READY: ${{ needs.archive.outputs.audit_ciphertext_ready }}
+          ARCHIVE_FETCH_SUCCEEDED: ${{ needs.archive.outputs.fetch_succeeded }}
+          ARCHIVE_SIZE_WITHIN_CAP: ${{ needs.archive.outputs.size_within_cap }}
           EVALUATE_WHY: ${{ steps.why.outputs.message }}
           BLAMES_SUBMISSION: ${{ steps.why.outputs.blames_submission }}
           LOGS: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -1257,13 +1352,15 @@ jobs:
           # infrastructure failure closed as "not planned" reads as a
           # verdict on their proof and buries the failure from operators.
           CLOSE=false
-          if [ "$AUDIT_CIPHERTEXT_READY" != "true" ]; then
+          if [ "$ARCHIVE_FETCH_SUCCEEDED" != "true" ] || [ "$ARCHIVE_SIZE_WITHIN_CAP" != "true" ]; then
+            BODY="❌ Audit archival preparation did not complete; evaluation did not start and the leaderboard was not updated. An operator will need to investigate. See the workflow logs: $LOGS"
+          elif [ "$AUDIT_CIPHERTEXT_READY" != "true" ]; then
             BODY="❌ Audit encryption of the submission did not complete; the submission was not evaluated and the leaderboard was not updated. An operator will need to investigate. See the workflow logs: $LOGS"
+          elif [ "$ARCHIVE_RESULT" != "success" ]; then
+            BODY="❌ Audit archival did not complete (archive job: $ARCHIVE_RESULT); evaluation did not start and the leaderboard was not updated. An operator will need to investigate. See the workflow logs: $LOGS"
           elif [ "$EVALUATE_RESULT" != "success" ]; then
             BODY="❌ Submission evaluation did not produce results. $EVALUATE_WHY See the workflow logs: $LOGS"
             CLOSE="$BLAMES_SUBMISSION"
-          elif [ "$ARCHIVE_RESULT" != "success" ]; then
-            BODY="❌ Audit archival did not complete (archive job: $ARCHIVE_RESULT); the leaderboard was not updated. An operator will need to investigate. See the workflow logs: $LOGS"
           else
             BODY="❌ Recording the submission to the leaderboard did not complete (record job: $RECORD_RESULT). An operator will need to investigate. See the workflow logs: $LOGS"
           fi
