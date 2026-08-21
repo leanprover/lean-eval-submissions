@@ -25,6 +25,11 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("'INFRASTRUCTURE.md'", pull_request)
         self.assertNotIn("'INFRASTRUCTURE.md'", push)
 
+    def test_smoke_retries_structured_payload_propagation(self) -> None:
+        self.assertEqual(DEPLOY.count("for attempt in $(seq 1 7); do"), 2)
+        self.assertEqual(DEPLOY.count("health payload did not converge"), 2)
+        self.assertNotIn("curl --fail --retry", DEPLOY)
+
     def test_reviewed_promotion_uses_only_contents_write(self) -> None:
         block = DEPLOY.split("\n  promote-dispatch-ref:", 1)[1].split(
             "\n  deploy-staging:", 1

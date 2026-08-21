@@ -143,9 +143,10 @@ jobs:
           EXPECTED_COMMIT: ${{ github.sha }}
           EXPECTED_ENVIRONMENT: staging
         run: |
-          body=$(curl --fail --retry 6 --retry-all-errors --retry-delay 5 \
-            https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz)
-          HEALTH_BODY="$body" python - <<'PY'
+          for attempt in $(seq 1 7); do
+            body=$(curl --fail --silent --show-error --max-time 10 \
+              https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz) || body=""
+            if HEALTH_BODY="$body" python - <<'PY'
           import json, os
           body = json.loads(os.environ["HEALTH_BODY"])
           assert body["status"] == "ok"
@@ -153,6 +154,13 @@ jobs:
           assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
           assert body["intake_enabled"] is False
           PY
+            then
+              exit 0
+            fi
+            if [ "$attempt" -lt 7 ]; then sleep 5; fi
+          done
+          echo "health payload did not converge: $body" >&2
+          exit 1
 
   deploy-production:
     needs: [deploy-staging, promote-dispatch-ref]
@@ -190,9 +198,10 @@ jobs:
           EXPECTED_COMMIT: ${{ github.sha }}
           EXPECTED_ENVIRONMENT: production
         run: |
-          body=$(curl --fail --retry 6 --retry-all-errors --retry-delay 5 \
-            https://lean-eval-submission-server.lean-eval.workers.dev/healthz)
-          HEALTH_BODY="$body" python - <<'PY'
+          for attempt in $(seq 1 7); do
+            body=$(curl --fail --silent --show-error --max-time 10 \
+              https://lean-eval-submission-server.lean-eval.workers.dev/healthz) || body=""
+            if HEALTH_BODY="$body" python - <<'PY'
           import json, os
           body = json.loads(os.environ["HEALTH_BODY"])
           assert body["status"] == "ok"
@@ -200,3 +209,10 @@ jobs:
           assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
           assert body["intake_enabled"] is False
           PY
+            then
+              exit 0
+            fi
+            if [ "$attempt" -lt 7 ]; then sleep 5; fi
+          done
+          echo "health payload did not converge: $body" >&2
+          exit 1
