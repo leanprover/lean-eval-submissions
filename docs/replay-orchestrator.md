@@ -205,12 +205,11 @@ provider. D6 must decide capability authentication, one-use enforcement, key
 custody, issuance/audit records, and destruction acknowledgement before any
 production execution-backend implementation or provisioning is authorized.
 
-## Restore and incident checks
+## Pre-enable evidence
 
-Before enabling a real runner, rehearse duplicate delivery, retry after runner
-loss, counter unsupported/permission denied, invalid verdict, source or
-benchmark ref disappearance, network-isolation failure, and teardown failure.
-Preserve the queue source digest, plan, started/terminal event IDs, verdict, VM
-image digest, and destruction acknowledgement. Never preserve plaintext
-private source, keys, tokens, ambient environment, or untrusted command output
-that can disclose source.
+The single staging acceptance test must exercise one-use refusal, wrong-archive
+refusal, network isolation, and confirmed teardown. Preserve the queue source
+digest, plan, started/terminal event IDs, verdict, VM image digest, and
+destruction acknowledgement. Never preserve plaintext private source, keys,
+tokens, ambient environment, or untrusted command output that can disclose
+source. No recurring recovery drill or separate alarm subsystem is required.

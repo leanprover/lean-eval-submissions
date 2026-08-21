@@ -166,8 +166,8 @@ Concretely:
 - **Recipient-private-key custody is the recipient's problem.** Lose
   it and the corresponding archived entries become permanently
   undecryptable. The validate-recipients CI does not (and cannot)
-  verify that someone holds each recipient's private key; that
-  requires a manual decrypt drill.
+  verify that someone holds each recipient's private key. The project accepts
+  that loss risk and does not impose a recurring recovery drill.
 - **Pre-existing public submissions and their commits.** Those exist
   in the submitter's own public repo at a pinned SHA, recorded in
   `results/<login>.json`. They are also archived going forward for
@@ -207,10 +207,6 @@ sha256sum /tmp/source.tar.gz   # match sidecar.sha256_plaintext_tar
 # 4. Extract.
 mkdir /tmp/source && tar -xzf /tmp/source.tar.gz -C /tmp/source
 ```
-
-Conduct a decrypt drill periodically (annually is plenty) so that
-recipient private keys are known to still exist on a reachable
-device.
 
 ## Size cap
 

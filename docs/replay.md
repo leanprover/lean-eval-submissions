@@ -117,12 +117,11 @@ Replay remains unavailable until all gates have evidence linked from
   documented no-provider-recovery risk acceptance;
 - the selected backend demonstrates nonce-specific disposable instance creation,
   deregistration, network egress policy, and no persistent mount;
-- an end-to-end drill recovers one test archive, proves a second unwrap fails,
-  proves a different archive fails, and verifies VM destruction;
+- one pre-enable staging acceptance test recovers one test archive, proves a
+  second unwrap fails, proves a different archive fails, and verifies VM
+  destruction;
 - workflow review confirms no master identity or broad repository credential
-  is available to the replay job or untrusted Lean;
-- observability alerts on expired/reused capabilities, digest mismatch,
-  teardown failure, and unexpected runner reuse.
+  is available to the replay job or untrusted Lean.
 
 No execution provider is selected here. A future adapter must satisfy the same
 fresh-instance, credential-isolation, network-isolation, teardown, and
