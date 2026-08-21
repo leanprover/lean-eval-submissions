@@ -146,16 +146,9 @@ jobs:
 
       - name: Remove every repository credential and Git metadata
         run: |
-          rm -rf \
-            .git \
-            evaluator/.git \
-            lean-eval/.git \
-            source/.git \
-            .ci/lean4export/.git \
-            .ci/comparator/.git \
-            .ci/nanoda/.git
-          if find evaluator source .ci -type d -name .git -print -quit | grep -q .; then
-            echo "source, evaluator, or component Git metadata survived stripping" >&2
+          find . -type d -name .git -prune -exec rm -rf '{}' +
+          if find . -type d -name .git -print -quit | grep -q .; then
+            echo "repository Git metadata survived recursive stripping" >&2
             exit 1
           fi
 

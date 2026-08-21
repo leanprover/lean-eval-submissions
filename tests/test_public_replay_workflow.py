@@ -58,7 +58,10 @@ class PublicReplayWorkflowTests(unittest.TestCase):
         self.assertLess(sandbox_probe, evaluate)
         self.assertIn("sandbox_engaged_probe.py --require-tools", self.text)
         self.assertIn("env_dump_probe.py --require-tools", self.text)
-        self.assertIn("if find evaluator source .ci -type d -name .git", self.text)
+        self.assertIn(
+            "find . -type d -name .git -prune -exec rm -rf '{}' +", self.text
+        )
+        self.assertIn("find . -type d -name .git -print -quit", self.text)
         self.assertNotIn("submission-source", self.text)
 
     def test_component_and_action_dependencies_are_commit_pinned(self) -> None:
