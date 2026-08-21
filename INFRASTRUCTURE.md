@@ -7,10 +7,11 @@ until this ledger changes in the same pull request or an immediately linked
 operations pull request. Secret **names, owners, scopes, and rotation dates**
 belong here; secret values do not.
 
-Last reconciled: 2026-08-21 (deployment tokens, State-writer tokens, browser
-OAuth Apps, and the two broker GitHub Apps provisioned; both App ownership
-transfers accepted and both State writers approved/preflighted; staging intake
-enabled only for the end-to-end fixture, production intake disabled).
+Last reconciled: 2026-08-21 (lifecycle-aware Worker commit `344ae1db` deployed
+and smoke-tested in both environments; staging intake enabled only for the
+end-to-end fixture, production intake disabled; deployment tokens,
+State-writer tokens, browser OAuth Apps, and both broker GitHub Apps remain
+provisioned and preflighted).
 Temporary owner: Kim Morrison. Target owner: leanprover organization
 administrators. Service code:
 [`server/`](server/).
@@ -20,11 +21,11 @@ administrators. Service code:
 | Resource | Desired identifier | Environment | Status |
 | --- | --- | --- | --- |
 | Cloudflare account | `lean-eval` (`a46b90978a1c29cc4795f30677e7e4b8`) | temporary dedicated | **PROVISIONED 2026-08-20** |
-| Cloudflare Worker | `lean-eval-submission-server-staging` | staging | **PROVISIONED 2026-08-20; INTAKE DISABLED** |
+| Cloudflare Worker | `lean-eval-submission-server-staging` | staging | **PROVISIONED 2026-08-20; INTAKE ENABLED FOR E2E FIXTURE 2026-08-21** |
 | Cloudflare Worker | `lean-eval-submission-server` | production | **PROVISIONED 2026-08-20; INTAKE DISABLED** |
 | Private GitHub broker Worker | `lean-eval-github-broker-staging` | staging | **PROVISIONED 2026-08-20; APP SECRETS INSTALLED 2026-08-21** |
 | Private GitHub broker Worker | `lean-eval-github-broker-production` | production | **PROVISIONED 2026-08-20; APP SECRETS INSTALLED 2026-08-21** |
-| Temporary Worker route | `lean-eval-submission-server-staging.lean-eval.workers.dev` | staging | **ACTIVE 2026-08-20; INTAKE DISABLED** |
+| Temporary Worker route | `lean-eval-submission-server-staging.lean-eval.workers.dev` | staging | **ACTIVE 2026-08-20; INTAKE ENABLED FOR E2E FIXTURE 2026-08-21** |
 | Temporary Worker route | `lean-eval-submission-server.lean-eval.workers.dev` | production | **ACTIVE 2026-08-20; INTAKE DISABLED** |
 | Target Worker custom domain | `eval-submit-staging.lean-lang.org` | staging | **DEFERRED; ZONE ABSENT** |
 | Target Worker custom domain | `eval-submit.lean-lang.org` | production | **DEFERRED; ZONE ABSENT** |
@@ -81,14 +82,14 @@ is the chosen infrastructure record. Resource identifiers created outside
 Wrangler must be copied here immediately.
 
 The intake-disabled bootstrap was performed manually with Wrangler OAuth. The
-dedicated deployment tokens are installed and were exercised successfully by
-the first post-merge deployment. Current versions use exact commit
-`a928be873db6569e2b4ccb3fb8b399d0f19b2e78`:
+dedicated deployment tokens are installed and exercised by every normal
+deployment. Current versions use exact commit
+`344ae1dbd5aaf53985b20511a770caa3c52b5626`:
 
 | Environment | Private broker version | Intake Worker version | Health verification |
 | --- | --- | --- | --- |
-| staging | `3d94acd4-ca8f-43cb-b7fa-981aa4c127a3` | `a3c65513-4f41-4d5b-9dfa-0a4634896173` | environment `staging`, intake `false`, exact commit |
-| production | `1468dcea-6180-4683-9f95-5f2a9780930d` | `25da2964-c22e-4857-b60c-c00d7eb95145` | environment `production`, intake `false`, exact commit |
+| staging | `7956e506-b48c-48ca-94fc-0e6495fe30d0` | `ac11dee4-4bba-4328-9831-8545535d9b8f` | environment `staging`, intake `true`, exact commit |
+| production | `1cae6f60-2950-459f-bb25-117f685069e4` | `6948abd5-5033-4864-97af-f3500b5ad5fd` | environment `production`, intake `false`, exact commit |
 
 This manual bootstrap does not replace deployment automation.
 `CLOUDFLARE_ACCOUNT_ID` and a distinct, narrowly scoped
@@ -493,6 +494,8 @@ compatibility fix or append a corrective event.
 | Lifecycle callback secret provisioning | 2026-08-21 | distinct random values installed in each intake Worker and its matching protected GitHub environment; values were never logged or recorded |
 | Post-provisioning health check | 2026-08-21 | both Workers report `status ok`, commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`, correct environment, and `intake_enabled false` |
 | Automated deployment verification | 2026-08-21 | run `32437703335` created the protected immutable dispatch tag, deployed broker and intake versions for exact commit `a928be873db6569e2b4ccb3fb8b399d0f19b2e78` to staging then production, and passed both structured intake-disabled smoke checks; PRs `#1172` and `#1174` fixed the checkout-free promotion directory and payload-propagation retry discovered during the first live exercise |
+| Lifecycle-aware deployment | 2026-08-21 | run `32481684831` promoted immutable tag `lean-eval-dispatch/344ae1dbd5aaf53985b20511a770caa3c52b5626`, deployed that exact commit to staging and production, and passed both structured smoke checks; the State view-v2 prerequisites were already merged and green |
+| Staging E2E intake enable | 2026-08-21 | protected control run `32481885882` redeployed only staging intake version `ac11dee4-4bba-4328-9831-8545535d9b8f` at exact commit `344ae1dbd5aaf53985b20511a770caa3c52b5626`; health reports staging intake `true` while production remains `false` |
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
 | Replay decrypt and destruction | blocked | D6 key/provider work intentionally not provisioned |
 | Release reconstruction | blocked | Publication remains disabled |
