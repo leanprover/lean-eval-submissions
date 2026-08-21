@@ -145,6 +145,18 @@ class KeyCapabilityContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ContractError, "does not match"):
             validate_envelope(changed)
 
+    def test_post_quantum_age_recipient_is_supported_and_bounded(self) -> None:
+        changed = copy.deepcopy(self.envelope)
+        changed["age_recipient"] = "age1pq1" + "q" * 1900
+        changed["data_key_id"] = archive_key_id(
+            changed["submission_id"], changed["age_recipient"]
+        )
+        self.assertEqual(validate_envelope(changed), changed)
+        changed["age_recipient"] = "age1" + "q" * 4091
+        changed["data_key_id"] = "ak1_" + "0" * 64
+        with self.assertRaisesRegex(ContractError, "age_recipient"):
+            validate_envelope(changed)
+
     def test_exact_fields_reject_raw_key_material(self) -> None:
         for value, validator in (
             (self.envelope, validate_envelope),

@@ -32,7 +32,7 @@ TIMESTAMP = re.compile(
     r"(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T"
     r"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z"
 )
-AGE_RECIPIENT = re.compile(r"age1[0-9a-z]{40,100}")
+AGE_RECIPIENT = re.compile(r"age1[0-9a-z]{40,4090}")
 MAX_CAPABILITY_LIFETIME = dt.timedelta(minutes=10)
 PURPOSES = {"lean-eval-release", "lean-eval-replay"}
 ENVELOPE_FIELDS = {

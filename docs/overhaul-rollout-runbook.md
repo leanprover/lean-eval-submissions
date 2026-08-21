@@ -231,10 +231,14 @@ do not change. No new State event or dual-provider scheme is required.
 AWS becomes permanently unavailable before migration, the affected private
 archives may be unrecoverable. This is an accepted simplification.
 
-No AWS resources need to be created during this design pass. When the account
-and key are eventually created, record their identifiers in
-`INFRASTRUCTURE.md`. The remaining D6 choices are the execution/capability
-implementation, which is delegated to implementation review.
+No AWS resources need to be created during this contract pass. When the account
+and key are created, record their identifiers in `INFRASTRUCTURE.md`. The
+provider-neutral envelope, ten-minute replay/release capability claims, stable
+`ak1_` identity, `uc1_` audit digest, and consume-before-unwrap interface are
+frozen in `schemas/archive-key-envelope-v1.schema.json`,
+`schemas/unwrap-capability-v1.schema.json`, and
+`docs/key-capability-contract.md`. The AWS one-use store/root-key adapter and
+disposable execution backend remain unprovisioned launch gates.
 
 **Contributor acknowledgement approved 2026-08-20:** “By submitting, I confirm
 that I have authority to provide this source. I authorize Lean Eval to store
@@ -246,13 +250,13 @@ action rather than expanding it into a separate policy questionnaire.
 
 ### D7: live results-v2 migration
 
-The latest local dry run preserved 1,281 of 1,281 records at submissions commit
-`269c4dc9e3d264fe6b06e7d5d2fd1b0d86ac17e4`, with no duplicate IDs,
-source digest
-`e80db05a35c6de75c2ae7d93e718f649b1a38580ada967b54d0611cb213a3ea5`, and
-output digest
-`b5121617730302ec25d35e24fdb68fbd36f1e301b593ae9e82245d97d7f6c44d`.
-That evidence becomes stale if `main` changes.
+Workflow dry run `32442394883` preserved 1,285 of 1,285 records across 44
+files at submissions commit
+`91c55f3c1a515f87f33b3f8c45a4fd4565a0028f`, with no duplicate IDs, source
+digest `9c6ab2e17186d4498d33816010b01ba330122d0863efa300d7de6aaf07356db4`,
+and output digest
+`340eaa0cce486aed35874ae1571425cb6e8912009f99822ea75fa945ea931a9e`.
+That evidence becomes stale if any results file on `main` changes.
 
 Authorization must name the fresh workflow run and approve its exact source
 commit, record count, and output digest. `apply=true` is a separate decision

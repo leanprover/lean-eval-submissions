@@ -10,7 +10,7 @@ not enable decryption or provision AWS. The schemas and validator are:
 
 ## Stable envelope
 
-Each new server archive receives a fresh age X25519 identity. The archive is a
+Each new server archive receives a fresh native age identity. The archive is a
 normal age v1 ciphertext encrypted only to its corresponding recipient. The
 small private identity is wrapped by the configured root-key adapter. The
 envelope records the submission ID, exact ciphertext digest, age recipient,
@@ -35,10 +35,13 @@ age_recipient_sha256 = SHA256(ASCII(age recipient))
 The initial AWS adapter uses a symmetric KMS key and supplies the context to
 both `Encrypt` and `Decrypt`. AWS documents that symmetric KMS encryption
 context is authenticated data and must match exactly on decrypt. The age
-identity is far below KMS's 4,096-byte symmetric plaintext limit:
+identity must be checked against KMS's 4,096-byte symmetric plaintext limit.
+The initial writer should explicitly request age's recommended post-quantum
+hybrid identity (`age-keygen -pq`) rather than depend on age's future default:
 
 - <https://docs.aws.amazon.com/kms/latest/APIReference/API_Encrypt.html>
 - <https://docs.aws.amazon.com/kms/latest/developerguide/encrypt_context.html>
+- <https://github.com/FiloSottile/age/blob/main/doc/age-keygen.1.ronn>
 
 ## Single-use capability
 

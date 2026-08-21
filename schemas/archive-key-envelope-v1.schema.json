@@ -29,7 +29,8 @@
     },
     "age_recipient": {
       "type": "string",
-      "pattern": "^age1[0-9a-z]{40,100}$"
+      "pattern": "^age1[0-9a-z]{40,4090}$",
+      "maxLength": 4096
     },
     "adapter": {
       "type": "string",
