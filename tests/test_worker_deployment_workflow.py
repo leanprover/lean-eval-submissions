@@ -19,6 +19,12 @@ WORKER_ENTRYPOINT = (ROOT / "server/src/index.ts").read_text(encoding="utf-8")
 
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
+    def test_infrastructure_only_merge_does_not_redeploy(self) -> None:
+        pull_request = DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0]
+        push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
+        self.assertIn("'INFRASTRUCTURE.md'", pull_request)
+        self.assertNotIn("'INFRASTRUCTURE.md'", push)
+
     def test_reviewed_promotion_uses_only_contents_write(self) -> None:
         block = DEPLOY.split("\n  promote-dispatch-ref:", 1)[1].split(
             "\n  deploy-staging:", 1
