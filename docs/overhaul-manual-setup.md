@@ -125,11 +125,13 @@ single-repository installation on `leanprover/lean-eval-submissions`.
 Keep production `INTAKE_ENABLED=false`.
 
 1. In <https://github.com/settings/installations>, configure the existing
-   `lean-eval-bot` installation owned by `kim-em`, add only
-   `kim-em/lean-eval-intake-fixture`, and save. This is the read-only App used
-   by the existing evaluation workflow after dispatch; the new source-reader
-   App already covers intake verification. Retry workflow run `32478988233`
-   rather than creating a duplicate submission.
+   `lean-eval-bot` installation (App ID `3346375`, owned by `kim-em`) and add
+   only `kim-em/lean-eval-intake-fixture`, then select **Save**. Do not select
+   the similarly named `lean-eval-source-reader` (App ID `4666604`): that
+   organization-owned App already covers intake verification, while
+   `lean-eval-bot` is the distinct read-only App used by the evaluation
+   workflow after dispatch. Retry workflow run `32478988233` rather than
+   creating a duplicate submission.
 2. Review the live leaderboard at <https://lean-lang.org/eval/preview/> and
    approve or request changes to `lean-eval-leaderboard#70` before cutover.
 3. Leave D7 unapplied until explicitly approving a current dry report's exact
