@@ -174,6 +174,8 @@ etc.).
   [`docs/replay-orchestrator.md`](docs/replay-orchestrator.md).
 - Provider-neutral archive-key envelope and single-use capability claims:
   [`docs/key-capability-contract.md`](docs/key-capability-contract.md).
+- Trusted provider-neutral archive writer (not yet wired into production):
+  [`scripts/archive_envelope.py`](scripts/archive_envelope.py).
 - `ci.yml` runs the Python test suite, `actionlint`, the workflow-pin
   audit, and `tests/test_submission_workflow.py` (a structural guard on
   `submission.yml`'s security-critical shape).

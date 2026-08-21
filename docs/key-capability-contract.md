@@ -6,6 +6,7 @@ not enable decryption or provision AWS. The schemas and validator are:
 - [`archive-key-envelope-v1.schema.json`](../schemas/archive-key-envelope-v1.schema.json)
 - [`unwrap-capability-v1.schema.json`](../schemas/unwrap-capability-v1.schema.json)
 - [`key_capability_contract.py`](../scripts/key_capability_contract.py)
+- [`archive_envelope.py`](../scripts/archive_envelope.py)
 - [`archive-key-contract-v1.json`](../tests/fixtures/archive-key-contract-v1.json)
 
 ## Stable envelope
@@ -42,6 +43,66 @@ hybrid identity (`age-keygen -pq`) rather than depend on age's future default:
 - <https://docs.aws.amazon.com/kms/latest/APIReference/API_Encrypt.html>
 - <https://docs.aws.amazon.com/kms/latest/developerguide/encrypt_context.html>
 - <https://github.com/FiloSottile/age/blob/main/doc/age-keygen.1.ronn>
+
+## Trusted archive writer
+
+`archive_envelope.py` implements the provider-neutral preparation half of this
+contract. It:
+
+1. validates the submission UUID, adapter name, source, and fresh output path;
+2. creates exactly one native age identity, requesting `age-keygen -pq` by
+   default;
+3. encrypts the source as a standard age v1 ciphertext;
+4. computes the digest and stable `ak1_…` identity;
+5. sends the private identity only over the configured adapter's stdin; and
+6. atomically publishes a new directory containing only
+   `source.tar.gz.age` and `archive-key-envelope.json`.
+
+The writer removes cloud and GitHub credentials from the `age` and
+`age-keygen` environments. It deliberately does not remove credentials from
+the adapter environment, because the adapter is the only process allowed to
+use the provider. Adapter stderr is never repeated: even a faulty adapter
+cannot make the writer print the private identity through diagnostics. The
+writer rejects an adapter that directly returns the plaintext identity.
+
+The adapter executable receives the argument `wrap` and one compact JSON
+object on stdin with exact fields:
+
+```json
+{
+  "adapter": "aws-kms-v1",
+  "context": {
+    "age_recipient_sha256": "<64 lowercase hex>",
+    "archive_ciphertext_sha256": "<64 lowercase hex>",
+    "contract": "lean-eval-archive-key-v1",
+    "data_key_id": "ak1_<64 lowercase hex>",
+    "submission_id": "<UUIDv7>"
+  },
+  "operation": "wrap",
+  "plaintext_identity_base64": "<canonical base64>",
+  "schema_version": 1
+}
+```
+
+It must return exactly `schema_version`, the same `adapter`, and nonempty
+canonical-base64 `wrapped_identity`. Provider diagnostics belong in the
+adapter's own redacted audit channel, never in this response. There is no
+unwrap operation in the writer.
+
+Example (the output directory must not already exist):
+
+```sh
+python3 scripts/archive_envelope.py \
+  --source-tar /tmp/fetch-out/source.tar.gz \
+  --submission-id 0198c4ee-7d2d-7b35-8d20-cd5db8aa9a6f \
+  --output-dir /tmp/archive-envelope \
+  --adapter-executable /opt/lean-eval/aws-kms-adapter \
+  --adapter-name aws-kms-v1
+```
+
+This tool is not yet wired into the submission workflow because no production
+root-key adapter or dedicated AWS account exists. The current workflow remains
+unchanged until those launch gates are satisfied.
 
 ## Single-use capability
 
