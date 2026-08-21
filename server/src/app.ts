@@ -184,14 +184,27 @@ function stateRepository(env: RuntimeEnv): GitHubStateRepository {
 
 async function readiness(request: Request, env: RuntimeEnv, lifecycle: Lifecycle): Promise<Response> {
   if (!(await readinessAuthorized(request, env))) return json({ error: "not_found" }, 404);
-  if (!intakeEnabled(env)) {
+  const verifyWrite = request.method === "POST";
+  if (!verifyWrite && !intakeEnabled(env)) {
     return json({ status: "not_ready", reason: "intake_disabled", environment: env.DEPLOYMENT_ENVIRONMENT }, 503);
   }
   if (!env.GITHUB_STATE_TOKEN) return json({ status: "not_ready", reason: "state_credential_missing" }, 503);
-  const cached = await cachedReadiness(env);
-  if (cached) return cached;
+  if (!verifyWrite) {
+    const cached = await cachedReadiness(env);
+    if (cached) return cached;
+  }
   try {
-    await stateRepository(env).assertAvailable();
+    const repository = stateRepository(env);
+    if (verifyWrite) {
+      const stateCommit = await repository.assertWritable();
+      return json({
+        status: "state_writer_ready",
+        environment: env.DEPLOYMENT_ENVIRONMENT,
+        intake_enabled: intakeEnabled(env),
+        state_commit: stateCommit,
+      });
+    }
+    await repository.assertAvailable();
     const response = json({ status: "ready", environment: env.DEPLOYMENT_ENVIRONMENT });
     cacheReadiness(env, response, lifecycle);
     return response;
@@ -710,7 +723,9 @@ export async function handleRequest(
   if (request.method === "GET" && url.pathname === "/healthz") {
     return json({ status: "ok", service: "lean-eval-submission", deployed_commit: env.DEPLOYED_COMMIT, environment: env.DEPLOYMENT_ENVIRONMENT, intake_enabled: intakeEnabled(env) });
   }
-  if (request.method === "GET" && url.pathname === "/readyz") return readiness(request, env, lifecycle);
+  if ((request.method === "GET" || request.method === "POST") && url.pathname === "/readyz") {
+    return readiness(request, env, lifecycle);
+  }
   if (url.pathname.startsWith("/api/") && !intakeEnabled(env)) return json({ error: "intake_disabled" }, 503);
   if (url.pathname.startsWith("/api/v1/")) {
     if (!(await rateLimit(request, env, dependencies))) {

@@ -235,6 +235,12 @@ tokens await `leanprover` owner approval and therefore still carry no authority.
 unprovisioned. `INTAKE_ENABLED` stays false, so no intake route can exercise
 any of these credentials.
 
+The authenticated `POST /readyz` State-writer preflight is the exception to
+that last sentence: it is an operator-only credential check that works while
+intake remains disabled. It reads the State branch and submits a non-forced
+same-commit ref update, proving both Contents-write authority and the configured
+ruleset bypass without changing the branch, commit graph, or State tree.
+
 `DISPATCH_WORKFLOW_REF` must stay absent until an operator creates an immutable
 tag named `lean-eval-dispatch/<40-character-commit>` at the reviewed workflow
 commit. `deploy-worker.yml` owns creation: after checks, its

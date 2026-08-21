@@ -1,0 +1,66 @@
+name: Verify State writer
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: Worker environment whose stored State credential should be verified
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+concurrency:
+  group: state-writer-preflight-${{ inputs.target_environment }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: cloudflare-${{ inputs.target_environment }}
+    permissions:
+      contents: read
+    env:
+      READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
+      TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
+    steps:
+      - name: Verify stored credential and ruleset bypass without changing State
+        run: |
+          set -euo pipefail
+          case "$TARGET_ENVIRONMENT" in
+            staging)
+              endpoint="https://lean-eval-submission-server-staging.lean-eval.workers.dev/readyz"
+              ;;
+            production)
+              endpoint="https://lean-eval-submission-server.lean-eval.workers.dev/readyz"
+              ;;
+            *)
+              echo "unsupported target environment"
+              exit 1
+              ;;
+          esac
+          response_file=$(mktemp)
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${READINESS_TOKEN}" \
+            --output "$response_file" \
+            "$endpoint"
+          RESPONSE_FILE="$response_file" python3 - <<'PY'
+          import json
+          import os
+          import re
+
+          with open(os.environ["RESPONSE_FILE"], encoding="utf-8") as stream:
+              payload = json.load(stream)
+          if payload["status"] != "state_writer_ready":
+              raise SystemExit("State writer preflight did not report ready")
+          if payload["environment"] != os.environ["TARGET_ENVIRONMENT"]:
+              raise SystemExit("State writer preflight reached the wrong environment")
+          if payload["intake_enabled"] is not False:
+              raise SystemExit("State writer preflight requires intake to remain disabled")
+          if re.fullmatch(r"[0-9a-f]{40}", payload["state_commit"]) is None:
+              raise SystemExit("State writer preflight returned an invalid commit")
+          print(f"State writer ready at {payload['state_commit']}")
+          PY

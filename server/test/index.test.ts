@@ -100,6 +100,43 @@ describe("Worker routing", () => {
     upstream.mockRestore();
   });
 
+  it("proves State write authority while intake remains disabled", async () => {
+    const replies = [
+      Response.json({ permissions: { push: true } }),
+      Response.json({ object: { sha: "1".repeat(40) } }),
+      Response.json({ tree: { sha: "2".repeat(40) } }),
+      Response.json({ ref: "refs/heads/main", object: { sha: "1".repeat(40) } }),
+    ];
+    const upstream = vi.spyOn(globalThis, "fetch").mockImplementation(() => {
+      const reply = replies.shift();
+      if (!reply) return Promise.reject(new Error("unexpected GitHub request"));
+      return Promise.resolve(reply);
+    });
+    const response = await handleRequest(
+      new Request("https://example.test/readyz", {
+        method: "POST",
+        headers: { authorization: "Bearer readiness-secret" },
+      }),
+      {
+        ...ENV,
+        GITHUB_STATE_TOKEN: "state-secret",
+        READINESS_TOKEN: "readiness-secret",
+      },
+      LIFECYCLE,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      status: "state_writer_ready",
+      environment: "staging",
+      intake_enabled: false,
+      state_commit: "1".repeat(40),
+    });
+    expect(upstream).toHaveBeenCalledTimes(4);
+    const [, init] = upstream.mock.calls[3] ?? [];
+    expect(init?.method).toBe("PATCH");
+    upstream.mockRestore();
+  });
+
   it("returns JSON 404s", async () => {
     const response = await handleRequest(new Request("https://example.test/nope"), ENV, LIFECYCLE);
     expect(response.status).toBe(404);

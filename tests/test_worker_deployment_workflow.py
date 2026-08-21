@@ -10,6 +10,9 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEPLOY = (ROOT / ".github/workflows/deploy-worker.yml").read_text(encoding="utf-8")
 ROLLBACK = (ROOT / ".github/workflows/rollback-worker.yml").read_text(encoding="utf-8")
+STATE_WRITER_PREFLIGHT = (
+    ROOT / ".github/workflows/verify-state-writer.yml"
+).read_text(encoding="utf-8")
 WRANGLER = json.loads((ROOT / "server/wrangler.jsonc").read_text(encoding="utf-8"))
 BROKER_WRANGLER = json.loads(
     (ROOT / "server/wrangler.broker.jsonc").read_text(encoding="utf-8")
@@ -19,6 +22,14 @@ WORKER_ENTRYPOINT = (ROOT / "server/src/index.ts").read_text(encoding="utf-8")
 
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
+    def test_state_writer_preflight_is_protected_and_intake_safe(self) -> None:
+        self.assertIn("environment: cloudflare-${{ inputs.target_environment }}", STATE_WRITER_PREFLIGHT)
+        self.assertIn("READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}", STATE_WRITER_PREFLIGHT)
+        self.assertIn("--request POST", STATE_WRITER_PREFLIGHT)
+        self.assertIn('payload["status"] != "state_writer_ready"', STATE_WRITER_PREFLIGHT)
+        self.assertIn('payload["intake_enabled"] is not False', STATE_WRITER_PREFLIGHT)
+        self.assertNotIn("GITHUB_STATE_TOKEN", STATE_WRITER_PREFLIGHT)
+
     def test_infrastructure_only_merge_does_not_redeploy(self) -> None:
         pull_request = DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0]
         push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]

@@ -553,9 +553,11 @@ tokens. Custom domains can be added later without changing the API contracts.
    leave the two local static-token hooks absent in the Worker. The broker's
    exact-operation and repository allowlists are covered by automated tests.
 
-10. Verify secret names without printing values, exercise authenticated
-   readiness, and record account and deployment version IDs in
-   `INFRASTRUCTURE.md`.
+10. Verify secret names without printing values. After each State token is
+    approved, run `verify-state-writer.yml` for its environment from protected
+    `main`; the authenticated same-commit ref update proves its ruleset bypass
+    without enabling intake or changing State. Record the result, account, and
+    deployment version IDs in `INFRASTRUCTURE.md`.
 
 ## Results migration walkthrough
 

@@ -49,6 +49,18 @@ The authentication and source-boundary design is recorded in
 [`../docs/intake-threat-model.md`](../docs/intake-threat-model.md); every launch
 gate there remains mandatory while intake is disabled.
 
+## Operational readiness
+
+`GET /healthz` is public and secret-free. Authenticated `GET /readyz` reports
+normal dependency readiness only when intake is enabled. Authenticated
+`POST /readyz` is the State-writer preflight used before enablement and after
+credential rotation: it reads the current State head and submits a non-forced
+update of the branch to that same commit. Success therefore proves repository
+read/write authority and the ruleset bypass without changing State. The
+preflight uses `READINESS_TOKEN`, remains available while intake is disabled,
+and is invoked through `verify-state-writer.yml` so the State credential never
+leaves its Worker secret binding.
+
 ## Local `/api/v1` contract
 
 The intake-disabled build implements these routes for local workerd and

@@ -394,7 +394,7 @@ export class GitHubStateRepository {
     this.#fetcher = fetcher;
   }
 
-  async assertAvailable(): Promise<void> {
+  async #authorizedSnapshot(): Promise<BranchSnapshot> {
     const repository = object(
       await jsonCall(this.#config, this.#fetcher, ""),
       "State repository",
@@ -403,7 +403,19 @@ export class GitHubStateRepository {
     if (permissions.push !== true) {
       throw new GitHubStateError(403, "State credential does not have push permission");
     }
-    await branchSnapshot(this.#config, this.#fetcher);
+    return branchSnapshot(this.#config, this.#fetcher);
+  }
+
+  async assertAvailable(): Promise<void> {
+    await this.#authorizedSnapshot();
+  }
+
+  async assertWritable(): Promise<string> {
+    const snapshot = await this.#authorizedSnapshot();
+    if ((await updateReference(this.#config, this.#fetcher, snapshot.headSha)) !== "applied") {
+      throw new GitHubStateError(409, "State branch rejected a same-commit write probe");
+    }
+    return snapshot.headSha;
   }
 
   async readSubmission(submissionId: string): Promise<SubmissionView | null> {
