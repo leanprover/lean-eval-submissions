@@ -37,8 +37,9 @@ IDs or the dispatcher installation. The trusted archive job now persists the
 encrypted snapshot before any evaluation job can start. Staging intake is
 enabled only for the end-to-end fixture; production remains disabled. The
 fixture's Source Reader preflight is green, but the separate `lean-eval-bot`
-installation used by the evaluation workflow still returns a repository-scoped
-404 until that fixture is added to its repository selection. Exact Worker
+(App ID `3346375`, not Source Reader App ID `4666604`) used by the evaluation
+workflow still returns a repository-scoped 404 until that fixture is added to
+its repository selection. Exact Worker
 version identifiers are recorded in `INFRASTRUCTURE.md`. The live results store
 has not been migrated. Dry-run `32442394883` reports source commit
 `91c55f3c1a515f87f33b3f8c45a4fd4565a0028f`, 44 files / 1,285 records,
