@@ -11,6 +11,11 @@ const LOGIN = /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/;
 const EVENT_REF = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const WORKFLOW_REF = /^lean-eval-dispatch\/[0-9a-f]{40}$/;
 const REASON = /^[a-z][a-z0-9_]{1,63}$/;
+const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const COMMIT = /^[0-9a-f]{40}$/;
+const DIGEST = /^[0-9a-f]{64}$/;
+const RESULT_ID = /^r2_[0-9a-f]{64}$/;
+const TOOLCHAIN = /^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+$/;
 const DISPATCH_FAILURE_REASONS = new Set([
   "dispatch_credential_rejected",
   "dispatch_provider_unavailable",
@@ -20,8 +25,42 @@ const DISPATCH_FAILURE_REASONS = new Set([
 
 export type DispatchStatus = "failed" | "pending" | "succeeded";
 
-export type SubmissionView = Readonly<{
-  schema_version: 1;
+type PendingSummary = Readonly<{ status: "pending" }>;
+export type ArchiveSummary =
+  | PendingSummary
+  | Readonly<{
+      status: "completed";
+      event_id: string;
+      occurred_at: string;
+      archive_repository: string;
+      archive_commit: string;
+      archive_path: string;
+      archive_ciphertext_sha256: string;
+      encrypted: true;
+    }>
+  | Readonly<{
+      status: "failed";
+      event_id: string;
+      occurred_at: string;
+      reason_code: string;
+      retryable: boolean;
+    }>;
+type EvaluationBase = Readonly<{
+  event_id: string;
+  occurred_at: string;
+  attempt: number;
+  benchmark_repository: string;
+  benchmark_commit: string;
+  toolchain: string;
+}>;
+export type EvaluationSummary =
+  | PendingSummary
+  | (EvaluationBase & Readonly<{ status: "running" }>)
+  | (EvaluationBase & Readonly<{ status: "accepted"; evaluator_version: string }>)
+  | (EvaluationBase & Readonly<{ status: "rejected"; reason_code: string }>)
+  | (EvaluationBase & Readonly<{ status: "failed"; reason_code: string; retryable: boolean }>);
+
+type SubmissionViewCommon = Readonly<{
   submission_id: string;
   owner_login: string;
   received_event_id: string;
@@ -32,9 +71,6 @@ export type SubmissionView = Readonly<{
   submission: SubmissionInput;
   production_metadata: ProductionMetadata;
   publication_choice: PublicationChoice;
-  archive: Readonly<{ status: "pending" }>;
-  evaluation: Readonly<{ status: "pending" }>;
-  result_id: null;
   dispatch: Readonly<{
     status: DispatchStatus;
     attempts: number;
@@ -44,6 +80,20 @@ export type SubmissionView = Readonly<{
     last_error_code: string | null;
   }>;
 }>;
+export type SubmissionView =
+  | (SubmissionViewCommon & Readonly<{
+      schema_version: 1;
+      archive: PendingSummary;
+      evaluation: PendingSummary;
+      result_id: null;
+    }>)
+  | (SubmissionViewCommon & Readonly<{
+      schema_version: 2;
+      archive: ArchiveSummary;
+      evaluation: EvaluationSummary;
+      result_id: string | null;
+      result_event_id: string | null;
+    }>);
 
 export type DispatchOutbox = Readonly<{
   schema_version: 1;
@@ -82,6 +132,91 @@ function safeAttempts(value: unknown): asserts value is number {
   }
 }
 
+function positive(value: unknown, label: string): asserts value is number {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
+    throw new TypeError(`${label} must be a positive safe integer`);
+  }
+}
+
+function eventMarker(value: Record<string, unknown>, label: string): void {
+  if (typeof value.event_id !== "string" || !EVENT_REF.test(value.event_id)) {
+    throw new TypeError(`${label} event_id is invalid`);
+  }
+  timestamp(value.occurred_at, `${label} occurred_at`);
+}
+
+function decodeArchiveSummary(value: unknown, version: 1 | 2, submissionId: string): ArchiveSummary {
+  const archive = object(value, "submission view archive");
+  if (archive.status === "pending") {
+    exact(archive, ["status"], "submission view archive");
+    return { status: "pending" };
+  }
+  if (version === 1) throw new TypeError("submission view archive v1 supports only pending");
+  if (archive.status === "completed") {
+    exact(archive, [
+      "archive_ciphertext_sha256", "archive_commit", "archive_path", "archive_repository",
+      "encrypted", "event_id", "occurred_at", "status",
+    ], "submission view archive");
+    eventMarker(archive, "submission view archive");
+    if (
+      typeof archive.archive_repository !== "string" || !REPOSITORY.test(archive.archive_repository) ||
+      typeof archive.archive_commit !== "string" || !COMMIT.test(archive.archive_commit) ||
+      typeof archive.archive_ciphertext_sha256 !== "string" || !DIGEST.test(archive.archive_ciphertext_sha256) ||
+      archive.archive_path !== `archives/${submissionId.replaceAll("-", "").slice(0, 2)}/${submissionId}.tar.age` ||
+      archive.encrypted !== true
+    ) {
+      throw new TypeError("submission view archive completion is invalid");
+    }
+    return archive as ArchiveSummary;
+  }
+  if (archive.status === "failed") {
+    exact(archive, ["event_id", "occurred_at", "reason_code", "retryable", "status"], "submission view archive");
+    eventMarker(archive, "submission view archive");
+    if (typeof archive.reason_code !== "string" || !REASON.test(archive.reason_code) || typeof archive.retryable !== "boolean") {
+      throw new TypeError("submission view archive failure is invalid");
+    }
+    return archive as ArchiveSummary;
+  }
+  throw new TypeError("submission view archive status is invalid");
+}
+
+function decodeEvaluationSummary(value: unknown, version: 1 | 2): EvaluationSummary {
+  const evaluation = object(value, "submission view evaluation");
+  if (evaluation.status === "pending") {
+    exact(evaluation, ["status"], "submission view evaluation");
+    return { status: "pending" };
+  }
+  if (version === 1) throw new TypeError("submission view evaluation v1 supports only pending");
+  const terminal = evaluation.status;
+  const fields = [
+    "attempt", "benchmark_commit", "benchmark_repository", "event_id", "occurred_at", "status", "toolchain",
+  ];
+  if (terminal === "accepted") fields.push("evaluator_version");
+  else if (terminal === "rejected") fields.push("reason_code");
+  else if (terminal === "failed") fields.push("reason_code", "retryable");
+  else if (terminal !== "running") throw new TypeError("submission view evaluation status is invalid");
+  exact(evaluation, fields, "submission view evaluation");
+  eventMarker(evaluation, "submission view evaluation");
+  positive(evaluation.attempt, "submission view evaluation attempt");
+  if (
+    typeof evaluation.benchmark_repository !== "string" || !REPOSITORY.test(evaluation.benchmark_repository) ||
+    typeof evaluation.benchmark_commit !== "string" || !COMMIT.test(evaluation.benchmark_commit) ||
+    typeof evaluation.toolchain !== "string" || !TOOLCHAIN.test(evaluation.toolchain)
+  ) {
+    throw new TypeError("submission view evaluation pins are invalid");
+  }
+  if (terminal === "accepted" && (typeof evaluation.evaluator_version !== "string" || evaluation.evaluator_version.length === 0)) {
+    throw new TypeError("submission view evaluator version is invalid");
+  }
+  if ((terminal === "rejected" || terminal === "failed") && (typeof evaluation.reason_code !== "string" || !REASON.test(evaluation.reason_code))) {
+    throw new TypeError("submission view evaluation reason is invalid");
+  }
+  if (terminal === "failed" && typeof evaluation.retryable !== "boolean") {
+    throw new TypeError("submission view evaluation retryability is invalid");
+  }
+  return evaluation as EvaluationSummary;
+}
+
 export function submissionViewPath(submissionId: string): string {
   if (!isUuidV7(submissionId)) throw new TypeError("submission view id must be a canonical lowercase UUIDv7");
   return `views/submissions/${submissionId.replaceAll("-", "").slice(0, 2)}/${submissionId}.json`;
@@ -94,12 +229,14 @@ export function dispatchOutboxPath(submissionId: string): string {
 
 export function decodeSubmissionView(value: unknown): SubmissionView {
   const view = object(value, "submission view");
-  exact(view, [
+  const expectedFields = [
     "accepted_at", "archive", "dispatch", "evaluation", "metadata_event_id", "mutation_event_id",
     "owner_login", "production_metadata", "publication_choice", "publication_event_id", "received_event_id",
     "result_id", "schema_version", "submission", "submission_id",
-  ], "submission view");
-  if (view.schema_version !== 1 || typeof view.submission_id !== "string" || !isUuidV7(view.submission_id)) {
+  ];
+  if (view.schema_version === 2) expectedFields.push("result_event_id");
+  exact(view, expectedFields, "submission view");
+  if ((view.schema_version !== 1 && view.schema_version !== 2) || typeof view.submission_id !== "string" || !isUuidV7(view.submission_id)) {
     throw new TypeError("submission view identity is invalid");
   }
   if (typeof view.owner_login !== "string" || !LOGIN.test(view.owner_login)) throw new TypeError("submission view owner is invalid");
@@ -115,13 +252,22 @@ export function decodeSubmissionView(value: unknown): SubmissionView {
   if (view.publication_choice !== "scheduled" && view.publication_choice !== "withheld") {
     throw new TypeError("submission view publication choice is invalid");
   }
-  const archive = object(view.archive, "submission view archive");
-  exact(archive, ["status"], "submission view archive");
-  if (archive.status !== "pending") throw new TypeError("unsupported submission view archive status");
-  const evaluation = object(view.evaluation, "submission view evaluation");
-  exact(evaluation, ["status"], "submission view evaluation");
-  if (evaluation.status !== "pending") throw new TypeError("unsupported submission view evaluation status");
-  if (view.result_id !== null) throw new TypeError("unsupported submission view result identity");
+  const archive = decodeArchiveSummary(view.archive, view.schema_version, view.submission_id);
+  const evaluation = decodeEvaluationSummary(view.evaluation, view.schema_version);
+  if (view.schema_version === 1 && view.result_id !== null) throw new TypeError("submission view v1 result identity must be null");
+  if (view.schema_version === 2 && view.result_id !== null && (typeof view.result_id !== "string" || !RESULT_ID.test(view.result_id))) {
+    throw new TypeError("submission view result identity is invalid");
+  }
+  if (
+    view.schema_version === 2 &&
+    view.result_event_id !== null &&
+    (typeof view.result_event_id !== "string" || !EVENT_REF.test(view.result_event_id))
+  ) {
+    throw new TypeError("submission view result event identity is invalid");
+  }
+  if (view.schema_version === 2 && (view.result_id === null) !== (view.result_event_id === null)) {
+    throw new TypeError("submission view result and event identities disagree");
+  }
   const dispatch = object(view.dispatch, "submission view dispatch");
   exact(dispatch, ["attempts", "last_error_code", "requested_at", "status", "updated_at", "workflow_ref"], "submission view dispatch");
   if (!new Set(["failed", "pending", "succeeded"]).has(String(dispatch.status))) throw new TypeError("submission view dispatch status is invalid");
@@ -155,10 +301,17 @@ export function decodeSubmissionView(value: unknown): SubmissionView {
     ...view,
     submission,
     production_metadata: metadata,
-    archive: { status: "pending" },
-    evaluation: { status: "pending" },
+    archive,
+    evaluation,
     dispatch: dispatch as SubmissionView["dispatch"],
   } as SubmissionView;
+}
+
+export function latestLifecycleEventId(view: SubmissionView): string {
+  if (view.schema_version === 2 && view.result_event_id !== null) return view.result_event_id;
+  if (view.evaluation.status !== "pending") return view.evaluation.event_id;
+  if (view.archive.status !== "pending") return view.archive.event_id;
+  return view.received_event_id;
 }
 
 export function decodeDispatchOutbox(value: unknown): DispatchOutbox {

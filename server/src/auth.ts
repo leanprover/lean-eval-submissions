@@ -272,7 +272,13 @@ export async function nonceDigest(purpose: "agent" | "oauth" | "submission", non
 
 /** Derive a replay-safe UUIDv7 for one immutable lifecycle fact. */
 export async function lifecycleEventId(
-  eventType: "archive.completed",
+  eventType:
+    | "archive.completed"
+    | "archive.failed"
+    | "evaluation.started"
+    | "evaluation.accepted"
+    | "evaluation.rejected"
+    | "evaluation.failed",
   subjectId: string,
   occurredAt: string,
 ): Promise<string> {

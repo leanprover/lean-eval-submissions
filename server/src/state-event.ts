@@ -124,6 +124,46 @@ export type ArchiveCompletedEvent = Omit<EventEnvelope, "causation_event_id"> &
     }>;
   }>;
 
+type SubmissionLifecycleEvent<K extends string, P> = Omit<EventEnvelope, "causation_event_id"> &
+  Readonly<{
+    event_type: K;
+    subject_id: string;
+    causation_event_id: string;
+    actor: Readonly<{ kind: "system" }>;
+    payload: Readonly<P>;
+  }>;
+
+export type ArchiveFailedEvent = SubmissionLifecycleEvent<"archive.failed", {
+  reason_code: string;
+  retryable: boolean;
+}>;
+export type EvaluationStartedEvent = SubmissionLifecycleEvent<"evaluation.started", {
+  attempt: number;
+  benchmark_repository: string;
+  benchmark_commit: string;
+  toolchain: string;
+}>;
+export type EvaluationAcceptedEvent = SubmissionLifecycleEvent<"evaluation.accepted", {
+  attempt: number;
+  evaluator_version: string;
+}>;
+export type EvaluationRejectedEvent = SubmissionLifecycleEvent<"evaluation.rejected", {
+  attempt: number;
+  reason_code: string;
+}>;
+export type EvaluationFailedEvent = SubmissionLifecycleEvent<"evaluation.failed", {
+  attempt: number;
+  reason_code: string;
+  retryable: boolean;
+}>;
+export type WritableSubmissionLifecycleEvent =
+  | ArchiveCompletedEvent
+  | ArchiveFailedEvent
+  | EvaluationStartedEvent
+  | EvaluationAcceptedEvent
+  | EvaluationRejectedEvent
+  | EvaluationFailedEvent;
+
 /** State events the public submission Worker is authorized to append. */
 export type WritableStateEvent =
   | SystemInitializedEvent
@@ -131,7 +171,7 @@ export type WritableStateEvent =
   | AuthenticationNonceConsumedEvent
   | SubmissionMetadataAmendedEvent
   | SubmissionPublicationChangedEvent
-  | ArchiveCompletedEvent;
+  | WritableSubmissionLifecycleEvent;
 
 type LifecycleEventType =
   | "archive.completed"

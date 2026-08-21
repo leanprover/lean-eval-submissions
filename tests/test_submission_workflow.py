@@ -90,7 +90,11 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         ]
         self.assertEqual(
             job_headers,
-            ["  intake:", "  evaluate:", "  archive:", "  archive_state:", "  record:", "  notify:"],
+            [
+                "  intake:", "  evaluate:", "  archive:",
+                "  archive_failure_state:", "  archive_state:",
+                "  evaluation_state:", "  record:", "  notify:",
+            ],
             "expected exactly the reviewed submission jobs",
         )
         self.assertNotIn(
@@ -115,11 +119,11 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             re.findall(r"uses: actions/checkout@([0-9a-f]{40})", self.text)
         )
         self.assertEqual(checkout_shas, {checkout_sha})
-        # 7: two in evaluate, one each in archive and record's results
-        # store, the record checkout, and notify's, which supplies
+        # 8: two in evaluate, one each in archive and the trusted evaluation
+        # callback, record's two checkouts, and notify's, which supplies
         # scripts/classify_evaluate_failure.py.
         self.assertEqual(
-            self.text.count("uses: actions/checkout@"), 7, "expected 7 checkout steps"
+            self.text.count("uses: actions/checkout@"), 8, "expected 8 checkout steps"
         )
         # The two evaluate-job checkouts must each set persist-credentials:false.
         self.assertGreaterEqual(
@@ -291,13 +295,21 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
     def test_archive_state_callback_is_source_free_and_step_scoped(self) -> None:
         self.assertEqual(
             self.text.count("LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}"),
-            1,
+            3,
         )
-        callback = self.text.split("\n  archive_state:", 1)[1].split("\n  record:", 1)[0]
-        self.assertIn("name: submission-archive-completion", callback)
-        self.assertNotIn("submission-audit-ciphertext", callback)
-        self.assertNotIn("submission-results", callback)
-        self.assertNotIn("actions/checkout", callback)
+        failure_callback = self.text.split("\n  archive_failure_state:", 1)[1].split("\n  archive_state:", 1)[0]
+        self.assertIn("/internal/v1/archive-failed", failure_callback)
+        self.assertNotIn("actions/checkout", failure_callback)
+        self.assertNotIn("submission-audit-ciphertext", failure_callback)
+        archive_callback = self.text.split("\n  archive_state:", 1)[1].split("\n  evaluation_state:", 1)[0]
+        self.assertIn("name: submission-archive-completion", archive_callback)
+        self.assertNotIn("submission-audit-ciphertext", archive_callback)
+        self.assertNotIn("submission-results", archive_callback)
+        self.assertNotIn("actions/checkout", archive_callback)
+        evaluation_callback = self.text.split("\n  evaluation_state:", 1)[1].split("\n  record:", 1)[0]
+        self.assertIn("scripts/build_evaluation_completion.py", evaluation_callback)
+        self.assertIn("/internal/v1/evaluation-completed", evaluation_callback)
+        self.assertNotIn("submission-audit-ciphertext", evaluation_callback)
         evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive:", 1)[0]
         self.assertNotIn("LIFECYCLE_CALLBACK_TOKEN", evaluate)
 
@@ -307,7 +319,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # to depend on `archive`, so that an archive failure suppresses
         # the leaderboard write.
         self.assertIn(
-            "needs: [evaluate, archive, archive_state]",
+            "needs: [evaluate, archive, archive_state, evaluation_state]",
             self.text,
             "record must depend on evaluation, archive, and server State handoff",
         )
@@ -325,7 +337,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn("always()", record_header)
         self.assertIn("needs.evaluate.result == 'success'", record_header)
         self.assertIn("needs.archive.result == 'success'", record_header)
-        self.assertIn("needs.archive_state.result == 'success'", record_header)
+        self.assertIn("needs.evaluation_state.result == 'success'", record_header)
 
     def test_archive_uses_archiver_app_scoped_to_audit_repo(self) -> None:
         self.assertIn("LEAN_EVAL_ARCHIVER_CLIENT_ID", self.text)
