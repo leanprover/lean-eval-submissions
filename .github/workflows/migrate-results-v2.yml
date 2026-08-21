@@ -181,6 +181,6 @@ jobs:
         if: always()
         with:
           name: results-v2-migration-report-${{ github.run_id }}
-          path: /tmp/results-v2-*-report.json
+          path: /tmp/results-v2*-report.json
           if-no-files-found: error
           retention-days: 30
