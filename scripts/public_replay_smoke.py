@@ -15,6 +15,7 @@ import os
 import pathlib
 import platform
 import re
+import subprocess
 import sys
 from typing import Any
 
@@ -24,6 +25,9 @@ DIGEST = re.compile(r"[0-9a-f]{64}")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 PROBLEM = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 TOOLCHAIN = re.compile(r"leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+")
+PUBLIC_GITHUB_REMOTE = re.compile(
+    r"https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:\.git)?"
+)
 TIMESTAMP = re.compile(
     r"(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T"
     r"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z"
@@ -205,6 +209,52 @@ def _counter(path: pathlib.Path) -> dict[str, Any]:
     return {"status": "unavailable", "reason": reason}
 
 
+def validate_public_dependency_git(root: pathlib.Path) -> None:
+    """Allow only credential-free public GitHub metadata in package caches."""
+    if root.is_symlink() or not root.is_dir():
+        raise SmokeError("dependency package root must be a regular directory")
+    git_dirs = sorted(path for path in root.rglob(".git") if path.is_dir())
+    if not git_dirs:
+        raise SmokeError("dependency package root contains no Git metadata")
+    for git_dir in git_dirs:
+        if git_dir.is_symlink() or git_dir.parent.parent != root:
+            raise SmokeError(f"dependency Git metadata is not one package deep: {git_dir}")
+        config = git_dir / "config"
+        if config.is_symlink() or not config.is_file():
+            raise SmokeError(f"dependency Git config is not a regular file: {config}")
+        try:
+            completed = subprocess.run(
+                ["git", "config", "--file", str(config), "--null", "--list"],
+                check=True,
+                capture_output=True,
+            )
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise SmokeError(f"cannot parse dependency Git config {config}") from error
+        remotes = 0
+        for raw_entry in completed.stdout.split(b"\0"):
+            if not raw_entry:
+                continue
+            try:
+                raw_key, raw_value = raw_entry.split(b"\n", 1)
+                key = raw_key.decode("utf-8").lower()
+                value = raw_value.decode("utf-8")
+            except (ValueError, UnicodeError) as error:
+                raise SmokeError(f"malformed dependency Git config {config}") from error
+            if (
+                key.startswith("credential.")
+                or key.endswith(".extraheader")
+                or key.endswith(".pushurl")
+                or (key.startswith("url.") and key.endswith(".insteadof"))
+            ):
+                raise SmokeError(f"credential-bearing dependency Git config key: {key}")
+            if key.startswith("remote.") and key.endswith(".url"):
+                remotes += 1
+                if PUBLIC_GITHUB_REMOTE.fullmatch(value) is None:
+                    raise SmokeError(f"dependency Git remote is not public GitHub HTTPS: {value}")
+        if remotes != 1:
+            raise SmokeError(f"dependency Git config must contain exactly one remote: {config}")
+
+
 def build_evidence(
     config_value: Any,
     results_value: Any,
@@ -371,6 +421,8 @@ def main(argv: list[str] | None = None) -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     validate_config_parser = subparsers.add_parser("validate-config")
     validate_config_parser.add_argument("--config", type=pathlib.Path, required=True)
+    validate_git_parser = subparsers.add_parser("validate-public-dependency-git")
+    validate_git_parser.add_argument("--root", type=pathlib.Path, required=True)
     evidence_parser = subparsers.add_parser("evidence")
     evidence_parser.add_argument("--config", type=pathlib.Path, required=True)
     evidence_parser.add_argument("--results", type=pathlib.Path, required=True)
@@ -386,6 +438,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "validate-config":
             validate_config(_load(args.config))
+        elif args.command == "validate-public-dependency-git":
+            validate_public_dependency_git(args.root)
         elif args.command == "evidence":
             evidence = build_evidence(
                 _load(args.config),
