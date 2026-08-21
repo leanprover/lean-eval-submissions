@@ -5,6 +5,8 @@ const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const PROBLEM = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const GIST_ID = /^[0-9a-f]{5,64}$/;
+const REASON = /^[a-z][a-z0-9_]{1,63}$/;
+const TOOLCHAIN = /^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+$/;
 
 export const MAX_JSON_BYTES = 16 * 1024;
 
@@ -63,6 +65,27 @@ export type ArchiveCompletion = Readonly<{
   schema_version: 1;
   occurred_at: string;
   locator: ArchiveLocator;
+}>;
+export type ArchiveFailure = Readonly<{
+  schema_version: 1;
+  submission_id: string;
+  occurred_at: string;
+  reason_code: string;
+  retryable: boolean;
+}>;
+export type EvaluationOutcome =
+  | Readonly<{ status: "accepted"; evaluator_version: string }>
+  | Readonly<{ status: "rejected"; reason_code: string }>
+  | Readonly<{ status: "failed"; reason_code: string; retryable: boolean }>;
+export type EvaluationCompletion = Readonly<{
+  schema_version: 1;
+  submission_id: string;
+  attempt: number;
+  occurred_at: string;
+  benchmark_repository: string;
+  benchmark_commit: string;
+  toolchain: string;
+  outcome: EvaluationOutcome;
 }>;
 
 export class ApiDecodeError extends Error {
@@ -380,6 +403,70 @@ export function decodeArchiveCompletion(value: unknown): ArchiveCompletion {
     occurred_at: data.occurred_at,
     locator: locator as ArchiveLocator,
   };
+}
+
+export function decodeArchiveFailure(value: unknown): ArchiveFailure {
+  const data = object(value, "archive failure");
+  exactFields(data, [
+    "occurred_at", "reason_code", "retryable", "schema_version", "submission_id",
+  ], [], "archive failure");
+  if (
+    data.schema_version !== 1 ||
+    typeof data.submission_id !== "string" || !UUID_V7.test(data.submission_id) ||
+    typeof data.reason_code !== "string" || !REASON.test(data.reason_code) ||
+    typeof data.retryable !== "boolean" ||
+    typeof data.occurred_at !== "string"
+  ) {
+    throw new ApiDecodeError("archive failure fields are invalid");
+  }
+  const occurredAt = new Date(data.occurred_at);
+  if (data.occurred_at.startsWith("0000-") || Number.isNaN(occurredAt.valueOf()) || occurredAt.toISOString() !== data.occurred_at) {
+    throw new ApiDecodeError("archive failure timestamp is not canonical UTC milliseconds");
+  }
+  return data as ArchiveFailure;
+}
+
+export function decodeEvaluationCompletion(value: unknown): EvaluationCompletion {
+  const data = object(value, "evaluation completion");
+  exactFields(data, [
+    "attempt", "benchmark_commit", "benchmark_repository", "occurred_at", "outcome",
+    "schema_version", "submission_id", "toolchain",
+  ], [], "evaluation completion");
+  if (
+    data.schema_version !== 1 ||
+    typeof data.submission_id !== "string" || !UUID_V7.test(data.submission_id) ||
+    typeof data.attempt !== "number" || !Number.isSafeInteger(data.attempt) || data.attempt < 1 ||
+    typeof data.benchmark_repository !== "string" || !REPOSITORY.test(data.benchmark_repository) ||
+    typeof data.benchmark_commit !== "string" || !COMMIT.test(data.benchmark_commit) ||
+    typeof data.toolchain !== "string" || !TOOLCHAIN.test(data.toolchain) ||
+    typeof data.occurred_at !== "string"
+  ) {
+    throw new ApiDecodeError("evaluation completion identity or pins are invalid");
+  }
+  const occurredAt = new Date(data.occurred_at);
+  if (data.occurred_at.startsWith("0000-") || Number.isNaN(occurredAt.valueOf()) || occurredAt.toISOString() !== data.occurred_at) {
+    throw new ApiDecodeError("evaluation completion timestamp is not canonical UTC milliseconds");
+  }
+  const outcome = object(data.outcome, "evaluation outcome");
+  if (outcome.status === "accepted") {
+    exactFields(outcome, ["evaluator_version", "status"], [], "evaluation outcome");
+    if (typeof outcome.evaluator_version !== "string" || !COMMIT.test(outcome.evaluator_version)) {
+      throw new ApiDecodeError("evaluation accepted version is invalid");
+    }
+  } else if (outcome.status === "rejected") {
+    exactFields(outcome, ["reason_code", "status"], [], "evaluation outcome");
+    if (typeof outcome.reason_code !== "string" || !REASON.test(outcome.reason_code)) {
+      throw new ApiDecodeError("evaluation rejection reason is invalid");
+    }
+  } else if (outcome.status === "failed") {
+    exactFields(outcome, ["reason_code", "retryable", "status"], [], "evaluation outcome");
+    if (typeof outcome.reason_code !== "string" || !REASON.test(outcome.reason_code) || typeof outcome.retryable !== "boolean") {
+      throw new ApiDecodeError("evaluation failure is invalid");
+    }
+  } else {
+    throw new ApiDecodeError("evaluation outcome status is invalid");
+  }
+  return { ...data, outcome } as EvaluationCompletion;
 }
 
 export function decodeSourceReaderPreflight(value: unknown): string {

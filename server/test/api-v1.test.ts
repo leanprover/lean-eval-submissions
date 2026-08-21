@@ -18,10 +18,15 @@ import {
 } from "../src/auth";
 import { handleRequest, handleScheduled, type RuntimeEnv, type StateAccess } from "../src/app";
 import { buildDispatchRequest, GitHubProvider } from "../src/github-provider";
-import { validateStateEvent, type WritableStateEvent } from "../src/state-event";
+import {
+  validateStateEvent,
+  type WritableStateEvent,
+  type WritableSubmissionLifecycleEvent,
+} from "../src/state-event";
 import {
   decodeDispatchOutbox,
   decodeSubmissionView,
+  latestLifecycleEventId,
   type DispatchOutbox,
   type SubmissionView,
 } from "../src/submission-view";
@@ -62,6 +67,22 @@ class MemoryState implements StateAccess {
   appendEvent(event: WritableStateEvent): Promise<{ created: boolean }> {
     this.events.push(event);
     return Promise.resolve({ created: this.created });
+  }
+
+  appendSubmissionLifecycle(
+    events: readonly WritableSubmissionLifecycleEvent[],
+    expectedLifecycleEventId: string,
+    nextView: SubmissionView,
+  ): Promise<{ created: boolean; view: SubmissionView }> {
+    events.forEach((event) => validateStateEvent(event));
+    const current = this.views.get(nextView.submission_id);
+    if (!current || latestLifecycleEventId(current) !== expectedLifecycleEventId) {
+      throw new Error("lifecycle conflict");
+    }
+    const decoded = decodeSubmissionView(nextView);
+    this.events.push(...events);
+    this.views.set(decoded.submission_id, decoded);
+    return Promise.resolve({ created: true, view: decoded });
   }
 
   acceptSubmission(
@@ -340,6 +361,57 @@ describe("strict API contract", () => {
       submissionId,
       completion.occurred_at,
     ));
+    expect(state.views.get(submissionId)).toMatchObject({
+      schema_version: 2,
+      archive: {
+        status: "completed",
+        event_id: event?.event_id,
+        occurred_at: completion.occurred_at,
+        archive_commit: completion.locator.archive_commit,
+      },
+      evaluation: { status: "pending" },
+    });
+    const retryRequest = jsonRequest("/internal/v1/archive-completed", completion);
+    retryRequest.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+    const retry = await handleRequest(
+      retryRequest,
+      { ...ENV, INTAKE_ENABLED: "false" },
+      LIFECYCLE,
+      { state },
+    );
+    expect(retry.status).toBe(200);
+    expect(state.events).toHaveLength(1);
+    const evaluationCompletion = {
+      schema_version: 1,
+      submission_id: submissionId,
+      attempt: 1,
+      occurred_at: "2026-05-02T03:04:05.001Z",
+      benchmark_repository: "leanprover/lean-eval",
+      benchmark_commit: "c".repeat(40),
+      toolchain: "leanprover/lean4:v4.32.0",
+      outcome: { status: "rejected", reason_code: "proof_rejected" },
+    };
+    const evaluationRequest = jsonRequest("/internal/v1/evaluation-completed", evaluationCompletion);
+    evaluationRequest.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+    const evaluationResponse = await handleRequest(
+      evaluationRequest,
+      { ...ENV, INTAKE_ENABLED: "false" },
+      LIFECYCLE,
+      { state },
+    );
+    expect(evaluationResponse.status).toBe(201);
+    expect(state.events.slice(-2).map((item) => item.event_type)).toEqual([
+      "evaluation.started", "evaluation.rejected",
+    ]);
+    expect(state.views.get(submissionId)).toMatchObject({
+      schema_version: 2,
+      evaluation: {
+        status: "rejected",
+        attempt: 1,
+        reason_code: "proof_rejected",
+        benchmark_commit: evaluationCompletion.benchmark_commit,
+      },
+    });
     const unauthorized = await handleRequest(
       jsonRequest("/internal/v1/archive-completed", completion),
       { ...ENV, INTAKE_ENABLED: "false" },
@@ -347,6 +419,43 @@ describe("strict API contract", () => {
       { state },
     );
     expect(unauthorized.status).toBe(401);
+  });
+
+  it("records an authenticated archive failure without leaving status pending", async () => {
+    const state = new MemoryState();
+    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    state.views.set(submissionId, pendingView(
+      submissionId,
+      "2026-05-01T00:00:00.000Z",
+      1,
+      "succeeded",
+    ));
+    const failure = {
+      schema_version: 1,
+      submission_id: submissionId,
+      occurred_at: "2026-05-01T00:01:00.000Z",
+      reason_code: "source_fetch_failed",
+      retryable: true,
+    };
+    const request = jsonRequest("/internal/v1/archive-failed", failure);
+    request.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+    const response = await handleRequest(
+      request,
+      { ...ENV, INTAKE_ENABLED: "false" },
+      LIFECYCLE,
+      { state },
+    );
+    expect(response.status).toBe(201);
+    expect(state.events.at(-1)).toMatchObject({
+      event_type: "archive.failed",
+      causation_event_id: submissionId,
+      payload: { reason_code: "source_fetch_failed", retryable: true },
+    });
+    expect(state.views.get(submissionId)).toMatchObject({
+      schema_version: 2,
+      archive: { status: "failed", reason_code: "source_fetch_failed", retryable: true },
+      evaluation: { status: "pending" },
+    });
   });
 
   it("fails closed with 429 when the Cloudflare limiter denies or errors", async () => {

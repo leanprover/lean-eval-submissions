@@ -2,6 +2,8 @@ import {
   ApiDecodeError,
   assertSourcePolicy,
   decodeArchiveCompletion,
+  decodeArchiveFailure,
+  decodeEvaluationCompletion,
   decodeAgentChallengeInput,
   decodeBrowserSubmission,
   decodeChallengeSubmission,
@@ -43,8 +45,18 @@ import {
   type GitHubIdentity,
 } from "./github-provider";
 import { githubBrokerFetch } from "./github-broker-client";
-import { type ArchiveCompletedEvent, type WritableStateEvent } from "./state-event";
 import {
+  type ArchiveCompletedEvent,
+  type ArchiveFailedEvent,
+  type EvaluationAcceptedEvent,
+  type EvaluationFailedEvent,
+  type EvaluationRejectedEvent,
+  type EvaluationStartedEvent,
+  type WritableStateEvent,
+  type WritableSubmissionLifecycleEvent,
+} from "./state-event";
+import {
+  latestLifecycleEventId,
   type DispatchOutbox,
   type SubmissionView,
 } from "./submission-view";
@@ -96,6 +108,11 @@ export type RuntimeEnv = Omit<
 type Lifecycle = Pick<ExecutionContext, "waitUntil">;
 export type StateAccess = Readonly<{
   appendEvent(event: WritableStateEvent): Promise<{ created: boolean }>;
+  appendSubmissionLifecycle(
+    events: readonly WritableSubmissionLifecycleEvent[],
+    expectedLifecycleEventId: string,
+    nextView: SubmissionView,
+  ): Promise<{ created: boolean; view: SubmissionView }>;
   acceptSubmission(
     events: readonly WritableStateEvent[],
     view: SubmissionView,
@@ -432,7 +449,7 @@ function initialSubmissionView(
 ): SubmissionView {
   const acceptedAt = canonicalMilliseconds(acceptedAtMilliseconds);
   return {
-    schema_version: 1,
+    schema_version: 2,
     submission_id: grant.submission_id,
     owner_login: login,
     received_event_id: grant.submission_id,
@@ -446,6 +463,7 @@ function initialSubmissionView(
     archive: { status: "pending" },
     evaluation: { status: "pending" },
     result_id: null,
+    result_event_id: null,
     dispatch: {
       status: "pending",
       attempts: 0,
@@ -602,17 +620,35 @@ async function archiveCompleted(
   if (Date.parse(completion.occurred_at) <= Date.parse(view.accepted_at)) {
     throw new ApiDecodeError("archive completion must follow submission acceptance");
   }
+  const eventId = await lifecycleEventId(
+    "archive.completed",
+    view.submission_id,
+    completion.occurred_at,
+  );
+  if (view.archive.status === "completed" && view.archive.event_id === eventId) {
+    if (
+      view.archive.occurred_at !== completion.occurred_at ||
+      view.archive.archive_repository !== completion.locator.archive_repository ||
+      view.archive.archive_commit !== completion.locator.archive_commit ||
+      view.archive.archive_path !== completion.locator.archive_path ||
+      view.archive.archive_ciphertext_sha256 !== completion.locator.archive_ciphertext_sha256
+    ) {
+      throw new StateEventConflictError(`archive completion ${eventId}`);
+    }
+    return json({
+      status: "already_recorded",
+      submission_id: view.submission_id,
+      event_id: eventId,
+    });
+  }
+  const expectedLifecycleEventId = latestLifecycleEventId(view);
   const event: ArchiveCompletedEvent = {
     schema_version: 1,
-    event_id: await lifecycleEventId(
-      "archive.completed",
-      view.submission_id,
-      completion.occurred_at,
-    ),
+    event_id: eventId,
     event_type: "archive.completed",
     occurred_at: completion.occurred_at,
     subject_id: view.submission_id,
-    causation_event_id: view.received_event_id,
+    causation_event_id: expectedLifecycleEventId,
     actor: { kind: "system" },
     payload: {
       archive_repository: completion.locator.archive_repository,
@@ -622,11 +658,225 @@ async function archiveCompleted(
       encrypted: true,
     },
   };
-  const outcome = await ledger.appendEvent(event);
+  const nextView: SubmissionView = {
+    ...view,
+    schema_version: 2,
+    result_event_id: view.schema_version === 2 ? view.result_event_id : null,
+    archive: {
+      status: "completed",
+      event_id: event.event_id,
+      occurred_at: event.occurred_at,
+      ...event.payload,
+    },
+  };
+  const outcome = await ledger.appendSubmissionLifecycle(
+    [event],
+    expectedLifecycleEventId,
+    nextView,
+  );
   return json({
     status: outcome.created ? "recorded" : "already_recorded",
     submission_id: view.submission_id,
     event_id: event.event_id,
+  }, outcome.created ? 201 : 200);
+}
+
+async function archiveFailed(
+  request: Request,
+  env: RuntimeEnv,
+  dependencies: ApiDependencies,
+): Promise<Response> {
+  const configured = env.LIFECYCLE_CALLBACK_TOKEN;
+  const authorization = request.headers.get("authorization");
+  const supplied = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : "";
+  if (!configured) return json({ error: "callback_unavailable" }, 503);
+  if (!supplied || !(await equalToken(supplied, configured))) {
+    return json({ error: "authentication_failed" }, 401);
+  }
+  const failure = decodeArchiveFailure(await readJson(request));
+  const ledger = state(env, dependencies);
+  const view = await ledger.readSubmission(failure.submission_id);
+  if (view === null) return json({ error: "submission_not_found" }, 409);
+  if (view.dispatch.status !== "succeeded") return json({ error: "submission_not_dispatched" }, 409);
+  if (view.archive.status === "completed" || view.evaluation.status !== "pending") {
+    return json({ error: "submission_lifecycle_already_advanced" }, 409);
+  }
+  const eventId = await lifecycleEventId("archive.failed", view.submission_id, failure.occurred_at);
+  const nextArchive = {
+    status: "failed" as const,
+    event_id: eventId,
+    occurred_at: failure.occurred_at,
+    reason_code: failure.reason_code,
+    retryable: failure.retryable,
+  };
+  if (view.archive.status === "failed" && view.archive.event_id === eventId) {
+    if (JSON.stringify(view.archive) !== JSON.stringify(nextArchive)) {
+      throw new StateEventConflictError(`archive failure ${eventId}`);
+    }
+    return json({ status: "already_recorded", submission_id: view.submission_id, event_id: eventId });
+  }
+  const previousAt = view.archive.status === "failed" ? view.archive.occurred_at : view.accepted_at;
+  if (Date.parse(failure.occurred_at) <= Date.parse(previousAt)) {
+    throw new ApiDecodeError("archive failure must follow the current archive state");
+  }
+  const expectedLifecycleEventId = latestLifecycleEventId(view);
+  const event: ArchiveFailedEvent = {
+    schema_version: 1,
+    event_id: eventId,
+    event_type: "archive.failed",
+    occurred_at: failure.occurred_at,
+    subject_id: view.submission_id,
+    causation_event_id: expectedLifecycleEventId,
+    actor: { kind: "system" },
+    payload: { reason_code: failure.reason_code, retryable: failure.retryable },
+  };
+  const nextView: SubmissionView = {
+    ...view,
+    schema_version: 2,
+    result_event_id: view.schema_version === 2 ? view.result_event_id : null,
+    archive: nextArchive,
+  };
+  const outcome = await ledger.appendSubmissionLifecycle(
+    [event],
+    expectedLifecycleEventId,
+    nextView,
+  );
+  return json({
+    status: outcome.created ? "recorded" : "already_recorded",
+    submission_id: view.submission_id,
+    event_id: event.event_id,
+  }, outcome.created ? 201 : 200);
+}
+
+async function evaluationCompleted(
+  request: Request,
+  env: RuntimeEnv,
+  dependencies: ApiDependencies,
+): Promise<Response> {
+  const configured = env.LIFECYCLE_CALLBACK_TOKEN;
+  const authorization = request.headers.get("authorization");
+  const supplied = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : "";
+  if (!configured) return json({ error: "callback_unavailable" }, 503);
+  if (!supplied || !(await equalToken(supplied, configured))) {
+    return json({ error: "authentication_failed" }, 401);
+  }
+  const completion = decodeEvaluationCompletion(await readJson(request));
+  const ledger = state(env, dependencies);
+  const view = await ledger.readSubmission(completion.submission_id);
+  if (view === null) return json({ error: "submission_not_found" }, 409);
+  if (view.dispatch.status !== "succeeded") return json({ error: "submission_not_dispatched" }, 409);
+  if (view.archive.status !== "completed") return json({ error: "submission_not_archived" }, 409);
+  if (Date.parse(completion.occurred_at) <= Date.parse(view.archive.occurred_at)) {
+    throw new ApiDecodeError("evaluation completion must follow archive completion");
+  }
+  const startedId = await lifecycleEventId(
+    "evaluation.started",
+    view.submission_id,
+    completion.occurred_at,
+  );
+  const terminalAt = canonicalMilliseconds(Date.parse(completion.occurred_at) + 1);
+  const terminalType = `evaluation.${completion.outcome.status}` as const;
+  const terminalId = await lifecycleEventId(terminalType, view.submission_id, terminalAt);
+  const evaluationBase = {
+    event_id: terminalId,
+    occurred_at: terminalAt,
+    attempt: completion.attempt,
+    benchmark_repository: completion.benchmark_repository,
+    benchmark_commit: completion.benchmark_commit,
+    toolchain: completion.toolchain,
+  };
+  const nextEvaluation = completion.outcome.status === "accepted"
+    ? { status: "accepted" as const, ...evaluationBase, evaluator_version: completion.outcome.evaluator_version }
+    : completion.outcome.status === "rejected"
+      ? { status: "rejected" as const, ...evaluationBase, reason_code: completion.outcome.reason_code }
+      : {
+          status: "failed" as const,
+          ...evaluationBase,
+          reason_code: completion.outcome.reason_code,
+          retryable: completion.outcome.retryable,
+        };
+  if (view.evaluation.status !== "pending" && view.evaluation.event_id === terminalId) {
+    if (JSON.stringify(view.evaluation) !== JSON.stringify(nextEvaluation)) {
+      throw new StateEventConflictError(`evaluation completion ${terminalId}`);
+    }
+    return json({
+      status: "already_recorded",
+      submission_id: view.submission_id,
+      event_id: terminalId,
+    });
+  }
+  const expectedLifecycleEventId = latestLifecycleEventId(view);
+  const started: EvaluationStartedEvent = {
+    schema_version: 1,
+    event_id: startedId,
+    event_type: "evaluation.started",
+    occurred_at: completion.occurred_at,
+    subject_id: view.submission_id,
+    causation_event_id: expectedLifecycleEventId,
+    actor: { kind: "system" },
+    payload: {
+      attempt: completion.attempt,
+      benchmark_repository: completion.benchmark_repository,
+      benchmark_commit: completion.benchmark_commit,
+      toolchain: completion.toolchain,
+    },
+  };
+  const terminal: EvaluationAcceptedEvent | EvaluationRejectedEvent | EvaluationFailedEvent =
+    completion.outcome.status === "accepted"
+      ? {
+          schema_version: 1,
+          event_id: terminalId,
+          event_type: "evaluation.accepted",
+          occurred_at: terminalAt,
+          subject_id: view.submission_id,
+          causation_event_id: started.event_id,
+          actor: { kind: "system" },
+          payload: { attempt: completion.attempt, evaluator_version: completion.outcome.evaluator_version },
+        }
+      : completion.outcome.status === "rejected"
+        ? {
+            schema_version: 1,
+            event_id: terminalId,
+            event_type: "evaluation.rejected",
+            occurred_at: terminalAt,
+            subject_id: view.submission_id,
+            causation_event_id: started.event_id,
+            actor: { kind: "system" },
+            payload: { attempt: completion.attempt, reason_code: completion.outcome.reason_code },
+          }
+        : {
+            schema_version: 1,
+            event_id: terminalId,
+            event_type: "evaluation.failed",
+            occurred_at: terminalAt,
+            subject_id: view.submission_id,
+            causation_event_id: started.event_id,
+            actor: { kind: "system" },
+            payload: {
+              attempt: completion.attempt,
+              reason_code: completion.outcome.reason_code,
+              retryable: completion.outcome.retryable,
+            },
+          };
+  const nextView: SubmissionView = {
+    ...view,
+    schema_version: 2,
+    result_event_id: view.schema_version === 2 ? view.result_event_id : null,
+    evaluation: nextEvaluation,
+  };
+  const outcome = await ledger.appendSubmissionLifecycle(
+    [started, terminal],
+    expectedLifecycleEventId,
+    nextView,
+  );
+  return json({
+    status: outcome.created ? "recorded" : "already_recorded",
+    submission_id: view.submission_id,
+    event_id: terminal.event_id,
   }, outcome.created ? 201 : 200);
 }
 
@@ -848,6 +1098,20 @@ export async function handleRequest(
   if (request.method === "POST" && url.pathname === "/internal/v1/archive-completed") {
     try {
       return await archiveCompleted(request, env, dependencies);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  }
+  if (request.method === "POST" && url.pathname === "/internal/v1/archive-failed") {
+    try {
+      return await archiveFailed(request, env, dependencies);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  }
+  if (request.method === "POST" && url.pathname === "/internal/v1/evaluation-completed") {
+    try {
+      return await evaluationCompleted(request, env, dependencies);
     } catch (error) {
       return errorResponse(error);
     }

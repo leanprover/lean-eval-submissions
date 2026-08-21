@@ -162,6 +162,7 @@ jobs:
       size_within_cap: ${{ steps.size_status.outputs.within_cap }}
       audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}
       benchmark_commit: ${{ steps.benchmark.outputs.sha }}
+      toolchain: ${{ steps.benchmark.outputs.toolchain }}
     steps:
       - name: Assert immutable server workflow ref
         if: github.event_name == 'workflow_dispatch'
@@ -206,7 +207,9 @@ jobs:
 
       - name: Resolve benchmark commit
         id: benchmark
-        run: echo "sha=$(git -C lean-eval rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "sha=$(git -C lean-eval rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "toolchain=$(cat lean-eval/lean-toolchain)" >> "$GITHUB_OUTPUT"
 
       # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
@@ -654,6 +657,93 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  archive_failure_state:
+    needs: [evaluate, archive]
+    if: |
+      always()
+      && github.event_name == 'workflow_dispatch'
+      && needs.archive.result != 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: cloudflare-${{ inputs.callback_environment }}
+    permissions:
+      contents: read
+    steps:
+      - name: Record archive failure in State
+        env:
+          AUDIT_CIPHERTEXT_READY: ${{ needs.evaluate.outputs.audit_ciphertext_ready }}
+          CALLBACK_ENVIRONMENT: ${{ inputs.callback_environment }}
+          FETCH_SUCCEEDED: ${{ needs.evaluate.outputs.fetch_succeeded }}
+          LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}
+          SIZE_WITHIN_CAP: ${{ needs.evaluate.outputs.size_within_cap }}
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+        run: |
+          set -euo pipefail
+          case "$CALLBACK_ENVIRONMENT" in
+            staging)
+              endpoint="https://lean-eval-submission-server-staging.lean-eval.workers.dev/internal/v1/archive-failed"
+              ;;
+            production)
+              endpoint="https://lean-eval-submission-server.lean-eval.workers.dev/internal/v1/archive-failed"
+              ;;
+            *)
+              echo "unsupported callback environment" >&2
+              exit 1
+              ;;
+          esac
+          if [ "$FETCH_SUCCEEDED" != "true" ]; then
+            reason_code="source_fetch_failed"
+            retryable="true"
+          elif [ "$SIZE_WITHIN_CAP" != "true" ]; then
+            reason_code="source_size_limit_exceeded"
+            retryable="false"
+          elif [ "$AUDIT_CIPHERTEXT_READY" != "true" ]; then
+            reason_code="archive_encryption_failed"
+            retryable="true"
+          else
+            reason_code="archive_persist_failed"
+            retryable="true"
+          fi
+          failure_file=$(mktemp)
+          OCCURRED_AT="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" \
+          REASON_CODE="$reason_code" RETRYABLE="$retryable" \
+          python3 - "$failure_file" <<'PY'
+          import json
+          import os
+          import sys
+
+          payload = {
+              "schema_version": 1,
+              "submission_id": os.environ["SUBMISSION_ID"],
+              "occurred_at": os.environ["OCCURRED_AT"],
+              "reason_code": os.environ["REASON_CODE"],
+              "retryable": os.environ["RETRYABLE"] == "true",
+          }
+          with open(sys.argv[1], "w", encoding="utf-8") as stream:
+              json.dump(payload, stream, sort_keys=True, separators=(",", ":"))
+              stream.write("\n")
+          PY
+          response_file=$(mktemp)
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${LIFECYCLE_CALLBACK_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data-binary @"$failure_file" \
+            --output "$response_file" \
+            "$endpoint"
+          RESPONSE_FILE="$response_file" python3 - <<'PY'
+          import json
+          import os
+
+          with open(os.environ["RESPONSE_FILE"], encoding="utf-8") as stream:
+              payload = json.load(stream)
+          if payload.get("status") not in {"recorded", "already_recorded"}:
+              raise SystemExit("archive failure callback did not confirm State")
+          if payload.get("submission_id") != os.environ["SUBMISSION_ID"]:
+              raise SystemExit("archive failure callback confirmed the wrong submission")
+          PY
+
   archive_state:
     needs: [evaluate, archive]
     if: |
@@ -711,12 +801,103 @@ jobs:
               raise SystemExit("archive completion callback confirmed the wrong submission")
           PY
 
+  evaluation_state:
+    needs: [evaluate, archive, archive_state]
+    if: |
+      always()
+      && github.event_name == 'workflow_dispatch'
+      && needs.archive_state.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: cloudflare-${{ inputs.callback_environment }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: submission-archive-completion
+          path: /tmp/archive-completion
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        id: results_download
+        continue-on-error: true
+        with:
+          name: submission-results
+          path: /tmp/evaluation-results
+
+      - name: Build trusted evaluation completion
+        env:
+          BENCHMARK_COMMIT: ${{ needs.evaluate.outputs.benchmark_commit }}
+          EVALUATE_RESULT: ${{ needs.evaluate.result }}
+          EVALUATOR_VERSION: ${{ github.sha }}
+          PROBLEM_ID: ${{ inputs.problem_id }}
+          TOOLCHAIN: ${{ needs.evaluate.outputs.toolchain }}
+        run: |
+          set -euo pipefail
+          results_flag=()
+          if [ -f /tmp/evaluation-results/results.json ]; then
+            results_flag+=(--results /tmp/evaluation-results/results.json)
+          fi
+          python3 scripts/build_evaluation_completion.py \
+            --archive-completion /tmp/archive-completion/archive-completion.json \
+            --evaluate-result "$EVALUATE_RESULT" \
+            --problem-id "$PROBLEM_ID" \
+            --benchmark-commit "$BENCHMARK_COMMIT" \
+            --toolchain "$TOOLCHAIN" \
+            --evaluator-version "$EVALUATOR_VERSION" \
+            --output /tmp/evaluation-completion.json \
+            "${results_flag[@]}"
+
+      - name: Record evaluation completion in State
+        env:
+          CALLBACK_ENVIRONMENT: ${{ inputs.callback_environment }}
+          LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+        run: |
+          set -euo pipefail
+          case "$CALLBACK_ENVIRONMENT" in
+            staging)
+              endpoint="https://lean-eval-submission-server-staging.lean-eval.workers.dev/internal/v1/evaluation-completed"
+              ;;
+            production)
+              endpoint="https://lean-eval-submission-server.lean-eval.workers.dev/internal/v1/evaluation-completed"
+              ;;
+            *)
+              echo "unsupported callback environment" >&2
+              exit 1
+              ;;
+          esac
+          response_file=$(mktemp)
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${LIFECYCLE_CALLBACK_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data-binary @/tmp/evaluation-completion.json \
+            --output "$response_file" \
+            "$endpoint"
+          RESPONSE_FILE="$response_file" python3 - <<'PY'
+          import json
+          import os
+
+          with open(os.environ["RESPONSE_FILE"], encoding="utf-8") as stream:
+              payload = json.load(stream)
+          if payload.get("status") not in {"recorded", "already_recorded"}:
+              raise SystemExit("evaluation completion callback did not confirm State")
+          if payload.get("submission_id") != os.environ["SUBMISSION_ID"]:
+              raise SystemExit("evaluation completion callback confirmed the wrong submission")
+          PY
+
   record:
     # Now gated on `archive` as well: if the audit archival did not
     # complete, the leaderboard must not advance either. The two
     # mechanisms are independent, but our policy is that a recorded
     # leaderboard entry implies a durable archived copy of the source.
-    needs: [evaluate, archive, archive_state]
+    needs: [evaluate, archive, archive_state, evaluation_state]
     # Labeled-event runs intentionally skip `intake`. Without an explicit
     # status function here, Actions' implicit `success()` also sees that
     # skipped ancestor and silently suppresses `record`, even after both
@@ -726,7 +907,7 @@ jobs:
       always()
       && needs.evaluate.result == 'success'
       && needs.archive.result == 'success'
-      && (github.event_name == 'issues' || needs.archive_state.result == 'success')
+      && (github.event_name == 'issues' || needs.evaluation_state.result == 'success')
     runs-on: ubuntu-latest
     # A live schema migration installs a durable Git lock. Evaluation and
     # archival remain live while this credentialed writer waits its turn.

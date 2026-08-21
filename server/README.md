@@ -138,20 +138,22 @@ verbatim signed expiring challenge. The broker deliberately continues to
 reject `/gists/`; no user token or App gist authority is required. Repository
 metadata and immutable-tag verification still use the source-reader App.
 
-The local workflow emits a digest-verified archive locator artifact, but no
-Actions credential is authorized to append the corresponding archive event to
-State. Dispatch persistence is local and credential-independent: the intake
+The local workflow emits a digest-verified archive locator artifact. Separate
+source-free callback jobs use the matching environment's lifecycle token to
+append `archive.completed` or a classified `archive.failed`, followed where
+applicable by `evaluation.started` and the exact accepted, rejected, or failed
+evaluation terminal event, while atomically advancing the
+targeted submission view. No State or callback credential enters the untrusted
+evaluation or archive job. Dispatch persistence is credential-independent: the intake
 CAS adds a strict per-submission view and outbox, request retries reuse it, and
 a one-minute scheduled handler reconciles bounded UUIDv7-tail shards. Owner
 routes target that view plus its referenced immutable events and never scan the
 complete ledger. Provider success removes the outbox; provider failure records
 a bounded backoff. State validation must deploy the matching view/outbox
-contract before intake is enabled. Correlating the locator's `archive_path` to
-its UUID before the archive lifecycle append remains a launch gate. The safe
-current behavior is `INTAKE_ENABLED=false`; do not treat a queued State record
-or locator artifact alone as a completed pipeline.
-
-Operational view v1 deliberately covers intake, owner mutations, and dispatch;
-its archive/evaluation/result fields remain `pending`/`null`. Before lifecycle
-writers are enabled, State and Worker must review and deploy a shared v2 view
-that materializes those events without weakening targeted-read validation.
+contract before intake is enabled. View v1 remains readable for pre-lifecycle
+records; any lifecycle append upgrades the same canonical path to strict v2.
+State independently reconstructs archive/evaluation/result summaries from the
+immutable event graph and rejects a stale or fabricated view. The safe current
+behavior remains `INTAKE_ENABLED=false` until the staged live path and all
+other rollout gates pass; do not treat a queued State record alone as a
+completed pipeline.

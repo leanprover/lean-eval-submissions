@@ -1,6 +1,7 @@
 import {
   stateEventPath,
   type StateEvent,
+  type WritableSubmissionLifecycleEvent,
   type WritableStateEvent,
   validateStateEvent,
 } from "./state-event";
@@ -8,6 +9,7 @@ import {
   decodeDispatchOutbox,
   decodeSubmissionView,
   dispatchOutboxPath,
+  latestLifecycleEventId,
   submissionViewPath,
   type DispatchOutbox,
   type SubmissionView,
@@ -326,12 +328,32 @@ async function readSubmissionAt(
     throw new GitHubStateError(502, `${path} is invalid: ${String(error)}`);
   }
   if (view.submission_id !== submissionId) throw new GitHubStateError(502, `${path} has the wrong submission identity`);
+  const archiveEventId = view.schema_version === 2 && view.archive.status !== "pending"
+    ? view.archive.event_id
+    : null;
+  const evaluationEventId = view.schema_version === 2 && view.evaluation.status !== "pending"
+    ? view.evaluation.event_id
+    : null;
   const eventIds = new Set([
     view.received_event_id,
     view.metadata_event_id,
     ...(view.publication_event_id === null ? [] : [view.publication_event_id]),
+    ...(archiveEventId === null ? [] : [archiveEventId]),
+    ...(evaluationEventId === null ? [] : [evaluationEventId]),
+    ...(view.schema_version === 2 && view.result_event_id !== null ? [view.result_event_id] : []),
   ]);
   const events = await Promise.all([...eventIds].map((eventId) => readEventAt(config, fetcher, eventId, commit)));
+  if (view.schema_version === 2 && evaluationEventId !== null && !new Set(["pending", "running"]).has(view.evaluation.status)) {
+    const terminal = events.find((event) => event.event_id === evaluationEventId);
+    const terminalCause = terminal?.causation_event_id;
+    if (terminalCause === null || terminalCause === undefined) {
+      throw new GitHubStateError(502, `${path} evaluation terminal event has no cause`);
+    }
+    if (!eventIds.has(terminalCause)) {
+      eventIds.add(terminalCause);
+      events.push(await readEventAt(config, fetcher, terminalCause, commit));
+    }
+  }
   const received = events.find((event) => event.event_id === view.received_event_id);
   if (
     received?.event_type !== "submission.received" ||
@@ -378,6 +400,57 @@ async function readSubmissionAt(
   }
   if (!eventIds.has(view.mutation_event_id)) {
     throw new GitHubStateError(502, `${path} mutation head is not a referenced owner mutation`);
+  }
+  if (view.schema_version === 2) {
+    if (view.archive.status !== "pending") {
+      const archive = events.find((event) => event.event_id === archiveEventId);
+      const expectedArchive = archive === undefined ? null : {
+        status: archive.event_type.split(".", 2)[1],
+        event_id: archive.event_id,
+        occurred_at: archive.occurred_at,
+        ...archive.payload,
+      };
+      if (
+        archive?.subject_id !== submissionId ||
+        !archive.event_type.startsWith("archive.") ||
+        canonicalJson(expectedArchive) !== canonicalJson(view.archive)
+      ) {
+        throw new GitHubStateError(502, `${path} archive summary does not match its lifecycle event`);
+      }
+    }
+    if (view.evaluation.status !== "pending") {
+      const current = events.find((event) => event.event_id === evaluationEventId);
+      const started = current?.event_type === "evaluation.started"
+        ? current
+        : events.find((event) => event.event_id === current?.causation_event_id);
+      const expectedEvaluation = current === undefined || started?.event_type !== "evaluation.started"
+        ? null
+        : {
+            status: current.event_type === "evaluation.started" ? "running" : current.event_type.split(".", 2)[1],
+            event_id: current.event_id,
+            occurred_at: current.occurred_at,
+            ...started.payload,
+            ...(current.event_type === "evaluation.started" ? {} : current.payload),
+          };
+      if (
+        current?.subject_id !== submissionId ||
+        started?.subject_id !== submissionId ||
+        !current.event_type.startsWith("evaluation.") ||
+        canonicalJson(expectedEvaluation) !== canonicalJson(view.evaluation)
+      ) {
+        throw new GitHubStateError(502, `${path} evaluation summary does not match its lifecycle events`);
+      }
+    }
+    if (view.result_event_id !== null) {
+      const result = events.find((event) => event.event_id === view.result_event_id);
+      if (
+        result?.event_type !== "result.recorded" ||
+        result.subject_id !== view.result_id ||
+        result.payload.submission_id !== submissionId
+      ) {
+        throw new GitHubStateError(502, `${path} result identity does not match its lifecycle event`);
+      }
+    }
   }
   return view;
 }
@@ -576,6 +649,76 @@ export class GitHubStateRepository {
       if (dispatchOutboxPath(outbox.submission_id) !== path) throw new GitHubStateError(502, `${path} has the wrong submission identity`);
       return outbox;
     }));
+  }
+
+  async appendSubmissionLifecycle(
+    events: readonly WritableSubmissionLifecycleEvent[],
+    expectedLifecycleEventId: string,
+    nextView: SubmissionView,
+  ): Promise<{ commit: string; created: boolean; view: SubmissionView }> {
+    if (events.length === 0 || events.length > 4) {
+      throw new TypeError("submission lifecycle batch must contain between one and four events");
+    }
+    for (const event of events) validateStateEvent(event);
+    const decodedView = decodeSubmissionView(nextView);
+    if (decodedView.schema_version !== 2) throw new TypeError("submission lifecycle requires a v2 view");
+    if (events.some((event) => event.subject_id !== decodedView.submission_id)) {
+      throw new TypeError("submission lifecycle event subjects disagree with the view");
+    }
+    for (let index = 0; index < events.length; index += 1) {
+      const expectedCause = index === 0 ? expectedLifecycleEventId : events[index - 1]?.event_id;
+      if (events[index]?.causation_event_id !== expectedCause) {
+        throw new TypeError("submission lifecycle batch does not form one causal chain");
+      }
+    }
+    const lastEventId = events.at(-1)?.event_id;
+    if (!lastEventId || latestLifecycleEventId(decodedView) !== lastEventId) {
+      throw new TypeError("submission lifecycle view does not name the batch terminal event");
+    }
+    const paths = events.map(stateEventPath);
+    if (new Set(paths).size !== paths.length) throw new TypeError("submission lifecycle event paths must be unique");
+    const viewPath = submissionViewPath(decodedView.submission_id);
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+      const current = await readSubmissionAt(this.#config, this.#fetcher, decodedView.submission_id, snapshot.headSha);
+      if (current === null) throw new GitHubStateError(404, "submission view does not exist");
+      if (latestLifecycleEventId(current) === lastEventId) {
+        const existing = await Promise.all(paths.map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)));
+        if (
+          existing.some((entry, index) => {
+            if (!entry.found) return true;
+            return canonicalJson(entry.value) !== canonicalJson(events[index]);
+          }) ||
+          canonicalJson(current) !== canonicalJson(decodedView)
+        ) {
+          throw new StateEventConflictError(viewPath);
+        }
+        return { commit: snapshot.headSha, created: false, view: current };
+      }
+      if (latestLifecycleEventId(current) !== expectedLifecycleEventId) {
+        throw new StateEventConflictError(viewPath);
+      }
+      const existing = await Promise.all(paths.map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)));
+      if (existing.some((entry) => entry.found)) {
+        throw new StateEventConflictError(paths[existing.findIndex((entry) => entry.found)] ?? viewPath);
+      }
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        events,
+        [{ path: viewPath, value: decodedView }],
+        `Record lifecycle through ${lastEventId} for ${decodedView.submission_id}`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return { commit, created: true, view: decodedView };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) {
+        throw new GitHubStateError(409, "State branch kept changing during lifecycle update");
+      }
+      await pause(attempt);
+    }
+    throw new Error("unreachable submission lifecycle update");
   }
 
   async appendEvents(events: readonly WritableStateEvent[]): Promise<{

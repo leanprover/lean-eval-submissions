@@ -336,8 +336,14 @@ verifying its digest. A separate source-free `archive_state` job holds only the
 matching environment's callback token and sends that object to the Worker. The
 Worker validates the UUID-derived path, authenticated environment, existing
 dispatched submission, and exact payload before appending an idempotent
-`archive.completed` event. No State credential or callback token enters the
-evaluation or archive job.
+`archive.completed` event and atomically upgrading the targeted view to v2. A
+second source-free callback job derives its fixed timestamp from the immutable
+archive completion, distinguishes accepted/rejected/pipeline-failed outcomes,
+and appends `evaluation.started` plus its terminal event in one CAS update.
+If source fetch, size validation, encryption, or persistence prevents an
+archive, a mutually exclusive source-free callback records the classified
+`archive.failed` state instead of leaving the submission indefinitely pending.
+No State credential or callback token enters the evaluation or archive job.
 
 | Field | Staging | Production |
 | --- | --- | --- |

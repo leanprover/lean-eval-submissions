@@ -6,7 +6,7 @@ import {
   StateEventConflictError,
   StateUpdateOutcomeUnknownError,
 } from "../src/github-state";
-import type { StateEvent } from "../src/state-event";
+import type { StateEvent, WritableSubmissionLifecycleEvent } from "../src/state-event";
 import type { SubmissionView } from "../src/submission-view";
 
 const HEAD = "1".repeat(40);
@@ -89,6 +89,33 @@ const VIEW: SubmissionView = {
     last_error_code: null,
   },
 };
+const ARCHIVE_EVENT: WritableSubmissionLifecycleEvent = {
+  schema_version: 1,
+  event_id: "0198abcd-1111-7000-8000-000000000003",
+  event_type: "archive.completed",
+  occurred_at: "2026-08-20T06:07:09.000Z",
+  subject_id: SUBMISSION_ID,
+  causation_event_id: SUBMISSION_ID,
+  actor: { kind: "system" },
+  payload: {
+    archive_repository: "leanprover/lean-eval-audit",
+    archive_commit: "c".repeat(40),
+    archive_path: `archives/01/${SUBMISSION_ID}.tar.age`,
+    archive_ciphertext_sha256: "d".repeat(64),
+    encrypted: true,
+  },
+};
+const VIEW_V2: SubmissionView = {
+  ...VIEW,
+  schema_version: 2,
+  result_event_id: null,
+  archive: {
+    status: "completed",
+    event_id: ARCHIVE_EVENT.event_id,
+    occurred_at: ARCHIVE_EVENT.occurred_at,
+    ...ARCHIVE_EVENT.payload,
+  },
+};
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status });
@@ -159,6 +186,28 @@ describe("atomic Git State append", () => {
     await expect(repository(fetcher).readSubmission(SUBMISSION_ID)).rejects.toMatchObject({ status: 502 });
   });
 
+  it("target-reads and authenticates v2 lifecycle summaries", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      contents(VIEW_V2),
+      contents(RECEIVED),
+      contents(METADATA),
+      contents(ARCHIVE_EVENT),
+    ]);
+    await expect(repository(fetcher).readSubmission(SUBMISSION_ID)).resolves.toEqual(VIEW_V2);
+
+    const tampered = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      contents({ ...VIEW_V2, archive: { ...VIEW_V2.archive, archive_commit: "e".repeat(40) } }),
+      contents(RECEIVED),
+      contents(METADATA),
+      contents(ARCHIVE_EVENT),
+    ]);
+    await expect(repository(tampered).readSubmission(SUBMISSION_ID)).rejects.toMatchObject({ status: 502 });
+  });
+
   it("publishes a create-only event with a non-forced ref update", async () => {
     const fetcher = sequence([
       json({ object: { sha: HEAD } }),
@@ -187,6 +236,32 @@ describe("atomic Git State append", () => {
     const updateRequestBody = calls[5]?.[1]?.body;
     if (typeof updateRequestBody !== "string") throw new TypeError("update body was not text");
     expect(JSON.parse(updateRequestBody)).toEqual({ sha: NEW_COMMIT, force: false });
+  });
+
+  it("atomically appends lifecycle events with the matching v2 submission view", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      contents(VIEW),
+      contents(RECEIVED),
+      contents(METADATA),
+      new Response(null, { status: 404 }),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    await expect(repository(fetcher).appendSubmissionLifecycle(
+      [ARCHIVE_EVENT],
+      SUBMISSION_ID,
+      VIEW_V2,
+    )).resolves.toEqual({ commit: NEW_COMMIT, created: true, view: VIEW_V2 });
+    const treeRequest = fetcher.mock.calls[6]?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
+    expect(tree.tree.map((entry) => entry.path)).toEqual([
+      `events/01/${ARCHIVE_EVENT.event_id}.json`,
+      `views/submissions/01/${SUBMISSION_ID}.json`,
+    ]);
   });
 
   it("refuses to overwrite an existing event", async () => {
