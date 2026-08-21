@@ -20,24 +20,26 @@ primary checkout is not the integration workspace.
 | Repository / lane | Published commit or pull request |
 | --- | --- |
 | `lean-eval-generator` | `a726789593eeac5c32ad82760061cd5bf6cae662` on `main` |
-| production State | `89cdf9bd163f451fa51c7695c14388e11e1d609d` on private `main` |
-| staging State | `6bfc9eb633c6c8bbaa2937708183d70fca7668fa` on private `main` |
+| production State | `320b545ac3d07376cf96ed9bd22d2ff88e6df464` on private `main`; lifecycle-aware view v2 enabled |
+| staging State | `535774735317a2716e5ce505ebd40fdcdfedaa18` on private `main`; lifecycle-aware view v2 enabled |
 | `lean-eval-releases` | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` on `main`; publication disabled |
-| catalog, generator consumer, software verification | merged as `lean-eval#540`; trusted regenerated main `5b63d702014cc96670599d2ec0aaf284e708547c` |
-| results v2, intake server, replay contracts | `lean-eval-submissions#1165` |
-| leaderboard v2 preview | merged as `lean-eval-leaderboard#69`; snapshot main `a438b83ffd400eecfc5a701115597366ba4809cc` pinned to regenerated LeanEval main |
+| catalog, generator consumer, software verification | merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; current main `21c6c02178e14cccc54b6e90e4836d1ca0e9c7e6` |
+| results v2, intake server, replay contracts | `lean-eval-submissions#1165`; lifecycle status merged in `#1190` |
+| leaderboard v2 preview | preview foundation merged as `lean-eval-leaderboard#69`; lifecycle-aware cutover remains reviewable in `#70` and at `https://lean-lang.org/eval/preview/` |
 
 The private broker and intake Workers are deployed in staging and production
-from commit `42f9d1989ff825dde862a660fdaa9f358dce2972`. Deployment, OAuth,
+from commit `344ae1dbd5aaf53985b20511a770caa3c52b5626`. Deployment, OAuth,
 readiness, authentication, State-writer, and broker App secrets are installed.
 Both State-writer tokens are organization-approved and preflighted, and both
 broker App registrations transferred to `leanprover` without changing their
 IDs or the dispatcher installation. Staging intake is enabled only for the
 end-to-end fixture; production remains disabled. Exact Worker version
 identifiers are recorded in `INFRASTRUCTURE.md`. The live results store has not
-been migrated: D7 still
-requires a fresh post-merge dry run and explicit approval of its exact source
-commit, record count, and output digest.
+been migrated. Dry-run `32442394883` reports source commit
+`91c55f3c1a515f87f33b3f8c45a4fd4565a0028f`, 44 files / 1,285 records,
+source digest `9c6ab2e17186d4498d33816010b01ba330122d0863efa300d7de6aaf07356db4`,
+output digest `340eaa0cce486aed35874ae1571425cb6e8912009f99822ea75fa945ea931a9e`,
+and no duplicate result IDs. D7 remains explicitly unapproved and unapplied.
 
 ## Decisions required from maintainers
 
