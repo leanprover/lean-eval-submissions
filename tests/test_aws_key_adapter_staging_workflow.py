@@ -4,7 +4,6 @@ import pathlib
 import re
 import unittest
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "aws-key-adapter-staging-smoke.yml"
 
@@ -62,7 +61,11 @@ class AwsKeyAdapterStagingWorkflowTests(unittest.TestCase):
     def test_aws_credentials_are_dropped_before_non_aws_processing(self) -> None:
         wrap = self.text.split("name: Wrap one fresh identity and drop AWS authority", 1)[1]
         self.assertLess(wrap.index("trap clear_aws EXIT"), wrap.index("archive_envelope.py"))
-        self.assertLess(wrap.index("clear_aws"), wrap.index("Upload only ciphertext"))
+        archive = wrap.index("archive_envelope.py")
+        clear = wrap.index("\n          clear_aws\n", archive)
+        validate = wrap.index("validate-artifact", archive)
+        self.assertLess(archive, clear)
+        self.assertLess(clear, validate)
         unwrap = self.text.split("name: Consume once, reject reuse, then decrypt without AWS authority", 1)[1]
         self.assertLess(unwrap.index("clear_aws\n"), unwrap.index("age --decrypt"))
         self.assertIn("env -u AWS_ACCESS_KEY_ID", unwrap)

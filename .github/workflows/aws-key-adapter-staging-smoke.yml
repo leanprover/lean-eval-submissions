@@ -104,6 +104,7 @@ jobs:
             --output-dir /tmp/aws-smoke-artifact/archive \
             --adapter-executable scripts/aws_key_adapter.py \
             --adapter-name aws-kms-v1
+          clear_aws
           rm /tmp/aws-smoke-source.tar.gz
           python scripts/aws_key_adapter_live_smoke.py validate-artifact \
             --root /tmp/aws-smoke-artifact

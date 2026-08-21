@@ -30,7 +30,6 @@ try:
         kms_encryption_context,
         validate_age_identity_bytes,
         validate_binding,
-        validate_envelope,
     )
 except ImportError:
     from key_capability_contract import (  # type: ignore[no-redef]
@@ -44,7 +43,6 @@ except ImportError:
         kms_encryption_context,
         validate_age_identity_bytes,
         validate_binding,
-        validate_envelope,
     )
 
 

@@ -7,14 +7,13 @@ import pathlib
 import tempfile
 import unittest
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 import sys
 
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from aws_key_adapter_live_smoke import (  # noqa: E402
+from aws_key_adapter_live_smoke import (
     LiveSmokeError,
     build_unwrap_request,
     prepare_source,
@@ -23,8 +22,7 @@ from aws_key_adapter_live_smoke import (  # noqa: E402
     validate_unwrap_response,
     verify_decrypted,
 )
-from key_capability_contract import archive_key_id, capability_digest  # noqa: E402
-
+from key_capability_contract import archive_key_id, capability_digest
 
 IDENTITY = b"# created by age-keygen\nAGE-SECRET-KEY-1STAGINGSMOKEFIXTURE\n"
 RECIPIENT = "age1" + "q" * 58

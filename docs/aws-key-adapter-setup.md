@@ -78,8 +78,11 @@ The six GitHub environment shells already exist:
 - `archive-staging` and `archive-production` in
   `leanprover/lean-eval-submissions`, each restricted to the tag pattern
   `lean-eval-dispatch/*`;
-- `replay-staging` and `replay-production` in
-  `leanprover/lean-eval-submissions`, each restricted to protected branches;
+- `replay-staging` in `leanprover/lean-eval-submissions`, restricted to exact
+  branch `main` and tag pattern `lean-eval-dispatch/*` so the existing public
+  replay and this immutable-tag smoke can both enter it;
+- `replay-production` in `leanprover/lean-eval-submissions`, restricted to
+  protected branches;
 - `release-staging` and `release-production` in
   `leanprover/lean-eval-releases`, each restricted to protected branches.
 

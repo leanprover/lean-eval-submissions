@@ -27,7 +27,6 @@ from typing import Any
 
 try:
     from .key_capability_contract import (
-        ADAPTER,
         COMMIT,
         ContractError,
         canonical_archive_path,
@@ -38,7 +37,6 @@ try:
     )
 except ImportError:
     from key_capability_contract import (  # type: ignore[no-redef]
-        ADAPTER,
         COMMIT,
         ContractError,
         canonical_archive_path,
