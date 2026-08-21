@@ -29,6 +29,10 @@ class MigrationWorkflowStructureTests(unittest.TestCase):
         self.assertIn("if: inputs.apply", MIGRATION)
         self.assertIn("--report /tmp/results-v2-report.json", MIGRATION)
 
+    def test_dry_and_apply_reports_are_uploaded(self) -> None:
+        self.assertIn("path: /tmp/results-v2*-report.json", MIGRATION)
+        self.assertNotIn("path: /tmp/results-v2-*-report.json", MIGRATION)
+
     def test_apply_is_bound_to_fresh_report_and_removes_lock(self) -> None:
         self.assertIn("expected_source_commit:", MIGRATION)
         self.assertIn("expected_source_digest:", MIGRATION)
