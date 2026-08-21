@@ -66,7 +66,8 @@ class KernelShadowWorkflowTests(unittest.TestCase):
         self.assertIn('git -C .ci/comparator checkout "$COMPARATOR_COMMIT"', self.text)
         self.assertIn('git -C .ci/mathgraph checkout "$CANDIDATE_COMMIT"', self.text)
         self.assertIn("cargo build --locked --release", self.text)
-        self.assertIn("rustup toolchain install 1.89.0", self.text)
+        self.assertIn("rustup toolchain install 1.95.0", self.text)
+        self.assertIn("rustc 1.95.0 (59807616e 2026-04-14)", self.text)
         self.assertIn("go-version: '1.25.12'", self.text)
         self.assertIn("runs-on: ubuntu-24.04", self.text)
 
