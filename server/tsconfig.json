@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "allowJs": false,
+    "exactOptionalPropertyTypes": true,
+    "forceConsistentCasingInFileNames": true,
+    "lib": ["ES2024"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2024",
+    "types": ["node", "@cloudflare/vitest-pool-workers/types"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts", "worker-configuration.d.ts", "broker-configuration.d.ts"]
+}

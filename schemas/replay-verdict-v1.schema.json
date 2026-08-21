@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/replay-verdict-v1.schema.json",
+  "title": "LeanEval disposable replay verdict v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "replay_task_id", "attempt", "execution_outcome",
+    "checker_outcome", "failure_reason", "statistics"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "replay_task_id": { "type": "string", "pattern": "^rt1_[0-9a-f]{64}$" },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "execution_outcome": { "enum": ["completed", "crashed", "timed_out", "failed"] },
+    "checker_outcome": {
+      "enum": ["accepted", "rejected", "declined", null]
+    },
+    "failure_reason": {
+      "enum": [
+        "benchmark_fetch_failed", "runner_lost",
+        "runner_start_failed", "source_fetch_failed", "toolchain_setup_failed",
+        "verdict_invalid", null
+      ]
+    },
+    "statistics": {
+      "oneOf": [{ "$ref": "#/$defs/statistics" }, { "type": "null" }]
+    }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "execution_outcome": { "const": "completed" },
+        "checker_outcome": {
+          "enum": ["accepted", "rejected", "declined"]
+        },
+        "failure_reason": { "type": "null" },
+        "statistics": { "$ref": "#/$defs/statistics" }
+      }
+    },
+    {
+      "properties": {
+        "execution_outcome": { "enum": ["crashed", "timed_out"] },
+        "checker_outcome": { "type": "null" },
+        "failure_reason": { "type": "null" },
+        "statistics": { "$ref": "#/$defs/statistics" }
+      }
+    },
+    {
+      "properties": {
+        "execution_outcome": { "const": "failed" },
+        "checker_outcome": { "type": "null" },
+        "failure_reason": { "type": "string" },
+        "statistics": { "type": "null" }
+      }
+    }
+  ],
+  "$defs": {
+    "statistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checker_wall_time_ms", "checker_retired_instructions",
+        "build_wall_time_ms", "build_retired_instructions",
+        "lines_of_code", "file_count"
+      ],
+      "properties": {
+        "checker_wall_time_ms": { "type": "integer", "minimum": 0 },
+        "checker_retired_instructions": { "$ref": "#/$defs/counter" },
+        "build_wall_time_ms": { "type": "integer", "minimum": 0 },
+        "build_retired_instructions": { "$ref": "#/$defs/counter" },
+        "lines_of_code": { "type": "integer", "minimum": 0 },
+        "file_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "counter": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value"],
+          "properties": {
+            "status": { "const": "measured" },
+            "value": { "type": "integer", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason"],
+          "properties": {
+            "status": { "const": "unavailable" },
+            "reason": {
+              "enum": [
+                "counter_not_reported", "counter_not_supported",
+                "counter_permission_denied"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

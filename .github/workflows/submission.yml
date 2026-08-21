@@ -28,6 +28,22 @@ name: Submission
 on:
   issues:
     types: [opened, labeled]
+  workflow_dispatch:
+    inputs:
+      workflow_commit: {description: 'Commit encoded in the immutable dispatch tag', required: true, type: string}
+      submission_id: {description: 'Canonical UUIDv7 allocated by the Worker', required: true, type: string}
+      submitted_by: {description: 'Verified lowercase GitHub login', required: true, type: string}
+      source_repository: {description: 'Canonical owner/repository', required: true, type: string}
+      source_commit: {description: 'Exact lowercase 40-character commit', required: true, type: string}
+      source_visibility: {description: 'Worker-verified public or private', required: true, type: string}
+      problem_id: {description: 'Canonical problem identifier', required: true, type: string}
+      problem_group: {description: 'Catalog policy group', required: true, type: string}
+      statement_revision: {description: 'Positive catalog statement revision', required: true, type: string}
+      declared_model: {description: 'Verbatim declared model', required: true, type: string}
+      publication_choice: {description: 'scheduled or withheld', required: true, type: string}
+      production_metadata_json: {description: 'Strict bounded production metadata object', required: true, type: string}
+      archive_locator_required: {description: 'Must be literal true', required: true, type: string}
+      archive_sidecar_schema: {description: 'Must be literal 2', required: true, type: string}
 
 concurrency:
   # Per-issue concurrency: each submission issue gets its own group so
@@ -37,7 +53,7 @@ concurrency:
   # silent dropouts when several issues were filed in quick succession.
   # Concurrent leaderboard pushes from sibling runs are already handled
   # by the `record` job's push-retry loop below.
-  group: submission-issue-${{ github.event.issue.number }}
+  group: submission-${{ github.event_name == 'workflow_dispatch' && inputs.submission_id || github.event.issue.number }}
   cancel-in-progress: false
 
 jobs:
@@ -102,7 +118,8 @@ jobs:
     needs: intake
     if: >-
       always() &&
-      ((github.event.action == 'labeled' && github.event.label.name == 'submission') ||
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.action == 'labeled' && github.event.label.name == 'submission') ||
        (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))
     # 16 GB of RAM is the ceiling a submission has to fit under. A build
     # that exceeds it is SIGTERM-killed mid-elaboration with exit 143 and
@@ -138,6 +155,20 @@ jobs:
       audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}
       benchmark_commit: ${{ steps.benchmark.outputs.sha }}
     steps:
+      - name: Assert immutable server workflow ref
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_WORKFLOW_COMMIT: ${{ inputs.workflow_commit }}
+        run: |
+          if [[ ! "$EXPECTED_WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "invalid expected workflow commit" >&2
+            exit 1
+          fi
+          if [ "$GITHUB_SHA" != "$EXPECTED_WORKFLOW_COMMIT" ]; then
+            echo "dispatch tag no longer resolves to the expected workflow commit" >&2
+            exit 1
+          fi
+
       # This repo (lean-eval-submissions): supplies the pipeline scripts.
       # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -168,9 +199,19 @@ jobs:
         id: owner
         env:
           ISSUE_BODY: ${{ github.event.issue.body }}
+          SERVER_SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           python - <<'PY'
           import os, re, sys
+          if os.environ.get("EVENT_NAME") == "workflow_dispatch":
+              repository = os.environ.get("SERVER_SOURCE_REPOSITORY", "")
+              if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
+                  sys.exit("invalid server source repository")
+              with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+                  fh.write("kind=github_repo\n")
+                  fh.write(f"owner={repository.split('/', 1)[0]}\n")
+              raise SystemExit(0)
           body = os.environ.get("ISSUE_BODY", "")
           m = re.search(
               r"^###\s+Submission URL\s*\n+(?P<value>.+?)(?=\n+###\s|\Z)",
@@ -224,8 +265,13 @@ jobs:
           # secrets block.
           APP_INSTALLATION_TOKEN: ${{ steps.app_token.outputs.token }}
         run: |
+          SERVER_FLAG=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SERVER_FLAG+=(--server-dispatch)
+          fi
           python scripts/fetch_submission.py \
             --event-path "$GITHUB_EVENT_PATH" \
+            "${SERVER_FLAG[@]}" \
             --output-dir /tmp/fetch-out
 
       - name: Record fetch status for downstream jobs
@@ -239,7 +285,7 @@ jobs:
           fi
 
       - name: Comment on fetch failure
-        if: failure() && steps.fetch.outcome == 'failure'
+        if: failure() && steps.fetch.outcome == 'failure' && github.event_name == 'issues'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -283,7 +329,7 @@ jobs:
           fi
 
       - name: Comment on size cap failure
-        if: failure() && steps.size_check.outcome == 'failure'
+        if: failure() && steps.size_check.outcome == 'failure' && github.event_name == 'issues'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -557,12 +603,26 @@ jobs:
           if [ -f /tmp/results-in/summary.json ]; then
             SUMMARY_FLAG+=(--summary /tmp/results-in/summary.json)
           fi
+          LOCATOR_FLAG=()
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            LOCATOR_FLAG+=(--locator-output /tmp/archive-locator.json)
+          fi
           python scripts/archive_submission.py push \
             --ciphertext /tmp/audit-in/source.tar.gz.age \
             --sidecar /tmp/audit-in/sidecar.partial.json \
             --benchmark-commit "${{ needs.evaluate.outputs.benchmark_commit }}" \
             --workflow-run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            "${LOCATOR_FLAG[@]}" \
             "${SUMMARY_FLAG[@]}"
+
+      - name: Upload verified server archive locator
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: submission-archive-locator
+          path: /tmp/archive-locator.json
+          if-no-files-found: error
+          retention-days: 7
 
   record:
     # Now gated on `archive` as well: if the audit archival did not
@@ -580,7 +640,11 @@ jobs:
       && needs.evaluate.result == 'success'
       && needs.archive.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # A live schema migration installs a durable Git lock. Evaluation and
+    # archival remain live while this credentialed writer waits its turn.
+    timeout-minutes: 45
+    env:
+      RESULTS_STORE_WRITER_GROUP: results-store-writer
     permissions:
       contents: read
       issues: write
@@ -645,9 +709,11 @@ jobs:
           set -euo pipefail
           if [ ! -f "$METADATA_PATH" ] || [ ! -f "$RESULTS_PATH" ]; then
             echo "missing metadata or results artifact; evaluate likely failed"
-            gh issue comment ${{ github.event.issue.number }} \
-              --repo "${{ github.repository }}" \
-              --body "❌ Evaluation did not produce results. See: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            if [ "${{ github.event_name }}" = "issues" ]; then
+              gh issue comment ${{ github.event.issue.number }} \
+                --repo "${{ github.repository }}" \
+                --body "❌ Evaluation did not produce results. See: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            fi
             exit 1
           fi
 
@@ -661,6 +727,10 @@ jobs:
           PRODUCTION_DESCRIPTION=$(python -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('production_description') or '')" "$METADATA_PATH")
           SOLUTION_PUBLICATION_STATUS=$(python -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('solution_publication_status') or '')" "$METADATA_PATH")
           SOLUTION_PUBLICATION_DATE=$(python -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('solution_publication_date') or '')" "$METADATA_PATH")
+          SUBMISSION_ID=$(python -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('submission_id') or '')" "$METADATA_PATH")
+          PROBLEM_ID=$(python -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('problem_id') or '')" "$METADATA_PATH")
+          STATEMENT_REVISION=$(python -c "import json,sys; d=json.load(open(sys.argv[1])); print(d.get('statement_revision') or '')" "$METADATA_PATH")
+          PRODUCTION_METADATA_JSON=$(python -c "import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps(d.get('production_metadata') or {}, separators=(',', ':')))" "$METADATA_PATH")
           if [ "$SUBMISSION_PUBLIC" = "true" ]; then
             PUBLIC_FLAG="--submission-public"
           else
@@ -677,11 +747,38 @@ jobs:
           if [ -n "$SOLUTION_PUBLICATION_DATE" ]; then
             PUBLICATION_ARGS+=(--solution-publication-date "$SOLUTION_PUBLICATION_DATE")
           fi
+          INTAKE_ARGS=()
+          if [ -n "$SUBMISSION_ID" ]; then
+            INTAKE_ARGS+=(--submission-id "$SUBMISSION_ID")
+            INTAKE_ARGS+=(--expected-problem-id "$PROBLEM_ID")
+            INTAKE_ARGS+=(--expected-statement-revision "$STATEMENT_REVISION")
+            INTAKE_ARGS+=(--production-metadata-json "$PRODUCTION_METADATA_JSON")
+          else
+            INTAKE_ARGS+=(--issue-number "${{ github.event.issue.number }}")
+          fi
 
           MAX_ATTEMPTS=5
           for attempt in $(seq 1 $MAX_ATTEMPTS); do
-            git -C results-store fetch origin main
-            git -C results-store reset --hard origin/main
+            # GitHub Actions concurrency groups are not FIFO: a third queued
+            # run cancels the older pending run. Use the named durable lock
+            # for record jobs instead, while migration workflow runs with the
+            # same results-store-writer contract. A push race is safe: either
+            # this record lands first or its push is rejected and the next
+            # iteration observes the lock.
+            for wait_attempt in $(seq 1 120); do
+              git -C results-store fetch origin main
+              git -C results-store reset --hard origin/main
+              if [ ! -f results-store/.results-store-writer-lock.json ]; then
+                break
+              fi
+              python -c 'import json,os; d=json.load(open("results-store/.results-store-writer-lock.json")); assert d["group"] == os.environ["RESULTS_STORE_WRITER_GROUP"]'
+              echo "results migration holds $RESULTS_STORE_WRITER_GROUP; waiting ($wait_attempt/120)"
+              sleep 15
+            done
+            if [ -f results-store/.results-store-writer-lock.json ]; then
+              echo "timed out waiting for $RESULTS_STORE_WRITER_GROUP"
+              exit 1
+            fi
 
             OUTPUT=$(python code/scripts/update_leaderboard.py \
               --user "$SUBMITTED_BY" \
@@ -693,7 +790,7 @@ jobs:
               --submission-ref "$SUBMISSION_REF" \
               $PUBLIC_FLAG \
               --model "$MODEL" \
-              --issue-number "${{ github.event.issue.number }}" \
+              "${INTAKE_ARGS[@]}" \
               "${DESCRIPTION_ARGS[@]}" \
               "${PUBLICATION_ARGS[@]}")
 
@@ -713,9 +810,11 @@ jobs:
             echo "results push rejected on attempt $attempt; retrying"
             sleep $((attempt * 2))
             if [ "$attempt" -eq "$MAX_ATTEMPTS" ]; then
-              gh issue comment ${{ github.event.issue.number }} \
-                --repo "${{ github.repository }}" \
-                --body "⚠️ Could not push the result after $MAX_ATTEMPTS attempts (race). An operator will need to retry this submission."
+              if [ "${{ github.event_name }}" = "issues" ]; then
+                gh issue comment ${{ github.event.issue.number }} \
+                  --repo "${{ github.repository }}" \
+                  --body "⚠️ Could not push the result after $MAX_ATTEMPTS attempts (race). An operator will need to retry this submission."
+              fi
               exit 1
             fi
           done
@@ -730,21 +829,26 @@ jobs:
           DISPATCH_TOKEN: ${{ secrets.LEADERBOARD_WRITE_TOKEN }}
           COMMENT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE: ${{ github.event.issue.number }}
+          SUBMISSION_ID: ${{ inputs.submission_id }}
         run: |
           set -uo pipefail
           if GH_TOKEN="$DISPATCH_TOKEN" gh api repos/leanprover/lean-eval-leaderboard/dispatches \
               -X POST \
               -F event_type=results-advanced \
-              -F "client_payload[issue]=$ISSUE"; then
+              -F "client_payload[issue]=$ISSUE" \
+              -F "client_payload[submission_id]=$SUBMISSION_ID"; then
             echo "leaderboard redeploy dispatched"
           else
             echo "::warning::leaderboard redeploy dispatch failed"
-            GH_TOKEN="$COMMENT_TOKEN" gh issue comment "$ISSUE" \
-              --repo "${{ github.repository }}" \
-              --body "⚠️ The result was recorded, but the leaderboard redeploy dispatch failed. An operator should re-run it: \`gh api repos/leanprover/lean-eval-leaderboard/dispatches -X POST -F event_type=results-advanced\`" || true
+            if [ "${{ github.event_name }}" = "issues" ]; then
+              GH_TOKEN="$COMMENT_TOKEN" gh issue comment "$ISSUE" \
+                --repo "${{ github.repository }}" \
+                --body "⚠️ The result was recorded, but the leaderboard redeploy dispatch failed. An operator should re-run it: \`gh api repos/leanprover/lean-eval-leaderboard/dispatches -X POST -F event_type=results-advanced\`" || true
+            fi
           fi
 
       - name: Comment submission summary
+        if: github.event_name == 'issues'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RESULTS_PATH: /tmp/submission-results/results.json
@@ -786,6 +890,7 @@ jobs:
             --body "$BODY"
 
       - name: Close issue
+        if: github.event_name == 'issues'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -807,6 +912,7 @@ jobs:
     needs: [evaluate, archive, record]
     if: |
       always()
+      && github.event_name == 'issues'
       && needs.evaluate.outputs.fetch_succeeded == 'true'
       && needs.evaluate.outputs.size_within_cap == 'true'
       && (

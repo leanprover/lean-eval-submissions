@@ -24,6 +24,41 @@ ISSUE_FORM = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "submit.yml"
 
 
 class SubmissionWorkflowStructureTests(unittest.TestCase):
+    def test_server_dispatch_is_strict_exact_ref_uuid_archive_lane(self) -> None:
+        for field in (
+            "workflow_commit:", "submission_id:", "submitted_by:", "source_repository:",
+            "source_commit:", "source_visibility:", "problem_id:",
+            "problem_group:", "statement_revision:", "declared_model:",
+            "publication_choice:", "production_metadata_json:",
+            "archive_locator_required:", "archive_sidecar_schema:",
+        ):
+            self.assertIn(field, self.text)
+        self.assertIn("--server-dispatch", self.text)
+        self.assertIn('--locator-output /tmp/archive-locator.json', self.text)
+        self.assertIn("name: submission-archive-locator", self.text)
+        self.assertIn('--submission-id "$SUBMISSION_ID"', self.text)
+        self.assertIn('--expected-problem-id "$PROBLEM_ID"', self.text)
+        self.assertIn("github.event_name == 'workflow_dispatch'", self.text)
+        self.assertIn('EXPECTED_WORKFLOW_COMMIT: ${{ inputs.workflow_commit }}', self.text)
+        self.assertIn('if [ "$GITHUB_SHA" != "$EXPECTED_WORKFLOW_COMMIT" ]; then', self.text)
+        self.assertIn(
+            "group: submission-${{ github.event_name == 'workflow_dispatch' && inputs.submission_id || github.event.issue.number }}",
+            self.text,
+        )
+        self.assertIn("cancel-in-progress: false", self.text)
+        for field in (
+            "workflow_commit", "submission_id", "submitted_by",
+            "source_repository", "source_commit", "source_visibility",
+            "problem_id", "problem_group", "statement_revision",
+            "declared_model", "publication_choice",
+            "production_metadata_json", "archive_locator_required",
+            "archive_sidecar_schema",
+        ):
+            self.assertRegex(
+                self.text,
+                rf"(?m)^      {field}: \{{description: .+, required: true, type: string\}}$",
+            )
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.text = WORKFLOW.read_text(encoding="utf-8")

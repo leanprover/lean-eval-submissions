@@ -1,0 +1,140 @@
+"""Structural guards for immutable dispatch-ref promotion and deployment."""
+
+from __future__ import annotations
+
+import json
+import pathlib
+import unittest
+
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+DEPLOY = (ROOT / ".github/workflows/deploy-worker.yml").read_text(encoding="utf-8")
+ROLLBACK = (ROOT / ".github/workflows/rollback-worker.yml").read_text(encoding="utf-8")
+WRANGLER = json.loads((ROOT / "server/wrangler.jsonc").read_text(encoding="utf-8"))
+BROKER_WRANGLER = json.loads(
+    (ROOT / "server/wrangler.broker.jsonc").read_text(encoding="utf-8")
+)
+WORKER_APP = (ROOT / "server/src/app.ts").read_text(encoding="utf-8")
+WORKER_ENTRYPOINT = (ROOT / "server/src/index.ts").read_text(encoding="utf-8")
+
+
+class WorkerDeploymentWorkflowTests(unittest.TestCase):
+    def test_reviewed_promotion_uses_only_contents_write(self) -> None:
+        block = DEPLOY.split("\n  promote-dispatch-ref:", 1)[1].split(
+            "\n  deploy-staging:", 1
+        )[0]
+        self.assertIn("environment: submission-dispatch-promotion", block)
+        self.assertIn("permissions:\n      contents: write", block)
+        self.assertEqual(block.count("secrets."), 1)
+        self.assertIn(
+            "APPROVAL_GUARD: ${{ secrets.DISPATCH_PROMOTION_APPROVAL_GUARD }}",
+            block,
+        )
+        self.assertIn("reviewed dispatch-promotion environment is not configured", block)
+        self.assertIn('tag="lean-eval-dispatch/$WORKFLOW_COMMIT"', block)
+        self.assertIn("compare/$WORKFLOW_COMMIT...main", block)
+        self.assertIn("contents/.github/workflows/submission.yml?ref=$WORKFLOW_COMMIT", block)
+
+    def test_promotion_is_idempotent_and_collision_safe(self) -> None:
+        self.assertIn('if [ "$existing" != "$WORKFLOW_COMMIT" ]; then', DEPLOY)
+        self.assertIn("dispatch tag collision", DEPLOY)
+        self.assertIn("dispatch tag read-back did not resolve", DEPLOY)
+        self.assertIn('-f "ref=refs/tags/$tag"', DEPLOY)
+        self.assertIn('-f "sha=$WORKFLOW_COMMIT"', DEPLOY)
+
+    def test_both_deployments_receive_promoted_ref(self) -> None:
+        self.assertEqual(
+            DEPLOY.count("DISPATCH_WORKFLOW_REF: ${{ needs.promote-dispatch-ref.outputs.ref }}"),
+            2,
+        )
+        self.assertEqual(
+            DEPLOY.count('--var "DISPATCH_WORKFLOW_REF:$DISPATCH_WORKFLOW_REF"'),
+            2,
+        )
+        self.assertIn("needs: promote-dispatch-ref", DEPLOY)
+        self.assertIn("needs: [deploy-staging, promote-dispatch-ref]", DEPLOY)
+
+    def test_rollback_requires_matching_commit_tag_binding(self) -> None:
+        self.assertIn('dispatch_ref="lean-eval-dispatch/$EXPECTED_COMMIT"', ROLLBACK)
+        self.assertIn("rollback dispatch tag does not resolve", ROLLBACK)
+        self.assertIn('"DISPATCH_WORKFLOW_REF": "lean-eval-dispatch/"', ROLLBACK)
+
+    def test_rate_limits_and_reconciliation_are_distinct_and_declarative(self) -> None:
+        staging = WRANGLER["env"]["staging"]
+        production = WRANGLER["env"]["production"]
+        staging_limit = staging["ratelimits"][0]
+        production_limit = production["ratelimits"][0]
+        self.assertEqual(staging_limit["name"], "API_RATE_LIMITER")
+        self.assertEqual(production_limit["name"], "API_RATE_LIMITER")
+        self.assertNotEqual(staging_limit["namespace_id"], production_limit["namespace_id"])
+        self.assertEqual(staging_limit["simple"], {"limit": 30, "period": 60})
+        self.assertEqual(production_limit["simple"], {"limit": 30, "period": 60})
+        self.assertEqual(staging["triggers"]["crons"], ["* * * * *"])
+        self.assertEqual(production["triggers"]["crons"], ["* * * * *"])
+        self.assertIn("env.API_RATE_LIMITER.limit({ key })", WORKER_APP)
+        self.assertIn("handleScheduled(env, controller.scheduledTime)", WORKER_ENTRYPOINT)
+
+    def test_private_brokers_are_bound_and_deployed_before_intake_workers(self) -> None:
+        for environment in ("staging", "production"):
+            with self.subTest(environment=environment):
+                service = WRANGLER["env"][environment]["services"]
+                self.assertEqual(
+                    service,
+                    [
+                        {
+                            "binding": "GITHUB_BROKER",
+                            "service": f"lean-eval-github-broker-{environment}",
+                        }
+                    ],
+                )
+                broker = BROKER_WRANGLER["env"][environment]
+                self.assertIs(broker["workers_dev"], False)
+                self.assertIs(broker["preview_urls"], False)
+                self.assertNotIn("routes", broker)
+                self.assertNotIn("SOURCE_APP_PRIVATE_KEY", broker["vars"])
+                self.assertNotIn("DISPATCH_APP_PRIVATE_KEY", broker["vars"])
+                deploy_block = DEPLOY.split(
+                    f"- name: Deploy {environment} GitHub broker", 1
+                )[1].split(f"- name: Deploy {environment} submission Worker", 1)[0]
+                self.assertIn("wrangler.broker.jsonc", deploy_block)
+                self.assertIn(f"--env {environment}", deploy_block)
+
+    def test_temporary_workers_dev_routes_are_exact_and_intake_disabled(self) -> None:
+        staging = WRANGLER["env"]["staging"]
+        production = WRANGLER["env"]["production"]
+        expected = {
+            "staging": (
+                staging,
+                "https://lean-eval-submission-server-staging.lean-eval.workers.dev",
+            ),
+            "production": (
+                production,
+                "https://lean-eval-submission-server.lean-eval.workers.dev",
+            ),
+        }
+        for environment, (configuration, base_url) in expected.items():
+            with self.subTest(environment=environment):
+                self.assertIs(configuration["workers_dev"], True)
+                self.assertIs(configuration["preview_urls"], False)
+                self.assertNotIn("routes", configuration)
+                self.assertEqual(configuration["vars"]["INTAKE_ENABLED"], "false")
+                self.assertEqual(
+                    configuration["vars"]["OAUTH_CALLBACK_URL"],
+                    base_url + "/api/v1/oauth/callback",
+                )
+                self.assertIn(base_url + "/healthz", DEPLOY)
+        self.assertIn(
+            "https://lean-eval-submission-server.lean-eval.workers.dev/healthz",
+            ROLLBACK,
+        )
+        self.assertNotIn("eval-submit-staging.lean-lang.org", DEPLOY)
+        self.assertNotIn("eval-submit.lean-lang.org", DEPLOY)
+        self.assertNotIn("eval-submit.lean-lang.org", ROLLBACK)
+
+    def test_owner_routes_have_no_full_ledger_scan(self) -> None:
+        self.assertNotIn("readEvents", WORKER_APP)
+        self.assertIn("ledger.readSubmission(match[1])", WORKER_APP)
+
+
+if __name__ == "__main__":
+    unittest.main()

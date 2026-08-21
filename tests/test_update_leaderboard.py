@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import pathlib
 import sys
 import tempfile
 import unittest
 
-
 REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
+import results_schema as rs  # noqa: E402
 import update_leaderboard as ul  # noqa: E402
-
 
 BENCHMARK_COMMIT = "8e1b9cf5e1d3c2b1a0f9e8d7c6b5a4938271605f"
 SUBMISSION_REF = "deadbeefcafef00dbaadc0de1234567890abcdef"
@@ -29,6 +30,7 @@ def default_call(
     model: str = "Claude Opus 4.6",
     issue_number: int = 42,
     benchmark_commit: str = BENCHMARK_COMMIT,
+    statement_revisions: dict[str, int] | None = None,
     production_description: str | None = None,
     solution_publication_status: str | None = None,
     solution_publication_date: str | None = None,
@@ -44,6 +46,7 @@ def default_call(
         submission_public=submission_public,
         model=model,
         issue_number=issue_number,
+        statement_revisions=statement_revisions,
         production_description=production_description,
         solution_publication_status=solution_publication_status,
         solution_publication_date=solution_publication_date,
@@ -51,332 +54,314 @@ def default_call(
     )
 
 
+def load_user(root: pathlib.Path, user: str = "alice") -> dict:
+    return json.loads((root / "results" / f"{user.lower()}.json").read_text())
+
+
+def find_record(data: dict, model: str, problem_id: str, revision: int = 1) -> dict:
+    matches = [
+        record
+        for record in data["results"]
+        if record["declared_model"] == model
+        and record["problem_id"] == problem_id
+        and record["statement_revision"] == revision
+    ]
+    if len(matches) != 1:
+        raise AssertionError(f"expected one record, found {len(matches)}")
+    return matches[0]
+
+
+def v1_file() -> dict:
+    return {
+        "schema_version": 1,
+        "user": "alice",
+        "solved": {
+            "Claude Opus 4.6": {
+                "two_plus_two": {
+                    "solved_at": "2026-04-11T10:45:00Z",
+                    "benchmark_commit": BENCHMARK_COMMIT,
+                    "submission_kind": "github_repo",
+                    "submission_repo": "alice/proofs",
+                    "submission_ref": SUBMISSION_REF,
+                    "submission_public": True,
+                    "issue_number": 42,
+                }
+            }
+        },
+    }
+
+
 class UpdateLeaderboardTests(unittest.TestCase):
-    def test_first_write_creates_file_with_schema_v1(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            result = default_call(leaderboard_dir=lb, passed=["two_plus_two"])
-            self.assertTrue(result["changed"])
-            self.assertEqual(result["added"], ["two_plus_two"])
-            self.assertEqual(
-                result["commit_message"],
-                "record: alice solved two_plus_two using Claude Opus 4.6 @ 8e1b9cf",
-            )
-            target = lb / "results" / "alice.json"
-            self.assertTrue(target.is_file())
-            data = json.loads(target.read_text())
-            self.assertEqual(data["schema_version"], 1)
-            self.assertEqual(data["user"], "alice")
-            self.assertIn("Claude Opus 4.6", data["solved"])
-            record = data["solved"]["Claude Opus 4.6"]["two_plus_two"]
-            self.assertEqual(record["solved_at"], "2026-04-11T10:45:00Z")
-            self.assertEqual(record["benchmark_commit"], BENCHMARK_COMMIT)
-            self.assertEqual(record["submission_kind"], "github_repo")
-            self.assertEqual(record["submission_repo"], "alice/proofs")
-            self.assertEqual(record["submission_ref"], SUBMISSION_REF)
-            self.assertTrue(record["submission_public"])
-            self.assertEqual(record["issue_number"], 42)
-            self.assertNotIn("model", record)
-            self.assertNotIn("production_description", record)
-
-    def test_gist_submission_records_kind(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            default_call(
-                leaderboard_dir=lb,
+    def test_server_intake_records_uuid_and_structured_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = pathlib.Path(td)
+            result = ul.update_leaderboard(
+                user="alice",
+                leaderboard_dir=root,
                 passed=["two_plus_two"],
-                submission_kind="gist",
-                submission_repo="alice/abc123def456abc123def456abc123de",
+                benchmark_commit="b" * 40,
+                submission_kind="github_repo",
+                submission_repo="alice/proofs",
+                submission_ref="a" * 40,
+                submission_public=False,
+                model="Example Model",
+                issue_number=None,
+                submission_id="0198abcd-1111-7000-8000-000000000001",
+                now="2026-08-20T00:00:00Z",
+                statement_revisions={"two_plus_two": 2},
+                production_metadata={"input_tokens": 123},
             )
-            data = json.loads((lb / "results" / "alice.json").read_text())
-            record = data["solved"]["Claude Opus 4.6"]["two_plus_two"]
-            self.assertEqual(record["submission_kind"], "gist")
-            self.assertEqual(
-                record["submission_repo"],
-                "alice/abc123def456abc123def456abc123de",
-            )
-
-    def test_invalid_submission_kind_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            with self.assertRaisesRegex(ul.UpdateError, "submission-kind"):
-                default_call(
-                    leaderboard_dir=lb,
-                    passed=["x"],
-                    submission_kind="bitbucket",
-                )
-
-    def test_duplicate_same_model_is_noop_and_preserves_solved_at(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            default_call(leaderboard_dir=lb, passed=["two_plus_two"], now="2026-04-11T10:45:00Z")
-            result = default_call(leaderboard_dir=lb, passed=["two_plus_two"], now="2026-05-01T00:00:00Z")
-            self.assertFalse(result["changed"])
-            self.assertEqual(result["added"], [])
-            self.assertEqual(result["commit_message"], "")
-            data = json.loads((lb / "results" / "alice.json").read_text())
-            self.assertEqual(
-                data["solved"]["Claude Opus 4.6"]["two_plus_two"]["solved_at"],
-                "2026-04-11T10:45:00Z",
-            )
-
-    def test_same_problem_different_model_records_new_entry(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            default_call(leaderboard_dir=lb, passed=["two_plus_two"], model="Claude Opus 4.6")
-            result = default_call(leaderboard_dir=lb, passed=["two_plus_two"], model="GPT-5.5", now="2026-05-01T01:00:00Z")
             self.assertTrue(result["changed"])
-            self.assertEqual(result["added"], ["two_plus_two"])
+            records = json.loads((root / "results" / "alice.json").read_text())["results"]
+            self.assertEqual(records[0]["intake"], {
+                "kind": "server",
+                "submission_id": "0198abcd-1111-7000-8000-000000000001",
+            })
+            self.assertEqual(records[0]["production_metadata"]["input_tokens"], 123)
+
+    def test_first_write_creates_flat_schema_v2(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            result = default_call(leaderboard_dir=root, passed=["two_plus_two"])
+            self.assertTrue(result["changed"])
+            data = load_user(root)
+            self.assertEqual(data["schema_version"], 2)
+            self.assertEqual(data["user"], "alice")
+            record = find_record(data, "Claude Opus 4.6", "two_plus_two")
             self.assertEqual(
-                result["commit_message"],
-                "record: alice solved two_plus_two using GPT-5.5 @ 8e1b9cf",
+                record["result_id"],
+                rs.result_id("alice", "Claude Opus 4.6", "two_plus_two", 1),
             )
-            data = json.loads((lb / "results" / "alice.json").read_text())
-            self.assertIn("Claude Opus 4.6", data["solved"])
-            self.assertIn("GPT-5.5", data["solved"])
+            self.assertEqual(record["accepted_at"], "2026-04-11T10:45:00Z")
+            self.assertEqual(record["benchmark_commit"], BENCHMARK_COMMIT)
             self.assertEqual(
-                data["solved"]["Claude Opus 4.6"]["two_plus_two"]["solved_at"],
-                "2026-04-11T10:45:00Z",
+                record["submission"],
+                {
+                    "kind": "github_repo",
+                    "repo": "alice/proofs",
+                    "ref": SUBMISSION_REF,
+                    "public": True,
+                },
             )
+            self.assertEqual(record["intake"], {"kind": "issue", "issue_number": 42})
+            self.assertEqual(record["production_metadata"], {})
+
+    def test_reads_v1_and_writes_v2_when_adding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            target = root / "results" / "alice.json"
+            target.parent.mkdir()
+            target.write_text(json.dumps(v1_file()))
+            result = default_call(leaderboard_dir=root, passed=["new_problem"])
+            self.assertTrue(result["changed"])
+            data = load_user(root)
+            self.assertEqual(data["schema_version"], 2)
+            self.assertEqual(len(data["results"]), 2)
+            find_record(data, "Claude Opus 4.6", "two_plus_two")
+            find_record(data, "Claude Opus 4.6", "new_problem")
+
+    def test_duplicate_retry_is_sticky_noop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            default_call(leaderboard_dir=root, passed=["two_plus_two"])
+            before = (root / "results" / "alice.json").read_bytes()
+            result = default_call(
+                leaderboard_dir=root,
+                passed=["two_plus_two"],
+                now="2026-05-01T00:00:00Z",
+                production_description="must not overwrite",
+            )
+            self.assertFalse(result["changed"])
+            self.assertEqual((root / "results" / "alice.json").read_bytes(), before)
+
+    def test_new_records_append_without_reordering_existing_v2(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            default_call(leaderboard_dir=root, passed=["z_problem"])
+            first_id = load_user(root)["results"][0]["result_id"]
+            default_call(leaderboard_dir=root, passed=["a_problem"])
+            records = load_user(root)["results"]
+            self.assertEqual(records[0]["result_id"], first_id)
             self.assertEqual(
-                data["solved"]["GPT-5.5"]["two_plus_two"]["solved_at"],
-                "2026-05-01T01:00:00Z",
+                [record["problem_id"] for record in records],
+                ["z_problem", "a_problem"],
             )
 
-    def test_partial_add_only_records_new_problems(self) -> None:
+    def test_new_revision_and_different_model_are_distinct(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            default_call(leaderboard_dir=lb, passed=["two_plus_two"])
-            result = default_call(leaderboard_dir=lb, passed=["two_plus_two", "list_append_singleton_length"])
-            self.assertEqual(result["added"], ["list_append_singleton_length"])
-            self.assertEqual(
-                result["commit_message"],
-                "record: alice solved list_append_singleton_length using Claude Opus 4.6 @ 8e1b9cf",
+            root = pathlib.Path(tmp)
+            default_call(leaderboard_dir=root, passed=["x"])
+            self.assertTrue(
+                default_call(
+                    leaderboard_dir=root,
+                    passed=["x"],
+                    statement_revisions={"x": 2},
+                )["changed"]
             )
-
-    def test_multi_problem_commit_message(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            result = default_call(leaderboard_dir=lb, passed=["a", "b", "c"])
-            self.assertEqual(result["added"], ["a", "b", "c"])
-            self.assertEqual(
-                result["commit_message"],
-                "record: alice solved a, b, c using Claude Opus 4.6 @ 8e1b9cf",
+            self.assertTrue(
+                default_call(leaderboard_dir=root, passed=["x"], model="GPT-5.5")[
+                    "changed"
+                ]
             )
+            data = load_user(root)
+            find_record(data, "Claude Opus 4.6", "x", 1)
+            find_record(data, "Claude Opus 4.6", "x", 2)
+            find_record(data, "GPT-5.5", "x", 1)
 
-    def test_private_submission_records_false_flag(self) -> None:
+    def test_metadata_and_gist_provenance_are_nested_losslessly(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            default_call(leaderboard_dir=lb, passed=["secret"], submission_public=False)
-            data = json.loads((lb / "results" / "alice.json").read_text())
-            record = data["solved"]["Claude Opus 4.6"]["secret"]
-            self.assertFalse(record["submission_public"])
-
-    def test_published_solution_snapshot_is_recorded(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
+            root = pathlib.Path(tmp)
             default_call(
-                leaderboard_dir=lb,
+                leaderboard_dir=root,
                 passed=["x"],
+                submission_kind="gist",
+                submission_repo="alice/abc123",
+                production_description="Custom orchestrator.",
                 solution_publication_status="published",
                 solution_publication_date="2026-08-05",
             )
-            data = json.loads((lb / "results" / "alice.json").read_text())
-            record = data["solved"]["Claude Opus 4.6"]["x"]
-            self.assertEqual(record["solution_publication_status"], "published")
-            self.assertEqual(record["solution_publication_date"], "2026-08-05")
+            record = find_record(load_user(root), "Claude Opus 4.6", "x")
+            self.assertEqual(record["submission"]["kind"], "gist")
+            self.assertEqual(
+                record["production_metadata"],
+                {
+                    "production_description": "Custom orchestrator.",
+                    "solution_publication_status": "published",
+                    "solution_publication_date": "2026-08-05",
+                },
+            )
 
-    def test_planned_solution_snapshot_is_recorded(self) -> None:
+    def test_private_planned_publication_is_recorded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
+            root = pathlib.Path(tmp)
             default_call(
-                leaderboard_dir=lb,
+                leaderboard_dir=root,
                 passed=["x"],
                 submission_public=False,
                 solution_publication_status="planned",
                 solution_publication_date="2027-01-15",
             )
-            data = json.loads((lb / "results" / "alice.json").read_text())
-            record = data["solved"]["Claude Opus 4.6"]["x"]
-            self.assertEqual(record["solution_publication_status"], "planned")
-            self.assertEqual(record["solution_publication_date"], "2027-01-15")
+            record = find_record(load_user(root), "Claude Opus 4.6", "x")
+            self.assertFalse(record["submission"]["public"])
+            self.assertEqual(
+                record["production_metadata"]["solution_publication_status"],
+                "planned",
+            )
 
-    def test_publication_status_must_match_detected_visibility(self) -> None:
+    def test_input_validation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            with self.assertRaisesRegex(ul.UpdateError, "requires a public submission"):
+            root = pathlib.Path(tmp)
+            cases = [
+                ("40-char hex SHA", {"benchmark_commit": "notasha"}),
+                ("GitHub login", {"user": "not a login"}),
+                ("submission-kind", {"submission_kind": "bitbucket"}),
+                ("positive integer", {"statement_revisions": {"x": 0}}),
+            ]
+            for message, overrides in cases:
+                with self.subTest(message=message), self.assertRaisesRegex(
+                    ul.UpdateError, message
+                ):
+                    default_call(leaderboard_dir=root, passed=["x"], **overrides)
+            with self.assertRaisesRegex(ul.UpdateError, "requires a public"):
                 default_call(
-                    leaderboard_dir=lb,
+                    leaderboard_dir=root,
                     passed=["x"],
                     submission_public=False,
                     solution_publication_status="published",
                     solution_publication_date="2026-08-05",
                 )
-
-    def test_invalid_publication_date_is_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
             with self.assertRaisesRegex(ul.UpdateError, "valid calendar date"):
                 default_call(
-                    leaderboard_dir=lb,
+                    leaderboard_dir=root,
                     passed=["x"],
                     solution_publication_status="published",
                     solution_publication_date="2026-02-30",
                 )
 
-    def test_duplicates_in_passed_list_are_deduped(self) -> None:
+    def test_description_validation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            result = default_call(leaderboard_dir=lb, passed=["a", "a", "b"])
-            self.assertEqual(result["added"], ["a", "b"])
-
-    def test_filename_is_lowercased(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            default_call(leaderboard_dir=lb, passed=["x"], user="Kim-EM")
-            self.assertTrue((lb / "results" / "kim-em.json").is_file())
-            data = json.loads((lb / "results" / "kim-em.json").read_text())
-            self.assertEqual(data["user"], "Kim-EM")
-
-    def test_schema_version_mismatch_is_fatal(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            target = lb / "results" / "alice.json"
-            target.parent.mkdir(parents=True)
-            target.write_text(json.dumps({"schema_version": 999, "user": "alice", "solved": {}}))
-            with self.assertRaisesRegex(ul.UpdateError, "schema_version"):
-                default_call(leaderboard_dir=lb, passed=["x"])
-
-    def test_old_v2_file_rejected(self) -> None:
-        # The (model, problem)-keyed v2 layout that briefly shipped is
-        # rejected; operators must wipe affected results files and replay.
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            target = lb / "results" / "alice.json"
-            target.parent.mkdir(parents=True)
-            target.write_text(json.dumps({
-                "schema_version": 2,
-                "user": "alice",
-                "solved": {"Claude Opus 4.6": {"two_plus_two": {}}},
-            }))
-            with self.assertRaisesRegex(ul.UpdateError, "schema_version"):
-                default_call(leaderboard_dir=lb, passed=["x"])
-
-    def test_invalid_benchmark_sha_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            with self.assertRaisesRegex(ul.UpdateError, "40-char hex SHA"):
-                default_call(leaderboard_dir=lb, passed=["x"], benchmark_commit="notasha")
-
-    def test_invalid_login_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            with self.assertRaisesRegex(ul.UpdateError, "GitHub login"):
-                default_call(leaderboard_dir=lb, passed=["x"], user="not a login")
-
-    def test_empty_passed_list_is_noop(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            result = default_call(leaderboard_dir=lb, passed=[])
-            self.assertFalse(result["changed"])
-            self.assertEqual(result["added"], [])
-            self.assertFalse((lb / "results" / "alice.json").exists())
-
-    def test_production_description_recorded_when_supplied(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            default_call(
-                leaderboard_dir=lb,
-                passed=["x"],
-                production_description="Custom orchestrator + Claude Opus 4.7.",
-            )
-            data = json.loads((lb / "results" / "alice.json").read_text())
-            record = data["solved"]["Claude Opus 4.6"]["x"]
-            self.assertEqual(
-                record["production_description"],
-                "Custom orchestrator + Claude Opus 4.7.",
-            )
-
-    def test_production_description_sticky_no_op(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            default_call(
-                leaderboard_dir=lb,
-                passed=["x"],
-                production_description="first description",
-            )
-            # Re-submitting the same (model, problem) with a different
-            # description must not overwrite the existing record.
-            default_call(
-                leaderboard_dir=lb,
-                passed=["x"],
-                production_description="second description",
-            )
-            data = json.loads((lb / "results" / "alice.json").read_text())
-            record = data["solved"]["Claude Opus 4.6"]["x"]
-            self.assertEqual(record["production_description"], "first description")
-
-    def test_production_description_oversize_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            oversize = "x" * (ul.PRODUCTION_DESCRIPTION_MAX_LEN + 1)
-            with self.assertRaisesRegex(ul.UpdateError, "at most"):
-                default_call(
-                    leaderboard_dir=lb,
-                    passed=["x"],
-                    production_description=oversize,
-                )
-
-    def test_production_description_nul_rejected(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
+            root = pathlib.Path(tmp)
             with self.assertRaisesRegex(ul.UpdateError, "NUL"):
                 default_call(
-                    leaderboard_dir=lb,
+                    leaderboard_dir=root,
                     passed=["x"],
                     production_description="bad\x00string",
                 )
+            with self.assertRaisesRegex(ul.UpdateError, "at most"):
+                default_call(
+                    leaderboard_dir=root,
+                    passed=["x"],
+                    production_description=(
+                        "x" * (ul.PRODUCTION_DESCRIPTION_MAX_LEN + 1)
+                    ),
+                )
 
-    def test_production_description_blank_treated_as_absent(self) -> None:
+    def test_deduping_empty_and_case_insensitive_login(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp)
-            default_call(
-                leaderboard_dir=lb,
-                passed=["x"],
-                production_description="   \n\t  ",
+            root = pathlib.Path(tmp)
+            result = default_call(
+                leaderboard_dir=root, passed=["a", "a", "b"], user="Alice"
             )
-            data = json.loads((lb / "results" / "alice.json").read_text())
-            record = data["solved"]["Claude Opus 4.6"]["x"]
-            self.assertNotIn("production_description", record)
+            self.assertEqual(result["added"], ["a", "b"])
+            data = load_user(root)
+            self.assertEqual(data["user"], "Alice")
+            self.assertEqual(
+                find_record(data, "Claude Opus 4.6", "a")["result_id"],
+                rs.result_id("alice", "Claude Opus 4.6", "a", 1),
+            )
+            empty_root = root / "empty"
+            self.assertFalse(
+                default_call(leaderboard_dir=empty_root, passed=[])["changed"]
+            )
+            self.assertFalse((empty_root / "results" / "alice.json").exists())
 
-    def test_cli_end_to_end_writes_and_prints_json(self) -> None:
+    def test_unknown_or_malformed_schema_is_fatal(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            lb = pathlib.Path(tmp) / "lb"
-            lb.mkdir()
-            results_path = pathlib.Path(tmp) / "results.json"
-            results_path.write_text(json.dumps({"passed": ["two_plus_two"]}))
-            import io
-            import contextlib
-            buf = io.StringIO()
-            with contextlib.redirect_stdout(buf):
-                rc = ul.main([
-                    "--user", "alice",
-                    "--leaderboard-dir", str(lb),
-                    "--results-json", str(results_path),
-                    "--benchmark-commit", BENCHMARK_COMMIT,
-                    "--submission-kind", "github_repo",
-                    "--submission-repo", "alice/proofs",
-                    "--submission-ref", SUBMISSION_REF,
-                    "--submission-public",
-                    "--model", "Claude Opus 4.6",
-                    "--issue-number", "42",
-                    "--now", "2026-04-11T10:45:00Z",
-                ])
+            root = pathlib.Path(tmp)
+            target = root / "results" / "alice.json"
+            target.parent.mkdir()
+            target.write_text(json.dumps({"schema_version": 999, "user": "alice"}))
+            with self.assertRaisesRegex(ul.UpdateError, "schema_version"):
+                default_call(leaderboard_dir=root, passed=["x"])
+            target.write_text(
+                json.dumps({"schema_version": 2, "user": "alice", "solved": {}})
+            )
+            with self.assertRaisesRegex(ul.UpdateError, "must contain only"):
+                default_call(leaderboard_dir=root, passed=["x"])
+
+    def test_cli_reads_revision_map_and_writes_v2(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "store"
+            root.mkdir()
+            evaluation = pathlib.Path(tmp) / "results.json"
+            evaluation.write_text(
+                json.dumps(
+                    {
+                        "passed": ["two_plus_two"],
+                        "statement_revisions": {"two_plus_two": 3},
+                    }
+                )
+            )
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                rc = ul.main(
+                    [
+                        "--user", "alice",
+                        "--leaderboard-dir", str(root),
+                        "--results-json", str(evaluation),
+                        "--benchmark-commit", BENCHMARK_COMMIT,
+                        "--submission-kind", "github_repo",
+                        "--submission-repo", "alice/proofs",
+                        "--submission-ref", SUBMISSION_REF,
+                        "--submission-public",
+                        "--model", "Claude Opus 4.6",
+                        "--issue-number", "42",
+                        "--now", "2026-04-11T10:45:00Z",
+                    ]
+                )
             self.assertEqual(rc, 0)
-            payload = json.loads(buf.getvalue())
-            self.assertTrue(payload["changed"])
-            self.assertEqual(payload["added"], ["two_plus_two"])
-            self.assertTrue((lb / "results" / "alice.json").is_file())
+            self.assertTrue(json.loads(output.getvalue())["changed"])
+            find_record(load_user(root), "Claude Opus 4.6", "two_plus_two", 3)
 
 
 if __name__ == "__main__":

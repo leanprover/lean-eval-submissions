@@ -30,6 +30,7 @@ import archive_submission as arch  # noqa: E402
 
 VALID_REF = "0123456789abcdef0123456789abcdef01234567"
 VALID_PLAINTEXT_SHA = "a" * 64
+VALID_SUBMISSION_ID = "0198c4ee-7d2d-7b35-8d20-cd5db8aa9a6f"
 
 
 def _make_source_tar(dir: pathlib.Path, *, size_padding: int = 0) -> pathlib.Path:
@@ -45,6 +46,23 @@ def _make_source_tar(dir: pathlib.Path, *, size_padding: int = 0) -> pathlib.Pat
 def _make_metadata(dir: pathlib.Path, **overrides) -> pathlib.Path:
     metadata = {
         "issue_number": 99,
+        "submission_ref": VALID_REF,
+        "submission_repo": "alice/proofs",
+        "submission_kind": "github_repo",
+        "submission_public": False,
+        "submitted_by": "alice",
+        "model": "Test Model",
+        "source_url": "https://github.com/alice/proofs",
+    }
+    metadata.update(overrides)
+    path = dir / "metadata.json"
+    path.write_text(json.dumps(metadata, indent=2, sort_keys=True))
+    return path
+
+
+def _make_server_metadata(dir: pathlib.Path, **overrides) -> pathlib.Path:
+    metadata = {
+        "submission_id": VALID_SUBMISSION_ID,
         "submission_ref": VALID_REF,
         "submission_repo": "alice/proofs",
         "submission_kind": "github_repo",
@@ -80,6 +98,62 @@ def _fake_age(args, **kwargs):
 
 
 class EncryptTests(unittest.TestCase):
+    def test_encrypt_server_submission_writes_v2_sidecar(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            with mock.patch.object(arch.subprocess, "run", side_effect=_fake_age):
+                rc = arch.main([
+                    "encrypt",
+                    "--source-tar", str(_make_source_tar(tmp)),
+                    "--metadata", str(_make_server_metadata(tmp)),
+                    "--recipients", str(_make_recipients(tmp)),
+                    "--output-dir", str(tmp / "out"),
+                ])
+            self.assertEqual(rc, 0)
+            sidecar = json.loads((tmp / "out" / "sidecar.partial.json").read_text())
+            self.assertEqual(sidecar["schema_version"], 2)
+            self.assertEqual(sidecar["submission_id"], VALID_SUBMISSION_ID)
+            self.assertNotIn("issue", sidecar)
+
+    def test_encrypt_rejects_non_uuidv7_submission_id(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            with self.assertRaises(SystemExit) as ctx:
+                arch.main([
+                    "encrypt",
+                    "--source-tar", str(_make_source_tar(tmp)),
+                    "--metadata", str(_make_server_metadata(tmp, submission_id="not-v7")),
+                    "--recipients", str(_make_recipients(tmp)),
+                    "--output-dir", str(tmp / "out"),
+                ])
+            self.assertIn("UUIDv7", str(ctx.exception))
+
+    def test_encrypt_rejects_ambiguous_server_and_issue_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            with self.assertRaises(SystemExit) as ctx:
+                arch.main([
+                    "encrypt",
+                    "--source-tar", str(_make_source_tar(tmp)),
+                    "--metadata", str(_make_server_metadata(tmp, issue_number=99)),
+                    "--recipients", str(_make_recipients(tmp)),
+                    "--output-dir", str(tmp / "out"),
+                ])
+            self.assertIn("must not contain both", str(ctx.exception))
+
+    def test_encrypt_rejects_boolean_issue_number(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            with self.assertRaises(SystemExit) as ctx:
+                arch.main([
+                    "encrypt",
+                    "--source-tar", str(_make_source_tar(tmp)),
+                    "--metadata", str(_make_metadata(tmp, issue_number=True)),
+                    "--recipients", str(_make_recipients(tmp)),
+                    "--output-dir", str(tmp / "out"),
+                ])
+            self.assertIn("must be int", str(ctx.exception))
+
     def test_encrypt_writes_ciphertext_and_partial_sidecar(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
@@ -293,6 +367,24 @@ class PushTests(unittest.TestCase):
         path.write_text(json.dumps(sidecar))
         return path
 
+    def _server_sidecar(self, dir: pathlib.Path, **overrides) -> pathlib.Path:
+        sidecar = {
+            "schema_version": 2,
+            "submission_id": VALID_SUBMISSION_ID,
+            "submission_repo": "alice/proofs",
+            "submission_ref": VALID_REF,
+            "submission_kind": "github_repo",
+            "submission_public": False,
+            "submitter": "alice",
+            "model": "Test Model",
+            "size_bytes_plaintext_tar": 1234,
+            "sha256_plaintext_tar": VALID_PLAINTEXT_SHA,
+        }
+        sidecar.update(overrides)
+        path = dir / "sidecar.partial.json"
+        path.write_text(json.dumps(sidecar))
+        return path
+
     def _ciphertext(self, dir: pathlib.Path, body: bytes = b"age-encryption.org/v1\nfake") -> pathlib.Path:
         path = dir / "source.tar.gz.age"
         path.write_bytes(body)
@@ -307,6 +399,7 @@ class PushTests(unittest.TestCase):
         ``sha256_plaintext_tar=``) to simulate a colliding source.
         """
         identity = {
+            "schema_version": 1,
             "submitter": "alice",
             "issue": 99,
             "submission_repo": "alice/proofs",
@@ -315,6 +408,33 @@ class PushTests(unittest.TestCase):
         }
         identity.update(identity_overrides)
         body = json.dumps(identity).encode("utf-8")
+        return json.dumps({
+            "sha": sha,
+            "encoding": "base64",
+            "content": base64.b64encode(body).decode("ascii"),
+        }).encode("utf-8")
+
+    @staticmethod
+    def _server_sidecar_meta(*, sha: str = "abc123", **overrides) -> bytes:
+        sidecar = {
+            "schema_version": 2,
+            "submission_id": VALID_SUBMISSION_ID,
+            "submitter": "alice",
+            "submission_repo": "alice/proofs",
+            "submission_ref": VALID_REF,
+            "submission_kind": "github_repo",
+            "submission_public": False,
+            "model": "Test Model",
+            "size_bytes_plaintext_tar": 1234,
+            "sha256_plaintext_tar": VALID_PLAINTEXT_SHA,
+            "sha256_ciphertext": hashlib.sha256(
+                b"age-encryption.org/v1\nexisting"
+            ).hexdigest(),
+            "size_bytes_ciphertext": len(b"age-encryption.org/v1\nexisting"),
+            "archived_at": "2026-08-20T00:00:00Z",
+        }
+        sidecar.update(overrides)
+        body = json.dumps(sidecar).encode("utf-8")
         return json.dumps({
             "sha": sha,
             "encoding": "base64",
@@ -393,6 +513,138 @@ class PushTests(unittest.TestCase):
             self.assertEqual(uploaded_sidecar["benchmark_commit"], "f" * 40)
             self.assertIn("archived_at", uploaded_sidecar)
             self.assertEqual(puts[0]["headers"]["Authorization"], "Bearer xxx")
+
+    def test_push_server_submission_emits_state_locator(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            locator = tmp / "archive-locator.json"
+            puts: list[dict] = []
+
+            def fake_urlopen(req, timeout=None):
+                if req.get_method() == "GET" and "?ref=" in req.full_url:
+                    return io.BytesIO(b"age-encryption.org/v1\nfake")
+                if req.get_method() == "GET":
+                    raise self._not_found(req.full_url)
+                puts.append({
+                    "url": req.full_url,
+                    "body": json.loads(req.data.decode("utf-8")),
+                })
+                return io.BytesIO(json.dumps({
+                    "content": {"sha": "deadbeef"},
+                    "commit": {"sha": "f" * 40},
+                }).encode("utf-8"))
+
+            with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}), \
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
+                rc = arch.main([
+                    "push",
+                    "--ciphertext", str(self._ciphertext(tmp)),
+                    "--sidecar", str(self._server_sidecar(tmp)),
+                    "--locator-output", str(locator),
+                ])
+
+            self.assertEqual(rc, 0)
+            self.assertEqual(len(puts), 2)
+            expected_base = f"archives/01/{VALID_SUBMISSION_ID}"
+            self.assertTrue(puts[0]["url"].endswith(expected_base + ".tar.age"))
+            self.assertTrue(puts[1]["url"].endswith(expected_base + ".json"))
+            value = json.loads(locator.read_text())
+            self.assertEqual(value, {
+                "schema_version": 1,
+                "submission_id": VALID_SUBMISSION_ID,
+                "archive_repository": "leanprover/lean-eval-audit",
+                "archive_commit": "f" * 40,
+                "archive_path": expected_base + ".tar.age",
+                "archive_ciphertext_sha256": hashlib.sha256(
+                    b"age-encryption.org/v1\nfake"
+                ).hexdigest(),
+                "encrypted": True,
+            })
+
+    def test_push_server_submission_requires_locator_output(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}):
+                with self.assertRaises(SystemExit) as ctx:
+                    arch.main([
+                        "push",
+                        "--ciphertext", str(self._ciphertext(tmp)),
+                        "--sidecar", str(self._server_sidecar(tmp)),
+                    ])
+            self.assertIn("--locator-output is required", str(ctx.exception))
+
+    def test_push_rejects_unknown_partial_sidecar_field(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}):
+                with self.assertRaises(SystemExit) as ctx:
+                    arch.main([
+                        "push",
+                        "--ciphertext", str(self._ciphertext(tmp)),
+                        "--sidecar", str(self._partial_sidecar(tmp, injected="value")),
+                    ])
+            self.assertIn("unknown fields", str(ctx.exception))
+
+    def test_push_server_refuses_locator_when_committed_ciphertext_differs(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            locator = tmp / "archive-locator.json"
+
+            def fake_urlopen(req, timeout=None):
+                if req.get_method() == "GET" and "?ref=" in req.full_url:
+                    return io.BytesIO(b"different committed ciphertext")
+                if req.get_method() == "GET":
+                    raise self._not_found(req.full_url)
+                return io.BytesIO(json.dumps({
+                    "commit": {"sha": "f" * 40},
+                }).encode("utf-8"))
+
+            with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}), \
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
+                with self.assertRaises(SystemExit) as ctx:
+                    arch.main([
+                        "push",
+                        "--ciphertext", str(self._ciphertext(tmp)),
+                        "--sidecar", str(self._server_sidecar(tmp)),
+                        "--locator-output", str(locator),
+                    ])
+            self.assertIn("does not contain the ciphertext", str(ctx.exception))
+            self.assertFalse(locator.exists())
+
+    def test_push_server_idempotent_replay_uses_existing_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            locator = tmp / "archive-locator.json"
+            calls: list[tuple[str, str]] = []
+
+            def fake_urlopen(req, timeout=None):
+                method, url = req.get_method(), req.full_url
+                calls.append((method, url))
+                if "/commits?" in url:
+                    return io.BytesIO(json.dumps([{"sha": "e" * 40}]).encode("utf-8"))
+                if method == "GET" and "?ref=" in url:
+                    return io.BytesIO(b"age-encryption.org/v1\nexisting")
+                if method == "GET" and url.endswith(".json"):
+                    return io.BytesIO(self._server_sidecar_meta())
+                raise AssertionError(f"unexpected {method} {url}")
+
+            with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}), \
+                 mock.patch.object(arch.urllib.request, "urlopen", side_effect=fake_urlopen):
+                rc = arch.main([
+                    "push",
+                    "--ciphertext", str(self._ciphertext(tmp)),
+                    "--sidecar", str(self._server_sidecar(tmp)),
+                    "--locator-output", str(locator),
+                ])
+
+            self.assertEqual(rc, 0)
+            self.assertFalse(any(method == "PUT" for method, _ in calls))
+            value = json.loads(locator.read_text())
+            self.assertEqual(value["archive_commit"], "e" * 40)
+            self.assertEqual(
+                value["archive_ciphertext_sha256"],
+                hashlib.sha256(b"age-encryption.org/v1\nexisting").hexdigest(),
+            )
 
     def test_push_idempotent_on_reeval_same_source(self) -> None:
         # Re-evaluating an already-archived submission. The sidecar exists for
@@ -608,6 +860,33 @@ class PushTests(unittest.TestCase):
                     ])
             self.assertIn("schema_version", str(ctx.exception))
 
+    def test_push_rejects_boolean_sidecar_schema_version(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            ciphertext = self._ciphertext(tmp)
+            sidecar = self._partial_sidecar(tmp, schema_version=True)
+            with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}):
+                with self.assertRaises(SystemExit) as ctx:
+                    arch.main([
+                        "push",
+                        "--ciphertext", str(ciphertext),
+                        "--sidecar", str(sidecar),
+                    ])
+            self.assertIn("schema_version", str(ctx.exception))
+
+    def test_push_rejects_malformed_audit_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            with mock.patch.dict(arch.os.environ, {"ARCHIVER_TOKEN": "xxx"}):
+                with self.assertRaises(SystemExit) as ctx:
+                    arch.main([
+                        "push",
+                        "--ciphertext", str(self._ciphertext(tmp)),
+                        "--sidecar", str(self._partial_sidecar(tmp)),
+                        "--audit-repo", "owner/repo/extra",
+                    ])
+            self.assertIn("--audit-repo", str(ctx.exception))
+
     def test_push_validates_sidecar_submission_ref(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = pathlib.Path(td)
@@ -667,6 +946,14 @@ class PushTests(unittest.TestCase):
 
 
 class GitBlobShaTests(unittest.TestCase):
+    def test_archive_locator_schema_is_strict_v1(self) -> None:
+        schema = json.loads(
+            (REPO_ROOT / "schemas" / "archive-locator-v1.schema.json").read_text()
+        )
+        self.assertEqual(schema["properties"]["schema_version"], {"const": 1})
+        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(set(schema["required"]), set(schema["properties"]))
+
     def test_matches_git_hash_object(self) -> None:
         # Reference value computed with `git hash-object` for the same
         # content. If this drifts, the idempotency check is comparing

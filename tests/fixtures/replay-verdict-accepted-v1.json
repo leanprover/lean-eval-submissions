@@ -1,0 +1,22 @@
+{
+  "attempt": 1,
+  "checker_outcome": "accepted",
+  "execution_outcome": "completed",
+  "failure_reason": null,
+  "replay_task_id": "rt1_18648187548dc56592b3befe69f5d380edd839bfeb255d7712269a02066c7e1a",
+  "schema_version": 1,
+  "statistics": {
+    "build_retired_instructions": {
+      "status": "measured",
+      "value": 987654
+    },
+    "build_wall_time_ms": 4321,
+    "checker_retired_instructions": {
+      "status": "measured",
+      "value": 123456
+    },
+    "checker_wall_time_ms": 1234,
+    "file_count": 3,
+    "lines_of_code": 87
+  }
+}

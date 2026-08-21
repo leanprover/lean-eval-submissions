@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/replay-execution-request-v1.schema.json",
+  "title": "LeanEval public-source replay execution request v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "replay_task_id", "attempt", "source", "benchmark",
+    "result", "checker", "execution_profile_digest", "measurement_config_digest",
+    "execution_profile", "measurement_config", "network", "untrusted_environment"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "replay_task_id": { "type": "string", "pattern": "^rt1_[0-9a-f]{64}$" },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "visibility"],
+      "properties": {
+        "repository": { "$ref": "#/$defs/repository" },
+        "commit": { "$ref": "#/$defs/commit" },
+        "visibility": { "const": "public" }
+      }
+    },
+    "benchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "toolchain"],
+      "properties": {
+        "repository": { "$ref": "#/$defs/repository" },
+        "commit": { "$ref": "#/$defs/commit" },
+        "toolchain": {
+          "type": "string",
+          "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_id", "submission_id", "problem_id", "statement_revision",
+        "commit", "tree_digest"
+      ],
+      "properties": {
+        "result_id": { "type": "string", "pattern": "^r2_[0-9a-f]{64}$" },
+        "submission_id": { "$ref": "#/$defs/uuid7" },
+        "problem_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$" },
+        "statement_revision": {
+          "type": "integer", "minimum": 1, "maximum": 9007199254740991
+        },
+        "commit": { "$ref": "#/$defs/commit" },
+        "tree_digest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "checker": { "const": "nanoda" },
+    "execution_profile_digest": { "$ref": "#/$defs/digest" },
+    "measurement_config_digest": { "$ref": "#/$defs/digest" },
+    "execution_profile": {
+      "$ref": "replay-execution-profile-v1.schema.json"
+    },
+    "measurement_config": {
+      "$ref": "replay-measurement-config-v1.schema.json"
+    },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fetch_phase", "untrusted_execution_phase"],
+      "properties": {
+        "fetch_phase": { "const": "public_https_only" },
+        "untrusted_execution_phase": { "const": "disabled" }
+      }
+    },
+    "untrusted_environment": {
+      "type": "object",
+      "maxProperties": 0
+    }
+  },
+  "$defs": {
+    "uuid7": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

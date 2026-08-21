@@ -1,5 +1,16 @@
 # Security model: the lean-eval submission pipeline
 
+The planned encrypted-source recovery path has a separate, currently disabled
+security contract in [`docs/replay.md`](docs/replay.md). It must not weaken the
+same-job, no-plaintext-artifact invariants documented below.
+
+The local-only Wave 2 public-source planner and disposable-VM handoff are
+specified in [`docs/replay-orchestrator.md`](docs/replay-orchestrator.md). The
+execution request admits no credentials or ambient environment and disables
+network access before untrusted Lean runs; structural tests guard those
+properties. Private replay remains nonterminally blocked pending D6; it stays
+queued and does not emit `replay.unavailable`.
+
 This document explains why we believe the lean-eval submission pipeline
 is resistant to adversarial submissions, what assumptions it depends on,
 and where a future red-teamer should look first.
@@ -113,6 +124,13 @@ and key custody story. The `record` job is gated on the `archive` job
 succeeding, so a recorded leaderboard entry always implies a durable
 encrypted archive of the source.
 
+The future server intake uses the same encryption boundary but keys the
+archive by its canonical UUIDv7 under `archives/<prefix>/<uuid>.tar.age`.
+Before State may receive `archive.completed`, the archiver emits an immutable
+repository/commit/path/ciphertext-digest locator and verifies the encrypted
+bytes at that exact commit. Issue-based intake retains its existing archive
+layout and behavior.
+
 ## 3. The two-checkout evaluation workflow
 
 `submission.yml`'s `evaluate` job is the only place untrusted submitter
@@ -151,14 +169,23 @@ running script out from under itself.
 - **Schema validation.** `update_leaderboard.py` validates
   `submission-ref` and `benchmark-commit` as 40-char hex SHAs,
   `submission-repo` as `owner/name`, `submission-kind` as `github_repo`
-  or `gist`, and `--user` as a GitHub login regex.
+  or `gist`, `--user` as a GitHub login regex, and the statement revision
+  frozen into the uncredentialed evaluator's artifact. It accepts schema v1
+  and v2 but validates the complete v2 envelope and identifier before writing.
 - **Sticky no-op writes.** A result for an already-recorded
-  `(user, model, problem)` triple is a no-op; the map only grows. See the
-  README's record-schema section.
+  `(user, verbatim model, problem, statement revision)` tuple is a no-op;
+  base records only grow. See the README's record-schema section.
 - **Push identity.** The `record` job's results push is authored by the
   `lean-eval-recorder` GitHub App, which is the explicit branch-protection
   bypass actor for this repo's `main` (see `docs/ci-secrets.md`). Only
   this workflow holds that App's credentials.
+- **Migration serialization.** The v2 migration uses that same App and first
+  commits a durable `results-store-writer` lock. Record jobs keep evaluating
+  and archiving, then fetch and wait at the credentialed write boundary. The
+  lock is removed atomically with the migration commit. See
+  `docs/results-schema-v2.md`; do not replace it with a static record-job
+  Actions concurrency group, which cancels older pending jobs rather than
+  queueing all of them.
 - **Leaderboard redeploy.** After a successful results push the job fires
   a `results-advanced` `repository_dispatch` at
   `leanprover/lean-eval-leaderboard`. Dispatch failure after a successful

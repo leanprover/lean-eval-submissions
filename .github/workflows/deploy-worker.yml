@@ -1,0 +1,200 @@
+name: Check and deploy submission Worker
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/deploy-worker.yml'
+      - 'INFRASTRUCTURE.md'
+      - 'server/**'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/deploy-worker.yml'
+      - 'INFRASTRUCTURE.md'
+      - 'server/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: submission-worker-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+defaults:
+  run:
+    working-directory: server
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # actions/setup-node pinned to v6.5.0.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.6.0'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+      - run: npm run types:check
+      - run: npm run lint
+      - run: npm test
+      - run: npm audit --package-lock-only --audit-level=high
+      - run: npm run deploy:dry-run
+
+  promote-dispatch-ref:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: submission-dispatch-promotion
+    permissions:
+      contents: write
+    outputs:
+      ref: ${{ steps.promote.outputs.ref }}
+    steps:
+      - name: Create or verify immutable workflow-dispatch tag
+        id: promote
+        env:
+          APPROVAL_GUARD: ${{ secrets.DISPATCH_PROMOTION_APPROVAL_GUARD }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$APPROVAL_GUARD" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "reviewed dispatch-promotion environment is not configured" >&2
+            exit 1
+          fi
+          if [[ ! "$WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "workflow commit is not a full lowercase SHA" >&2
+            exit 1
+          fi
+          status=$(gh api "repos/$REPOSITORY/compare/$WORKFLOW_COMMIT...main" --jq .status)
+          if [ "$status" != "ahead" ] && [ "$status" != "identical" ]; then
+            echo "workflow commit is not reachable from protected main" >&2
+            exit 1
+          fi
+          gh api "repos/$REPOSITORY/contents/.github/workflows/submission.yml?ref=$WORKFLOW_COMMIT" \
+            --jq .sha >/dev/null
+
+          tag="lean-eval-dispatch/$WORKFLOW_COMMIT"
+          if existing=$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq .object.sha 2>/dev/null); then
+            if [ "$existing" != "$WORKFLOW_COMMIT" ]; then
+              echo "dispatch tag collision: $tag resolves to $existing" >&2
+              exit 1
+            fi
+          else
+            gh api "repos/$REPOSITORY/git/refs" \
+              -X POST \
+              -f "ref=refs/tags/$tag" \
+              -f "sha=$WORKFLOW_COMMIT" >/dev/null
+          fi
+          resolved=$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq .object.sha)
+          if [ "$resolved" != "$WORKFLOW_COMMIT" ]; then
+            echo "dispatch tag read-back did not resolve to the reviewed commit" >&2
+            exit 1
+          fi
+          echo "ref=$tag" >> "$GITHUB_OUTPUT"
+
+  deploy-staging:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: promote-dispatch-ref
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: cloudflare-staging
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.6.0'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Deploy staging GitHub broker
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          npx wrangler deploy --config wrangler.broker.jsonc --env staging
+          --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+      - name: Deploy staging submission Worker
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DISPATCH_WORKFLOW_REF: ${{ needs.promote-dispatch-ref.outputs.ref }}
+        run: >-
+          npx wrangler deploy --env staging
+          --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+          --var "DISPATCH_WORKFLOW_REF:$DISPATCH_WORKFLOW_REF"
+      - name: Smoke-test staging
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_ENVIRONMENT: staging
+        run: |
+          body=$(curl --fail --retry 6 --retry-all-errors --retry-delay 5 \
+            https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz)
+          HEALTH_BODY="$body" python - <<'PY'
+          import json, os
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["status"] == "ok"
+          assert body["environment"] == os.environ["EXPECTED_ENVIRONMENT"]
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          assert body["intake_enabled"] is False
+          PY
+
+  deploy-production:
+    needs: [deploy-staging, promote-dispatch-ref]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: cloudflare-production
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.6.0'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Deploy production GitHub broker
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          npx wrangler deploy --config wrangler.broker.jsonc --env production
+          --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+      - name: Deploy production submission Worker
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DISPATCH_WORKFLOW_REF: ${{ needs.promote-dispatch-ref.outputs.ref }}
+        run: >-
+          npx wrangler deploy --env production
+          --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+          --var "DISPATCH_WORKFLOW_REF:$DISPATCH_WORKFLOW_REF"
+      - name: Smoke-test production
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_ENVIRONMENT: production
+        run: |
+          body=$(curl --fail --retry 6 --retry-all-errors --retry-delay 5 \
+            https://lean-eval-submission-server.lean-eval.workers.dev/healthz)
+          HEALTH_BODY="$body" python - <<'PY'
+          import json, os
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["status"] == "ok"
+          assert body["environment"] == os.environ["EXPECTED_ENVIRONMENT"]
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          assert body["intake_enabled"] is False
+          PY

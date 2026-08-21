@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/replay-plan-v1.schema.json",
+  "title": "LeanEval replay planner output v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "kind"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "kind": { "const": "empty" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "kind", "replay_task_id", "queue_event_id",
+        "blocking_reason"
+      ],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "kind": { "const": "blocked" },
+        "replay_task_id": { "$ref": "#/$defs/replayTaskId" },
+        "queue_event_id": { "$ref": "#/$defs/uuid7" },
+        "blocking_reason": { "const": "private_replay_requires_d6" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "kind", "started_transition", "request"],
+      "properties": {
+        "schema_version": { "const": 1 },
+        "kind": { "const": "execution" },
+        "started_transition": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["event_type", "subject_id", "causation_event_id", "payload"],
+          "properties": {
+            "event_type": { "const": "replay.started" },
+            "subject_id": { "$ref": "#/$defs/replayTaskId" },
+            "causation_event_id": { "$ref": "#/$defs/uuid7" },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["attempt", "runner_profile"],
+              "properties": {
+                "attempt": { "type": "integer", "minimum": 1 },
+                "runner_profile": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        },
+        "request": { "$ref": "replay-execution-request-v1.schema.json" }
+      }
+    }
+  ],
+  "$defs": {
+    "uuid7": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "replayTaskId": {
+      "type": "string",
+      "pattern": "^rt1_[0-9a-f]{64}$"
+    }
+  }
+}

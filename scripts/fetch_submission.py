@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import math
 import os
 import pathlib
 import re
@@ -31,6 +32,11 @@ from typing import Literal
 
 
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+UUIDV7_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+)
+LOGIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$")
+PROBLEM_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 OWNER_RE = r"[A-Za-z0-9][A-Za-z0-9-]*"
 REPO_RE = r"[A-Za-z0-9._-]+"
 GIST_USER_RE = r"[A-Za-z0-9-]+"
@@ -544,6 +550,200 @@ def fetch_submission(
     return metadata
 
 
+SERVER_INPUT_FIELDS = {
+    "archive_locator_required",
+    "archive_sidecar_schema",
+    "declared_model",
+    "problem_group",
+    "problem_id",
+    "production_metadata_json",
+    "publication_choice",
+    "source_commit",
+    "source_repository",
+    "source_visibility",
+    "statement_revision",
+    "submission_id",
+    "submitted_by",
+    "workflow_commit",
+}
+SERVER_METADATA_FIELDS = {
+    "billing_mode",
+    "component_models",
+    "cost_usd",
+    "credit_identity",
+    "harness",
+    "human_involvement",
+    "input_tokens",
+    "notes",
+    "output_tokens",
+    "prompt",
+    "wall_time_seconds",
+    "web_access",
+}
+
+
+def _server_text(inputs: dict, field: str, maximum: int) -> str:
+    value = inputs.get(field)
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > maximum
+        or any(ord(character) <= 31 or ord(character) == 127 for character in value)
+    ):
+        raise FetchError(f"server input {field!r} is invalid")
+    return value
+
+
+def _validate_server_metadata(metadata: dict) -> None:
+    if not set(metadata) <= SERVER_METADATA_FIELDS:
+        raise FetchError("server production metadata has unknown fields")
+    text_limits = {
+        "credit_identity": 256,
+        "harness": 1024,
+        "human_involvement": 1024,
+        "prompt": 8192,
+        "notes": 4096,
+    }
+    for field, maximum in text_limits.items():
+        if field in metadata:
+            _server_text(metadata, field, maximum)
+    components = metadata.get("component_models")
+    if "component_models" in metadata:
+        if not isinstance(components, list) or len(components) > 16:
+            raise FetchError("server component_models is invalid")
+        for index, value in enumerate(components):
+            _server_text({str(index): value}, str(index), 256)
+    if "web_access" in metadata and not isinstance(metadata["web_access"], bool):
+        raise FetchError("server web_access is invalid")
+    for field in ("input_tokens", "output_tokens"):
+        value = metadata.get(field)
+        if field in metadata and (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or value < 0
+            or value > 9_007_199_254_740_991
+        ):
+            raise FetchError(f"server {field} is invalid")
+    for field, maximum in (("wall_time_seconds", 31_536_000), ("cost_usd", 1_000_000)):
+        value = metadata.get(field)
+        if field in metadata and (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not math.isfinite(value)
+            or value < 0
+            or value > maximum
+        ):
+            raise FetchError(f"server {field} is invalid")
+    if "billing_mode" in metadata and metadata.get("billing_mode") not in {"api", "subscription", "unknown"}:
+        raise FetchError("server billing_mode is invalid")
+
+
+def fetch_server_submission(
+    *,
+    inputs: dict,
+    output_dir: pathlib.Path,
+    app_token: str | None,
+    skip_clone: bool = False,
+) -> dict:
+    """Strictly decode and fetch one Worker-originated exact-ref submission."""
+    if set(inputs) != SERVER_INPUT_FIELDS:
+        raise FetchError("server dispatch has unknown or missing input fields")
+    if inputs.get("archive_locator_required") != "true" or inputs.get("archive_sidecar_schema") != "2":
+        raise FetchError("server dispatch does not require the UUID archive locator contract")
+    submission_id = _server_text(inputs, "submission_id", 36)
+    submitted_by = _server_text(inputs, "submitted_by", 39)
+    source_repository = _server_text(inputs, "source_repository", 200)
+    source_commit = _server_text(inputs, "source_commit", 40)
+    source_visibility = _server_text(inputs, "source_visibility", 7)
+    problem_id = _server_text(inputs, "problem_id", 128)
+    problem_group = _server_text(inputs, "problem_group", 64)
+    declared_model = _server_text(inputs, "declared_model", 256)
+    publication_choice = _server_text(inputs, "publication_choice", 16)
+    workflow_commit = _server_text(inputs, "workflow_commit", 40)
+    if not UUIDV7_RE.fullmatch(submission_id):
+        raise FetchError("server submission_id is not a canonical lowercase UUIDv7")
+    if not LOGIN_RE.fullmatch(submitted_by):
+        raise FetchError("server submitted_by is not a canonical lowercase GitHub login")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", source_repository):
+        raise FetchError("server source_repository is not canonical")
+    if not SHA_RE.fullmatch(source_commit):
+        raise FetchError("server source_commit is not an exact lowercase commit")
+    if not PROBLEM_RE.fullmatch(problem_id):
+        raise FetchError("server problem_id is not canonical")
+    if problem_group not in {
+        "formalization-evaluation",
+        "software-verification",
+        "open-conjectures",
+    }:
+        raise FetchError("server problem_group is invalid")
+    if source_visibility not in {"private", "public"}:
+        raise FetchError("server source_visibility is invalid")
+    if publication_choice not in {"scheduled", "withheld"}:
+        raise FetchError("server publication_choice is invalid")
+    if not SHA_RE.fullmatch(workflow_commit):
+        raise FetchError("server workflow_commit is not an exact lowercase commit")
+    try:
+        statement_revision = int(_server_text(inputs, "statement_revision", 16))
+    except ValueError as error:
+        raise FetchError("server statement_revision is invalid") from error
+    if statement_revision < 1 or statement_revision > 9_007_199_254_740_991:
+        raise FetchError("server statement_revision is invalid")
+    try:
+        production_metadata = json.loads(
+            _server_text(inputs, "production_metadata_json", 12_000)
+        )
+    except json.JSONDecodeError as error:
+        raise FetchError("server production_metadata_json is invalid") from error
+    if not isinstance(production_metadata, dict):
+        raise FetchError("server production_metadata_json must decode to an object")
+    _validate_server_metadata(production_metadata)
+
+    descriptor = parse_source_url(
+        f"https://github.com/{source_repository}/commit/{source_commit}"
+    )
+    clone_url = clone_url_for(descriptor, app_token)
+    sha = resolve_ref(descriptor, clone_url)
+    if sha != source_commit:
+        raise FetchError("server source did not resolve to the exact requested commit")
+    submission_public = resolve_repo_visibility(descriptor, app_token)
+    if submission_public != (source_visibility == "public"):
+        raise FetchError("server source visibility changed after Worker verification")
+    required_visibility = "public" if problem_group == "open-conjectures" else "private"
+    if source_visibility != required_visibility:
+        raise FetchError(
+            f"server {problem_group} submission requires {required_visibility} source"
+        )
+
+    source_dir = output_dir / "source"
+    if not skip_clone:
+        clone_at_sha(clone_url, sha, source_dir)
+        shutil.rmtree(source_dir / ".git")
+        guard_no_path_escape(source_dir)
+        tar_source(source_dir, output_dir / "source.tar.gz")
+    metadata = {
+        "schema_version": 2,
+        "submission_id": submission_id,
+        "source_url": f"https://github.com/{source_repository}/commit/{source_commit}",
+        "submission_kind": "github_repo",
+        "submission_repo": source_repository,
+        "submission_ref": source_commit,
+        "submission_public": submission_public,
+        "model": declared_model,
+        "submitted_by": submitted_by,
+        "problem_id": problem_id,
+        "problem_group": problem_group,
+        "statement_revision": statement_revision,
+        "publication_choice": publication_choice,
+        "production_metadata": production_metadata,
+    }
+    metadata_path = output_dir / "metadata.json"
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    metadata_path.write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return metadata
+
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -552,6 +752,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Path to the GitHub issue event payload JSON. "
         "Defaults to $GITHUB_EVENT_PATH.",
+    )
+    parser.add_argument(
+        "--server-dispatch",
+        action="store_true",
+        help="Decode the strict workflow_dispatch inputs contract instead of an issue.",
     )
     parser.add_argument(
         "--output-dir",
@@ -579,12 +784,23 @@ def main(argv: list[str] | None = None) -> int:
             )
         event_payload = json.loads(event_path.read_text(encoding="utf-8"))
         app_token = os.environ.get("APP_INSTALLATION_TOKEN") or None
-        metadata = fetch_submission(
-            event_payload=event_payload,
-            output_dir=args.output_dir,
-            app_token=app_token,
-            skip_clone=args.dry_run,
-        )
+        if args.server_dispatch:
+            inputs = event_payload.get("inputs")
+            if not isinstance(inputs, dict):
+                raise FetchError("server dispatch payload is missing inputs")
+            metadata = fetch_server_submission(
+                inputs=inputs,
+                output_dir=args.output_dir,
+                app_token=app_token,
+                skip_clone=args.dry_run,
+            )
+        else:
+            metadata = fetch_submission(
+                event_payload=event_payload,
+                output_dir=args.output_dir,
+                app_token=app_token,
+                skip_clone=args.dry_run,
+            )
     except FetchError as exc:
         print(str(exc), file=sys.stderr)
         return 1
