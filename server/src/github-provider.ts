@@ -65,10 +65,18 @@ export class GitHubProvider {
     verificationFetcher?: ProviderFetch,
     dispatchFetcher?: ProviderFetch,
   ) {
-    this.#fetcher = fetcher;
+    // A Worker runtime fetch function must be invoked without rebinding its
+    // receiver. Calling a function-valued private field as `this.#fetcher()`
+    // supplies the provider instance as `this`, which workerd rejects for the
+    // native global fetch with an illegal-invocation TypeError.
+    this.#fetcher = (input, init) => fetcher(input, init);
     this.#verificationToken = verificationToken;
-    this.#verificationFetcher = verificationFetcher;
-    this.#dispatchFetcher = dispatchFetcher;
+    this.#verificationFetcher = verificationFetcher === undefined
+      ? undefined
+      : (input, init) => verificationFetcher(input, init);
+    this.#dispatchFetcher = dispatchFetcher === undefined
+      ? undefined
+      : (input, init) => dispatchFetcher(input, init);
   }
 
   async exchangeOAuth(
