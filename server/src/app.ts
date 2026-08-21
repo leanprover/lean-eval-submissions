@@ -7,6 +7,7 @@ import {
   decodeChallengeSubmission,
   decodeMetadataAmendment,
   decodePublicationChoice,
+  decodeSourceReaderPreflight,
   isUuidV7,
   readJson,
   type ProductionMetadata,
@@ -602,6 +603,25 @@ async function archiveCompleted(
   }, outcome.created ? 201 : 200);
 }
 
+async function sourceReaderPreflight(
+  request: Request,
+  env: RuntimeEnv,
+  dependencies: ApiDependencies,
+): Promise<Response> {
+  if (!(await readinessAuthorized(request, env))) return json({ error: "not_found" }, 404);
+  if (env.DEPLOYMENT_ENVIRONMENT !== "staging") {
+    return json({ error: "staging_only" }, 403);
+  }
+  const repository = decodeSourceReaderPreflight(await readJson(request));
+  const source = await provider(env, dependencies).repository(repository);
+  return json({
+    status: "source_reader_ready",
+    environment: "staging",
+    repository: source.fullName,
+    private: source.private,
+  });
+}
+
 function statusFor(view: SubmissionView): Record<string, unknown> {
   return {
     submission_id: view.submission_id,
@@ -789,6 +809,13 @@ export async function handleRequest(
   if (request.method === "POST" && url.pathname === "/internal/v1/archive-completed") {
     try {
       return await archiveCompleted(request, env, dependencies);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  }
+  if (request.method === "POST" && url.pathname === "/internal/v1/source-reader-preflight") {
+    try {
+      return await sourceReaderPreflight(request, env, dependencies);
     } catch (error) {
       return errorResponse(error);
     }

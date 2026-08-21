@@ -4,6 +4,7 @@ import {
   ApiDecodeError,
   assertSourcePolicy,
   decodeArchiveCompletion,
+  decodeSourceReaderPreflight,
   decodeSubmissionInput,
   readJson,
 } from "../src/api-contract";
@@ -235,6 +236,47 @@ describe("strict API contract", () => {
       ...completion,
       locator: { ...completion.locator, archive_path: `archives/ff/${submissionId}.tar.age` },
     })).toThrow(/path/);
+  });
+
+  it("strictly decodes and authenticates the staging source-reader preflight", async () => {
+    expect(decodeSourceReaderPreflight({ repository: "kim-em/lean-eval-intake-fixture" }))
+      .toBe("kim-em/lean-eval-intake-fixture");
+    expect(() => decodeSourceReaderPreflight({ repository: "Kim Em/bad", extra: true }))
+      .toThrow(/unknown|canonical/);
+
+    const upstream = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({
+      full_name: "kim-em/lean-eval-intake-fixture",
+      private: true,
+    }));
+    const request = jsonRequest("/internal/v1/source-reader-preflight", {
+      repository: "kim-em/lean-eval-intake-fixture",
+    });
+    request.headers.set("authorization", "Bearer readiness-secret");
+    const response = await handleRequest(
+      request,
+      { ...ENV, READINESS_TOKEN: "readiness-secret" },
+      LIFECYCLE,
+      { provider: new GitHubProvider(upstream, "verification-token") },
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      status: "source_reader_ready",
+      environment: "staging",
+      repository: "kim-em/lean-eval-intake-fixture",
+      private: true,
+    });
+
+    const productionRequest = jsonRequest("/internal/v1/source-reader-preflight", {
+      repository: "kim-em/lean-eval-intake-fixture",
+    });
+    productionRequest.headers.set("authorization", "Bearer readiness-secret");
+    const production = await handleRequest(
+      productionRequest,
+      { ...ENV, DEPLOYMENT_ENVIRONMENT: "production", READINESS_TOKEN: "readiness-secret" },
+      LIFECYCLE,
+      { provider: new GitHubProvider(upstream, "verification-token") },
+    );
+    expect(production.status).toBe(403);
   });
 
   it("records authenticated archive completion while public intake is disabled", async () => {
