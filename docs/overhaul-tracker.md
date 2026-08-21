@@ -115,7 +115,9 @@ one issue per lane.
       final v1 membership is 128 at merge `21c6c021`.
 - [ ] Complete staging OAuth/agent intake and exact-ref dispatch; wire its
       artifacts through the implemented UUIDv7 archive writer and into State.
-- [ ] Demonstrate public replay and isolated private replay.
+- [x] Demonstrate credential-free historical public replay (hosted run
+      `32499490261`, workflow commit `757b0831`).
+- [ ] Demonstrate isolated private replay.
 - [ ] Verify single-submission decrypt, VM destruction, and release
       reconstruction before enabling those features.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
