@@ -2,9 +2,10 @@
 
 The four provisioning procedures below were completed on 2026-08-21. The two
 State-writer tokens are approved and preflighted, and both broker GitHub Apps
-are now owned by `leanprover` with unchanged IDs. The
-source reader remains deliberately uninstalled until a contributor selects a
-source repository. The Workers remain deployed with intake disabled. Never
+are owned by `leanprover` with unchanged IDs. The source reader is installed
+only on the private staging fixture and passed its live broker preflight.
+Staging intake is enabled only for that end-to-end fixture; production intake
+remains disabled. Never
 paste a secret value into an issue, pull request, chat, shell argument, or
 tracked file.
 
@@ -119,14 +120,24 @@ Ownership transfers for both existing registrations were accepted by
 and `4666633`; dispatcher installation `155329316` remains the recorded
 single-repository installation on `leanprover/lean-eval-submissions`.
 
-## After these four tasks
+## Current remaining manual actions
 
-Keep production `INTAKE_ENABLED=false`. Install the source reader on one
-selected test repository, deploy the reviewed archive-locator callback, and
-exercise browser intake in staging before considering production intake. Results migration
-D7 is independent: run a fresh post-merge dry report and obtain explicit
-approval of its exact source commit, record count, and output digest before
-`apply=true`.
+Keep production `INTAKE_ENABLED=false`.
+
+1. In <https://github.com/settings/installations>, configure the existing
+   `lean-eval-bot` installation owned by `kim-em`, add only
+   `kim-em/lean-eval-intake-fixture`, and save. This is the read-only App used
+   by the existing evaluation workflow after dispatch; the new source-reader
+   App already covers intake verification. Retry workflow run `32478988233`
+   rather than creating a duplicate submission.
+2. Review the live leaderboard at <https://lean-lang.org/eval/preview/> and
+   approve or request changes to `lean-eval-leaderboard#70` before cutover.
+3. Leave D7 unapplied until explicitly approving a current dry report's exact
+   source commit, record count, and output digest.
+4. Provision the dedicated AWS account/KMS capability service and a reviewed
+   disposable replay backend before private replay, automatic release, or
+   production intake. The provider-neutral contracts are implemented; no AWS
+   resource or production replay runner exists yet.
 
 The archive callback uses a distinct random `LIFECYCLE_CALLBACK_TOKEN` in each
 Worker and the matching `cloudflare-staging` or `cloudflare-production` GitHub

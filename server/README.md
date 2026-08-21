@@ -103,10 +103,13 @@ Consumed nonces are committed atomically with intake when applicable. Their
 issuance time; retries read the targeted stored view rather than reconstructing
 different event timestamps. State
 stores only `SHA256("lean-eval-auth-nonce-v1\\0" + purpose + "\\0" + nonce)`;
-the raw nonce and signed token never enter State. Production State must deploy
-the matching `authentication.nonce_consumed`,
+the raw nonce and signed token never enter State. Production and staging State
+deploy the matching `authentication.nonce_consumed`,
 `submission.metadata_amended`, and `submission.publication_changed` schemas
-and materializer before this Worker can be enabled.
+and materializer. Lifecycle-aware submission view v2 additionally
+authenticates its referenced archive, evaluation, and result events without
+scanning the full ledger. Staging uses this contract for the end-to-end
+fixture; production intake remains disabled.
 
 ## GitHub App broker boundary
 
