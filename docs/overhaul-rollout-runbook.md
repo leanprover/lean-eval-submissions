@@ -177,8 +177,8 @@ custom domains during the organization-account migration.
 
 ### D5: initial State writer credential
 
-The implemented bootstrap uses separate organization-owned, fine-grained PATs
-because a static GitHub App installation token expires. Each token is limited
+The implemented bootstrap uses separate Kim-owned, fine-grained PATs because a
+static GitHub App installation token expires. Each token is limited
 to one State repository, Contents read/write and Metadata read, and at most a
 90-day lifetime.
 
@@ -199,10 +199,11 @@ Kim Morrison no later than 14 days before expiry. Record the exact token owner,
 creation date and expiry date in
 `INFRASTRUCTURE.md` when each repository and token exists. Never reuse either
 token across environments or grant workflow/repository administration. These
-PATs authorize bootstrap State writes only: production intake remains forbidden
-until D9's GitHub App/broker replacement is implemented, its short-lived token
-flow is tested, the PATs are revoked, and the infrastructure ledger records the
-cutover.
+PATs are approved for initial staging and production State writes after
+organization approval and an environment-specific write test. The only
+ruleset bypass is the specific `kim-em` user, whose two PATs remain separated by
+their single-repository scopes. Reassess and rotate or replace both credentials
+no later than 14 days before expiry.
 
 ### D6: publication, key lifecycle, and license policy
 

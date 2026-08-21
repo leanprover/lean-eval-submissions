@@ -28,8 +28,9 @@ one issue per lane.
       for this bootstrap.
 - [x] D5: bootstrap with separate Kim-owned fine-grained PATs for staging and
       production State, each single-repository scoped and at most 90 days;
-      rotate at least 14 days before expiry and forbid production intake until
-      the D9 GitHub App/broker replacement is live and the PATs are revoked.
+      rotate at least 14 days before expiry. The bootstrap is approved for
+      initial staging and production intake once each token and its narrowly
+      named ruleset bypass pass an environment-specific write test.
 - [x] D6: approve key lifecycle, one-submission capability, contributor
       acknowledgement, and license wording before private intake/release. D6a
       selects a new dedicated AWS account with AWS KMS behind a
@@ -73,24 +74,26 @@ one issue per lane.
 - [x] Create protected `cloudflare-staging` and `cloudflare-production` GitHub
       environments.
 - [x] Install the Cloudflare account ID in both environments.
-- [ ] Install distinct scoped deployment API tokens in those environments.
+- [x] Install distinct scoped deployment API tokens in those environments.
 - [x] Create the protected `submission-dispatch-promotion` environment and the
       immutable `lean-eval-dispatch/*` tag ruleset.
 - [x] Install distinct random `AUTH_TOKEN_SECRET` and `READINESS_TOKEN` values.
-- [ ] Create distinct staging/production GitHub OAuth Apps with exact callback
+- [x] Create distinct staging/production GitHub OAuth Apps with exact callback
       URLs and install their credentials.
 - [x] Deploy staging manually with intake disabled and record the Worker,
       `workers.dev` endpoint, account, subdomain, and version identifiers.
 - [x] Promote the same commit to production and verify the structured health
       response.
 - [x] Install distinct readiness secrets in each Worker.
-- [ ] Install distinct State-writer credentials in each Worker.
+- [ ] Obtain organization approval for the installed, distinct State-writer
+      credentials and test each with its matching ruleset bypass.
 - [x] Implement the D9 private service-binding broker and separate source and
       dispatch authority paths.
 - [x] Deploy both private brokers and bind the intake-disabled staging and
       production Workers to them.
-- [ ] Create/install the two Apps and provision their broker secrets; keep the
-      local static verification/dispatch-token hooks absent in production.
+- [x] Create both Apps, install the dispatcher on only the submissions
+      repository, and provision both broker environments; keep the local static
+      verification/dispatch-token hooks absent in production.
 - [ ] Replace or separately authorize the private-gist headless-agent proof;
       installation tokens cannot read submitter-owned private gists.
 

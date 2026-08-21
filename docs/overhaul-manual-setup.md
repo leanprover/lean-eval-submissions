@@ -1,9 +1,10 @@
-# Remaining manual setup
+# Manual setup record and remaining actions
 
-Everything below requires an account UI or secret value. The Workers are
-already deployed with intake disabled; do not repeat the bootstrap deployment.
-Enter secrets only through the named interactive prompt. Never paste a value
-into an issue, pull request, chat, shell argument, or tracked file.
+The four provisioning procedures below were completed on 2026-08-21. The two
+State-writer tokens remain pending `leanprover` owner approval, and the source
+reader remains deliberately uninstalled until a contributor selects a source
+repository. The Workers remain deployed with intake disabled. Never paste a
+secret value into an issue, pull request, chat, shell argument, or tracked file.
 
 ## 1. Cloudflare deployment tokens
 
@@ -103,9 +104,11 @@ read a submitter-owned private gist; this does not block browser OAuth intake.
 
 ## After these four tasks
 
-Keep `INTAKE_ENABLED=false`. Merge the reviewed submissions PR, confirm the
-automatic staging and production deployments, exercise browser intake in
-staging, and finish the archive-locator callback before enabling production
-intake. Results migration D7 is independent: run a fresh post-merge dry report
-and obtain explicit approval of its exact source commit, record count, and
-output digest before `apply=true`.
+Keep `INTAKE_ENABLED=false` until the pending State tokens are approved and
+tested through their matching `kim-em` ruleset bypasses. Merge the reviewed
+submissions PR, confirm the automatic staging and production deployments,
+install the source reader on one selected test repository, exercise browser
+intake in staging, and finish the archive-locator callback before enabling
+production intake. Results migration D7 is independent: run a fresh post-merge
+dry report and obtain explicit approval of its exact source commit, record
+count, and output digest before `apply=true`.

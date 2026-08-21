@@ -7,9 +7,10 @@ until this ledger changes in the same pull request or an immediately linked
 operations pull request. Secret **names, owners, scopes, and rotation dates**
 belong here; secret values do not.
 
-Last reconciled: 2026-08-20 (separate temporary account and intake-disabled
-staging and production Workers provisioned). Temporary owner: Kim Morrison.
-Target owner: leanprover organization administrators. Service code:
+Last reconciled: 2026-08-21 (deployment tokens, State-writer tokens, browser
+OAuth Apps, and the two broker GitHub Apps provisioned; intake still disabled).
+Temporary owner: Kim Morrison. Target owner: leanprover organization
+administrators. Service code:
 [`server/`](server/).
 
 ## Provisioning status
@@ -19,8 +20,8 @@ Target owner: leanprover organization administrators. Service code:
 | Cloudflare account | `lean-eval` (`a46b90978a1c29cc4795f30677e7e4b8`) | temporary dedicated | **PROVISIONED 2026-08-20** |
 | Cloudflare Worker | `lean-eval-submission-server-staging` | staging | **PROVISIONED 2026-08-20; INTAKE DISABLED** |
 | Cloudflare Worker | `lean-eval-submission-server` | production | **PROVISIONED 2026-08-20; INTAKE DISABLED** |
-| Private GitHub broker Worker | `lean-eval-github-broker-staging` | staging | **PROVISIONED 2026-08-20; APP SECRETS PENDING** |
-| Private GitHub broker Worker | `lean-eval-github-broker-production` | production | **PROVISIONED 2026-08-20; APP SECRETS PENDING** |
+| Private GitHub broker Worker | `lean-eval-github-broker-staging` | staging | **PROVISIONED 2026-08-20; APP SECRETS INSTALLED 2026-08-21** |
+| Private GitHub broker Worker | `lean-eval-github-broker-production` | production | **PROVISIONED 2026-08-20; APP SECRETS INSTALLED 2026-08-21** |
 | Temporary Worker route | `lean-eval-submission-server-staging.lean-eval.workers.dev` | staging | **ACTIVE 2026-08-20; INTAKE DISABLED** |
 | Temporary Worker route | `lean-eval-submission-server.lean-eval.workers.dev` | production | **ACTIVE 2026-08-20; INTAKE DISABLED** |
 | Target Worker custom domain | `eval-submit-staging.lean-lang.org` | staging | **DEFERRED; ZONE ABSENT** |
@@ -29,8 +30,8 @@ Target owner: leanprover organization administrators. Service code:
 | GitHub state repository | `leanprover/lean-eval-state` | production | **CREATED PRIVATE 2026-08-20** |
 | GitHub generator repository | `leanprover/lean-eval-generator` | shared | **CREATED PUBLIC 2026-08-20** |
 | GitHub release repository | `leanprover/lean-eval-releases` | production | **CREATED PUBLIC 2026-08-20; PUBLICATION DISABLED** |
-| GitHub Environment | `cloudflare-staging` (`20259250422`) | staging | **CREATED 2026-08-20; ACCOUNT ID SET; API TOKEN PENDING** |
-| GitHub Environment | `cloudflare-production` (`20259250928`) | production | **CREATED 2026-08-20; ACCOUNT ID SET; API TOKEN PENDING** |
+| GitHub Environment | `cloudflare-staging` (`20259250422`) | staging | **CREATED 2026-08-20; ACCOUNT ID SET; API TOKEN SET 2026-08-21** |
+| GitHub Environment | `cloudflare-production` (`20259250928`) | production | **CREATED 2026-08-20; ACCOUNT ID SET; API TOKEN SET 2026-08-21** |
 | GitHub Environment | `submission-dispatch-promotion` (`20259251430`) | shared | **CREATED 2026-08-20; REVIEW + GUARD CONFIGURED** |
 | Replay execution backend | Lean-Eval-owned disposable executor | production | **TO BE DESIGNED AND PROVISIONED** |
 
@@ -77,18 +78,20 @@ There is no Terraform layer. Wrangler configuration plus this reviewed ledger
 is the chosen infrastructure record. Resource identifiers created outside
 Wrangler must be copied here immediately.
 
-The intake-disabled bootstrap was performed manually with Wrangler OAuth while
-the dedicated automation tokens are pending. Current versions all use exact
+The intake-disabled bootstrap was performed manually with Wrangler OAuth. The
+dedicated deployment tokens are now installed. The latest pre-merge versions,
+including the versions created when secrets were installed, all use exact
 commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`:
 
 | Environment | Private broker version | Intake Worker version | Health verification |
 | --- | --- | --- | --- |
-| staging | `073e7532-d86d-4dad-9280-f413ff970dab` | `92aa9ac5-4305-47ab-85f2-8495c6935123` | environment `staging`, intake `false`, exact commit |
-| production | `b658a77b-f7e8-4bd2-9268-a7862af07122` | `46ef4231-1ace-4343-9f16-ce9ea60e194e` | environment `production`, intake `false`, exact commit |
+| staging | `eee1ee9f-71d2-40aa-9daf-950a991b7b58` | `4b363f1d-e4ed-491a-8009-ea4cf45904c8` | environment `staging`, intake `false`, exact commit |
+| production | `1d9cfd9f-cdf6-4a65-8e62-ad9f7299dd7f` | `a30535bd-8ec6-4de3-b2b9-34aead7434fa` | environment `production`, intake `false`, exact commit |
 
-This manual bootstrap does not replace deployment automation. Before the first
-post-merge automatic deployment, add `CLOUDFLARE_ACCOUNT_ID` and a distinct,
-narrowly scoped `CLOUDFLARE_API_TOKEN` to each Cloudflare environment.
+This manual bootstrap does not replace deployment automation.
+`CLOUDFLARE_ACCOUNT_ID` and a distinct, narrowly scoped
+`CLOUDFLARE_API_TOKEN` are installed in each Cloudflare environment. The first
+post-merge deployment is the functional verification of those opaque tokens.
 
 The namespace IDs are user-defined positive integers and must remain unique in
 the Cloudflare account; bindings with the same ID share counters. Configuration
@@ -127,7 +130,21 @@ script-scoped, so both tokens can edit the four Workers in this dedicated Lean
 Eval account. Environment separation still gives independent revocation and
 rotation, while the dedicated account keeps unrelated services outside that
 authority. Neither token may administer zones or other account products.
-GitHub environment secrets are not exposed to pull-request checks. See
+GitHub environment secrets are not exposed to pull-request checks.
+
+Recorded deployment tokens, both account-owned in the `lean-eval` account:
+
+| Token name | Environment | Permission | Created | Expiry |
+| --- | --- | --- | --- | --- |
+| `lean-eval-deploy-staging` | `cloudflare-staging` | Workers Scripts: Edit, entire `lean-eval` account | 2026-08-21 | none |
+| `lean-eval-deploy-production` | `cloudflare-production` | Workers Scripts: Edit, entire `lean-eval` account | 2026-08-21 | none |
+
+Neither token carries any other permission. Each was checked at creation
+against `/accounts/<id>/tokens/verify` (active), `/accounts/<id>/workers/scripts`
+(the four Lean Eval Workers, and nothing else), `/zones` (zero zones), and
+`/accounts/<id>/storage/kv/namespaces` (denied). They carry no expiry so an
+unattended deployment cannot fail on a lapsed credential; rotation is therefore
+manual and owned by Kim Morrison. See
 Cloudflare's [GitHub Actions authentication
 guide](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
 and [permission reference](https://developers.cloudflare.com/fundamentals/api/reference/permissions/).
@@ -163,24 +180,59 @@ Each Worker environment has a distinct Wrangler secret:
 | `READINESS_TOKEN` | production | Authenticate operational readiness probes | No GitHub access |
 | `AUTH_TOKEN_SECRET` | staging | HMAC-sign OAuth state, sessions, grants, and agent challenges | No GitHub access; random >=32-byte value |
 | `AUTH_TOKEN_SECRET` | production | HMAC-sign OAuth state, sessions, grants, and agent challenges | No GitHub access; distinct from staging |
-| `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | each | Environment-specific GitHub OAuth application | `read:user` only; callback listed below |
-| `GITHUB_VERIFICATION_TOKEN` | each | **LOCAL CONTRACT ONLY; not approved for production** source visibility/tag/gist verification | Unprovisioned pending broker/App decision |
-| `GITHUB_DISPATCH_TOKEN` | each | **LOCAL CONTRACT ONLY; not approved for production** exact-ref workflow dispatch | Unprovisioned pending broker/App decision |
+| `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | each | Environment-specific GitHub OAuth application | `read:user` only; callback listed below; **SET 2026-08-21** |
+| `GITHUB_VERIFICATION_TOKEN` | each | **LOCAL CONTRACT ONLY; not approved for production** source visibility/tag/gist verification | Intentionally absent; source broker provisioned |
+| `GITHUB_DISPATCH_TOKEN` | each | **LOCAL CONTRACT ONLY; not approved for production** exact-ref workflow dispatch | Intentionally absent; dispatch broker provisioned |
 
 Each private broker environment instead receives four Wrangler secrets:
 
 | Secret | Purpose | Status |
 | --- | --- | --- |
-| `SOURCE_APP_ID` | Source-reader GitHub App identifier | **PENDING APP CREATION** |
-| `SOURCE_APP_PRIVATE_KEY` | Mint repository-scoped source-reader installation tokens | **PENDING APP CREATION** |
-| `DISPATCH_APP_ID` | Workflow-dispatch GitHub App identifier | **PENDING APP CREATION** |
-| `DISPATCH_APP_PRIVATE_KEY` | Mint a token scoped to `leanprover/lean-eval-submissions` | **PENDING APP CREATION** |
+| `SOURCE_APP_ID` | Source-reader GitHub App identifier | **SET 2026-08-21**; App `4666604` |
+| `SOURCE_APP_PRIVATE_KEY` | Mint repository-scoped source-reader installation tokens | **SET 2026-08-21**; key `4176146`, the App's only key |
+| `DISPATCH_APP_ID` | Workflow-dispatch GitHub App identifier | **SET 2026-08-21**; App `4666633` |
+| `DISPATCH_APP_PRIVATE_KEY` | Mint a token scoped to `leanprover/lean-eval-submissions` | **SET 2026-08-21**; key `4176163`, the App's only key |
+
+Recorded GitHub Apps:
+
+| App | Slug | App ID | Permissions | Installation |
+| --- | --- | --- | --- | --- |
+| Lean Eval Source Reader | `lean-eval-source-reader` | `4666604` | Metadata read, Contents read | none; installed per contributor repository on opt-in |
+| Lean Eval Workflow Dispatcher | `lean-eval-workflow-dispatcher` | `4666633` | Metadata read, Contents read, Actions read/write | `155329316` on `leanprover`, repository selection `selected`, exactly `leanprover/lean-eval-submissions` |
+
+Both Apps are owned by the personal account `kim-em` because the temporary
+owner is not an administrator of the `leanprover` organization. Transfer the
+existing registrations to `leanprover` before production intake, then verify
+the App IDs, private-key authentication, and installation selection before
+assuming that no Worker secret rotation is required. Neither App subscribes to
+any event and neither has a webhook. The source reader deliberately has no
+Actions permission. The dispatcher installation was verified on 2026-08-21 by
+minting an installation token and listing `/installation/repositories`, which
+returned exactly one repository.
+
+Recorded browser OAuth Apps, both owned by the personal account `kim-em` for
+the same reason as the two GitHub Apps:
+
+| App name | Application ID | Client ID | Callback |
+| --- | --- | --- | --- |
+| Lean Eval Submissions (staging) | `3806355` | `Ov23li6zjHADKyrgKeRa` | `https://lean-eval-submission-server-staging.lean-eval.workers.dev/api/v1/oauth/callback` |
+| Lean Eval Submissions | `3806359` | `Ov23liFcOLHsyvY9DmQ5` | `https://lean-eval-submission-server.lean-eval.workers.dev/api/v1/oauth/callback` |
+
+Each App has one exact callback with strict matching, no wildcard, device flow
+disabled, and user access token expiry enabled. Each callback was compared byte
+for byte against the matching `OAUTH_CALLBACK_URL` in `server/wrangler.jsonc`.
+The Worker requests `scope=read:user` and nothing else
+(`server/src/app.ts`). Client secrets were generated once per App and installed
+directly into the matching Worker.
 
 `READINESS_TOKEN` and `AUTH_TOKEN_SECRET` were installed with distinct random
 values in both Workers on 2026-08-20. The matching readiness value is also an
-environment secret for future authenticated probes. GitHub State, OAuth,
-verification, and dispatch credentials remain absent, so readiness correctly
-fails closed and no intake route can acquire external authority.
+environment secret for future authenticated probes. As of 2026-08-21 the State,
+OAuth, and broker App credentials are installed, while the two State-writer
+tokens await `leanprover` owner approval and therefore still carry no authority.
+`GITHUB_VERIFICATION_TOKEN` and `GITHUB_DISPATCH_TOKEN` remain deliberately
+unprovisioned. `INTAKE_ENABLED` stays false, so no intake route can exercise
+any of these credentials.
 
 `DISPATCH_WORKFLOW_REF` must stay absent until an operator creates an immutable
 tag named `lean-eval-dispatch/<40-character-commit>` at the reviewed workflow
@@ -200,6 +252,12 @@ binding and tag. Record the environment reviewers, tag, commit, ruleset
 identifier, and administrators here before provisioning dispatch credentials.
 The Worker rejects a branch name, raw SHA,
 or differently named tag with `503`.
+
+The protected promotion environment is `submission-dispatch-promotion`
+(`20259251430`) with reviewer `kim-em`. Active tag ruleset `21094118` targets
+`refs/tags/lean-eval-dispatch/*`, rejects updates and deletion, and has no
+bypass. No dispatch tag exists before the first reviewed post-merge deployment;
+record its exact tag and commit after that deployment.
 
 The approved D9 design uses separate organization-owned GitHub Apps for source
 verification and workflow dispatch, reached through a narrow token broker.
@@ -251,9 +309,25 @@ separate launch gate and must correlate `archive_path` to the UUID.
 | Credential type | Fine-grained PAT bootstrap | Fine-grained PAT bootstrap |
 | Machine owner | Kim Morrison | Kim Morrison |
 | Credential owner | Kim Morrison | Kim Morrison |
-| Created / expires | **TO BE RECORDED AT CREATION; <=90 days** | **TO BE RECORDED AT CREATION; <=90 days** |
-| Rotation owner / deadline | Kim Morrison / >=14 days before expiry | Kim Morrison / >=14 days before expiry |
-| Intake gate | D9 Apps/broker provisioned; bootstrap PAT reviewed | D9 Apps/broker provisioned; bootstrap PAT reviewed |
+| Token name | `lean-eval-state-writer-staging` (`18528992`) | `lean-eval-state-writer-production` (`18529041`) |
+| Created / expires | 2026-08-21 / 2026-11-19 (90 days) | 2026-08-21 / 2026-11-19 (90 days) |
+| Approval state | **PENDING `leanprover` owner approval** | **PENDING `leanprover` owner approval** |
+| Rotation owner / deadline | Kim Morrison / by 2026-11-05 | Kim Morrison / by 2026-11-05 |
+| Intake gate | D9 Apps/broker provisioned; PAT approved and matching bypass tested | D9 Apps/broker provisioned; PAT approved and matching bypass tested |
+
+Each token grants Metadata read and Contents read/write on exactly one
+repository and holds no Actions, Administration, Workflows, or Issues
+permission. Because the temporary owner is an organization member rather than
+an administrator, GitHub issued both tokens in `pending` state; an owner of
+`leanprover` must approve them at
+`https://github.com/organizations/leanprover/settings/personal-access-token-requests`
+before either can reach its State repository. GitHub reveals a fine-grained
+token value only once, so both values were installed into their matching Worker
+at creation and start working when approval lands. Until then each Worker holds
+a credential with no authority, which is safe while `INTAKE_ENABLED` is false.
+Fine-grained tokens can always read public repositories, so a read of the public
+`lean-eval-submissions` is inherent to the credential type and is not a grant
+made here.
 
 The internet-facing Worker token must not write workflow files, modify
 repository settings, reach `lean-eval-submissions`, or reach the other
@@ -269,8 +343,8 @@ occupies exactly one file under `events/<id-prefix>/<event-id>.json`. Configure:
 - deletion and force-push protection;
 - required pull request and status checks for human-authored changes;
 - no broad Actions write token;
-- no writer bypass while intake is disabled; add only the environment-specific
-  State-writer GitHub App after its permissions are reviewed;
+- the only writer bypass is the specific `kim-em` user required by the two
+  matching, single-repository bootstrap PATs; remove it if those PATs retire;
 - secret scanning and dependency alerts;
 - validation of append-only history on pull requests and direct writer pushes;
 - scheduled validation of the whole event tree.
@@ -280,7 +354,7 @@ Recorded repository controls:
 | Field | Staging | Production |
 | --- | --- | --- |
 | Branch ruleset ID | `21094006` | `21094005` |
-| Writer bypass | none (intake disabled) | none (intake disabled) |
+| Writer bypass | `kim-em` (`User` 477956), always | `kim-em` (`User` 477956), always |
 
 ## Encrypted replay boundary
 
@@ -370,7 +444,13 @@ compatibility fix or append a corrective event.
 | --- | --- | --- |
 | Staging deploy and smoke | 2026-08-20 | broker `073e7532-d86d-4dad-9280-f413ff970dab`, intake `0669c5a2-9cf6-445c-98ce-dacab8f72af0`; exact commit and intake-disabled assertions passed |
 | Production deploy and smoke | 2026-08-20 | broker `b658a77b-f7e8-4bd2-9268-a7862af07122`, intake `759d75ab-971d-4b93-ba69-ce0ac5319e04`; exact commit and intake-disabled assertions passed |
-| Readiness-secret rotation | 2026-08-20 | distinct staging/production values rotated in both Workers and matching protected GitHub environment secrets; current intake versions `92aa9ac5-4305-47ab-85f2-8495c6935123` / `46ef4231-1ace-4343-9f16-ce9ea60e194e`; health remained commit-exact and intake-disabled |
+| Readiness-secret rotation | 2026-08-20 | distinct staging/production values rotated in both Workers and matching protected GitHub environment secrets; resulting intake versions `92aa9ac5-4305-47ab-85f2-8495c6935123` / `46ef4231-1ace-4343-9f16-ce9ea60e194e`; health remained commit-exact and intake-disabled |
+| Deployment token provisioning | 2026-08-21 | `lean-eval-deploy-staging` and `lean-eval-deploy-production` created with Workers Scripts: Edit only; each verified active, reaching the four Lean Eval Workers, zero zones, KV denied; installed in the matching protected GitHub environment |
+| State-writer token provisioning | 2026-08-21 | two single-repository fine-grained tokens created, expiring 2026-11-19, installed as `GITHUB_STATE_TOKEN` in the matching Worker; both pending `leanprover` owner approval |
+| State ruleset bypasses | 2026-08-21 | `kim-em` (`User` 477956) is the sole always-allowed bypass actor on staging ruleset `21094006` and production ruleset `21094005`; all protection rules otherwise unchanged |
+| Browser OAuth App provisioning | 2026-08-21 | two Apps with exact per-environment callbacks; client ID and secret installed in the matching Worker |
+| Broker GitHub App provisioning | 2026-08-21 | source reader `4666604` (Metadata read, Contents read, no installation) and workflow dispatcher `4666633` (Metadata read, Contents read, Actions read/write, installation `155329316` limited to `leanprover/lean-eval-submissions`); four secrets installed in both broker environments |
+| Post-provisioning health check | 2026-08-21 | both Workers report `status ok`, commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`, correct environment, and `intake_enabled false` |
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
 | Replay decrypt and destruction | blocked | D6 key/provider work intentionally not provisioned |
 | Release reconstruction | blocked | Publication remains disabled |

@@ -111,10 +111,11 @@ operations without changing submission IDs, State, or API routes.
 
 Static `GITHUB_VERIFICATION_TOKEN` and `GITHUB_DISPATCH_TOKEN` hooks remain only
 for local contract tests; they are not an approved production credential
-design. The two Apps and their broker secrets are not yet provisioned, so the
-safe default remains `503` with `INTAKE_ENABLED=false`. Do not request broad
-OAuth `repo` scope as a shortcut; browser OAuth intentionally requests only
-`read:user`.
+design. The two Apps and their broker secrets were provisioned on 2026-08-21;
+the Apps remain temporarily owned by `kim-em` pending transfer to `leanprover`.
+The safe default remains `503` with `INTAKE_ENABLED=false`. Do not request
+broad OAuth `repo` scope as a shortcut; browser OAuth intentionally requests
+only `read:user`.
 
 GitHub App installation tokens cannot read a submitter's private gist. The
 current headless-agent gist proof therefore remains launch-disabled rather
