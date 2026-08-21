@@ -2,11 +2,13 @@
 
 Replay is a recovery and audit path for one archived submission. It is not a
 second intake path, a batch decryption service, or a place to give general
-archive keys to CI. No replay workflow is enabled yet; the key service and
-disposable-runner controls below are launch gates.
+archive keys to CI. The only workflow is a credential-free manual smoke for an
+already-public historical source; it has no State/result/archive/release write
+authority. No private or authoritative queue-consuming replay workflow is
+enabled; the key service and disposable-runner controls below are launch gates.
 
-The local-only Wave 2 public planner, verdict contract, and disposable-VM
-operator sequence are documented in
+The Wave 2 public planner, historical smoke, verdict contract, and disposable-
+VM operator sequence are documented in
 [`replay-orchestrator.md`](replay-orchestrator.md). That foundation deliberately
 leaves the private path nonterminally blocked and does not provision an
 execution backend.
@@ -115,12 +117,11 @@ Replay remains unavailable until all gates have evidence linked from
   documented no-provider-recovery risk acceptance;
 - the selected backend demonstrates nonce-specific disposable instance creation,
   deregistration, network egress policy, and no persistent mount;
-- an end-to-end drill recovers one test archive, proves a second unwrap fails,
-  proves a different archive fails, and verifies VM destruction;
+- one pre-enable staging acceptance test recovers one test archive, proves a
+  second unwrap fails, proves a different archive fails, and verifies VM
+  destruction;
 - workflow review confirms no master identity or broad repository credential
-  is available to the replay job or untrusted Lean;
-- observability alerts on expired/reused capabilities, digest mismatch,
-  teardown failure, and unexpected runner reuse.
+  is available to the replay job or untrusted Lean.
 
 No execution provider is selected here. A future adapter must satisfy the same
 fresh-instance, credential-isolation, network-isolation, teardown, and

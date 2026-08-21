@@ -1,9 +1,11 @@
 # Replay orchestrator and disposable-VM interface
 
-This Wave 2 foundation is local-only. It plans public-source replay and checks
-the result returned by a disposable runner. It does not install a GitHub
-workflow, invoke a production execution backend, decrypt an archive, mint a
-capability, write State, or publish a result.
+The Wave 2 foundation plans public-source replay and checks the result returned
+by a disposable runner. A separate manual `public-replay-smoke.yml` workflow
+replays one reviewed historical public result without credentials. The smoke
+does not invoke the authoritative queue, append State, write results, decrypt
+an archive, mint a capability, or publish a release. It is reproducibility
+evidence, not the production replay backend or ranking evidence.
 
 ## Locked inputs
 
@@ -40,6 +42,34 @@ test data. Enabling a host requires a separately reviewed profile whose image
 digest is present on that host and whose digest is recorded by State.
 
 ## Public replay sequence
+
+### Credential-free historical smoke
+
+The tracked `two_plus_two_issue_906` fixture binds the original public source,
+benchmark commit and toolchain, evaluator commit, successful workflow run, and
+declared result. The manual workflow runs only through the protected
+`replay-staging` environment and has repository contents read permission. It:
+
+1. anonymously verifies the source repository is still public;
+2. restores source, benchmark, and evaluator by exact 40-character commits;
+3. installs the exact recorded Lean and reviewed Go/Rust/checker pins;
+4. removes workflow, source, evaluator, benchmark, and component-checkout Git
+   metadata before the sandbox probes and untrusted Lean; the anonymous
+   Mathlib package cache retains only its public dependency metadata;
+5. replays only `two_plus_two` through the original evaluator's
+   `evaluate_submission.py` and the benchmark's comparator/landrun boundary;
+6. uploads only results, summary, and strict source-free smoke evidence.
+
+The artifact records observed GitHub-hosted runner image, CPU, architecture,
+kernel, total wall time, source LOC/file count, and retired instructions when
+the host permits `instructions:u`. GitHub-hosted image/CPU observations are not
+a pre-pinned production profile, and the aggregate timing is not split into
+build and checker measurements. Therefore this smoke proves proof replay and
+security-boundary wiring only. It cannot produce a `replay.started` or terminal
+State event. The authoritative path below remains gated on a reviewed,
+pre-pinned execution profile and backend.
+
+### Authoritative queue path
 
 Run locally against reviewed files:
 
@@ -175,12 +205,11 @@ provider. D6 must decide capability authentication, one-use enforcement, key
 custody, issuance/audit records, and destruction acknowledgement before any
 production execution-backend implementation or provisioning is authorized.
 
-## Restore and incident checks
+## Pre-enable evidence
 
-Before enabling a real runner, rehearse duplicate delivery, retry after runner
-loss, counter unsupported/permission denied, invalid verdict, source or
-benchmark ref disappearance, network-isolation failure, and teardown failure.
-Preserve the queue source digest, plan, started/terminal event IDs, verdict, VM
-image digest, and destruction acknowledgement. Never preserve plaintext
-private source, keys, tokens, ambient environment, or untrusted command output
-that can disclose source.
+The single staging acceptance test must exercise one-use refusal, wrong-archive
+refusal, network isolation, and confirmed teardown. Preserve the queue source
+digest, plan, started/terminal event IDs, verdict, VM image digest, and
+destruction acknowledgement. Never preserve plaintext private source, keys,
+tokens, ambient environment, or untrusted command output that can disclose
+source. No recurring recovery drill or separate alarm subsystem is required.

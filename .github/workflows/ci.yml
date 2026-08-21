@@ -83,6 +83,13 @@ jobs:
           tests.test_aws_key_adapter
           tests.test_aws_key_infrastructure
 
+      - name: Replay contract and public smoke tests
+        run: >-
+          python -m unittest
+          tests.test_replay_orchestrator
+          tests.test_public_replay_smoke
+          tests.test_public_replay_workflow
+
   artifact-upload:
     runs-on: ubuntu-latest
     permissions:
