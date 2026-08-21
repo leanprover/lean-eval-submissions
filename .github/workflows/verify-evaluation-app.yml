@@ -1,0 +1,60 @@
+name: Verify staging evaluation App
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evaluation-app-preflight-staging
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: cloudflare-staging
+    steps:
+      - name: Mint lean-eval-bot installation token for the fixed fixture
+        id: app-token
+        # actions/create-github-app-token pinned to v3.2.0.
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ secrets.LEAN_EVAL_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
+          owner: kim-em
+          repositories: lean-eval-intake-fixture
+
+      - name: Verify exact private fixture and frozen source commit
+        env:
+          APP_INSTALLATION_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          metadata_file=$(mktemp)
+          commit_file=$(mktemp)
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer ${APP_INSTALLATION_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --output "$metadata_file" \
+            https://api.github.com/repos/kim-em/lean-eval-intake-fixture
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer ${APP_INSTALLATION_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --output "$commit_file" \
+            https://api.github.com/repos/kim-em/lean-eval-intake-fixture/git/commits/ae38f4d3e4ad2991212135435f54e6640bcc89e7
+          METADATA_FILE="$metadata_file" COMMIT_FILE="$commit_file" python3 - <<'PY'
+          import json
+          import os
+
+          with open(os.environ["METADATA_FILE"], encoding="utf-8") as stream:
+              metadata = json.load(stream)
+          with open(os.environ["COMMIT_FILE"], encoding="utf-8") as stream:
+              commit = json.load(stream)
+          assert metadata["full_name"] == "kim-em/lean-eval-intake-fixture"
+          assert metadata["private"] is True
+          assert commit["sha"] == "ae38f4d3e4ad2991212135435f54e6640bcc89e7"
+          print("lean-eval-bot can read the exact private staging fixture commit")
+          PY
