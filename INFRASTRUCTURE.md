@@ -7,9 +7,9 @@ until this ledger changes in the same pull request or an immediately linked
 operations pull request. Secret **names, owners, scopes, and rotation dates**
 belong here; secret values do not.
 
-Last reconciled: 2026-08-21 (lifecycle-aware Worker commit `344ae1db` deployed
-and smoke-tested in both environments; staging intake enabled only for the
-end-to-end fixture, production intake disabled; deployment tokens,
+Last reconciled: 2026-08-21 (archive-before-evaluation Worker commit
+`b64a3029` deployed and smoke-tested in both environments; staging intake
+enabled only for the end-to-end fixture, production intake disabled; deployment tokens,
 State-writer tokens, browser OAuth Apps, and both broker GitHub Apps remain
 provisioned and preflighted; the six empty AWS workload environment shells and
 their exact ref policies are recorded below).
@@ -560,6 +560,8 @@ compatibility fix or append a corrective event.
 | Lifecycle-aware deployment | 2026-08-21 | run `32481684831` promoted immutable tag `lean-eval-dispatch/344ae1dbd5aaf53985b20511a770caa3c52b5626`, deployed that exact commit to staging and production, and passed both structured smoke checks; the State view-v2 prerequisites were already merged and green |
 | Staging E2E intake enable | 2026-08-21 | protected control run `32481885882` redeployed only staging intake version `ac11dee4-4bba-4328-9831-8545535d9b8f` at exact commit `344ae1dbd5aaf53985b20511a770caa3c52b5626`; health reports staging intake `true` while production remains `false` |
 | AWS workload environment shells | 2026-08-21 | created six empty GitHub environments: archive staging/production restricted to tag `lean-eval-dispatch/*`, replay staging/production and release staging/production restricted to protected branches; exact node, protection-rule, and tag-policy IDs are recorded above; no secret, variable, or AWS authority is present |
+| Archive-before-evaluation deployment | 2026-08-21 | run `32488170650` promoted immutable tag `lean-eval-dispatch/b64a30293e82e77cc76da1f74e6f1633747e1bf0`, deployed exact commit `b64a3029` to staging (broker `edeb2d01-5acf-4099-8329-cf3e52f431e1`, intake `366c8c6d-671b-4c53-b488-e2cb86320dd3`) and production (broker `1ebdfbe1-57be-4ee4-ba80-23a9bf740fc6`, intake `3d2658ec-0fda-4bf1-9619-e7500fa61d52`), and passed both structured smoke checks; obsolete docs-only run `32482830556` at commit `5027d7dc` was cancelled without deploying so it could not block the current non-cancelling concurrency group |
+| Staging intake re-enable after archive deployment | 2026-08-21 | protected control run `32488534189` verified the immutable `b64a3029` tag and deployed staging intake version `39e8392d-dcc4-46e4-9bc7-afaff28b01a5`; final health is staging `true`, production `false`, both at exact commit `b64a3029` |
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
 | Replay decrypt and destruction | blocked | D6 key/provider work intentionally not provisioned |
 | Release reconstruction | blocked | Publication remains disabled |
