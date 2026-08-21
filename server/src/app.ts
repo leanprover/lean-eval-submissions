@@ -1,6 +1,7 @@
 import {
   ApiDecodeError,
   assertSourcePolicy,
+  decodeArchiveCompletion,
   decodeAgentChallengeInput,
   decodeBrowserSubmission,
   decodeChallengeSubmission,
@@ -15,6 +16,7 @@ import {
 import {
   AuthError,
   equalToken,
+  lifecycleEventId,
   makeAgentChallenge,
   makeOAuthState,
   makeSubmissionGrant,
@@ -39,7 +41,7 @@ import {
   type GitHubIdentity,
 } from "./github-provider";
 import { githubBrokerFetch } from "./github-broker-client";
-import { type WritableStateEvent } from "./state-event";
+import { type ArchiveCompletedEvent, type WritableStateEvent } from "./state-event";
 import {
   type DispatchOutbox,
   type SubmissionView,
@@ -62,6 +64,7 @@ export type RuntimeEnv = Omit<
   | "GITHUB_STATE_TOKEN"
   | "GITHUB_VERIFICATION_TOKEN"
   | "INTAKE_ENABLED"
+  | "LIFECYCLE_CALLBACK_TOKEN"
   | "OAUTH_CALLBACK_URL"
   | "READINESS_TOKEN"
   | "STATE_REPOSITORY"
@@ -82,6 +85,7 @@ export type RuntimeEnv = Omit<
     GITHUB_STATE_TOKEN?: string;
     GITHUB_VERIFICATION_TOKEN?: string;
     INTAKE_ENABLED: string;
+    LIFECYCLE_CALLBACK_TOKEN?: string;
     OAUTH_CALLBACK_URL?: string;
     READINESS_TOKEN?: string;
     STATE_REPOSITORY: string;
@@ -397,6 +401,7 @@ async function dispatchSubmission(
     env.DISPATCH_WORKFLOW_REF ?? "",
     submissionId,
     login,
+    env.DEPLOYMENT_ENVIRONMENT,
     input,
   );
   if (dependencies.dispatch) return dependencies.dispatch(request);
@@ -540,6 +545,61 @@ async function acceptSubmission(
     reconciled.dispatch.status === "succeeded" && !outcome.created ? 200 : 202,
     { location: `/api/v1/submissions/${grant.submission_id}` },
   );
+}
+
+async function archiveCompleted(
+  request: Request,
+  env: RuntimeEnv,
+  dependencies: ApiDependencies,
+): Promise<Response> {
+  const configured = env.LIFECYCLE_CALLBACK_TOKEN;
+  const authorization = request.headers.get("authorization");
+  const supplied = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : "";
+  if (!configured) return json({ error: "callback_unavailable" }, 503);
+  if (!supplied || !(await equalToken(supplied, configured))) {
+    return json({ error: "authentication_failed" }, 401);
+  }
+  const completion = decodeArchiveCompletion(await readJson(request));
+  if (completion.locator.archive_repository !== "leanprover/lean-eval-audit") {
+    throw new ApiDecodeError("archive completion named an unapproved repository");
+  }
+  const ledger = state(env, dependencies);
+  const view = await ledger.readSubmission(completion.locator.submission_id);
+  if (view === null) return json({ error: "submission_not_found" }, 409);
+  if (view.dispatch.status !== "succeeded") {
+    return json({ error: "submission_not_dispatched" }, 409);
+  }
+  if (Date.parse(completion.occurred_at) <= Date.parse(view.accepted_at)) {
+    throw new ApiDecodeError("archive completion must follow submission acceptance");
+  }
+  const event: ArchiveCompletedEvent = {
+    schema_version: 1,
+    event_id: await lifecycleEventId(
+      "archive.completed",
+      view.submission_id,
+      completion.occurred_at,
+    ),
+    event_type: "archive.completed",
+    occurred_at: completion.occurred_at,
+    subject_id: view.submission_id,
+    causation_event_id: view.received_event_id,
+    actor: { kind: "system" },
+    payload: {
+      archive_repository: completion.locator.archive_repository,
+      archive_commit: completion.locator.archive_commit,
+      archive_path: completion.locator.archive_path,
+      archive_ciphertext_sha256: completion.locator.archive_ciphertext_sha256,
+      encrypted: true,
+    },
+  };
+  const outcome = await ledger.appendEvent(event);
+  return json({
+    status: outcome.created ? "recorded" : "already_recorded",
+    submission_id: view.submission_id,
+    event_id: event.event_id,
+  }, outcome.created ? 201 : 200);
 }
 
 function statusFor(view: SubmissionView): Record<string, unknown> {
@@ -725,6 +785,13 @@ export async function handleRequest(
   }
   if ((request.method === "GET" || request.method === "POST") && url.pathname === "/readyz") {
     return readiness(request, env, lifecycle);
+  }
+  if (request.method === "POST" && url.pathname === "/internal/v1/archive-completed") {
+    try {
+      return await archiveCompleted(request, env, dependencies);
+    } catch (error) {
+      return errorResponse(error);
+    }
   }
   if (url.pathname.startsWith("/api/") && !intakeEnabled(env)) return json({ error: "intake_disabled" }, 503);
   if (url.pathname.startsWith("/api/v1/")) {

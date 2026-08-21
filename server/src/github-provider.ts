@@ -218,6 +218,7 @@ export function buildDispatchRequest(
   workflowRef: string,
   submissionId: string,
   login: string,
+  callbackEnvironment: "staging" | "production",
   submission: Readonly<{
     problem_id: string;
     problem_group: string;
@@ -258,6 +259,8 @@ export function buildDispatchRequest(
         production_metadata_json: JSON.stringify(submission.production_metadata),
         archive_locator_required: "true",
         archive_sidecar_schema: "2",
+        archive_state_callback_required: "true",
+        callback_environment: callbackEnvironment,
       },
     }),
   });

@@ -177,6 +177,12 @@ function decodeDispatchBody(body: string | null, expectedRepository: string, exp
   if (!commit || inputs.workflow_commit !== commit) {
     throw new BrokerError(403, "dispatch did not bind the immutable workflow commit");
   }
+  if (
+    inputs.archive_state_callback_required !== "true" ||
+    (inputs.callback_environment !== "staging" && inputs.callback_environment !== "production")
+  ) {
+    throw new BrokerError(403, "dispatch did not bind the reviewed State callback");
+  }
   if (expectedRepository !== "leanprover/lean-eval-submissions" || expectedWorkflow !== "submission.yml") {
     throw new BrokerError(503, "broker dispatch configuration was not the reviewed target");
   }

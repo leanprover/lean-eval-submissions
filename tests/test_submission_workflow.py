@@ -31,11 +31,16 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             "problem_group:", "statement_revision:", "declared_model:",
             "publication_choice:", "production_metadata_json:",
             "archive_locator_required:", "archive_sidecar_schema:",
+            "archive_state_callback_required:", "callback_environment:",
         ):
             self.assertIn(field, self.text)
         self.assertIn("--server-dispatch", self.text)
         self.assertIn('--locator-output /tmp/archive-locator.json', self.text)
+        self.assertIn('--completion-output /tmp/archive-completion.json', self.text)
         self.assertIn("name: submission-archive-locator", self.text)
+        self.assertIn("name: submission-archive-completion", self.text)
+        self.assertIn("/internal/v1/archive-completed", self.text)
+        self.assertIn("LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}", self.text)
         self.assertIn('--submission-id "$SUBMISSION_ID"', self.text)
         self.assertIn('--expected-problem-id "$PROBLEM_ID"', self.text)
         self.assertIn("github.event_name == 'workflow_dispatch'", self.text)
@@ -52,12 +57,13 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             "problem_id", "problem_group", "statement_revision",
             "declared_model", "publication_choice",
             "production_metadata_json", "archive_locator_required",
-            "archive_sidecar_schema",
+            "archive_sidecar_schema", "archive_state_callback_required",
         ):
             self.assertRegex(
                 self.text,
                 rf"(?m)^      {field}: \{{description: .+, required: true, type: string\}}$",
             )
+        self.assertRegex(self.text, r"(?m)^      callback_environment:$")
 
     @classmethod
     def setUpClass(cls) -> None:
@@ -84,8 +90,8 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         ]
         self.assertEqual(
             job_headers,
-            ["  intake:", "  evaluate:", "  archive:", "  record:", "  notify:"],
-            "expected exactly the intake/evaluate/archive/record/notify jobs",
+            ["  intake:", "  evaluate:", "  archive:", "  archive_state:", "  record:", "  notify:"],
+            "expected exactly the reviewed submission jobs",
         )
         self.assertNotIn(
             "name: submission-source",
@@ -282,15 +288,28 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             "the archiver token must be set in exactly one (step-scoped) env block",
         )
 
+    def test_archive_state_callback_is_source_free_and_step_scoped(self) -> None:
+        self.assertEqual(
+            self.text.count("LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}"),
+            1,
+        )
+        callback = self.text.split("\n  archive_state:", 1)[1].split("\n  record:", 1)[0]
+        self.assertIn("name: submission-archive-completion", callback)
+        self.assertNotIn("submission-audit-ciphertext", callback)
+        self.assertNotIn("submission-results", callback)
+        self.assertNotIn("actions/checkout", callback)
+        evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive:", 1)[0]
+        self.assertNotIn("LIFECYCLE_CALLBACK_TOKEN", evaluate)
+
     def test_record_waits_on_archive(self) -> None:
         # Policy: a recorded leaderboard entry implies a durable
         # archived copy of the source. The `record` job therefore has
         # to depend on `archive`, so that an archive failure suppresses
         # the leaderboard write.
         self.assertIn(
-            "needs: [evaluate, archive]",
+            "needs: [evaluate, archive, archive_state]",
             self.text,
-            "record must depend on both evaluate and archive",
+            "record must depend on evaluation, archive, and server State handoff",
         )
 
     def test_record_overrides_skipped_intake_without_weakening_gates(self) -> None:
@@ -306,6 +325,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn("always()", record_header)
         self.assertIn("needs.evaluate.result == 'success'", record_header)
         self.assertIn("needs.archive.result == 'success'", record_header)
+        self.assertIn("needs.archive_state.result == 'success'", record_header)
 
     def test_archive_uses_archiver_app_scoped_to_audit_repo(self) -> None:
         self.assertIn("LEAN_EVAL_ARCHIVER_CLIENT_ID", self.text)

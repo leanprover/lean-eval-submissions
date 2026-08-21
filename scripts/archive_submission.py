@@ -571,7 +571,7 @@ def _write_locator(
     audit_repo: str,
     archive_commit: str,
     archive_path: str,
-) -> None:
+) -> dict:
     if not SHA40_RE.fullmatch(archive_commit):
         sys.exit(
             "GitHub did not return a 40-char lowercase commit SHA for the "
@@ -593,6 +593,30 @@ def _write_locator(
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(locator, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return locator
+
+
+def _write_archive_completion(
+    path: pathlib.Path,
+    *,
+    sidecar: dict,
+    locator: dict,
+) -> None:
+    archived_at = sidecar.get("archived_at")
+    if not isinstance(archived_at, str) or re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", archived_at
+    ) is None:
+        sys.exit("final sidecar has no canonical archived_at for State completion")
+    completion = {
+        "schema_version": 1,
+        "occurred_at": archived_at[:-1] + ".000Z",
+        "locator": locator,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(completion, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _verify_ciphertext_at_commit(
@@ -659,8 +683,13 @@ def _push(args: argparse.Namespace) -> int:
     _validate_sidecar(sidecar)
 
     is_server_submission = sidecar["schema_version"] == SERVER_SIDECAR_SCHEMA_VERSION
-    if is_server_submission and args.locator_output is None:
-        sys.exit("--locator-output is required for a server-submission archive")
+    if is_server_submission and (
+        args.locator_output is None or args.completion_output is None
+    ):
+        sys.exit(
+            "--locator-output and --completion-output are required for a "
+            "server-submission archive"
+        )
 
     sidecar["sha256_ciphertext"] = _sha256_of_file(ciphertext)
     sidecar["size_bytes_ciphertext"] = ciphertext.stat().st_size
@@ -771,12 +800,17 @@ def _push(args: argparse.Namespace) -> int:
                     archive_path=ciphertext_remote,
                     expected_sha256=archived_digest,
                 )
-                _write_locator(
+                locator = _write_locator(
                     args.locator_output,
                     sidecar=existing_sidecar,
                     audit_repo=audit_repo,
                     archive_commit=archive_commit,
                     archive_path=ciphertext_remote,
+                )
+                _write_archive_completion(
+                    args.completion_output,
+                    sidecar=existing_sidecar,
+                    locator=locator,
                 )
             print(f"archived: {audit_repo}:{ciphertext_remote}")
             print(f"          {audit_repo}:{sidecar_remote}")
@@ -826,12 +860,17 @@ def _push(args: argparse.Namespace) -> int:
             archive_path=ciphertext_remote,
             expected_sha256=sidecar["sha256_ciphertext"],
         )
-        _write_locator(
+        locator = _write_locator(
             args.locator_output,
             sidecar=sidecar,
             audit_repo=audit_repo,
             archive_commit=archive_commit,
             archive_path=ciphertext_remote,
+        )
+        _write_archive_completion(
+            args.completion_output,
+            sidecar=sidecar,
+            locator=locator,
         )
 
     print(f"archived: {audit_repo}:{ciphertext_remote}")
@@ -1089,6 +1128,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help=(
             "Write the immutable State archive locator (required for "
+            "UUIDv7 server submissions)."
+        ),
+    )
+    p_push.add_argument(
+        "--completion-output",
+        type=pathlib.Path,
+        default=None,
+        help=(
+            "Write the authenticated Worker callback payload (required for "
             "UUIDv7 server submissions)."
         ),
     )

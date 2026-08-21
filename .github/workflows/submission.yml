@@ -44,6 +44,14 @@ on:
       production_metadata_json: {description: 'Strict bounded production metadata object', required: true, type: string}
       archive_locator_required: {description: 'Must be literal true', required: true, type: string}
       archive_sidecar_schema: {description: 'Must be literal 2', required: true, type: string}
+      archive_state_callback_required: {description: 'Must be literal true', required: true, type: string}
+      callback_environment:
+        description: 'Worker environment receiving trusted lifecycle callbacks'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
 
 concurrency:
   # Per-issue concurrency: each submission issue gets its own group so
@@ -159,6 +167,8 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         env:
           EXPECTED_WORKFLOW_COMMIT: ${{ inputs.workflow_commit }}
+          CALLBACK_ENVIRONMENT: ${{ inputs.callback_environment }}
+          CALLBACK_REQUIRED: ${{ inputs.archive_state_callback_required }}
         run: |
           if [[ ! "$EXPECTED_WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
             echo "invalid expected workflow commit" >&2
@@ -166,6 +176,14 @@ jobs:
           fi
           if [ "$GITHUB_SHA" != "$EXPECTED_WORKFLOW_COMMIT" ]; then
             echo "dispatch tag no longer resolves to the expected workflow commit" >&2
+            exit 1
+          fi
+          if [ "$CALLBACK_REQUIRED" != "true" ]; then
+            echo "server dispatch did not require the State lifecycle callback" >&2
+            exit 1
+          fi
+          if [ "$CALLBACK_ENVIRONMENT" != "staging" ] && [ "$CALLBACK_ENVIRONMENT" != "production" ]; then
+            echo "server dispatch selected an invalid callback environment" >&2
             exit 1
           fi
 
@@ -604,8 +622,10 @@ jobs:
             SUMMARY_FLAG+=(--summary /tmp/results-in/summary.json)
           fi
           LOCATOR_FLAG=()
+          COMPLETION_FLAG=()
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             LOCATOR_FLAG+=(--locator-output /tmp/archive-locator.json)
+            COMPLETION_FLAG+=(--completion-output /tmp/archive-completion.json)
           fi
           python scripts/archive_submission.py push \
             --ciphertext /tmp/audit-in/source.tar.gz.age \
@@ -613,6 +633,7 @@ jobs:
             --benchmark-commit "${{ needs.evaluate.outputs.benchmark_commit }}" \
             --workflow-run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             "${LOCATOR_FLAG[@]}" \
+            "${COMPLETION_FLAG[@]}" \
             "${SUMMARY_FLAG[@]}"
 
       - name: Upload verified server archive locator
@@ -624,12 +645,78 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Upload verified server archive completion
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: submission-archive-completion
+          path: /tmp/archive-completion.json
+          if-no-files-found: error
+          retention-days: 7
+
+  archive_state:
+    needs: [evaluate, archive]
+    if: |
+      always()
+      && github.event_name == 'workflow_dispatch'
+      && needs.archive.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: cloudflare-${{ inputs.callback_environment }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: submission-archive-completion
+          path: /tmp/archive-completion
+
+      - name: Record verified archive completion in State
+        env:
+          CALLBACK_ENVIRONMENT: ${{ inputs.callback_environment }}
+          LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+        run: |
+          set -euo pipefail
+          case "$CALLBACK_ENVIRONMENT" in
+            staging)
+              endpoint="https://lean-eval-submission-server-staging.lean-eval.workers.dev/internal/v1/archive-completed"
+              ;;
+            production)
+              endpoint="https://lean-eval-submission-server.lean-eval.workers.dev/internal/v1/archive-completed"
+              ;;
+            *)
+              echo "unsupported callback environment" >&2
+              exit 1
+              ;;
+          esac
+          response_file=$(mktemp)
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${LIFECYCLE_CALLBACK_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data-binary @/tmp/archive-completion/archive-completion.json \
+            --output "$response_file" \
+            "$endpoint"
+          RESPONSE_FILE="$response_file" python3 - <<'PY'
+          import json
+          import os
+
+          with open(os.environ["RESPONSE_FILE"], encoding="utf-8") as stream:
+              payload = json.load(stream)
+          if payload.get("status") not in {"recorded", "already_recorded"}:
+              raise SystemExit("archive completion callback did not confirm State")
+          if payload.get("submission_id") != os.environ["SUBMISSION_ID"]:
+              raise SystemExit("archive completion callback confirmed the wrong submission")
+          PY
+
   record:
     # Now gated on `archive` as well: if the audit archival did not
     # complete, the leaderboard must not advance either. The two
     # mechanisms are independent, but our policy is that a recorded
     # leaderboard entry implies a durable archived copy of the source.
-    needs: [evaluate, archive]
+    needs: [evaluate, archive, archive_state]
     # Labeled-event runs intentionally skip `intake`. Without an explicit
     # status function here, Actions' implicit `success()` also sees that
     # skipped ancestor and silently suppresses `record`, even after both
@@ -639,6 +726,7 @@ jobs:
       always()
       && needs.evaluate.result == 'success'
       && needs.archive.result == 'success'
+      && (github.event_name == 'issues' || needs.archive_state.result == 'success')
     runs-on: ubuntu-latest
     # A live schema migration installs a durable Git lock. Evaluation and
     # archival remain live while this credentialed writer waits its turn.

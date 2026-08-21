@@ -109,13 +109,29 @@ export type SubmissionPublicationChangedEvent = Omit<EventEnvelope, "causation_e
     payload: Readonly<{ publication_choice: "scheduled" | "withheld" }>;
   }>;
 
+export type ArchiveCompletedEvent = Omit<EventEnvelope, "causation_event_id"> &
+  Readonly<{
+    event_type: "archive.completed";
+    subject_id: string;
+    causation_event_id: string;
+    actor: Readonly<{ kind: "system" }>;
+    payload: Readonly<{
+      archive_ciphertext_sha256: string;
+      archive_commit: string;
+      archive_path: string;
+      archive_repository: string;
+      encrypted: true;
+    }>;
+  }>;
+
 /** State events the public submission Worker is authorized to append. */
 export type WritableStateEvent =
   | SystemInitializedEvent
   | SubmissionReceivedEvent
   | AuthenticationNonceConsumedEvent
   | SubmissionMetadataAmendedEvent
-  | SubmissionPublicationChangedEvent;
+  | SubmissionPublicationChangedEvent
+  | ArchiveCompletedEvent;
 
 type LifecycleEventType =
   | "archive.completed"

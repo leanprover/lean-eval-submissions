@@ -164,6 +164,18 @@ push-retry loop resets `results-store/` to `origin/main` between attempts;
 keeping the script in a separate checkout means the loop cannot reset the
 running script out from under itself.
 
+For Worker-originated submissions, archival completion crosses a separate
+credential boundary. The archive job uploads only a strict locator/completion
+artifact after verifying the ciphertext bytes at the recorded immutable audit
+commit. The source-free `archive_state` job alone receives the matching
+environment's `LIFECYCLE_CALLBACK_TOKEN`; it sends the completion to the Worker,
+which appends the causally linked `archive.completed` event with a
+domain-separated SHA-256-derived UUIDv7. Retries therefore target the same
+immutable event path even after credential rotation.
+The callback token and State credential are absent from the fetch/evaluate and
+archive jobs, and the callback endpoint remains available for in-flight jobs
+when public intake is disabled.
+
 ## 4. Recording validations
 
 - **Schema validation.** `update_leaderboard.py` validates

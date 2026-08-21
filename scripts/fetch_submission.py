@@ -553,6 +553,8 @@ def fetch_submission(
 SERVER_INPUT_FIELDS = {
     "archive_locator_required",
     "archive_sidecar_schema",
+    "archive_state_callback_required",
+    "callback_environment",
     "declared_model",
     "problem_group",
     "problem_id",
@@ -648,7 +650,12 @@ def fetch_server_submission(
     """Strictly decode and fetch one Worker-originated exact-ref submission."""
     if set(inputs) != SERVER_INPUT_FIELDS:
         raise FetchError("server dispatch has unknown or missing input fields")
-    if inputs.get("archive_locator_required") != "true" or inputs.get("archive_sidecar_schema") != "2":
+    if (
+        inputs.get("archive_locator_required") != "true"
+        or inputs.get("archive_sidecar_schema") != "2"
+        or inputs.get("archive_state_callback_required") != "true"
+        or inputs.get("callback_environment") not in {"staging", "production"}
+    ):
         raise FetchError("server dispatch does not require the UUID archive locator contract")
     submission_id = _server_text(inputs, "submission_id", 36)
     submitted_by = _server_text(inputs, "submitted_by", 39)
