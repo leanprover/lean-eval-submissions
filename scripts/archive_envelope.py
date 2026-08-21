@@ -29,6 +29,7 @@ try:
         archive_key_id,
         canonical_archive_path,
         envelope_binding_context,
+        validate_age_identity_bytes,
         validate_envelope,
     )
 except ImportError:
@@ -40,11 +41,11 @@ except ImportError:
         archive_key_id,
         canonical_archive_path,
         envelope_binding_context,
+        validate_age_identity_bytes,
         validate_envelope,
     )
 
 
-MAX_IDENTITY_BYTES = 4096
 MAX_ADAPTER_STDOUT_BYTES = 32768
 ADAPTER_RESPONSE_FIELDS = {"schema_version", "adapter", "wrapped_identity"}
 
@@ -95,16 +96,10 @@ def _read_identity(identity_path: pathlib.Path) -> bytes:
         raise EnvelopeError("age-keygen did not create a readable identity") from error
     if mode & 0o077:
         raise EnvelopeError("age identity permissions expose group or other access")
-    if not identity or len(identity) > MAX_IDENTITY_BYTES:
-        raise EnvelopeError("age identity is empty or exceeds the root-adapter limit")
     try:
-        lines = identity.decode("ascii").splitlines()
-    except UnicodeDecodeError as error:
-        raise EnvelopeError("age identity must be ASCII") from error
-    secret_lines = [line for line in lines if line and not line.startswith("#")]
-    if len(secret_lines) != 1 or not secret_lines[0].startswith("AGE-SECRET-KEY-"):
-        raise EnvelopeError("age identity must contain exactly one native secret key")
-    return identity
+        return validate_age_identity_bytes(identity)
+    except ContractError as error:
+        raise EnvelopeError(str(error)) from error
 
 
 def _adapter_wrap(

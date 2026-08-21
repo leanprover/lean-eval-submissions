@@ -237,13 +237,15 @@ provider-neutral envelope, ten-minute replay/release capability claims, stable
 `ak1_` identity, `uc1_` audit digest, and consume-before-unwrap interface are
 frozen in `schemas/archive-key-envelope-v1.schema.json`,
 `schemas/unwrap-capability-v1.schema.json`, and
-`docs/key-capability-contract.md`. `scripts/archive_envelope.py` now implements
+`docs/key-capability-contract.md`. `scripts/archive_envelope.py` implements
 the trusted, provider-neutral archive preparation side: one fresh PQ-hybrid age
 identity per archive, strict stdin-only adapter wrapping, and atomic publication
-of ciphertext plus envelope. It remains deliberately disconnected from the
-submission workflow until the dedicated AWS account and reviewed adapter
-exist. The AWS one-use store/root-key adapter and disposable execution backend
-remain unprovisioned launch gates.
+of ciphertext plus envelope. `scripts/aws_key_adapter.py` and
+`infrastructure/aws-key-adapter/template.yaml` implement the initial KMS wrap,
+direct-Lambda unwrap, and conditional DynamoDB consume boundary. Both remain
+deliberately disconnected from the submission workflow until the dedicated AWS
+account is provisioned and live single-use checks pass. The disposable
+execution backend remains a separate unprovisioned launch gate.
 
 **Contributor acknowledgement approved 2026-08-20:** “By submitting, I confirm
 that I have authority to provide this source. I authorize Lean Eval to store

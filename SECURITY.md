@@ -131,6 +131,15 @@ repository/commit/path/ciphertext-digest locator and verifies the encrypted
 bytes at that exact commit. Issue-based intake retains its existing archive
 layout and behavior.
 
+Per-submission KMS wrapping does not weaken the evaluation credential boundary.
+The future trusted archive job independently fetches the exact source commit,
+wraps its fresh age identity with an Encrypt-only OIDC role, and persists the
+archive before evaluation starts. The evaluation job then performs its own
+exact-commit fetch and continues to keep fetch and evaluation co-located. No
+plaintext source artifact crosses jobs, and the evaluation job must never gain
+`id-token: write`, AWS credentials, a wrapped identity, or KMS/DynamoDB/Lambda
+authority.
+
 ## 3. The two-checkout evaluation workflow
 
 `submission.yml`'s `evaluate` job is the only place untrusted submitter

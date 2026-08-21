@@ -176,6 +176,11 @@ etc.).
   [`docs/key-capability-contract.md`](docs/key-capability-contract.md).
 - Trusted provider-neutral archive writer (not yet wired into production):
   [`scripts/archive_envelope.py`](scripts/archive_envelope.py).
+- Initial AWS KMS/DynamoDB adapter and linted SAM infrastructure (not yet
+  provisioned): [`scripts/aws_key_adapter.py`](scripts/aws_key_adapter.py) and
+  [`infrastructure/aws-key-adapter/template.yaml`](infrastructure/aws-key-adapter/template.yaml).
+- Concise operator walkthrough for the dedicated account:
+  [`docs/aws-key-adapter-setup.md`](docs/aws-key-adapter-setup.md).
 - `ci.yml` runs the Python test suite, `actionlint`, the workflow-pin
   audit, and `tests/test_submission_workflow.py` (a structural guard on
   `submission.yml`'s security-critical shape).

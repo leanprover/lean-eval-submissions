@@ -104,6 +104,43 @@ This tool is not yet wired into the submission workflow because no production
 root-key adapter or dedicated AWS account exists. The current workflow remains
 unchanged until those launch gates are satisfied.
 
+## Initial AWS adapter
+
+`scripts/aws_key_adapter.py` is the initial provider implementation. Its local
+command line exposes `wrap` only. That path calls KMS `Encrypt` with the exact
+context above and is intended for a protected archive job whose OIDC role has
+only `kms:Encrypt` on the one environment key.
+
+Unwrap exists only as a synchronous Lambda handler. The protected replay or
+release controller may assume a role with only `lambda:InvokeFunction` on the
+published `live` alias. The function role alone has `dynamodb:PutItem` on the
+one-use table and `kms:Decrypt` on the environment key. It validates the
+envelope, purpose, runner nonce, binding, and ten-minute lifetime; conditionally
+inserts the `uc1_…` digest with `attribute_not_exists`; and calls KMS only after
+that insert succeeds. A repeated request never reaches KMS. A KMS or response
+failure after consumption is fail-closed; the controller must investigate and
+issue a fresh capability rather than replay an ambiguous one.
+
+There is no Function URL or API Gateway. AWS IAM authenticates direct Lambda
+invocation, and the untrusted VM receives neither the invoker role nor any KMS
+or DynamoDB permission. The Lambda does not log request or response bodies.
+DynamoDB TTL removes expired consume records eventually, but TTL is cleanup,
+not authorization: the immutable capability timestamp is always validated
+before the conditional write.
+
+The linted SAM template at
+`infrastructure/aws-key-adapter/template.yaml` creates separate staging or
+production KMS keys, tables, functions, and roles from the same code. It binds
+GitHub OIDC to exact protected environment subjects and grants no wildcard KMS,
+DynamoDB, or Lambda workload authority.
+
+The future workflow must put the Encrypt-only OIDC role in a trusted archive
+job, never in the job that runs untrusted Lean. The archive job independently
+fetches the exact source commit, encrypts and persists it, and finishes before
+evaluation. The evaluation job then fetches the same immutable commit again
+with only its short-lived read token. Plaintext source does not cross a job or
+artifact boundary, and `id-token: write` is absent from the evaluation job.
+
 ## Single-use capability
 
 The capability claims bind one purpose (`lean-eval-replay` or
@@ -130,16 +167,18 @@ recommends `EncryptionContextEquals` where possible:
 
 ## Launch boundary
 
-Before new production intake, a reviewed adapter must:
+Before new production intake, the adapter must be provisioned and demonstrate:
 
-1. create and wrap one fresh age identity per archive;
-2. persist the exact envelope alongside the ciphertext;
-3. authenticate issuance from the protected replay/release controller;
-4. bind unwrap to the intended fresh runner identity and nonce;
-5. consume once before KMS decrypt and fail closed on an ambiguous response;
-6. return only the one age identity, never the KMS key or another envelope;
-7. record the non-secret request/capability digest and outcome;
-8. pass the second-use, cross-archive, expiry, and provider-rewrap tests.
+1. the protected archive job can wrap one fresh identity with Encrypt-only
+   authority;
+2. the ciphertext and exact envelope are persisted together;
+3. only the protected replay/release subjects can invoke unwrap;
+4. unwrap is bound to the intended fresh runner identity and nonce;
+5. a capability is consumed before KMS decrypt and ambiguous responses fail
+   closed;
+6. the controller receives only the one age identity, never the KMS key;
+7. the untrusted runner has no AWS credential or provider API access; and
+8. the live second-use, cross-archive, expiry, and rewrap checks pass.
 
 GitHub Actions may use OIDC rather than a long-lived AWS secret. The AWS trust
 policy must match the exact repository and protected environment subject; an
