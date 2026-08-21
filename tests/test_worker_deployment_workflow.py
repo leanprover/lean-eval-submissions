@@ -36,6 +36,12 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("'INFRASTRUCTURE.md'", pull_request)
         self.assertNotIn("'INFRASTRUCTURE.md'", push)
 
+    def test_submission_workflow_change_promotes_and_deploys_its_exact_ref(self) -> None:
+        pull_request = DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0]
+        push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
+        for trigger in (pull_request, push):
+            self.assertIn("'.github/workflows/submission.yml'", trigger)
+
     def test_smoke_retries_structured_payload_propagation(self) -> None:
         self.assertEqual(DEPLOY.count("for attempt in $(seq 1 13); do"), 2)
         self.assertEqual(DEPLOY.count("health payload did not converge"), 2)

@@ -116,7 +116,9 @@ list in `.audit/recipients.txt` and pushed to the private
 `leanprover/lean-eval-audit` repo for indefinite retention. The
 ciphertext is decryptable only by holders of the matching SSH/age
 private keys; the unencrypted sidecar JSON records issue, submitter,
-repo+ref, model, and the evaluator verdict. This is disclosed to
+repo+ref, model, provenance, and integrity digests. Older sidecars may also
+carry the evaluator verdict; current archives are durably committed before an
+evaluation verdict exists. This is disclosed to
 submitters via the third acknowledgement on the submission Issue Form
 and the "Audit archive" section of the README. See
 [`docs/audit-archive.md`](docs/audit-archive.md) for the threat model
@@ -124,21 +126,21 @@ and key custody story. The `record` job is gated on the `archive` job
 succeeding, so a recorded leaderboard entry always implies a durable
 encrypted archive of the source.
 
-The future server intake uses the same encryption boundary but keys the
+Server intake uses the same encryption boundary but keys the
 archive by its canonical UUIDv7 under `archives/<prefix>/<uuid>.tar.age`.
 Before State may receive `archive.completed`, the archiver emits an immutable
 repository/commit/path/ciphertext-digest locator and verifies the encrypted
 bytes at that exact commit. Issue-based intake retains its existing archive
 layout and behavior.
 
-Per-submission KMS wrapping does not weaken the evaluation credential boundary.
-The future trusted archive job independently fetches the exact source commit,
-wraps its fresh age identity with an Encrypt-only OIDC role, and persists the
-archive before evaluation starts. The evaluation job then performs its own
-exact-commit fetch and continues to keep fetch and evaluation co-located. No
-plaintext source artifact crosses jobs, and the evaluation job must never gain
-`id-token: write`, AWS credentials, a wrapped identity, or KMS/DynamoDB/Lambda
-authority.
+The trusted archive job now independently fetches the exact source commit and
+persists the encrypted archive before evaluation starts. The evaluation job
+then performs its own exact-commit fetch and verifies the archive job's frozen
+metadata digest before keeping fetch and evaluation co-located. No plaintext
+or ciphertext transport artifact crosses jobs. When per-submission KMS
+wrapping is enabled, only the archive job may gain the Encrypt-only OIDC role;
+the evaluation job must never gain `id-token: write`, AWS credentials, a
+wrapped identity, or KMS/DynamoDB/Lambda authority.
 
 ## 3. The two-checkout evaluation workflow
 
@@ -148,11 +150,12 @@ sandbox (see `leanprover/lean-eval`'s `SECURITY.md` §3 for the full
 "where untrusted code runs" table). The job:
 
 1. Checks out this repo (the pipeline scripts) and `leanprover/lean-eval`
-   at `main` (the benchmark) into `lean-eval/`, both with
+   at the exact commit frozen by the preceding archive job, both with
    `persist-credentials: false`.
-2. Resolves `benchmark_commit` from `git -C lean-eval rev-parse HEAD`.
-3. Fetches the submission with the step-scoped `lean-eval-bot` token.
-4. Strips `.git` from both checkouts.
+2. Verifies `benchmark_commit` and toolchain against the archive outputs.
+3. Independently fetches the submission with a step-scoped `lean-eval-bot`
+   token and verifies the deterministic metadata digest against archive.
+4. Strips `.git` from both checkouts before untrusted Lean runs.
 5. Builds landrun / lean4export / comparator / the `lean-eval` CLI.
 6. Fetches Mathlib's independent cache, but does not restore from or save
    to the repository's GitHub Actions cache. The evaluate job deliberately

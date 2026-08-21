@@ -73,12 +73,12 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
     def test_workflow_file_exists(self) -> None:
         self.assertTrue(WORKFLOW.is_file(), f"missing {WORKFLOW}")
 
-    def test_fetch_and_evaluate_share_one_job(self) -> None:
-        # A previous design split fetch into its own job and shipped the
-        # cloned source as an artifact, which leaked private submissions
-        # on a public repo. Fetch + evaluate must stay in one job.
-        self.assertIn("python scripts/fetch_submission.py", self.text)
-        self.assertIn("python scripts/evaluate_submission.py", self.text)
+    def test_archive_precedes_independent_evaluation_without_plaintext_transport(self) -> None:
+        # Archive and evaluation deliberately fetch independently. The archive
+        # must persist first; evaluation must refetch the frozen identity on
+        # its own runner, never receive source through a workflow artifact.
+        self.assertEqual(self.text.count("python scripts/fetch_submission.py"), 2)
+        self.assertEqual(self.text.count("python scripts/evaluate_submission.py"), 1)
         # Job headers are the 2-space-indented keys after the top-level
         # `jobs:` line. Slice from there so `on:`/`concurrency:` sub-keys
         # (also 2-indented) are not mistaken for jobs.
@@ -102,13 +102,24 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             self.text,
             "the submission source must never be uploaded as an artifact",
         )
-        # The audit-archive design only ever uploads the encrypted
-        # ciphertext, never the plaintext source.
-        self.assertIn(
-            "name: submission-audit-ciphertext",
-            self.text,
-            "the audit-archive ciphertext artifact must exist",
-        )
+        self.assertNotIn("name: submission-audit-ciphertext", self.text)
+        evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive:", 1)[0]
+        archive = self.text.split("\n  archive:", 1)[1].split(
+            "\n  archive_failure_state:", 1
+        )[0]
+        self.assertIn("needs: [intake, archive, archive_state]", evaluate)
+        self.assertIn("needs.archive.result == 'success'", evaluate)
+        self.assertIn("needs.archive_state.result == 'success'", evaluate)
+        self.assertIn("python scripts/fetch_submission.py", evaluate)
+        self.assertIn("python scripts/evaluate_submission.py", evaluate)
+        self.assertIn("EXPECTED_METADATA_SHA256", evaluate)
+        self.assertIn("ref: ${{ needs.archive.outputs.benchmark_commit }}", evaluate)
+        self.assertIn("needs: intake", archive)
+        self.assertNotIn("needs: evaluate", archive)
+        self.assertIn("python scripts/fetch_submission.py", archive)
+        self.assertIn("python scripts/archive_submission.py encrypt", archive)
+        self.assertIn("python scripts/archive_submission.py push", archive)
+        self.assertNotIn("evaluate_submission.py", archive)
 
     def test_both_checkouts_disable_persisted_credentials(self) -> None:
         # The submissions checkout and the lean-eval checkout share the
@@ -119,11 +130,10 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             re.findall(r"uses: actions/checkout@([0-9a-f]{40})", self.text)
         )
         self.assertEqual(checkout_shas, {checkout_sha})
-        # 8: two in evaluate, one each in archive and the trusted evaluation
-        # callback, record's two checkouts, and notify's, which supplies
-        # scripts/classify_evaluate_failure.py.
+        # 9: intake; two each in archive and evaluate; one trusted evaluation
+        # callback; record's two; and notify's classifier checkout.
         self.assertEqual(
-            self.text.count("uses: actions/checkout@"), 8, "expected 8 checkout steps"
+            self.text.count("uses: actions/checkout@"), 9, "expected 9 checkout steps"
         )
         # The two evaluate-job checkouts must each set persist-credentials:false.
         self.assertGreaterEqual(
@@ -250,12 +260,12 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         )
 
     def test_app_token_is_step_scoped(self) -> None:
-        # APP_INSTALLATION_TOKEN must appear only in the Fetch submission
-        # step's env, never in a job-level env/secrets block.
+        # Each independent fetch gets a token only in that fetch step's env,
+        # never in a job-level env/secrets block.
         self.assertEqual(
             self.text.count("APP_INSTALLATION_TOKEN:"),
-            1,
-            "the app token must be set in exactly one (step-scoped) env block",
+            2,
+            "both app tokens must be confined to their fetch steps",
         )
 
     def test_record_uses_a_separate_results_store_checkout(self) -> None:
@@ -302,6 +312,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertNotIn("actions/checkout", failure_callback)
         self.assertNotIn("submission-audit-ciphertext", failure_callback)
         archive_callback = self.text.split("\n  archive_state:", 1)[1].split("\n  evaluation_state:", 1)[0]
+        self.assertIn("needs: archive", archive_callback)
         self.assertIn("name: submission-archive-completion", archive_callback)
         self.assertNotIn("submission-audit-ciphertext", archive_callback)
         self.assertNotIn("submission-results", archive_callback)
@@ -365,6 +376,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             pairs,
             [
                 ("LEAN_EVAL_BOT", "LEAN_EVAL_BOT"),
+                ("LEAN_EVAL_BOT", "LEAN_EVAL_BOT"),
                 ("LEAN_EVAL_ARCHIVER", "LEAN_EVAL_ARCHIVER"),
                 ("LEAN_EVAL_RECORDER", "LEAN_EVAL_RECORDER"),
             ],
@@ -379,33 +391,33 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # this test alongside the workflow.
         self.assertIn("10 * 1024 * 1024", self.text)
 
-    def test_archive_gated_on_audit_ciphertext_ready(self) -> None:
-        # If encrypt or the ciphertext upload fails, `archive` must NOT
-        # run — otherwise the submitter sees a misleading "evaluation
-        # did not produce results" comment instead of the correct
-        # "audit encryption failed" one.
+    def test_evaluation_is_gated_on_durable_archive(self) -> None:
+        # Encryption and persistence happen inside archive; only a successful
+        # archive (plus server State acknowledgement) may unlock evaluation.
         self.assertIn(
             "audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}",
             self.text,
-            "evaluate must expose audit_ciphertext_ready as a job output",
+            "archive must classify encryption failures for callbacks and notification",
         )
         self.assertIn(
-            "needs.evaluate.outputs.audit_ciphertext_ready == 'true'",
+            "needs.archive.result == 'success'",
             self.text,
-            "archive's if-condition must gate on audit_ciphertext_ready",
+            "evaluation must require successful durable archival",
         )
         self.assertIn(
-            "needs.evaluate.outputs.audit_ciphertext_ready != 'true'",
+            "needs.archive.outputs.audit_ciphertext_ready",
             self.text,
-            "notify must branch when audit_ciphertext_ready is not true",
+            "callbacks and notify must use archive's classified output",
         )
+        self.assertNotIn("submission-audit-ciphertext", self.text)
 
-    def test_archive_reads_per_problem_verdict_from_summary(self) -> None:
-        # Per-problem records live at summary["run_eval"]["problems"];
-        # results.json is just {"passed": [ids]}. Passing --results
-        # would silently omit the verdict from every sidecar.
-        self.assertIn("--summary /tmp/results-in/summary.json", self.text)
-        self.assertNotIn("--results /tmp/results-in/results.json", self.text)
+    def test_pre_evaluation_archive_does_not_claim_an_evaluator_verdict(self) -> None:
+        archive = self.text.split("\n  archive:", 1)[1].split(
+            "\n  archive_failure_state:", 1
+        )[0]
+        self.assertNotIn("submission-results", archive)
+        self.assertNotIn("--summary", archive)
+        self.assertNotIn("--results", archive)
 
 
 class SubmissionIssueFormTests(unittest.TestCase):
