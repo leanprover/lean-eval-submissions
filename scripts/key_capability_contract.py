@@ -34,6 +34,7 @@ TIMESTAMP = re.compile(
 )
 AGE_RECIPIENT = re.compile(r"age1[0-9a-z]{40,4090}")
 MAX_CAPABILITY_LIFETIME = dt.timedelta(minutes=10)
+MAX_AGE_IDENTITY_BYTES = 4096
 PURPOSES = {"lean-eval-release", "lean-eval-replay"}
 ENVELOPE_FIELDS = {
     "schema_version",
@@ -103,6 +104,22 @@ def archive_key_id(submission_id: str, age_recipient: str) -> str:
     _match(AGE_RECIPIENT, age_recipient, "age_recipient")
     payload = f"{submission_id}\0{age_recipient}".encode("ascii")
     return "ak1_" + hashlib.sha256(b"lean-eval-archive-key-v1\0" + payload).hexdigest()
+
+
+def validate_age_identity_bytes(identity: bytes) -> bytes:
+    """Validate the one native age identity accepted by every root adapter."""
+    if not isinstance(identity, bytes):
+        raise ContractError("age identity must be bytes")
+    if not identity or len(identity) > MAX_AGE_IDENTITY_BYTES:
+        raise ContractError("age identity is empty or exceeds the root-adapter limit")
+    try:
+        lines = identity.decode("ascii").splitlines()
+    except UnicodeDecodeError as error:
+        raise ContractError("age identity must be ASCII") from error
+    secret_lines = [line for line in lines if line and not line.startswith("#")]
+    if len(secret_lines) != 1 or not secret_lines[0].startswith("AGE-SECRET-KEY-"):
+        raise ContractError("age identity must contain exactly one native secret key")
+    return identity
 
 
 def capability_digest(capability_value: Any) -> str:

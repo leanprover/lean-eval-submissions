@@ -134,10 +134,20 @@ Keep production `INTAKE_ENABLED=false`.
    approve or request changes to `lean-eval-leaderboard#70` before cutover.
 3. Leave D7 unapplied until explicitly approving a current dry report's exact
    source commit, record count, and output digest.
-4. Provision the dedicated AWS account/KMS capability service and a reviewed
-   disposable replay backend before private replay, automatic release, or
-   production intake. The provider-neutral contracts are implemented; no AWS
-   resource or production replay runner exists yet.
+4. Create the dedicated Lean Eval AWS account. In `us-east-1`, add GitHub's OIDC
+   provider (`https://token.actions.githubusercontent.com`, audience
+   `sts.amazonaws.com`), then deploy
+   `infrastructure/aws-key-adapter/template.yaml` as
+   `lean-eval-key-adapter-staging` and
+   `lean-eval-key-adapter-production` with the corresponding environment
+   parameter and that provider ARN. Record the stack outputs in
+   `INFRASTRUCTURE.md`; never create an IAM access key. The template is ready,
+   but no AWS resource exists yet. Exact commands and output fields are in
+   [`aws-key-adapter-setup.md`](aws-key-adapter-setup.md).
+5. A reviewed disposable replay backend is still required before private
+   replay, automatic release, or production intake. It must call the Lambda
+   through the controller's Invoke-only role and must not pass AWS credentials
+   into the untrusted VM.
 
 The archive callback uses a distinct random `LIFECYCLE_CALLBACK_TOKEN` in each
 Worker and the matching `cloudflare-staging` or `cloudflare-production` GitHub

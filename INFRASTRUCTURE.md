@@ -398,8 +398,9 @@ Recorded repository controls:
 
 ## Encrypted replay boundary
 
-The selected root-key platform is AWS KMS in a new dedicated AWS account. No
-AWS resource has been created yet:
+The selected root-key platform is AWS KMS in a new dedicated AWS account. The
+implementation and linted SAM template exist, but no AWS resource has been
+created yet:
 
 | Field | Recorded value |
 | --- | --- |
@@ -409,9 +410,15 @@ AWS resource has been created yet:
 | Billing owner | Kim Morrison (temporary) |
 | Primary administrator | Kim Morrison |
 | Provider-loss recovery | None by design; planned migration requires the active provider |
-| KMS region | **TO BE DECIDED** |
-| KMS key ARN / alias | **TO BE PROVISIONED AFTER D6** |
-| Workload role | **TO BE PROVISIONED WITH THE KEY** |
+| KMS region | `us-east-1` selected for the initial small service; the stable contract is region-neutral |
+| Staging stack | `lean-eval-key-adapter-staging` — **TO BE PROVISIONED** |
+| Production stack | `lean-eval-key-adapter-production` — **TO BE PROVISIONED** |
+| KMS aliases | `alias/lean-eval-archive-identities-staging` and `-production` — **TO BE PROVISIONED** |
+| One-use tables | `lean-eval-capability-consumption-staging` and `-production` — **TO BE PROVISIONED** |
+| Unwrap functions | `lean-eval-archive-unwrap-staging` and `-production`, alias `live` — **TO BE PROVISIONED** |
+| Archive roles | `lean-eval-archive-wrap-staging` and `-production` (KMS Encrypt only) — **TO BE PROVISIONED** |
+| Controller roles | `lean-eval-archive-unwrap-invoker-staging` and `-production` (Lambda Invoke only) — **TO BE PROVISIONED** |
+| Function roles | KMS Decrypt + conditional DynamoDB PutItem + logs only — **TO BE PROVISIONED** |
 
 AWS is an initial provider, not a stable protocol dependency. Archives remain
 standard `age` ciphertext. Each archive has a small provider-neutral envelope
@@ -426,6 +433,30 @@ adapter; provider-specific SDK calls stay inside that adapter. While AWS is
 available, migration consists of unwrapping each identity with the AWS adapter
 and wrapping it with the replacement adapter. Archives and stable IDs do not
 change. If AWS is already permanently unavailable, recovery is not supported.
+
+The initial adapter is implemented in `scripts/aws_key_adapter.py`; its
+infrastructure is `infrastructure/aws-key-adapter/template.yaml`. Deploy the
+template once for staging and once for production in the dedicated account.
+There is no public endpoint. Protected archive jobs use exact GitHub OIDC
+subjects `archive-staging` or `archive-production` and receive only KMS Encrypt.
+Protected replay/release controllers use `replay-<environment>` or
+`release-<environment>` and receive only synchronous invocation of that
+environment's versioned Lambda alias. Only the Lambda role can conditionally
+write the environment's one-use table and decrypt with its KMS key.
+
+The archive GitHub environments must select the **tag** pattern
+`lean-eval-dispatch/*`, because server dispatch runs the reviewed workflow from
+that immutable tag. Replay and release environments select protected branches
+only. Never configure the archive environments as “protected branches only” or
+the legitimate dispatch ref will be denied; never configure any of these six
+environments with unrestricted branches and tags.
+
+The one-use table's partition key is `capability_digest`; `PutItem` uses
+`attribute_not_exists(capability_digest)` before decrypt. Its
+`expires_at_epoch` TTL is eventual storage cleanup, not a security decision:
+the adapter rejects expired claims independently. No public API, access key,
+archive-wide age identity, cross-environment role, provider-loss recovery,
+backup drill, or alarm subsystem is part of this setup.
 
 Submission source archives remain encrypted outside the evaluation job. Replay
 uses a Lean-Eval-owned controller through a provider-neutral disposable-executor

@@ -1,0 +1,203 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Lean Eval one-submission archive key adapter
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    AllowedValues:
+      - staging
+      - production
+  GitHubOidcProviderArn:
+    Type: String
+    AllowedPattern: ^arn:aws:iam::[0-9]{12}:oidc-provider/token\.actions\.githubusercontent\.com$
+  GitHubRepository:
+    Type: String
+    Default: leanprover/lean-eval-submissions
+    AllowedPattern: ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$
+
+Resources:
+  ArchiveIdentityKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub Lean Eval ${EnvironmentName} per-submission age identities
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: EnableAccountIamPolicies
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+            Action: kms:*
+            Resource: "*"
+
+  ArchiveIdentityKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/lean-eval-archive-identities-${EnvironmentName}
+      TargetKeyId: !Ref ArchiveIdentityKey
+
+  CapabilityConsumption:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub lean-eval-capability-consumption-${EnvironmentName}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: capability_digest
+          AttributeType: S
+      KeySchema:
+        - AttributeName: capability_digest
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+      TimeToLiveSpecification:
+        AttributeName: expires_at_epoch
+        Enabled: true
+
+  WrapRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub lean-eval-archive-wrap-${EnvironmentName}
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubRepository}:environment:archive-${EnvironmentName}
+      Policies:
+        - PolicyName: EncryptOneArchiveIdentity
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: kms:Encrypt
+                Resource: !GetAtt ArchiveIdentityKey.Arn
+                Condition:
+                  StringEquals:
+                    kms:EncryptionContext:contract: lean-eval-archive-key-v1
+                  ForAllValues:StringEquals:
+                    kms:EncryptionContextKeys:
+                      - contract
+                      - submission_id
+                      - archive_ciphertext_sha256
+                      - data_key_id
+                      - age_recipient_sha256
+
+  UnwrapFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub lean-eval-archive-unwrap-function-${EnvironmentName}
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WriteFunctionLogs
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*
+        - PolicyName: ConsumeAndDecryptOneIdentity
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: dynamodb:PutItem
+                Resource: !GetAtt CapabilityConsumption.Arn
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: !GetAtt ArchiveIdentityKey.Arn
+                Condition:
+                  StringEquals:
+                    kms:EncryptionContext:contract: lean-eval-archive-key-v1
+                  ForAllValues:StringEquals:
+                    kms:EncryptionContextKeys:
+                      - contract
+                      - submission_id
+                      - archive_ciphertext_sha256
+                      - data_key_id
+                      - age_recipient_sha256
+
+  UnwrapFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      FunctionName: !Sub lean-eval-archive-unwrap-${EnvironmentName}
+      Description: Validates and consumes one capability before one KMS decrypt
+      Runtime: python3.13
+      Architectures:
+        - x86_64
+      Handler: aws_key_adapter.lambda_handler
+      CodeUri: ../..
+      Role: !GetAtt UnwrapFunctionRole.Arn
+      MemorySize: 128
+      Timeout: 10
+      ReservedConcurrentExecutions: 1
+      AutoPublishAlias: live
+      Tracing: PassThrough
+      LoggingConfig:
+        LogFormat: JSON
+        ApplicationLogLevel: ERROR
+        SystemLogLevel: WARN
+      Environment:
+        Variables:
+          LEAN_EVAL_KMS_KEY_ID: !GetAtt ArchiveIdentityKey.Arn
+          LEAN_EVAL_CAPABILITY_TABLE: !Ref CapabilityConsumption
+          LEAN_EVAL_ADAPTER_NAME: aws-kms-v1
+
+  UnwrapInvokerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub lean-eval-archive-unwrap-invoker-${EnvironmentName}
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub:
+                  - !Sub repo:${GitHubRepository}:environment:replay-${EnvironmentName}
+                  - !Sub repo:${GitHubRepository}:environment:release-${EnvironmentName}
+      Policies:
+        - PolicyName: InvokeOnlyTheUnwrapAlias
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Sub ${UnwrapFunction.Arn}:live
+
+Outputs:
+  AdapterName:
+    Value: aws-kms-v1
+  KmsKeyArn:
+    Value: !GetAtt ArchiveIdentityKey.Arn
+  CapabilityTableName:
+    Value: !Ref CapabilityConsumption
+  WrapRoleArn:
+    Value: !GetAtt WrapRole.Arn
+  UnwrapFunctionAliasArn:
+    Value: !Sub ${UnwrapFunction.Arn}:live
+  UnwrapInvokerRoleArn:
+    Value: !GetAtt UnwrapInvokerRole.Arn
