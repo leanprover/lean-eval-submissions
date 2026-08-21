@@ -108,8 +108,11 @@ npx wrangler secret put DISPATCH_APP_PRIVATE_KEY --config wrangler.broker.jsonc 
 ```
 
 Record App and installation IDs, not private keys, in `INFRASTRUCTURE.md`.
-Headless private-gist proof remains disabled because installation tokens cannot
-read a submitter-owned private gist; this does not block browser OAuth intake.
+Headless proof uses a GitHub secret gist as an unlisted challenge location.
+GitHub documents secret gists as readable by anyone who knows the URL, so the
+Worker fetches the exact gist ID anonymously and verifies its owner,
+`public: false`, untruncated proof file, and signed expiring content. Do not add
+gist permission to either App or browser OAuth.
 
 Ownership transfers for both existing registrations were accepted by
 `leanprover` on 2026-08-21. Public App records confirm unchanged IDs `4666604`

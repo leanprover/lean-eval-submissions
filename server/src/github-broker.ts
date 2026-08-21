@@ -147,7 +147,7 @@ function assertSourceRequest(request: BrokerRequest, url: URL): string {
     throw new BrokerError(403, "source authority is read-only");
   }
   if (url.pathname.startsWith("/gists/")) {
-    throw new BrokerError(501, "private gist proof is not available through an installation token");
+    throw new BrokerError(501, "gist proof must use the anonymous exact-ID verifier");
   }
   const { repository, suffix } = repositoryFromPath(url.pathname);
   const metadata = suffix === "";

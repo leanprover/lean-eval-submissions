@@ -28,12 +28,14 @@ primary checkout is not the integration workspace.
 | leaderboard v2 preview | merged as `lean-eval-leaderboard#69`; snapshot main `a438b83ffd400eecfc5a701115597366ba4809cc` pinned to regenerated LeanEval main |
 
 The private broker and intake Workers are deployed in staging and production
-from commit `a928be873db6569e2b4ccb3fb8b399d0f19b2e78`, with intake disabled.
-Deployment, OAuth, readiness, authentication, State-writer, and broker App
-secrets are installed. The State-writer tokens still lack authority pending
-organization approval, and both broker App registrations are pending transfer
-from `kim-em` to `leanprover`. Exact Worker version identifiers are recorded in
-`INFRASTRUCTURE.md`. The live results store has not been migrated: D7 still
+from commit `42f9d1989ff825dde862a660fdaa9f358dce2972`. Deployment, OAuth,
+readiness, authentication, State-writer, and broker App secrets are installed.
+Both State-writer tokens are organization-approved and preflighted, and both
+broker App registrations transferred to `leanprover` without changing their
+IDs or the dispatcher installation. Staging intake is enabled only for the
+end-to-end fixture; production remains disabled. Exact Worker version
+identifiers are recorded in `INFRASTRUCTURE.md`. The live results store has not
+been migrated: D7 still
 requires a fresh post-merge dry run and explicit approval of its exact source
 commit, record count, and output digest.
 
@@ -304,10 +306,12 @@ Use two Apps: one source reader and one workflow dispatcher. Record App IDs,
 installations, exact permissions, and broker identifiers when provisioned;
 private keys never enter this ledger.
 
-Implementation note: installation tokens cannot read a submitter-owned private
-gist. The broker therefore rejects the existing private-gist agent proof and
-agent intake stays disabled pending an App-verifiable proof or a separately
-approved user-token design. This does not broaden browser OAuth or either App.
+Implementation note: GitHub calls these “secret” gists, but documents them as
+unlisted rather than private. Agent proof anonymously fetches the exact gist ID
+and validates `public: false`, the exact owner, an untruncated
+`lean-eval-proof.txt`, and the signed expiring challenge. The broker continues
+to reject `/gists/`; no App or user token gains gist authority, and browser
+OAuth remains `read:user` only.
 
 ### D10: embargo and issue-intake transition policy
 

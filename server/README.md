@@ -124,18 +124,19 @@ operations without changing submission IDs, State, or API routes.
 Static `GITHUB_VERIFICATION_TOKEN` and `GITHUB_DISPATCH_TOKEN` hooks remain only
 for local contract tests; they are not an approved production credential
 design. The two Apps and their broker secrets were provisioned on 2026-08-21;
-the Apps remain temporarily owned by `kim-em` pending transfer to `leanprover`.
-The safe default remains `503` with `INTAKE_ENABLED=false`. Do not request
+the Apps are owned by `leanprover`; transfers preserved their IDs and the
+dispatcher installation. The safe production default remains
+`INTAKE_ENABLED=false`. Do not request
 broad OAuth `repo` scope as a shortcut; browser OAuth intentionally requests
 only `read:user`.
 
-GitHub App installation tokens cannot read a submitter's private gist. The
-current headless-agent gist proof therefore remains launch-disabled rather
-than silently requesting user-token or broad gist authority. Browser OAuth
-intake and repository/tag verification do not depend on that proof. Before
-agent intake is enabled, replace it with an explicitly reviewed proof that the
-source-reader App can verify, or separately approve a GitHub App user-token
-flow.
+GitHub secret gists are unlisted rather than private. Headless-agent proof
+fetches the exact high-entropy gist ID anonymously, then requires
+`public: false`, the asserted GitHub owner, an untruncated
+`lean-eval-proof.txt`, and the
+verbatim signed expiring challenge. The broker deliberately continues to
+reject `/gists/`; no user token or App gist authority is required. Repository
+metadata and immutable-tag verification still use the source-reader App.
 
 The local workflow emits a digest-verified archive locator artifact, but no
 Actions credential is authorized to append the corresponding archive event to

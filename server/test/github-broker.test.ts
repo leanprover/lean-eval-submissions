@@ -138,7 +138,7 @@ describe("GitHub App broker", () => {
     expect(calls).toHaveLength(3);
   });
 
-  it("rejects private-gist proof instead of broadening installation authority", async () => {
+  it("rejects gist proof instead of broadening installation authority", async () => {
     const upstream = vi.fn<typeof fetch>();
     const response = await handleBrokerRequest(
       brokerRequest("source", "https://api.github.com/gists/abcdef"),
