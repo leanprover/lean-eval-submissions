@@ -1,0 +1,34 @@
+{
+  "capability": {
+    "archive_ciphertext_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "archive_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "archive_path": "archives/01/0198c4ee-7d2d-7b35-8d20-cd5db8aa9a6f.tar.age",
+    "archive_repository": "leanprover/lean-eval-audit",
+    "data_key_id": "ak1_4398244fdbb45410c8f85944a3faffc2f03fe434cbb13ece91815202fd8564de",
+    "expires_at": "2026-08-21T12:05:00.000Z",
+    "issued_at": "2026-08-21T12:00:00.000Z",
+    "max_uses": 1,
+    "purpose": "lean-eval-replay",
+    "request_id": "0198c4ee-7d2d-7b35-8d20-cd5db8aa9a70",
+    "runner_nonce": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "schema_version": 1,
+    "submission_id": "0198c4ee-7d2d-7b35-8d20-cd5db8aa9a6f"
+  },
+  "capability_digest": "uc1_d64db676eb069ae89f48b929d876fbf3b876d27804f91047f25f256d24575bb9",
+  "envelope": {
+    "adapter": "aws-kms-v1",
+    "age_recipient": "age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+    "archive_ciphertext_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "data_key_id": "ak1_4398244fdbb45410c8f85944a3faffc2f03fe434cbb13ece91815202fd8564de",
+    "schema_version": 1,
+    "submission_id": "0198c4ee-7d2d-7b35-8d20-cd5db8aa9a6f",
+    "wrapped_identity": "dGVzdC13cmFwcGVkLWlkZW50aXR5"
+  },
+  "kms_encryption_context": {
+    "age_recipient_sha256": "37f04815cb86faf8812f77f435dc3ec1096cbc0a6f7554edfaec6a761a1b44d0",
+    "archive_ciphertext_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "contract": "lean-eval-archive-key-v1",
+    "data_key_id": "ak1_4398244fdbb45410c8f85944a3faffc2f03fe434cbb13ece91815202fd8564de",
+    "submission_id": "0198c4ee-7d2d-7b35-8d20-cd5db8aa9a6f"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/archive-key-envelope-v1.schema.json",
+  "title": "Lean Eval archive key envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "submission_id",
+    "archive_ciphertext_sha256",
+    "data_key_id",
+    "age_recipient",
+    "adapter",
+    "wrapped_identity"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "submission_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "archive_ciphertext_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "data_key_id": {
+      "type": "string",
+      "pattern": "^ak1_[0-9a-f]{64}$"
+    },
+    "age_recipient": {
+      "type": "string",
+      "pattern": "^age1[0-9a-z]{40,100}$"
+    },
+    "adapter": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}-v[1-9][0-9]*$"
+    },
+    "wrapped_identity": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+      "maxLength": 16384
+    }
+  }
+}
