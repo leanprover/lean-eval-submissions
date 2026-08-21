@@ -168,8 +168,8 @@ jobs:
         run: |
           set -euo pipefail
           start_ns=$(date +%s%N)
-          if perf stat -x, -o /tmp/replay-perf-probe.csv -e instructions:u -- true; then
-            perf stat -x, -o /tmp/replay-perf.csv -e instructions:u -- \
+          if perf stat --no-big-num -x, -o /tmp/replay-perf-probe.csv -e instructions:u -- true; then
+            perf stat --no-big-num -x, -o /tmp/replay-perf.csv -e instructions:u -- \
               python evaluator/scripts/evaluate_submission.py \
                 --source-dir source \
                 --generated-root lean-eval/generated \
