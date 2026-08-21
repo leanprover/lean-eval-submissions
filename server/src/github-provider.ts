@@ -170,11 +170,11 @@ export class GitHubProvider {
   }
 
   async verifySecretGist(gistId: string, login: string, challenge: string): Promise<GitHubIdentity> {
-    if (!this.#verificationToken && !this.#verificationFetcher) {
-      throw new GitHubProviderError(503, "source verification credential is not configured");
-    }
-    const response = await (this.#verificationFetcher ?? this.#fetcher)(`${API}/gists/${gistId}`, {
-      headers: providerHeaders(this.#verificationToken),
+    // GitHub secret gists are unlisted rather than access-controlled. Fetching
+    // the exact high-entropy gist ID anonymously avoids granting the source
+    // reader (or the browser OAuth flow) unrelated user-level gist authority.
+    const response = await this.#fetcher(`${API}/gists/${gistId}`, {
+      headers: providerHeaders(),
       signal: AbortSignal.timeout(5000),
     });
     const gist = await jsonResponse(response, "gist response");

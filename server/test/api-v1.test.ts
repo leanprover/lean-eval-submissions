@@ -378,16 +378,34 @@ describe("strict API contract", () => {
 });
 
 describe("agent intake in workerd", () => {
+  it("reads the exact secret gist anonymously instead of through the source broker", async () => {
+    const anonymousFetch = vi.fn<typeof fetch>((_input, init) => {
+      expect(new Headers(init?.headers).has("authorization")).toBe(false);
+      return Promise.resolve(Response.json({
+        public: false,
+        owner: { id: 42, login: "Alice" },
+        files: { "lean-eval-proof.txt": { truncated: false, content: "challenge" } },
+      }));
+    });
+    const sourceBroker = vi.fn<typeof fetch>(() => Promise.reject(new Error("gist reached source broker")));
+    const provider = new GitHubProvider(anonymousFetch, undefined, sourceBroker);
+    await expect(provider.verifySecretGist("abcde", "alice", "challenge"))
+      .resolves.toEqual({ id: 42, login: "alice" });
+    expect(anonymousFetch).toHaveBeenCalledOnce();
+    expect(sourceBroker).not.toHaveBeenCalled();
+  });
+
   it("verifies secret gist ownership and tag-at-exact-commit before one atomic append", async () => {
     const state = new MemoryState();
     let challenge = "";
-    const upstream = vi.fn<typeof fetch>((input) => {
+    const upstream = vi.fn<typeof fetch>((input, init) => {
       const url = typeof input === "string"
         ? input
         : input instanceof URL
           ? input.toString()
           : input.url;
       if (url.includes("/gists/abcde")) {
+        expect(new Headers(init?.headers).has("authorization")).toBe(false);
         return Promise.resolve(Response.json({
           public: false,
           owner: { id: 42, login: "alice" },
@@ -435,6 +453,34 @@ describe("agent intake in workerd", () => {
     expect(dispatch).toHaveBeenCalledOnce();
     const dispatchBody = await dispatch.mock.calls[0]?.[0].json<{ inputs: Record<string, string> }>();
     expect(dispatchBody?.inputs.source_commit).toBe("a".repeat(40));
+  });
+
+  it("rejects public, truncated, wrong-owner, and wrong-content gist proofs", async () => {
+    const cases = [
+      { public: true, owner: { id: 42, login: "alice" }, truncated: false, content: "challenge" },
+      { public: false, owner: { id: 42, login: "alice" }, truncated: true, content: "challenge" },
+      { public: false, owner: { id: 43, login: "mallory" }, truncated: false, content: "challenge" },
+      { public: false, owner: { id: 42, login: "alice" }, truncated: false, content: "different" },
+    ];
+    for (const candidate of cases) {
+      const upstream = vi.fn<typeof fetch>((_input, init) => {
+        expect(new Headers(init?.headers).has("authorization")).toBe(false);
+        return Promise.resolve(Response.json({
+          public: candidate.public,
+          owner: candidate.owner,
+          files: {
+            "lean-eval-proof.txt": {
+              truncated: candidate.truncated,
+              content: candidate.content,
+            },
+          },
+        }));
+      });
+      const provider = new GitHubProvider(upstream, "verification-token");
+      await expect(provider.verifySecretGist("abcde", "alice", "challenge"))
+        .rejects.toMatchObject({ status: 409 });
+      expect(upstream).toHaveBeenCalledOnce();
+    }
   });
 
   it("persists a failed dispatch and retries the existing submission without duplicating events", async () => {

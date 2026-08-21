@@ -57,7 +57,7 @@ publicly attributable State events.
 | --- | --- |
 | OAuth login CSRF or callback substitution | One-time state bound to the initiating session, exact callback allowlist, expiry, and reuse tests. |
 | Stolen browser token | Minimal scopes, immediate verification, never log or persist the token, redact upstream bodies. |
-| Agent impersonation | The current commit/tag/gist challenge remains disabled because installation tokens cannot read private gists; enable only after a reviewed App-verifiable replacement, with owner equality, signed expiry, and nonce-consumption race tests. |
+| Agent impersonation | The signed challenge must appear verbatim in `lean-eval-proof.txt` in the asserted owner's secret (unlisted) gist; the anonymous exact-ID fetch sends no credential and checks `public: false`, owner equality, truncation, expiry, and nonce-consumption races. Repository identity and the immutable tag are verified separately by the source-reader App. |
 | Ref movement or repository swap | Resolve and record the source's exact 40-character commit. GitHub dispatch accepts only branch/tag refs, so the workflow uses a protected `lean-eval-dispatch/<commit>` tag, carries the embedded commit as an input, and checks it against `GITHUB_SHA` before any source access. |
 | SSRF through source metadata | Worker never fetches source; downstream fetcher accepts only canonical GitHub repository or gist forms already validated by the secure pipeline. |
 | Duplicate or ambiguous requests | Stable idempotency key, immutable ID-derived event path, byte-equivalent replay success, non-forced compare-and-swap update. |
@@ -72,8 +72,12 @@ publicly attributable State events.
 
 ## Credential provisioning still required
 
-Agent tag verification for private repositories and server workflow dispatch
-cannot use the discarded browser OAuth token. The selected implementation is a
+Agent repository/tag verification for private repositories and server workflow
+dispatch cannot use the discarded browser OAuth token. Secret-gist challenge
+verification needs no credential because GitHub [documents secret gists as
+unlisted, not
+private](https://docs.github.com/en/get-started/writing-on-github/editing-and-sharing-content-with-gists/creating-gists);
+the exact-ID request is anonymous. The selected implementation is a
 private Cloudflare service-binding broker with separate source-reader and
 workflow-dispatch Apps. Static verification/dispatch token hooks are
 local-contract scaffolding only. The Apps and secrets still require operator

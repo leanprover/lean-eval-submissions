@@ -9,7 +9,8 @@ belong here; secret values do not.
 
 Last reconciled: 2026-08-21 (deployment tokens, State-writer tokens, browser
 OAuth Apps, and the two broker GitHub Apps provisioned; both App ownership
-transfers and both State-token approvals pending; intake still disabled).
+transfers accepted and both State writers approved/preflighted; staging intake
+enabled only for the end-to-end fixture, production intake disabled).
 Temporary owner: Kim Morrison. Target owner: leanprover organization
 administrators. Service code:
 [`server/`](server/).
@@ -309,11 +310,15 @@ is the provider seam: another provider can replace the broker without changing
 public API, State, archive, or result identifiers. Do not provision the static
 local-contract token hooks and do not grant browser OAuth broad `repo` scope.
 
-Installation tokens cannot read submitter-owned private gists. The existing
-headless-agent gist proof therefore remains disabled until it is replaced with
-an App-verifiable proof or a separate user-token design is approved. Browser
-intake is unaffected. Do not expand either installation App merely to bypass
-this limit.
+GitHub [documents secret gists as unlisted, not
+private](https://docs.github.com/en/get-started/writing-on-github/editing-and-sharing-content-with-gists/creating-gists):
+an exact high-entropy gist ID is readable without authentication.
+Headless-agent proof therefore fetches only
+`GET /gists/<id>` anonymously and verifies the signed, expiring challenge in
+`lean-eval-proof.txt`, `public: false`, and exact owner ID/login. It never sends
+an App, OAuth, or State credential to the gist endpoint. The source-reader App
+still verifies only repository metadata and the immutable source tag; do not
+expand either App with user-level gist authority.
 
 The Worker owns durable dispatch reconciliation independently of the credential
 choice. The intake CAS writes the immutable event batch, a validated targeted

@@ -85,8 +85,9 @@ one issue per lane.
 - [x] Promote the same commit to production and verify the structured health
       response.
 - [x] Install distinct readiness secrets in each Worker.
-- [ ] Obtain organization approval for the installed, distinct State-writer
-      credentials and test each with its matching ruleset bypass.
+- [x] Obtain organization approval for the installed, distinct State-writer
+      credentials and test each with its matching ruleset bypass (preflight
+      runs `32465890236` and `32465892118`).
 - [x] Implement the D9 private service-binding broker and separate source and
       dispatch authority paths.
 - [x] Deploy both private brokers and bind the intake-disabled staging and
@@ -94,11 +95,13 @@ one issue per lane.
 - [x] Create both Apps, install the dispatcher on only the submissions
       repository, and provision both broker environments; keep the local static
       verification/dispatch-token hooks absent in production.
-- [ ] Complete the pending ownership transfers of both broker GitHub Apps to
-      `leanprover`, then verify their App IDs, private keys, and dispatcher
-      installation remain unchanged.
-- [ ] Replace or separately authorize the private-gist headless-agent proof;
-      installation tokens cannot read submitter-owned private gists.
+- [x] Complete the ownership transfers of both broker GitHub Apps to
+      `leanprover`; public records and protected preflights verify unchanged
+      App IDs, working private keys, and dispatcher installation `155329316`.
+- [x] Replace the credentialed private-gist assumption with anonymous exact-ID
+      verification of GitHub's unlisted secret gist, while retaining exact
+      owner/content/visibility/truncation checks and keeping the broker closed
+      to `/gists/`.
 
 ## Data and product rollout
 
