@@ -71,7 +71,7 @@ or `gist`. The structured
 `production_metadata` object preserves submission-time declarations; changes
 after acceptance are events.
 
-Legacy schema-version-1 results are assigned `statement_revision = 1`. The migration maps
+Legacy schema version 1 results are assigned `statement_revision = 1`. The migration maps
 `solved_at` to `accepted_at`, nests the source fields under `submission`, nests
 `issue_number` under `intake`, and moves the three optional production and
 publication fields into `production_metadata`. No legacy field is discarded.
@@ -80,7 +80,7 @@ publication fields into `production_metadata`. No legacy field is discarded.
 
 `scripts/migrate_results_v2.py` defaults to a read-only dry run. It reports
 the captured commit, source and output record counts, source digest, canonical
-output digest, changed files, duplicate IDs, and an exact schema-version-1
+output digest, changed files, duplicate IDs, and an exact schema version 1
 projection check.
 `--apply` additionally requires all three reviewed expectations:
 `--expect-source-digest`, `--expect-record-count`, and

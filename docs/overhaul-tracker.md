@@ -1,4 +1,4 @@
-# [overhaul] implementation tracker
+# [lifecycle overhaul] implementation tracker
 
 Tracks implementation and production rollout of the plan in
 [lean-eval#536](https://github.com/leanprover/lean-eval/pull/536) and the
@@ -43,7 +43,7 @@ one issue per lane.
       changing archives or stable IDs. D6b accepts no provider-loss recovery.
       The capability implementation is delegated to the implementation review;
       concise contributor/release wording is approved.
-- [ ] D7: approve a fresh results schema-version-2 migration report's exact
+- [ ] D7: approve a fresh results schema version 2 migration report's exact
       source commit, record count, and output digest.
 - [x] D8: acknowledge UUID-prefix State paths and the durable Git writer lock
       as correctness-preserving deviations from the literal program text.
@@ -62,12 +62,20 @@ one issue per lane.
 - [x] Replace LeanEval's local generator path with an exact public commit SHA.
 - [x] Verify generator byte parity after the remote pin (theorem- and
       definition-hole fixtures, 10/10 files each).
+- [ ] Merge generator fixes `lean-eval-generator#1` / `#2` and synchronization
+      PR `#3`, advance exact pins, rerun corpus/FC parity, and remove LeanEval's
+      embedded generator core.
 - [x] Configure State rulesets and append-only validation.
+- [x] Publish the schema-validated public projection of private production
+      State without exposing private source or operational metadata
+      (`lean-eval-state#4`; staging mirror `lean-eval-state-staging#4`).
+- [ ] Complete lifecycle-aware leaderboard consumption and publish the exact
+      validated projection after the held cutover PR is approved.
 
 ## Existing-repository PRs
 
 - [x] Open catalog lifecycle/tags/audit PR.
-- [x] Open results schema-version-2 compatibility and migration-tooling PR.
+- [x] Open results schema version 2 compatibility and migration-tooling PR.
 - [x] Open intake-disabled Worker, deployment, rollback, threat-model, and
       infrastructure-ledger PR.
 - [x] Open lifecycle-aware leaderboard preview PR.
@@ -110,7 +118,7 @@ one issue per lane.
 
 ## Data and product rollout
 
-- [x] Produce a fresh results schema-version-2 dry-run artifact.
+- [x] Produce a fresh results schema version 2 dry-run artifact.
 - [ ] Review and approve its exact post-merge checksums (D7).
 - [ ] Execute the authorized migration and verify the writer lock is released.
 - [x] Define and audit the approved mechanical 118-member v1 base set.
@@ -118,8 +126,11 @@ one issue per lane.
       merge commit `547b00ed345bc0737dd94847d6b67cb681b6178a`).
 - [x] Add the ten explicitly approved post-audit problems in `lean-eval#548`;
       final v1 membership is 128 at merge `21c6c021`.
-- [ ] Complete staging OAuth/agent intake and exact-ref dispatch; wire its
-      artifacts through the implemented UUIDv7 archive writer and into State.
+- [x] Complete staging OAuth/agent intake and exact-ref dispatch. Hosted run
+      `32546606639` archived the exact private fixture, produced the deliberate
+      rejection, and recorded archive completion plus evaluation start/reject
+      events through staging State commit `b2160515`; no accepted result was
+      written.
 - [x] Demonstrate credential-free historical public replay (hosted run
       `32499490261`, workflow commit `757b0831`).
 - [ ] Demonstrate isolated private replay.
