@@ -62,11 +62,13 @@ one issue per lane.
 - [x] Replace LeanEval's local generator path with an exact public commit SHA.
 - [x] Verify generator byte parity after the remote pin (theorem- and
       definition-hole fixtures, 10/10 files each).
-- [ ] Merge generator fixes `lean-eval-generator#1` / `#2` and synchronization
-      PR `#3`, advance exact pins, rerun corpus/FC parity, and merge the
+- [x] Merge generator fixes `lean-eval-generator#1` / `#2` and synchronization
+      PR `#3`, advance exact pins, rerun corpus parity, and merge the
       embedded-core removal in `lean-eval#553`. All three generator PRs merged
-      into exact main commit `77373a53`; consumer `#553` is ready at final pin
-      `98c7da8f`, with its local parity suite green and hosted matrix running.
+      into exact main commit `77373a53`; consumer `#553` merged as
+      `b91d4757`, after local parity/build/test checks and hosted run
+      `32559642804` passed all eight catalog shards, the inventory aggregate,
+      repository checks, and security/scoring smoke tests.
 - [x] Configure State rulesets and append-only validation.
 - [x] Publish the schema-validated public projection of private production
       State without exposing private source or operational metadata
