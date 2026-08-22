@@ -629,22 +629,22 @@ def _verify_ciphertext_at_commit(
 ) -> None:
     """Prove the immutable commit named in State contains the expected bytes."""
     query = urllib.parse.urlencode({"ref": archive_commit})
-    api_url = (
+    contents_url = (
         f"https://api.github.com/repos/{audit_repo}/contents/{archive_path}?{query}"
     )
     req = urllib.request.Request(
-        api_url,
+        contents_url,
         method="GET",
         headers={
             "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github.raw+json",
+            "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
             "User-Agent": "lean-eval-archiver",
         },
     )
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
-            archived_bytes = resp.read()
+            contents = json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         try:
             body = exc.read().decode("utf-8", errors="replace")
@@ -658,6 +658,80 @@ def _verify_ciphertext_at_commit(
         sys.exit(
             f"could not verify archived ciphertext at {archive_commit}:{archive_path}: {exc}"
         )
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        sys.exit(
+            "could not decode archived ciphertext metadata at "
+            f"{archive_commit}:{archive_path}: {exc}"
+        )
+
+    blob_sha = contents.get("sha") if isinstance(contents, dict) else None
+    if (
+        not isinstance(contents, dict)
+        or contents.get("type") != "file"
+        or not isinstance(blob_sha, str)
+        or not SHA40_RE.fullmatch(blob_sha)
+    ):
+        sys.exit(
+            "archived ciphertext metadata did not identify a regular Git blob at "
+            f"{archive_commit}:{archive_path}"
+        )
+
+    # Do not depend on Contents-API raw-media content negotiation here. GitHub
+    # can return the JSON metadata envelope even when the raw media type is
+    # requested; hashing that envelope produced a false mismatch in the first
+    # live server-intake archive. Resolve the immutable path to its blob SHA,
+    # then read and decode that exact Git blob explicitly.
+    blob_url = f"https://api.github.com/repos/{audit_repo}/git/blobs/{blob_sha}"
+    blob_req = urllib.request.Request(
+        blob_url,
+        method="GET",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "lean-eval-archiver",
+        },
+    )
+    try:
+        with urllib.request.urlopen(blob_req, timeout=60) as resp:
+            blob = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        try:
+            body = exc.read().decode("utf-8", errors="replace")
+        finally:
+            exc.close()
+        sys.exit(
+            f"could not read archived ciphertext blob {blob_sha} ({exc.code}): {body}"
+        )
+    except urllib.error.URLError as exc:
+        sys.exit(f"could not read archived ciphertext blob {blob_sha}: {exc}")
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        sys.exit(f"could not decode archived ciphertext blob {blob_sha}: {exc}")
+
+    encoded = blob.get("content") if isinstance(blob, dict) else None
+    if (
+        not isinstance(blob, dict)
+        or blob.get("sha") != blob_sha
+        or blob.get("encoding") != "base64"
+        or not isinstance(encoded, str)
+    ):
+        sys.exit(f"GitHub returned malformed archived ciphertext blob {blob_sha}")
+    try:
+        archived_bytes = base64.b64decode("".join(encoded.split()), validate=True)
+    except ValueError as exc:
+        sys.exit(
+            "GitHub returned invalid base64 for archived ciphertext blob "
+            f"{blob_sha}: {exc}"
+        )
+    if _git_blob_sha(archived_bytes) != blob_sha:
+        sys.exit(f"GitHub returned bytes that do not match ciphertext blob {blob_sha}")
+    reported_size = blob.get("size")
+    if (
+        isinstance(reported_size, bool)
+        or not isinstance(reported_size, int)
+        or reported_size != len(archived_bytes)
+    ):
+        sys.exit(f"GitHub returned an invalid size for ciphertext blob {blob_sha}")
     actual_sha256 = hashlib.sha256(archived_bytes).hexdigest()
     if actual_sha256 != expected_sha256:
         sys.exit(

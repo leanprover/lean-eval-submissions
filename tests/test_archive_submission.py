@@ -442,6 +442,30 @@ class PushTests(unittest.TestCase):
         }).encode("utf-8")
 
     @staticmethod
+    def _committed_blob_responses(body: bytes) -> tuple[bytes, bytes]:
+        """Contents metadata and Git-blob responses for immutable verification."""
+        blob_sha = arch._git_blob_sha(body)
+        contents = json.dumps({
+            "type": "file",
+            "sha": blob_sha,
+            "size": len(body),
+            # Deliberately include a misleading JSON `content` field. The
+            # verifier must resolve and decode the Git blob, not hash this
+            # Contents-API envelope as the live workflow did before the fix.
+            "encoding": "base64",
+            "content": base64.b64encode(b"not the blob").decode("ascii"),
+        }).encode("utf-8")
+        encoded = base64.b64encode(body).decode("ascii")
+        blob = json.dumps({
+            "sha": blob_sha,
+            "size": len(body),
+            "encoding": "base64",
+            # GitHub may wrap base64 output; exercise whitespace removal.
+            "content": encoded[:12] + "\n" + encoded[12:],
+        }).encode("utf-8")
+        return contents, blob
+
+    @staticmethod
     def _not_found(url: str) -> urllib.error.HTTPError:
         return urllib.error.HTTPError(
             url, 404, "Not Found", {}, io.BytesIO(b'{"message":"Not Found"}')
@@ -520,10 +544,16 @@ class PushTests(unittest.TestCase):
             locator = tmp / "archive-locator.json"
             completion = tmp / "archive-completion.json"
             puts: list[dict] = []
+            committed = b"age-encryption.org/v1\nfake"
+            contents_response, blob_response = self._committed_blob_responses(
+                committed
+            )
 
             def fake_urlopen(req, timeout=None):
+                if req.get_method() == "GET" and "/git/blobs/" in req.full_url:
+                    return io.BytesIO(blob_response)
                 if req.get_method() == "GET" and "?ref=" in req.full_url:
-                    return io.BytesIO(b"age-encryption.org/v1\nfake")
+                    return io.BytesIO(contents_response)
                 if req.get_method() == "GET":
                     raise self._not_found(req.full_url)
                 puts.append({
@@ -602,10 +632,15 @@ class PushTests(unittest.TestCase):
             tmp = pathlib.Path(td)
             locator = tmp / "archive-locator.json"
             completion = tmp / "archive-completion.json"
+            contents_response, blob_response = self._committed_blob_responses(
+                b"different committed ciphertext"
+            )
 
             def fake_urlopen(req, timeout=None):
+                if req.get_method() == "GET" and "/git/blobs/" in req.full_url:
+                    return io.BytesIO(blob_response)
                 if req.get_method() == "GET" and "?ref=" in req.full_url:
-                    return io.BytesIO(b"different committed ciphertext")
+                    return io.BytesIO(contents_response)
                 if req.get_method() == "GET":
                     raise self._not_found(req.full_url)
                 return io.BytesIO(json.dumps({
@@ -631,14 +666,20 @@ class PushTests(unittest.TestCase):
             locator = tmp / "archive-locator.json"
             completion = tmp / "archive-completion.json"
             calls: list[tuple[str, str]] = []
+            existing_ciphertext = b"age-encryption.org/v1\nexisting"
+            contents_response, blob_response = self._committed_blob_responses(
+                existing_ciphertext
+            )
 
             def fake_urlopen(req, timeout=None):
                 method, url = req.get_method(), req.full_url
                 calls.append((method, url))
                 if "/commits?" in url:
                     return io.BytesIO(json.dumps([{"sha": "e" * 40}]).encode("utf-8"))
+                if method == "GET" and "/git/blobs/" in url:
+                    return io.BytesIO(blob_response)
                 if method == "GET" and "?ref=" in url:
-                    return io.BytesIO(b"age-encryption.org/v1\nexisting")
+                    return io.BytesIO(contents_response)
                 if method == "GET" and url.endswith(".json"):
                     return io.BytesIO(self._server_sidecar_meta())
                 raise AssertionError(f"unexpected {method} {url}")
