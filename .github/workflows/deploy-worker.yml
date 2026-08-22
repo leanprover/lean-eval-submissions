@@ -17,6 +17,8 @@ on:
       - '.audit/**'
       - 'scripts/**'
       - 'server/**'
+      - '!server/*.md'
+      - '!server/**/*.md'
   workflow_dispatch:
 
 permissions:
