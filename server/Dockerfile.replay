@@ -3,7 +3,7 @@ FROM docker.io/cloudflare/sandbox:0.12.7
 USER root
 
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates curl \
+    && apt-get install --yes --no-install-recommends ca-certificates curl python3 \
     && rm -rf /var/lib/apt/lists/* \
     && curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
       https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz \

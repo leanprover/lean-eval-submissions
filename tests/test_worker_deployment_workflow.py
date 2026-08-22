@@ -25,6 +25,7 @@ WORKER_APP = (ROOT / "server/src/app.ts").read_text(encoding="utf-8")
 WORKER_ENTRYPOINT = (ROOT / "server/src/index.ts").read_text(encoding="utf-8")
 REPLAY_ENTRYPOINT = (ROOT / "server/src/replay-entry.ts").read_text(encoding="utf-8")
 REPLAY_APP = (ROOT / "server/src/replay-app.ts").read_text(encoding="utf-8")
+REPLAY_DOCKERFILE = (ROOT / "server/Dockerfile.replay").read_text(encoding="utf-8")
 
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
@@ -91,6 +92,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("override enableInternet = false", REPLAY_ENTRYPOINT)
         self.assertIn("`r-${runnerNonce.slice(0, 61)}`", REPLAY_ENTRYPOINT)
         self.assertIn("await sandbox.destroy()", REPLAY_APP)
+        self.assertIn("ca-certificates curl python3", REPLAY_DOCKERFILE)
+        self.assertIn("test \"$(age --version)\" = 'v1.3.1'", REPLAY_DOCKERFILE)
 
     def test_replay_container_auto_deploys_but_dry_run_skips_local_rollout(self) -> None:
         self.assertEqual(
