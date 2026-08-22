@@ -105,6 +105,63 @@ ref policies. Use variable `AWS_WRAP_ROLE_ARN` in `archive-staging` and
 `AWS_REPLAY_UNWRAP_ROLE_ARN` in `replay-staging`; reserve the corresponding
 production and release role variables until their workflows are reviewed.
 
+List both stacks' recorded outputs without exposing a credential:
+
+```sh
+aws cloudformation describe-stacks \
+  --stack-name lean-eval-key-adapter-staging \
+  --region us-east-1 \
+  --query 'Stacks[0].Outputs' \
+  --output table
+
+aws cloudformation describe-stacks \
+  --stack-name lean-eval-key-adapter-production \
+  --region us-east-1 \
+  --query 'Stacks[0].Outputs' \
+  --output table
+```
+
+Install only the two staging role outputs needed by the reviewed smoke. The
+values are non-secret ARNs, but still avoid placing them in an issue or chat:
+
+```sh
+LEAN_EVAL_STAGING_WRAP_ROLE_ARN="$(aws cloudformation describe-stacks \
+  --stack-name lean-eval-key-adapter-staging \
+  --region us-east-1 \
+  --query "Stacks[0].Outputs[?OutputKey=='WrapRoleArn'].OutputValue | [0]" \
+  --output text)"
+
+LEAN_EVAL_STAGING_REPLAY_ROLE_ARN="$(aws cloudformation describe-stacks \
+  --stack-name lean-eval-key-adapter-staging \
+  --region us-east-1 \
+  --query "Stacks[0].Outputs[?OutputKey=='ReplayInvokerRoleArn'].OutputValue | [0]" \
+  --output text)"
+
+test -n "$LEAN_EVAL_STAGING_WRAP_ROLE_ARN"
+test "$LEAN_EVAL_STAGING_WRAP_ROLE_ARN" != None
+test -n "$LEAN_EVAL_STAGING_REPLAY_ROLE_ARN"
+test "$LEAN_EVAL_STAGING_REPLAY_ROLE_ARN" != None
+
+gh variable set AWS_WRAP_ROLE_ARN \
+  --repo leanprover/lean-eval-submissions \
+  --env archive-staging \
+  --body "$LEAN_EVAL_STAGING_WRAP_ROLE_ARN"
+
+gh variable set AWS_REPLAY_UNWRAP_ROLE_ARN \
+  --repo leanprover/lean-eval-submissions \
+  --env replay-staging \
+  --body "$LEAN_EVAL_STAGING_REPLAY_ROLE_ARN"
+```
+
+Verify the variable names, environment boundaries, and existing ref policies
+through the GitHub API before running the smoke. The API returns names and
+non-secret values; it never returns an AWS credential:
+
+```sh
+gh api repos/leanprover/lean-eval-submissions/environments/archive-staging/variables
+gh api repos/leanprover/lean-eval-submissions/environments/replay-staging/variables
+```
+
 Then run `AWS key-adapter staging smoke` from the immutable
 `lean-eval-dispatch/<workflow-commit>` tag containing the workflow. It creates
 one synthetic archive under the Encrypt-only role, transfers only ciphertext,
