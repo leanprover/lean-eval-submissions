@@ -126,13 +126,11 @@ single-repository installation on `leanprover/lean-eval-submissions`.
 
 Keep production `INTAKE_ENABLED=false`.
 
-1. Leave D7 unapplied until explicitly approving a current dry report's exact
-   source commit, record count, and output digest.
-2. A reviewed disposable replay backend is still required before private
+1. A reviewed disposable replay backend is still required before private
    replay, automatic release, or production intake. It must call the Lambda
    through the controller's Invoke-only role and must not pass AWS credentials
    into the untrusted VM.
-3. Keep all production AWS role variables unset until the corresponding
+2. Keep all production AWS role variables unset until the corresponding
    archive, replay, and release workflows and their launch gates are reviewed.
 
 When the production launch gates are later satisfied, use

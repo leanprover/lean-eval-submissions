@@ -29,7 +29,7 @@ primary checkout is not the integration workspace.
 | staging State | `1e76ea66405ed692bf7564f5accbfb3efd9c25f0` on private `main`; full deliberate-rejection lifecycle and projection contract recorded, with schema terminology qualified |
 | `lean-eval-releases` | `f1f83344017333650b4066a533e5ff4eefda5b54` on `main`; terminology `#3`, planner `#1`, and reconstruction `#2` are merged and green; publication remains disabled |
 | catalog, generator consumer, software verification | v1 freeze merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; terminology rule merged in `#554`; standalone-generator consumer merged in `#553`; current main `b91d4757aa0d7776c02540c9089df54fa0d0658a` |
-| results schema version 2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198`; exact-blob archive verification and dependency promotion in `#1213` / `#1214`; runtime-only deployment trigger in `#1217`; infrastructure refresh in `#1225`; schema terminology in `#1227`; kernel/AWS smokes `#1207` / `#1208`; AWS provisioning `#1239`; exact runtime `d487c9d5b1a22a7a7dd27d729f3eb642c6474b1a` is deployed with intake disabled |
+| results schema version 2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198`; exact-blob archive verification and dependency promotion in `#1213` / `#1214`; runtime-only deployment trigger in `#1217`; infrastructure refresh in `#1225`; schema terminology in `#1227`; kernel/AWS smokes `#1207` / `#1208`; AWS provisioning `#1239`; D7 migration main `c3491661`; exact Worker runtime `d487c9d5b1a22a7a7dd27d729f3eb642c6474b1a` remains deployed with intake disabled |
 | AWS archive-key custody | dedicated account `lean-eval` (`161072922960`), exact GitHub OIDC provider, and isolated staging/production CloudFormation stacks provisioned 2026-08-22; staging one-use run `32568604230` passed; only staging role variables connected; no replay compute and no production workflow connected |
 | lifecycle-aware leaderboard | preview foundation merged as `lean-eval-leaderboard#69`; UI terminology merged in `#73`; deeper schema terminology merged in `#74`; cutover `#72` is merged and live at `https://lean-lang.org/eval/`, with `/legacy/` retained and read-only State deploy key `160968617` provisioned |
 
@@ -46,14 +46,12 @@ dispatch, both private-read paths, and the UUIDv7 archive callback have been
 exercised. The separate `lean-eval-bot` (App ID `3346375`, not Source Reader
 App ID `4666604`) is installed on the private fixture and both archival and
 evaluation fetches succeed. Exact Worker
-version identifiers are recorded in `INFRASTRUCTURE.md`. The live results store
-has not been migrated. Dry-run `32442394883` reports source commit
-`91c55f3c1a515f87f33b3f8c45a4fd4565a0028f`, 44 files / 1,285 records,
-source digest `9c6ab2e17186d4498d33816010b01ba330122d0863efa300d7de6aaf07356db4`,
-output digest `340eaa0cce486aed35874ae1571425cb6e8912009f99822ea75fa945ea931a9e`,
-and no duplicate result IDs. That report is now historical because the live
-store advanced; D7 requires a fresh report after the maintainer lifts the hold.
-D7 remains explicitly unapproved and unapplied.
+version identifiers are recorded in `INFRASTRUCTURE.md`. D7 is complete: fresh
+dry run `32569220655` was approved and apply run `32569936026` migrated all
+1,298 records and 44 files to schema version 2 as main `c3491661`. The durable
+writer lock is absent, no submission writer is queued, an independent rerun
+finds zero changes and the approved `b78fb207…` canonical output digest, and
+main CI `32569954466` passed.
 
 The dedicated AWS account now holds the KMS keys, conditional one-use tables,
 and direct-Lambda unwrap gates described by D6. This is archive-key custody,
@@ -288,18 +286,17 @@ action rather than expanding it into a separate policy questionnaire.
 
 ### D7: live results schema version 2 migration
 
-Workflow dry run `32442394883` preserved 1,285 of 1,285 records across 44
-files at submissions commit
-`91c55f3c1a515f87f33b3f8c45a4fd4565a0028f`, with no duplicate IDs, source
-digest `9c6ab2e17186d4498d33816010b01ba330122d0863efa300d7de6aaf07356db4`,
-and output digest
-`340eaa0cce486aed35874ae1571425cb6e8912009f99822ea75fa945ea931a9e`.
-That evidence becomes stale if any results file on `main` changes.
-
-Authorization must name the fresh workflow run and approve its exact source
-commit, record count, and output digest. `apply=true` is a separate decision
-from merging the migration tooling. After the first schema version 2-only
-record lands, repairs are forward-only.
+**Completed 2026-08-22.** Fresh dry run `32569220655` preserved 1,298 of 1,298
+records across 44 files at source commit
+`ddc0e4ec8980296a5312844dedd5513d1d604e5b`, with source digest
+`884c38373f8ecafbbc3894a6cb90cdca476f558bb32fe44d0af08e8c62fd2e05`, no
+duplicate result IDs, and canonical output digest
+`b78fb207d4711c2f59970fd3e769c483cf7eab8f5afb1fec07abe7cadbfc24c4`.
+The maintainer approved those exact values. Apply run `32569936026` used the
+durable lock and produced `c3491661da9dcdad908d1b1e78576d9f64f112f4`;
+post-apply verification found 44/44 schema-version-2 files, the same record
+count and output digest, no lock, no queued writer, and zero remaining changes.
+Repairs are now forward-only.
 
 ### D8: two correctness-preserving plan deviations
 
@@ -395,9 +392,9 @@ others:
 creation and publication, tracker creation, implementation branch pushes,
 draft pull requests, merges after required checks, infrastructure provisioning,
 intake-disabled Worker deployment, eventual feature enablement after their
-documented safety gates, and the backed-up leaderboard-branch repair. D7 remains
-separately bound to a fresh, named migration report because the maintainer asked
-for clarification before the irreversible rewrite. Secret values and manual
+documented safety gates, and the backed-up leaderboard-branch repair. D7 was
+separately approved against fresh report `32569220655` and applied by run
+`32569936026`. Secret values and manual
 account actions still require the operator walkthrough at the point of use.
 
 ## Maintainer response template
