@@ -19,11 +19,35 @@ In the dedicated Cloudflare account `lean-eval`
 - `lean-eval-deploy-staging`
 - `lean-eval-deploy-production`
 
-Each token gets only **Workers Scripts: Edit** on that one account. Do not add
-zone, DNS, KV, R2, billing, or account-administration permissions. Cloudflare
-does not offer per-script resource scoping for this permission; the dedicated
-account is the isolation boundary and the separate tokens provide independent
-revocation and rotation.
+Each token originally received only **Workers Scripts: Edit** on that one
+account. The approved Cloudflare Sandbox replay executor additionally requires
+**Containers: Edit** on the same account so Wrangler can publish and roll out
+its image. Do not add zone, DNS, KV, R2, billing, Access, or
+account-administration permissions. Cloudflare does not offer per-script
+resource scoping for these permissions; the dedicated account is the isolation
+boundary and the separate tokens provide independent revocation and rotation.
+
+To expand the existing account-owned tokens without creating another
+credential:
+
+1. In the Cloudflare dashboard select the `lean-eval` account, then open
+   **Manage Account > API Tokens**.
+2. Edit `lean-eval-deploy-staging`.
+3. Keep **Account > Workers Scripts > Edit** and add exactly
+   **Account > Containers > Edit**.
+4. Keep the resource restricted to the one `lean-eval` account. Leave zone
+   resources and every other permission absent. Retain the recorded no-expiry
+   and no-IP-filter policy.
+5. Review the summary and save the edit. Editing an existing token does not
+   require changing the matching GitHub secret unless Cloudflare explicitly
+   rotates or replaces its value.
+6. Repeat steps 2--5 for `lean-eval-deploy-production`.
+
+If the dashboard requires replacement rather than editing, create a replacement
+with exactly the two permissions and one-account scope above, update only the
+matching GitHub environment secret using the commands below, verify one
+deployment, and then revoke the old token. Never have one environment use the
+other environment's token.
 
 Install each token in its matching GitHub environment:
 
@@ -126,10 +150,11 @@ single-repository installation on `leanprover/lean-eval-submissions`.
 
 Keep production `INTAKE_ENABLED=false`.
 
-1. A reviewed disposable replay backend is still required before private
-   replay, automatic release, or production intake. It must call the Lambda
-   through the controller's Invoke-only role and must not pass AWS credentials
-   into the untrusted VM.
+1. The approved Cloudflare Sandbox replay backend is being implemented. Its
+   deployment remains blocked until both deployment tokens have Containers:
+   Edit and its staging acceptance test has passed. The controller must call
+   the Lambda through its Invoke-only role and must not pass AWS or Cloudflare
+   credentials into the untrusted sandbox.
 2. Keep all production AWS role variables unset until the corresponding
    archive, replay, and release workflows and their launch gates are reviewed.
 

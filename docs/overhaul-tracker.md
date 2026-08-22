@@ -108,6 +108,8 @@ one issue per lane.
       environments.
 - [x] Install the Cloudflare account ID in both environments.
 - [x] Install distinct scoped deployment API tokens in those environments.
+- [ ] Add Containers: Edit to both existing account-scoped deployment tokens;
+      retain Workers Scripts: Edit and no other account or zone permission.
 - [x] Create the protected `submission-dispatch-promotion` environment and the
       immutable `lean-eval-dispatch/*` tag ruleset.
 - [x] Install distinct random `AUTH_TOKEN_SECRET` and `READINESS_TOKEN` values.
@@ -156,12 +158,12 @@ one issue per lane.
       written.
 - [x] Demonstrate credential-free historical public replay (hosted run
       `32499490261`, workflow commit `757b0831`).
-- [ ] Demonstrate isolated private replay. Provider-neutral contracts and the
-      AWS key adapter are implemented and provisioned, but no disposable VM
-      backend is selected or provisioned. The synthetic key-adapter round trip
-      is not a private replay demonstration.
+- [ ] Demonstrate isolated private replay. Cloudflare Sandbox was selected on
+      2026-08-22 behind the provider-neutral executor contract; implementation,
+      deployment-token expansion, and staging evidence remain pending. The
+      synthetic key-adapter round trip is not a private replay demonstration.
 - [ ] Verify single-submission decrypt, second-use and wrong-archive refusal,
-      VM destruction, and release reconstruction before enabling those
+      sandbox destruction, and release reconstruction before enabling those
       features. Unit tests cover the refusal paths; live staging round-trip
       evidence is recorded separately in `INFRASTRUCTURE.md`.
 - [ ] Enable production intake and begin the four-week issue-intake adoption

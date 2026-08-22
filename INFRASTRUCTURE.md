@@ -50,7 +50,7 @@ administrators. Service code:
 | AWS account | `lean-eval` (`161072922960`) | dedicated key custody | **CREATED; ROOT MFA ENABLED; NO ACCESS KEYS** |
 | AWS CloudFormation stack | `lean-eval-key-adapter-staging` | staging | **PROVISIONED 2026-08-22** |
 | AWS CloudFormation stack | `lean-eval-key-adapter-production` | production | **PROVISIONED 2026-08-22; NOT CONNECTED TO GITHUB** |
-| Replay execution backend | Lean-Eval-owned disposable executor | production | **TO BE DESIGNED AND PROVISIONED** |
+| Replay execution backend | Cloudflare Sandbox, provider-neutral adapter | staging / production | **APPROVED 2026-08-22; IMPLEMENTATION IN PROGRESS; NOT ENABLED** |
 
 Do not change a status to provisioned without replacing every applicable
 placeholder in the inventory below and recording a verification date.
@@ -109,6 +109,10 @@ This manual bootstrap does not replace deployment automation.
 `CLOUDFLARE_ACCOUNT_ID` and a distinct, narrowly scoped
 `CLOUDFLARE_API_TOKEN` are installed in each Cloudflare environment. The
 2026-08-21 post-merge deployment verified both opaque tokens successfully.
+Cloudflare Sandbox was selected for the disposable replay executor on
+2026-08-22. Container image publication requires adding Containers: Edit to
+both existing tokens; that expansion is pending and is recorded rather than
+assumed.
 
 The namespace IDs are user-defined positive integers and must remain unique in
 the Cloudflare account; bindings with the same ID share counters. Configuration
@@ -140,7 +144,7 @@ GitHub environment `cloudflare-staging` must contain:
 | Name | Kind | Required scope |
 | --- | --- | --- |
 | `CLOUDFLARE_ACCOUNT_ID` | secret | Cloudflare account identifier |
-| `CLOUDFLARE_API_TOKEN` | secret | Workers Scripts edit for the dedicated Lean Eval account; no zone or DNS permission |
+| `CLOUDFLARE_API_TOKEN` | secret | Workers Scripts edit plus Containers edit for the dedicated Lean Eval account; no zone or DNS permission |
 
 `cloudflare-production` contains the same names backed by a **different API
 token**. Cloudflare's Workers Scripts permission is account-scoped, not
@@ -154,10 +158,10 @@ Recorded deployment tokens, both account-owned in the `lean-eval` account:
 
 | Token name | Environment | Permission | Created | Expiry |
 | --- | --- | --- | --- | --- |
-| `lean-eval-deploy-staging` | `cloudflare-staging` | Workers Scripts: Edit, entire `lean-eval` account | 2026-08-21 | none |
-| `lean-eval-deploy-production` | `cloudflare-production` | Workers Scripts: Edit, entire `lean-eval` account | 2026-08-21 | none |
+| `lean-eval-deploy-staging` | `cloudflare-staging` | Workers Scripts: Edit; Containers: Edit requested 2026-08-22; entire `lean-eval` account | 2026-08-21 | none |
+| `lean-eval-deploy-production` | `cloudflare-production` | Workers Scripts: Edit; Containers: Edit requested 2026-08-22; entire `lean-eval` account | 2026-08-21 | none |
 
-Neither token carries any other permission. Each was checked at creation
+Neither token may carry any other permission. Each was checked at creation
 against `/accounts/<id>/tokens/verify` (active), `/accounts/<id>/workers/scripts`
 (the four Lean Eval Workers, and nothing else), `/zones` (zero zones), and
 `/accounts/<id>/storage/kv/namespaces` (denied). They carry no expiry so an
@@ -166,6 +170,15 @@ manual and owned by Kim Morrison. See
 Cloudflare's [GitHub Actions authentication
 guide](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
 and [permission reference](https://developers.cloudflare.com/fundamentals/api/reference/permissions/).
+
+Permission-expansion procedure: select account `lean-eval`, open **Manage
+Account > API Tokens**, edit each named token, retain Account / Workers Scripts
+/ Edit, add only Account / Containers / Edit, retain the one-account resource
+scope, and leave zone resources, IP filtering, expiry, and all other
+permissions unchanged. If Cloudflare replaces rather than edits a token, put
+the new opaque value only into its matching GitHub environment, verify a
+container deployment, then revoke the old value. No token value belongs in
+this ledger.
 
 Both Cloudflare environments are restricted to protected branches. The
 `submission-dispatch-promotion` environment requires review by `kim-em`, is
