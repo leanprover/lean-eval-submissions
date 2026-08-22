@@ -120,7 +120,7 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: promote-dispatch-ref
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     environment: cloudflare-staging
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -138,6 +138,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: >-
           npx wrangler deploy --config wrangler.broker.jsonc --env staging
+          --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+      - name: Deploy staging replay executor and container
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          npx wrangler deploy --config wrangler.replay.jsonc --env staging
           --var "DEPLOYED_COMMIT:$GITHUB_SHA"
       - name: Deploy staging submission Worker
         env:
@@ -171,11 +178,39 @@ jobs:
           done
           echo "health payload did not converge: $body" >&2
           exit 1
+      - name: Smoke-test disabled staging replay executor
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          for attempt in $(seq 1 25); do
+            body=$(curl --fail --silent --show-error --max-time 10 \
+              https://lean-eval-replay-executor-staging.lean-eval.workers.dev/healthz) || body=""
+            if HEALTH_BODY="$body" python - <<'PY'
+          import json, os
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body == {
+              "status": "ok",
+              "service": "lean-eval-replay-executor",
+              "environment": "staging",
+              "deployed_commit": os.environ["EXPECTED_COMMIT"],
+              "replay_enabled": False,
+              "staging_acceptance_enabled": True,
+              "staging_memory_limit_bytes": 12 * 1024**3,
+              "production_memory_gate_bytes": 16 * 1024**3,
+          }
+          PY
+            then
+              exit 0
+            fi
+            if [ "$attempt" -lt 25 ]; then sleep 5; fi
+          done
+          echo "replay health payload did not converge: $body" >&2
+          exit 1
 
   deploy-production:
     needs: [deploy-staging, promote-dispatch-ref]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     environment: cloudflare-production
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -193,6 +228,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: >-
           npx wrangler deploy --config wrangler.broker.jsonc --env production
+          --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+      - name: Deploy disabled production replay executor and container
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          npx wrangler deploy --config wrangler.replay.jsonc --env production
           --var "DEPLOYED_COMMIT:$GITHUB_SHA"
       - name: Deploy production submission Worker
         env:
@@ -225,4 +267,32 @@ jobs:
             if [ "$attempt" -lt 13 ]; then sleep 5; fi
           done
           echo "health payload did not converge: $body" >&2
+          exit 1
+      - name: Smoke-test disabled production replay executor
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          for attempt in $(seq 1 25); do
+            body=$(curl --fail --silent --show-error --max-time 10 \
+              https://lean-eval-replay-executor.lean-eval.workers.dev/healthz) || body=""
+            if HEALTH_BODY="$body" python - <<'PY'
+          import json, os
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body == {
+              "status": "ok",
+              "service": "lean-eval-replay-executor",
+              "environment": "production",
+              "deployed_commit": os.environ["EXPECTED_COMMIT"],
+              "replay_enabled": False,
+              "staging_acceptance_enabled": False,
+              "staging_memory_limit_bytes": 12 * 1024**3,
+              "production_memory_gate_bytes": 16 * 1024**3,
+          }
+          PY
+            then
+              exit 0
+            fi
+            if [ "$attempt" -lt 25 ]; then sleep 5; fi
+          done
+          echo "replay health payload did not converge: $body" >&2
           exit 1

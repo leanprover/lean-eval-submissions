@@ -2,41 +2,39 @@
 
 Replay is a recovery and audit path for one archived submission. It is not a
 second intake path, a batch decryption service, or a place to give general
-archive keys to CI. The only workflow is a credential-free manual smoke for an
-already-public historical source; it has no State/result/archive/release write
-authority. No private or authoritative queue-consuming replay workflow is
-enabled; the key service and disposable-runner controls below are launch gates.
+archive keys to CI. The enabled workflows are a credential-free manual smoke
+for an already-public historical source and a synthetic, source-free staging
+acceptance for the private boundary. Neither has State/result/archive/release
+write authority. No authoritative queue-consuming replay workflow is enabled.
 
 The Wave 2 public planner, historical smoke, verdict contract, and disposable-
 VM operator sequence are documented in
-[`replay-orchestrator.md`](replay-orchestrator.md). That foundation deliberately
-leaves the private path nonterminally blocked and does not provision an
-execution backend.
+[`replay-orchestrator.md`](replay-orchestrator.md). Cloudflare Sandbox is the
+selected initial private execution backend; the stable controller contract is
+provider-neutral.
 
 ## Trust boundary
 
 The orchestrator is a Lean-Eval-owned controller behind a provider-neutral
 disposable-executor interface. It does not reuse another project's runner. For
-each approved replay it creates a fresh isolated instance from a
-pinned image, assigns a unique instance identity and request nonce, executes
-exactly one request, and destroys the instance in an unconditional cleanup
-path. Whether the eventual adapter uses a local hypervisor, hosted VM API,
-sandbox service, or another mechanism is deliberately not part of the stable
-request, State, or verdict contracts.
+each approved replay it creates a fresh Cloudflare Sandbox from the reviewed
+image, assigns a unique request nonce, executes exactly one fixed command, and
+destroys the Sandbox in an unconditional cleanup path. Cloudflare is not part
+of the stable request, State, archive, capability, or verdict contracts.
 
-The replay VM may receive only:
+The disposable executor may receive only:
 
 - one encrypted archive, pinned by repository, Git commit, canonical object
   path, and ciphertext SHA-256;
-- a short-lived, single-use capability authorizing unwrap of that archive's
-  data key only;
+- the plaintext per-archive age identity returned by a short-lived, single-use
+  unwrap immediately before handoff; never a root or shared archive key;
 - public benchmark and evaluator commits pinned by SHA;
-- the ordinary ephemeral runner registration and job credentials.
+- public, non-secret execution configuration.
 
-It must not receive the archive identity/master key, Worker State token,
-submission-fetch App credential, results-writer credential, release-publisher
-credential, or access to another submission. The controller must not mount a
-persistent workspace into the instance.
+It must not receive a master key, Worker State token, submission-fetch App
+credential, results-writer credential, release-publisher credential, AWS
+credential, GitHub OIDC token, Cloudflare credential, or access to another
+submission. The controller must not mount a persistent workspace into it.
 
 ## Capability contract
 
@@ -67,8 +65,8 @@ all of these fields:
 ```
 
 The unwrap decision must fail closed unless every field matches the request,
-the capability is unexpired and unused, and the caller is the intended fresh
-VM. The key service records issuance, success/refusal, capability digest,
+the capability is unexpired and unused, and the runner nonce matches the fresh
+executor request. The key service records issuance, success/refusal, capability digest,
 submission, runner nonce, and destruction acknowledgement without recording a
 key or plaintext. A lost response cannot make a capability reusable.
 
@@ -84,22 +82,21 @@ boundary and is not sufficient for automated replay.
    records the incident, audit, or recovery reason.
 2. A trusted preparation job resolves the immutable State event, ciphertext
    object, digests, evaluator commit, benchmark commit, and authorization.
-3. The Lean Eval controller creates a fresh isolated instance with a
-   nonce-specific identity. A persistent or shared generic replay runner is a
-   configuration error.
-4. The replay job fetches only pinned public code with
-   `persist-credentials:false`, downloads the exact ciphertext, verifies its
-   digest, consumes the one-use unwrap capability inside the VM, and decrypts
-   onto an encrypted ephemeral filesystem.
+3. The Lean Eval controller creates a fresh nonce-specific Sandbox. A
+   persistent or shared generic replay executor is a configuration error.
+4. The trusted controller verifies the exact ciphertext, consumes the one-use
+   unwrap capability, drops AWS authority, and sends only that ciphertext, its
+   per-archive identity, the nonce, and public expectations to the Sandbox.
+   The Sandbox has public network access disabled and decrypts only inside its
+   ephemeral filesystem.
 5. Before untrusted Lean runs, all `.git` directories and workflow credentials
    are removed. Evaluation uses the same Comparator/landrun boundary and
    resource caps as normal intake. Plaintext, source-derived paths, and command
    output that could reproduce source are excluded from logs and artifacts.
-6. The job publishes only the reviewed result/audit projection. It shreds the
-   plaintext filesystem key and requests immediate VM shutdown.
-7. An unconditional controller teardown destroys the instance and verifies
-   that its execution identity disappeared. Failure to confirm destruction is
-   an incident and blocks another replay.
+6. The job publishes only the reviewed result/audit projection. It removes
+   plaintext and identity material before returning source-free evidence.
+7. An unconditional controller teardown destroys the Sandbox before success
+   is returned. Failure to confirm destruction fails the request.
 
 No source artifact crosses jobs. Fetch, decrypt, evaluate, and plaintext cleanup
 therefore remain in the same disposable replay job, matching the existing
@@ -111,19 +108,22 @@ Replay remains unavailable until all gates have evidence linked from
 `INFRASTRUCTURE.md`:
 
 - threat-model review covers malicious Lean, malicious archive metadata,
-  compromised instance, compromised Lean Eval controller, replay, confused deputy,
+  compromised Sandbox, compromised Lean Eval controller, replay, confused deputy,
   lost provider responses, clock skew, and teardown failure;
 - the key service enforces the exact one-use contract above and its root has a
   documented no-provider-recovery risk acceptance;
 - the selected backend demonstrates nonce-specific disposable instance creation,
-  deregistration, network egress policy, and no persistent mount;
+  network egress denial, bounded capacity, and no persistent mount;
 - one pre-enable staging acceptance test recovers one test archive, proves a
-  second unwrap fails, proves a different archive fails, and verifies VM
+  second unwrap fails, proves a different archive fails, and verifies Sandbox
   destruction;
 - workflow review confirms no master identity or broad repository credential
   is available to the replay job or untrusted Lean.
 
-No execution provider is selected here. A future adapter must satisfy the same
-fresh-instance, credential-isolation, network-isolation, teardown, and
-attestation contract without changing the provider-neutral request or verdict
-formats.
+Cloudflare Sandbox is the initial provider. Staging uses one 12 GiB
+`standard-4` instance at most; SSH and public network access are disabled.
+Production replay stays disabled until Cloudflare can supply the separately
+approved 16 GiB launch capacity and every remaining gate has evidence. A future
+adapter must satisfy the same fresh-instance, credential-isolation,
+network-isolation, teardown, and evidence contract without changing the
+provider-neutral request or verdict formats.

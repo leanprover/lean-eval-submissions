@@ -35,7 +35,7 @@ class AwsKeyAdapterStagingWorkflowTests(unittest.TestCase):
             7,
         )
         self.assertIn("alias/lean-eval-archive-identities-staging", self.text)
-        self.assertEqual(self.text.count("aws lambda invoke"), 2)
+        self.assertEqual(self.text.count("aws lambda invoke"), 3)
 
     def test_dependencies_and_actions_are_immutable(self) -> None:
         actions = re.findall(r"uses:\s+[^@\s]+@([^\s]+)", self.text)
@@ -66,9 +66,25 @@ class AwsKeyAdapterStagingWorkflowTests(unittest.TestCase):
         validate = wrap.index("validate-artifact", archive)
         self.assertLess(archive, clear)
         self.assertLess(clear, validate)
-        unwrap = self.text.split("name: Consume once, reject reuse, then decrypt without AWS authority", 1)[1]
-        self.assertLess(unwrap.index("clear_aws\n"), unwrap.index("age --decrypt"))
+        unwrap = self.text.split("name: Reject a wrong archive binding, consume once, and reject reuse", 1)[1]
+        cloudflare = unwrap.split("name: Decrypt and verify only inside the Cloudflare staging sandbox", 1)[1]
+        self.assertLess(unwrap.index("clear_aws\n"), unwrap.index("trap - EXIT"))
         self.assertIn("env -u AWS_ACCESS_KEY_ID", unwrap)
+        self.assertIn('test -z "${AWS_ACCESS_KEY_ID:-}"', cloudflare)
+
+    def test_cloudflare_handoff_is_exact_oidc_bound_and_source_free(self) -> None:
+        unwrap = self.text.split("\n  unwrap:", 1)[1]
+        self.assertIn("build-binding-rejection-request", unwrap)
+        self.assertIn("validate-binding-rejection", unwrap)
+        self.assertIn("build-executor-request", unwrap)
+        self.assertIn("validate-executor-response", unwrap)
+        self.assertIn("audience=lean-eval-replay-staging", unwrap)
+        self.assertIn(
+            "https://lean-eval-replay-executor-staging.lean-eval.workers.dev/api/v1/staging-acceptance",
+            unwrap,
+        )
+        self.assertIn("Authorization: Bearer $replay_oidc_token", unwrap)
+        self.assertNotIn("age --decrypt", unwrap)
 
     def test_smoke_cannot_write_project_state(self) -> None:
         for forbidden in (

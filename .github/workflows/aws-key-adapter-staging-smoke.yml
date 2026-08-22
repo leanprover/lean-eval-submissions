@@ -167,19 +167,6 @@ jobs:
             --workflow-commit "$GITHUB_SHA" \
             --output /tmp/unwrap-request.json
 
-      - name: Install checksum-pinned age 1.3.1
-        run: |
-          set -euo pipefail
-          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
-          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
-            https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz \
-            --output /tmp/age-v1.3.1.tar.gz
-          echo 'bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377  /tmp/age-v1.3.1.tar.gz' \
-            | sha256sum --check --strict
-          tar --extract --gzip --file /tmp/age-v1.3.1.tar.gz --directory /tmp
-          test "$(/tmp/age/age --version)" = "v1.3.1"
-          echo /tmp/age >> "$GITHUB_PATH"
-
       - name: Require the preinstalled AWS CLI version 2
         run: |
           unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
@@ -193,7 +180,7 @@ jobs:
           role-session-name: lean-eval-replay-staging-smoke
           mask-aws-account-id: true
 
-      - name: Consume once, reject reuse, then decrypt without AWS authority
+      - name: Reject a wrong archive binding, consume once, and reject reuse
         run: |
           set -euo pipefail
           unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
@@ -209,12 +196,30 @@ jobs:
             clear_aws
             rm -f \
               /tmp/identity.age \
-              /tmp/decrypted-source.tar.gz \
+              /tmp/binding-rejection-request.json \
+              /tmp/binding-rejection-response.json \
+              /tmp/binding-rejection-metadata.json \
               /tmp/unwrap-request.json \
               /tmp/unwrap-response.json \
-              /tmp/reuse-response.json
+              /tmp/unwrap-metadata.json \
+              /tmp/reuse-response.json \
+              /tmp/reuse-metadata.json
           }
           trap cleanup EXIT
+
+          python scripts/aws_key_adapter_live_smoke.py build-binding-rejection-request \
+            --request /tmp/unwrap-request.json \
+            --output /tmp/binding-rejection-request.json
+          aws lambda invoke \
+            --function-name lean-eval-archive-unwrap-staging \
+            --qualifier live \
+            --cli-binary-format raw-in-base64-out \
+            --payload fileb:///tmp/binding-rejection-request.json \
+            /tmp/binding-rejection-response.json > /tmp/binding-rejection-metadata.json
+          env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+            python scripts/aws_key_adapter_live_smoke.py validate-binding-rejection \
+              --metadata /tmp/binding-rejection-metadata.json \
+              --response /tmp/binding-rejection-response.json
 
           aws lambda invoke \
             --function-name lean-eval-archive-unwrap-staging \
@@ -241,11 +246,59 @@ jobs:
               --response /tmp/reuse-response.json
 
           clear_aws
-          age --decrypt --identity /tmp/identity.age \
-            --output /tmp/decrypted-source.tar.gz \
-            /tmp/aws-smoke-artifact/archive/source.tar.gz.age
-          python scripts/aws_key_adapter_live_smoke.py verify-decrypted \
-            --decrypted-tar /tmp/decrypted-source.tar.gz \
-            --expectation /tmp/aws-smoke-artifact/expectation.json
+          rm -f \
+            /tmp/binding-rejection-request.json \
+            /tmp/binding-rejection-response.json \
+            /tmp/binding-rejection-metadata.json \
+            /tmp/unwrap-response.json \
+            /tmp/unwrap-metadata.json \
+            /tmp/reuse-response.json \
+            /tmp/reuse-metadata.json
+          trap - EXIT
+
+      - name: Decrypt and verify only inside the Cloudflare staging sandbox
+        env:
+          REPLAY_EXECUTOR_URL: https://lean-eval-replay-executor-staging.lean-eval.workers.dev/api/v1/staging-acceptance
+        run: |
+          set -euo pipefail
+          cleanup() {
+            unset replay_oidc_token
+            rm -f \
+              /tmp/identity.age \
+              /tmp/unwrap-request.json \
+              /tmp/replay-executor-request.json \
+              /tmp/replay-executor-response.json \
+              /tmp/replay-oidc-response.json
+          }
+          trap cleanup EXIT
+          test -z "${AWS_ACCESS_KEY_ID:-}"
+          test -z "${AWS_SECRET_ACCESS_KEY:-}"
+          test -z "${AWS_SESSION_TOKEN:-}"
+
+          python scripts/aws_key_adapter_live_smoke.py build-executor-request \
+            --artifact-root /tmp/aws-smoke-artifact \
+            --unwrap-request /tmp/unwrap-request.json \
+            --identity /tmp/identity.age \
+            --output /tmp/replay-executor-request.json
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-replay-staging" \
+            --output /tmp/replay-oidc-response.json
+          replay_oidc_token=$(python -c \
+            'import json; print(json.load(open("/tmp/replay-oidc-response.json", encoding="utf-8"))["value"])')
+          test -n "$replay_oidc_token"
+          rm /tmp/replay-oidc-response.json
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --header "Authorization: Bearer $replay_oidc_token" \
+            --header 'Content-Type: application/json' \
+            --request POST \
+            --data-binary @/tmp/replay-executor-request.json \
+            "$REPLAY_EXECUTOR_URL" \
+            --output /tmp/replay-executor-response.json
+          unset replay_oidc_token
+          rm /tmp/identity.age
+          python scripts/aws_key_adapter_live_smoke.py validate-executor-response \
+            --request /tmp/replay-executor-request.json \
+            --response /tmp/replay-executor-response.json
           cleanup
           trap - EXIT

@@ -108,6 +108,10 @@ one issue per lane.
       environments.
 - [x] Install the Cloudflare account ID in both environments.
 - [x] Install distinct scoped deployment API tokens in those environments.
+- [x] Add Containers: Edit to both existing account-scoped deployment tokens;
+      operator-confirmed 2026-08-22, retaining Workers Scripts: Edit and no
+      other account or zone permission. Live verification remains part of the
+      first staging container deployment.
 - [x] Create the protected `submission-dispatch-promotion` environment and the
       immutable `lean-eval-dispatch/*` tag ruleset.
 - [x] Install distinct random `AUTH_TOKEN_SECRET` and `READINESS_TOKEN` values.
@@ -156,14 +160,17 @@ one issue per lane.
       written.
 - [x] Demonstrate credential-free historical public replay (hosted run
       `32499490261`, workflow commit `757b0831`).
-- [ ] Demonstrate isolated private replay. Provider-neutral contracts and the
-      AWS key adapter are implemented and provisioned, but no disposable VM
-      backend is selected or provisioned. The synthetic key-adapter round trip
-      is not a private replay demonstration.
+- [ ] Demonstrate isolated private replay. Cloudflare Sandbox was selected on
+      2026-08-22 behind the provider-neutral executor contract. Workers Paid is
+      active; the 12 GiB, max-one-instance, SSH-off, network-disabled executor,
+      automatic deployment, exact GitHub OIDC boundary, and source-free live
+      acceptance workflow are implemented. Deployment-token expansion is
+      operator-confirmed; first deployment and staging evidence remain pending.
 - [ ] Verify single-submission decrypt, second-use and wrong-archive refusal,
-      VM destruction, and release reconstruction before enabling those
-      features. Unit tests cover the refusal paths; live staging round-trip
-      evidence is recorded separately in `INFRASTRUCTURE.md`.
+      sandbox destruction, and release reconstruction before enabling those
+      features. The staging acceptance proves the first four without writing
+      State or a result; release reconstruction remains a separate launch gate.
+      Live evidence is recorded separately in `INFRASTRUCTURE.md`.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
       window.
 - [x] Complete leaderboard preview review and cut over with rollback retained

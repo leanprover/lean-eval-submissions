@@ -57,6 +57,32 @@ RESPONSE_FIELDS = {
     "capability_digest",
     "plaintext_identity_base64",
 }
+EXECUTOR_REQUEST_FIELDS = {
+    "schema_version",
+    "request_id",
+    "runner_nonce",
+    "archive_ciphertext_sha256",
+    "ciphertext_base64",
+    "plaintext_identity_base64",
+    "marker_sha256",
+}
+EXECUTOR_RESPONSE_FIELDS = {
+    "schema_version",
+    "service",
+    "environment",
+    "request_id",
+    "runner_nonce",
+    "archive_ciphertext_sha256",
+    "marker_sha256",
+    "network_policy",
+    "network_probe",
+    "destruction",
+    "architecture",
+    "kernel_release",
+    "cpu_model",
+    "staging_memory_limit_bytes",
+    "production_memory_gate_bytes",
+}
 REQUEST_FIELDS = {
     "schema_version",
     "operation",
@@ -358,6 +384,106 @@ def validate_reuse_failure(metadata_path: pathlib.Path, response_path: pathlib.P
         raise LiveSmokeError("repeat invocation failed for an unexpected reason")
 
 
+def build_binding_rejection_request(request_path: pathlib.Path, output: pathlib.Path) -> None:
+    request = _object(_load(request_path, "unwrap request"), "unwrap request")
+    _fields(request, REQUEST_FIELDS, "unwrap request")
+    capability = _object(request.get("capability"), "request capability")
+    envelope = _object(request.get("envelope"), "request envelope")
+    digest = envelope.get("archive_ciphertext_sha256")
+    if not isinstance(digest, str) or DIGEST.fullmatch(digest) is None:
+        raise LiveSmokeError("request envelope digest is invalid")
+    changed = "0" * 64 if digest != "0" * 64 else "1" * 64
+    rejected = dict(request)
+    rejected["capability"] = {**capability, "archive_ciphertext_sha256": changed}
+    _write_json(output, rejected)
+
+
+def validate_binding_rejection(metadata_path: pathlib.Path, response_path: pathlib.Path) -> None:
+    metadata = _object(_load(metadata_path, "binding rejection metadata"), "binding rejection metadata")
+    if metadata.get("StatusCode") != 200 or not isinstance(metadata.get("FunctionError"), str):
+        raise LiveSmokeError("wrong-archive invocation did not report a Lambda function error")
+    try:
+        raw = response_path.read_bytes()
+    except OSError as error:
+        raise LiveSmokeError("cannot read wrong-archive invocation response") from error
+    if len(raw) > MAX_JSON_BYTES:
+        raise LiveSmokeError("wrong-archive response exceeds the size limit")
+    if b"plaintext_identity_base64" in raw or b"AGE-SECRET-KEY-" in raw:
+        raise LiveSmokeError("wrong-archive invocation exposed private identity material")
+    response = _object(_load(response_path, "wrong-archive response"), "wrong-archive response")
+    message = response.get("errorMessage")
+    if not isinstance(message, str) or (
+        "capability.archive_ciphertext_sha256 does not match envelope" not in message
+    ):
+        raise LiveSmokeError("wrong-archive invocation failed for an unexpected reason")
+
+
+def build_executor_request(
+    artifact_root: pathlib.Path,
+    unwrap_request_path: pathlib.Path,
+    identity_path: pathlib.Path,
+    output: pathlib.Path,
+) -> dict[str, Any]:
+    expectation, envelope = validate_artifact(artifact_root)
+    unwrap = _object(_load(unwrap_request_path, "unwrap request"), "unwrap request")
+    _fields(unwrap, REQUEST_FIELDS, "unwrap request")
+    capability = _object(unwrap.get("capability"), "request capability")
+    if capability.get("archive_ciphertext_sha256") != envelope["archive_ciphertext_sha256"]:
+        raise LiveSmokeError("unwrap request is not bound to the synthetic ciphertext")
+    try:
+        identity = identity_path.read_bytes()
+        ciphertext = (artifact_root / "archive" / "source.tar.gz.age").read_bytes()
+    except OSError as error:
+        raise LiveSmokeError("cannot read executor private inputs") from error
+    validate_age_identity_bytes(identity)
+    if len(identity) > 4096 or len(ciphertext) > MAX_CIPHERTEXT_BYTES:
+        raise LiveSmokeError("executor private input exceeds the size limit")
+    request = {
+        "schema_version": 1,
+        "request_id": capability.get("request_id"),
+        "runner_nonce": capability.get("runner_nonce"),
+        "archive_ciphertext_sha256": envelope["archive_ciphertext_sha256"],
+        "ciphertext_base64": base64.b64encode(ciphertext).decode("ascii"),
+        "plaintext_identity_base64": base64.b64encode(identity).decode("ascii"),
+        "marker_sha256": expectation["marker_sha256"],
+    }
+    _fields(request, EXECUTOR_REQUEST_FIELDS, "executor request")
+    _write_json(output, request)
+    return request
+
+
+def validate_executor_response(request_path: pathlib.Path, response_path: pathlib.Path) -> dict[str, Any]:
+    request = _object(_load(request_path, "executor request"), "executor request")
+    _fields(request, EXECUTOR_REQUEST_FIELDS, "executor request")
+    response = _object(_load(response_path, "executor response"), "executor response")
+    _fields(response, EXECUTOR_RESPONSE_FIELDS, "executor response")
+    expected = {
+        "schema_version": 1,
+        "service": "lean-eval-replay-executor",
+        "environment": "staging",
+        "request_id": request["request_id"],
+        "runner_nonce": request["runner_nonce"],
+        "archive_ciphertext_sha256": request["archive_ciphertext_sha256"],
+        "marker_sha256": request["marker_sha256"],
+        "network_policy": "disabled",
+        "network_probe": "blocked",
+        "destruction": "confirmed",
+        "staging_memory_limit_bytes": 12 * 1024**3,
+        "production_memory_gate_bytes": 16 * 1024**3,
+    }
+    for field, value in expected.items():
+        if response.get(field) != value:
+            raise LiveSmokeError(f"executor response {field} is invalid")
+    for field in ("architecture", "kernel_release", "cpu_model"):
+        value = response.get(field)
+        if not isinstance(value, str) or not value or len(value) > 256:
+            raise LiveSmokeError(f"executor response {field} is invalid")
+    encoded = json.dumps(response, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    if b"plaintext_identity" in encoded or b"ciphertext_base64" in encoded or b"AGE-SECRET-KEY-" in encoded:
+        raise LiveSmokeError("executor response exposed private input material")
+    return response
+
+
 def verify_decrypted(decrypted_tar: pathlib.Path, expectation_path: pathlib.Path) -> None:
     expectation = validate_expectation(_load(expectation_path, "expectation"))
     if not decrypted_tar.is_file() or decrypted_tar.is_symlink():
@@ -403,6 +529,24 @@ def main(argv: list[str] | None = None) -> int:
     reuse.add_argument("--metadata", required=True, type=pathlib.Path)
     reuse.add_argument("--response", required=True, type=pathlib.Path)
 
+    rejection_request = commands.add_parser("build-binding-rejection-request")
+    rejection_request.add_argument("--request", required=True, type=pathlib.Path)
+    rejection_request.add_argument("--output", required=True, type=pathlib.Path)
+
+    rejection = commands.add_parser("validate-binding-rejection")
+    rejection.add_argument("--metadata", required=True, type=pathlib.Path)
+    rejection.add_argument("--response", required=True, type=pathlib.Path)
+
+    executor_request = commands.add_parser("build-executor-request")
+    executor_request.add_argument("--artifact-root", required=True, type=pathlib.Path)
+    executor_request.add_argument("--unwrap-request", required=True, type=pathlib.Path)
+    executor_request.add_argument("--identity", required=True, type=pathlib.Path)
+    executor_request.add_argument("--output", required=True, type=pathlib.Path)
+
+    executor_response = commands.add_parser("validate-executor-response")
+    executor_response.add_argument("--request", required=True, type=pathlib.Path)
+    executor_response.add_argument("--response", required=True, type=pathlib.Path)
+
     decrypted = commands.add_parser("verify-decrypted")
     decrypted.add_argument("--decrypted-tar", required=True, type=pathlib.Path)
     decrypted.add_argument("--expectation", required=True, type=pathlib.Path)
@@ -425,6 +569,20 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(summary, separators=(",", ":"), sort_keys=True))
         elif args.command == "validate-reuse-failure":
             validate_reuse_failure(args.metadata, args.response)
+        elif args.command == "build-binding-rejection-request":
+            build_binding_rejection_request(args.request, args.output)
+        elif args.command == "validate-binding-rejection":
+            validate_binding_rejection(args.metadata, args.response)
+        elif args.command == "build-executor-request":
+            build_executor_request(
+                args.artifact_root,
+                args.unwrap_request,
+                args.identity,
+                args.output,
+            )
+        elif args.command == "validate-executor-response":
+            summary = validate_executor_response(args.request, args.response)
+            print(json.dumps(summary, separators=(",", ":"), sort_keys=True))
         else:
             verify_decrypted(args.decrypted_tar, args.expectation)
     except (ContractError, LiveSmokeError, OSError) as error:

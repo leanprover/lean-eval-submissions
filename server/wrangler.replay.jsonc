@@ -1,0 +1,81 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lean-eval-replay-executor",
+  "main": "src/replay-entry.ts",
+  "compatibility_date": "2026-08-22",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "env": {
+    "staging": {
+      "name": "lean-eval-replay-executor-staging",
+      "workers_dev": true,
+      "preview_urls": false,
+      "containers": [
+        {
+          "class_name": "ReplaySandbox",
+          "image": "./Dockerfile.replay",
+          "instance_type": "standard-4",
+          "max_instances": 1,
+          "ssh": { "enabled": false }
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          { "name": "REPLAY_SANDBOX", "class_name": "ReplaySandbox" }
+        ]
+      },
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["ReplaySandbox"] }
+      ],
+      "vars": {
+        "DEPLOYED_COMMIT": "development",
+        "DEPLOYMENT_ENVIRONMENT": "staging",
+        "REPLAY_ENABLED": "false",
+        "STAGING_ACCEPTANCE_ENABLED": "true",
+        "GITHUB_OIDC_AUDIENCE": "lean-eval-replay-staging",
+        "GITHUB_OIDC_ENVIRONMENT": "replay-staging",
+        "STAGING_MEMORY_LIMIT_BYTES": "12884901888",
+        "PRODUCTION_MEMORY_GATE_BYTES": "17179869184",
+        "SANDBOX_TRANSPORT": "rpc"
+      }
+    },
+    "production": {
+      "name": "lean-eval-replay-executor",
+      "workers_dev": true,
+      "preview_urls": false,
+      "containers": [
+        {
+          "class_name": "ReplaySandbox",
+          "image": "./Dockerfile.replay",
+          "instance_type": "standard-4",
+          "max_instances": 1,
+          "ssh": { "enabled": false }
+        }
+      ],
+      "durable_objects": {
+        "bindings": [
+          { "name": "REPLAY_SANDBOX", "class_name": "ReplaySandbox" }
+        ]
+      },
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["ReplaySandbox"] }
+      ],
+      "vars": {
+        "DEPLOYED_COMMIT": "development",
+        "DEPLOYMENT_ENVIRONMENT": "production",
+        "REPLAY_ENABLED": "false",
+        "STAGING_ACCEPTANCE_ENABLED": "false",
+        "GITHUB_OIDC_AUDIENCE": "lean-eval-replay-production",
+        "GITHUB_OIDC_ENVIRONMENT": "replay-production",
+        "STAGING_MEMORY_LIMIT_BYTES": "12884901888",
+        "PRODUCTION_MEMORY_GATE_BYTES": "17179869184",
+        "SANDBOX_TRANSPORT": "rpc"
+      }
+    }
+  }
+}
