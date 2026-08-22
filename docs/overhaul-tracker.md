@@ -65,13 +65,16 @@ one issue per lane.
 - [ ] Merge generator fixes `lean-eval-generator#1` / `#2` and synchronization
       PR `#3`, advance exact pins, rerun corpus/FC parity, and merge the draft
       embedded-core removal in `lean-eval#553`. All three generator PRs are
-      green and await independent review; the consumer test suites are green.
+      green but cannot merge until the repository rules receive one approving
+      write-access review; no reviewer is assigned. The consumer test suites
+      are green.
 - [x] Configure State rulesets and append-only validation.
 - [x] Publish the schema-validated public projection of private production
       State without exposing private source or operational metadata
       (`lean-eval-state#4`; staging mirror `lean-eval-state-staging#4`).
-- [ ] Complete lifecycle-aware leaderboard consumption and publish the exact
-      validated projection after the held cutover PR is approved.
+- [x] Complete lifecycle-aware leaderboard consumption and publish the exact
+      validated projection (`lean-eval-leaderboard#72`, merge `dd5d508d`; Pages
+      deployment run `32557778003`).
 
 ## Existing-repository PRs
 
@@ -83,10 +86,13 @@ one issue per lane.
 - [x] Open software-verification draft PR after D3 review.
 - [x] Open LeanEval generator-consumer PR after the public generator pin exists.
 - [x] Open independent-kernel shadow smoke `lean-eval-submissions#1207` and
-      AWS one-submission key-adapter staging smoke `#1208`; both are green and
-      await independent security review.
+      AWS one-submission key-adapter staging smoke `#1208`; both merged and
+      deployed intake-disabled as exact commit `a34b2053`. The AWS workflow
+      remains disabled because no AWS account or stack exists.
 - [x] Open disabled release planner `lean-eval-releases#1` and dependent draft
-      reconstruction smoke `#2`; both are green and await independent review.
+      reconstruction smoke `#2`; both and terminology PR `#3` are green but
+      cannot merge until the repository rules receive one approving
+      write-access review; no reviewer is assigned.
 
 ## Cloudflare bootstrap
 
@@ -147,7 +153,8 @@ one issue per lane.
       features.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
       window.
-- [ ] Complete leaderboard preview review and cut over with rollback retained.
+- [x] Complete leaderboard preview review and cut over with rollback retained
+      (`lean-eval-leaderboard#72`; Pages run `32557778003`).
 - [ ] Close issue intake only after the time, incident, submitter, adoption, and
       announcement gates in the implementation program pass.
 
@@ -166,7 +173,7 @@ one issue per lane.
       fail-closed `Erdos324.erdos_324.match_1` orphan recorded upstream.
 - [x] Obtain a compatible FC-owned importer/output contract with strict,
       deterministic provenance (`formal-conjectures#4951`, green at head
-      `58c3851463a9a95a7b72b4802ae120fb945331b6`).
+      `2654e42de2026de6cdb248ad5ed0f1c7d659c8fa`).
 - [ ] Launch FC100/open-conjectures only after generator pins advance, the
       importer receives FC maintainer review, and the production launch gates
       are satisfied.
