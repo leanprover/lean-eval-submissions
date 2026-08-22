@@ -1,0 +1,22 @@
+FROM docker.io/cloudflare/sandbox:0.12.7
+
+USER root
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+      https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz \
+      --output /tmp/age-v1.3.1.tar.gz \
+    && echo 'bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377  /tmp/age-v1.3.1.tar.gz' \
+      | sha256sum --check --strict \
+    && tar --extract --gzip --file /tmp/age-v1.3.1.tar.gz --directory /tmp \
+    && install -m 0555 /tmp/age/age /usr/local/bin/age \
+    && rm -rf /tmp/age /tmp/age-v1.3.1.tar.gz \
+    && test "$(age --version)" = 'v1.3.1' \
+    && curl --version
+
+COPY replay-image/replay-staging-acceptance /opt/lean-eval/replay-staging-acceptance
+RUN chmod 0555 /opt/lean-eval/replay-staging-acceptance
+
+EXPOSE 3000

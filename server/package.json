@@ -8,13 +8,13 @@
   },
   "scripts": {
     "check": "npm run types:check && npm run lint && npm test && npm run deploy:dry-run",
-    "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.broker.jsonc --env staging && wrangler deploy --dry-run --env staging && wrangler deploy --dry-run --config wrangler.broker.jsonc --env production && wrangler deploy --dry-run --env production",
+    "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.broker.jsonc --env staging && wrangler deploy --dry-run --env staging && wrangler deploy --dry-run --containers-rollout=none --config wrangler.replay.jsonc --env staging && wrangler deploy --dry-run --config wrangler.broker.jsonc --env production && wrangler deploy --dry-run --env production && wrangler deploy --dry-run --containers-rollout=none --config wrangler.replay.jsonc --env production",
     "dev:broker": "wrangler dev --config wrangler.broker.jsonc --env staging",
     "dev": "wrangler dev --env staging",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
-    "types": "wrangler types --env-interface CloudflareEnv && wrangler types broker-configuration.d.ts --config wrangler.broker.jsonc --env-interface BrokerCloudflareEnv && tsc --noEmit",
-    "types:check": "wrangler types --env-interface CloudflareEnv --check && wrangler types broker-configuration.d.ts --config wrangler.broker.jsonc --env-interface BrokerCloudflareEnv --check && tsc --noEmit"
+    "types": "wrangler types --env-interface CloudflareEnv && wrangler types broker-configuration.d.ts --config wrangler.broker.jsonc --env-interface BrokerCloudflareEnv && wrangler types replay-configuration.d.ts --config wrangler.replay.jsonc --env staging --env-interface ReplayCloudflareEnv && tsc --noEmit",
+    "types:check": "wrangler types --env-interface CloudflareEnv --check && wrangler types broker-configuration.d.ts --config wrangler.broker.jsonc --env-interface BrokerCloudflareEnv --check && wrangler types replay-configuration.d.ts --config wrangler.replay.jsonc --env staging --env-interface ReplayCloudflareEnv --check && tsc --noEmit"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.22.0",
@@ -25,5 +25,8 @@
     "typescript-eslint": "8.67.0",
     "vitest": "4.1.11",
     "wrangler": "4.124.0"
+  },
+  "dependencies": {
+    "@cloudflare/sandbox": "0.12.7"
   }
 }

@@ -49,6 +49,24 @@ The authentication and source-boundary design is recorded in
 [`../docs/intake-threat-model.md`](../docs/intake-threat-model.md); every launch
 gate there remains mandatory while intake is disabled.
 
+## Replay executor
+
+`wrangler.replay.jsonc`, `Dockerfile.replay`, and `src/replay-*.ts` define the
+separate Cloudflare Sandbox replay boundary. It is automatically deployed after
+merge with the broker and intake Worker, but general replay stays disabled in
+both environments. Staging alone exposes the synthetic acceptance route to the
+exact protected `replay-staging` GitHub environment via GitHub OIDC. Production
+acceptance and replay are both disabled.
+
+Each request creates a fresh nonce-derived Sandbox, uses no persistent default
+session, runs one fixed image command with public networking disabled, and
+calls `destroy()` before returning source-free evidence. The container is
+limited to one `standard-4` instance (12 GiB) with SSH disabled. The recorded
+production launch requirement remains 16 GiB, so the present declaration
+cannot be mistaken for production readiness. `npm run deploy:dry-run` validates
+Worker configuration without building a local container; normal protected-main
+deployment performs the real image build and rollout.
+
 ## Operational readiness
 
 `GET /healthz` is public and secret-free. Authenticated `GET /readyz` reports

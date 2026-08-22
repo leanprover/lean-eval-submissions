@@ -17,8 +17,14 @@ WRANGLER = json.loads((ROOT / "server/wrangler.jsonc").read_text(encoding="utf-8
 BROKER_WRANGLER = json.loads(
     (ROOT / "server/wrangler.broker.jsonc").read_text(encoding="utf-8")
 )
+REPLAY_WRANGLER = json.loads(
+    (ROOT / "server/wrangler.replay.jsonc").read_text(encoding="utf-8")
+)
+PACKAGE = json.loads((ROOT / "server/package.json").read_text(encoding="utf-8"))
 WORKER_APP = (ROOT / "server/src/app.ts").read_text(encoding="utf-8")
 WORKER_ENTRYPOINT = (ROOT / "server/src/index.ts").read_text(encoding="utf-8")
+REPLAY_ENTRYPOINT = (ROOT / "server/src/replay-entry.ts").read_text(encoding="utf-8")
+REPLAY_APP = (ROOT / "server/src/replay-app.ts").read_text(encoding="utf-8")
 
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
@@ -52,8 +58,48 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
 
     def test_smoke_retries_structured_payload_propagation(self) -> None:
         self.assertEqual(DEPLOY.count("for attempt in $(seq 1 13); do"), 2)
-        self.assertEqual(DEPLOY.count("health payload did not converge"), 2)
+        self.assertEqual(DEPLOY.count("for attempt in $(seq 1 25); do"), 2)
+        self.assertEqual(DEPLOY.count('echo "health payload did not converge'), 2)
+        self.assertEqual(DEPLOY.count('echo "replay health payload did not converge'), 2)
         self.assertNotIn("curl --fail --retry", DEPLOY)
+
+    def test_replay_executor_is_isolated_capacity_bounded_and_disabled(self) -> None:
+        expected_urls = {
+            "staging": "https://lean-eval-replay-executor-staging.lean-eval.workers.dev/healthz",
+            "production": "https://lean-eval-replay-executor.lean-eval.workers.dev/healthz",
+        }
+        for environment in ("staging", "production"):
+            with self.subTest(environment=environment):
+                configuration = REPLAY_WRANGLER["env"][environment]
+                container = configuration["containers"][0]
+                variables = configuration["vars"]
+                self.assertEqual(container["class_name"], "ReplaySandbox")
+                self.assertEqual(container["instance_type"], "standard-4")
+                self.assertEqual(container["max_instances"], 1)
+                self.assertEqual(container["ssh"], {"enabled": False})
+                self.assertIs(configuration["workers_dev"], True)
+                self.assertIs(configuration["preview_urls"], False)
+                self.assertEqual(variables["REPLAY_ENABLED"], "false")
+                self.assertEqual(
+                    variables["STAGING_ACCEPTANCE_ENABLED"],
+                    "true" if environment == "staging" else "false",
+                )
+                self.assertEqual(variables["STAGING_MEMORY_LIMIT_BYTES"], "12884901888")
+                self.assertEqual(variables["PRODUCTION_MEMORY_GATE_BYTES"], "17179869184")
+                self.assertIn(expected_urls[environment], DEPLOY)
+
+        self.assertIn("override enableInternet = false", REPLAY_ENTRYPOINT)
+        self.assertIn("`r-${runnerNonce.slice(0, 61)}`", REPLAY_ENTRYPOINT)
+        self.assertIn("await sandbox.destroy()", REPLAY_APP)
+
+    def test_replay_container_auto_deploys_but_dry_run_skips_local_rollout(self) -> None:
+        self.assertEqual(
+            DEPLOY.count("npx wrangler deploy --config wrangler.replay.jsonc --env"),
+            2,
+        )
+        self.assertNotIn("--containers-rollout=none", DEPLOY)
+        dry_run = PACKAGE["scripts"]["deploy:dry-run"]
+        self.assertEqual(dry_run.count("--containers-rollout=none"), 2)
 
     def test_reviewed_promotion_uses_only_contents_write(self) -> None:
         block = DEPLOY.split("\n  promote-dispatch-ref:", 1)[1].split(

@@ -50,7 +50,9 @@ administrators. Service code:
 | AWS account | `lean-eval` (`161072922960`) | dedicated key custody | **CREATED; ROOT MFA ENABLED; NO ACCESS KEYS** |
 | AWS CloudFormation stack | `lean-eval-key-adapter-staging` | staging | **PROVISIONED 2026-08-22** |
 | AWS CloudFormation stack | `lean-eval-key-adapter-production` | production | **PROVISIONED 2026-08-22; NOT CONNECTED TO GITHUB** |
-| Replay execution backend | Cloudflare Sandbox, provider-neutral adapter | staging / production | **APPROVED 2026-08-22; IMPLEMENTATION IN PROGRESS; NOT ENABLED** |
+| Cloudflare replay Worker | `lean-eval-replay-executor-staging` | staging | **DECLARED 2026-08-22; ACCEPTANCE-ONLY; FIRST DEPLOYMENT PENDING** |
+| Cloudflare replay Worker | `lean-eval-replay-executor` | production | **DECLARED 2026-08-22; REPLAY AND ACCEPTANCE DISABLED; FIRST DEPLOYMENT PENDING** |
+| Replay execution backend | Cloudflare Sandbox, provider-neutral adapter | staging / production | **APPROVED AND IMPLEMENTED 2026-08-22; LIVE ACCEPTANCE PENDING; PRODUCTION DISABLED** |
 
 Do not change a status to provisioned without replacing every applicable
 placeholder in the inventory below and recording a verification date.
@@ -65,7 +67,7 @@ placeholder in the inventory below and recording a verification date.
 | Excluded account | `Kim@lean-fro.org's Account` (`d789bf36d237e0cb313be59b927c82bd`); contains Palomar Workers and must not host Lean Eval |
 | Zone | none; target `lean-lang.org` will not be present in the temporary account |
 | Zone ID | not applicable until organization-account migration |
-| Billing plan / cost owner | Free / Kim Morrison (temporary) |
+| Billing plan / cost owner | Workers Paid activated 2026-08-22 / Kim Morrison (temporary) |
 | Primary administrator | Kim Morrison (`kim@lean-fro.org`) |
 | Additional administrator | none; optional for the temporary account |
 
@@ -84,6 +86,26 @@ Worker configuration is declarative in [`server/wrangler.jsonc`](server/wrangler
   Workers have no public route and hold the two D9 App private keys;
 - intake disabled by default and enabled only through a reviewed configuration
   change after the rollout gates pass.
+
+Replay Worker and container configuration is separately declarative in
+[`server/wrangler.replay.jsonc`](server/wrangler.replay.jsonc) and
+[`server/Dockerfile.replay`](server/Dockerfile.replay):
+
+- Cloudflare Sandbox SDK `0.12.7`, backed by the matching pinned base-image tag;
+- one `standard-4` container at most per environment (4 vCPU, 12 GiB RAM,
+  20 GB disk), with SSH disabled and public network access disabled in the
+  Sandbox class;
+- staging exposes only the synthetic acceptance endpoint; general replay is
+  disabled in staging and both acceptance and replay are disabled in production;
+- every request gets a fresh nonce-derived sandbox ID, no default persistent
+  session, a fixed command, bounded inputs, and unconditional `destroy()`;
+- 12 GiB is the approved staging acceptance capacity. Production replay has a
+  recorded 16 GiB launch gate and cannot be enabled on the current 12 GiB
+  `standard-4` declaration until Cloudflare grants the required limit and the
+  configuration is reviewed;
+- the stable request/evidence contract contains no Cloudflare identifier, so a
+  later execution-provider migration does not alter State, archive, capability,
+  or verdict formats.
 
 Every deployment injects `DEPLOYED_COMMIT` from the Git commit being deployed.
 The smoke gate validates that marker, the target environment, and the expected
@@ -136,9 +158,10 @@ scripts, or archive recipient set merged to protected `main` runs:
 
 1. locked dependency install, generated binding types, typecheck, lint, tests,
    dependency audit, and Wrangler dry run;
-2. staging broker deploy, intake Worker deploy, and `GET /healthz` smoke test;
-3. production broker deploy, intake Worker deploy, and `GET /healthz` smoke
-   test.
+2. staging broker, replay Worker/container, and intake Worker deploys, followed
+   by exact structured `GET /healthz` smoke tests;
+3. production broker, disabled replay Worker/container, and intake Worker
+   deploys, followed by the same exact health gates.
 
 GitHub environment `cloudflare-staging` must contain:
 
@@ -160,7 +183,7 @@ Recorded deployment tokens, both account-owned in the `lean-eval` account:
 | Token name | Environment | Permission | Created | Expiry |
 | --- | --- | --- | --- | --- |
 | `lean-eval-deploy-staging` | `cloudflare-staging` | Workers Scripts: Edit; Containers: Edit operator-configured 2026-08-22, live deployment verification pending; entire `lean-eval` account | 2026-08-21 | none |
-| `lean-eval-deploy-production` | `cloudflare-production` | Workers Scripts: Edit; Containers: Edit operator-configured 2026-08-22, live deployment verification pending; entire `lean-eval` account | 2026-08-21 | none |
+| `lean-eval-deploy-production` | `cloudflare-production` | Workers Scripts: Edit; Containers: Edit operator-configured 2026-08-22, live disabled-container deployment verification pending; entire `lean-eval` account | 2026-08-21 | none |
 
 Neither token may carry any other permission. Each was checked at creation
 against `/accounts/<id>/tokens/verify` (active), `/accounts/<id>/workers/scripts`
@@ -672,7 +695,7 @@ compatibility fix or append a corrective event.
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
 | AWS key-adapter staging round trip | 2026-08-22 | authoritative run `32568604230` at immutable tag/commit `d487c9d5b1a22a7a7dd27d729f3eb642c6474b1a` passed gate, Encrypt-only OIDC assumption and wrap, source-free ciphertext handoff, Invoke-only assumption, first consume/decrypt, identical second-use rejection, AWS-authority removal, and local synthetic-source decryption. Staging contains one synthetic TTL item; production contains zero. Initial run `32568171403` had stopped before unwrap on the mistyped action pin corrected by `#1239`. No State event, result, release, production AWS variable, or replay backend was created. |
 | Results schema version 2 migration (D7) | 2026-08-22 | maintainer approved fresh dry run `32569220655` at source `ddc0e4ec8980296a5312844dedd5513d1d604e5b`, source digest `884c38373f8ecafbbc3894a6cb90cdca476f558bb32fe44d0af08e8c62fd2e05`, 1,298 records, and canonical output digest `b78fb207d4711c2f59970fd3e769c483cf7eab8f5afb1fec07abe7cadbfc24c4`. Apply run `32569936026` created lock commit `fd1259b3`, rewrote 43 legacy files / 1,088 legacy records, removed the lock, and produced main `c3491661da9dcdad908d1b1e78576d9f64f112f4`. Independent post-apply validation found 44/44 files at schema version 2, 1,298/1,298 records, no duplicates, unchanged canonical output digest, zero further changes, no queued submission writers, and green main CI `32569954466`. |
-| Replay decrypt and destruction | blocked | key custody is provisioned; the disposable replay executor remains unselected and unprovisioned |
+| Replay decrypt and destruction | implementation ready; live gate pending | Cloudflare Sandbox executor, fixed-command image, OIDC boundary, wrong-archive and reuse checks, egress probe, and unconditional destruction are reviewed in code; first protected staging run remains required |
 | Release reconstruction | blocked | Publication remains disabled |
 
 ## Reconciliation checklist

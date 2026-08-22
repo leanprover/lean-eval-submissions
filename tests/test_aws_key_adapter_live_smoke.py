@@ -15,9 +15,13 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from aws_key_adapter_live_smoke import (
     LiveSmokeError,
+    build_binding_rejection_request,
+    build_executor_request,
     build_unwrap_request,
     prepare_source,
     validate_artifact,
+    validate_binding_rejection,
+    validate_executor_response,
     validate_reuse_failure,
     validate_unwrap_response,
     verify_decrypted,
@@ -161,6 +165,59 @@ class AwsKeyAdapterLiveSmokeTests(unittest.TestCase):
         response.write_text(json.dumps(changed))
         with self.assertRaisesRegex(LiveSmokeError, "exposed"):
             validate_reuse_failure(metadata, response)
+
+    def test_wrong_archive_binding_is_rejected_without_identity(self) -> None:
+        request, _, _ = self._request_and_response()
+        rejection = self.root / "rejection-request.json"
+        build_binding_rejection_request(request, rejection)
+        rejected = json.loads(rejection.read_text())
+        self.assertNotEqual(
+            rejected["capability"]["archive_ciphertext_sha256"],
+            rejected["envelope"]["archive_ciphertext_sha256"],
+        )
+        metadata = self.root / "rejection-metadata.json"
+        response = self.root / "rejection-response.json"
+        metadata.write_text(json.dumps({"StatusCode": 200, "FunctionError": "Unhandled"}))
+        response.write_text(json.dumps({
+            "errorMessage": "capability.archive_ciphertext_sha256 does not match envelope",
+            "errorType": "AwsAdapterError",
+        }))
+        validate_binding_rejection(metadata, response)
+        response.write_text(json.dumps({
+            "errorMessage": "capability.archive_ciphertext_sha256 does not match envelope",
+            "plaintext_identity_base64": base64.b64encode(IDENTITY).decode("ascii"),
+        }))
+        with self.assertRaisesRegex(LiveSmokeError, "exposed"):
+            validate_binding_rejection(metadata, response)
+
+    def test_cloudflare_executor_handoff_and_source_free_evidence(self) -> None:
+        request, metadata, response = self._request_and_response()
+        identity = self.root / "identity.age"
+        validate_unwrap_response(request, metadata, response, identity)
+        executor_request = self.root / "executor-request.json"
+        payload = build_executor_request(self.artifact, request, identity, executor_request)
+        self.assertEqual(payload["plaintext_identity_base64"], base64.b64encode(IDENTITY).decode("ascii"))
+        executor_response = self.root / "executor-response.json"
+        executor_response.write_text(json.dumps({
+            "schema_version": 1,
+            "service": "lean-eval-replay-executor",
+            "environment": "staging",
+            "request_id": payload["request_id"],
+            "runner_nonce": payload["runner_nonce"],
+            "archive_ciphertext_sha256": payload["archive_ciphertext_sha256"],
+            "marker_sha256": payload["marker_sha256"],
+            "network_policy": "disabled",
+            "network_probe": "blocked",
+            "destruction": "confirmed",
+            "architecture": "x86_64",
+            "kernel_release": "fixture-kernel",
+            "cpu_model": "fixture-cpu",
+            "staging_memory_limit_bytes": 12 * 1024**3,
+            "production_memory_gate_bytes": 16 * 1024**3,
+        }))
+        evidence = validate_executor_response(executor_request, executor_response)
+        self.assertNotIn("plaintext_identity_base64", evidence)
+        self.assertNotIn("ciphertext_base64", evidence)
 
 
 if __name__ == "__main__":

@@ -161,13 +161,16 @@ one issue per lane.
 - [x] Demonstrate credential-free historical public replay (hosted run
       `32499490261`, workflow commit `757b0831`).
 - [ ] Demonstrate isolated private replay. Cloudflare Sandbox was selected on
-      2026-08-22 behind the provider-neutral executor contract; implementation,
-      deployment-token expansion, and staging evidence remain pending. The
-      synthetic key-adapter round trip is not a private replay demonstration.
+      2026-08-22 behind the provider-neutral executor contract. Workers Paid is
+      active; the 12 GiB, max-one-instance, SSH-off, network-disabled executor,
+      automatic deployment, exact GitHub OIDC boundary, and source-free live
+      acceptance workflow are implemented. Deployment-token expansion is
+      operator-confirmed; first deployment and staging evidence remain pending.
 - [ ] Verify single-submission decrypt, second-use and wrong-archive refusal,
       sandbox destruction, and release reconstruction before enabling those
-      features. Unit tests cover the refusal paths; live staging round-trip
-      evidence is recorded separately in `INFRASTRUCTURE.md`.
+      features. The staging acceptance proves the first four without writing
+      State or a result; release reconstruction remains a separate launch gate.
+      Live evidence is recorded separately in `INFRASTRUCTURE.md`.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
       window.
 - [x] Complete leaderboard preview review and cut over with rollback retained
