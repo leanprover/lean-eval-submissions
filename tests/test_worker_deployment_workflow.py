@@ -36,6 +36,12 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("'INFRASTRUCTURE.md'", pull_request)
         self.assertNotIn("'INFRASTRUCTURE.md'", push)
 
+    def test_documentation_only_merge_does_not_redeploy(self) -> None:
+        push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
+        self.assertIn("'server/**'", push)
+        self.assertIn("'!server/*.md'", push)
+        self.assertIn("'!server/**/*.md'", push)
+
     def test_dispatch_dependency_changes_promote_and_deploy_exact_ref(self) -> None:
         pull_request = DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0]
         push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
