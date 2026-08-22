@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://lean-lang.org/schemas/lean-eval/replay-queue-v1.schema.json",
-  "title": "LeanEval deterministic replay queue v1",
+  "title": "LeanEval deterministic replay queue schema version 1",
   "type": "object",
   "additionalProperties": false,
   "required": [

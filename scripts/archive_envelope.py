@@ -225,7 +225,9 @@ def create_archive_envelope(
             except OSError as error:
                 raise EnvelopeError("age did not create a readable ciphertext") from error
             if not header.startswith(b"age-encryption.org/v1\n"):
-                raise EnvelopeError("age output does not have the v1 ciphertext header")
+                raise EnvelopeError(
+                    "age output does not have the format-version-1 ciphertext header"
+                )
 
             archive_digest = _sha256(ciphertext_temp)
             data_key_identity = archive_key_id(submission_id, recipient)

@@ -12,8 +12,8 @@ not enable decryption or provision AWS. The schemas and validator are:
 ## Stable envelope
 
 Each new server archive receives a fresh native age identity. The archive is a
-normal age v1 ciphertext encrypted only to its corresponding recipient. The
-small private identity is wrapped by the configured root-key adapter. The
+normal age format-version-1 ciphertext encrypted only to its corresponding
+recipient. The small private identity is wrapped by the configured root-key adapter. The
 envelope records the submission ID, exact ciphertext digest, age recipient,
 provider-neutral `ak1_…` key identity, adapter name, and opaque wrapped bytes.
 
@@ -52,7 +52,7 @@ contract. It:
 1. validates the submission UUID, adapter name, source, and fresh output path;
 2. creates exactly one native age identity, requesting `age-keygen -pq` by
    default;
-3. encrypts the source as a standard age v1 ciphertext;
+3. encrypts the source as a standard age format-version-1 ciphertext;
 4. computes the digest and stable `ak1_…` identity;
 5. sends the private identity only over the configured adapter's stdin; and
 6. atomically publishes a new directory containing only
