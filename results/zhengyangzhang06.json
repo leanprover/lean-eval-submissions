@@ -4450,6 +4450,28 @@
         "ref": "7e2d3c973bee0d7df219a219044ac5d1f36f0c32",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-08-22T18:16:38Z",
+      "benchmark_commit": "b91d4757aa0d7776c02540c9089df54fa0d0658a",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1248,
+        "kind": "issue"
+      },
+      "problem_id": "coherent_cohomology_finite_dimensional",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_6e092fe7f3afaf6f268cb267780796af380a5cf7f73f05a6293c02ac3811e421",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a714dd7f43fbb427f1a432d782017697e9a9cdb3",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
