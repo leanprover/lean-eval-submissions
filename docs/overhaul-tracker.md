@@ -169,8 +169,11 @@ one issue per lane.
 - [x] Verify synthetic single-archive decrypt, second-use and wrong-archive
       refusal, blocked egress, and sandbox destruction before enabling private
       replay. Evidence is recorded in `INFRASTRUCTURE.md`.
-- [ ] Demonstrate release reconstruction separately before enabling release or
-      publication.
+- [x] Demonstrate release reconstruction separately without enabling release
+      or publication. Protected `lean-eval-releases` run `32574614106` at exact
+      main commit `f1f83344` planned one due synthetic release, reconstructed
+      and validated its manifest, enforced the public-file allowlist, excluded
+      a private fixture file, and left Git and State unchanged.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
       window.
 - [x] Complete leaderboard preview review and cut over with rollback retained
