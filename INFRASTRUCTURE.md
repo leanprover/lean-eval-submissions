@@ -230,8 +230,8 @@ deliberately has no Actions permission. The dispatcher installation was
 verified on 2026-08-21 by minting an installation token and listing
 `/installation/repositories`, which returned exactly one repository.
 
-Recorded browser OAuth Apps, both owned by the personal account `kim-em` for
-the same reason as the two GitHub Apps:
+Recorded browser OAuth Apps, both currently owned by the personal account
+`kim-em`:
 
 | App name | Application ID | Client ID | Callback |
 | --- | --- | --- | --- |
@@ -592,6 +592,7 @@ compatibility fix or append a corrective event.
 | Browser OAuth App provisioning | 2026-08-21 | two Apps with exact per-environment callbacks; client ID and secret installed in the matching Worker |
 | Broker GitHub App provisioning | 2026-08-21 | source reader `4666604` (Metadata read, Contents read, no installation) and workflow dispatcher `4666633` (Metadata read, Contents read, Actions read/write, installation `155329316` limited to `leanprover/lean-eval-submissions`); four secrets installed in both broker environments |
 | Broker GitHub App ownership transfer | 2026-08-21 | both registrations accepted by `leanprover`; public records confirm unchanged IDs `4666604` / `4666633` and the exact reviewed permission split |
+| Staging Source Reader preflight | 2026-08-21 | protected run `32519788255` proved the transferred App private key, staging broker binding, exact installation on `kim-em/lean-eval-intake-fixture`, and private visibility without dispatching or evaluating a submission |
 | Lifecycle callback secret provisioning | 2026-08-21 | distinct random values installed in each intake Worker and its matching protected GitHub environment; values were never logged or recorded |
 | Post-provisioning health check | 2026-08-21 | both Workers report `status ok`, commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`, correct environment, and `intake_enabled false` |
 | Automated deployment verification | 2026-08-21 | run `32437703335` created the protected immutable dispatch tag, deployed broker and intake versions for exact commit `a928be873db6569e2b4ccb3fb8b399d0f19b2e78` to staging then production, and passed both structured intake-disabled smoke checks; PRs `#1172` and `#1174` fixed the checkout-free promotion directory and payload-propagation retry discovered during the first live exercise |
@@ -609,6 +610,7 @@ compatibility fix or append a corrective event.
 | Staging intake re-enable after archive deployment | 2026-08-21 | protected control run `32488534189` verified the immutable `b64a3029` tag and deployed staging intake version `39e8392d-dcc4-46e4-9bc7-afaff28b01a5`; final health is staging `true`, production `false`, both at exact commit `b64a3029` |
 | Credential-free public replay | 2026-08-21 | hosted run `32499490261` at workflow commit `757b0831018dd6ad88092eff8a2f4b3245a456d6` restored exact public source/benchmark/evaluator revisions, passed landrun and environment probes, and reproduced `two_plus_two` revision 1 through nanoda and Lean's default kernel; the downloaded three-JSON artifact independently validated with no source payload |
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
+| AWS key-adapter staging round trip | blocked | workflow is implemented; dedicated account, stacks, and staging OIDC role variables are not provisioned |
 | Replay decrypt and destruction | blocked | D6 key/provider work intentionally not provisioned |
 | Release reconstruction | blocked | Publication remains disabled |
 

@@ -4,7 +4,6 @@ import pathlib
 import re
 import unittest
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TEMPLATE_PATH = ROOT / "infrastructure" / "aws-key-adapter" / "template.yaml"
 MAKEFILE_PATH = ROOT / "Makefile"
@@ -79,6 +78,7 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
             "age_recipient_sha256",
         ):
             self.assertIn(f"- {name}", role)
+            self.assertIn(f"kms:EncryptionContext:{name}: false", role)
 
     def test_function_role_alone_can_consume_and_decrypt(self) -> None:
         role = _section(self.template, "  UnwrapFunctionRole:\n", "  UnwrapFunction:\n")
@@ -86,6 +86,14 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
         self.assertIn("Action: kms:Decrypt", role)
         self.assertNotIn("Action: kms:Encrypt", role)
         self.assertNotIn('Resource: "*"', role)
+        for name in (
+            "contract",
+            "submission_id",
+            "archive_ciphertext_sha256",
+            "data_key_id",
+            "age_recipient_sha256",
+        ):
+            self.assertIn(f"kms:EncryptionContext:{name}: false", role)
         function = _section(self.template, "  UnwrapFunction:\n", "  ReplayInvokerRole:\n")
         self.assertIn("ReservedConcurrentExecutions: 1", function)
         self.assertIn("AutoPublishAlias: live", function)

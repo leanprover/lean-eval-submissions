@@ -78,8 +78,11 @@ The six GitHub environment shells already exist:
 - `archive-staging` and `archive-production` in
   `leanprover/lean-eval-submissions`, each restricted to the tag pattern
   `lean-eval-dispatch/*`;
-- `replay-staging` and `replay-production` in
-  `leanprover/lean-eval-submissions`, each restricted to protected branches;
+- `replay-staging` in `leanprover/lean-eval-submissions`, restricted to exact
+  branch `main` and tag pattern `lean-eval-dispatch/*` so the existing public
+  replay and this immutable-tag smoke can both enter it;
+- `replay-production` in `leanprover/lean-eval-submissions`, restricted to
+  protected branches;
 - `release-staging` and `release-production` in
   `leanprover/lean-eval-releases`, each restricted to protected branches.
 
@@ -98,9 +101,81 @@ For each stack, copy the seven non-secret outputs into `INFRASTRUCTURE.md`:
 
 After the outputs exist, store each corresponding role ARN as a non-secret
 variable in its existing environment. Recheck rather than change the recorded
-ref policies. Then add a staging-only live round trip. Do not wire the production
-archive workflow, enable private replay/release, or enable production intake
-merely because the stacks exist.
+ref policies. Use variable `AWS_WRAP_ROLE_ARN` in `archive-staging` and
+`AWS_REPLAY_UNWRAP_ROLE_ARN` in `replay-staging`; reserve the corresponding
+production and release role variables until their workflows are reviewed.
+
+List both stacks' recorded outputs without exposing a credential:
+
+```sh
+aws cloudformation describe-stacks \
+  --stack-name lean-eval-key-adapter-staging \
+  --region us-east-1 \
+  --query 'Stacks[0].Outputs' \
+  --output table
+
+aws cloudformation describe-stacks \
+  --stack-name lean-eval-key-adapter-production \
+  --region us-east-1 \
+  --query 'Stacks[0].Outputs' \
+  --output table
+```
+
+Install only the two staging role outputs needed by the reviewed smoke. The
+values are non-secret ARNs, but still avoid placing them in an issue or chat:
+
+```sh
+LEAN_EVAL_STAGING_WRAP_ROLE_ARN="$(aws cloudformation describe-stacks \
+  --stack-name lean-eval-key-adapter-staging \
+  --region us-east-1 \
+  --query "Stacks[0].Outputs[?OutputKey=='WrapRoleArn'].OutputValue | [0]" \
+  --output text)"
+
+LEAN_EVAL_STAGING_REPLAY_ROLE_ARN="$(aws cloudformation describe-stacks \
+  --stack-name lean-eval-key-adapter-staging \
+  --region us-east-1 \
+  --query "Stacks[0].Outputs[?OutputKey=='ReplayInvokerRoleArn'].OutputValue | [0]" \
+  --output text)"
+
+test -n "$LEAN_EVAL_STAGING_WRAP_ROLE_ARN"
+test "$LEAN_EVAL_STAGING_WRAP_ROLE_ARN" != None
+test -n "$LEAN_EVAL_STAGING_REPLAY_ROLE_ARN"
+test "$LEAN_EVAL_STAGING_REPLAY_ROLE_ARN" != None
+
+gh variable set AWS_WRAP_ROLE_ARN \
+  --repo leanprover/lean-eval-submissions \
+  --env archive-staging \
+  --body "$LEAN_EVAL_STAGING_WRAP_ROLE_ARN"
+
+gh variable set AWS_REPLAY_UNWRAP_ROLE_ARN \
+  --repo leanprover/lean-eval-submissions \
+  --env replay-staging \
+  --body "$LEAN_EVAL_STAGING_REPLAY_ROLE_ARN"
+```
+
+Verify the variable names, environment boundaries, and existing ref policies
+through the GitHub API before running the smoke. The API returns names and
+non-secret values; it never returns an AWS credential:
+
+```sh
+gh api repos/leanprover/lean-eval-submissions/environments/archive-staging/variables
+gh api repos/leanprover/lean-eval-submissions/environments/replay-staging/variables
+```
+
+Then run `AWS key-adapter staging smoke` from the immutable
+`lean-eval-dispatch/<workflow-commit>` tag containing the workflow. It creates
+one synthetic archive under the Encrypt-only role, transfers only ciphertext,
+the provider-neutral envelope, and a marker digest through a one-day artifact,
+invokes the versioned
+unwrap alias through the replay Invoke-only role, proves the same capability is
+rejected on its second use, drops AWS authority, and decrypts the synthetic
+archive. The synthetic locator is never appended to State and is not evidence
+that an audit-repository object exists. No identity, plaintext source, AWS
+credential, State event, result, or release is uploaded.
+
+Do not wire the production archive workflow, enable private replay/release, or
+enable production intake merely because the stacks and this synthetic smoke
+exist.
 
 ## Why this is one-use
 

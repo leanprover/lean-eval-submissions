@@ -15,7 +15,6 @@ from scripts.aws_key_adapter import (
     validate_wrap_request,
 )
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 VECTOR = json.loads(
     (ROOT / "tests" / "fixtures" / "archive-key-contract-v1.json").read_text(

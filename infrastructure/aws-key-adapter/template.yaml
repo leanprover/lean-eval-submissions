@@ -93,6 +93,12 @@ Resources:
                       - archive_ciphertext_sha256
                       - data_key_id
                       - age_recipient_sha256
+                  "Null":
+                    kms:EncryptionContext:contract: false
+                    kms:EncryptionContext:submission_id: false
+                    kms:EncryptionContext:archive_ciphertext_sha256: false
+                    kms:EncryptionContext:data_key_id: false
+                    kms:EncryptionContext:age_recipient_sha256: false
 
   UnwrapFunctionRole:
     Type: AWS::IAM::Role
@@ -136,6 +142,12 @@ Resources:
                       - archive_ciphertext_sha256
                       - data_key_id
                       - age_recipient_sha256
+                  "Null":
+                    kms:EncryptionContext:contract: false
+                    kms:EncryptionContext:submission_id: false
+                    kms:EncryptionContext:archive_ciphertext_sha256: false
+                    kms:EncryptionContext:data_key_id: false
+                    kms:EncryptionContext:age_recipient_sha256: false
 
   UnwrapFunction:
     Type: AWS::Serverless::Function
