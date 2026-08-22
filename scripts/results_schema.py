@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Results-store schema v1/v2 validation and deterministic conversion.
+"""Results-store schema-version-1/2 validation and deterministic conversion.
 
-Schema v1 remains readable during the migration window.  All newly written
-files use the flat v2 representation described in ``docs/results-schema-v2.md``.
+Results schema version 1 remains readable during the migration window. All
+newly written files use the flat schema-version-2 representation described in
+``docs/results-schema-v2.md``.
 This module deliberately has no third-party dependencies so the recording and
 migration workflows can use the same implementation.
 """
@@ -79,7 +80,7 @@ def result_id(
     problem_id: str,
     statement_revision: int,
 ) -> str:
-    """Compute the public, stable v2 identifier for one accepted result."""
+    """Compute the public, stable schema-version-2 identifier for one result."""
 
     if not isinstance(user, str) or not user:
         raise ResultsSchemaError("user must be a non-empty string")
@@ -123,11 +124,12 @@ def _convert_v1_record(
     problem_id: str,
     record: Any,
 ) -> dict[str, Any]:
-    old = _require_object(record, f"v1 record {declared_model!r}/{problem_id!r}")
+    label = f"schema-version-1 record {declared_model!r}/{problem_id!r}"
+    old = _require_object(record, label)
     unknown = set(old) - V1_RECORD_FIELDS
     if unknown:
         raise ResultsSchemaError(
-            f"v1 record {declared_model!r}/{problem_id!r} has unknown fields: "
+            f"{label} has unknown fields: "
             + ", ".join(sorted(unknown))
         )
     required = V1_RECORD_FIELDS - {
@@ -138,7 +140,7 @@ def _convert_v1_record(
     missing = required - set(old)
     if missing:
         raise ResultsSchemaError(
-            f"v1 record {declared_model!r}/{problem_id!r} is missing fields: "
+            f"{label} is missing fields: "
             + ", ".join(sorted(missing))
         )
     statement_revision = 1
@@ -170,17 +172,17 @@ def _convert_v1_record(
 
 
 def convert_v1(data: Any, *, context: str = "results file") -> dict[str, Any]:
-    """Convert one validated v1 file to v2 without dropping known fields."""
+    """Convert one validated schema-version-1 file to version 2 losslessly."""
 
     old = _require_object(data, context)
     unknown = set(old) - V1_TOP_LEVEL_FIELDS
     if unknown:
         raise ResultsSchemaError(
-            f"{context} schema v1 has unknown top-level fields: "
+            f"{context} schema version 1 has unknown top-level fields: "
             + ", ".join(sorted(unknown))
         )
     if old.get("schema_version") != 1:
-        raise ResultsSchemaError(f"{context} is not schema v1")
+        raise ResultsSchemaError(f"{context} is not schema version 1")
     user = _require_string(old.get("user"), f"{context}.user")
     solved = _require_object(old.get("solved"), f"{context}.solved")
     records: list[dict[str, Any]] = []
@@ -206,7 +208,7 @@ def convert_v1(data: Any, *, context: str = "results file") -> dict[str, Any]:
 
 
 def validate_v2(data: Any, *, context: str = "results file") -> dict[str, Any]:
-    """Validate and return a schema-v2 file.
+    """Validate and return a schema-version-2 file.
 
     The validator is intentionally strict about the base envelope and stable
     identifier while allowing the structured production metadata object to
@@ -216,7 +218,7 @@ def validate_v2(data: Any, *, context: str = "results file") -> dict[str, Any]:
     doc = _require_object(data, context)
     if set(doc) != {"schema_version", "user", "results"}:
         raise ResultsSchemaError(
-            f"{context} schema v2 must contain only schema_version, user, results"
+            f"{context} schema version 2 must contain only schema_version, user, results"
         )
     if doc.get("schema_version") != SCHEMA_VERSION:
         raise ResultsSchemaError(
@@ -385,7 +387,7 @@ def validate_v2(data: Any, *, context: str = "results file") -> dict[str, Any]:
 
 
 def read_results_file(path: pathlib.Path) -> tuple[dict[str, Any], int]:
-    """Read v1 or v2 and return a validated v2 view plus source version."""
+    """Read schema version 1 or 2 and return a validated version-2 view."""
 
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -405,7 +407,7 @@ def read_results_file(path: pathlib.Path) -> tuple[dict[str, Any], int]:
 
 
 def canonical_file_bytes(data: dict[str, Any]) -> bytes:
-    """Stable pretty-printed on-disk representation for v2 files."""
+    """Stable pretty-printed on-disk representation for schema-version-2 files."""
 
     validate_v2(data)
     rendered = json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False)
@@ -413,7 +415,7 @@ def canonical_file_bytes(data: dict[str, Any]) -> bytes:
 
 
 def canonical_store_digest(files: Iterable[tuple[str, dict[str, Any]]]) -> str:
-    """Digest a path-sorted set of canonical v2 files."""
+    """Digest a path-sorted set of canonical schema-version-2 files."""
 
     digest = hashlib.sha256()
     for relative_path, data in sorted(files, key=lambda item: item[0]):

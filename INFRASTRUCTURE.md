@@ -90,13 +90,13 @@ Wrangler must be copied here immediately.
 
 The intake-disabled bootstrap was performed manually with Wrangler OAuth. The
 dedicated deployment tokens are installed and exercised by every normal
-deployment. Current versions use exact archive-before-evaluation commit
-`b64a30293e82e77cc76da1f74e6f1633747e1bf0`:
+deployment. Current versions use exact runtime-only deployment-trigger commit
+`b0a505372ddc332b5413b63e0554ee2dee690fd8`:
 
 | Environment | Private broker version | Intake Worker version | Health verification |
 | --- | --- | --- | --- |
-| staging | `edeb2d01-5acf-4099-8329-cf3e52f431e1` | `39e8392d-dcc4-46e4-9bc7-afaff28b01a5` | environment `staging`, intake `true`, exact commit; intake version is the protected post-deploy re-enable |
-| production | `1ebdfbe1-57be-4ee4-ba80-23a9bf740fc6` | `3d2658ec-0fda-4bf1-9619-e7500fa61d52` | environment `production`, intake `false`, exact commit |
+| staging | `1c0cc274-4234-42c8-887a-e129a350b36e` | `ec7375aa-911e-449c-805d-5051056eb12c` | environment `staging`, intake `false`, exact commit |
+| production | `56513157-722a-455f-8cb1-3b6898b9b0a2` | `e16c398f-df4b-4fb3-957c-473a2a911d8c` | environment `production`, intake `false`, exact commit |
 
 This manual bootstrap does not replace deployment automation.
 `CLOUDFLARE_ACCOUNT_ID` and a distinct, narrowly scoped
@@ -119,7 +119,8 @@ submission IDs, State events, archive locators, or the public API.
 ## Deployment automation
 
 [`deploy-worker.yml`](.github/workflows/deploy-worker.yml) is the only normal
-deployment path. A change under `server/` merged to protected `main` runs:
+deployment path. A change to the Worker, submission workflow, trusted workflow
+scripts, or archive recipient set merged to protected `main` runs:
 
 1. locked dependency install, generated binding types, typecheck, lint, tests,
    dependency audit, and Wrangler dry run;
@@ -311,8 +312,8 @@ multi-environment callbacks are forbidden.
 The production source-verification and dispatch mechanism is the implemented
 private Cloudflare service-binding broker. One App can read repository
 metadata and tags; the other can dispatch only the pinned workflow in
-`leanprover/lean-eval-submissions`. The broker validates an exact v1 audience,
-authority, operation, repository, and immutable commit, mints scoped
+`leanprover/lean-eval-submissions`. The broker validates an exact
+protocol-version-1 audience, authority, operation, repository, and immutable commit, mints scoped
 installation tokens, and never returns them to intake. This internal protocol
 is the provider seam: another provider can replace the broker without changing
 public API, State, archive, or result identifiers. Do not provision the static
@@ -344,7 +345,8 @@ verifying its digest. A separate source-free `archive_state` job holds only the
 matching environment's callback token and sends that object to the Worker. The
 Worker validates the UUID-derived path, authenticated environment, existing
 dispatched submission, and exact payload before appending an idempotent
-`archive.completed` event and atomically upgrading the targeted view to v2. A
+`archive.completed` event and atomically upgrading the targeted view to the
+lifecycle-aware schema. A
 successful `archive_state` acknowledgement is a dependency of evaluation, so
 untrusted Lean cannot start before both durable audit persistence and State
 recording. The evaluation job independently refetches the archived source
@@ -406,6 +408,30 @@ Recorded repository controls:
 | --- | --- | --- |
 | Branch ruleset ID | `21094006` | `21094005` |
 | Writer bypass | `kim-em` (`User` 477956), always | `kim-em` (`User` 477956), always |
+
+### Public State projection
+
+Raw State and its internal `materialized/domain.json` remain private. Production
+State PR `#4` (merge `e9477c7c88f71127bda3a7442d35068fd2d7a5dd`)
+and its staging mirror `#4` (merge
+`685f293dae9e64a32d5466211a06c9e6bc892a3b`) define the strict
+`public-state-projection-v1` contract (schema version 1). It contains only
+recorded results, public credit/production metadata, acceptance provenance, replay measurements,
+release status, and released-solution links. It omits pending/rejected
+submissions, submission IDs, source/archive locators, and authentication
+nonces. Result identities are recomputed, metadata fields are closed, and the
+artifact records its exact private State commit, canonical event digest, and
+event count.
+
+The lifecycle-aware leaderboard's production build reads State using deploy
+key `160968617` (`lean-eval-leaderboard-public-projection`). The key is read-only
+and scoped solely to `leanprover/lean-eval-state`; its private half exists only
+as leaderboard Actions secret `PRODUCTION_STATE_READ_KEY` (set 2026-08-22).
+Pull-request builds never receive it. Production generates and revalidates the
+redacted artifact, verifies its commit against the checkout, and publishes the
+exact bytes as `site-data/public-state.json`. It never publishes raw events or
+the internal domain. Removing deploy key `160968617` immediately revokes this
+read path without affecting State writers or intake.
 
 ## Encrypted replay boundary
 
@@ -569,7 +595,13 @@ compatibility fix or append a corrective event.
 | Lifecycle callback secret provisioning | 2026-08-21 | distinct random values installed in each intake Worker and its matching protected GitHub environment; values were never logged or recorded |
 | Post-provisioning health check | 2026-08-21 | both Workers report `status ok`, commit `9f5db319309bfc3f4a38215fba71e4763228c2a6`, correct environment, and `intake_enabled false` |
 | Automated deployment verification | 2026-08-21 | run `32437703335` created the protected immutable dispatch tag, deployed broker and intake versions for exact commit `a928be873db6569e2b4ccb3fb8b399d0f19b2e78` to staging then production, and passed both structured intake-disabled smoke checks; PRs `#1172` and `#1174` fixed the checkout-free promotion directory and payload-propagation retry discovered during the first live exercise |
-| Lifecycle-aware deployment | 2026-08-21 | run `32481684831` promoted immutable tag `lean-eval-dispatch/344ae1dbd5aaf53985b20511a770caa3c52b5626`, deployed that exact commit to staging and production, and passed both structured smoke checks; the State view-v2 prerequisites were already merged and green |
+| Lifecycle-overhaul terminology deployment | 2026-08-22 | run `32540475554` promoted immutable tag `lean-eval-dispatch/ee73dd0992811b1b60549fae86e59ffde4f17dc8`, deployed exact commit `ee73dd09` to staging (broker `a078c48d-6269-4d11-a0e1-80afff7dde41`, intake `f2f29886-21a7-41f3-968f-f32f913a36e7`) and production (broker `ce147759-47c7-424d-ba78-c6a01f05964f`, intake `7bf3b058-e708-473b-b9cc-a3f530209579`), and passed both structured intake-disabled smoke checks |
+| Archive-verification recovery deployment | 2026-08-22 | PRs `#1213` / `#1214` changed immutable verification to decode the exact Git blob and made trusted script/recipient changes promote a fresh dispatch ref; run `32546480178` promoted `lean-eval-dispatch/1738baeb1934b28bdf44a4eb6fecaec00846ee75`, deployed staging broker/intake versions `367a191a-e779-4d2e-ba67-d21b1ecc5c4c` / `c243be75-d0a5-4e81-bd49-ab4a20106364` and production versions `ab214097-abd6-4d5d-954f-c3fedf9edcb5` / `137f4553-ea1a-468f-8dbf-ccdbc0c9129f`, and passed both structured intake-disabled smoke checks |
+| Redacted public State projection | 2026-08-22 | production/staging State PRs `#4` merged as `e9477c7c` / `685f293d`; 63 tests in each repository verify strict identities, metadata, lifecycle evidence, and absence of private identifiers; read-only production deploy key `160968617` and leaderboard secret `PRODUCTION_STATE_READ_KEY` were provisioned for held cutover PR `lean-eval-leaderboard#72` |
+| Staging private-source E2E completion | 2026-08-22 | submission `01a02427-9e09-7b63-9ab7-5ff6b9ef8a09`, hosted run `32546606639`, and exact server commit `1738baeb1934b28bdf44a4eb6fecaec00846ee75` completed archive, archive-State callback, evaluation, and evaluation-State callback; the deliberate stale-proof fixture was rejected, staging State advanced to `b2160515cc18b2a871135dbe6d49df7e1bd8306d` with seven valid events and no result, and the redacted projection validated with zero results |
+| Runtime-only automatic deployment trigger | 2026-08-22 | PR `#1217` excludes `server/*.md` and nested Markdown from main-branch Worker deployment while retaining runtime/config/script/audit-recipient/workflow triggers; docs-only run `32548922158` was cancelled before promotion with no Worker change; approved run `32549095770` promoted immutable tag `lean-eval-dispatch/b0a505372ddc332b5413b63e0554ee2dee690fd8`, deployed staging broker/intake `1c0cc274-4234-42c8-887a-e129a350b36e` / `ec7375aa-911e-449c-805d-5051056eb12c` and production broker/intake `56513157-722a-455f-8cb1-3b6898b9b0a2` / `e16c398f-df4b-4fb3-957c-473a2a911d8c`, and passed exact-commit intake-disabled smoke checks |
+| Post-ledger live health recheck | 2026-08-22 | direct `/healthz` reads returned `status ok`, exact deployed commit `b0a505372ddc332b5413b63e0554ee2dee690fd8`, matching staging/production environment names, and `intake_enabled false` for both Workers |
+| Lifecycle-aware deployment | 2026-08-21 | run `32481684831` promoted immutable tag `lean-eval-dispatch/344ae1dbd5aaf53985b20511a770caa3c52b5626`, deployed that exact commit to staging and production, and passed both structured smoke checks; the State lifecycle-aware submission-view prerequisites were already merged and green |
 | Staging E2E intake enable | 2026-08-21 | protected control run `32481885882` redeployed only staging intake version `ac11dee4-4bba-4328-9831-8545535d9b8f` at exact commit `344ae1dbd5aaf53985b20511a770caa3c52b5626`; health reports staging intake `true` while production remains `false` |
 | AWS workload environment shells | 2026-08-21 | created six empty GitHub environments: archive staging/production restricted to tag `lean-eval-dispatch/*`, replay staging/production and release staging/production restricted to protected branches; exact node, protection-rule, and tag-policy IDs are recorded above; no secret, variable, or AWS authority is present |
 | Archive-before-evaluation deployment | 2026-08-21 | run `32488170650` promoted immutable tag `lean-eval-dispatch/b64a30293e82e77cc76da1f74e6f1633747e1bf0`, deployed exact commit `b64a3029` to staging (broker `edeb2d01-5acf-4099-8329-cf3e52f431e1`, intake `366c8c6d-671b-4c53-b488-e2cb86320dd3`) and production (broker `1ebdfbe1-57be-4ee4-ba80-23a9bf740fc6`, intake `3d2658ec-0fda-4bf1-9619-e7500fa61d52`), and passed both structured smoke checks; obsolete docs-only run `32482830556` at commit `5027d7dc` was cancelled without deploying so it could not block the current non-cancelling concurrency group |

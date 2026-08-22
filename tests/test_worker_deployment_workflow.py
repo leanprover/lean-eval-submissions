@@ -36,11 +36,19 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("'INFRASTRUCTURE.md'", pull_request)
         self.assertNotIn("'INFRASTRUCTURE.md'", push)
 
-    def test_submission_workflow_change_promotes_and_deploys_its_exact_ref(self) -> None:
+    def test_documentation_only_merge_does_not_redeploy(self) -> None:
+        push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
+        self.assertIn("'server/**'", push)
+        self.assertIn("'!server/*.md'", push)
+        self.assertIn("'!server/**/*.md'", push)
+
+    def test_dispatch_dependency_changes_promote_and_deploy_exact_ref(self) -> None:
         pull_request = DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0]
         push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
         for trigger in (pull_request, push):
             self.assertIn("'.github/workflows/submission.yml'", trigger)
+            self.assertIn("'.audit/**'", trigger)
+            self.assertIn("'scripts/**'", trigger)
 
     def test_smoke_retries_structured_payload_propagation(self) -> None:
         self.assertEqual(DEPLOY.count("for attempt in $(seq 1 13); do"), 2)

@@ -151,7 +151,9 @@ function decodeArchiveSummary(value: unknown, version: 1 | 2, submissionId: stri
     exact(archive, ["status"], "submission view archive");
     return { status: "pending" };
   }
-  if (version === 1) throw new TypeError("submission view archive v1 supports only pending");
+  if (version === 1) {
+    throw new TypeError("submission view archive schema version 1 supports only pending");
+  }
   if (archive.status === "completed") {
     exact(archive, [
       "archive_ciphertext_sha256", "archive_commit", "archive_path", "archive_repository",
@@ -186,7 +188,9 @@ function decodeEvaluationSummary(value: unknown, version: 1 | 2): EvaluationSumm
     exact(evaluation, ["status"], "submission view evaluation");
     return { status: "pending" };
   }
-  if (version === 1) throw new TypeError("submission view evaluation v1 supports only pending");
+  if (version === 1) {
+    throw new TypeError("submission view evaluation schema version 1 supports only pending");
+  }
   const terminal = evaluation.status;
   const fields = [
     "attempt", "benchmark_commit", "benchmark_repository", "event_id", "occurred_at", "status", "toolchain",
@@ -254,7 +258,9 @@ export function decodeSubmissionView(value: unknown): SubmissionView {
   }
   const archive = decodeArchiveSummary(view.archive, view.schema_version, view.submission_id);
   const evaluation = decodeEvaluationSummary(view.evaluation, view.schema_version);
-  if (view.schema_version === 1 && view.result_id !== null) throw new TypeError("submission view v1 result identity must be null");
+  if (view.schema_version === 1 && view.result_id !== null) {
+    throw new TypeError("submission view schema version 1 result identity must be null");
+  }
   if (view.schema_version === 2 && view.result_id !== null && (typeof view.result_id !== "string" || !RESULT_ID.test(view.result_id))) {
     throw new TypeError("submission view result identity is invalid");
   }

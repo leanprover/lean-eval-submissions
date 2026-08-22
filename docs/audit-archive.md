@@ -31,7 +31,7 @@ audit/
 archives/
   {uuid-prefix}/
     {submission-uuidv7}.tar.age            # server-intake ciphertext
-    {submission-uuidv7}.json               # v2 UUID-keyed sidecar
+    {submission-uuidv7}.json               # sidecar schema version 2, UUID-keyed
 ```
 
 The first layout is retained for existing GitHub Issue intake. Server intake

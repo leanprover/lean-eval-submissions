@@ -23,7 +23,7 @@ body:
         inside each matched workspace. Nothing else from your submission is
         ever inspected or published.
 
-        **v1 limitations**:
+        **Current issue-intake limitations**:
 
         - Only `lakefile.toml` is supported; `lakefile.lean` (Lean-syntax
           lakefiles) is not detected.

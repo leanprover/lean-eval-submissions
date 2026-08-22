@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/archive-locator-v1.schema.json",
-  "title": "LeanEval immutable archive locator v1",
+  "title": "LeanEval immutable archive locator schema version 1",
   "type": "object",
   "additionalProperties": false,
   "required": [

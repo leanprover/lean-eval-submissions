@@ -486,7 +486,8 @@ def fetch_submission(
     submission_public = resolve_repo_visibility(descriptor, app_token)
     if descriptor.kind == "gist" and not submission_public:
         raise FetchError(
-            "Secret (unlisted) gists are rejected in v1. "
+            "Secret (unlisted) gists are rejected by the current "
+            "agent-verification contract. "
             "Make your gist public, or host your proof in a public or "
             "App-accessible private GitHub repository."
         )

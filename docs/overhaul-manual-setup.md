@@ -3,9 +3,10 @@
 The four provisioning procedures below were completed on 2026-08-21. The two
 State-writer tokens are approved and preflighted, and both broker GitHub Apps
 are owned by `leanprover` with unchanged IDs. The source reader is installed
-only on the private staging fixture and passed its live broker preflight.
-Staging intake is enabled only for that end-to-end fixture; production intake
-remains disabled. Never
+only on the private staging fixture and passed its live broker preflight. The
+separate evaluation App is also installed on that fixture; exact private
+archival and evaluation fetches pass. Both intake Workers are currently
+disabled. Never
 paste a secret value into an issue, pull request, chat, shell argument, or
 tracked file.
 
@@ -124,17 +125,14 @@ single-repository installation on `leanprover/lean-eval-submissions`.
 
 Keep production `INTAKE_ENABLED=false`.
 
-1. In <https://github.com/settings/installations>, configure the existing
-   `lean-eval-bot` installation owned by `kim-em`, add only
-   `kim-em/lean-eval-intake-fixture`, and save. This is the read-only App used
-   by the existing evaluation workflow after dispatch; the new source-reader
-   App already covers intake verification. Retry workflow run `32478988233`
-   rather than creating a duplicate submission.
-2. Review the live leaderboard at <https://lean-lang.org/eval/preview/> and
-   approve or request changes to `lean-eval-leaderboard#70` before cutover.
-3. Leave D7 unapplied until explicitly approving a current dry report's exact
+1. Review the live leaderboard at <https://lean-lang.org/eval/preview/> and
+   approve or request changes to `lean-eval-leaderboard#72` before cutover.
+   The production-only, repository-scoped read key and the redacted State
+   projection contract are already provisioned; no additional credential setup
+   is required for this review.
+2. Leave D7 unapplied until explicitly approving a current dry report's exact
    source commit, record count, and output digest.
-4. Create the dedicated Lean Eval AWS account. In `us-east-1`, add GitHub's OIDC
+3. Create the dedicated Lean Eval AWS account. In `us-east-1`, add GitHub's OIDC
    provider (`https://token.actions.githubusercontent.com`, audience
    `sts.amazonaws.com`), then deploy
    `infrastructure/aws-key-adapter/template.yaml` as
@@ -144,7 +142,7 @@ Keep production `INTAKE_ENABLED=false`.
    `INFRASTRUCTURE.md`; never create an IAM access key. The template is ready,
    but no AWS resource exists yet. Exact commands and output fields are in
    [`aws-key-adapter-setup.md`](aws-key-adapter-setup.md).
-5. A reviewed disposable replay backend is still required before private
+4. A reviewed disposable replay backend is still required before private
    replay, automatic release, or production intake. It must call the Lambda
    through the controller's Invoke-only role and must not pass AWS credentials
    into the untrusted VM.
