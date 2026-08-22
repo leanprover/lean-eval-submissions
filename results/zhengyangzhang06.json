@@ -4274,6 +4274,28 @@
         "ref": "0d086a9b4644b081f3d2166e6f5ae047a75c1b4d",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-08-22T04:23:17Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1221,
+        "kind": "issue"
+      },
+      "problem_id": "annals_linear_subspaces",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_a2dc154c9f318a0b4a610ca320dce234ffbf018fc8ccd643be3bd3289d4f96a6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "61a52527ba76dd5e07a6ef9bfdbad92ee959e868",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
