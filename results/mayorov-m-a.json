@@ -1,578 +1,1203 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "Aleph Prover(logicalintelligence.com)": {
-      "abel_ruffini": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+  "results": [
+    {
+      "accepted_at": "2026-06-03T07:37:57Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 185,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-06-03T07:37:57Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "baer_suzuki": {
-        "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
-        "issue_number": 135,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-31T05:00:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "b41267b886149eba6d6b2f7f6f2b34c5c752e80d",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "banach_alaoglu_bourbaki",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "balanceable_bounded_partitions": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 248,
-        "production_description": "Solved without human intervention.\n\nTwo `native_decide`'s were used in the AI-generated proof(one as `interval_cases k <;> native_decide`).\nThose were replaced with `decide` manually.\n\nThe goals that were solved by `native_decide`->`decide` were:\n```\n\u22a2 \u2211 i \u2208 Finset.Icc 1 0, i * (i - 2) \u2264 0 * (0 - 1) * (0 - 2) / 2\n\ncase pos.\u00ab0\u00bb\nk : \u2115\nih : \u2211 i \u2208 Finset.Icc 1 0, i * (i - 2) \u2264 0 * (0 - 1) * (0 - 2) / 2\nhk : 0 < 3\n\u22a2 \u2211 i \u2208 Finset.Icc 1 (0 + 1), i * (i - 2) \u2264 (0 + 1) * (0 + 1 - 1) * (0 + 1 - 2) / 2\n\ncase pos.\u00ab1\u00bb\nk : \u2115\nih : \u2211 i \u2208 Finset.Icc 1 1, i * (i - 2) \u2264 1 * (1 - 1) * (1 - 2) / 2\nhk : 1 < 3\n\u22a2 \u2211 i \u2208 Finset.Icc 1 (1 + 1), i * (i - 2) \u2264 (1 + 1) * (1 + 1 - 1) * (1 + 1 - 2) / 2\n\ncase pos.\u00ab2\u00bb\nk : \u2115\nih : \u2211 i \u2208 Finset.Icc 1 2, i * (i - 2) \u2264 2 * (2 - 1) * (2 - 2) / 2\nhk : 2 < 3\n\u22a2 \u2211 i \u2208 Finset.Icc 1 (2 + 1), i * (i - 2) \u2264 (2 + 1) * (2 + 1 - 1) * (2 + 1 - 2) / 2\n```\n\n(Aleph wasn't rerun in strict mode just to save time)",
-        "solved_at": "2026-05-13T22:06:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "669913b82e25206fa3b28cccdbf547deb994f359",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "banach_alaoglu_bourbaki": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
-        "issue_number": 185,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-06-03T07:37:57Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "boone_higman_simple": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
-        "issue_number": 188,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-06-03T14:49:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7d73806069322eb218d5720c51e279f3e791ca71",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "brauer_character_in_cyclotomic": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "result_id": "r2_006f29c6d0b377f016825979aa0472de97444641ce9eb61c4f34adb8f21442f8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "brauer_fowler": {
-        "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
-        "issue_number": 108,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-28T07:34:36Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "c4f3856d0991ef6539d44ebdfe1d5067e07e587f",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "instance_hole_example",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "brouwer_fixed_point": {
-        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
-        "issue_number": 113,
-        "production_description": "First attempt used  `pin_sphere_n_mulEquiv_int` which Aleph can't prove yet.\nFor the second attempt we asked Aleph to use Milnor's proof instead and to avoid \"`HomotopyGroup.Pi`, `pin_sphere_n_mulEquiv_int`, `pi1_circle_mulEquiv_int`, singular/cellular homology, or fundamental groups. Mathlib's algebraic-topology infrastructure is too thin to prove \"S^(d-1) is not contractible\"(that was human judgement).",
-        "solved_at": "2026-05-28T18:27:34Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "9f174025eda55647c3fe8a673940f2cd511b26d8",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "result_id": "r2_040042b756a934a4e69800e1d683dbbb0e2f309b05c91ddb3d745209b24809b8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-28T13:05:40Z",
+      "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 110,
+        "kind": "issue"
       },
-      "bvp_comparison": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "problem_id": "koszul_formula",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_0756a1f570bd8839fe3197652655e2fb258f0396cf7e823a8a1c9fdc7cb93a34",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "70d4898435b35874940833a998f9c63b4736cb0b",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "ci_regenerate_main_check": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "problem_id": "pi1_circle_mulEquiv_int",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_08ec689bd8f9635819bda0f9e840a32319c772a7683b5a1d45169d40d835a756",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "contractibleSpace_houseWithTwoRooms": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 252,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-14T14:08:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "af6353296c51c8d06fdee654ac0ff3708d229fec",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "result_id": "r2_1169549e5f86098a40e1b3a5dc9943dcf752971da01a5b38f8d109c27dde8eab",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "cyclotomic_integer_house_le_two": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
-        "issue_number": 164,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T06:54:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "9a329ee4f6749414374c24c9227b40a755f7d063",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "mem_convexHull_finset_extremePoints_of_mem_compact_convex",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "def_hole_example": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
-        "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "result_id": "r2_11ffeec3e8ebfcfd86fb032aa5e2b6641122a3f3b35b33d85eeabaaa86d145d7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T21:51:27Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 247,
+        "kind": "issue"
       },
-      "dirichlet_eigenvalues_eq_nat_sq": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
-        "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "rouche_zero_count_eq",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "dvd_card_connectedComponent_markoffGraph": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
-        "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "result_id": "r2_13886b69f6a94969869d5cd58ac59c69d92bae3dbd7d8f2281c44d644c92dbc6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "74e8e3ac94238741f8d00e8ac7e81ad49a51f867",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-31T20:50:30Z",
+      "benchmark_commit": "70adaaa6b523781e363c75033212fdbf1e765cf1",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 147,
+        "kind": "issue"
       },
-      "euler_lagrange_equation": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
-        "issue_number": 185,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-06-03T07:37:57Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "furstenberg_topological",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "exists_complementary_polynomial_on_unit_circle": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
-        "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "result_id": "r2_15bcc037e075013326ad42f5ebf5caa5eec5d4d3de3e1b6bc054c1400c60e20c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "dabb202918652d10defc619684753b3635950a2c",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-28T13:05:40Z",
+      "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 110,
+        "kind": "issue"
       },
-      "exists_nonisotopic_link": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 250,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-14T03:15:54Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a4d81e601ce22d057863b441465abb0415492e09",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "parallel_postulate_independent",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "result_id": "r2_21db3cd4f46fe431c382d2d6f9ed5f1cca2b08fcdaa621eb97d36b04036fb51a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "70d4898435b35874940833a998f9c63b4736cb0b",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T21:51:27Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 247,
+        "kind": "issue"
+      },
+      "problem_id": "permute_to_unimodal",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_258558b8bd1e4bfea6a61edd112498af200ecc5486b7722682cb8cbe5ecba1bc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "74e8e3ac94238741f8d00e8ac7e81ad49a51f867",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:49:34Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 160,
-        "production_description": "Solved without human intervention.\nThen manual one-line fix applied for 4.30 because, as of now, Aleph only supports lean/mathlib versions up to 4.29.\n\n```\n      34 -  exact \u27e8(SimpleGraph.Embedding.induce S).comp f\u27e9\n      34 +  exact \u27e8(SimpleGraph.Copy.induce G S).comp f\u27e9\n```",
-        "solved_at": "2026-05-08T00:49:34Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "20419e55b5bda21ea26113e612290b573538379d",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
-        "issue_number": 159,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:16:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1dfb06b50fdb6efa234c9d279148ff41345d2380",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {
+        "production_description": "Solved without human intervention.\nThen manual one-line fix applied for 4.30 because, as of now, Aleph only supports lean/mathlib versions up to 4.29.\n\n```\n      34 -  exact ⟨(SimpleGraph.Embedding.induce S).comp f⟩\n      34 +  exact ⟨(SimpleGraph.Copy.induce G S).comp f⟩\n```"
       },
-      "fourier_dirichlet_fejer": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "result_id": "r2_2f7a7c76baf85b4a288de76b1f52363937514c755ec1ea0a65a38cf30cc4620a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "20419e55b5bda21ea26113e612290b573538379d",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T15:19:00Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 189,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-06-03T15:19:00Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "c1cd30b2c26ee6b8c30d6bab9d10456f600daff7",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "fraser_kakeya_fourier_decay": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
-        "issue_number": 188,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-06-03T14:49:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7d73806069322eb218d5720c51e279f3e791ca71",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "fourier_dirichlet_fejer",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "frobenius_kernel_isNormal": {
-        "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
-        "issue_number": 125,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-29T20:58:12Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "856d2e874f3cd63095f7daf297f7d369d3ae4475",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "furstenberg_topological": {
-        "benchmark_commit": "70adaaa6b523781e363c75033212fdbf1e765cf1",
-        "issue_number": 147,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-31T20:50:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "dabb202918652d10defc619684753b3635950a2c",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "glAction_range_eq_centralizer_symAction": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
-        "issue_number": 161,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T05:02:33Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "fbbed83484265f69fc3fb46803200baae5eab9b6",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "heat_kernel_solves_heat_equation": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
-        "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "instance_hole_example": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
-        "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "kakutani_fixed_point": {
-        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
-        "issue_number": 114,
-        "production_description": "The solution used brouwer_fixed_point.\nBrouwer fixed-point theorem was first proved by Aleph and then manually inlined.\n\nOther than that, the solutions were produced autonomously.",
-        "solved_at": "2026-05-28T18:56:19Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "95cb929946e8c78ef47bea9914a4f3a6a6d1a43a",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "koszul_formula": {
-        "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
-        "issue_number": 110,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-28T13:05:40Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "70d4898435b35874940833a998f9c63b4736cb0b",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "lidskii_inequality": {
-        "benchmark_commit": "70adaaa6b523781e363c75033212fdbf1e765cf1",
-        "issue_number": 147,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-31T20:50:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "dabb202918652d10defc619684753b3635950a2c",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "lidskii_last": {
-        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
-        "issue_number": 154,
-        "production_description": "The proof required `lidskii_inequality` solution, it was previously solved by Aleph, then for this run it had access to that whole proof. At the end, only the `lidskii_inequality` theorem itself was needed.\n\nNo other human intervention other wise.",
-        "solved_at": "2026-06-01T08:58:10Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "14c7460132cb1db1dee2096374d6c0441efd1235",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "linear_ode_asymptotic_stability": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
-        "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "liouville_arnold": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
-        "issue_number": 184,
-        "production_description": "Two attempts were made, for the second one we added guidance to only focus on homeomorphism(asked by the challenge) and not diffeomorphism(which is what the actual theorem claims).\nThe first attempt got stuck in the part that's not well developed in Mathlib.",
-        "solved_at": "2026-06-03T07:23:45Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "292b247e8fe6743133343c23e6cef4c75ae247a8",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "list_append_singleton_length": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
-        "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "lp_maximum_principle": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "result_id": "r2_397125fa26b4b7f657d5fcb263d7d5d7232f8668855d75e5d29452f8a553cf82",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c1cd30b2c26ee6b8c30d6bab9d10456f600daff7",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T15:19:00Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 189,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-06-03T15:19:00Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "c1cd30b2c26ee6b8c30d6bab9d10456f600daff7",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "problem_id": "lp_maximum_principle",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_3a070f707ca5238f62e762954c2c6ae2ad7a69b28088166586ef2d4ea5ea6e19",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c1cd30b2c26ee6b8c30d6bab9d10456f600daff7",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-31T20:50:30Z",
+      "benchmark_commit": "70adaaa6b523781e363c75033212fdbf1e765cf1",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 147,
+        "kind": "issue"
+      },
+      "problem_id": "lidskii_inequality",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_3b576a055e7b5c6b5b4cbd9dabc1cde393ff0ea3994dc542449bbfaf3e4346cb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "dabb202918652d10defc619684753b3635950a2c",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "monge_kantorovich": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
-        "issue_number": 185,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-06-03T07:37:57Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "def_hole_example",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "mountain_pass": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "result_id": "r2_42a17d1373012fddee95d4781e6e17009578397370010ef0aba4a3d29efe7b83",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-05T12:07:53Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 208,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-06-05T12:07:53Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "86f4da9a5e6b39f46649dbb8814a302a20f8bbe5",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "nash_equilibrium_exists": {
-        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
-        "issue_number": 115,
-        "production_description": "The solution used schauder_fixed_point.\nSchauder fixed-point theorem was first proven by Aleph and then manually inlined.\n\nOther than that, the solution was produced autonomously.",
-        "solved_at": "2026-05-28T19:11:19Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "c05503e4a317d5c2732aef43184f2d0c8dbc14cb",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "mountain_pass",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "oppenheim_inequality": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "result_id": "r2_4583c88edfd3547041a1aa0c99b7c7fac4f1652b84dd64e3af25403b576d5ddd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "86f4da9a5e6b39f46649dbb8814a302a20f8bbe5",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "parallel_postulate_independent": {
-        "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
-        "issue_number": 110,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-28T13:05:40Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "70d4898435b35874940833a998f9c63b4736cb0b",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "exists_complementary_polynomial_on_unit_circle",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "pell_solution_convergent": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "result_id": "r2_49b5e1c1e1d3512f9373ba1b828e91d7e32e3079c714b52cb237e829dba894b0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T07:37:57Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 185,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-06-03T07:37:57Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "permute_to_unimodal": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 247,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-13T21:51:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "74e8e3ac94238741f8d00e8ac7e81ad49a51f867",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "monge_kantorovich",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "pi1_circle_mulEquiv_int": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "result_id": "r2_4bfb3058e02fe1255469838b6325db93d6f6200aeb3ce315b3acea5a0e7688d8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T07:37:57Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 185,
+        "kind": "issue"
+      },
+      "problem_id": "wiener_atom_detection",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_4cbe224a3ea57da831776691cde1394bf1990019c12295c394fd7aec83db3f83",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T07:37:57Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 185,
+        "kind": "issue"
+      },
+      "problem_id": "abel_ruffini",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_5005388458cd4cec27ca2a9a95736feeaaf8dce5db4d81471ac19364861a6257",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-14T14:08:17Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 252,
+        "kind": "issue"
+      },
+      "problem_id": "contractibleSpace_houseWithTwoRooms",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_534d37afe552c22b80d0757809421b359290753d09a817a1d3474365fee9a140",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "af6353296c51c8d06fdee654ac0ff3708d229fec",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T06:54:23Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 164,
+        "kind": "issue"
+      },
+      "problem_id": "cyclotomic_integer_house_le_two",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_5598c1786bdf1c80ea51eac44c49a99b5531027d83fa5fd95fb771defd582904",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9a329ee4f6749414374c24c9227b40a755f7d063",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-28T18:27:34Z",
+      "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 113,
+        "kind": "issue"
+      },
+      "problem_id": "brouwer_fixed_point",
+      "production_metadata": {
+        "production_description": "First attempt used  `pin_sphere_n_mulEquiv_int` which Aleph can't prove yet.\nFor the second attempt we asked Aleph to use Milnor's proof instead and to avoid \"`HomotopyGroup.Pi`, `pin_sphere_n_mulEquiv_int`, `pi1_circle_mulEquiv_int`, singular/cellular homology, or fundamental groups. Mathlib's algebraic-topology infrastructure is too thin to prove \"S^(d-1) is not contractible\"(that was human judgement)."
+      },
+      "result_id": "r2_6634b1ba1a6ac574bfcbc8a521a5b52dfc59373644bf3f317b937d5fd95be47e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9f174025eda55647c3fe8a673940f2cd511b26d8",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "posSemidef_map_exp": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "problem_id": "dvd_card_connectedComponent_markoffGraph",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_663d4c5df8c2375d95368c7d9322ff32030e962ec54da580c55d17755814b416",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "rouche_zero_count_eq": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 247,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-13T21:51:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "74e8e3ac94238741f8d00e8ac7e81ad49a51f867",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "ci_regenerate_main_check",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "runge_theorem": {
-        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
-        "issue_number": 155,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-06-01T09:01:55Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "cc6ddd2ccc0fb1f250477853675f06027947d743",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
-      },
-      "schauder_fixed_point": {
-        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+      "result_id": "r2_750b6bfad1e0ef1495dfa014eaa64147e2a13cf8e7ff3d97b70217a0dffde77c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-28T18:56:19Z",
+      "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 114,
-        "production_description": "The solution used brouwer_fixed_point.\nBrouwer fixed-point theorem was first proved by Aleph and then manually inlined.\n\nOther than that, the solutions were produced autonomously.",
-        "solved_at": "2026-05-28T18:56:19Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "95cb929946e8c78ef47bea9914a4f3a6a6d1a43a",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "solvable_by_radicals_converse": {
-        "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
-        "issue_number": 135,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-31T05:00:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "b41267b886149eba6d6b2f7f6f2b34c5c752e80d",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "kakutani_fixed_point",
+      "production_metadata": {
+        "production_description": "The solution used brouwer_fixed_point.\nBrouwer fixed-point theorem was first proved by Aleph and then manually inlined.\n\nOther than that, the solutions were produced autonomously."
       },
-      "stable_unstable_manifolds": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "result_id": "r2_8095ae3ee094a255b44360c8e02a50f7c92f3c3aa1e696cea4c3134340052817",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "95cb929946e8c78ef47bea9914a4f3a6a6d1a43a",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-05T12:58:47Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 209,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-06-05T12:58:47Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1e5b40c99ac8b61edfdfd9b2e5db8e7dc8824c35",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "sturm": {
-        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
-        "issue_number": 112,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-28T16:36:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "efaaf2b427771f1b4147fbe00c7338b2bda99af7",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "stable_unstable_manifolds",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
       },
-      "sturm_separation": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "result_id": "r2_84e63ceace0477553805e61ea9c4ac360fdf28aba5e3465afa8558365b7b06b4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1e5b40c99ac8b61edfdfd9b2e5db8e7dc8824c35",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 157,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-08T00:29:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "symAction_range_eq_centralizer_glAction": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "problem_id": "list_append_singleton_length",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_86211b4ce4d704f4083e01450d03cb0e735f9e1501612f4890114f014be42dd6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 157,
+        "kind": "issue"
+      },
+      "problem_id": "heat_kernel_solves_heat_equation",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_8a566f208197fa3f3db4775d1d44defe3d91758e5c652bab9dc82488410d6b96",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 157,
+        "kind": "issue"
+      },
+      "problem_id": "oppenheim_inequality",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_8af6b0e402ef31acf94852e9e0a9cc5cd9c5f3ddda72fa3b943e7e418d07d5af",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 157,
+        "kind": "issue"
+      },
+      "problem_id": "linear_ode_asymptotic_stability",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_98a6af2217e56bf8c8b80c91899350c15dcc3c1081931a51ba4cbbb0bc9d072e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T07:23:45Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 184,
+        "kind": "issue"
+      },
+      "problem_id": "liouville_arnold",
+      "production_metadata": {
+        "production_description": "Two attempts were made, for the second one we added guidance to only focus on homeomorphism(asked by the challenge) and not diffeomorphism(which is what the actual theorem claims).\nThe first attempt got stuck in the part that's not well developed in Mathlib."
+      },
+      "result_id": "r2_9d906cf1a3e0ba478db7d7333bc44bd896f8473a7dfc0f159c42ef6dfac41650",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "292b247e8fe6743133343c23e6cef4c75ae247a8",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 157,
+        "kind": "issue"
+      },
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_a28b92504d8a2d90e8832096a1757bc00facd9e0fa1451e92353b5da1e096681",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T08:58:10Z",
+      "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 154,
+        "kind": "issue"
+      },
+      "problem_id": "lidskii_last",
+      "production_metadata": {
+        "production_description": "The proof required `lidskii_inequality` solution, it was previously solved by Aleph, then for this run it had access to that whole proof. At the end, only the `lidskii_inequality` theorem itself was needed.\n\nNo other human intervention other wise."
+      },
+      "result_id": "r2_a3e3c21ebb53f8f6634016c738da76ecb2edc74f8c690bfa8b58ffc073172c9f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "14c7460132cb1db1dee2096374d6c0441efd1235",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-28T19:11:19Z",
+      "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 115,
+        "kind": "issue"
+      },
+      "problem_id": "nash_equilibrium_exists",
+      "production_metadata": {
+        "production_description": "The solution used schauder_fixed_point.\nSchauder fixed-point theorem was first proven by Aleph and then manually inlined.\n\nOther than that, the solution was produced autonomously."
+      },
+      "result_id": "r2_a456b742e970b9960f174582b0e98b2f2214673ea148279d214df5e184de970b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c05503e4a317d5c2732aef43184f2d0c8dbc14cb",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T06:48:07Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 163,
-        "production_description": "Solved without human intervention\nSolution to glAction_range_eq_centralizer_symAction was used for this proof as internally all the benchmark problems were put into a single Lean project. We manually inlined that solution.",
-        "solved_at": "2026-05-08T06:48:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "4127187f33df6ef6cbad62e8780866c205b2555b",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
       },
-      "symplectic_matrix_det": {
-        "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
-        "issue_number": 110,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-05-28T13:05:40Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "70d4898435b35874940833a998f9c63b4736cb0b",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "problem_id": "symAction_range_eq_centralizer_glAction",
+      "production_metadata": {
+        "production_description": "Solved without human intervention\nSolution to glAction_range_eq_centralizer_symAction was used for this proof as internally all the benchmark problems were put into a single Lean project. We manually inlined that solution."
       },
-      "two_plus_two": {
-        "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
-        "issue_number": 156,
-        "production_description": "Solved completely autonomously without human intervention.",
-        "solved_at": "2026-05-07T23:46:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "8e7aa68ed38f5cedbdcaf25381ca5c2fa2b2e435",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      "result_id": "r2_a59ab859ae0523d0a7b8914ef5191f757a4cd5d7c1bf2bc3d530c3d63cac89a1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4127187f33df6ef6cbad62e8780866c205b2555b",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:16:14Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 159,
+        "kind": "issue"
       },
-      "wiener_atom_detection": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "problem_id": "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_bddd3cd296e3dc88b2b12fd136fc2b59ad2a1b4c109358dacc54f08b2596f103",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1dfb06b50fdb6efa234c9d279148ff41345d2380",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 157,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_character_in_cyclotomic",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_c08058eaba8918689e3a749fd17292f1106726cf6b0838450078eba744ee8397",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T14:49:14Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 188,
+        "kind": "issue"
+      },
+      "problem_id": "boone_higman_simple",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_c4a256bf39ff1ff5054a451831d192d8b1d0777c6fb1859cda1d247c8a458982",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7d73806069322eb218d5720c51e279f3e791ca71",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 157,
+        "kind": "issue"
+      },
+      "problem_id": "dirichlet_eigenvalues_eq_nat_sq",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_c5562edd1b09a53d74ba05107a0cb9a5da9f8e4c43425ff649d3f52bb43257e7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T07:37:57Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
         "issue_number": 185,
-        "production_description": "Solved completely autonomously without human intervention",
-        "solved_at": "2026-06-03T07:37:57Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
-        "submission_repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+        "kind": "issue"
+      },
+      "problem_id": "pell_solution_convergent",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_c91e02342425922346ea82d1f2ca0a9e1c6dc3c60d5b32f72bb897d7680b76cb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 157,
+        "kind": "issue"
+      },
+      "problem_id": "bvp_comparison",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_cb1e1465d81c1b9ed3c4b5db2eb52246c3a2686b890ffd147a1ba43f9412bb50",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-28T16:36:32Z",
+      "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 112,
+        "kind": "issue"
+      },
+      "problem_id": "sturm",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_cf1bb62252cbc751571eba7959d4a23693cb6d6d4bbaabf0887481e978eff95b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "efaaf2b427771f1b4147fbe00c7338b2bda99af7",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-28T07:34:36Z",
+      "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 108,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_fowler",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_d17498eabbfc928edd32a617ed67ae2d968d0bf01beef8672707265cdc097a52",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c4f3856d0991ef6539d44ebdfe1d5067e07e587f",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T14:49:14Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 188,
+        "kind": "issue"
+      },
+      "problem_id": "fraser_kakeya_fourier_decay",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_d856ac2658f8301fcc0b333ea464dfa935d15e9d1e4188c9b3a785cbcaa0c507",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7d73806069322eb218d5720c51e279f3e791ca71",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-29T20:58:12Z",
+      "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 125,
+        "kind": "issue"
+      },
+      "problem_id": "frobenius_kernel_isNormal",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_df7726ea581ba892732141105734ae081eb306000619033ac1f33ebe0852ce12",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "856d2e874f3cd63095f7daf297f7d369d3ae4475",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-07T23:46:48Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 156,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention."
+      },
+      "result_id": "r2_e10b885a1e150fe35f7004100f2efc1f9a11b28a817e72bb56ce2e07d5b7df1c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8e7aa68ed38f5cedbdcaf25381ca5c2fa2b2e435",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T09:01:55Z",
+      "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 155,
+        "kind": "issue"
+      },
+      "problem_id": "runge_theorem",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_e1664120c2c9d1fc51ad8e774d593fb048ad21e6c299b955869cfb1d7fa735d2",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "cc6ddd2ccc0fb1f250477853675f06027947d743",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T05:02:33Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 161,
+        "kind": "issue"
+      },
+      "problem_id": "glAction_range_eq_centralizer_symAction",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_e4368f03860413e5216fc967556a68041530a2e816cc1b4f4a258396a21ac0cf",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "fbbed83484265f69fc3fb46803200baae5eab9b6",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-08T00:29:58Z",
+      "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 157,
+        "kind": "issue"
+      },
+      "problem_id": "sturm_separation",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_e6c3cf51341a02bdc1546032adb525b8d62f490a2d8b37e761791de6184f78ad",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e9f9d6a6fcfdbb50f55c33c77c13e0bd647221",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-31T05:00:27Z",
+      "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 135,
+        "kind": "issue"
+      },
+      "problem_id": "solvable_by_radicals_converse",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_e6ce2c869ade73a82ad5f9bf3035816a21340532d2cc460b9e0ed6103acfca4f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b41267b886149eba6d6b2f7f6f2b34c5c752e80d",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T07:37:57Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 185,
+        "kind": "issue"
+      },
+      "problem_id": "euler_lagrange_equation",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_e7336d8cb251ae2155e05a4faa18c6e153a22f38ffd50bccbe21cf61e10fcd68",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "34edabbf11be9a6f1ff13f9625a843a6428c4970",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-31T05:00:27Z",
+      "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 135,
+        "kind": "issue"
+      },
+      "problem_id": "baer_suzuki",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_ea0e274eda7cf6ae4981363cd8320b259f4e3b0a2d247a93364e65147e47238b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b41267b886149eba6d6b2f7f6f2b34c5c752e80d",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-14T03:15:54Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 250,
+        "kind": "issue"
+      },
+      "problem_id": "exists_nonisotopic_link",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_effb067acddb6ee41f9dd00f5535f3af870a3cba77accd74a2fae6fd166089f8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a4d81e601ce22d057863b441465abb0415492e09",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T22:06:32Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 248,
+        "kind": "issue"
+      },
+      "problem_id": "balanceable_bounded_partitions",
+      "production_metadata": {
+        "production_description": "Solved without human intervention.\n\nTwo `native_decide`'s were used in the AI-generated proof(one as `interval_cases k <;> native_decide`).\nThose were replaced with `decide` manually.\n\nThe goals that were solved by `native_decide`->`decide` were:\n```\n⊢ ∑ i ∈ Finset.Icc 1 0, i * (i - 2) ≤ 0 * (0 - 1) * (0 - 2) / 2\n\ncase pos.«0»\nk : ℕ\nih : ∑ i ∈ Finset.Icc 1 0, i * (i - 2) ≤ 0 * (0 - 1) * (0 - 2) / 2\nhk : 0 < 3\n⊢ ∑ i ∈ Finset.Icc 1 (0 + 1), i * (i - 2) ≤ (0 + 1) * (0 + 1 - 1) * (0 + 1 - 2) / 2\n\ncase pos.«1»\nk : ℕ\nih : ∑ i ∈ Finset.Icc 1 1, i * (i - 2) ≤ 1 * (1 - 1) * (1 - 2) / 2\nhk : 1 < 3\n⊢ ∑ i ∈ Finset.Icc 1 (1 + 1), i * (i - 2) ≤ (1 + 1) * (1 + 1 - 1) * (1 + 1 - 2) / 2\n\ncase pos.«2»\nk : ℕ\nih : ∑ i ∈ Finset.Icc 1 2, i * (i - 2) ≤ 2 * (2 - 1) * (2 - 2) / 2\nhk : 2 < 3\n⊢ ∑ i ∈ Finset.Icc 1 (2 + 1), i * (i - 2) ≤ (2 + 1) * (2 + 1 - 1) * (2 + 1 - 2) / 2\n```\n\n(Aleph wasn't rerun in strict mode just to save time)"
+      },
+      "result_id": "r2_f053a15eaca7cceae2112a6a5aa48153bf86d98b63e126709c53175670cb2de4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "669913b82e25206fa3b28cccdbf547deb994f359",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-28T18:56:19Z",
+      "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 114,
+        "kind": "issue"
+      },
+      "problem_id": "schauder_fixed_point",
+      "production_metadata": {
+        "production_description": "The solution used brouwer_fixed_point.\nBrouwer fixed-point theorem was first proved by Aleph and then manually inlined.\n\nOther than that, the solutions were produced autonomously."
+      },
+      "result_id": "r2_f6b688c15e0ccbfcf4f81e56a549d14ca1e6fa22d34952580e5055cd52872750",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "95cb929946e8c78ef47bea9914a4f3a6a6d1a43a",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
+      }
+    },
+    {
+      "accepted_at": "2026-05-28T13:05:40Z",
+      "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
+      "declared_model": "Aleph Prover(logicalintelligence.com)",
+      "intake": {
+        "issue_number": 110,
+        "kind": "issue"
+      },
+      "problem_id": "symplectic_matrix_det",
+      "production_metadata": {
+        "production_description": "Solved completely autonomously without human intervention"
+      },
+      "result_id": "r2_fc85a79426b1942a10ead7bed18bbc8159126cda7e613fe7b15a93c270b7d201",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "70d4898435b35874940833a998f9c63b4736cb0b",
+        "repo": "mayorov-m-a/aleph-lean-eval-subm-2026-may-08"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "mayorov-m-a"
 }

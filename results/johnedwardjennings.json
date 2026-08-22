@@ -1,78 +1,153 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "Aristotle (Harmonic)": {
-      "baer_suzuki": {
-        "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
-        "issue_number": 327,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator.",
-        "solved_at": "2026-06-14T19:59:59Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "869a684136e19696339fbd77447686f0a0f1e7f2",
-        "submission_repo": "JohnEdwardJennings/lean-eval-personal"
-      },
-      "brouwer_fixed_point": {
-        "benchmark_commit": "2f3d03779b67905095ff31cdb8bd7f777b03997e",
-        "issue_number": 144,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.\n\nMost of this proof was extracted from an intermediate result that Aristotle used to prove `nash_equilibrium_exists`.",
-        "solved_at": "2026-05-31T18:45:31Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "adc7efca7ed68160bbdf5089a928e29fa8bdbfe7",
-        "submission_repo": "JohnEdwardJennings/lean-eval-personal"
-      },
-      "kakutani_fixed_point": {
-        "benchmark_commit": "70adaaa6b523781e363c75033212fdbf1e765cf1",
+  "results": [
+    {
+      "accepted_at": "2026-05-31T19:47:44Z",
+      "benchmark_commit": "70adaaa6b523781e363c75033212fdbf1e765cf1",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 145,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.\n\nThe Brouwer fixed-point theorem formalization component of this proof was extracted from Aristotle's proof `brouwer_fixed_point`.",
-        "solved_at": "2026-05-31T19:47:44Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "c0394520ef2822aec78dc6f88bcf3152e3bdfbf6",
-        "submission_repo": "JohnEdwardJennings/lean-eval-personal"
+        "kind": "issue"
       },
-      "lidskii_inequality": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 273,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.",
-        "solved_at": "2026-06-10T02:27:18Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "ed8286bcfa2eb0c9df0a6e1bfee31ff62ca868ae",
-        "submission_repo": "JohnEdwardJennings/lean-eval-personal"
+      "problem_id": "kakutani_fixed_point",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.\n\nThe Brouwer fixed-point theorem formalization component of this proof was extracted from Aristotle's proof `brouwer_fixed_point`."
       },
-      "lidskii_last": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "result_id": "r2_1a97dfc0dab064b7b2a6d01568d734f5413fdfd31c09af83aaf9a056a62b0872",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c0394520ef2822aec78dc6f88bcf3152e3bdfbf6",
+        "repo": "JohnEdwardJennings/lean-eval-personal"
+      }
+    },
+    {
+      "accepted_at": "2026-05-31T18:45:31Z",
+      "benchmark_commit": "2f3d03779b67905095ff31cdb8bd7f777b03997e",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 144,
+        "kind": "issue"
+      },
+      "problem_id": "brouwer_fixed_point",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.\n\nMost of this proof was extracted from an intermediate result that Aristotle used to prove `nash_equilibrium_exists`."
+      },
+      "result_id": "r2_499e38f29c6d1c0c946adb5164ba43bbe359b10d0e88b1a85b1fc4f5f2e6e5a6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "adc7efca7ed68160bbdf5089a928e29fa8bdbfe7",
+        "repo": "JohnEdwardJennings/lean-eval-personal"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T01:28:55Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 272,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.",
-        "solved_at": "2026-06-10T01:28:55Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "c9813cde040d9000149d1e3727a0ef51b00708e0",
-        "submission_repo": "JohnEdwardJennings/lean-eval-personal"
+        "kind": "issue"
       },
-      "schauder_fixed_point": {
-        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
-        "issue_number": 150,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.\n\nThe Brouwer fixed-point theorem formalization component of the `schauder_fixed_point` proof was extracted from Aristotle's proof of `brouwer_fixed_point`.",
-        "solved_at": "2026-06-01T04:32:51Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "5b12ad730eac01f5544aa500521ba81af726bc66",
-        "submission_repo": "JohnEdwardJennings/lean-eval-personal"
+      "problem_id": "lidskii_last",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator."
       },
-      "symplectic_matrix_det": {
-        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+      "result_id": "r2_4d3a20d1af616ec09406afc9052fb8a3f16c81af006557ff9d92958a948eaeb4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c9813cde040d9000149d1e3727a0ef51b00708e0",
+        "repo": "JohnEdwardJennings/lean-eval-personal"
+      }
+    },
+    {
+      "accepted_at": "2026-06-14T19:59:59Z",
+      "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 327,
+        "kind": "issue"
+      },
+      "problem_id": "baer_suzuki",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review or supervision of the proofs was performed; correctness was checked only through the benchmark comparator."
+      },
+      "result_id": "r2_5f2efbde0e0ada7c7400eeb0d6684d186185bf82da9e227865915d591c71925b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "869a684136e19696339fbd77447686f0a0f1e7f2",
+        "repo": "JohnEdwardJennings/lean-eval-personal"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T04:32:51Z",
+      "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 150,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.\n\nThe Brouwer fixed-point theorem formalization component of the `schauder_fixed_point` proof was extracted from Aristotle's proof of `brouwer_fixed_point`.",
-        "solved_at": "2026-06-01T04:32:51Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "5b12ad730eac01f5544aa500521ba81af726bc66",
-        "submission_repo": "JohnEdwardJennings/lean-eval-personal"
+        "kind": "issue"
+      },
+      "problem_id": "schauder_fixed_point",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.\n\nThe Brouwer fixed-point theorem formalization component of the `schauder_fixed_point` proof was extracted from Aristotle's proof of `brouwer_fixed_point`."
+      },
+      "result_id": "r2_c2b5db106f7b96aab966a7fc40e7493978c0964b3f80ce5873b7658814fcb980",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5b12ad730eac01f5544aa500521ba81af726bc66",
+        "repo": "JohnEdwardJennings/lean-eval-personal"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T02:27:18Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 273,
+        "kind": "issue"
+      },
+      "problem_id": "lidskii_inequality",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator."
+      },
+      "result_id": "r2_da532092ce1917853bf284b1bce0d80b1f49df0e3585241cb738cc8bfbb3c204",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ed8286bcfa2eb0c9df0a6e1bfee31ff62ca868ae",
+        "repo": "JohnEdwardJennings/lean-eval-personal"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T04:32:51Z",
+      "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 150,
+        "kind": "issue"
+      },
+      "problem_id": "symplectic_matrix_det",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic), with prompting and submission by John Jennings.\nNo human review of the proofs was performed; correctness was checked only through the benchmark comparator.\n\nThe Brouwer fixed-point theorem formalization component of the `schauder_fixed_point` proof was extracted from Aristotle's proof of `brouwer_fixed_point`."
+      },
+      "result_id": "r2_de2924e649de61eeb54701d753ed61527e25943c4c309e7a8d4a8eb1db7d62cf",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5b12ad730eac01f5544aa500521ba81af726bc66",
+        "repo": "JohnEdwardJennings/lean-eval-personal"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "JohnEdwardJennings"
 }

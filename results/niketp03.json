@@ -1,18 +1,27 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "Autoform-Bot": {
-      "fourier_dirichlet_fejer": {
-        "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
+  "results": [
+    {
+      "accepted_at": "2026-06-02T18:00:01Z",
+      "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
+      "declared_model": "Autoform-Bot",
+      "intake": {
         "issue_number": 179,
-        "production_description": "This was created by building on the Atlas-Lean repository.",
-        "solved_at": "2026-06-02T18:00:01Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "26f2f6655aefd0e4d941a0653c96703bb090a33e",
-        "submission_repo": "niketp03/fourier-dirichlet-fejer-submission"
+        "kind": "issue"
+      },
+      "problem_id": "fourier_dirichlet_fejer",
+      "production_metadata": {
+        "production_description": "This was created by building on the Atlas-Lean repository."
+      },
+      "result_id": "r2_6529ce21896cd953cce226e289be8ddaa1403b72b91052dcdf7b7fab222af653",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "26f2f6655aefd0e4d941a0653c96703bb090a33e",
+        "repo": "niketp03/fourier-dirichlet-fejer-submission"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "niketp03"
 }

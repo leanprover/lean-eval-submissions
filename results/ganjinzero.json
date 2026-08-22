@@ -1,1331 +1,2787 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "Seed Prover (ByteDance)": {
-      "H1_not_closedComplemented": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 455,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-24T07:00:53Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "27e812fd87f4f12aa014c0d763be211507b9413a",
-        "submission_repo": "GanjinZero/H1_not_closedComplemented"
-      },
-      "abel_ruffini": {
-        "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
-        "issue_number": 172,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-02T02:26:24Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "9451087eb2d5dd31a9ab6cd93b24f07cba42008b",
-        "submission_repo": "GanjinZero/abel_ruffini"
-      },
-      "anosov_bowen_shadowing": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 220,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-06T07:04:24Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "44d03e133ea18aafeb6282a386cc6af487f05e44",
-        "submission_repo": "GanjinZero/anosov_bowen_shadowing"
-      },
-      "baer_suzuki": {
-        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
-        "issue_number": 153,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-01T06:22:53Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7f1d1c6be2f659f46dd39ab721ca30853518e47c",
-        "submission_repo": "GanjinZero/baer_suzuki"
-      },
-      "balanceable_bounded_partitions": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 15,
-        "solved_at": "2026-05-20T10:49:33Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "aaad6f72484191b65cc7a72a67e038d1f4cbf23d",
-        "submission_repo": "GanjinZero/balanceable_bounded_partitions"
-      },
-      "banach_alaoglu_bourbaki": {
-        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
-        "issue_number": 160,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-01T15:44:40Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "4f902c5d81ba3881dec21d01bcf2d17e26a9588a",
-        "submission_repo": "GanjinZero/banach_alaoglu_bourbaki"
-      },
-      "bauer_extreme_point_uniqueness": {
-        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
-        "issue_number": 295,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-13T03:06:42Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "6620bc6eb0982d55826fb725cf54272da9bbf827",
-        "submission_repo": "GanjinZero/bauer_extreme_point_uniqueness"
-      },
-      "bezout_projective_multiplicity": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 508,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-30T15:22:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1e807eb2277514c539d0bbc2132372ea0e1059f8",
-        "submission_repo": "GanjinZero/bezout_projective_multiplicity"
-      },
-      "boone_higman_embedding": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 274,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T02:36:08Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
-      },
-      "boone_higman_simple": {
-        "benchmark_commit": "b4bb63115fcd20c5c8f15f7761766db0e9a3aad0",
-        "issue_number": 183,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-03T04:39:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f06dc95e67b2c970acabcdf6695f825d1c6be2f5",
-        "submission_repo": "GanjinZero/boone_higman_simple"
-      },
-      "brauer_character_in_cyclotomic": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "brauer_fowler": {
-        "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
-        "issue_number": 73,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-25T06:55:45Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "52c6d202fdfaa7e168450703f027562ac1636a8f",
-        "submission_repo": "GanjinZero/brauer_fowler"
-      },
-      "brauer_suzuki": {
-        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
-        "issue_number": 909,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-08-02T07:12:39Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "c9bc6168c860e79148fe98fc4a499b96891ec0a7",
-        "submission_repo": "GanjinZero/brauer_suzuki"
-      },
-      "brouwer_fixed_point": {
-        "benchmark_commit": "ecb1fbd7f00983159c06053260e5e8741786ebb4",
-        "issue_number": 86,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-25T17:50:36Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a07c161df9739152497b19ba0437be662b7754c2",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
-      },
-      "brun_constant_converges": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 432,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-22T07:11:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "d1ff9c0eeeb2277181c353370feb09c30ee64d6f",
-        "submission_repo": "GanjinZero/brun_constant_converges"
-      },
-      "bvp_comparison": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "cauchy_kovalevskaya": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 472,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-26T02:30:04Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "3af3b50718027f85f45503241f47ed16e5134e20",
-        "submission_repo": "GanjinZero/cauchy_kovalevskaya"
-      },
-      "choquet_representation_theorem": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 274,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T02:36:08Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
-      },
-      "chudnovsky_formula_for_pi_inv": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 852,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-21T04:28:06Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "4b50665945f35f848fdb3942d2515732f36b1426",
-        "submission_repo": "GanjinZero/chudnovsky_formula_for_pi_inv"
-      },
-      "commProb_closed": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 821,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-15T08:18:18Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "5204f0d1bc83a273ff53e6ba9cd8e18ab62498d5",
-        "submission_repo": "GanjinZero/commProb_closed"
-      },
-      "compact_group_semisimple": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 414,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-21T12:47:10Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "34f102bce120968c37250b77cf6d8d5d29fa9761",
-        "submission_repo": "GanjinZero/compact_group_semisimple"
-      },
-      "contractibleSpace_houseWithTwoRooms": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 17,
-        "solved_at": "2026-05-21T15:32:28Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "5f0fced6229aa389d705245e0d40eaef28fa3332",
-        "submission_repo": "GanjinZero/contractibleSpace_houseWithTwoRooms"
-      },
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "cyclotomic_integer_house_le_two": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 11,
-        "solved_at": "2026-05-20T08:04:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "darboux": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 458,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-24T16:09:24Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "afd9760db81c89577549712eb6578103d8efcd7f",
-        "submission_repo": "GanjinZero/darboux"
-      },
-      "dehn_sommerville": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 849,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-19T03:46:13Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "64d448f9e173bcb92e90e257bf2e3c1dd1868e3d",
-        "submission_repo": "GanjinZero/dehn_sommerville"
-      },
-      "dirichlet_eigenvalues_eq_nat_sq": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "dvd_card_connectedComponent_markoffGraph": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 11,
-        "solved_at": "2026-05-20T08:04:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "euler_lagrange_equation": {
-        "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
-        "issue_number": 171,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-02T02:15:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "586a4c4cdd37eb77623643866f621bf936100602",
-        "submission_repo": "GanjinZero/euler_lagrange_equation"
-      },
-      "exists_complementary_polynomial_on_unit_circle": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 11,
-        "solved_at": "2026-05-20T08:04:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "exists_nonisotopic_knots": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 555,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-05T11:13:19Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "70e2698c9f119b88500e0e829e32839d8ae82388",
-        "submission_repo": "GanjinZero/exists_nonisotopic_knots"
-      },
-      "exists_nonisotopic_link": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 11,
-        "solved_at": "2026-05-20T08:04:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "families_of_maps_b01": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 838,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-17T06:36:20Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "10c7adb275c7b414ffd1fd837175d1167bad7d24",
-        "submission_repo": "GanjinZero/families_of_maps_b01"
-      },
-      "fang_xia_tiling_partition_transitive": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 263,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-09T01:09:49Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "2b5d22a9fec2aad7fa841313a2f29773fcc39af1",
-        "submission_repo": "GanjinZero/fang_xia_tiling_partition_transitive"
-      },
-      "fatou_julia_dichotomy": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 817,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-15T01:46:47Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "d4aadff9fb106949dad39034c9ade5553173b207",
-        "submission_repo": "GanjinZero/fatou_julia_dichotomy"
-      },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "fourier_dirichlet_fejer": {
-        "benchmark_commit": "b4bb63115fcd20c5c8f15f7761766db0e9a3aad0",
-        "issue_number": 182,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-03T03:47:28Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "557e9ffc23c0e0658fd0762d5df9b27b27d556ee",
-        "submission_repo": "GanjinZero/fourier_dirichlet_fejer"
-      },
-      "fraser_kakeya_fourier_decay": {
-        "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
-        "issue_number": 175,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-02T15:20:08Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "3f7d303b8a2075f8839d5ec03b93b3149160a735",
-        "submission_repo": "GanjinZero/fraser_kakeya_fourier_decay"
-      },
-      "frobenius_group_determinant": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 430,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-22T01:06:16Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "99f6dc44cf13f3b10000257775d1b485bb3638c6",
-        "submission_repo": "GanjinZero/frobenius_group_determinant"
-      },
-      "frobenius_kernel_isNormal": {
-        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
-        "issue_number": 117,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-29T00:58:13Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "3e0114a027d3bc100a232bd315beaefbfb1dd190",
-        "submission_repo": "GanjinZero/frobenius_kernel_isNormal"
-      },
-      "fundamental_topos_theory": {
-        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
-        "issue_number": 294,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-13T03:03:36Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "628d4e1ef94bbee69a043dba05b8952092c30ad7",
-        "submission_repo": "GanjinZero/fundamental_topos_theory"
-      },
-      "furstenberg_topological": {
-        "benchmark_commit": "60a0f0a136978bb36098a9e314d86db1b81c5df0",
-        "issue_number": 124,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-29T16:47:41Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f67c723737d8db97eac9cfe9f652c0b9b9626b69",
-        "submission_repo": "GanjinZero/furstenberg_topological"
-      },
-      "gauss_wantzel_constructible_polygon": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 419,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-21T13:24:06Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "0d1a0dacedc30733009faaa90b5a81c483747e86",
-        "submission_repo": "GanjinZero/gauss_wantzel_constructible_polygon"
-      },
-      "glAction_range_eq_centralizer_symAction": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 11,
-        "solved_at": "2026-05-20T08:04:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "gleason_theorem_finite": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 775,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-13T01:30:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "3649d4e645ce9a2c9c9ec4358d31538711bb5d39",
-        "submission_repo": "GanjinZero/gleason_theorem_finite"
-      },
-      "gleason_theorem_separable": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 722,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-12T12:10:25Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "58bee05e19ad7ac6a14e04080de5ba4d56820157",
-        "submission_repo": "GanjinZero/gleason_theorem_separable"
-      },
-      "golod_shafarevich_inequality": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 466,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-25T14:14:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "88fafbe70e25765cdf4054f203f49c62eb8d6356",
-        "submission_repo": "GanjinZero/golod_shafarevich_inequality"
-      },
-      "halmos_generic_weak_mixing": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 413,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-21T12:54:50Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7da550cab08a2bce712ac0bff20bf29f9862bcef",
-        "submission_repo": "GanjinZero/halmos_generic_weak_mixing"
-      },
-      "hausdorff_absolute_continuity": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 274,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T02:36:08Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
-      },
-      "hausdorff_hildebrandt_schoenberg": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 275,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T05:19:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "63833f93c145d0b70524284340739a23f77f13e5",
-        "submission_repo": "GanjinZero/0610-v2"
-      },
-      "hausdorff_positivity_criterion": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 274,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T02:36:08Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
-      },
-      "heat_kernel_solves_heat_equation": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "hippocrates_lunes": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 277,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T07:46:19Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e9ffb41d5fe057c556c3e18d3061b11333758589",
-        "submission_repo": "GanjinZero/hippocrates_lunes"
-      },
-      "hopf_umlaufsatz": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 844,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-17T09:34:08Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "37174bed125f61977824fd3b52e4505905fb25a9",
-        "submission_repo": "GanjinZero/hopf_umlaufsatz"
-      },
-      "hurewicz_h1_abelianization": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 275,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T05:19:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "63833f93c145d0b70524284340739a23f77f13e5",
-        "submission_repo": "GanjinZero/0610-v2"
-      },
-      "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "ising_2d_phase_transition": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
-        "issue_number": 872,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-23T08:48:05Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "88b8cb04d94347d4888ab3c67b75a6601dbdce66",
-        "submission_repo": "GanjinZero/ising_2d_phase_transition"
-      },
-      "jordan_brouwer": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 500,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-29T01:34:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "4a760880507c12df77f859ba3f1b41a399c04a88",
-        "submission_repo": "GanjinZero/jordan_brouwer"
-      },
-      "jordan_curve": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 501,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-29T01:47:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "59a2df914cb48a2978e83cdd8dd935043671f8b8",
-        "submission_repo": "GanjinZero/jordan_curve"
-      },
-      "jordan_normal_form": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 275,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T05:19:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "63833f93c145d0b70524284340739a23f77f13e5",
-        "submission_repo": "GanjinZero/0610-v2"
-      },
-      "kakutani_fixed_point": {
-        "benchmark_commit": "ecb1fbd7f00983159c06053260e5e8741786ebb4",
-        "issue_number": 86,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-25T17:50:36Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a07c161df9739152497b19ba0437be662b7754c2",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
-      },
-      "kirk_normal_structure": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 415,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-21T12:47:05Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "d6d05030de620b14219197a6a7a7b6187d2ae381",
-        "submission_repo": "GanjinZero/kirk_normal_structure"
-      },
-      "kolmogorov_arnold_superposition": {
-        "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
-        "issue_number": 331,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-15T02:00:54Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "2b084d9b848089fedcefefc77ade7f2a9f470244",
-        "submission_repo": "GanjinZero/kolmogorov_arnold_superposition"
-      },
-      "koszul_formula": {
-        "benchmark_commit": "ecb1fbd7f00983159c06053260e5e8741786ebb4",
-        "issue_number": 86,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-25T17:50:36Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a07c161df9739152497b19ba0437be662b7754c2",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
-      },
-      "landsberg_schaar": {
-        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
-        "issue_number": 286,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-12T06:36:29Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a55f8b059f699578d250e2d9f7ec8cc5172bed33",
-        "submission_repo": "GanjinZero/landsberg_schaar"
-      },
-      "lax_approximation": {
-        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
-        "issue_number": 285,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-12T06:37:18Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "35aa04e11998c35c494abc62388a1e512911323d",
-        "submission_repo": "GanjinZero/lax_approximation"
-      },
-      "levi_civita_exists_unique": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 452,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-23T15:45:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "2a5017fd1967601a537a3585f33fac245fa5876c",
-        "submission_repo": "GanjinZero/levi_civita_exists_unique"
-      },
-      "lidskii_inequality": {
-        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
-        "issue_number": 120,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-29T07:11:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "503d59689a0f4e79813de48f65550fcc6583d131",
-        "submission_repo": "GanjinZero/lidskii_inequality"
-      },
-      "lidskii_last": {
-        "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+  "results": [
+    {
+      "accepted_at": "2026-05-29T00:36:12Z",
+      "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
         "issue_number": 116,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-29T00:36:12Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1c261e95181a91b2832abfac380553854ef201cb",
-        "submission_repo": "GanjinZero/lidskii_last"
+        "kind": "issue"
       },
-      "lindemann": {
-        "benchmark_commit": "d307513fb47669b588d6843b281aa777969ac253",
-        "issue_number": 317,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-14T09:34:56Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "4a8f2967b49e0d3d78ecba4726f7848e87ddfaf0",
-        "submission_repo": "GanjinZero/lindemann"
+      "problem_id": "lidskii_last",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
       },
-      "lindemann_weierstrass": {
-        "benchmark_commit": "f11b2eda181c431caad3faf5a004b02b9deb2d18",
-        "issue_number": 316,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-14T08:03:43Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "8a9ca3f15a05403bff4a302d02a7943020e9fd14",
-        "submission_repo": "GanjinZero/lindemann_weierstrass"
+      "result_id": "r2_0701cbbd8b02a73a95d8b40186ccc5af6f6f19bb878c39116e903111b9816df5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1c261e95181a91b2832abfac380553854ef201cb",
+        "repo": "GanjinZero/lidskii_last"
+      }
+    },
+    {
+      "accepted_at": "2026-06-22T01:06:16Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 430,
+        "kind": "issue"
       },
-      "linear_ode_asymptotic_stability": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
+      "problem_id": "frobenius_group_determinant",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
       },
-      "liouville_arnold": {
-        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
-        "issue_number": 151,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-01T05:56:34Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "57237674ee95e715f1e50b24997f07b3bab59fd2",
-        "submission_repo": "GanjinZero/liouville_arnold"
+      "result_id": "r2_09a945244dc8fcde1cddc0d8e876f21d83eb7ac4ebc0ae8146413dcf58e3127d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "99f6dc44cf13f3b10000257775d1b485bb3638c6",
+        "repo": "GanjinZero/frobenius_group_determinant"
+      }
+    },
+    {
+      "accepted_at": "2026-07-21T04:28:06Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 852,
+        "kind": "issue"
       },
-      "lp_maximum_principle": {
-        "benchmark_commit": "fdace9d297ef8a609dfaf5e30a305aa8fc235a1f",
-        "issue_number": 181,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-03T00:46:51Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "aefcc92c54b72bd35931144fd3746b9005dba1d7",
-        "submission_repo": "GanjinZero/lp_maximum_principle"
+      "problem_id": "chudnovsky_formula_for_pi_inv",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
       },
-      "margulis_ruelle": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 725,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-12T14:09:02Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a4513a6537a2fd3645ba74e7a939c9e3c1633c9a",
-        "submission_repo": "GanjinZero/margulis_ruelle"
+      "result_id": "r2_0bde02d1c8041967b184b656a029bb891e013a1bc6fe5501900173bd17dffe3e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4b50665945f35f848fdb3942d2515732f36b1426",
+        "repo": "GanjinZero/chudnovsky_formula_for_pi_inv"
+      }
+    },
+    {
+      "accepted_at": "2026-05-25T06:55:45Z",
+      "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 73,
+        "kind": "issue"
       },
-      "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 10,
-        "solved_at": "2026-05-20T06:09:50Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e2f7eec0791dbaa6e5f8b3c85b8be0ff35540e63",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
+      "problem_id": "brauer_fowler",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
       },
-      "mergelyan_theorem": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 720,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-12T11:31:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "9544f6bb51f23f5ad64d26892fd1f525fb1d3f48",
-        "submission_repo": "GanjinZero/mergelyan"
-      },
-      "monge_kantorovich": {
-        "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
-        "issue_number": 168,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-02T00:54:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "59a1d46f1b52192cb609ded73c3d67c5cfaf4339",
-        "submission_repo": "GanjinZero/monge_kantorovich"
-      },
-      "moran_equality_affine": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 276,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T07:43:16Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "be2288dd8750caef725eac2037a4b93ba74c6ab2",
-        "submission_repo": "GanjinZero/moran_equality_affine"
-      },
-      "morley_theorem": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 274,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T02:36:08Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
-      },
-      "mountain_pass": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 211,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-05T13:24:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7b887b7c0cf4ee0b8f237428640e4ccc2d773358",
-        "submission_repo": "GanjinZero/mountain_pass"
-      },
-      "mulCayley_connected_iff_closure_eq_top": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "nash_equilibrium_exists": {
-        "benchmark_commit": "ecb1fbd7f00983159c06053260e5e8741786ebb4",
-        "issue_number": 86,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-25T17:50:36Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a07c161df9739152497b19ba0437be662b7754c2",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
-      },
-      "nonlinear_three_manifold_group": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 854,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-21T08:30:02Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7ce5a24cb5c71b617c2129863b8cc47e33189fd3",
-        "submission_repo": "GanjinZero/nonlinear_three_manifold_group"
-      },
-      "normal_spectral_theorem": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 421,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-21T13:24:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "3dc9990014f50626e97b22e710c37bc01c72c662",
-        "submission_repo": "GanjinZero/normal_spectral_theorem"
-      },
-      "nyquist_shannon_sampling": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 416,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-21T12:50:54Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "138045da891605c9067a83ebdbc916e03af2bb7f",
-        "submission_repo": "GanjinZero/nyquist_shannon_sampling"
-      },
-      "oppenheim_inequality": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "ornstein_weiss_rokhlin": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 212,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-05T13:28:02Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e21360ad3d7457572189548c0e1b53a2e0fa7f7c",
-        "submission_repo": "GanjinZero/ornstein_weiss_rokhlin"
-      },
-      "parallel_postulate_independent": {
-        "benchmark_commit": "dc0a77053f401986e3f8431d713b20b5c4cbe5d8",
-        "issue_number": 87,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-26T02:03:43Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "ba5bb5eacdeb4f0bd0517d8729dad6349957ce68",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
-      },
-      "pascal": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 275,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T05:19:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "63833f93c145d0b70524284340739a23f77f13e5",
-        "submission_repo": "GanjinZero/0610-v2"
-      },
-      "peano_existence": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 420,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-21T13:24:31Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "2729c457daeb32e302b6977d95d83e450d7110b4",
-        "submission_repo": "GanjinZero/peano_existence"
-      },
-      "pell_solution_convergent": {
-        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
-        "issue_number": 159,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-01T15:23:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "5cb919e3763562f544696658ab54e86490d109e9",
-        "submission_repo": "GanjinZero/pell_solution_convergent"
-      },
-      "permute_to_unimodal": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 11,
-        "solved_at": "2026-05-20T08:04:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "pi1_circle_mulEquiv_int": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "pi3_sphere_two_mulEquiv_int": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 593,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-08T16:44:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "000517f69000cbb4b209cc5fc70b279967d8b685",
-        "submission_repo": "GanjinZero/pi3_sphere_two_mulEquiv_int"
-      },
-      "pick": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 812,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-14T12:32:57Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "459a9ab7df4c7a08571dffdb339337a475856cca",
-        "submission_repo": "GanjinZero/pick"
-      },
-      "pin_sphere_n_mulEquiv_int": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 594,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-08T16:54:21Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "c4d0fe8aad6f023ebd658e5c8bb35e2d1f28b2af",
-        "submission_repo": "GanjinZero/pin_sphere_n_mulEquiv_int"
-      },
-      "poincare_bendixson": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 723,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-12T13:21:39Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "0f7f8dbd531d3778bb91b82bb9ae6c4b0c9b69e7",
-        "submission_repo": "GanjinZero/poincare_bendixson"
-      },
-      "poincare_siegel_linearisation": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 412,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-21T12:55:04Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "11d534bec84fbb2898f2c732b7a0c0e7b5203df0",
-        "submission_repo": "GanjinZero/poincare_siegel_linearisation"
-      },
-      "posSemidef_map_exp": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "rado_riemannSurface": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 498,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-28T10:07:41Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "6ae15a1fc1fb9ac2cbb53ba5e341b89c377e0a09",
-        "submission_repo": "GanjinZero/rado_riemannSurface"
-      },
-      "radon_transform_inversion": {
-        "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
-        "issue_number": 323,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-14T14:43:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a6829e20435bd66210624b9e8ae5fede1e034319",
-        "submission_repo": "GanjinZero/radon_transform_inversion"
-      },
-      "regular_value_ae": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 274,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T02:36:08Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
-      },
-      "riesz_brothers_theorem": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 512,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-01T04:07:45Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "abcb4ad3857adb5886fe4302757ca830d7bc8f2b",
-        "submission_repo": "GanjinZero/riesz_brothers_theorem"
-      },
-      "rising_sun_lemma": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 274,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T02:36:08Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-0610"
-      },
-      "rokhlin_lemma": {
-        "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
-        "issue_number": 106,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-27T14:38:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e023f0adeac882b77dcc512c64dfd5557f5d909d",
-        "submission_repo": "GanjinZero/rokhlin_lemma"
-      },
-      "rouche_zero_count_eq": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "runge_theorem": {
-        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
-        "issue_number": 152,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-01T06:25:34Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "28f43627cf0e293888865d60a690e14d27f7d8c6",
-        "submission_repo": "GanjinZero/runge_theorem"
-      },
-      "sard_theorem": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "result_id": "r2_0cac8fd2e310612dddcff6dbe8b6c7e030920eeedd4670b767532da6f1ff8107",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "52c6d202fdfaa7e168450703f027562ac1636a8f",
+        "repo": "GanjinZero/brauer_fowler"
+      }
+    },
+    {
+      "accepted_at": "2026-06-05T18:45:58Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
         "issue_number": 217,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-05T18:45:58Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "b64bacb0dcf53ad5084e2de1bfb9cf88014bed6c",
-        "submission_repo": "GanjinZero/sard_theorem"
+        "kind": "issue"
       },
-      "schauder_fixed_point": {
-        "benchmark_commit": "d27268c592bbedca0d60ecd361baeecb72e6d45d",
-        "issue_number": 90,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-26T10:08:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e3ab99a7ffd1ae258b28da8903003eed7ec2d5c5",
-        "submission_repo": "GanjinZero/schauder_fixed_point"
+      "problem_id": "sard_theorem",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
       },
-      "schlafli_classification": {
-        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
-        "issue_number": 910,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-08-02T11:36:21Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "2924250ef013c40facd4c32ae6dea9a3665802f6",
-        "submission_repo": "GanjinZero/schlafli_classification"
+      "result_id": "r2_0fc79e595b3519a4533ce79d31a331588406d7d1520b361b69de9dc5af9cd7f4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b64bacb0dcf53ad5084e2de1bfb9cf88014bed6c",
+        "repo": "GanjinZero/sard_theorem"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T06:25:34Z",
+      "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 152,
+        "kind": "issue"
       },
-      "semilinear_poisson_radial_symmetry": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 454,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-24T00:54:29Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "6d5a59d80bc2e030660f7086da47d1efa2c41011",
-        "submission_repo": "GanjinZero/semilinear_poisson_radial_symmetry"
+      "problem_id": "runge_theorem",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
       },
-      "shannon_capacity_pentagon": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 417,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-21T12:51:05Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "823b7858c4830c1a9015c463929d095c824717f4",
-        "submission_repo": "GanjinZero/shannon_capacity_pentagon"
+      "result_id": "r2_15c5d873f2d9ce4135264a45face64c9a8cb322b5dfd896e56eadc7b4529c78a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "28f43627cf0e293888865d60a690e14d27f7d8c6",
+        "repo": "GanjinZero/runge_theorem"
+      }
+    },
+    {
+      "accepted_at": "2026-06-02T15:20:08Z",
+      "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 175,
+        "kind": "issue"
       },
-      "sobolev_embedding_morrey": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 210,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-05T13:22:36Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f34698caf70cad38002767ae15f25fc24945028",
-        "submission_repo": "GanjinZero/sobolev_embedding_morrey"
+      "problem_id": "fraser_kakeya_fourier_decay",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
       },
-      "solvable_by_radicals_converse": {
-        "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
-        "issue_number": 126,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-30T10:08:49Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "d9e7d0d4d641482193c54f9e7bc2df5ee61cf14b",
-        "submission_repo": "GanjinZero/solvable_by_radicals_converse"
+      "result_id": "r2_1a288312b3c37ad3c1085d10714ee167dfc2179b6bd864e2b7970dd06be5c36a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "3f7d303b8a2075f8839d5ec03b93b3149160a735",
+        "repo": "GanjinZero/fraser_kakeya_fourier_decay"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T12:10:25Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 722,
+        "kind": "issue"
       },
-      "stable_unstable_manifolds": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 213,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-05T15:40:00Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "8e1e59fa6455a001efec9359dbd77a8300660af3",
-        "submission_repo": "GanjinZero/stable_unstable_manifolds"
+      "problem_id": "gleason_theorem_separable",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
       },
-      "strong_subadditivity": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 447,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-23T12:36:00Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e6e8bb5d71330d1f983f0361a5a49ddebd7c604b",
-        "submission_repo": "GanjinZero/strong_subadditivity"
-      },
-      "sturm": {
-        "benchmark_commit": "dc0a77053f401986e3f8431d713b20b5c4cbe5d8",
-        "issue_number": 87,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-26T02:03:43Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "ba5bb5eacdeb4f0bd0517d8729dad6349957ce68",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
-      },
-      "sturm_separation": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "result_id": "r2_1a4dbece298757ede7117a18809434c74a8f6f7386245d4239ef963a5abade45",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "58bee05e19ad7ac6a14e04080de5ba4d56820157",
+        "repo": "GanjinZero/gleason_theorem_separable"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
         "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
+        "kind": "issue"
       },
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 12,
-        "solved_at": "2026-05-20T10:06:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
+      "problem_id": "heat_kernel_solves_heat_equation",
+      "production_metadata": {},
+      "result_id": "r2_1a7d5b3f0b56250cbf7bec42f3f7e3c8a7a07ed8d79b0ae2cbc13651a0f1a3d1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-12T06:37:18Z",
+      "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 285,
+        "kind": "issue"
       },
-      "symAction_range_eq_centralizer_glAction": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 11,
-        "solved_at": "2026-05-20T08:04:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
+      "problem_id": "lax_approximation",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
       },
-      "symplectic_matrix_det": {
-        "benchmark_commit": "ecb1fbd7f00983159c06053260e5e8741786ebb4",
-        "issue_number": 86,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-05-25T17:50:36Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a07c161df9739152497b19ba0437be662b7754c2",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval-batch2"
-      },
-      "thue_siegel_roth": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 831,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-16T08:51:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "ebc3d0214a849605693204d73610c445a8f542be",
-        "submission_repo": "GanjinZero/thue_siegel_roth"
-      },
-      "trace_cayley_hamilton_newton": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 422,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-21T13:23:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f3d41900cbbfad4c2478cecb946451a95e3320e6",
-        "submission_repo": "GanjinZero/trace_cayley_hamilton_newton"
-      },
-      "turing_recursive_equiv": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 431,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-22T01:03:28Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "309338f05ed8f8a59d836dba03059c77d6f14ac0",
-        "submission_repo": "GanjinZero/turing_recursive_equiv"
-      },
-      "tverberg_theorem": {
-        "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
-        "issue_number": 275,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-10T05:19:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "63833f93c145d0b70524284340739a23f77f13e5",
-        "submission_repo": "GanjinZero/0610-v2"
-      },
-      "unit_distance_upper_bound": {
-        "benchmark_commit": "344d00f6d9c2740b740106bc88e40d0e24089992",
-        "issue_number": 905,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-31T14:55:04Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "c30458e7334c7ba5e95dbcc7d09d935fdb996836",
-        "submission_repo": "GanjinZero/unit_distance_upper_bound"
-      },
-      "vonNeumann_doubleCommutant_tfae": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 11,
-        "solved_at": "2026-05-20T08:04:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
-        "submission_repo": "GanjinZero/SeedProver-lean-eval"
-      },
-      "wallpaper_groups_17": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 777,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-13T10:51:54Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "ebdd57967236606f9db04d299dff7778c0427951",
-        "submission_repo": "GanjinZero/wallpaper_groups_17"
-      },
-      "wieferich_g_three": {
-        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+      "result_id": "r2_1bbbc663111cdd7dee7a7d247d8647608d6bd93bb6efcfcc773b0345c94ad2c9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "35aa04e11998c35c494abc62388a1e512911323d",
+        "repo": "GanjinZero/lax_approximation"
+      }
+    },
+    {
+      "accepted_at": "2026-06-13T14:41:07Z",
+      "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
         "issue_number": 309,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-13T14:41:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e255820d309ee39b31a96570438e01e3b5865f5e",
-        "submission_repo": "GanjinZero/wieferich_g_three"
+        "kind": "issue"
       },
-      "wiener_atom_detection": {
-        "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
-        "issue_number": 169,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-02T01:14:28Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1c42fc33dc9a7bab5550f0e5bf40ec868388d139",
-        "submission_repo": "GanjinZero/wiener_atom_detection"
+      "problem_id": "wieferich_g_three",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
       },
-      "wiener_inverse_closed": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 425,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-21T14:41:31Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "d6e89382c3e1e6b6389c9888fdf0f43e81a1ec56",
-        "submission_repo": "GanjinZero/wiener_inverse_closed"
+      "result_id": "r2_2042e066d48d5b6a17e28aa64bbbdf2a5a4395d586e3c5f7333bf96a28903b87",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e255820d309ee39b31a96570438e01e3b5865f5e",
+        "repo": "GanjinZero/wieferich_g_three"
+      }
+    },
+    {
+      "accepted_at": "2026-07-21T08:30:02Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 854,
+        "kind": "issue"
       },
-      "wiener_levy_analytic_calculus": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 453,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-24T00:54:46Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "29f9c120fca66b230773c189d100bbe3d639775b",
-        "submission_repo": "GanjinZero/wiener_levy_analytic_calculus"
+      "problem_id": "nonlinear_three_manifold_group",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
       },
-      "wigner_semicircle": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "result_id": "r2_23c646931ded5c819be0e74bfea9ca1c53d51d10ec1b84cd04ec22f5f26c4147",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7ce5a24cb5c71b617c2129863b8cc47e33189fd3",
+        "repo": "GanjinZero/nonlinear_three_manifold_group"
+      }
+    },
+    {
+      "accepted_at": "2026-05-29T00:58:13Z",
+      "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 117,
+        "kind": "issue"
+      },
+      "problem_id": "frobenius_kernel_isNormal",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_23cf5940c1aa915b329235f4c1bea38be1a266e326377eb5635ec4a91217df99",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "3e0114a027d3bc100a232bd315beaefbfb1dd190",
+        "repo": "GanjinZero/frobenius_kernel_isNormal"
+      }
+    },
+    {
+      "accepted_at": "2026-06-02T02:26:24Z",
+      "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 172,
+        "kind": "issue"
+      },
+      "problem_id": "abel_ruffini",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_253bfd09ab1843b35fc80df0bd33b6daa834e73d54f85012ab95dc387efd0f6a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9451087eb2d5dd31a9ab6cd93b24f07cba42008b",
+        "repo": "GanjinZero/abel_ruffini"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "mulCayley_connected_iff_closure_eq_top",
+      "production_metadata": {},
+      "result_id": "r2_2b60786c75c13e1c13ae5e40d7b269999eb30bbe9aa23d0ba99e2a94f6c2b750",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T07:43:16Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 276,
+        "kind": "issue"
+      },
+      "problem_id": "moran_equality_affine",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_2d6cbc9c4f5229643e9569392bce78fb5debfee393275dbd6b6bf3d88cf43507",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "be2288dd8750caef725eac2037a4b93ba74c6ab2",
+        "repo": "GanjinZero/moran_equality_affine"
+      }
+    },
+    {
+      "accepted_at": "2026-07-15T08:18:18Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 821,
+        "kind": "issue"
+      },
+      "problem_id": "commProb_closed",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_34e81e9eb6d16646f1c1b0e80a264a346fef46cbdc498d077594cf44dd3528a4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5204f0d1bc83a273ff53e6ba9cd8e18ab62498d5",
+        "repo": "GanjinZero/commProb_closed"
+      }
+    },
+    {
+      "accepted_at": "2026-06-30T15:22:03Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 508,
+        "kind": "issue"
+      },
+      "problem_id": "bezout_projective_multiplicity",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_34fd6c3b4242e47419c363025c639eb26130ea101b150474e0b3ef65713c840e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1e807eb2277514c539d0bbc2132372ea0e1059f8",
+        "repo": "GanjinZero/bezout_projective_multiplicity"
+      }
+    },
+    {
+      "accepted_at": "2026-05-29T07:11:17Z",
+      "benchmark_commit": "3d1b344903182d68871e836a0ea1607ce8ac280b",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 120,
+        "kind": "issue"
+      },
+      "problem_id": "lidskii_inequality",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_35398b0461385f50ddf2061b0894d45dd7e998c152db01b025cfbaa30782651a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "503d59689a0f4e79813de48f65550fcc6583d131",
+        "repo": "GanjinZero/lidskii_inequality"
+      }
+    },
+    {
+      "accepted_at": "2026-06-22T07:11:58Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 432,
+        "kind": "issue"
+      },
+      "problem_id": "brun_constant_converges",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_35ec8f7daf205d614c12e63abace96cb5271d52cf55316530ef23255f99785c9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d1ff9c0eeeb2277181c353370feb09c30ee64d6f",
+        "repo": "GanjinZero/brun_constant_converges"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T00:46:51Z",
+      "benchmark_commit": "fdace9d297ef8a609dfaf5e30a305aa8fc235a1f",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 181,
+        "kind": "issue"
+      },
+      "problem_id": "lp_maximum_principle",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_3c79226c0008769e8b0e5cb919889597933d0c6ab19dec447fd07f8bd6aa52a6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "aefcc92c54b72bd35931144fd3746b9005dba1d7",
+        "repo": "GanjinZero/lp_maximum_principle"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "bvp_comparison",
+      "production_metadata": {},
+      "result_id": "r2_3dfe2784f4e3dc27d6c7e6c70ce48dde9f5ef6e6b8978563a943fd4d9f5d01b6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-23T08:48:05Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 872,
+        "kind": "issue"
+      },
+      "problem_id": "ising_2d_phase_transition",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_3f40a15040a1ed3cbd401408e3dbc8f19d2cff86541999b9d5d81c16956a1365",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "88b8cb04d94347d4888ab3c67b75a6601dbdce66",
+        "repo": "GanjinZero/ising_2d_phase_transition"
+      }
+    },
+    {
+      "accepted_at": "2026-06-25T14:14:09Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 466,
+        "kind": "issue"
+      },
+      "problem_id": "golod_shafarevich_inequality",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_4363230424f50de610d1a687607928908aaa1f891eed06d916a072a34074986b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "88fafbe70e25765cdf4054f203f49c62eb8d6356",
+        "repo": "GanjinZero/golod_shafarevich_inequality"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T07:46:19Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 277,
+        "kind": "issue"
+      },
+      "problem_id": "hippocrates_lunes",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_446380632d23904d63cf6ef9e063d80bfae242f64adbd4af2ee7657fc096dccc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e9ffb41d5fe057c556c3e18d3061b11333758589",
+        "repo": "GanjinZero/hippocrates_lunes"
+      }
+    },
+    {
+      "accepted_at": "2026-06-21T12:47:10Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 414,
+        "kind": "issue"
+      },
+      "problem_id": "compact_group_semisimple",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_47e526fa1c6be3c0266020ffddc240e044264e1f82c73f64b4b1749c6c20d4a8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "34f102bce120968c37250b77cf6d8d5d29fa9761",
+        "repo": "GanjinZero/compact_group_semisimple"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "sturm_separation",
+      "production_metadata": {},
+      "result_id": "r2_4f0b4b38d5dc5ec1a40338a8d96a66e61fb8b346cef70343f83c504d9a0a76d9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-14T14:43:48Z",
+      "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 323,
+        "kind": "issue"
+      },
+      "problem_id": "radon_transform_inversion",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_51df78fe1a4f4a82c2a38d0d5ec97f1bb00988e9ebdda44f6bbd7b68b82d6f70",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a6829e20435bd66210624b9e8ae5fede1e034319",
+        "repo": "GanjinZero/radon_transform_inversion"
+      }
+    },
+    {
+      "accepted_at": "2026-05-21T15:32:28Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 17,
+        "kind": "issue"
+      },
+      "problem_id": "contractibleSpace_houseWithTwoRooms",
+      "production_metadata": {},
+      "result_id": "r2_53124f0ec029dbebc0c49b3681cfe3b3cdbd3949042127be75c1ff8a240052a1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5f0fced6229aa389d705245e0d40eaef28fa3332",
+        "repo": "GanjinZero/contractibleSpace_houseWithTwoRooms"
+      }
+    },
+    {
+      "accepted_at": "2026-06-02T00:54:48Z",
+      "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 168,
+        "kind": "issue"
+      },
+      "problem_id": "monge_kantorovich",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_54e741be8a6151f384eeef03f7411cd7ed6f481dee07b920ffcafc2aa9e21614",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "59a1d46f1b52192cb609ded73c3d67c5cfaf4339",
+        "repo": "GanjinZero/monge_kantorovich"
+      }
+    },
+    {
+      "accepted_at": "2026-05-25T17:50:36Z",
+      "benchmark_commit": "ecb1fbd7f00983159c06053260e5e8741786ebb4",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 86,
+        "kind": "issue"
+      },
+      "problem_id": "nash_equilibrium_exists",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_55e2fe047d8ea4a8ff0d9cd3b47ceacb4c71183624a290da28bf0e709d148490",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a07c161df9739152497b19ba0437be662b7754c2",
+        "repo": "GanjinZero/SeedProver-lean-eval-batch2"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {},
+      "result_id": "r2_569022ee661e83541917012c8b175fa690b7d0f3443be7625eb692f85e5d5a76",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-29T01:47:58Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 501,
+        "kind": "issue"
+      },
+      "problem_id": "jordan_curve",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_57d1aff8a0945c15020450fb4c01dd4427816f2b608cd6a8cfcc110e4173ef08",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "59a2df914cb48a2978e83cdd8dd935043671f8b8",
+        "repo": "GanjinZero/jordan_curve"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T15:44:40Z",
+      "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 160,
+        "kind": "issue"
+      },
+      "problem_id": "banach_alaoglu_bourbaki",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_594ec4ac3428f4ad48c7fe29df2d4a47a1201e163da2708fca252dacff394994",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4f902c5d81ba3881dec21d01bcf2d17e26a9588a",
+        "repo": "GanjinZero/banach_alaoglu_bourbaki"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T14:09:02Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 725,
+        "kind": "issue"
+      },
+      "problem_id": "margulis_ruelle",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_5cef12802d8670435423b755f9803c91c7ac2f728e3bb39a3a8cf33a6a33e2a9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a4513a6537a2fd3645ba74e7a939c9e3c1633c9a",
+        "repo": "GanjinZero/margulis_ruelle"
+      }
+    },
+    {
+      "accepted_at": "2026-07-05T11:13:19Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 555,
+        "kind": "issue"
+      },
+      "problem_id": "exists_nonisotopic_knots",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_5d224dc0c0f66ece543fdaea81d04ef1c5e2ddc2f0ac3f3ba60f3285bcad56f9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "70e2698c9f119b88500e0e829e32839d8ae82388",
+        "repo": "GanjinZero/exists_nonisotopic_knots"
+      }
+    },
+    {
+      "accepted_at": "2026-06-28T10:07:41Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 498,
+        "kind": "issue"
+      },
+      "problem_id": "rado_riemannSurface",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_5d62d2ac557d990ed14b380349ba8c361c047765ca4a667b5079b545db273b34",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6ae15a1fc1fb9ac2cbb53ba5e341b89c377e0a09",
+        "repo": "GanjinZero/rado_riemannSurface"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T05:19:09Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 275,
+        "kind": "issue"
+      },
+      "problem_id": "jordan_normal_form",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_5f6162fee6a91f5befbf530338c49cdcdbb1119d9b439971e1b2a3fab28f61bd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "63833f93c145d0b70524284340739a23f77f13e5",
+        "repo": "GanjinZero/0610-v2"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T02:36:08Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 274,
+        "kind": "issue"
+      },
+      "problem_id": "regular_value_ae",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_6126e582d4c8aea9c42d54fc090e82de0db69fe872475dbad3968cba6413db36",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "repo": "GanjinZero/SeedProver-lean-eval-0610"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T05:19:09Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 275,
+        "kind": "issue"
+      },
+      "problem_id": "tverberg_theorem",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_64f287574e29d5ef701ab89310aa7d5e544e735e670bd715d271e5b0c671ad9e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "63833f93c145d0b70524284340739a23f77f13e5",
+        "repo": "GanjinZero/0610-v2"
+      }
+    },
+    {
+      "accepted_at": "2026-05-27T14:38:09Z",
+      "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 106,
+        "kind": "issue"
+      },
+      "problem_id": "rokhlin_lemma",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_6689de1ccb95588586ba73ea8d5f7158d479263a23cf8265b23796c4350ae378",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e023f0adeac882b77dcc512c64dfd5557f5d909d",
+        "repo": "GanjinZero/rokhlin_lemma"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {},
+      "result_id": "r2_690152ffe8886a32d46e9b61e22232d9b36c099dd26b7962415823443570c73e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T08:04:03Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 11,
+        "kind": "issue"
+      },
+      "problem_id": "exists_nonisotopic_link",
+      "production_metadata": {},
+      "result_id": "r2_69015af7be7052e83ec797d23a762b44927d149f294a3a3bb737674664f28afd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T02:36:08Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 274,
+        "kind": "issue"
+      },
+      "problem_id": "rising_sun_lemma",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_694c109841961c78998561a2e59aa5538f100448e19e70aa05b8c4dfe80023a8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "repo": "GanjinZero/SeedProver-lean-eval-0610"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T11:31:32Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 720,
+        "kind": "issue"
+      },
+      "problem_id": "mergelyan_theorem",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_6be6ff074a04f7ddb31a8784f9b166f1d8da7a5db09a607459e9f8440e02de9c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9544f6bb51f23f5ad64d26892fd1f525fb1d3f48",
+        "repo": "GanjinZero/mergelyan"
+      }
+    },
+    {
+      "accepted_at": "2026-06-05T13:28:02Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 212,
+        "kind": "issue"
+      },
+      "problem_id": "ornstein_weiss_rokhlin",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_6bf0788d7960e38b89836059f7950cf7d9e43bf5190a9644eb630de54b22c369",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e21360ad3d7457572189548c0e1b53a2e0fa7f7c",
+        "repo": "GanjinZero/ornstein_weiss_rokhlin"
+      }
+    },
+    {
+      "accepted_at": "2026-06-12T06:36:29Z",
+      "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 286,
+        "kind": "issue"
+      },
+      "problem_id": "landsberg_schaar",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_6cf399f744a39fb69cfd14514dfe2ea9c5a7571470cafda2d8bffcfa304e4129",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a55f8b059f699578d250e2d9f7ec8cc5172bed33",
+        "repo": "GanjinZero/landsberg_schaar"
+      }
+    },
+    {
+      "accepted_at": "2026-06-21T12:54:50Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 413,
+        "kind": "issue"
+      },
+      "problem_id": "halmos_generic_weak_mixing",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_72c37ff6b131d122618717d03026308976ec86e982aa47712bf795562347d5be",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7da550cab08a2bce712ac0bff20bf29f9862bcef",
+        "repo": "GanjinZero/halmos_generic_weak_mixing"
+      }
+    },
+    {
+      "accepted_at": "2026-06-21T12:50:54Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 416,
+        "kind": "issue"
+      },
+      "problem_id": "nyquist_shannon_sampling",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_76d165c39d92a06258d60eede7185a80c05527040a2826baf2bb6073e02362b4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "138045da891605c9067a83ebdbc916e03af2bb7f",
+        "repo": "GanjinZero/nyquist_shannon_sampling"
+      }
+    },
+    {
+      "accepted_at": "2026-06-24T07:00:53Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 455,
+        "kind": "issue"
+      },
+      "problem_id": "H1_not_closedComplemented",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_783ac0f75ee852adb0f9d246ea6ae8dbe0ae30dddc2fc559caad2580c2888c43",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "27e812fd87f4f12aa014c0d763be211507b9413a",
+        "repo": "GanjinZero/H1_not_closedComplemented"
+      }
+    },
+    {
+      "accepted_at": "2026-07-17T06:36:20Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 838,
+        "kind": "issue"
+      },
+      "problem_id": "families_of_maps_b01",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_78bae1c7932f6a20bf779c8d84f6400715b98c4fb44bac29a7121c7face9a2b8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "10c7adb275c7b414ffd1fd837175d1167bad7d24",
+        "repo": "GanjinZero/families_of_maps_b01"
+      }
+    },
+    {
+      "accepted_at": "2026-05-26T10:08:09Z",
+      "benchmark_commit": "d27268c592bbedca0d60ecd361baeecb72e6d45d",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 90,
+        "kind": "issue"
+      },
+      "problem_id": "schauder_fixed_point",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_78f16d69f3bed1e8f014ec9d24350008b6880e11cfd79c6c885778e7e5e8d479",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e3ab99a7ffd1ae258b28da8903003eed7ec2d5c5",
+        "repo": "GanjinZero/schauder_fixed_point"
+      }
+    },
+    {
+      "accepted_at": "2026-07-08T16:44:14Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 593,
+        "kind": "issue"
+      },
+      "problem_id": "pi3_sphere_two_mulEquiv_int",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_7babc14ba3fccb805955f9bebb2cf136e855d721b2f7f943144173f493d4065e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "000517f69000cbb4b209cc5fc70b279967d8b685",
+        "repo": "GanjinZero/pi3_sphere_two_mulEquiv_int"
+      }
+    },
+    {
+      "accepted_at": "2026-07-01T04:07:45Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 512,
+        "kind": "issue"
+      },
+      "problem_id": "riesz_brothers_theorem",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_7cba15df05ad8cf0ec9e7992758b9ff380752817a6c8f534a9415324ad46caf8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "abcb4ad3857adb5886fe4302757ca830d7bc8f2b",
+        "repo": "GanjinZero/riesz_brothers_theorem"
+      }
+    },
+    {
+      "accepted_at": "2026-06-21T13:24:06Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 419,
+        "kind": "issue"
+      },
+      "problem_id": "gauss_wantzel_constructible_polygon",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_7e28ecaddc925c3de6afe96c2f767a0e0217fd653a4d0680595d9635ee2b568d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0d1a0dacedc30733009faaa90b5a81c483747e86",
+        "repo": "GanjinZero/gauss_wantzel_constructible_polygon"
+      }
+    },
+    {
+      "accepted_at": "2026-05-30T10:08:49Z",
+      "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 126,
+        "kind": "issue"
+      },
+      "problem_id": "solvable_by_radicals_converse",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_80616bec77432e6b297428b52ab581a62d9c06f6f0692376fd89bed38d5f53f0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d9e7d0d4d641482193c54f9e7bc2df5ee61cf14b",
+        "repo": "GanjinZero/solvable_by_radicals_converse"
+      }
+    },
+    {
+      "accepted_at": "2026-08-02T07:12:39Z",
+      "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 909,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_suzuki",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_806803c0ecc2c46d33d3de1d4213f278188e16bd60d997473752fbb1d0ec1940",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c9bc6168c860e79148fe98fc4a499b96891ec0a7",
+        "repo": "GanjinZero/brauer_suzuki"
+      }
+    },
+    {
+      "accepted_at": "2026-06-29T01:34:14Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 500,
+        "kind": "issue"
+      },
+      "problem_id": "jordan_brouwer",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_8168bf4ea4b110ae04464e9f95bf69d17f97bd4766899dd11af81043988ec577",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4a760880507c12df77f859ba3f1b41a399c04a88",
+        "repo": "GanjinZero/jordan_brouwer"
+      }
+    },
+    {
+      "accepted_at": "2026-07-13T01:30:48Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 775,
+        "kind": "issue"
+      },
+      "problem_id": "gleason_theorem_finite",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_82f0da5dd98502137285d35b8bad9a17cf08e0aed8ca24a849a7c7e7fabdd9a3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "3649d4e645ce9a2c9c9ec4358d31538711bb5d39",
+        "repo": "GanjinZero/gleason_theorem_finite"
+      }
+    },
+    {
+      "accepted_at": "2026-05-29T16:47:41Z",
+      "benchmark_commit": "60a0f0a136978bb36098a9e314d86db1b81c5df0",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 124,
+        "kind": "issue"
+      },
+      "problem_id": "furstenberg_topological",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_857bc2fe6fc722c31b3aec5604e8118843edfb4f7ee5ecf1645fe3e9a0395db3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f67c723737d8db97eac9cfe9f652c0b9b9626b69",
+        "repo": "GanjinZero/furstenberg_topological"
+      }
+    },
+    {
+      "accepted_at": "2026-06-24T16:09:24Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 458,
+        "kind": "issue"
+      },
+      "problem_id": "darboux",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_863ac693d35a4b6095f46661db095a5eb3742821a163ff088788cb8121a2dd44",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "afd9760db81c89577549712eb6578103d8efcd7f",
+        "repo": "GanjinZero/darboux"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T02:36:08Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 274,
+        "kind": "issue"
+      },
+      "problem_id": "hausdorff_absolute_continuity",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_876c9def134b9a8cca46fcae158583b5d614f68b7651af8e3b4feb0be5ca02ad",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "repo": "GanjinZero/SeedProver-lean-eval-0610"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T05:19:09Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 275,
+        "kind": "issue"
+      },
+      "problem_id": "pascal",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_8a72f21bc5de9ea110f7b6a8f260752eb7055b209b82fb05f00ce14343601f28",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "63833f93c145d0b70524284340739a23f77f13e5",
+        "repo": "GanjinZero/0610-v2"
+      }
+    },
+    {
+      "accepted_at": "2026-05-25T17:50:36Z",
+      "benchmark_commit": "ecb1fbd7f00983159c06053260e5e8741786ebb4",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 86,
+        "kind": "issue"
+      },
+      "problem_id": "brouwer_fixed_point",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_8b018b21b8e3b6071207cd68ba3cf9f3866d8f7be5d73dcc8968e71606d0401a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a07c161df9739152497b19ba0437be662b7754c2",
+        "repo": "GanjinZero/SeedProver-lean-eval-batch2"
+      }
+    },
+    {
+      "accepted_at": "2026-06-23T15:45:23Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 452,
+        "kind": "issue"
+      },
+      "problem_id": "levi_civita_exists_unique",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_8cbf668fff6b95696925a61310dda06a365d006adfe3739314aa43dad0aa4d87",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2a5017fd1967601a537a3585f33fac245fa5876c",
+        "repo": "GanjinZero/levi_civita_exists_unique"
+      }
+    },
+    {
+      "accepted_at": "2026-06-22T01:03:28Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 431,
+        "kind": "issue"
+      },
+      "problem_id": "turing_recursive_equiv",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_8cee346a2a208b68c8d70fb6241f208d4c3095ac6b8a19086f0644412a8b768d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "309338f05ed8f8a59d836dba03059c77d6f14ac0",
+        "repo": "GanjinZero/turing_recursive_equiv"
+      }
+    },
+    {
+      "accepted_at": "2026-06-29T10:12:38Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
         "issue_number": 502,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-06-29T10:12:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "bbf72e340dece4b324d66b9acfe90b9598bfa4d2",
-        "submission_repo": "GanjinZero/wigner_semicircle"
+        "kind": "issue"
+      },
+      "problem_id": "wigner_semicircle",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_8d555e319744cb61702e25ab2af1bfccd23e33d69225b725235d710cfd13e232",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "bbf72e340dece4b324d66b9acfe90b9598bfa4d2",
+        "repo": "GanjinZero/wigner_semicircle"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T03:47:28Z",
+      "benchmark_commit": "b4bb63115fcd20c5c8f15f7761766db0e9a3aad0",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 182,
+        "kind": "issue"
+      },
+      "problem_id": "fourier_dirichlet_fejer",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_922c8a79cbb5eb36e973b38fc693f9c051b64f9a61b891e9e899d80c1c78b59e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "557e9ffc23c0e0658fd0762d5df9b27b27d556ee",
+        "repo": "GanjinZero/fourier_dirichlet_fejer"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T08:04:03Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 11,
+        "kind": "issue"
+      },
+      "problem_id": "dvd_card_connectedComponent_markoffGraph",
+      "production_metadata": {},
+      "result_id": "r2_943a1326d1e9066f82f19dc0e35ca221b5ea7896ecfee391fc8af2298db47e1c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "linear_ode_asymptotic_stability",
+      "production_metadata": {},
+      "result_id": "r2_9572135f65ef0e5826204db9f1285daef33c77ae2e38e865ed0aa22f84e8d2e0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T06:22:53Z",
+      "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 153,
+        "kind": "issue"
+      },
+      "problem_id": "baer_suzuki",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_9667f363aca8396ced01f6317f805dba7152dbe546d18103af57b33b71f025c1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7f1d1c6be2f659f46dd39ab721ca30853518e47c",
+        "repo": "GanjinZero/baer_suzuki"
+      }
+    },
+    {
+      "accepted_at": "2026-05-26T02:03:43Z",
+      "benchmark_commit": "dc0a77053f401986e3f8431d713b20b5c4cbe5d8",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 87,
+        "kind": "issue"
+      },
+      "problem_id": "sturm",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_9a01743814a45ce6737ed474ec39b35161aba0edc90b64460899dfb024e8d139",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ba5bb5eacdeb4f0bd0517d8729dad6349957ce68",
+        "repo": "GanjinZero/SeedProver-lean-eval-batch2"
+      }
+    },
+    {
+      "accepted_at": "2026-06-02T01:14:28Z",
+      "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 169,
+        "kind": "issue"
+      },
+      "problem_id": "wiener_atom_detection",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_9ab28e86493c75040b02ecb934bc9a0c33ef739460e5c134aafb8ccb44180298",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1c42fc33dc9a7bab5550f0e5bf40ec868388d139",
+        "repo": "GanjinZero/wiener_atom_detection"
+      }
+    },
+    {
+      "accepted_at": "2026-06-05T13:24:27Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 211,
+        "kind": "issue"
+      },
+      "problem_id": "mountain_pass",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_9e24c1d13498b7d7b709c68bec9b6512429c6a7587c2cd95b9531ba978a8ece4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7b887b7c0cf4ee0b8f237428640e4ccc2d773358",
+        "repo": "GanjinZero/mountain_pass"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:49:33Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 15,
+        "kind": "issue"
+      },
+      "problem_id": "balanceable_bounded_partitions",
+      "production_metadata": {},
+      "result_id": "r2_9fff51ce52e767d9579c2d7f781b04abab137b92d9edc22d0d37ad22ffb03f61",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "aaad6f72484191b65cc7a72a67e038d1f4cbf23d",
+        "repo": "GanjinZero/balanceable_bounded_partitions"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "oppenheim_inequality",
+      "production_metadata": {},
+      "result_id": "r2_a05098133647a1f01984dda312c219ad2e056dc6f8e97f17c9345119a19bfdeb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-15T02:00:54Z",
+      "benchmark_commit": "5513b6538b3a482f51a8b245486263ac7f6fdfc1",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 331,
+        "kind": "issue"
+      },
+      "problem_id": "kolmogorov_arnold_superposition",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_a0882bb8f84b28b7cdd3f356ad6bfed261917f5df2d9bfe4d9603b099e41fe4b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2b084d9b848089fedcefefc77ade7f2a9f470244",
+        "repo": "GanjinZero/kolmogorov_arnold_superposition"
+      }
+    },
+    {
+      "accepted_at": "2026-06-06T07:04:24Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 220,
+        "kind": "issue"
+      },
+      "problem_id": "anosov_bowen_shadowing",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_a4b07d8089e91da551faf69f726130939ea3fad215f226296087cb101f2575a8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "44d03e133ea18aafeb6282a386cc6af487f05e44",
+        "repo": "GanjinZero/anosov_bowen_shadowing"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T08:04:03Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 11,
+        "kind": "issue"
+      },
+      "problem_id": "symAction_range_eq_centralizer_glAction",
+      "production_metadata": {},
+      "result_id": "r2_a4fcc4652f734ca03eafeaa440419bd0287616a2277e51b721dd93dbeaca715b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-21T14:41:31Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 425,
+        "kind": "issue"
+      },
+      "problem_id": "wiener_inverse_closed",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_a62ecdae6139dad6d62ee4670bdd68f0ab52f637b6751f9802cc59253cc4cb75",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d6e89382c3e1e6b6389c9888fdf0f43e81a1ec56",
+        "repo": "GanjinZero/wiener_inverse_closed"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {},
+      "result_id": "r2_a720e4ab045fd2e5e3e8c7394d2541aa96d8db04980aecb0f9dff269f9b8d4f1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-09T01:09:49Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 263,
+        "kind": "issue"
+      },
+      "problem_id": "fang_xia_tiling_partition_transitive",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_a8248bce3915d5b6b806471e04d2c5f1c98647c39842b5438b0d8db5a62729e3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2b5d22a9fec2aad7fa841313a2f29773fcc39af1",
+        "repo": "GanjinZero/fang_xia_tiling_partition_transitive"
+      }
+    },
+    {
+      "accepted_at": "2026-07-15T01:46:47Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 817,
+        "kind": "issue"
+      },
+      "problem_id": "fatou_julia_dichotomy",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_a90a9777400e51f80431dc0888b33a1b06644e861c3323e99ce814235d62ff0f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d4aadff9fb106949dad39034c9ade5553173b207",
+        "repo": "GanjinZero/fatou_julia_dichotomy"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T08:04:03Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 11,
+        "kind": "issue"
+      },
+      "problem_id": "vonNeumann_doubleCommutant_tfae",
+      "production_metadata": {},
+      "result_id": "r2_acbf6639ba3882c45cddb60c2604aab5bac22806bae62d1f9dda4cd8da6dcc6f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T02:36:08Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 274,
+        "kind": "issue"
+      },
+      "problem_id": "choquet_representation_theorem",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_ae4d97554d7084648bf46a16c7277ce5950ccdf1ee315051088dc0e84618d0e2",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "repo": "GanjinZero/SeedProver-lean-eval-0610"
+      }
+    },
+    {
+      "accepted_at": "2026-08-02T11:36:21Z",
+      "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 910,
+        "kind": "issue"
+      },
+      "problem_id": "schlafli_classification",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_aee46a6ac23e62b9ed7788ea60b2a271f3faab2fd2f7aa852562ba3d1f923123",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2924250ef013c40facd4c32ae6dea9a3665802f6",
+        "repo": "GanjinZero/schlafli_classification"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T04:39:48Z",
+      "benchmark_commit": "b4bb63115fcd20c5c8f15f7761766db0e9a3aad0",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 183,
+        "kind": "issue"
+      },
+      "problem_id": "boone_higman_simple",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_afca35a8e1f07daf5e16daed042c7cfdd235caaf2fd6b2b47926f74f042e15da",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f06dc95e67b2c970acabcdf6695f825d1c6be2f5",
+        "repo": "GanjinZero/boone_higman_simple"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T15:23:35Z",
+      "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 159,
+        "kind": "issue"
+      },
+      "problem_id": "pell_solution_convergent",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_b2e910be497b897891cae5d3708da130ec38aba3c23fe531a9c2acdfda54c638",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5cb919e3763562f544696658ab54e86490d109e9",
+        "repo": "GanjinZero/pell_solution_convergent"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T05:19:09Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 275,
+        "kind": "issue"
+      },
+      "problem_id": "hurewicz_h1_abelianization",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_b4c544a3164004620b3b140776f298a1d1b081813fc0de2a98dcdf288a9a99b1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "63833f93c145d0b70524284340739a23f77f13e5",
+        "repo": "GanjinZero/0610-v2"
+      }
+    },
+    {
+      "accepted_at": "2026-05-26T02:03:43Z",
+      "benchmark_commit": "dc0a77053f401986e3f8431d713b20b5c4cbe5d8",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 87,
+        "kind": "issue"
+      },
+      "problem_id": "parallel_postulate_independent",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_b6efcd9654eb24dc9ef32ab4513fa2850252c9b769c65e34ec12cac733a0161c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ba5bb5eacdeb4f0bd0517d8729dad6349957ce68",
+        "repo": "GanjinZero/SeedProver-lean-eval-batch2"
+      }
+    },
+    {
+      "accepted_at": "2026-06-21T13:24:31Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 420,
+        "kind": "issue"
+      },
+      "problem_id": "peano_existence",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_b7871fe88d21cf6004e1bce0a622812c35041dd469eefd4abfe1990dcf481ece",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2729c457daeb32e302b6977d95d83e450d7110b4",
+        "repo": "GanjinZero/peano_existence"
+      }
+    },
+    {
+      "accepted_at": "2026-05-25T17:50:36Z",
+      "benchmark_commit": "ecb1fbd7f00983159c06053260e5e8741786ebb4",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 86,
+        "kind": "issue"
+      },
+      "problem_id": "koszul_formula",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_bbc00446a75942a26d4bfa86e9872cf7eae95f050a8c0f8e83a7926e4b65acbb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a07c161df9739152497b19ba0437be662b7754c2",
+        "repo": "GanjinZero/SeedProver-lean-eval-batch2"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T06:09:50Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 10,
+        "kind": "issue"
+      },
+      "problem_id": "mem_convexHull_finset_extremePoints_of_mem_compact_convex",
+      "production_metadata": {},
+      "result_id": "r2_bc3e2917fb2350ade0703e74c9ba1594d70e14112b3c1c7f1b6ce3ce2d6c8078",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e2f7eec0791dbaa6e5f8b3c85b8be0ff35540e63",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {},
+      "result_id": "r2_bc8d8ffe1381557fa1b5a47a385245367c7dff0b078d32f0c76f01af10f314d1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-25T17:50:36Z",
+      "benchmark_commit": "ecb1fbd7f00983159c06053260e5e8741786ebb4",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 86,
+        "kind": "issue"
+      },
+      "problem_id": "kakutani_fixed_point",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_c2d08e37a1fa6a7ebe69ebcb4dbdfcbe75dacb03658ad62308d06c162ea3addf",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a07c161df9739152497b19ba0437be662b7754c2",
+        "repo": "GanjinZero/SeedProver-lean-eval-batch2"
+      }
+    },
+    {
+      "accepted_at": "2026-07-19T03:46:13Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 849,
+        "kind": "issue"
+      },
+      "problem_id": "dehn_sommerville",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_c422421158c218b15cff38d4f969b789de44f34a053df59058a68ec8f3b61d11",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "64d448f9e173bcb92e90e257bf2e3c1dd1868e3d",
+        "repo": "GanjinZero/dehn_sommerville"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow",
+      "production_metadata": {},
+      "result_id": "r2_c5034d8b7649805e49154907fc9ce5c212ca319df7af28be8a0baf4e7dfe2907",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "rouche_zero_count_eq",
+      "production_metadata": {},
+      "result_id": "r2_c7ca82c21bbd697446bd730b744ce9d33e1d68759e051995cdf311c493429070",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T08:04:03Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 11,
+        "kind": "issue"
+      },
+      "problem_id": "glAction_range_eq_centralizer_symAction",
+      "production_metadata": {},
+      "result_id": "r2_c89a5edae71feb56876deab2c64c676942c880d0327ee113d4dca56a391b98bd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-02T02:15:27Z",
+      "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 171,
+        "kind": "issue"
+      },
+      "problem_id": "euler_lagrange_equation",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_cb6448856c47ba16276f2fb15d541dd1de1f72827b50631acd222c6a36e3d99a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "586a4c4cdd37eb77623643866f621bf936100602",
+        "repo": "GanjinZero/euler_lagrange_equation"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius",
+      "production_metadata": {},
+      "result_id": "r2_cb77c175a59b5480ad930af76804b4a4fdbb387acb9216a11a557875ebac58db",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-13T03:06:42Z",
+      "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 295,
+        "kind": "issue"
+      },
+      "problem_id": "bauer_extreme_point_uniqueness",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_ccfc5485ca16fa015d6651a6efe44ad32bffff5228cafb1a53f1379141d41f91",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6620bc6eb0982d55826fb725cf54272da9bbf827",
+        "repo": "GanjinZero/bauer_extreme_point_uniqueness"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T08:04:03Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 11,
+        "kind": "issue"
+      },
+      "problem_id": "cyclotomic_integer_house_le_two",
+      "production_metadata": {},
+      "result_id": "r2_cd6d278818219f41aa19b839ac58f1b841bd8f81b8c4ca0ac8f452a070788b98",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-21T13:23:48Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 422,
+        "kind": "issue"
+      },
+      "problem_id": "trace_cayley_hamilton_newton",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_cf0ab24dac14ab136b498f0799c981d3cb6ddfa1041780a16a37cc334316d97b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f3d41900cbbfad4c2478cecb946451a95e3320e6",
+        "repo": "GanjinZero/trace_cayley_hamilton_newton"
+      }
+    },
+    {
+      "accepted_at": "2026-06-14T08:03:43Z",
+      "benchmark_commit": "f11b2eda181c431caad3faf5a004b02b9deb2d18",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 316,
+        "kind": "issue"
+      },
+      "problem_id": "lindemann_weierstrass",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_cf0f46aeaecaf72c2684740af0aee1dcafdd1f3f6916ca40e9b055f83d5a988c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8a9ca3f15a05403bff4a302d02a7943020e9fd14",
+        "repo": "GanjinZero/lindemann_weierstrass"
+      }
+    },
+    {
+      "accepted_at": "2026-06-14T09:34:56Z",
+      "benchmark_commit": "d307513fb47669b588d6843b281aa777969ac253",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 317,
+        "kind": "issue"
+      },
+      "problem_id": "lindemann",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_cf3b1aced081a773e4001d2bc39b0255b8722a3626d5d7ce4c7a87271e95b79f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4a8f2967b49e0d3d78ecba4726f7848e87ddfaf0",
+        "repo": "GanjinZero/lindemann"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "dirichlet_eigenvalues_eq_nat_sq",
+      "production_metadata": {},
+      "result_id": "r2_cf48e195817a3757dfa215faa0bcc5bbf3c70c3a589c85bce0c93e5ec3c19a21",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-21T12:51:05Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 417,
+        "kind": "issue"
+      },
+      "problem_id": "shannon_capacity_pentagon",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_cf7d8b24f577c710539f1af5f9b7815022bb559381d852eafc880b9e8e1ad945",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "823b7858c4830c1a9015c463929d095c824717f4",
+        "repo": "GanjinZero/shannon_capacity_pentagon"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "pi1_circle_mulEquiv_int",
+      "production_metadata": {},
+      "result_id": "r2_cf81021564d81908d605d933214ced76f1286311cc7be11e5dca37bc13c3c0a2",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-17T09:34:08Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 844,
+        "kind": "issue"
+      },
+      "problem_id": "hopf_umlaufsatz",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_d262c0a5c6c73c6f837d70ba290faf2c55075772faa32a8a0f608d9446bb8cc3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "37174bed125f61977824fd3b52e4505905fb25a9",
+        "repo": "GanjinZero/hopf_umlaufsatz"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T02:36:08Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 274,
+        "kind": "issue"
+      },
+      "problem_id": "hausdorff_positivity_criterion",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_d2a5686bbf38195dcb5d627fb49f2d600b383eb62e2c126e584e14f827038d33",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "repo": "GanjinZero/SeedProver-lean-eval-0610"
+      }
+    },
+    {
+      "accepted_at": "2026-06-05T15:40:00Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 213,
+        "kind": "issue"
+      },
+      "problem_id": "stable_unstable_manifolds",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_d3b1dae011c4fd2ef5ac91f806728b9df25c953dadb7aad3e40821a52daea8fa",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8e1e59fa6455a001efec9359dbd77a8300660af3",
+        "repo": "GanjinZero/stable_unstable_manifolds"
+      }
+    },
+    {
+      "accepted_at": "2026-07-08T16:54:21Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 594,
+        "kind": "issue"
+      },
+      "problem_id": "pin_sphere_n_mulEquiv_int",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_d4e9c146cc393b5e6c52adca9e736cf751332b9fa31e305c4ac24db4545bf1e8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c4d0fe8aad6f023ebd658e5c8bb35e2d1f28b2af",
+        "repo": "GanjinZero/pin_sphere_n_mulEquiv_int"
+      }
+    },
+    {
+      "accepted_at": "2026-06-23T12:36:00Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 447,
+        "kind": "issue"
+      },
+      "problem_id": "strong_subadditivity",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_d58d47669a336566b04b8497a6a232b1e43e4a87f6ac0cebf479f3de9839124a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e6e8bb5d71330d1f983f0361a5a49ddebd7c604b",
+        "repo": "GanjinZero/strong_subadditivity"
+      }
+    },
+    {
+      "accepted_at": "2026-06-24T00:54:29Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 454,
+        "kind": "issue"
+      },
+      "problem_id": "semilinear_poisson_radial_symmetry",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_da8ec46eace2099135274f67fa381ed23e75a9bbcf63d7f0b0b13f36f036428e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6d5a59d80bc2e030660f7086da47d1efa2c41011",
+        "repo": "GanjinZero/semilinear_poisson_radial_symmetry"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T13:21:39Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 723,
+        "kind": "issue"
+      },
+      "problem_id": "poincare_bendixson",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_dd0a799d36693132d695d7907ecf363c22d0ea6f8d8b2f4373932a090e6b2273",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0f7f8dbd531d3778bb91b82bb9ae6c4b0c9b69e7",
+        "repo": "GanjinZero/poincare_bendixson"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T05:19:09Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 275,
+        "kind": "issue"
+      },
+      "problem_id": "hausdorff_hildebrandt_schoenberg",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_dd7d0b93e3f0fbd5a83ef924ddad01ba66c8b9abbb16c350b1d41fb8013ef413",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "63833f93c145d0b70524284340739a23f77f13e5",
+        "repo": "GanjinZero/0610-v2"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T08:04:03Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 11,
+        "kind": "issue"
+      },
+      "problem_id": "permute_to_unimodal",
+      "production_metadata": {},
+      "result_id": "r2_de003356ecdcf0d8c615f24576e06d3c234223876db6bb3b5f44a88597b1b34a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T10:06:48Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 12,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_character_in_cyclotomic",
+      "production_metadata": {},
+      "result_id": "r2_dec99e39ee0785a07310f999defd9ce8506992c035fd8052a3c1bab45eb30a30",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "146d80b68a983cf5f0b4a00e253dd011d0bc414b",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T02:36:08Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 274,
+        "kind": "issue"
+      },
+      "problem_id": "boone_higman_embedding",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_e19b385a7de4be7e346188a83413aecad740014891cc823b6eda6937d99a489e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "repo": "GanjinZero/SeedProver-lean-eval-0610"
+      }
+    },
+    {
+      "accepted_at": "2026-06-05T13:22:36Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 210,
+        "kind": "issue"
+      },
+      "problem_id": "sobolev_embedding_morrey",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_e1aeb9a4cfd6b9052f38b74c449d41bc3fbff432de9c68ac45732643686821fd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f34698caf70cad38002767ae15f25fc24945028",
+        "repo": "GanjinZero/sobolev_embedding_morrey"
+      }
+    },
+    {
+      "accepted_at": "2026-07-16T08:51:52Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 831,
+        "kind": "issue"
+      },
+      "problem_id": "thue_siegel_roth",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_e39e2ce57fbe2d77bbd1cfec119045d42e7d1e63ab9e7494720a9a2e54269e01",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ebc3d0214a849605693204d73610c445a8f542be",
+        "repo": "GanjinZero/thue_siegel_roth"
+      }
+    },
+    {
+      "accepted_at": "2026-07-13T10:51:54Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 777,
+        "kind": "issue"
+      },
+      "problem_id": "wallpaper_groups_17",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_e4e8f8530fc4cd5042325b874da013f8c679e69d7ce8041263eeb11d3921b4f1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ebdd57967236606f9db04d299dff7778c0427951",
+        "repo": "GanjinZero/wallpaper_groups_17"
+      }
+    },
+    {
+      "accepted_at": "2026-06-21T12:55:04Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 412,
+        "kind": "issue"
+      },
+      "problem_id": "poincare_siegel_linearisation",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_e58fad31322ac62a4253070f7346a041e2e9bd9bdb06abc649a5215c3ef82ed2",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "11d534bec84fbb2898f2c732b7a0c0e7b5203df0",
+        "repo": "GanjinZero/poincare_siegel_linearisation"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T08:04:03Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 11,
+        "kind": "issue"
+      },
+      "problem_id": "exists_complementary_polynomial_on_unit_circle",
+      "production_metadata": {},
+      "result_id": "r2_e5fe0c616825f42127004d7cb771bfa0018cedf16a698f36cca0443c3554ac0d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7167044aeede2b8888db5cfc3b99b2ac928f7e9c",
+        "repo": "GanjinZero/SeedProver-lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-31T14:55:04Z",
+      "benchmark_commit": "344d00f6d9c2740b740106bc88e40d0e24089992",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 905,
+        "kind": "issue"
+      },
+      "problem_id": "unit_distance_upper_bound",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_e68b92ef18cca7591148bc23317820ee42db3b1a53cd8375a8f255460f64f4ee",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c30458e7334c7ba5e95dbcc7d09d935fdb996836",
+        "repo": "GanjinZero/unit_distance_upper_bound"
+      }
+    },
+    {
+      "accepted_at": "2026-06-24T00:54:46Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 453,
+        "kind": "issue"
+      },
+      "problem_id": "wiener_levy_analytic_calculus",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_f183161cf32a0e6efd982a5bd339d0e725879b29737bdff9b2c3b46bc4bc524f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "29f9c120fca66b230773c189d100bbe3d639775b",
+        "repo": "GanjinZero/wiener_levy_analytic_calculus"
+      }
+    },
+    {
+      "accepted_at": "2026-07-14T12:32:57Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 812,
+        "kind": "issue"
+      },
+      "problem_id": "pick",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_f1c71c864e68a0046af00a868845a4e21698665564870d4b2172017ce29f97b3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "459a9ab7df4c7a08571dffdb339337a475856cca",
+        "repo": "GanjinZero/pick"
+      }
+    },
+    {
+      "accepted_at": "2026-06-13T03:03:36Z",
+      "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 294,
+        "kind": "issue"
+      },
+      "problem_id": "fundamental_topos_theory",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_f43e506250883f244be729172838b4a9302f347634608cc6980ce3966c2fcdb7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "628d4e1ef94bbee69a043dba05b8952092c30ad7",
+        "repo": "GanjinZero/fundamental_topos_theory"
+      }
+    },
+    {
+      "accepted_at": "2026-06-21T13:24:58Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 421,
+        "kind": "issue"
+      },
+      "problem_id": "normal_spectral_theorem",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_f4e83e049ebb27b0a32fe5a5ae0ad3ac31b45727922408b761c2d70f85bcdbdc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "3dc9990014f50626e97b22e710c37bc01c72c662",
+        "repo": "GanjinZero/normal_spectral_theorem"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T05:56:34Z",
+      "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 151,
+        "kind": "issue"
+      },
+      "problem_id": "liouville_arnold",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_f60f09724ab6c0af8bc9328a1438ac30f04953ba0c16c817db53573a363cd43c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "57237674ee95e715f1e50b24997f07b3bab59fd2",
+        "repo": "GanjinZero/liouville_arnold"
+      }
+    },
+    {
+      "accepted_at": "2026-05-25T17:50:36Z",
+      "benchmark_commit": "ecb1fbd7f00983159c06053260e5e8741786ebb4",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 86,
+        "kind": "issue"
+      },
+      "problem_id": "symplectic_matrix_det",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_f74de9ede104e4216df7c9bd0121ed4520b5d1c4501bf4d360f478b48053e795",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a07c161df9739152497b19ba0437be662b7754c2",
+        "repo": "GanjinZero/SeedProver-lean-eval-batch2"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T02:36:08Z",
+      "benchmark_commit": "21e75a06768692119a8d384e8dc35648b9678e64",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 274,
+        "kind": "issue"
+      },
+      "problem_id": "morley_theorem",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_f7eb02bb8df9d241ca80ad9d89e11f55f4057954b8cdd1cb93d56ec2a3acae04",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "dfdc0b7f0530689deed482ac19ef81f6ab7862b4",
+        "repo": "GanjinZero/SeedProver-lean-eval-0610"
+      }
+    },
+    {
+      "accepted_at": "2026-06-21T12:47:05Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 415,
+        "kind": "issue"
+      },
+      "problem_id": "kirk_normal_structure",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_fab8f9cb82290c1c5acf352c7e9d30cc61f41efe2703d95669b700e6dd2283bc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d6d05030de620b14219197a6a7a7b6187d2ae381",
+        "repo": "GanjinZero/kirk_normal_structure"
+      }
+    },
+    {
+      "accepted_at": "2026-06-26T02:30:04Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 472,
+        "kind": "issue"
+      },
+      "problem_id": "cauchy_kovalevskaya",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_fca1124f703b5facdceab893630320aea93a1e8d5b422069b3b06cf19ebb7284",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "3af3b50718027f85f45503241f47ed16e5134e20",
+        "repo": "GanjinZero/cauchy_kovalevskaya"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "GanjinZero"
 }

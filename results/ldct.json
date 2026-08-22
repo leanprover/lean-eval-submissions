@@ -1,18 +1,27 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "Claude Opus 4.8 + Fable 5 (multi-agent)": {
-      "chudnovsky_formula_for_pi_inv": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+  "results": [
+    {
+      "accepted_at": "2026-07-05T14:53:26Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Claude Opus 4.8 + Fable 5 (multi-agent)",
+      "intake": {
         "issue_number": 558,
-        "production_description": "Formalization of Mathlib's chudnovskySum = \u03c0\u207b\u00b9 following Milla's complex-analytic proof (arXiv:1809.00533v6). Produced by Claude Opus 4.8 and Fable 5 (Claude Code) via multi-agent, file-parallel orchestration across multiple sessions; human direction/review at the architecture level (statement pinning, wave planning, output review). ~20.8k lines across 30 modules under Submission/Pi/. Axiom-clean: #print axioms yields exactly [propext, Classical.choice, Quot.sound] (no sorryAx). Toolchain leanprover/lean4:v4.32.0-rc1, Mathlib rev 360da6f.",
-        "solved_at": "2026-07-05T14:53:26Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "4a7505195632d378c8b5cb888864b344621e1d4d",
-        "submission_repo": "ldct/lean-eval-chudnovsky"
+        "kind": "issue"
+      },
+      "problem_id": "chudnovsky_formula_for_pi_inv",
+      "production_metadata": {
+        "production_description": "Formalization of Mathlib's chudnovskySum = π⁻¹ following Milla's complex-analytic proof (arXiv:1809.00533v6). Produced by Claude Opus 4.8 and Fable 5 (Claude Code) via multi-agent, file-parallel orchestration across multiple sessions; human direction/review at the architecture level (statement pinning, wave planning, output review). ~20.8k lines across 30 modules under Submission/Pi/. Axiom-clean: #print axioms yields exactly [propext, Classical.choice, Quot.sound] (no sorryAx). Toolchain leanprover/lean4:v4.32.0-rc1, Mathlib rev 360da6f."
+      },
+      "result_id": "r2_3bbeb43d348566f89665929d822d215214eea9349ba2a0803decce8d194205c1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "4a7505195632d378c8b5cb888864b344621e1d4d",
+        "repo": "ldct/lean-eval-chudnovsky"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "ldct"
 }

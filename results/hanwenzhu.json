@@ -1,220 +1,449 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "Seed Prover (ByteDance)": {
-      "adoCharZero": {
-        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
-        "issue_number": 1024,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-13T18:11:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "4408df1921fe54d17c11a5d45aa5901d34d3a102",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "alternating_sign_matrix_count": {
-        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
-        "issue_number": 930,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-08-03T19:00:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "d41d7856a8aaf300b20615f794602fecb3b23abc",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "brauer_splitting_field": {
-        "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
-        "issue_number": 892,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-28T19:32:12Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "5ac3c256103c9ab0358df952b480d2d90c14327a",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "chebyshev_sign_change": {
-        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
-        "issue_number": 935,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-08-04T08:27:00Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "5182208fe23b845b6862651afb783fbfb8cf5ff4",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "conway_schneeberger_fifteen": {
-        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
-        "issue_number": 1023,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-13T21:04:56Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "9b98ab81f687179ebcaf5d58e5be3847d5f22992",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "deBranges_theorem": {
-        "benchmark_commit": "24a03a21451dc039556ee55ade1d2d788842636e",
-        "issue_number": 901,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-31T00:01:11Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "b5948b4f899e3114c471a13983534fda6aecbd50",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "exists_chiral_knot": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
-        "issue_number": 868,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-23T02:23:43Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "ce337120c983a063f9dc9f1c0c8d89c052917ffb",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "fary_milnor": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
-        "issue_number": 877,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-24T00:00:05Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "c803b859ba13ea7d01b0c01c158c081e286aad84",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "furstenberg_measure": {
-        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
-        "issue_number": 942,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-08-04T19:40:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "51a4a939400cc1575ccd8c5f92a75fc00bea9052",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "higman_infinite_simple": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
-        "issue_number": 885,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-26T18:35:10Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f827d8c61408d89356903b15e83183a7f476b4d2",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "hopf_rinow": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
-        "issue_number": 886,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-26T19:36:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "81d1ddc833df4a6661e4be53cf44e5a8a7b4b6da",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "isoperimetric_inequality": {
-        "benchmark_commit": "344d00f6d9c2740b740106bc88e40d0e24089992",
-        "issue_number": 903,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-31T07:21:44Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "c98aa42f364c6875a568ce3a2cc0fc31b467dd84",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "kam_invariant_curve": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
-        "issue_number": 871,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-23T03:25:26Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "4e4628451213c7c53b18b92cd9afe2466a35aea2",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "m23_irrep_tensor_square_decomp": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 850,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-19T18:12:57Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "523a7e402ed832a3d2982d11f5370eed6c081474",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "mandelbrot_connected": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 861,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-22T00:37:26Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "8479b635bb3651a2ec5e4f9c8429f8e4d83ef45d",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "morse_inequality": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
-        "issue_number": 865,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-22T20:28:40Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "4c1f86215b77936805fb9177f9a3949184b52673",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
-      },
-      "novikov_unsolvable": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+  "results": [
+    {
+      "accepted_at": "2026-07-23T20:09:15Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
         "issue_number": 876,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-23T20:09:15Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "eb0764aefd535273153182dd6b4f0d6ea39abd95",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+        "kind": "issue"
       },
-      "platonic_classification": {
-        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+      "problem_id": "novikov_unsolvable",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_008263798ca49600b0ae5c7546b937693d6c84ff08d4238dc5d09091b59be1cd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "eb0764aefd535273153182dd6b4f0d6ea39abd95",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-08-03T20:58:39Z",
+      "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
         "issue_number": 931,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-08-03T20:58:39Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "fcf5141145bab13be5096232fbc7515af312db8f",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+        "kind": "issue"
       },
-      "strong_mason_conjecture": {
-        "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+      "problem_id": "platonic_classification",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_052d6b2a5a9e1afb943df82baa6476fdf85e3e99320e21b415bd09c0d45fc7ff",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "fcf5141145bab13be5096232fbc7515af312db8f",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-08-04T21:09:14Z",
+      "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
         "issue_number": 943,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-08-04T21:09:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "6466150f543bd9b3597cafea5978ad21a9992d30",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+        "kind": "issue"
       },
-      "upper_bound_simplicial_spheres": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "problem_id": "strong_mason_conjecture",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_0783fe0fbc5324bb6aad6727327eadb6aaac20ce760d0bf3f2ecba2c66047699",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6466150f543bd9b3597cafea5978ad21a9992d30",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-07-26T19:36:14Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 886,
+        "kind": "issue"
+      },
+      "problem_id": "hopf_rinow",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_1200283747fe4196d557bdd93017be70b7882d2c7c904f890a16762ed3bc6d90",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "81d1ddc833df4a6661e4be53cf44e5a8a7b4b6da",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-07-23T03:25:26Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 871,
+        "kind": "issue"
+      },
+      "problem_id": "kam_invariant_curve",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_25afff9855ff44208c80455f3927233ada984e414e9b9b26b6287e03c99b2e1b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4e4628451213c7c53b18b92cd9afe2466a35aea2",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-07-31T00:01:11Z",
+      "benchmark_commit": "24a03a21451dc039556ee55ade1d2d788842636e",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 901,
+        "kind": "issue"
+      },
+      "problem_id": "deBranges_theorem",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_389bf05fdc874e926534222eaf78880ba45fe237a97fdafb83acae8377a5d325",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b5948b4f899e3114c471a13983534fda6aecbd50",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-07-22T00:37:26Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 861,
+        "kind": "issue"
+      },
+      "problem_id": "mandelbrot_connected",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_49f131d3181f4231722f9606f14b5979dfc2b4c3b93b0b8f1f688091a2371f04",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8479b635bb3651a2ec5e4f9c8429f8e4d83ef45d",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-07-23T01:02:15Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
         "issue_number": 867,
-        "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-23T01:02:15Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "fb301196723762095a8dd882172e1f67ac3f828d",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+        "kind": "issue"
       },
-      "weak_morse_inequality": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
-        "issue_number": 866,
+      "problem_id": "upper_bound_simplicial_spheres",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_4ef8b9ab62f493adbfe5716f171145547275ab067b048eddd1605f3ca5a91c35",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "fb301196723762095a8dd882172e1f67ac3f828d",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-07-23T02:23:43Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 868,
+        "kind": "issue"
+      },
+      "problem_id": "exists_chiral_knot",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_5c09eff4cba51063f61c473a1fc07bacb557a22e7912047b2a79dd827e44f1a1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ce337120c983a063f9dc9f1c0c8d89c052917ffb",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-08-13T18:11:03Z",
+      "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 1024,
+        "kind": "issue"
+      },
+      "problem_id": "adoCharZero",
+      "production_metadata": {
         "production_description": "Automatically proved by Seed Prover.",
-        "solved_at": "2026-07-22T20:41:55Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "95de7f292d1e3974cdfe847af7231ca99a65394c",
-        "submission_repo": "hanwenzhu/lean-eval-seedprover"
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_61f599d0b045a9b9c5b0ff94cf9912cd205000b076ab06c756340b403ac5caab",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4408df1921fe54d17c11a5d45aa5901d34d3a102",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-08-13T21:04:56Z",
+      "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 1023,
+        "kind": "issue"
+      },
+      "problem_id": "conway_schneeberger_fifteen",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_62317183d86f0d7e2fe74163aaf710bba002a3d691c856b1e519f7552f0e53fb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9b98ab81f687179ebcaf5d58e5be3847d5f22992",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-07-22T20:28:40Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 865,
+        "kind": "issue"
+      },
+      "problem_id": "morse_inequality",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_7209fa748d8f4fcce60e5bb9e7a358b4eb52bf0157d4b038ca925119143f3b96",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "4c1f86215b77936805fb9177f9a3949184b52673",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-07-26T18:35:10Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 885,
+        "kind": "issue"
+      },
+      "problem_id": "higman_infinite_simple",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_788c6a1d8d4c1ce27ac987ba2cdac52b8b9f68ec9694fd31f57b8cb7f90c703e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f827d8c61408d89356903b15e83183a7f476b4d2",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-08-04T08:27:00Z",
+      "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 935,
+        "kind": "issue"
+      },
+      "problem_id": "chebyshev_sign_change",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_7cc49b27b93b6ec0cb309a558ccf5d8bac08bf81a6bcc1b702b94a5388309ab1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5182208fe23b845b6862651afb783fbfb8cf5ff4",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-07-24T00:00:05Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 877,
+        "kind": "issue"
+      },
+      "problem_id": "fary_milnor",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_7dc6c60b3dde4684bc1fd700459b62df6c1dc63cb25f9b541b33dcad4df5d006",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c803b859ba13ea7d01b0c01c158c081e286aad84",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-07-19T18:12:57Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 850,
+        "kind": "issue"
+      },
+      "problem_id": "m23_irrep_tensor_square_decomp",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_9894b691ffd710b78ab4fa221cab1561aacc2328985528e1d187982a9afb26bc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "523a7e402ed832a3d2982d11f5370eed6c081474",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-07-31T07:21:44Z",
+      "benchmark_commit": "344d00f6d9c2740b740106bc88e40d0e24089992",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 903,
+        "kind": "issue"
+      },
+      "problem_id": "isoperimetric_inequality",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_991d6b346b939c30d7acd60b1dd7f58101f9c73bc97de4bf6dee89efb6e2ae59",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c98aa42f364c6875a568ce3a2cc0fc31b467dd84",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-07-22T20:41:55Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 866,
+        "kind": "issue"
+      },
+      "problem_id": "weak_morse_inequality",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_a0e669ca7b3c76d28395435422b59672276e9ec9ec5f376d37f159dba4684389",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "95de7f292d1e3974cdfe847af7231ca99a65394c",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-08-03T19:00:17Z",
+      "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 930,
+        "kind": "issue"
+      },
+      "problem_id": "alternating_sign_matrix_count",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_b3aea81d60c04743d3728eeb6cf5f23efa052f9a00b92fb358cd19ab956880b6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "d41d7856a8aaf300b20615f794602fecb3b23abc",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-08-04T19:40:35Z",
+      "benchmark_commit": "6af65bb1abb997a3cfabf3236e43ab5085a51dac",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 942,
+        "kind": "issue"
+      },
+      "problem_id": "furstenberg_measure",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_b9dc1f90b7a73eebc0e6ed91fe402f71cccdf98d9e19ccb64519c51c1fda263a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "51a4a939400cc1575ccd8c5f92a75fc00bea9052",
+        "repo": "hanwenzhu/lean-eval-seedprover"
+      }
+    },
+    {
+      "accepted_at": "2026-07-28T19:32:12Z",
+      "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
+      "declared_model": "Seed Prover (ByteDance)",
+      "intake": {
+        "issue_number": 892,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_splitting_field",
+      "production_metadata": {
+        "production_description": "Automatically proved by Seed Prover."
+      },
+      "result_id": "r2_d613f31f1526167d50f3917e4e7683da8bb8693ced0bd02e37ae74ef1f2d843f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5ac3c256103c9ab0358df952b480d2d90c14327a",
+        "repo": "hanwenzhu/lean-eval-seedprover"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "hanwenzhu"
 }

@@ -1,30 +1,48 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "UNICO/NOUS pipeline - Claude (Anthropic)": {
-      "morley_theorem": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 780,
-        "production_description": "Produced by an autonomous theorem-proving and certification pipeline built with Claude Code, directed and operated by a non-mathematician developer. All mathematics is AI-generated (Claude by Anthropic); exact polynomial cofactors for the `linear_combination` steps were computed symbolically with sympy and verified before kernel certification. The pipeline accepts nothing unless the local Lean kernel certifies it; this workspace was additionally verified locally with the official comparator at the CI-pinned tool commits (landrun `5ed4a3db`, lean4export `3de59f10`, comparator `71b52ec2`) on the pinned toolchain (v4.32.0-rc1): \"Your solution is okay!\".\n\nThe proof is independent of all previously recorded solutions (none were consulted). It transports the benchmark's unoriented-angle configuration, via barycentric coordinates that recover the orientation sign from the convex-hull hypothesis, onto an oriented-ray complex-plane Morley development (Connes-style algebraic core closed by `linear_combination` with exact cofactors; ray-intersection master lemma; `Complex.arg` toolkit). A standalone statement with existence/uniqueness and non-degeneracy companions lives in the same repository (`UnicoProofs/Morley.lean`). Axioms: `propext`, `Classical.choice`, `Quot.sound` only - no `sorry`, no `native_decide`.\n\nEstimated cost: one afternoon of wall-clock time end-to-end (bridge design + proof + hardening, ~25 local kernel verdicts), subscription-based model usage, consumer Apple Silicon hardware. Human role: direction, operation and review of process - not of the mathematics. Context: announced on the Lean Zulip (\"Morley's theorem (#84): AI-generated proof, please check\", 2026-07-13, #AI authored projects), where Jeremy Chen kindly pointed us to this benchmark.",
-        "solved_at": "2026-07-13T15:49:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "a5f503014a635623ec2d2de8ab0f6c00030d9028",
-        "submission_repo": "Solarys431/unico-lean-proofs"
+  "results": [
+    {
+      "accepted_at": "2026-07-21T15:55:26Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "UNICO/NOUS: Claude (Fable 5 + Opus 4.8) + GPT-5.6-Sol",
+      "intake": {
+        "issue_number": 858,
+        "kind": "issue"
+      },
+      "problem_id": "platonic_classification",
+      "production_metadata": {
+        "production_description": "Produced by UNICO/NOUS, a multi-model pipeline: Claude Fable 5 as the orchestrator in the main loop, with GPT-5.6-Sol (via Codex CLI) and Claude Opus 4.8 as prover/builder agents. A Python numerical scout computed exact golden-ratio data (flags, exposing functionals, wall reflections of the 24-cell, 600-cell and 120-cell) that guided the Lean formalization; every step was then proved from scratch and kernel-checked. Human direction throughout (strategy, adversarial review gates, final audits). The final theorem depends only on [propext, Classical.choice, Quot.sound]; no sorry, axiom or native_decide anywhere in the submission. Solved 2026-07-18 to 2026-07-21. (Third attempt: the repo is now structured as a generated workspace importing ChallengeDeps, root theorem in the Submission namespace; Solution.lean builds in a local replica of the CI environment.)"
+      },
+      "result_id": "r2_050f4a605fdaf42f83e2c0670c704cbef83ff83eecf0400520acba43b34976cd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0742f2ff516619b3afebfeebd0f1473fe0b5ef57",
+        "repo": "Solarys431/lean-eval-platonic-classification"
       }
     },
-    "UNICO/NOUS: Claude (Fable 5 + Opus 4.8) + GPT-5.6-Sol": {
-      "platonic_classification": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 858,
-        "production_description": "Produced by UNICO/NOUS, a multi-model pipeline: Claude Fable 5 as the orchestrator in the main loop, with GPT-5.6-Sol (via Codex CLI) and Claude Opus 4.8 as prover/builder agents. A Python numerical scout computed exact golden-ratio data (flags, exposing functionals, wall reflections of the 24-cell, 600-cell and 120-cell) that guided the Lean formalization; every step was then proved from scratch and kernel-checked. Human direction throughout (strategy, adversarial review gates, final audits). The final theorem depends only on [propext, Classical.choice, Quot.sound]; no sorry, axiom or native_decide anywhere in the submission. Solved 2026-07-18 to 2026-07-21. (Third attempt: the repo is now structured as a generated workspace importing ChallengeDeps, root theorem in the Submission namespace; Solution.lean builds in a local replica of the CI environment.)",
-        "solved_at": "2026-07-21T15:55:26Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "0742f2ff516619b3afebfeebd0f1473fe0b5ef57",
-        "submission_repo": "Solarys431/lean-eval-platonic-classification"
+    {
+      "accepted_at": "2026-07-13T15:49:22Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "UNICO/NOUS pipeline - Claude (Anthropic)",
+      "intake": {
+        "issue_number": 780,
+        "kind": "issue"
+      },
+      "problem_id": "morley_theorem",
+      "production_metadata": {
+        "production_description": "Produced by an autonomous theorem-proving and certification pipeline built with Claude Code, directed and operated by a non-mathematician developer. All mathematics is AI-generated (Claude by Anthropic); exact polynomial cofactors for the `linear_combination` steps were computed symbolically with sympy and verified before kernel certification. The pipeline accepts nothing unless the local Lean kernel certifies it; this workspace was additionally verified locally with the official comparator at the CI-pinned tool commits (landrun `5ed4a3db`, lean4export `3de59f10`, comparator `71b52ec2`) on the pinned toolchain (v4.32.0-rc1): \"Your solution is okay!\".\n\nThe proof is independent of all previously recorded solutions (none were consulted). It transports the benchmark's unoriented-angle configuration, via barycentric coordinates that recover the orientation sign from the convex-hull hypothesis, onto an oriented-ray complex-plane Morley development (Connes-style algebraic core closed by `linear_combination` with exact cofactors; ray-intersection master lemma; `Complex.arg` toolkit). A standalone statement with existence/uniqueness and non-degeneracy companions lives in the same repository (`UnicoProofs/Morley.lean`). Axioms: `propext`, `Classical.choice`, `Quot.sound` only - no `sorry`, no `native_decide`.\n\nEstimated cost: one afternoon of wall-clock time end-to-end (bridge design + proof + hardening, ~25 local kernel verdicts), subscription-based model usage, consumer Apple Silicon hardware. Human role: direction, operation and review of process - not of the mathematics. Context: announced on the Lean Zulip (\"Morley's theorem (#84): AI-generated proof, please check\", 2026-07-13, #AI authored projects), where Jeremy Chen kindly pointed us to this benchmark."
+      },
+      "result_id": "r2_340449ceb6d1eb7b9c0aa39ba3dd9f8c97544c5c167be6d321e2cc8f9b0c4ccb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "a5f503014a635623ec2d2de8ab0f6c00030d9028",
+        "repo": "Solarys431/unico-lean-proofs"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "Solarys431"
 }

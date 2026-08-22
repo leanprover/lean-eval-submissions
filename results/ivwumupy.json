@@ -1,46 +1,82 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "deepseek-v4 and gpt-5.x": {
-      "brauer_suzuki": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
-        "issue_number": 880,
-        "solved_at": "2026-07-24T04:58:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "31219ea62ffac44c137cb10919e1e4ae566ebe2b",
-        "submission_repo": "Qiuzhen-CFSG/CFSG"
-      },
-      "feit_thompson": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
-        "issue_number": 880,
-        "solved_at": "2026-07-24T04:58:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "31219ea62ffac44c137cb10919e1e4ae566ebe2b",
-        "submission_repo": "Qiuzhen-CFSG/CFSG"
-      },
-      "glauberman_zStar": {
-        "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
+  "results": [
+    {
+      "accepted_at": "2026-07-27T16:55:37Z",
+      "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
+      "declared_model": "deepseek-v4 and gpt-5.x",
+      "intake": {
         "issue_number": 887,
-        "solved_at": "2026-07-27T16:55:37Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "c3503435e1e303497ab3698f240f38ff23c57f23",
-        "submission_repo": "Qiuzhen-CFSG/CFSG"
+        "kind": "issue"
+      },
+      "problem_id": "glauberman_zStar",
+      "production_metadata": {},
+      "result_id": "r2_5c2d94fc4897f604502905e974b220cb8f9214810f2fea7af01c00235ca854f8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "c3503435e1e303497ab3698f240f38ff23c57f23",
+        "repo": "Qiuzhen-CFSG/CFSG"
       }
     },
-    "various model (deepseek-v4, gpt-5.*)": {
-      "feit_thompson": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+    {
+      "accepted_at": "2026-07-24T01:03:46Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "various model (deepseek-v4, gpt-5.*)",
+      "intake": {
         "issue_number": 878,
-        "solved_at": "2026-07-24T01:03:46Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "1b9ceeb20c204831188548a8e80996aed7907adf",
-        "submission_repo": "Qiuzhen-CFSG/CFSG"
+        "kind": "issue"
+      },
+      "problem_id": "feit_thompson",
+      "production_metadata": {},
+      "result_id": "r2_836a3f6a3cddc66e140a4438ba7a237c092a3cf2fcebe3c28851c4116db08ce6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "1b9ceeb20c204831188548a8e80996aed7907adf",
+        "repo": "Qiuzhen-CFSG/CFSG"
+      }
+    },
+    {
+      "accepted_at": "2026-07-24T04:58:03Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "deepseek-v4 and gpt-5.x",
+      "intake": {
+        "issue_number": 880,
+        "kind": "issue"
+      },
+      "problem_id": "feit_thompson",
+      "production_metadata": {},
+      "result_id": "r2_a28c3d7f4a8c8ca8fe19c9602ce5830c73be29c50359402be01b6d148c773bff",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "31219ea62ffac44c137cb10919e1e4ae566ebe2b",
+        "repo": "Qiuzhen-CFSG/CFSG"
+      }
+    },
+    {
+      "accepted_at": "2026-07-24T04:58:03Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "deepseek-v4 and gpt-5.x",
+      "intake": {
+        "issue_number": 880,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_suzuki",
+      "production_metadata": {},
+      "result_id": "r2_f0c0ef0644a0ff841dbf02fa83a23a189a855e265d877a405948f3aec9fe1809",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "31219ea62ffac44c137cb10919e1e4ae566ebe2b",
+        "repo": "Qiuzhen-CFSG/CFSG"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "ivwumupy"
 }

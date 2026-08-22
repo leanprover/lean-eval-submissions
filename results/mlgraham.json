@@ -1,154 +1,282 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "github.com/mlgraham (Claude Fable 5)": {
-      "banach_alaoglu_bourbaki": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1139,
-        "production_description": "Original proof of banach_alaoglu_bourbaki (Bourbaki's locally convex extension of\nBanach-Alaoglu, absent from Mathlib per the problem's own docstring). Claude Fable 5 (Claude\nCode), under human direction, worked from the Challenge, Mathlib source search, and compiler\nfeedback only; no published lean-eval solution consulted. Method: choose an open absolutely\nconvex V inside the given neighborhood (nhds_hasBasis_absConvex_open), take p := gaugeSeminorm\nof V, build a type synonym of E carrying p as a SeminormedAddCommGroup/NormedSpace structure,\napply Mathlib's seminormed Banach-Alaoglu (WeakDual.isCompact_polar) to the unit ball there,\nand transport compactness through the pointwise-continuous inclusion of the p-dual into\nWeakDual of E; the weak-star polar of U is closed and contained in that compact image. Cost:\n9 compile iterations, ~45 minutes of model loop time, ~$0 marginal spend. (Earlier workspaces\non this branch are already recorded; results are sticky.)",
-        "solution_publication_date": "2026-08-19",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-20T02:20:18Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "c81843f5adcb7e34c8e46e748465bfa4dfcfbcda",
-        "submission_repo": "mlgraham/lean-eval-submission"
-      },
-      "brauer_character_in_cyclotomic": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1144,
-        "production_description": "Original proof of brauer_character_in_cyclotomic. Claude Fable 5 (Claude Code), under human\ndirection, from the Challenge, Mathlib source search, and compiler feedback only; no published\nlean-eval solution consulted. Method: embed CyclotomicField (exponent G) into C via\nIsAlgClosed.lift; rho(g)^exp = 1, so the trace equals the sum of charpoly roots\n(trace_eq_sum_roots_charpoly), each root is an eigenvalue (hasEigenvalue_iff_isRoot_charpoly)\nwhose eigenvector forces mu^exp = 1, hence each root is a power of the image of zeta\n(IsPrimitiveRoot.eq_pow_of_pow_eq_one) and lies in the embedding's range, a subring. Cost:\n3 compile iterations, ~35 minutes of model loop time, ~$0 marginal spend. (Earlier workspaces\non this branch are already recorded; results are sticky.)",
-        "solution_publication_date": "2026-08-19",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-20T02:54:43Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "9a2fc4415453a08097b73ba72af19cb7ee340f0d",
-        "submission_repo": "mlgraham/lean-eval-submission"
-      },
-      "bvp_comparison": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1142,
-        "production_description": "Retry of bvp_comparison and sturm_separation, which failed evaluation in #1130/#1131 with no\nerror detail while sibling workspaces passed \u2014 consistent with the runner memory issue\ndocumented in #1078. This resubmission replaces `import Mathlib` with minimal targeted\nimports in both Submission.lean files to shrink the build/export footprint; the proofs are\nbyte-identical otherwise. Both are original proofs by Claude Fable 5 (Claude Code) under\nhuman direction (methods described in #1130/#1131); no published lean-eval solution\nconsulted. (Other workspaces on this branch are already recorded; results are sticky.)",
-        "solution_publication_date": "2026-08-19",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-20T02:42:13Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "42808fea2b805402ea022106b4150d355de77948",
-        "submission_repo": "mlgraham/lean-eval-submission"
-      },
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1150,
-        "production_description": "Retry of cubic_decay_asymptotic, which failed evaluation in #1145 with no error detail while\nthe eight sibling workspaces passed in the same run. This is the same evaluator memory\npattern we hit and fixed in #1142 (see also #1078): the resubmission replaces `import\nMathlib` with minimal targeted imports (and one tactic call with an explicit term); the\nproof is otherwise identical and builds locally. Original proof by Claude Fable 5 (Claude\nCode) under human direction; method described in #1145; no published lean-eval solution\nconsulted. (Other workspaces on this branch are already recorded; results are sticky.)",
-        "solution_publication_date": "2026-08-19",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-20T04:10:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "fbc41ae6c87bb920db42d92f3a4711e8db0d56f0",
-        "submission_repo": "mlgraham/lean-eval-submission"
-      },
-      "dirichlet_eigenvalues_eq_nat_sq": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+  "results": [
+    {
+      "accepted_at": "2026-08-20T05:57:01Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
         "issue_number": 1156,
-        "production_description": "Original proof of dirichlet_eigenvalues_eq_nat_sq. Claude Fable 5 (Claude Code), under human\ndirection, from the Challenge, Mathlib source search, and compiler feedback only; no published\nlean-eval solution consulted. Method: a second-order IVP uniqueness lemma obtained by passing\nto the first-order system in R x R with a continuous-linear vector field and Gronwall's\ntrajectory estimate (dist_le_of_trajectories_ODE); then trichotomy on lam with explicit\ncomparison solutions (sinh / linear / sine scaled by the initial slope), so the boundary\ncondition at pi forces either a vanishing initial slope (contradicting the interior\nnonvanishing point) or sin(sqrt(lam) pi) = 0, giving lam = n^2 via sin_eq_zero_iff; the\nconverse exhibits sin(n x). Slim imports per the evaluator-memory finding. Cost: 3 compile\niterations, ~50 minutes of model loop time. (Earlier workspaces on this branch are already\nrecorded; results are sticky.)\n\nNote: this is a retry of #1153, whose evaluation was canceled mid-run (workflow logs show\n`Run evaluate_submission.py: The operation was canceled` after ~45 min, plus an early\n`Mint lean-eval-bot installation token: Not Found` error) \u2014 the generic overlay-collision\ncomment appears to be the catch-all failure message. The submission content is unchanged.",
-        "solution_publication_date": "2026-08-19",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-20T05:57:01Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "d561d4168e59d26ac7da7e25d65ea41580e440a6",
-        "submission_repo": "mlgraham/lean-eval-submission"
+        "kind": "issue"
       },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1129,
-        "production_description": "Original proof, produced for a pre-registered research gate. Claude Fable 5 (Claude Code),\nunder human direction, worked from the problem's Challenge.lean, the workspace's pinned\nMathlib (source search), and compiler feedback only \u2014 no published lean-eval solution to any\nproblem was consulted. (The same submitter maintains a separately-labeled packaging entry;\nthe buckets and branches are kept disjoint on purpose.) Method: a Finset-strengthened Ramsey\nstatement proved by double induction on r and s with the pivot-vertex pigeonhole\n(R(r+1,s+1) \u2264 R(r,s+1) + R(r+1,s) + 1), all within a single vertex type, then specialized to\nFin n with A = univ. Mathlib at this pin has no Ramsey theorem. Cost: 2 compile iterations,\n~17 minutes of model loop time, ~$0 marginal spend.",
+      "problem_id": "dirichlet_eigenvalues_eq_nat_sq",
+      "production_metadata": {
+        "production_description": "Original proof of dirichlet_eigenvalues_eq_nat_sq. Claude Fable 5 (Claude Code), under human\ndirection, from the Challenge, Mathlib source search, and compiler feedback only; no published\nlean-eval solution consulted. Method: a second-order IVP uniqueness lemma obtained by passing\nto the first-order system in R x R with a continuous-linear vector field and Gronwall's\ntrajectory estimate (dist_le_of_trajectories_ODE); then trichotomy on lam with explicit\ncomparison solutions (sinh / linear / sine scaled by the initial slope), so the boundary\ncondition at pi forces either a vanishing initial slope (contradicting the interior\nnonvanishing point) or sin(sqrt(lam) pi) = 0, giving lam = n^2 via sin_eq_zero_iff; the\nconverse exhibits sin(n x). Slim imports per the evaluator-memory finding. Cost: 3 compile\niterations, ~50 minutes of model loop time. (Earlier workspaces on this branch are already\nrecorded; results are sticky.)\n\nNote: this is a retry of #1153, whose evaluation was canceled mid-run (workflow logs show\n`Run evaluate_submission.py: The operation was canceled` after ~45 min, plus an early\n`Mint lean-eval-bot installation token: Not Found` error) — the generic overlay-collision\ncomment appears to be the catch-all failure message. The submission content is unchanged.",
         "solution_publication_date": "2026-08-19",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-20T01:08:51Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "8d44d31c6bb221bed45749804fa18ec7fec79d71",
-        "submission_repo": "mlgraham/lean-eval-submission"
+        "solution_publication_status": "published"
       },
-      "koszul_formula": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1151,
-        "production_description": "Original proof of koszul_formula. Claude Fable 5 (Claude Code), under human direction, from\nthe Challenge, Mathlib source search, and compiler feedback only; no published lean-eval\nsolution consulted. Method: instantiate the problem's IsMetricCompatible hypothesis at the\nthree cyclic pairs, replace the three Lie brackets via Mathlib's\nCovariantDerivative.torsion_eq_zero_iff, then bilinearity of the inner product\n(inner_sub_right), three real_inner_comm rewrites, and ring. Cost: 2 compile iterations,\n~20 minutes of model loop time. (Earlier workspaces on this branch are already recorded;\nresults are sticky.)",
-        "solution_publication_date": "2026-08-19",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-20T04:33:54Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "db00345ae5776e1cc782fd5df35e82e02a6a67ef",
-        "submission_repo": "mlgraham/lean-eval-submission"
-      },
-      "mulCayley_connected_iff_closure_eq_top": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1130,
-        "production_description": "Original proofs (batch of 2: bvp_comparison, mulCayley_connected_iff_closure_eq_top), produced\nfor a pre-registered research gate. Claude Fable 5 (Claude Code), under human direction, worked\nfrom each problem's Challenge.lean, the workspace's pinned Mathlib (source search), and compiler\nfeedback only \u2014 no published lean-eval solution to any problem was consulted. bvp_comparison:\nw := u - v has w'' >= 0, so w is convex on [0,1] (convexOn_of_deriv2_nonneg) and bounded by its\nendpoint values. mulCayley: closure-membership transfers along walks (forward); closure_induction\nwith left-translation as a graph homomorphism (backward). Cost: 3 and 1 compile iterations,\n~20 and ~15 minutes of model loop time respectively, ~$0 marginal spend. (The previously\nsubmitted finite_graph_ramsey_theorem workspace is also on this branch; its result is sticky.)",
-        "solution_publication_date": "2026-08-19",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-20T01:41:08Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "8f92249fd1b60e2f734e6688cce0d113c177bb6b",
-        "submission_repo": "mlgraham/lean-eval-submission"
-      },
-      "posSemidef_map_exp": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1142,
-        "production_description": "Retry of bvp_comparison and sturm_separation, which failed evaluation in #1130/#1131 with no\nerror detail while sibling workspaces passed \u2014 consistent with the runner memory issue\ndocumented in #1078. This resubmission replaces `import Mathlib` with minimal targeted\nimports in both Submission.lean files to shrink the build/export footprint; the proofs are\nbyte-identical otherwise. Both are original proofs by Claude Fable 5 (Claude Code) under\nhuman direction (methods described in #1130/#1131); no published lean-eval solution\nconsulted. (Other workspaces on this branch are already recorded; results are sticky.)",
-        "solution_publication_date": "2026-08-19",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-20T02:42:13Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "42808fea2b805402ea022106b4150d355de77948",
-        "submission_repo": "mlgraham/lean-eval-submission"
-      },
-      "sturm_separation": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1142,
-        "production_description": "Retry of bvp_comparison and sturm_separation, which failed evaluation in #1130/#1131 with no\nerror detail while sibling workspaces passed \u2014 consistent with the runner memory issue\ndocumented in #1078. This resubmission replaces `import Mathlib` with minimal targeted\nimports in both Submission.lean files to shrink the build/export footprint; the proofs are\nbyte-identical otherwise. Both are original proofs by Claude Fable 5 (Claude Code) under\nhuman direction (methods described in #1130/#1131); no published lean-eval solution\nconsulted. (Other workspaces on this branch are already recorded; results are sticky.)",
-        "solution_publication_date": "2026-08-19",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-20T02:42:13Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "42808fea2b805402ea022106b4150d355de77948",
-        "submission_repo": "mlgraham/lean-eval-submission"
-      },
-      "symplectic_matrix_det": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1133,
-        "production_description": "symplectic_matrix_det: a direct citation \u2014 the statement is Mathlib's own\nSymplecticGroup.det_eq_one, applied in one line. Found via Mathlib source search by Claude\nFable 5 (Claude Code) under human direction, for a pre-registered research gate; no published\nlean-eval solution consulted. Disclosed as a citation rather than a new proof. Cost: 2 compile\niterations (one namespace fix), ~5 minutes. (Earlier workspaces on this branch are already\nrecorded; results are sticky.)",
-        "solution_publication_date": "2026-08-19",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-20T02:00:53Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "bfcda9d27292a86888305aea32e819c114849884",
-        "submission_repo": "mlgraham/lean-eval-submission"
+      "result_id": "r2_1dd4e87967d3ae5bd9162f4d9984172302827253f24a338aae5debf8d72525bd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "d561d4168e59d26ac7da7e25d65ea41580e440a6",
+        "repo": "mlgraham/lean-eval-submission"
       }
     },
-    "github.com/mlgraham \u2014 public accepted source, packaged (Claude Fable 5)": {
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1128,
-        "production_description": "This is a packaged copy of a published, previously accepted solution \u2014 not an original proof.\nSource: the `savarin-6-hour-gpt-5.6-speedrun` entry's public repository\n(savarin/lean-eval-speedrun @ ab459a1ea7a89ec6db93da77d522ea384a45d0aa, Apache-2.0, published\n2026-08-17), whose solution to this problem was accepted by the comparator. Claude Fable 5\n(Claude Code), under human direction, located the published source via the public results\nstore, verified its Apache-2.0 license, regenerated a fresh workspace from the current\nleanprover/lean-eval benchmark, copied `Submission.lean`/`Submission/Helpers.lean` unmodified,\nand rebuilt locally against the current trusted `Challenge.lean` (`lake build`; the full\ncomparator replay was left to this pipeline because `landrun` is Linux-only). The original\nLICENSE is included in the submission repository. Purpose: pipeline validation for a\npre-registered research gate; est. cost ~$0 API spend, <1h combined human/AI time for this\nproblem.",
+    {
+      "accepted_at": "2026-08-20T04:33:54Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1151,
+        "kind": "issue"
+      },
+      "problem_id": "koszul_formula",
+      "production_metadata": {
+        "production_description": "Original proof of koszul_formula. Claude Fable 5 (Claude Code), under human direction, from\nthe Challenge, Mathlib source search, and compiler feedback only; no published lean-eval\nsolution consulted. Method: instantiate the problem's IsMetricCompatible hypothesis at the\nthree cyclic pairs, replace the three Lie brackets via Mathlib's\nCovariantDerivative.torsion_eq_zero_iff, then bilinearity of the inner product\n(inner_sub_right), three real_inner_comm rewrites, and ring. Cost: 2 compile iterations,\n~20 minutes of model loop time. (Earlier workspaces on this branch are already recorded;\nresults are sticky.)",
         "solution_publication_date": "2026-08-19",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-20T00:08:13Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "2d317a57a82c688aabfa9c872c156fd87706b21e",
-        "submission_repo": "mlgraham/lean-eval-submission"
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_332912d4c1b54f73b8b9d6db83b780116afd6c5ee06a5049dd5a4eee74af9be0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "db00345ae5776e1cc782fd5df35e82e02a6a67ef",
+        "repo": "mlgraham/lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T02:54:43Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1144,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_character_in_cyclotomic",
+      "production_metadata": {
+        "production_description": "Original proof of brauer_character_in_cyclotomic. Claude Fable 5 (Claude Code), under human\ndirection, from the Challenge, Mathlib source search, and compiler feedback only; no published\nlean-eval solution consulted. Method: embed CyclotomicField (exponent G) into C via\nIsAlgClosed.lift; rho(g)^exp = 1, so the trace equals the sum of charpoly roots\n(trace_eq_sum_roots_charpoly), each root is an eigenvalue (hasEigenvalue_iff_isRoot_charpoly)\nwhose eigenvector forces mu^exp = 1, hence each root is a power of the image of zeta\n(IsPrimitiveRoot.eq_pow_of_pow_eq_one) and lies in the embedding's range, a subring. Cost:\n3 compile iterations, ~35 minutes of model loop time, ~$0 marginal spend. (Earlier workspaces\non this branch are already recorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_490647683acd8954c04abb32436869c004b07d805b9d0af243691e7072112c8d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "9a2fc4415453a08097b73ba72af19cb7ee340f0d",
+        "repo": "mlgraham/lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T02:42:13Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1142,
+        "kind": "issue"
+      },
+      "problem_id": "bvp_comparison",
+      "production_metadata": {
+        "production_description": "Retry of bvp_comparison and sturm_separation, which failed evaluation in #1130/#1131 with no\nerror detail while sibling workspaces passed — consistent with the runner memory issue\ndocumented in #1078. This resubmission replaces `import Mathlib` with minimal targeted\nimports in both Submission.lean files to shrink the build/export footprint; the proofs are\nbyte-identical otherwise. Both are original proofs by Claude Fable 5 (Claude Code) under\nhuman direction (methods described in #1130/#1131); no published lean-eval solution\nconsulted. (Other workspaces on this branch are already recorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_63d44a91004081421023a56993a4f27a1f4807a32fa0d3449ca8e9a1d4bb0702",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "42808fea2b805402ea022106b4150d355de77948",
+        "repo": "mlgraham/lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T02:00:53Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1133,
+        "kind": "issue"
+      },
+      "problem_id": "symplectic_matrix_det",
+      "production_metadata": {
+        "production_description": "symplectic_matrix_det: a direct citation — the statement is Mathlib's own\nSymplecticGroup.det_eq_one, applied in one line. Found via Mathlib source search by Claude\nFable 5 (Claude Code) under human direction, for a pre-registered research gate; no published\nlean-eval solution consulted. Disclosed as a citation rather than a new proof. Cost: 2 compile\niterations (one namespace fix), ~5 minutes. (Earlier workspaces on this branch are already\nrecorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_778aca0e71f481e178cc20b0c74986bfe19679c85a877528d82bff1ec9afd4d0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "bfcda9d27292a86888305aea32e819c114849884",
+        "repo": "mlgraham/lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T02:42:13Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1142,
+        "kind": "issue"
+      },
+      "problem_id": "sturm_separation",
+      "production_metadata": {
+        "production_description": "Retry of bvp_comparison and sturm_separation, which failed evaluation in #1130/#1131 with no\nerror detail while sibling workspaces passed — consistent with the runner memory issue\ndocumented in #1078. This resubmission replaces `import Mathlib` with minimal targeted\nimports in both Submission.lean files to shrink the build/export footprint; the proofs are\nbyte-identical otherwise. Both are original proofs by Claude Fable 5 (Claude Code) under\nhuman direction (methods described in #1130/#1131); no published lean-eval solution\nconsulted. (Other workspaces on this branch are already recorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_94e3685c301de537a63241262ed1e7a7c1634e0f1239c60f456b2559a849991c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "42808fea2b805402ea022106b4150d355de77948",
+        "repo": "mlgraham/lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T02:42:13Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1142,
+        "kind": "issue"
+      },
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {
+        "production_description": "Retry of bvp_comparison and sturm_separation, which failed evaluation in #1130/#1131 with no\nerror detail while sibling workspaces passed — consistent with the runner memory issue\ndocumented in #1078. This resubmission replaces `import Mathlib` with minimal targeted\nimports in both Submission.lean files to shrink the build/export footprint; the proofs are\nbyte-identical otherwise. Both are original proofs by Claude Fable 5 (Claude Code) under\nhuman direction (methods described in #1130/#1131); no published lean-eval solution\nconsulted. (Other workspaces on this branch are already recorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_a87e4c14a4afde00be5b3eb603b96d78d446a6534f1cb1d9cd9b74a38282e4ff",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "42808fea2b805402ea022106b4150d355de77948",
+        "repo": "mlgraham/lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T02:20:18Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1139,
+        "kind": "issue"
+      },
+      "problem_id": "banach_alaoglu_bourbaki",
+      "production_metadata": {
+        "production_description": "Original proof of banach_alaoglu_bourbaki (Bourbaki's locally convex extension of\nBanach-Alaoglu, absent from Mathlib per the problem's own docstring). Claude Fable 5 (Claude\nCode), under human direction, worked from the Challenge, Mathlib source search, and compiler\nfeedback only; no published lean-eval solution consulted. Method: choose an open absolutely\nconvex V inside the given neighborhood (nhds_hasBasis_absConvex_open), take p := gaugeSeminorm\nof V, build a type synonym of E carrying p as a SeminormedAddCommGroup/NormedSpace structure,\napply Mathlib's seminormed Banach-Alaoglu (WeakDual.isCompact_polar) to the unit ball there,\nand transport compactness through the pointwise-continuous inclusion of the p-dual into\nWeakDual of E; the weak-star polar of U is closed and contained in that compact image. Cost:\n9 compile iterations, ~45 minutes of model loop time, ~$0 marginal spend. (Earlier workspaces\non this branch are already recorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_ad88201997f69b6dbb31a76e3d15e528589aee5e49713d2a211186ad344c94ad",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "c81843f5adcb7e34c8e46e748465bfa4dfcfbcda",
+        "repo": "mlgraham/lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T04:10:38Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1150,
+        "kind": "issue"
+      },
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {
+        "production_description": "Retry of cubic_decay_asymptotic, which failed evaluation in #1145 with no error detail while\nthe eight sibling workspaces passed in the same run. This is the same evaluator memory\npattern we hit and fixed in #1142 (see also #1078): the resubmission replaces `import\nMathlib` with minimal targeted imports (and one tactic call with an explicit term); the\nproof is otherwise identical and builds locally. Original proof by Claude Fable 5 (Claude\nCode) under human direction; method described in #1145; no published lean-eval solution\nconsulted. (Other workspaces on this branch are already recorded; results are sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_b598cda06d15ab1f5da23f41b24911d184726d9d857ce494326d60187dc012e2",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "fbc41ae6c87bb920db42d92f3a4711e8db0d56f0",
+        "repo": "mlgraham/lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T01:41:08Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1130,
+        "kind": "issue"
+      },
+      "problem_id": "mulCayley_connected_iff_closure_eq_top",
+      "production_metadata": {
+        "production_description": "Original proofs (batch of 2: bvp_comparison, mulCayley_connected_iff_closure_eq_top), produced\nfor a pre-registered research gate. Claude Fable 5 (Claude Code), under human direction, worked\nfrom each problem's Challenge.lean, the workspace's pinned Mathlib (source search), and compiler\nfeedback only — no published lean-eval solution to any problem was consulted. bvp_comparison:\nw := u - v has w'' >= 0, so w is convex on [0,1] (convexOn_of_deriv2_nonneg) and bounded by its\nendpoint values. mulCayley: closure-membership transfers along walks (forward); closure_induction\nwith left-translation as a graph homomorphism (backward). Cost: 3 and 1 compile iterations,\n~20 and ~15 minutes of model loop time respectively, ~$0 marginal spend. (The previously\nsubmitted finite_graph_ramsey_theorem workspace is also on this branch; its result is sticky.)",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_b783689cb1cbee9ac2bb2407320436338128abc99a3b695dcc73e9e8f26ae55b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "8f92249fd1b60e2f734e6688cce0d113c177bb6b",
+        "repo": "mlgraham/lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T00:08:13Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "github.com/mlgraham — public accepted source, packaged (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1128,
+        "kind": "issue"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {
+        "production_description": "This is a packaged copy of a published, previously accepted solution — not an original proof.\nSource: the `savarin-6-hour-gpt-5.6-speedrun` entry's public repository\n(savarin/lean-eval-speedrun @ ab459a1ea7a89ec6db93da77d522ea384a45d0aa, Apache-2.0, published\n2026-08-17), whose solution to this problem was accepted by the comparator. Claude Fable 5\n(Claude Code), under human direction, located the published source via the public results\nstore, verified its Apache-2.0 license, regenerated a fresh workspace from the current\nleanprover/lean-eval benchmark, copied `Submission.lean`/`Submission/Helpers.lean` unmodified,\nand rebuilt locally against the current trusted `Challenge.lean` (`lake build`; the full\ncomparator replay was left to this pipeline because `landrun` is Linux-only). The original\nLICENSE is included in the submission repository. Purpose: pipeline validation for a\npre-registered research gate; est. cost ~$0 API spend, <1h combined human/AI time for this\nproblem.",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_c432fc73612ad5c91f7009955fe74a58cba85129b479c67c57d6835ff1f56ff1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "2d317a57a82c688aabfa9c872c156fd87706b21e",
+        "repo": "mlgraham/lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T01:08:51Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1129,
+        "kind": "issue"
+      },
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {
+        "production_description": "Original proof, produced for a pre-registered research gate. Claude Fable 5 (Claude Code),\nunder human direction, worked from the problem's Challenge.lean, the workspace's pinned\nMathlib (source search), and compiler feedback only — no published lean-eval solution to any\nproblem was consulted. (The same submitter maintains a separately-labeled packaging entry;\nthe buckets and branches are kept disjoint on purpose.) Method: a Finset-strengthened Ramsey\nstatement proved by double induction on r and s with the pivot-vertex pigeonhole\n(R(r+1,s+1) ≤ R(r,s+1) + R(r+1,s) + 1), all within a single vertex type, then specialized to\nFin n with A = univ. Mathlib at this pin has no Ramsey theorem. Cost: 2 compile iterations,\n~17 minutes of model loop time, ~$0 marginal spend.",
+        "solution_publication_date": "2026-08-19",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_e79ee7e1fea8aa86c1d9086bcc732ace6dda95b92ab5a9104529e1e8fb5d98d7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "8d44d31c6bb221bed45749804fa18ec7fec79d71",
+        "repo": "mlgraham/lean-eval-submission"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "mlgraham"
 }

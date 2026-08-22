@@ -1,278 +1,576 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "MerLean-Prover": {
-      "abel_ruffini": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+  "results": [
+    {
+      "accepted_at": "2026-06-25T19:56:07Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "MerLean-Prover",
+      "intake": {
         "issue_number": 469,
-        "solved_at": "2026-06-25T19:56:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7b3bc037db402c14c0515366491c1ea1bc35dbc9",
-        "submission_repo": "doxtor6/lean-eval"
+        "kind": "issue"
       },
-      "banach_alaoglu_bourbaki": {
-        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
-        "issue_number": 287,
-        "solved_at": "2026-06-12T16:33:20Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "83c8d6ca60463a2173d012ca80c2e248900eb5dc",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "boone_higman_simple": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 350,
-        "solved_at": "2026-06-18T21:36:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "b6512d79e4e06e15493362ce6159961fd55a4f85",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "brauer_character_in_cyclotomic": {
-        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+      "problem_id": "abel_ruffini",
+      "production_metadata": {},
+      "result_id": "r2_079b91a9b60dd1d281c8ffc3c915cf07b09139c05fabe33c3260099de7e8aaa5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7b3bc037db402c14c0515366491c1ea1bc35dbc9",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T11:11:03Z",
+      "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+      "declared_model": "MerLean-Prover",
+      "intake": {
         "issue_number": 156,
-        "solved_at": "2026-06-01T11:11:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f31ca1be7002532e1b4d3e0dcf76deef3993ef90",
-        "submission_repo": "doxtor6/lean-eval"
+        "kind": "issue"
       },
-      "brouwer_fixed_point": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 216,
-        "solved_at": "2026-06-05T18:10:39Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "3c44320d1c9c944d71e1fb25b3ad08fd0699106e",
-        "submission_repo": "doxtor6/lean-eval"
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {},
+      "result_id": "r2_1e2097738d61f925d1d6435f2a88d4700f16af6b661d2ae1182c7f33f45bcc8f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f31ca1be7002532e1b4d3e0dcf76deef3993ef90",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T21:36:23Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 350,
+        "kind": "issue"
       },
-      "bvp_comparison": {
-        "benchmark_commit": "8dc055ac0f83d45d3cbf5eac5db59fab4d742b32",
+      "problem_id": "boone_higman_simple",
+      "production_metadata": {},
+      "result_id": "r2_3142b146d362394648cf0f41e9e06937703d7b03a8fe115976ba4b7c515f0e1c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b6512d79e4e06e15493362ce6159961fd55a4f85",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T23:28:30Z",
+      "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 166,
+        "kind": "issue"
+      },
+      "problem_id": "dirichlet_eigenvalues_eq_nat_sq",
+      "production_metadata": {},
+      "result_id": "r2_376636eccaa2318d933ee30eed86b319c27f6394895f67db6703ffe6b41371d8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-02T15:50:18Z",
+      "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 176,
+        "kind": "issue"
+      },
+      "problem_id": "mem_convexHull_finset_extremePoints_of_mem_compact_convex",
+      "production_metadata": {},
+      "result_id": "r2_410644074499df5959ea01cf1582545f96439cce8a523ab139432af84ad1f713",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "74148fe0b4570fde8c97cb388a65ed8ae4dffc1c",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T11:11:03Z",
+      "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 156,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_character_in_cyclotomic",
+      "production_metadata": {},
+      "result_id": "r2_4aae1e253e4eb0828b9623bad684ac3f290138caea6a857a67581d71f3b65f12",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f31ca1be7002532e1b4d3e0dcf76deef3993ef90",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-31T12:37:38Z",
+      "benchmark_commit": "8dc055ac0f83d45d3cbf5eac5db59fab4d742b32",
+      "declared_model": "MerLean-Prover",
+      "intake": {
         "issue_number": 143,
-        "solved_at": "2026-05-31T12:37:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "8db8125b8c00705cce96805f08c26acdab8db2f9",
-        "submission_repo": "doxtor6/lean-eval"
+        "kind": "issue"
       },
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "ca718c2e86433fd5bcf210b25877aaa90b275324",
-        "issue_number": 156,
-        "solved_at": "2026-06-01T11:11:03Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f31ca1be7002532e1b4d3e0dcf76deef3993ef90",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "dirichlet_eigenvalues_eq_nat_sq": {
-        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
-        "issue_number": 166,
-        "solved_at": "2026-06-01T23:28:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "exists_complementary_polynomial_on_unit_circle": {
-        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
-        "issue_number": 166,
-        "solved_at": "2026-06-01T23:28:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "exists_nonisotopic_link": {
-        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
-        "issue_number": 166,
-        "solved_at": "2026-06-01T23:28:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
-        "issue_number": 187,
-        "solved_at": "2026-06-03T11:57:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f618450a980860000f8dfbb0fb5b964c23ed0dd0",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 207,
-        "solved_at": "2026-06-05T10:44:04Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "92f0d06a2e7c6ee78aca2686d523dbf862780082",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "fourier_dirichlet_fejer": {
-        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+      "problem_id": "bvp_comparison",
+      "production_metadata": {},
+      "result_id": "r2_547b95ea6af806658bb30a0ea278eed39f3c61ceda87b408e0405cb7db781745",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8db8125b8c00705cce96805f08c26acdab8db2f9",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-12T16:33:20Z",
+      "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+      "declared_model": "MerLean-Prover",
+      "intake": {
         "issue_number": 287,
-        "solved_at": "2026-06-12T16:33:20Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "83c8d6ca60463a2173d012ca80c2e248900eb5dc",
-        "submission_repo": "doxtor6/lean-eval"
+        "kind": "issue"
       },
-      "heat_kernel_solves_heat_equation": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
-        "issue_number": 187,
-        "solved_at": "2026-06-03T11:57:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f618450a980860000f8dfbb0fb5b964c23ed0dd0",
-        "submission_repo": "doxtor6/lean-eval"
+      "problem_id": "banach_alaoglu_bourbaki",
+      "production_metadata": {},
+      "result_id": "r2_588f9d795ff85cc1b3932cb8bbc086a9bf1bafd2e0fd7fe8477ae0d718f2abe0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "83c8d6ca60463a2173d012ca80c2e248900eb5dc",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-02T15:50:18Z",
+      "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 176,
+        "kind": "issue"
       },
-      "hippocrates_lunes": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "problem_id": "oppenheim_inequality",
+      "production_metadata": {},
+      "result_id": "r2_59f264f98ff3378bc7068351ea0c322099d921f37b76a69368190012c377a35b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "74148fe0b4570fde8c97cb388a65ed8ae4dffc1c",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T21:36:23Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "MerLean-Prover",
+      "intake": {
         "issue_number": 350,
-        "solved_at": "2026-06-18T21:36:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "b6512d79e4e06e15493362ce6159961fd55a4f85",
-        "submission_repo": "doxtor6/lean-eval"
+        "kind": "issue"
       },
-      "linear_ode_asymptotic_stability": {
-        "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "problem_id": "wiener_atom_detection",
+      "production_metadata": {},
+      "result_id": "r2_5b49c5f92be6eb649c4f9165f64f2c36184a2495c17e4e783aa3962efbdc9543",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b6512d79e4e06e15493362ce6159961fd55a4f85",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T23:28:30Z",
+      "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 166,
+        "kind": "issue"
+      },
+      "problem_id": "exists_complementary_polynomial_on_unit_circle",
+      "production_metadata": {},
+      "result_id": "r2_72fcb31e62f8a0d62a63e6e551be5d444370650fbf2648dd8fd23079b1810666",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T11:57:30Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "MerLean-Prover",
+      "intake": {
         "issue_number": 187,
-        "solved_at": "2026-06-03T11:57:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f618450a980860000f8dfbb0fb5b964c23ed0dd0",
-        "submission_repo": "doxtor6/lean-eval"
+        "kind": "issue"
       },
-      "lp_maximum_principle": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 350,
-        "solved_at": "2026-06-18T21:36:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "b6512d79e4e06e15493362ce6159961fd55a4f85",
-        "submission_repo": "doxtor6/lean-eval"
+      "problem_id": "heat_kernel_solves_heat_equation",
+      "production_metadata": {},
+      "result_id": "r2_793e9c9af78c69e0238fe7c9538dc7aea1d3558566cf038f96da5b08dc5f3b9f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f618450a980860000f8dfbb0fb5b964c23ed0dd0",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T23:28:30Z",
+      "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 166,
+        "kind": "issue"
       },
-      "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
-        "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
-        "issue_number": 176,
-        "solved_at": "2026-06-02T15:50:18Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "74148fe0b4570fde8c97cb388a65ed8ae4dffc1c",
-        "submission_repo": "doxtor6/lean-eval"
+      "problem_id": "exists_nonisotopic_link",
+      "production_metadata": {},
+      "result_id": "r2_7bc4756a7809d7126a39f70d790dcd60b77ce76a92c8780459af58b0822a27e4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-05T18:10:39Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 216,
+        "kind": "issue"
       },
-      "mulCayley_connected_iff_closure_eq_top": {
-        "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
-        "issue_number": 176,
-        "solved_at": "2026-06-02T15:50:18Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "74148fe0b4570fde8c97cb388a65ed8ae4dffc1c",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "oppenheim_inequality": {
-        "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
-        "issue_number": 176,
-        "solved_at": "2026-06-02T15:50:18Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "74148fe0b4570fde8c97cb388a65ed8ae4dffc1c",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "pell_solution_convergent": {
-        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+      "problem_id": "brouwer_fixed_point",
+      "production_metadata": {},
+      "result_id": "r2_84e41cdbaaef80f2c87974c2f20a38483fad30ee934f0d9cb271d10c0667f318",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "3c44320d1c9c944d71e1fb25b3ad08fd0699106e",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-12T16:33:20Z",
+      "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+      "declared_model": "MerLean-Prover",
+      "intake": {
         "issue_number": 287,
-        "solved_at": "2026-06-12T16:33:20Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "83c8d6ca60463a2173d012ca80c2e248900eb5dc",
-        "submission_repo": "doxtor6/lean-eval"
+        "kind": "issue"
       },
-      "pi1_circle_mulEquiv_int": {
-        "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
+      "problem_id": "pell_solution_convergent",
+      "production_metadata": {},
+      "result_id": "r2_895af74fa0332b9c57b6ae40795e82bf4468c0ac1734c708d7f35a202732950b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "83c8d6ca60463a2173d012ca80c2e248900eb5dc",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T11:57:30Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 187,
+        "kind": "issue"
+      },
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {},
+      "result_id": "r2_8c0410be00ad7f7750517e4fc19340dcf1f65227b1a1581d8ad754e9f41289c7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f618450a980860000f8dfbb0fb5b964c23ed0dd0",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-02T15:50:18Z",
+      "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
+      "declared_model": "MerLean-Prover",
+      "intake": {
         "issue_number": 176,
-        "solved_at": "2026-06-02T15:50:18Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "74148fe0b4570fde8c97cb388a65ed8ae4dffc1c",
-        "submission_repo": "doxtor6/lean-eval"
+        "kind": "issue"
       },
-      "posSemidef_map_exp": {
-        "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {},
+      "result_id": "r2_90e17f375cca0e18ea6e015c4911087b9294f74de89dd4f2e03907b3f8aead49",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "74148fe0b4570fde8c97cb388a65ed8ae4dffc1c",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-02T15:50:18Z",
+      "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
+      "declared_model": "MerLean-Prover",
+      "intake": {
         "issue_number": 176,
-        "solved_at": "2026-06-02T15:50:18Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "74148fe0b4570fde8c97cb388a65ed8ae4dffc1c",
-        "submission_repo": "doxtor6/lean-eval"
+        "kind": "issue"
       },
-      "rouche_zero_count_eq": {
-        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
-        "issue_number": 166,
-        "solved_at": "2026-06-01T23:28:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "runge_theorem": {
-        "benchmark_commit": "d04e5d5f1959528ffb320b7d7c19aad47f709012",
-        "issue_number": 138,
-        "solved_at": "2026-05-31T10:02:53Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "905cfa940566afe283ac0f4d7be05c2a0d6bc9e4",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "schauder_fixed_point": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 469,
-        "solved_at": "2026-06-25T19:56:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7b3bc037db402c14c0515366491c1ea1bc35dbc9",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "sturm_separation": {
-        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
-        "issue_number": 166,
-        "solved_at": "2026-06-01T23:28:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
-        "issue_number": 166,
-        "solved_at": "2026-06-01T23:28:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
-        "submission_repo": "doxtor6/lean-eval"
-      },
-      "vonNeumann_doubleCommutant_tfae": {
-        "benchmark_commit": "8dc055ac0f83d45d3cbf5eac5db59fab4d742b32",
+      "problem_id": "pi1_circle_mulEquiv_int",
+      "production_metadata": {},
+      "result_id": "r2_99b67e41e94f0084a243ad0643510df796c56ace27fae3d9fa0755d3189d5114",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "74148fe0b4570fde8c97cb388a65ed8ae4dffc1c",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-31T11:25:45Z",
+      "benchmark_commit": "8dc055ac0f83d45d3cbf5eac5db59fab4d742b32",
+      "declared_model": "MerLean-Prover",
+      "intake": {
         "issue_number": 139,
-        "solved_at": "2026-05-31T11:25:45Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "dc1319fc2c043e76b9cadb61b84f501d19a9c48e",
-        "submission_repo": "doxtor6/lean-eval"
+        "kind": "issue"
       },
-      "wiener_atom_detection": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "problem_id": "vonNeumann_doubleCommutant_tfae",
+      "production_metadata": {},
+      "result_id": "r2_b0073bc8feeda5a30e7eb1fac9d572a157e2b3928cd8e54772f28a15ec65a73d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "dc1319fc2c043e76b9cadb61b84f501d19a9c48e",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-31T10:02:53Z",
+      "benchmark_commit": "d04e5d5f1959528ffb320b7d7c19aad47f709012",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 138,
+        "kind": "issue"
+      },
+      "problem_id": "runge_theorem",
+      "production_metadata": {},
+      "result_id": "r2_b2709cabbd65009964d1cd25cd0110f9e08033d946fff8f9820fc6fad5c2df92",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "905cfa940566afe283ac0f4d7be05c2a0d6bc9e4",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-25T19:56:07Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 469,
+        "kind": "issue"
+      },
+      "problem_id": "schauder_fixed_point",
+      "production_metadata": {},
+      "result_id": "r2_b55459084f761c601e87a1db0751b93763642fe77510c704126fc202683da964",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7b3bc037db402c14c0515366491c1ea1bc35dbc9",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T21:36:23Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "MerLean-Prover",
+      "intake": {
         "issue_number": 350,
-        "solved_at": "2026-06-18T21:36:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "b6512d79e4e06e15493362ce6159961fd55a4f85",
-        "submission_repo": "doxtor6/lean-eval"
+        "kind": "issue"
+      },
+      "problem_id": "hippocrates_lunes",
+      "production_metadata": {},
+      "result_id": "r2_b8c3a7bdb1994012722045d49977abb8606d0ffe54835e4ba09c170c5ce0c36f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b6512d79e4e06e15493362ce6159961fd55a4f85",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-05T10:44:04Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 207,
+        "kind": "issue"
+      },
+      "problem_id": "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow",
+      "production_metadata": {},
+      "result_id": "r2_c0b9f905b2c4120237ab9d684ed7626a249c56c6755f45a32584e3778dfaf46f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "92f0d06a2e7c6ee78aca2686d523dbf862780082",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T23:28:30Z",
+      "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 166,
+        "kind": "issue"
+      },
+      "problem_id": "rouche_zero_count_eq",
+      "production_metadata": {},
+      "result_id": "r2_c257714634990d82aa1623b3fe4c34a4e5990d6e4bffa037117341450eec202b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T21:36:23Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 350,
+        "kind": "issue"
+      },
+      "problem_id": "lp_maximum_principle",
+      "production_metadata": {},
+      "result_id": "r2_cc8da301dd87a54126b9ba289a0069a6171fa26809784d3ce9fa9e6c6e83949c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b6512d79e4e06e15493362ce6159961fd55a4f85",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-12T16:33:20Z",
+      "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 287,
+        "kind": "issue"
+      },
+      "problem_id": "fourier_dirichlet_fejer",
+      "production_metadata": {},
+      "result_id": "r2_e0e91e44f9ac5f392434b342eaca2526328dc1be802f22eeb6a483d7aaa702b7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "83c8d6ca60463a2173d012ca80c2e248900eb5dc",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T23:28:30Z",
+      "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 166,
+        "kind": "issue"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {},
+      "result_id": "r2_e79e5b4cb9f9386952f835baf358a49646cf3708a143c26f6882de91db4a782b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-03T11:57:30Z",
+      "benchmark_commit": "598a247bc4d50419dc92adbf43bc5c80231c83cb",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 187,
+        "kind": "issue"
+      },
+      "problem_id": "linear_ode_asymptotic_stability",
+      "production_metadata": {},
+      "result_id": "r2_efb6a2a43d4211512752b426d39ba560e8ab1bfd5fddfcd159bdfdc943e73409",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f618450a980860000f8dfbb0fb5b964c23ed0dd0",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-02T15:50:18Z",
+      "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 176,
+        "kind": "issue"
+      },
+      "problem_id": "mulCayley_connected_iff_closure_eq_top",
+      "production_metadata": {},
+      "result_id": "r2_f5ac6edb2e629ef4707d016f6ec6c8ba6fd15043ef75ea228830cbb444e419e4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "74148fe0b4570fde8c97cb388a65ed8ae4dffc1c",
+        "repo": "doxtor6/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-01T23:28:30Z",
+      "benchmark_commit": "57e44c26550543275d4d42829898fef8bd34efcf",
+      "declared_model": "MerLean-Prover",
+      "intake": {
+        "issue_number": 166,
+        "kind": "issue"
+      },
+      "problem_id": "sturm_separation",
+      "production_metadata": {},
+      "result_id": "r2_ff9c3912e228428b267a9285364f2c2e75c572979469d2f9ce9958ae65733af0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "75069dd7cc5e13b8ca3e17b4c7a92e8050862e01",
+        "repo": "doxtor6/lean-eval"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "doxtor6"
 }

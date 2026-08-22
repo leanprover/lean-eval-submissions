@@ -1,297 +1,598 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "Claude Fable 5": {
-      "jacobian_challenge_diffgeo": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 588,
-        "solved_at": "2026-07-07T04:46:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "d01da40b8545310b63aa59e750bc7a7bdbb5c593",
-        "submission_repo": "rkirov/jacobian-fable"
-      },
-      "jordan_curve": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 631,
-        "solved_at": "2026-07-10T01:45:44Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "b141748187099368d1b564de5fc6601026255378",
-        "submission_repo": "rkirov/jordan_pick"
-      },
-      "pick": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 631,
-        "solved_at": "2026-07-10T01:45:44Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "b141748187099368d1b564de5fc6601026255378",
-        "submission_repo": "rkirov/jordan_pick"
-      },
-      "rado_riemannSurface": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 631,
-        "solved_at": "2026-07-10T01:45:44Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "b141748187099368d1b564de5fc6601026255378",
-        "submission_repo": "rkirov/jordan_pick"
-      }
-    },
-    "Claude Opus 4.7": {
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "48b8530beb9ff567d8932326aaec1e1acb67b749",
-        "issue_number": 21,
-        "solved_at": "2026-04-30T10:05:19Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "212bebf172ea4a345071d0b3fc40a978515d09c6",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "list_append_singleton_length": {
-        "benchmark_commit": "48b8530beb9ff567d8932326aaec1e1acb67b749",
-        "issue_number": 21,
-        "solved_at": "2026-04-30T10:05:19Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "212bebf172ea4a345071d0b3fc40a978515d09c6",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "two_plus_two": {
-        "benchmark_commit": "48b8530beb9ff567d8932326aaec1e1acb67b749",
-        "issue_number": 21,
-        "solved_at": "2026-04-30T10:05:19Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "212bebf172ea4a345071d0b3fc40a978515d09c6",
-        "submission_repo": "rkirov/lean-eval"
-      }
-    },
-    "Claude Opus 4.7 (1M context)": {
-      "brauer_character_in_cyclotomic": {
-        "benchmark_commit": "3f035efb4e5cac1277ae89582902897d96b0b95b",
-        "issue_number": 125,
-        "solved_at": "2026-05-04T14:38:51Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "0d1658363e6fea77c26c9b016814398298dc03e4",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "bvp_comparison": {
-        "benchmark_commit": "ce95f00abb6d84e2ca465e6ec7bb5e12f82cd427",
-        "issue_number": 81,
-        "solved_at": "2026-05-02T03:42:53Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "f1cccf7cda6aec137608be10e68c5545eef7ba63",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "ci_regenerate_main_check": {
-        "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
-        "issue_number": 78,
-        "production_description": "Just asking to solve the problems in Claude Code.",
-        "solved_at": "2026-05-02T03:11:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "69e24b6b1a18117485ef55663d4773900655e033",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "2b5dc0fcf5def1fc2a605b785c307f858a0d98b6",
-        "issue_number": 116,
-        "solved_at": "2026-05-03T14:50:31Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "7ea8d3c19aa3ce2fd2376f9ac70126d9bb970baf",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "def_hole_example": {
-        "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
-        "issue_number": 78,
-        "production_description": "Just asking to solve the problems in Claude Code.",
-        "solved_at": "2026-05-02T03:11:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "69e24b6b1a18117485ef55663d4773900655e033",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "dirichlet_eigenvalues_eq_nat_sq": {
-        "benchmark_commit": "3f035efb4e5cac1277ae89582902897d96b0b95b",
-        "issue_number": 124,
-        "solved_at": "2026-05-04T14:36:57Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "7b1bb00700c3b9271df041f37e26a5cc5e656251",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "exists_complementary_polynomial_on_unit_circle": {
-        "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
-        "issue_number": 51,
-        "solved_at": "2026-05-24T14:50:11Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "cfed2cbc06b8373b35c442f5247b852c51c933eb",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
-        "issue_number": 78,
-        "production_description": "Just asking to solve the problems in Claude Code.",
-        "solved_at": "2026-05-02T03:11:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "69e24b6b1a18117485ef55663d4773900655e033",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "heat_kernel_solves_heat_equation": {
-        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
-        "issue_number": 39,
-        "solved_at": "2026-05-22T21:26:16Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "7984d665265a2bde32e64599842ea98d1d7991b1",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "instance_hole_example": {
-        "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
-        "issue_number": 78,
-        "production_description": "Just asking to solve the problems in Claude Code.",
-        "solved_at": "2026-05-02T03:11:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "69e24b6b1a18117485ef55663d4773900655e033",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "list_append_singleton_length": {
-        "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
-        "issue_number": 78,
-        "production_description": "Just asking to solve the problems in Claude Code.",
-        "solved_at": "2026-05-02T03:11:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "69e24b6b1a18117485ef55663d4773900655e033",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
-        "benchmark_commit": "e61a234f0de8502377ba8820257d97cee349f727",
-        "issue_number": 121,
-        "solved_at": "2026-05-04T06:51:42Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "5b65a4366f1ef11184c71f4d3eec5c6a6065e4a6",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "mulCayley_connected_iff_closure_eq_top": {
-        "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
-        "issue_number": 78,
-        "production_description": "Just asking to solve the problems in Claude Code.",
-        "solved_at": "2026-05-02T03:11:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "69e24b6b1a18117485ef55663d4773900655e033",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "oppenheim_inequality": {
-        "benchmark_commit": "276a580e44cad4d6a1be2cb90f0874d73457296f",
-        "issue_number": 106,
-        "solved_at": "2026-05-02T14:19:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "469356690df9b9bcc7751388474ab1268c32c00e",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "pi1_circle_mulEquiv_int": {
-        "benchmark_commit": "2b5dc0fcf5def1fc2a605b785c307f858a0d98b6",
-        "issue_number": 117,
-        "solved_at": "2026-05-03T19:44:59Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "0913f09053f62427808102039c0b7f7764633291",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "posSemidef_map_exp": {
-        "benchmark_commit": "ce95f00abb6d84e2ca465e6ec7bb5e12f82cd427",
-        "issue_number": 82,
-        "solved_at": "2026-05-02T04:15:12Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "17568cfb74a1f49b2aacc5fbfab52bfa90c33cbb",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "rouche_zero_count_eq": {
-        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
-        "issue_number": 26,
-        "solved_at": "2026-05-22T14:57:33Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "f94961e7c63cc81d6a0e7990322d3a5eb236d6ec",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "sturm_separation": {
-        "benchmark_commit": "3f035efb4e5cac1277ae89582902897d96b0b95b",
+  "results": [
+    {
+      "accepted_at": "2026-05-05T04:27:23Z",
+      "benchmark_commit": "3f035efb4e5cac1277ae89582902897d96b0b95b",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
         "issue_number": 128,
-        "solved_at": "2026-05-05T04:27:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ecd95c4cc46b14181d140adadbefe67021533ea7",
-        "submission_repo": "rkirov/lean-eval"
+        "kind": "issue"
       },
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
-        "issue_number": 78,
-        "production_description": "Just asking to solve the problems in Claude Code.",
-        "solved_at": "2026-05-02T03:11:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "69e24b6b1a18117485ef55663d4773900655e033",
-        "submission_repo": "rkirov/lean-eval"
-      },
-      "two_plus_two": {
-        "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
-        "issue_number": 78,
-        "production_description": "Just asking to solve the problems in Claude Code.",
-        "solved_at": "2026-05-02T03:11:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "69e24b6b1a18117485ef55663d4773900655e033",
-        "submission_repo": "rkirov/lean-eval"
+      "problem_id": "sturm_separation",
+      "production_metadata": {},
+      "result_id": "r2_09b5dc507b1083d151ce340cc8305a0b18b849f2294988523dfeacc69149cece",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ecd95c4cc46b14181d140adadbefe67021533ea7",
+        "repo": "rkirov/lean-eval"
       }
     },
-    "Claude Opus 4.7, 4.8 and Fable 5 + OSS contributions": {
-      "jacobian_challenge_diffgeo": {
-        "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+    {
+      "accepted_at": "2026-05-24T14:50:11Z",
+      "benchmark_commit": "a9a74a383cb2ae8d841ee66ac9df85e378cdd621",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 51,
+        "kind": "issue"
+      },
+      "problem_id": "exists_complementary_polynomial_on_unit_circle",
+      "production_metadata": {},
+      "result_id": "r2_11b31dc5f6c524984c04b0d96cdb72711651acceffa6e2f25b5033e27c504e85",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "cfed2cbc06b8373b35c442f5247b852c51c933eb",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-02T03:11:14Z",
+      "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 78,
+        "kind": "issue"
+      },
+      "problem_id": "instance_hole_example",
+      "production_metadata": {
+        "production_description": "Just asking to solve the problems in Claude Code."
+      },
+      "result_id": "r2_174abb97f47c8bddd88af30a9bbc426870d21370a17bbd2a791f94f3ed2132da",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "69e24b6b1a18117485ef55663d4773900655e033",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-02T03:11:14Z",
+      "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 78,
+        "kind": "issue"
+      },
+      "problem_id": "ci_regenerate_main_check",
+      "production_metadata": {
+        "production_description": "Just asking to solve the problems in Claude Code."
+      },
+      "result_id": "r2_1b560ce542e34ea6c413e9ba610a541c2756f8417f92f7ed6047500d94ff157c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "69e24b6b1a18117485ef55663d4773900655e033",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-02T03:11:14Z",
+      "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 78,
+        "kind": "issue"
+      },
+      "problem_id": "def_hole_example",
+      "production_metadata": {
+        "production_description": "Just asking to solve the problems in Claude Code."
+      },
+      "result_id": "r2_2393568d02e25bd292c53288c30bfdbcd361be4e59d3c9e0cae8e17d76de4dc0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "69e24b6b1a18117485ef55663d4773900655e033",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-02T14:19:27Z",
+      "benchmark_commit": "276a580e44cad4d6a1be2cb90f0874d73457296f",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 106,
+        "kind": "issue"
+      },
+      "problem_id": "oppenheim_inequality",
+      "production_metadata": {},
+      "result_id": "r2_3a8cd6d3340e96f8857e3a0accea829643a23839c84b5d43408b7f0b6f872a96",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "469356690df9b9bcc7751388474ab1268c32c00e",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-01T19:53:15Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Claude Opus 4.8 (1M context)",
+      "intake": {
+        "issue_number": 520,
+        "kind": "issue"
+      },
+      "problem_id": "jordan_curve",
+      "production_metadata": {
+        "production_description": "~1 week of grinding on $100/month subscription. Minimal human intervention."
+      },
+      "result_id": "r2_44597463453b25abfc2691cb1ce451bf2f2b7c7975ae5c3e17fe4803a3eaaf8a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ae084a7bebb07f1c27a6ed3a2d732b6957be2091",
+        "repo": "rkirov/jordan_pick"
+      }
+    },
+    {
+      "accepted_at": "2026-05-04T14:38:51Z",
+      "benchmark_commit": "3f035efb4e5cac1277ae89582902897d96b0b95b",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 125,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_character_in_cyclotomic",
+      "production_metadata": {},
+      "result_id": "r2_44f909fcbe73c307326bd18d7e4a211b77241ed5b790a74f2d53bbe2f7d34d01",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "0d1658363e6fea77c26c9b016814398298dc03e4",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-04-30T10:05:19Z",
+      "benchmark_commit": "48b8530beb9ff567d8932326aaec1e1acb67b749",
+      "declared_model": "Claude Opus 4.7",
+      "intake": {
+        "issue_number": 21,
+        "kind": "issue"
+      },
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {},
+      "result_id": "r2_513073c777ce95067ee100684edf5f32859153ef4dfac90d380b715e862d9e57",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "212bebf172ea4a345071d0b3fc40a978515d09c6",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-04-30T10:05:19Z",
+      "benchmark_commit": "48b8530beb9ff567d8932326aaec1e1acb67b749",
+      "declared_model": "Claude Opus 4.7",
+      "intake": {
+        "issue_number": 21,
+        "kind": "issue"
+      },
+      "problem_id": "list_append_singleton_length",
+      "production_metadata": {},
+      "result_id": "r2_6548a001b7bcc58df57bc8ac18fbe258954aeb2c83e501803a0f8016c3e8d289",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "212bebf172ea4a345071d0b3fc40a978515d09c6",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-04-30T10:05:19Z",
+      "benchmark_commit": "48b8530beb9ff567d8932326aaec1e1acb67b749",
+      "declared_model": "Claude Opus 4.7",
+      "intake": {
+        "issue_number": 21,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {},
+      "result_id": "r2_68fbd1b1ff970418948b1b445bdfbc152352d092b76c5a69b83071f554611e3e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "212bebf172ea4a345071d0b3fc40a978515d09c6",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-04T14:36:57Z",
+      "benchmark_commit": "3f035efb4e5cac1277ae89582902897d96b0b95b",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 124,
+        "kind": "issue"
+      },
+      "problem_id": "dirichlet_eigenvalues_eq_nat_sq",
+      "production_metadata": {},
+      "result_id": "r2_6b222c41891b071601459401adc751cc400ff0ecafe89cf7c96c75fec0782cc6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "7b1bb00700c3b9271df041f37e26a5cc5e656251",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-02T03:11:14Z",
+      "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 78,
+        "kind": "issue"
+      },
+      "problem_id": "mulCayley_connected_iff_closure_eq_top",
+      "production_metadata": {
+        "production_description": "Just asking to solve the problems in Claude Code."
+      },
+      "result_id": "r2_81bdaca4eda9917a879a119f3f5bd22dab3fc42ad882041f4f5897d99f7efba6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "69e24b6b1a18117485ef55663d4773900655e033",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T01:45:44Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Claude Fable 5",
+      "intake": {
+        "issue_number": 631,
+        "kind": "issue"
+      },
+      "problem_id": "pick",
+      "production_metadata": {},
+      "result_id": "r2_837c01a5136f370aeb3f3a55ec017240179092771eb09552e26facb2cd403365",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "b141748187099368d1b564de5fc6601026255378",
+        "repo": "rkirov/jordan_pick"
+      }
+    },
+    {
+      "accepted_at": "2026-05-22T14:57:33Z",
+      "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 26,
+        "kind": "issue"
+      },
+      "problem_id": "rouche_zero_count_eq",
+      "production_metadata": {},
+      "result_id": "r2_8794d55a8852a302714864ae9232530905d1cb07c05a18f1ee550b56bd7e8526",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "f94961e7c63cc81d6a0e7990322d3a5eb236d6ec",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-02T03:42:53Z",
+      "benchmark_commit": "ce95f00abb6d84e2ca465e6ec7bb5e12f82cd427",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 81,
+        "kind": "issue"
+      },
+      "problem_id": "bvp_comparison",
+      "production_metadata": {},
+      "result_id": "r2_8abb83799dd4b531d4869ffd2dab10088448a33ff9f9b18e1eed3147b3d52109",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "f1cccf7cda6aec137608be10e68c5545eef7ba63",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-02T03:11:14Z",
+      "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 78,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Just asking to solve the problems in Claude Code."
+      },
+      "result_id": "r2_9037f7842ebb3d2d20f697bb27eca0a06a150078baa50d9d414837fcd5fe8279",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "69e24b6b1a18117485ef55663d4773900655e033",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-02T03:11:14Z",
+      "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 78,
+        "kind": "issue"
+      },
+      "problem_id": "list_append_singleton_length",
+      "production_metadata": {
+        "production_description": "Just asking to solve the problems in Claude Code."
+      },
+      "result_id": "r2_979bf081c1d457f5885401e03d11243dfcedf84045cc5fd3f5770718e2b25b7f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "69e24b6b1a18117485ef55663d4773900655e033",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-11T18:59:34Z",
+      "benchmark_commit": "ca0b2f9414c61bf9186313b479547383f2eb620f",
+      "declared_model": "Claude Opus 4.7, 4.8 and Fable 5 + OSS contributions",
+      "intake": {
         "issue_number": 284,
-        "production_description": "vanilla Claude Code using Opus 4.7, 4.8 and Fable 5. Partial ports from https://github.com/Brsanch/jacobian-lean-challenge https://github.com/tangentstorm/JacobianChallenge and https://github.com/mrdouglasny/jacobian-challenge.",
-        "solved_at": "2026-06-11T18:59:34Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "906335fb5e24909782b204a3fbd2ec5cf96f8ffb",
-        "submission_repo": "rkirov/jacobian-claude"
+        "kind": "issue"
+      },
+      "problem_id": "jacobian_challenge_diffgeo",
+      "production_metadata": {
+        "production_description": "vanilla Claude Code using Opus 4.7, 4.8 and Fable 5. Partial ports from https://github.com/Brsanch/jacobian-lean-challenge https://github.com/tangentstorm/JacobianChallenge and https://github.com/mrdouglasny/jacobian-challenge."
+      },
+      "result_id": "r2_a845b4e1d6cd485bcda032c2de209e619a63f8c728e0880c494b63e0f5f8ab20",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "906335fb5e24909782b204a3fbd2ec5cf96f8ffb",
+        "repo": "rkirov/jacobian-claude"
       }
     },
-    "Claude Opus 4.8 (1M context)": {
-      "jordan_curve": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 520,
-        "production_description": "~1 week of grinding on $100/month subscription. Minimal human intervention.",
-        "solved_at": "2026-07-01T19:53:15Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ae084a7bebb07f1c27a6ed3a2d732b6957be2091",
-        "submission_repo": "rkirov/jordan_pick"
+    {
+      "accepted_at": "2026-07-10T01:45:44Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Claude Fable 5",
+      "intake": {
+        "issue_number": 631,
+        "kind": "issue"
       },
-      "pick": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "problem_id": "rado_riemannSurface",
+      "production_metadata": {},
+      "result_id": "r2_a8694ae1664913f246e003a0c9662a642b1368f37a0dd9fd2885b1b583584860",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "b141748187099368d1b564de5fc6601026255378",
+        "repo": "rkirov/jordan_pick"
+      }
+    },
+    {
+      "accepted_at": "2026-05-02T03:11:14Z",
+      "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 78,
+        "kind": "issue"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {
+        "production_description": "Just asking to solve the problems in Claude Code."
+      },
+      "result_id": "r2_a919a8908ee56a6d54515bfc562dd0bec46cab4fdfcbe3b402c050cc4ba37446",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "69e24b6b1a18117485ef55663d4773900655e033",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-02T03:11:14Z",
+      "benchmark_commit": "6543eeb833db70365fd2c24aae32731207f2ec05",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 78,
+        "kind": "issue"
+      },
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {
+        "production_description": "Just asking to solve the problems in Claude Code."
+      },
+      "result_id": "r2_b21da239a4c1e7b6de253c58cf6d5ecda95a3ccd2de964d13b9eb3bb2e8932f3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "69e24b6b1a18117485ef55663d4773900655e033",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-04T06:51:42Z",
+      "benchmark_commit": "e61a234f0de8502377ba8820257d97cee349f727",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 121,
+        "kind": "issue"
+      },
+      "problem_id": "mem_convexHull_finset_extremePoints_of_mem_compact_convex",
+      "production_metadata": {},
+      "result_id": "r2_b4147c5fccadfaa0c2a8d4e2374ef2c72edd7b03c2ae6ee162ada84b5e7a12fe",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "5b65a4366f1ef11184c71f4d3eec5c6a6065e4a6",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-02T04:15:12Z",
+      "benchmark_commit": "ce95f00abb6d84e2ca465e6ec7bb5e12f82cd427",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 82,
+        "kind": "issue"
+      },
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {},
+      "result_id": "r2_d3f8316050066c5d5294fe3ef3aced43c3d846a6517bd5db84678c91be544287",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17568cfb74a1f49b2aacc5fbfab52bfa90c33cbb",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T01:45:44Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Claude Fable 5",
+      "intake": {
+        "issue_number": 631,
+        "kind": "issue"
+      },
+      "problem_id": "jordan_curve",
+      "production_metadata": {},
+      "result_id": "r2_db9fa04bcbcb8d5164326e926930904868d9597ba35f039efaf0baa07cc00ba0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "b141748187099368d1b564de5fc6601026255378",
+        "repo": "rkirov/jordan_pick"
+      }
+    },
+    {
+      "accepted_at": "2026-07-01T19:53:15Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Claude Opus 4.8 (1M context)",
+      "intake": {
         "issue_number": 520,
-        "production_description": "~1 week of grinding on $100/month subscription. Minimal human intervention.",
-        "solved_at": "2026-07-01T19:53:15Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ae084a7bebb07f1c27a6ed3a2d732b6957be2091",
-        "submission_repo": "rkirov/jordan_pick"
+        "kind": "issue"
+      },
+      "problem_id": "pick",
+      "production_metadata": {
+        "production_description": "~1 week of grinding on $100/month subscription. Minimal human intervention."
+      },
+      "result_id": "r2_ea4ead50ec1e3478aece041a68ae870971f6bf13ece00178a447ecaadd16385f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ae084a7bebb07f1c27a6ed3a2d732b6957be2091",
+        "repo": "rkirov/jordan_pick"
+      }
+    },
+    {
+      "accepted_at": "2026-05-22T21:26:16Z",
+      "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 39,
+        "kind": "issue"
+      },
+      "problem_id": "heat_kernel_solves_heat_equation",
+      "production_metadata": {},
+      "result_id": "r2_f37fe8825922f805f2c7c04f933258f18ddbb369fb80475230186f9bd996f256",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "7984d665265a2bde32e64599842ea98d1d7991b1",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-03T14:50:31Z",
+      "benchmark_commit": "2b5dc0fcf5def1fc2a605b785c307f858a0d98b6",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 116,
+        "kind": "issue"
+      },
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {},
+      "result_id": "r2_f4870c095f989aa59a6be38cb5f15a57bab1005b70de802fd5fe77161cdf0cdd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "7ea8d3c19aa3ce2fd2376f9ac70126d9bb970baf",
+        "repo": "rkirov/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-07T04:46:27Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Claude Fable 5",
+      "intake": {
+        "issue_number": 588,
+        "kind": "issue"
+      },
+      "problem_id": "jacobian_challenge_diffgeo",
+      "production_metadata": {},
+      "result_id": "r2_f6ec12812e2d128f6a8a3ddb761f681ea999f43becb8f0c4f0ab277690bbf75c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "d01da40b8545310b63aa59e750bc7a7bdbb5c593",
+        "repo": "rkirov/jacobian-fable"
+      }
+    },
+    {
+      "accepted_at": "2026-05-03T19:44:59Z",
+      "benchmark_commit": "2b5dc0fcf5def1fc2a605b785c307f858a0d98b6",
+      "declared_model": "Claude Opus 4.7 (1M context)",
+      "intake": {
+        "issue_number": 117,
+        "kind": "issue"
+      },
+      "problem_id": "pi1_circle_mulEquiv_int",
+      "production_metadata": {},
+      "result_id": "r2_f8a582a203cc9c3259614a0b006cc1a67bf2fbd20fbfccd6251dc1fea6d55cf8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "0913f09053f62427808102039c0b7f7764633291",
+        "repo": "rkirov/lean-eval"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "rkirov"
 }

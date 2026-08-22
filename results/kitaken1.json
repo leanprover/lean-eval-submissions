@@ -1,42 +1,71 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "GPT-5.6 and Fable 5 (human-in-the-loop)": {
-      "conway_schneeberger_fifteen": {
-        "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
-        "issue_number": 911,
-        "production_description": "This submission was produced through a human-in-the-loop collaboration using GPT-5.6 and Fable 5. The human operator directed the proof strategy, reviewed intermediate claims, and controlled local and EC2 execution.\nThe formalization follows the escalator-tree proof architecture and uses explicit finite certificates.\nThe standalone workspace was rebuilt locally. The final theorem uses only propext, Classical.choice, and Quot.sound, with no sorry, admit, native_decide, or bv_decide in the submitted dependency graph. User-owned EC2 was used only as temporary compilation compute; the final durable build and axiom audit were completed locally.",
-        "solved_at": "2026-08-02T23:59:56Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "f4e380bf0aacec7eb1720bbbe64e3695a5e857d0",
-        "submission_repo": "KitaKen1/lean-eval-conway-schneeberger-fifteen"
-      },
-      "pi_succ_sphere_n_mulEquiv_zmod_two": {
-        "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
+  "results": [
+    {
+      "accepted_at": "2026-08-06T11:25:59Z",
+      "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
+      "declared_model": "GPT-5.6 and Fable 5 (human-in-the-loop)",
+      "intake": {
         "issue_number": 957,
+        "kind": "issue"
+      },
+      "problem_id": "pi_succ_sphere_n_mulEquiv_zmod_two",
+      "production_metadata": {
         "production_description": "This submission was developed by KitaKen1 (Kenta Kitamura) in a human-in-the-loop\nworkflow using GPT-5.6 and Fable 5.\n\nThe immutable Submission URL above is the exact artifact evaluated by Lean-Eval.\nA maintained version is available here:\nhttps://github.com/KitaKen1/lean-eval-pi-succ-sphere-n-mulequiv-zmod-two\n\nRe-files #956. There, `evaluate` passed with\n`{\"passed\": [\"pi_succ_sphere_n_mulEquiv_zmod_two\"]}` but `intake` was skipped\n(the issue form applies the `submission` label at creation, while `intake`\nrequires that label to be absent at `opened`), so `record` was skipped as well.\nThis issue is created via the API without labels so that `intake` can run.",
         "solution_publication_date": "2026-08-06",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-06T11:25:59Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "5bef8d13ebee0f36b74d525ca968a88ab097d0f4",
-        "submission_repo": "KitaKen1/lean-eval-pi-succ-sphere-n-mulequiv-zmod-two"
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_39ff1984ce37df9086c4f5be623c7cbc6d1f2ff1a2d52f2bd58e6d8f3ea6a33f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "5bef8d13ebee0f36b74d525ca968a88ab097d0f4",
+        "repo": "KitaKen1/lean-eval-pi-succ-sphere-n-mulequiv-zmod-two"
       }
     },
-    "GPT-5.6 terra": {
-      "two_plus_two": {
-        "benchmark_commit": "3f3786f3b4d9a4b64a5859b3036aca190cd25613",
+    {
+      "accepted_at": "2026-08-01T03:59:11Z",
+      "benchmark_commit": "3f3786f3b4d9a4b64a5859b3036aca190cd25613",
+      "declared_model": "GPT-5.6 terra",
+      "intake": {
         "issue_number": 906,
-        "production_description": "Pipeline test on two_plus_two. GPT-5.6 terra proposed the norm_num proof; Codex generated and compiled the workspace in Kenta Kitamura's local environment.",
-        "solved_at": "2026-08-01T03:59:11Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "a7cf16eead7f54a3eae4099c154eb80b0f520c92",
-        "submission_repo": "KitaKen1/lean-eval-two-plus-two"
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Pipeline test on two_plus_two. GPT-5.6 terra proposed the norm_num proof; Codex generated and compiled the workspace in Kenta Kitamura's local environment."
+      },
+      "result_id": "r2_c4e178fbb6cdafcb8f2146245adf02a709a60836f022e8a3d75d72c84b472b60",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "a7cf16eead7f54a3eae4099c154eb80b0f520c92",
+        "repo": "KitaKen1/lean-eval-two-plus-two"
+      }
+    },
+    {
+      "accepted_at": "2026-08-02T23:59:56Z",
+      "benchmark_commit": "2d020616d6ad7088fa6c8dce040894f2f241e0f3",
+      "declared_model": "GPT-5.6 and Fable 5 (human-in-the-loop)",
+      "intake": {
+        "issue_number": 911,
+        "kind": "issue"
+      },
+      "problem_id": "conway_schneeberger_fifteen",
+      "production_metadata": {
+        "production_description": "This submission was produced through a human-in-the-loop collaboration using GPT-5.6 and Fable 5. The human operator directed the proof strategy, reviewed intermediate claims, and controlled local and EC2 execution.\nThe formalization follows the escalator-tree proof architecture and uses explicit finite certificates.\nThe standalone workspace was rebuilt locally. The final theorem uses only propext, Classical.choice, and Quot.sound, with no sorry, admit, native_decide, or bv_decide in the submitted dependency graph. User-owned EC2 was used only as temporary compilation compute; the final durable build and axiom audit were completed locally."
+      },
+      "result_id": "r2_e8ef5f672ff326b71cff2332390bfa0713493f83473c19568a0731dd31bf666d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "f4e380bf0aacec7eb1720bbbe64e3695a5e857d0",
+        "repo": "KitaKen1/lean-eval-conway-schneeberger-fifteen"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "KitaKen1"
 }

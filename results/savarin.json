@@ -1,260 +1,489 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "savarin-6-hour-gpt-5.6-speedrun": {
-      "banach_alaoglu_bourbaki": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+  "results": [
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
         "issue_number": 1080,
-        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
-        "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "kind": "issue"
       },
-      "bauer_extreme_point_uniqueness": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
-        "issue_number": 1080,
+      "problem_id": "kirk_normal_structure",
+      "production_metadata": {
         "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
         "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "solution_publication_status": "published"
       },
-      "brauer_character_in_cyclotomic": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "result_id": "r2_156cf9f0a105fd2761e598e7b830a1aa9f39d3902237875654075c4ee0ff6bff",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
         "issue_number": 1080,
-        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
-        "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "kind": "issue"
       },
-      "brouwer_fixed_point": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
-        "issue_number": 1080,
+      "problem_id": "bauer_extreme_point_uniqueness",
+      "production_metadata": {
         "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
         "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "solution_publication_status": "published"
       },
-      "bvp_comparison": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "result_id": "r2_18c499c3b11825017884911d607042861b2fb7991a0c6e98dc6c4ec0f647a735",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
         "issue_number": 1080,
-        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
-        "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "kind": "issue"
       },
-      "chudnovsky_formula_for_pi_inv": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
-        "issue_number": 1080,
+      "problem_id": "dirichlet_eigenvalues_eq_nat_sq",
+      "production_metadata": {
         "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
         "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "solution_publication_status": "published"
       },
-      "compact_group_semisimple": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "result_id": "r2_293d8f3d8b82254b2c0790e05f8a225c30862cfe4cb827b56d02eb88517f926e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
         "issue_number": 1080,
-        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
-        "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "kind": "issue"
       },
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
-        "issue_number": 1080,
+      "problem_id": "chudnovsky_formula_for_pi_inv",
+      "production_metadata": {
         "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
         "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "solution_publication_status": "published"
       },
-      "dirichlet_eigenvalues_eq_nat_sq": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "result_id": "r2_32b42dc6f5de9c594208f01b462219bf6c2d82d1fd4609b6ef2b5677a214cd2c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
         "issue_number": 1080,
-        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
-        "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "kind": "issue"
       },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
-        "issue_number": 1080,
+      "problem_id": "brauer_character_in_cyclotomic",
+      "production_metadata": {
         "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
         "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "solution_publication_status": "published"
       },
-      "kirk_normal_structure": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "result_id": "r2_3e3dfd8abf3d3f2b7325396161f37227307d0cdf876304fb667f5f417093079b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
         "issue_number": 1080,
-        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
-        "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "kind": "issue"
       },
-      "koszul_formula": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
-        "issue_number": 1080,
+      "problem_id": "pell_solution_convergent",
+      "production_metadata": {
         "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
         "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "solution_publication_status": "published"
       },
-      "lp_maximum_principle": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "result_id": "r2_561e3be1bfb9dfb3e3dd3dbfe90d7c953101be948fce65c0a8003b01a2b88c8f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
         "issue_number": 1080,
-        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
-        "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "kind": "issue"
       },
-      "mulCayley_connected_iff_closure_eq_top": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
-        "issue_number": 1080,
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {
         "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
         "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "solution_publication_status": "published"
       },
-      "pell_solution_convergent": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "result_id": "r2_63e1351edfe18768351dfaaf068a2259e9fbd87f2b6cd4bf2f9deabfc044bacd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
         "issue_number": 1080,
-        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
-        "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "kind": "issue"
       },
-      "pi1_circle_mulEquiv_int": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
-        "issue_number": 1080,
+      "problem_id": "sard_theorem",
+      "production_metadata": {
         "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
         "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "solution_publication_status": "published"
       },
-      "posSemidef_map_exp": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "result_id": "r2_736d7069e1dc729e14b0a1e69e5b4927373e12b626f93b6341c29907acee2ac0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
         "issue_number": 1080,
-        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
-        "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "kind": "issue"
       },
-      "sard_theorem": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
-        "issue_number": 1080,
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {
         "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
         "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "solution_publication_status": "published"
       },
-      "sturm_separation": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "result_id": "r2_86fa5e62bfbb5db78a727eaf9f5d1fa8173f5844f223c1acc7baf8077fea87da",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
         "issue_number": 1080,
-        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
-        "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "kind": "issue"
       },
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
-        "issue_number": 1080,
+      "problem_id": "sturm_separation",
+      "production_metadata": {
         "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
         "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "solution_publication_status": "published"
       },
-      "symplectic_matrix_det": {
-        "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "result_id": "r2_8c01ae2a19f34f5f2060966b2cdeaf6d7300b8719686245183c8427b95bf303d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
         "issue_number": 1080,
+        "kind": "issue"
+      },
+      "problem_id": "brouwer_fixed_point",
+      "production_metadata": {
         "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
         "solution_publication_date": "2026-08-16",
-        "solution_publication_status": "published",
-        "solved_at": "2026-08-17T05:31:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
-        "submission_repo": "savarin/lean-eval-speedrun"
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_a2deb49c1e3382c2fe2d16777b2418972f1e0290331c39db6cebe942b610310f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
+        "issue_number": 1080,
+        "kind": "issue"
+      },
+      "problem_id": "lp_maximum_principle",
+      "production_metadata": {
+        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
+        "solution_publication_date": "2026-08-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_b07557c0449477e3e45d5136fdc53e0011c4dd6143391307d59df947c0c0f46d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
+        "issue_number": 1080,
+        "kind": "issue"
+      },
+      "problem_id": "compact_group_semisimple",
+      "production_metadata": {
+        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
+        "solution_publication_date": "2026-08-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_b485763909e6c1e79e53836b8a6bba56526442d8a5d3e27ab170f3a604cd4312",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
+        "issue_number": 1080,
+        "kind": "issue"
+      },
+      "problem_id": "bvp_comparison",
+      "production_metadata": {
+        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
+        "solution_publication_date": "2026-08-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_ca1007a986fdcbbefd337cbcb2c55d6074c759f5b11849ead9f4f23d647fbc23",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
+        "issue_number": 1080,
+        "kind": "issue"
+      },
+      "problem_id": "koszul_formula",
+      "production_metadata": {
+        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
+        "solution_publication_date": "2026-08-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_d4607916716a6d2feb11003ceef8067183b4bb06c8aef0c67cb0702621f9f705",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
+        "issue_number": 1080,
+        "kind": "issue"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {
+        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
+        "solution_publication_date": "2026-08-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_df237a1906aa28a43568fc1055c8494393f948a13582750ca3994391bb25714a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
+        "issue_number": 1080,
+        "kind": "issue"
+      },
+      "problem_id": "mulCayley_connected_iff_closure_eq_top",
+      "production_metadata": {
+        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
+        "solution_publication_date": "2026-08-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_ec002c82c01d79271a45281a1b9f9f770f9858b0913a21338801dc96d6563295",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
+        "issue_number": 1080,
+        "kind": "issue"
+      },
+      "problem_id": "pi1_circle_mulEquiv_int",
+      "production_metadata": {
+        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
+        "solution_publication_date": "2026-08-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_ee5bf2cdf408960eb9abf40422c8ca0d002499e4ec87a738aa6154d4c0aaff7e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
+        "issue_number": 1080,
+        "kind": "issue"
+      },
+      "problem_id": "banach_alaoglu_bourbaki",
+      "production_metadata": {
+        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
+        "solution_publication_date": "2026-08-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_f1f4119d1bd425203fc9adbdaba03f9219c112879c2e4e8b3aaedcd55c48cd44",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
+        "issue_number": 1080,
+        "kind": "issue"
+      },
+      "problem_id": "symplectic_matrix_det",
+      "production_metadata": {
+        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
+        "solution_publication_date": "2026-08-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_f8c80d54d5e5a3decd8c6b0d064cea5ff284f6ad850c8bda0014edcdac8ec1e7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
+      }
+    },
+    {
+      "accepted_at": "2026-08-17T05:31:38Z",
+      "benchmark_commit": "ed29f457a31e34008769b4c068935b80024bcdb4",
+      "declared_model": "savarin-6-hour-gpt-5.6-speedrun",
+      "intake": {
+        "issue_number": 1080,
+        "kind": "issue"
+      },
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {
+        "production_description": "GPT-5.6 Sol driven by a deterministic Python orchestrator for an exact six-hour\nwindow after one hour of setup. Eight concurrent isolated workers attempted all\n239 scored problems in leaderboard-count order, followed by eight targeted\nnear-miss repairs in the remaining time. Every counted proof independently\npassed `lake build Solution`, a forbidden-construct scan, and trusted-file\nintegrity checks. Result: 30 verified problems. Per-attempt parent-observed\ntiming, raw token usage, API-equivalent cost, prompts, hashes, controller events,\nvalidation logs, chat transcript, and the logarithmic solves-over-time graph are\npublished in the repository's full run branch. Known API-equivalent cost is\n$234.256248 for 127 usage-complete attempts; 119 deadline-truncated attempts are\nretained with incomplete cost rather than imputed as zero. No existing\nLean-Eval solution content was searched or copied.",
+        "solution_publication_date": "2026-08-16",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_fcef09308f03a1f470fcd000ee55a2dd599fb57a59c665b270fbecc61b1fbacf",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ab459a1ea7a89ec6db93da77d522ea384a45d0aa",
+        "repo": "savarin/lean-eval-speedrun"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "savarin"
 }

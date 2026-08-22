@@ -1,217 +1,443 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "EVO": {
-      "bvp_comparison": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 200,
-        "solved_at": "2026-06-04T11:32:18Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "411b0f26ea04eb840704854ae286aaf28b265c92",
-        "submission_repo": "machinelearning2014/deepthought_lean_eval"
+  "results": [
+    {
+      "accepted_at": "2026-06-06T10:27:07Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
+        "issue_number": 221,
+        "kind": "issue"
       },
-      "ci_regenerate_main_check": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 196,
-        "solved_at": "2026-06-04T06:41:56Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "4bfcc276f6054c52427c94425951511803aee723",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "def_hole_example": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 196,
-        "solved_at": "2026-06-04T06:41:56Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "4bfcc276f6054c52427c94425951511803aee723",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 200,
-        "solved_at": "2026-06-04T11:32:18Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "411b0f26ea04eb840704854ae286aaf28b265c92",
-        "submission_repo": "machinelearning2014/deepthought_lean_eval"
-      },
-      "instance_hole_example": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 199,
-        "solved_at": "2026-06-04T10:42:55Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "626261d1a19554e9ae76785f3c1bd02fa56218c2",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "list_append_singleton_length": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 198,
-        "solved_at": "2026-06-04T09:05:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "3f8e994d1e8e2ef4c5461ef96d6fcdf4c334dbd7",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "two_plus_two": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 198,
-        "solved_at": "2026-06-04T09:05:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "3f8e994d1e8e2ef4c5461ef96d6fcdf4c334dbd7",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "variable_binder_example": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 199,
-        "solved_at": "2026-06-04T10:42:55Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "626261d1a19554e9ae76785f3c1bd02fa56218c2",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {},
+      "result_id": "r2_0ce787f62816a833549887a23827ed40e5e353683f397c30172fc1083a660b71",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "73791422ab4d7a4db8afedae381a1c422c9c849e",
+        "repo": "test1-deepthought/lean-eval-solutions"
       }
     },
-    "EVO (deepthought.com.au)": {
-      "bvp_comparison": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 219,
-        "solved_at": "2026-06-06T02:05:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
+    {
+      "accepted_at": "2026-06-04T11:32:18Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO",
+      "intake": {
+        "issue_number": 200,
+        "kind": "issue"
       },
-      "ci_regenerate_main_check": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 219,
-        "solved_at": "2026-06-06T02:05:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "def_hole_example": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 219,
-        "solved_at": "2026-06-06T02:05:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "dirichlet_eigenvalues_eq_nat_sq": {
-        "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
-        "issue_number": 270,
-        "solved_at": "2026-06-10T00:23:16Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "c0ebb6816f26dac48f5486a139bc1c9200eebdb3",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 221,
-        "solved_at": "2026-06-06T10:27:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "73791422ab4d7a4db8afedae381a1c422c9c849e",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "instance_hole_example": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 219,
-        "solved_at": "2026-06-06T02:05:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "list_append_singleton_length": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 219,
-        "solved_at": "2026-06-06T02:05:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "mulCayley_connected_iff_closure_eq_top": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "problem_id": "bvp_comparison",
+      "production_metadata": {},
+      "result_id": "r2_21df83ee859f2d0510147e987b15bf35971ad627b5fd21892c9de0b72e62a872",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "411b0f26ea04eb840704854ae286aaf28b265c92",
+        "repo": "machinelearning2014/deepthought_lean_eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-23T12:43:46Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
         "issue_number": 446,
-        "solved_at": "2026-06-23T12:43:46Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "da97f5b0b4f8909ebf8037b282a29d174289ee40",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
+        "kind": "issue"
       },
-      "multi_hole_helpers_example": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {},
+      "result_id": "r2_2ad74c3bbddd3d3365139f190c6ec70d216082d16f096e531019110da26a8ba4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "da97f5b0b4f8909ebf8037b282a29d174289ee40",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-04T10:42:55Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO",
+      "intake": {
+        "issue_number": 199,
+        "kind": "issue"
+      },
+      "problem_id": "instance_hole_example",
+      "production_metadata": {},
+      "result_id": "r2_2aeab7e4931dbb5ffe59ceae684dd616e1cd5f579726976d77d2993da5442b93",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "626261d1a19554e9ae76785f3c1bd02fa56218c2",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T00:23:16Z",
+      "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
+        "issue_number": 270,
+        "kind": "issue"
+      },
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {},
+      "result_id": "r2_30746455cc259b53879c47090f88b194ae4876720ac944e6952a9690ece4f10f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "c0ebb6816f26dac48f5486a139bc1c9200eebdb3",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-06T02:05:32Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
+        "issue_number": 219,
+        "kind": "issue"
+      },
+      "problem_id": "ci_regenerate_main_check",
+      "production_metadata": {},
+      "result_id": "r2_3417d4edf29e858d8ed8a08f6f4ea5812f03749c3dce986e19faa655183667cf",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-04T06:41:56Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO",
+      "intake": {
+        "issue_number": 196,
+        "kind": "issue"
+      },
+      "problem_id": "ci_regenerate_main_check",
+      "production_metadata": {},
+      "result_id": "r2_4310466cfad7efe85ac6bbc01f1ed7dcbb1fb9b3c35408861d9ea2b27fc050c4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "4bfcc276f6054c52427c94425951511803aee723",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-04T09:05:23Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO",
+      "intake": {
+        "issue_number": 198,
+        "kind": "issue"
+      },
+      "problem_id": "list_append_singleton_length",
+      "production_metadata": {},
+      "result_id": "r2_45300221393318be62a7306c70fcdc368d4da3c2241cfed713690b46fc00cb3c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "3f8e994d1e8e2ef4c5461ef96d6fcdf4c334dbd7",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-06T02:05:32Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
+        "issue_number": 219,
+        "kind": "issue"
+      },
+      "problem_id": "def_hole_example",
+      "production_metadata": {},
+      "result_id": "r2_4ce96de0454db98f39a608f6b24fee5e635cd0c180268c6338268a789c7d7008",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-04T10:42:55Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO",
+      "intake": {
+        "issue_number": 199,
+        "kind": "issue"
+      },
+      "problem_id": "variable_binder_example",
+      "production_metadata": {},
+      "result_id": "r2_6965a4babc3dec647df4b02643cb31f35e055740da0bc1724e7e9feadbd49a53",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "626261d1a19554e9ae76785f3c1bd02fa56218c2",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-06T02:05:32Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
+        "issue_number": 219,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {},
+      "result_id": "r2_706aad8e7e9009eeb8ed208790951f5579a19e15ca4e6fc75b592db4cc502762",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-06T02:05:32Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
+        "issue_number": 219,
+        "kind": "issue"
+      },
+      "problem_id": "variable_binder_example",
+      "production_metadata": {},
+      "result_id": "r2_72d2866d80d2935eb1344a9705100605daf6f076122153982ab402bfdfa17d06",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-23T12:43:46Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
+        "issue_number": 446,
+        "kind": "issue"
+      },
+      "problem_id": "mulCayley_connected_iff_closure_eq_top",
+      "production_metadata": {},
+      "result_id": "r2_73c307c371c8229364f7c95d7b1ecf167b20a55c2fc7f9df2d2f8f75ca0a8e8c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "da97f5b0b4f8909ebf8037b282a29d174289ee40",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T00:23:16Z",
+      "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
+        "issue_number": 270,
+        "kind": "issue"
+      },
+      "problem_id": "pell_solution_convergent",
+      "production_metadata": {},
+      "result_id": "r2_83b6778ea7c32072ee1c95ac1633bcdae64bc177844ebb02a44534aabf1b6f83",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "c0ebb6816f26dac48f5486a139bc1c9200eebdb3",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-06T10:27:07Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
+        "issue_number": 221,
+        "kind": "issue"
+      },
+      "problem_id": "sturm_separation",
+      "production_metadata": {},
+      "result_id": "r2_85bde779e3283938f1c6d67f5c4f6576187b15c0c8308ab96b70402d30d5844a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "73791422ab4d7a4db8afedae381a1c422c9c849e",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-10T00:23:16Z",
+      "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
+        "issue_number": 270,
+        "kind": "issue"
+      },
+      "problem_id": "dirichlet_eigenvalues_eq_nat_sq",
+      "production_metadata": {},
+      "result_id": "r2_872b069ec31abd1520fa4346f0b0279cb77cd10c166970782e4347ea7ebef649",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "c0ebb6816f26dac48f5486a139bc1c9200eebdb3",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-04T11:32:18Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO",
+      "intake": {
+        "issue_number": 200,
+        "kind": "issue"
+      },
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {},
+      "result_id": "r2_9def694334f13d9f64ee1a2bed2508af6aef52d0dbbd1efc7d7d52d719df1d37",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "411b0f26ea04eb840704854ae286aaf28b265c92",
+        "repo": "machinelearning2014/deepthought_lean_eval"
+      }
+    },
+    {
+      "accepted_at": "2026-06-06T02:05:32Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
+        "issue_number": 219,
+        "kind": "issue"
+      },
+      "problem_id": "instance_hole_example",
+      "production_metadata": {},
+      "result_id": "r2_a86980a923600dff883f31ec8bc3cec55cc0a6b7c2fa9dd2f63e5b1b0a50c495",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-04T09:05:23Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO",
+      "intake": {
+        "issue_number": 198,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {},
+      "result_id": "r2_ade7940aba2fd61d0526b858cce932efc743af8034b0d8b75a914289eb6aabe1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "3f8e994d1e8e2ef4c5461ef96d6fcdf4c334dbd7",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-06T02:05:32Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
+        "issue_number": 219,
+        "kind": "issue"
+      },
+      "problem_id": "bvp_comparison",
+      "production_metadata": {},
+      "result_id": "r2_b56396d47fdcc2f062ff90ae586a78040bb169350c3f0fddf73d7465e7b3f601",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-06T02:05:32Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
+        "issue_number": 219,
+        "kind": "issue"
+      },
+      "problem_id": "list_append_singleton_length",
+      "production_metadata": {},
+      "result_id": "r2_e88c5a3391bc783e5e313dcd7976c24433f5b86422ce571a7bef5d0954ddb179",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-22T15:18:05Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "EVO (deepthought.com.au)",
+      "intake": {
         "issue_number": 436,
-        "solved_at": "2026-06-22T15:18:05Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "5ee01db2fe00133ca0322cdaf0fd95ff5eb37fca",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
+        "kind": "issue"
       },
-      "pell_solution_convergent": {
-        "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
-        "issue_number": 270,
-        "solved_at": "2026-06-10T00:23:16Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "c0ebb6816f26dac48f5486a139bc1c9200eebdb3",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
+      "problem_id": "multi_hole_helpers_example",
+      "production_metadata": {},
+      "result_id": "r2_fb2a371415eae219b4aa8e85a1822ce51ebc0b6bb2cfa663f4c889e29ca95f8f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "5ee01db2fe00133ca0322cdaf0fd95ff5eb37fca",
+        "repo": "test1-deepthought/lean-eval-solutions"
+      }
+    },
+    {
+      "accepted_at": "2026-06-04T06:41:56Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "EVO",
+      "intake": {
+        "issue_number": 196,
+        "kind": "issue"
       },
-      "posSemidef_map_exp": {
-        "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
-        "issue_number": 270,
-        "solved_at": "2026-06-10T00:23:16Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "c0ebb6816f26dac48f5486a139bc1c9200eebdb3",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "sturm_separation": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 221,
-        "solved_at": "2026-06-06T10:27:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "73791422ab4d7a4db8afedae381a1c422c9c849e",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 446,
-        "solved_at": "2026-06-23T12:43:46Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "da97f5b0b4f8909ebf8037b282a29d174289ee40",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "two_plus_two": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 219,
-        "solved_at": "2026-06-06T02:05:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
-      },
-      "variable_binder_example": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 219,
-        "solved_at": "2026-06-06T02:05:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "23cb0ec2098f3278e3c676ee9fd361608d2f5d92",
-        "submission_repo": "test1-deepthought/lean-eval-solutions"
+      "problem_id": "def_hole_example",
+      "production_metadata": {},
+      "result_id": "r2_fdf8176e5028ee27a651e53a400ee06f5b8d7348dd2703771d612e66c1233edc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "4bfcc276f6054c52427c94425951511803aee723",
+        "repo": "test1-deepthought/lean-eval-solutions"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "test1-deepthought"
 }

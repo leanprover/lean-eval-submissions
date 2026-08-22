@@ -1,1016 +1,2134 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "Tau (caj.al)": {
-      "H1_not_closedComplemented": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 507,
-        "solved_at": "2026-06-30T12:17:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "12b75df12d63181ded65fff316d81cb614637f40",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "abel_ruffini": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "anosov_bowen_shadowing": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 507,
-        "solved_at": "2026-06-30T12:17:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "12b75df12d63181ded65fff316d81cb614637f40",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "baer_suzuki": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 382,
-        "solved_at": "2026-06-19T11:43:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "balanceable_bounded_partitions": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 833,
-        "solved_at": "2026-07-16T12:48:11Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "ee9d43d6193893c2b2afc67ac3b88b23c0294320",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "banach_alaoglu_bourbaki": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "bauer_extreme_point_uniqueness": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "boone_higman_embedding": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "boone_higman_simple": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "brauer_character_in_cyclotomic": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "brauer_fowler": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+  "results": [
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
         "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
+        "kind": "issue"
       },
-      "brouwer_fixed_point": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "brun_constant_converges": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 516,
-        "solved_at": "2026-07-01T13:06:54Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "bfb71f790f14e30edaf0541d33927afec577d6cc",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "bvp_comparison": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "problem_id": "hausdorff_positivity_criterion",
+      "production_metadata": {},
+      "result_id": "r2_03ce18fcb9e2b9ada2b221f42bd88cd86a5f06503e964e6c7e55fd52e81c194f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
         "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
+        "kind": "issue"
       },
-      "choquet_representation_theorem": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "ci_regenerate_main_check": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 382,
-        "solved_at": "2026-06-19T11:43:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "compact_group_semisimple": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 457,
-        "solved_at": "2026-06-24T12:07:15Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f8e90cdb788ab27c2c506ae5356660ad992d698a",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "contractibleSpace_houseWithTwoRooms": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 382,
-        "solved_at": "2026-06-19T11:43:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "problem_id": "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius",
+      "production_metadata": {},
+      "result_id": "r2_048e032d9768422da07f11e24408aa588a1ee8398d6794d4a411e02117465d8e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
         "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "cyclotomic_integer_house_le_two": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "darboux": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 531,
-        "solved_at": "2026-07-04T12:45:53Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "6f7c617b13e7ce45df3ff08c362f1a3bee0b0fd9",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "def_hole_example": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 382,
-        "solved_at": "2026-06-19T11:43:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "dirichlet_eigenvalues_eq_nat_sq": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "dvd_card_connectedComponent_markoffGraph": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "euler_lagrange_equation": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "exists_complementary_polynomial_on_unit_circle": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "exists_nonisotopic_link": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 495,
-        "solved_at": "2026-06-27T18:46:50Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "adf512c4dbb1b3426e233b2fa724dd8f465ca470",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "fang_xia_tiling_partition_transitive": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 400,
-        "solved_at": "2026-06-19T22:03:41Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "52668bb7743b3e0ffb6791c5764db18126673be2",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "fourier_dirichlet_fejer": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 433,
-        "solved_at": "2026-06-22T12:03:42Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "0a8b3a67afc57f09c9f10ae76751bc9a0355bf08",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "fraser_kakeya_fourier_decay": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "frobenius_group_determinant": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 507,
-        "solved_at": "2026-06-30T12:17:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "12b75df12d63181ded65fff316d81cb614637f40",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "frobenius_kernel_isNormal": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 411,
-        "solved_at": "2026-06-21T11:55:44Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "cfe589d62d5cf8743bda0bc7350b5c36a3473bb1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "fundamental_topos_theory": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 531,
-        "solved_at": "2026-07-04T12:45:53Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "6f7c617b13e7ce45df3ff08c362f1a3bee0b0fd9",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "furstenberg_topological": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "gauss_wantzel_constructible_polygon": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 470,
-        "solved_at": "2026-06-25T21:51:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "b140d8d985ac2c9b153279829d826d123c461197",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "glAction_range_eq_centralizer_symAction": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 402,
-        "solved_at": "2026-06-20T10:57:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7919817fbb616703f6c3479a184254d81ed191f2",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "hausdorff_absolute_continuity": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "hausdorff_hildebrandt_schoenberg": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 433,
-        "solved_at": "2026-06-22T12:03:42Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "0a8b3a67afc57f09c9f10ae76751bc9a0355bf08",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "hausdorff_positivity_criterion": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "heat_kernel_solves_heat_equation": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "hippocrates_lunes": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "hurewicz_h1_abelianization": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 459,
-        "solved_at": "2026-06-24T16:25:18Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "15ebd3e7c354d371b9d696da5f8b7a9a7a4110e3",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "instance_hole_example": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 382,
-        "solved_at": "2026-06-19T11:43:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "jordan_normal_form": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "kakutani_fixed_point": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "kirk_normal_structure": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 496,
-        "solved_at": "2026-06-27T20:14:43Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "ac9510dfb329b1e2518f6592d061026f5e0e72aa",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "kolmogorov_arnold_superposition": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 713,
-        "solved_at": "2026-07-11T19:15:11Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "0aa952414cb675750e84cdff6ca0398f273c1286",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "koszul_formula": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "landsberg_schaar": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "lax_approximation": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 399,
-        "solved_at": "2026-06-19T16:38:01Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "24e81a9b0abea4272eeb721a43cec332c932b9c3",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "levi_civita_exists_unique": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 519,
-        "solved_at": "2026-07-01T19:22:08Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e9f1e6cbebfbd5b4a59e627b84224ceb6ff7695e",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "lidskii_inequality": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 484,
-        "solved_at": "2026-06-26T13:15:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "b25b2c3d97770464fb53f2800d6e03bd2313ae0c",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "lidskii_last": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "lindemann": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "lindemann_weierstrass": {
-        "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
-        "issue_number": 411,
-        "solved_at": "2026-06-21T11:55:44Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "cfe589d62d5cf8743bda0bc7350b5c36a3473bb1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "linear_ode_asymptotic_stability": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "list_append_singleton_length": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 382,
-        "solved_at": "2026-06-19T11:43:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "lp_maximum_principle": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "monge_kantorovich": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "moran_equality_affine": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "morley_theorem": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "mountain_pass": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "mulCayley_connected_iff_closure_eq_top": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "multi_hole_helpers_example": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 382,
-        "solved_at": "2026-06-19T11:43:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "nash_equilibrium_exists": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 506,
-        "solved_at": "2026-06-29T16:01:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "938abfb770a3a45f60a343fc5a92e28e32da96fd",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "noncomputable_hole_example": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 382,
-        "solved_at": "2026-06-19T11:43:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "normal_spectral_theorem": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 464,
-        "solved_at": "2026-06-25T12:37:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a95af5b474eb932731d93b16f3d862040adbe813",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "nyquist_shannon_sampling": {
-        "benchmark_commit": "a1175bedc0d1c04b70ef51569137bc39ae0e60de",
-        "issue_number": 492,
-        "solved_at": "2026-06-27T12:13:51Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "071a1754fbb5742d0a8a20a6b0f5b0519b4bde3f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "oppenheim_inequality": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "ornstein_weiss_rokhlin": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "parallel_postulate_independent": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 400,
-        "solved_at": "2026-06-19T22:03:41Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "52668bb7743b3e0ffb6791c5764db18126673be2",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "pascal": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "peano_existence": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 457,
-        "solved_at": "2026-06-24T12:07:15Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f8e90cdb788ab27c2c506ae5356660ad992d698a",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "pell_solution_convergent": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "permute_to_unimodal": {
-        "benchmark_commit": "a1175bedc0d1c04b70ef51569137bc39ae0e60de",
-        "issue_number": 492,
-        "solved_at": "2026-06-27T12:13:51Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "071a1754fbb5742d0a8a20a6b0f5b0519b4bde3f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "pi1_circle_mulEquiv_int": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "poincare_siegel_linearisation": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 507,
-        "solved_at": "2026-06-30T12:17:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "12b75df12d63181ded65fff316d81cb614637f40",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "posSemidef_map_exp": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "radon_transform_inversion": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "regular_value_ae": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 393,
-        "solved_at": "2026-06-19T13:31:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "73734406eb8cf95cee5c0a6a8f17001680ee08fa",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "riesz_brothers_theorem": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 507,
-        "solved_at": "2026-06-30T12:17:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "12b75df12d63181ded65fff316d81cb614637f40",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "rising_sun_lemma": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "rokhlin_lemma": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "rouche_zero_count_eq": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "runge_theorem": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 464,
-        "solved_at": "2026-06-25T12:37:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a95af5b474eb932731d93b16f3d862040adbe813",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "sard_theorem": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 449,
-        "solved_at": "2026-06-23T12:53:04Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "c92b7cd970dfc884c9516c5019009e611c51c5bc",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "schauder_fixed_point": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 394,
-        "solved_at": "2026-06-19T13:44:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f3362656a8a62cb13589d8d95438703c6d23e7f6",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "semilinear_poisson_radial_symmetry": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 510,
-        "solved_at": "2026-06-30T16:44:10Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "5d7d097323b53327ea8d2956ddfcbdc891d01eb3",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "shannon_capacity_pentagon": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 464,
-        "solved_at": "2026-06-25T12:37:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a95af5b474eb932731d93b16f3d862040adbe813",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "sobolev_embedding_morrey": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 559,
-        "solved_at": "2026-07-05T15:03:33Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "bbfc2104ba956513b2215cb73f6971f7d61759b1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "solvable_by_radicals_converse": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "stable_unstable_manifolds": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 402,
-        "solved_at": "2026-06-20T10:57:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7919817fbb616703f6c3479a184254d81ed191f2",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "strong_subadditivity": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 509,
-        "solved_at": "2026-06-30T16:42:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "03a74f41d76393bdb94483ac05c1e1cfbb55ddc2",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "sturm": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "sturm_separation": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "symAction_range_eq_centralizer_glAction": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 342,
-        "solved_at": "2026-06-18T12:41:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "symplectic_matrix_det": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 382,
-        "solved_at": "2026-06-19T11:43:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "trace_cayley_hamilton_newton": {
-        "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
-        "issue_number": 465,
-        "solved_at": "2026-06-25T13:22:37Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f51e08f7bed7d6263dad49a476ed40962c6ba069",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "turing_recursive_equiv": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 518,
-        "solved_at": "2026-07-01T19:19:18Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "8dc09844f870221d45119e90e17562a8cf2099b5",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "tverberg_theorem": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "two_plus_two": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 382,
-        "solved_at": "2026-06-19T11:43:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "variable_binder_example": {
-        "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
-        "issue_number": 382,
-        "solved_at": "2026-06-19T11:43:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "vonNeumann_doubleCommutant_tfae": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 343,
-        "solved_at": "2026-06-18T13:39:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a576e56db34532180f074945ed3e69368db89ab1",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "wiener_atom_detection": {
-        "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
-        "issue_number": 344,
-        "solved_at": "2026-06-18T13:39:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "wiener_inverse_closed": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 521,
-        "solved_at": "2026-07-01T20:19:46Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "644491683ed467266bd35c16b4406dc0d36fb8e0",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
-      },
-      "wiener_levy_analytic_calculus": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+        "kind": "issue"
+      },
+      "problem_id": "mem_convexHull_finset_extremePoints_of_mem_compact_convex",
+      "production_metadata": {},
+      "result_id": "r2_0622ec99747816525ee91f04a92b422dfab0ee777a0c7f7775b956686cc07a20",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-07-02T09:19:07Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
         "issue_number": 522,
-        "solved_at": "2026-07-02T09:19:07Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "06c939ca4227451ef45f2e162320ead3557536c3",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
+        "kind": "issue"
       },
-      "wigner_semicircle": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "problem_id": "wiener_levy_analytic_calculus",
+      "production_metadata": {},
+      "result_id": "r2_089c191631fdba1e81c0ba8ade0c8a4ad876f0e45dd108529c9869d94d4bf6e3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "06c939ca4227451ef45f2e162320ead3557536c3",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "rokhlin_lemma",
+      "production_metadata": {},
+      "result_id": "r2_0c638304f296e5b3f8b5f0a3c27f22cf256ccb8ad216724f051a6664afe48fa0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "linear_ode_asymptotic_stability",
+      "production_metadata": {},
+      "result_id": "r2_0ec8cbde7837fa2a723bfd1eaef9497ad9f510c778bd2add82c4136aaf03d43a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "fraser_kakeya_fourier_decay",
+      "production_metadata": {},
+      "result_id": "r2_1663588fdb7e0c00d936c054a6b0354b188f8b63adb9341534f1bab0229e7941",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "lindemann",
+      "production_metadata": {},
+      "result_id": "r2_166cb13749b56ff7aafe01ce382ee0bcc5b5a7aa0b0e070344695b3d3f350149",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-21T11:55:44Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 411,
+        "kind": "issue"
+      },
+      "problem_id": "lindemann_weierstrass",
+      "production_metadata": {},
+      "result_id": "r2_1cff8e03091da529ca266da65363710fa8a2a312e165989874e36e9dd5ffe53d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "cfe589d62d5cf8743bda0bc7350b5c36a3473bb1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {},
+      "result_id": "r2_200e409055be2c57d9c2d518cf7a582d4acc36847f194b2f75ae88dcaafc5e48",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "oppenheim_inequality",
+      "production_metadata": {},
+      "result_id": "r2_22fc72362481e00fdd8e8bd9f86f472292b725adcd2b6460368163be4344a632",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "furstenberg_topological",
+      "production_metadata": {},
+      "result_id": "r2_235368cc809989322b18e82b52979435c92f1309c2eb361c963a29165fbf6ba4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-25T12:37:23Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 464,
+        "kind": "issue"
+      },
+      "problem_id": "runge_theorem",
+      "production_metadata": {},
+      "result_id": "r2_23cc5e286b588dde831e3ae342038c9946126f2cfffe8bb8f666ea247a57a442",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a95af5b474eb932731d93b16f3d862040adbe813",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {},
+      "result_id": "r2_2723ff91a4b553bb195e951621dc1915d9b352d803ccfa1c33a608aa3415a042",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "bauer_extreme_point_uniqueness",
+      "production_metadata": {},
+      "result_id": "r2_28b73278d55aa9bbefcd80631dc6fcbea780678f30c4bcb626a2274508fc5293",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "landsberg_schaar",
+      "production_metadata": {},
+      "result_id": "r2_2f1f861815438f10bea9cdb8a2a301ba10ad2e88b65f2d8d5412a40fddb3e7ea",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "choquet_representation_theorem",
+      "production_metadata": {},
+      "result_id": "r2_30262d64b4913532f434099fcdcf61e27f199af519d4831c7d5ecce0302b32e9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-30T12:17:07Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 507,
+        "kind": "issue"
+      },
+      "problem_id": "riesz_brothers_theorem",
+      "production_metadata": {},
+      "result_id": "r2_31c1a7a7dbf51e8f5697e598133f8ebf41fb4253ef0f779cf8851f536c550f1d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "12b75df12d63181ded65fff316d81cb614637f40",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "abel_ruffini",
+      "production_metadata": {},
+      "result_id": "r2_330b87993a651ecff7a85549c28ae3b80eea1263257a430c82da5e709208e62d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-27T18:46:50Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 495,
+        "kind": "issue"
+      },
+      "problem_id": "exists_nonisotopic_link",
+      "production_metadata": {},
+      "result_id": "r2_330d980cbfbf6ddb155de51e5829713784a2e98cc1994bdd7975913bb063e93b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "adf512c4dbb1b3426e233b2fa724dd8f465ca470",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-25T13:22:37Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 465,
+        "kind": "issue"
+      },
+      "problem_id": "trace_cayley_hamilton_newton",
+      "production_metadata": {},
+      "result_id": "r2_350869a99d47f0e417c784b044a9ab459e48b6282d795fab44cd32bc007d1a89",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f51e08f7bed7d6263dad49a476ed40962c6ba069",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "pell_solution_convergent",
+      "production_metadata": {},
+      "result_id": "r2_36736003257a8d61dd6a543a4936100b31ae7c832614590fbecf37e3ad442968",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-27T12:13:51Z",
+      "benchmark_commit": "a1175bedc0d1c04b70ef51569137bc39ae0e60de",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 492,
+        "kind": "issue"
+      },
+      "problem_id": "permute_to_unimodal",
+      "production_metadata": {},
+      "result_id": "r2_38ab311e314f45c23d7e13163c766435c82992cbcfcc6d09080c74d47cb1edd4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "071a1754fbb5742d0a8a20a6b0f5b0519b4bde3f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "banach_alaoglu_bourbaki",
+      "production_metadata": {},
+      "result_id": "r2_39f07c6399eca12af09d462d4a71433fd1a817cd8a4d3b21480b43cecff54782",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {},
+      "result_id": "r2_3ddd77c29ea712bd297c0e765ee5cb9b348f1d70509a0c43c2f34b24a46d81b3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-27T12:13:51Z",
+      "benchmark_commit": "a1175bedc0d1c04b70ef51569137bc39ae0e60de",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 492,
+        "kind": "issue"
+      },
+      "problem_id": "nyquist_shannon_sampling",
+      "production_metadata": {},
+      "result_id": "r2_3f05aab87759feef1cb3e35a936370254145ed52742a4394c5ec637067e8ee9d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "071a1754fbb5742d0a8a20a6b0f5b0519b4bde3f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "monge_kantorovich",
+      "production_metadata": {},
+      "result_id": "r2_3facc8cdc8487e1fe69824c598d2a43ac9bd7e75190ef6c77f02098800a941c4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-07-16T12:48:11Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 833,
+        "kind": "issue"
+      },
+      "problem_id": "balanceable_bounded_partitions",
+      "production_metadata": {},
+      "result_id": "r2_4212b8f6a68a80041895b6ed2492a95936e5c2457039a364be83e011fdcd5583",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ee9d43d6193893c2b2afc67ac3b88b23c0294320",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "hausdorff_absolute_continuity",
+      "production_metadata": {},
+      "result_id": "r2_47f0376ffb24cb275885cebd3ceb2e4eeead1d7bc66f28f71b59c49cedcc156d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-29T16:01:14Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 506,
+        "kind": "issue"
+      },
+      "problem_id": "nash_equilibrium_exists",
+      "production_metadata": {},
+      "result_id": "r2_4c51c2d75d2fe0b065ed85f77f9a4998e9b00be0605444b403664be78f1e7e0a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "938abfb770a3a45f60a343fc5a92e28e32da96fd",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "euler_lagrange_equation",
+      "production_metadata": {},
+      "result_id": "r2_4f0c6566414a173158650b3ad21772bff59c539b7136415cda21a60458e43378",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_fowler",
+      "production_metadata": {},
+      "result_id": "r2_57030dda8352c6ed26a3bf0a3409814da4c843c32f8492a608462a35574d10e1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-07-04T12:45:53Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
         "issue_number": 531,
-        "solved_at": "2026-07-04T12:45:53Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "6f7c617b13e7ce45df3ff08c362f1a3bee0b0fd9",
-        "submission_repo": "lukerj00/tau-lean-eval-submission"
+        "kind": "issue"
+      },
+      "problem_id": "darboux",
+      "production_metadata": {},
+      "result_id": "r2_5c829b723eb29e0e05ddf1212576fd3cb7a114cfb2570fa3d3fe4dae226fa24c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6f7c617b13e7ce45df3ff08c362f1a3bee0b0fd9",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T11:43:07Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 382,
+        "kind": "issue"
+      },
+      "problem_id": "ci_regenerate_main_check",
+      "production_metadata": {},
+      "result_id": "r2_6451992fdee3dd129b0eb5f708031b4a60e86f22d566dbd9896bae3ad2d972c1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "mountain_pass",
+      "production_metadata": {},
+      "result_id": "r2_678a9050c783f26d4a97a47453236990dc023a1ff0b0f96604f30150424f359e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T13:31:32Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 393,
+        "kind": "issue"
+      },
+      "problem_id": "regular_value_ae",
+      "production_metadata": {},
+      "result_id": "r2_6b9927c48fabd75b27f5c4a5c2d4a1c25e6388828001533b1cb51cb16a74f5c5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "73734406eb8cf95cee5c0a6a8f17001680ee08fa",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "cyclotomic_integer_house_le_two",
+      "production_metadata": {},
+      "result_id": "r2_6c3837d8c5ee0694af82bdcfe0639c406cdb3a7b04ff78795652b7c93a9bfaf1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T16:38:01Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 399,
+        "kind": "issue"
+      },
+      "problem_id": "lax_approximation",
+      "production_metadata": {},
+      "result_id": "r2_6c7b3fd90ed39c05bdbd4b77aa142a0854cf22529f0b383707645450ef8575bb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "24e81a9b0abea4272eeb721a43cec332c932b9c3",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-26T13:15:27Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 484,
+        "kind": "issue"
+      },
+      "problem_id": "lidskii_inequality",
+      "production_metadata": {},
+      "result_id": "r2_70b471b886c2d7dd4f9253b4466545ca322b89ca0f49384812179005bdc4025b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b25b2c3d97770464fb53f2800d6e03bd2313ae0c",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "morley_theorem",
+      "production_metadata": {},
+      "result_id": "r2_77abc1b5efd405d3f1dab67e3159e9c26d21fcf8de45c72a7b26f1f0270f76a3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-30T16:42:17Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 509,
+        "kind": "issue"
+      },
+      "problem_id": "strong_subadditivity",
+      "production_metadata": {},
+      "result_id": "r2_79856ccff5ca65598ec1fd6e5167644707836bd73f64588985a72a818dff3ebd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "03a74f41d76393bdb94483ac05c1e1cfbb55ddc2",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "bvp_comparison",
+      "production_metadata": {},
+      "result_id": "r2_7fa5b7189c3e432b4800b37ef7271226121cc7b651910e42a9eacced0b94e1d0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "radon_transform_inversion",
+      "production_metadata": {},
+      "result_id": "r2_80525df61b25b8d9dca8b72852d7486dfc323878b8ac123741e8db59c1ef842e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T13:44:27Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 394,
+        "kind": "issue"
+      },
+      "problem_id": "schauder_fixed_point",
+      "production_metadata": {},
+      "result_id": "r2_8174cf1a9c31eea6d7fcc2d2854a60b0869c623b9aea22702a02bcb509fef8b3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f3362656a8a62cb13589d8d95438703c6d23e7f6",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-07-01T13:06:54Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 516,
+        "kind": "issue"
+      },
+      "problem_id": "brun_constant_converges",
+      "production_metadata": {},
+      "result_id": "r2_825e6002d90c182ee4222120332239d0ab5eeee44c0c00a68797bad03d1a3589",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "bfb71f790f14e30edaf0541d33927afec577d6cc",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-25T21:51:22Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 470,
+        "kind": "issue"
+      },
+      "problem_id": "gauss_wantzel_constructible_polygon",
+      "production_metadata": {},
+      "result_id": "r2_83bae61cf71e3c317d868996c2b5601d7fff69267738911449ab5528bf9cf78d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b140d8d985ac2c9b153279829d826d123c461197",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-25T12:37:23Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 464,
+        "kind": "issue"
+      },
+      "problem_id": "shannon_capacity_pentagon",
+      "production_metadata": {},
+      "result_id": "r2_8523ab478b687044a37ab9b56b7421462d7565d25e4f5860f1f01538bbb3189e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a95af5b474eb932731d93b16f3d862040adbe813",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "wiener_atom_detection",
+      "production_metadata": {},
+      "result_id": "r2_85a52af8a0be9363a281d9c75358b4d3bbdc4949fb70bf8f3b7dec72bc817a4a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-07-01T20:19:46Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 521,
+        "kind": "issue"
+      },
+      "problem_id": "wiener_inverse_closed",
+      "production_metadata": {},
+      "result_id": "r2_86a0ab09ae51c1f5ab90e9dda2dfd96287559aaaa57b7f4a7faca6161c550499",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "644491683ed467266bd35c16b4406dc0d36fb8e0",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-30T12:17:07Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 507,
+        "kind": "issue"
+      },
+      "problem_id": "H1_not_closedComplemented",
+      "production_metadata": {},
+      "result_id": "r2_86d30f748aa85d71ae90c019146fed8b5f2067c930d8d5ab381889e13ae21215",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "12b75df12d63181ded65fff316d81cb614637f40",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "dirichlet_eigenvalues_eq_nat_sq",
+      "production_metadata": {},
+      "result_id": "r2_87fce372ada9447e38fe675adda648492acf5a7b4e0481aed2886090be02a7f3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T11:43:07Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 382,
+        "kind": "issue"
+      },
+      "problem_id": "instance_hole_example",
+      "production_metadata": {},
+      "result_id": "r2_881d65b9f2d75acc6ac94504bd70906ad6144c6e51eef4e1253713ce91b9299c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "lidskii_last",
+      "production_metadata": {},
+      "result_id": "r2_89a5306f44840f02bc18a452de65decf6744a2b5b3a8f8ea7fd6c14a83c774f7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "jordan_normal_form",
+      "production_metadata": {},
+      "result_id": "r2_89eeaeb56861b7f84d941f7233ff88984a1d6ee6207d454e79fa1133acc85218",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-24T12:07:15Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 457,
+        "kind": "issue"
+      },
+      "problem_id": "compact_group_semisimple",
+      "production_metadata": {},
+      "result_id": "r2_8defeab53e7dbd8bc47af43a24d5d41d662a42f0fe0eacfeb801e579f1a901ad",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f8e90cdb788ab27c2c506ae5356660ad992d698a",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-23T12:53:04Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 449,
+        "kind": "issue"
+      },
+      "problem_id": "sard_theorem",
+      "production_metadata": {},
+      "result_id": "r2_8e4432512c598908d679a6fd41037cc6cf8f5c47c0553e79468fbbff510e1067",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c92b7cd970dfc884c9516c5019009e611c51c5bc",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T11:43:07Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 382,
+        "kind": "issue"
+      },
+      "problem_id": "noncomputable_hole_example",
+      "production_metadata": {},
+      "result_id": "r2_8f0a4661bb86a91da3b1cde098526a2613064f76b022e589322942bae89a1dd6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-24T16:25:18Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 459,
+        "kind": "issue"
+      },
+      "problem_id": "hurewicz_h1_abelianization",
+      "production_metadata": {},
+      "result_id": "r2_8fef409ae382ce08def558fc75ed69dc2d28fc84248c5851a7adeaec203195f9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "15ebd3e7c354d371b9d696da5f8b7a9a7a4110e3",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-25T12:37:23Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 464,
+        "kind": "issue"
+      },
+      "problem_id": "normal_spectral_theorem",
+      "production_metadata": {},
+      "result_id": "r2_93d6cbdf56aaf99b31e45169a6abd37d2060e939ba6f0611069fbaf859e22f6d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a95af5b474eb932731d93b16f3d862040adbe813",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T11:43:07Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 382,
+        "kind": "issue"
+      },
+      "problem_id": "baer_suzuki",
+      "production_metadata": {},
+      "result_id": "r2_95bf9b20b4ba43679af2f294ef8534d4429fe1ee104fa63613c4ea096d47116f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-07-05T15:03:33Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 559,
+        "kind": "issue"
+      },
+      "problem_id": "sobolev_embedding_morrey",
+      "production_metadata": {},
+      "result_id": "r2_975af1dee0befd2681613b08f534e025ba7d8f1866cb4ddede61b57f4e9412cf",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "bbfc2104ba956513b2215cb73f6971f7d61759b1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-07-04T12:45:53Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 531,
+        "kind": "issue"
+      },
+      "problem_id": "fundamental_topos_theory",
+      "production_metadata": {},
+      "result_id": "r2_97c87b7e100c3767607e59b82c86fd05ffe8b9044b8d99524442eac10cf7d861",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6f7c617b13e7ce45df3ff08c362f1a3bee0b0fd9",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "pi1_circle_mulEquiv_int",
+      "production_metadata": {},
+      "result_id": "r2_999bee6c68d894658be4c19e0c23e80ffdf8efd24b17e99f4686c5a728334a4c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-30T12:17:07Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 507,
+        "kind": "issue"
+      },
+      "problem_id": "poincare_siegel_linearisation",
+      "production_metadata": {},
+      "result_id": "r2_9b3224f7dbd8ce07be33406a8b835466d07131bf5efcd4b9f0352a32a3319b6e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "12b75df12d63181ded65fff316d81cb614637f40",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "sturm_separation",
+      "production_metadata": {},
+      "result_id": "r2_9f24a22b2ec6d20eb0b9202f667348b1d02d2e3ae1fcb860d119585827e97e7f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-30T12:17:07Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 507,
+        "kind": "issue"
+      },
+      "problem_id": "anosov_bowen_shadowing",
+      "production_metadata": {},
+      "result_id": "r2_9fccd829afd4104f4485f29036f47caa000f48b2a4ce1ca0d6aa49d1d8f28600",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "12b75df12d63181ded65fff316d81cb614637f40",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T11:43:07Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 382,
+        "kind": "issue"
+      },
+      "problem_id": "def_hole_example",
+      "production_metadata": {},
+      "result_id": "r2_a0685c155eebc1e0079ca6c319be72b2d7c05e1f7c2cb0e5865228a05cc6d09b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "koszul_formula",
+      "production_metadata": {},
+      "result_id": "r2_a306c690fdcbedcb15e1dc023129bd512d8a5f207a082de34116b215dd77762c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "sturm",
+      "production_metadata": {},
+      "result_id": "r2_a3a9ace827949ec57228b7aa437062db380eae10e2c285e8e87de0df955ea79c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T11:43:07Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 382,
+        "kind": "issue"
+      },
+      "problem_id": "list_append_singleton_length",
+      "production_metadata": {},
+      "result_id": "r2_a4f274fa26daed4ccefb2028b1539dfcd0e0c83e6b692bb057b87d4ff61a77f1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "ornstein_weiss_rokhlin",
+      "production_metadata": {},
+      "result_id": "r2_a7b132edaff288e71be78b2d864e1e3de31af59202559e04d229a3a9557e8fad",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T22:03:41Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 400,
+        "kind": "issue"
+      },
+      "problem_id": "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow",
+      "production_metadata": {},
+      "result_id": "r2_a805a82b24f91255e11685b0ca1b9ff8bd2bc068cc88223c1c3bae0d7c95de28",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "52668bb7743b3e0ffb6791c5764db18126673be2",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-22T12:03:42Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 433,
+        "kind": "issue"
+      },
+      "problem_id": "hausdorff_hildebrandt_schoenberg",
+      "production_metadata": {},
+      "result_id": "r2_a8260f67114d799f5ee89d639043d4e657401db1395f134815c714f873efe729",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0a8b3a67afc57f09c9f10ae76751bc9a0355bf08",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "tverberg_theorem",
+      "production_metadata": {},
+      "result_id": "r2_a9f0219ac6f8b4130ffb40b231d2c6c771401cb26bea21ae9e77d91e7d4354b9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "lp_maximum_principle",
+      "production_metadata": {},
+      "result_id": "r2_aa5d46ba2e0d248b20707e8ed178e143105363ab45f6ed7b45d7f5c38de9b273",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "moran_equality_affine",
+      "production_metadata": {},
+      "result_id": "r2_aaa7a3d9ccb7d371db876d4c86987ecd747204581d4312c11fcfc1052c41d49a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "symAction_range_eq_centralizer_glAction",
+      "production_metadata": {},
+      "result_id": "r2_aae3e721d276dac9e23088d38039902787699461cf26c36bf5deaa44675a16ce",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "vonNeumann_doubleCommutant_tfae",
+      "production_metadata": {},
+      "result_id": "r2_aed00320047b3735996f17a8042e9e08741c474baac8cf5545c8e9a8b816c326",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-20T10:57:32Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 402,
+        "kind": "issue"
+      },
+      "problem_id": "stable_unstable_manifolds",
+      "production_metadata": {},
+      "result_id": "r2_b0522c1e0b8c901fae0e7f8874f38cb83f88156a9d3ea3a3cc2dbf84070c0c80",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7919817fbb616703f6c3479a184254d81ed191f2",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "rising_sun_lemma",
+      "production_metadata": {},
+      "result_id": "r2_b4c4764423442c9d93340180a3fa4fb0700145cd6775b4ec9d5929e78fea7fb9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_character_in_cyclotomic",
+      "production_metadata": {},
+      "result_id": "r2_b4fa7b80f08ed6b1e1242a3cfdbfe50b38f379eca45492413b444a6679484000",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "fang_xia_tiling_partition_transitive",
+      "production_metadata": {},
+      "result_id": "r2_b9747b63346f4c017a15faa0c6f379016866dfba0a23567d6ba26d79ba927899",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "boone_higman_embedding",
+      "production_metadata": {},
+      "result_id": "r2_bacad1b8c1af1951e0493a4eebf54355d8ce6fd6faf9641245167266ec0a89d4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "hippocrates_lunes",
+      "production_metadata": {},
+      "result_id": "r2_bbbc3f3f146c3d7ca43fdd7f7180df6506513fa110d412f1d492a9a030910f09",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "pascal",
+      "production_metadata": {},
+      "result_id": "r2_bbdb7effbb441bec4c93db978ee79cc0723b2a2596da00a60b2a60092e65f89e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "kakutani_fixed_point",
+      "production_metadata": {},
+      "result_id": "r2_bf50546e05d39980975796e221e3c03684744fee33585315496c737f800915e1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "rouche_zero_count_eq",
+      "production_metadata": {},
+      "result_id": "r2_c08a84424d455f5df0079a06b15c49be110abedc731912b6dea30fd60f2df029",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-21T11:55:44Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 411,
+        "kind": "issue"
+      },
+      "problem_id": "frobenius_kernel_isNormal",
+      "production_metadata": {},
+      "result_id": "r2_c0934fff5979baba10da8e9f973b6f01f0a0c7f15aa18e3d46042081622ae943",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "cfe589d62d5cf8743bda0bc7350b5c36a3473bb1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "boone_higman_simple",
+      "production_metadata": {},
+      "result_id": "r2_c2d41d16987ac2fc397d21fc4dfba062788915c01df5dd95d765a6a2804f3bf5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-22T12:03:42Z",
+      "benchmark_commit": "f1b61d3f5774c302d94b520d991f9bd847d30f45",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 433,
+        "kind": "issue"
+      },
+      "problem_id": "fourier_dirichlet_fejer",
+      "production_metadata": {},
+      "result_id": "r2_c35c3f3e118cf04c6fc8468b27c274e28c2ea076e4dcb4b097dbee02d35594bb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0a8b3a67afc57f09c9f10ae76751bc9a0355bf08",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {},
+      "result_id": "r2_ca65c9576565d171eb0e1b636069926b8b88e16129eb3054dffa1e3f331b5286",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "brouwer_fixed_point",
+      "production_metadata": {},
+      "result_id": "r2_cc0819ef535a73b3b18e29e5d9e2bfdce73d4a6d2b8b476214f6845bb25c61c7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-07-01T19:22:08Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 519,
+        "kind": "issue"
+      },
+      "problem_id": "levi_civita_exists_unique",
+      "production_metadata": {},
+      "result_id": "r2_ccbb2e3e08ef418084edfc3999e7cf720a5bf8d67b6bf65e32483c175db62338",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e9f1e6cbebfbd5b4a59e627b84224ceb6ff7695e",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-20T10:57:32Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 402,
+        "kind": "issue"
+      },
+      "problem_id": "glAction_range_eq_centralizer_symAction",
+      "production_metadata": {},
+      "result_id": "r2_ccca198a588c602817457ef6a6db9033ed52399a599cb06cff5297737da43bce",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7919817fbb616703f6c3479a184254d81ed191f2",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T11:43:07Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 382,
+        "kind": "issue"
+      },
+      "problem_id": "multi_hole_helpers_example",
+      "production_metadata": {},
+      "result_id": "r2_d17eec29b6db7d305f61eec980e3fa00255e41003b31f210df9bebf19250ee7c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-07-11T19:15:11Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 713,
+        "kind": "issue"
+      },
+      "problem_id": "kolmogorov_arnold_superposition",
+      "production_metadata": {},
+      "result_id": "r2_d22cd80b1970c603961c95577426670f77a54963b4276c163d629dedb9c613e4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0aa952414cb675750e84cdff6ca0398f273c1286",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T11:43:07Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 382,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {},
+      "result_id": "r2_d3b413c1a711122f5b1eae17b60afb60307445f8db6602ef9c604eab4a55ef25",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "heat_kernel_solves_heat_equation",
+      "production_metadata": {},
+      "result_id": "r2_d97af1cf42e2003c7d71924b199282be38f6d752e1b604b5ef05e1f8781bad54",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-07-04T12:45:53Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 531,
+        "kind": "issue"
+      },
+      "problem_id": "wigner_semicircle",
+      "production_metadata": {},
+      "result_id": "r2_dcc33ad151951e83d2e3fb327a0dce7e30972d06d5450da0c17d666abe70e516",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6f7c617b13e7ce45df3ff08c362f1a3bee0b0fd9",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-30T16:44:10Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 510,
+        "kind": "issue"
+      },
+      "problem_id": "semilinear_poisson_radial_symmetry",
+      "production_metadata": {},
+      "result_id": "r2_e30da09cab1bb7f660dea830716933ab89f0ad89b3ccfe9b3baecd69d9618186",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5d7d097323b53327ea8d2956ddfcbdc891d01eb3",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T22:03:41Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 400,
+        "kind": "issue"
+      },
+      "problem_id": "parallel_postulate_independent",
+      "production_metadata": {},
+      "result_id": "r2_e57b794d2bb37029b366fc08837c7796683c0c615c01d2a6efed1a4f486231eb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "52668bb7743b3e0ffb6791c5764db18126673be2",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T11:43:07Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 382,
+        "kind": "issue"
+      },
+      "problem_id": "symplectic_matrix_det",
+      "production_metadata": {},
+      "result_id": "r2_e65ccb21cef7a252439290e329679712e457526ba6665f31c86ab5b9b31c5214",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-24T12:07:15Z",
+      "benchmark_commit": "3ced75ab190b51318ee127dda573bc9a70bca53d",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 457,
+        "kind": "issue"
+      },
+      "problem_id": "peano_existence",
+      "production_metadata": {},
+      "result_id": "r2_e757dda374c2d45cd3be9c2d7ba9326fc1bb16724a5936b762998d452bff5506",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f8e90cdb788ab27c2c506ae5356660ad992d698a",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-30T12:17:07Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 507,
+        "kind": "issue"
+      },
+      "problem_id": "frobenius_group_determinant",
+      "production_metadata": {},
+      "result_id": "r2_e76b480ef69238a3845594a52bf853499d66133be3569622f2964fe7931ee1a6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "12b75df12d63181ded65fff316d81cb614637f40",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:09Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 344,
+        "kind": "issue"
+      },
+      "problem_id": "dvd_card_connectedComponent_markoffGraph",
+      "production_metadata": {},
+      "result_id": "r2_e9447b93105c33af93d74e4fc1a2123f73d7de2ccc38bdffc67c60643aa8f936",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1f161e546e7f0989dc5f39d2711396020cb55a6f",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-27T20:14:43Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 496,
+        "kind": "issue"
+      },
+      "problem_id": "kirk_normal_structure",
+      "production_metadata": {},
+      "result_id": "r2_ea50a127dce108cba1d3b4070c410cfc34e5341a4f4befd891f9078394b41a2f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "ac9510dfb329b1e2518f6592d061026f5e0e72aa",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-07-01T19:19:18Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 518,
+        "kind": "issue"
+      },
+      "problem_id": "turing_recursive_equiv",
+      "production_metadata": {},
+      "result_id": "r2_eb33743e501abc765d2e8b64a995bbae2dfb559bcd1aac4019bbadc0cdd60bef",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8dc09844f870221d45119e90e17562a8cf2099b5",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T11:43:07Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 382,
+        "kind": "issue"
+      },
+      "problem_id": "contractibleSpace_houseWithTwoRooms",
+      "production_metadata": {},
+      "result_id": "r2_f4da61e50bd710ee6972924850ed95cb84f83ed1e9de41c05fc1da604b4c6e2a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-19T11:43:07Z",
+      "benchmark_commit": "17141faa1994de55c314e2856a43799dd38122ad",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 382,
+        "kind": "issue"
+      },
+      "problem_id": "variable_binder_example",
+      "production_metadata": {},
+      "result_id": "r2_f821798ff467df86084a49bec1bb2d74e2383743a259adaf62704bf397589641",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e821469559e1260d13b3a952bbfd35c0505ba683",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T12:41:35Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 342,
+        "kind": "issue"
+      },
+      "problem_id": "solvable_by_radicals_converse",
+      "production_metadata": {},
+      "result_id": "r2_f8d39a3d9043802f4f2a7dd2e11e77249413dab306b3ba432be297907b22e3ef",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7211d7a4268802f70d1a497170f541dc780d06d8",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "exists_complementary_polynomial_on_unit_circle",
+      "production_metadata": {},
+      "result_id": "r2_fc8bbc33acebc17dd96ebc9a6a084790616d04c0aee4944553ceddbf989c5899",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
+      }
+    },
+    {
+      "accepted_at": "2026-06-18T13:39:52Z",
+      "benchmark_commit": "4dbbbf6e6d0951cecd5eabce676cb84ef882f27c",
+      "declared_model": "Tau (caj.al)",
+      "intake": {
+        "issue_number": 343,
+        "kind": "issue"
+      },
+      "problem_id": "mulCayley_connected_iff_closure_eq_top",
+      "production_metadata": {},
+      "result_id": "r2_fff3f0e09b53aca2ebfd1a6d6bcbb9f5d2ee31a089e8ca0a5467ad26328cff6c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a576e56db34532180f074945ed3e69368db89ab1",
+        "repo": "lukerj00/tau-lean-eval-submission"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "lukerj00"
 }

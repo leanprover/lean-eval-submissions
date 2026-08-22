@@ -1,216 +1,405 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "Aristotle (Harmonic)": {
-      "bvp_comparison": {
-        "benchmark_commit": "852c67d442ce24ac7e8db16d6c17d7e9c72c6756",
-        "issue_number": 90,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies \u2014 proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility.",
-        "solved_at": "2026-05-02T10:53:04Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "83181e9586a8fe41e7fa7168047271add60789bb",
-        "submission_repo": "kim-em/e63b6679f735afd3ba4d5945a83a810d"
-      },
-      "ci_regenerate_main_check": {
-        "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
-        "issue_number": 58,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies \u2014 proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility.",
-        "solved_at": "2026-05-01T04:08:56Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "fc7a817912cd276ff3fca7bdabe02bcc904bef8d",
-        "submission_repo": "kim-em/d50dde8f11006b2d975671123d0acddd"
-      },
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "fd2c49bc9fb574f73008143a26e3f5a7646a41ea",
+  "results": [
+    {
+      "accepted_at": "2026-05-02T11:05:40Z",
+      "benchmark_commit": "fd2c49bc9fb574f73008143a26e3f5a7646a41ea",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 94,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies \u2014 proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility.",
-        "solved_at": "2026-05-02T11:05:40Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "cfd6f7b2b7d5d134b1985ce2f95eaf767c370326",
-        "submission_repo": "kim-em/0e2146482105e90a2bb4b63f137975fb"
+        "kind": "issue"
       },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
-        "issue_number": 60,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies \u2014 proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility.",
-        "solved_at": "2026-05-01T04:09:27Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "13d74bd985294975f54a1457633364117c38f840",
-        "submission_repo": "kim-em/15cab769a93e323f4a87f68ecb84ffb8"
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies — proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility."
       },
-      "instance_hole_example": {
-        "benchmark_commit": "276a580e44cad4d6a1be2cb90f0874d73457296f",
-        "issue_number": 112,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies \u2014 proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility.",
-        "solved_at": "2026-05-03T05:01:14Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "94dfb27eaa0edf18ce51da4591aa4b09d21a89e0",
-        "submission_repo": "kim-em/029a31248cea54e2d04b060b27e5e8f4"
-      },
-      "list_append_singleton_length": {
-        "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
-        "issue_number": 59,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies \u2014 proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility.",
-        "solved_at": "2026-05-01T04:09:05Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "e33579d39754d2fc53e00f725191eb3a17f495f8",
-        "submission_repo": "kim-em/87ef9e588d516f7901475e64a77b350d"
-      },
-      "mulCayley_connected_iff_closure_eq_top": {
-        "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
-        "issue_number": 61,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies \u2014 proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility.",
-        "solved_at": "2026-05-01T04:08:39Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "accf5aa1d158976df301d07f784a4c8ae8c35618",
-        "submission_repo": "kim-em/d692ae845fdc1f874946aecbf31a84d6"
-      },
-      "posSemidef_map_exp": {
-        "benchmark_commit": "a88fb3c997d78064f7aaa8a8c830ca7b963f750d",
-        "issue_number": 71,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies \u2014 proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility.",
-        "solved_at": "2026-05-01T15:38:32Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "e950873aef479ab789df674fa8d5a21097f24092",
-        "submission_repo": "kim-em/e6dd59ee0fcb958f116764a20bf374d3"
-      },
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "126de1f3e6b053a0e8a7f67681045804cf12712e",
-        "issue_number": 62,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies \u2014 proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility.",
-        "solved_at": "2026-05-01T04:46:23Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "cdffb90c53ee5fdcf41369769f15130fa6bd6b3b",
-        "submission_repo": "kim-em/ba837b9520ea4ec64c7945bb1f0cf10f"
-      },
-      "two_plus_two": {
-        "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
-        "issue_number": 57,
-        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies \u2014 proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility.",
-        "solved_at": "2026-05-01T04:09:08Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "4b214dba34932bed874a770e65d8177b80c96b13",
-        "submission_repo": "kim-em/e29d0c42ccdda277d3b14b024f5e7c64"
+      "result_id": "r2_08fc8650a27b2d8115844491e66edf67cd822fa4eb9bbaf41c71661e122610a9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "cfd6f7b2b7d5d134b1985ce2f95eaf767c370326",
+        "repo": "kim-em/0e2146482105e90a2bb4b63f137975fb"
       }
     },
-    "Claude Opus 4.7": {
-      "two_plus_two": {
-        "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
-        "issue_number": 45,
-        "production_description": "Seed submission to populate the leaderboard. Solved by Claude Opus 4.7 via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators.",
-        "solved_at": "2026-05-01T03:16:18Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "567b8d1feebbc6ccbb1f8ebb0a7bbcf5e914f135",
-        "submission_repo": "kim-em/22bad2dccd67bcca0df87c01d072ef39"
-      }
-    },
-    "Claude Sonnet 4.6": {
-      "two_plus_two": {
-        "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
-        "issue_number": 56,
-        "production_description": "Seed submission to populate the leaderboard. Solved by Claude Sonnet 4.6 via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators.",
-        "solved_at": "2026-05-01T03:59:26Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "abc391f430430e663b2b71050c7a362d7591bbe3",
-        "submission_repo": "kim-em/0429e116fa42128b951113658a123eab"
-      }
-    },
-    "DeepSeek V4 Pro": {
-      "two_plus_two": {
-        "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
-        "issue_number": 48,
-        "production_description": "Seed submission to populate the leaderboard. Solved by DeepSeek V4 Pro via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators.",
-        "solved_at": "2026-05-01T03:48:53Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "ccfef2885c0266c48386e243ee59e009dedb8d9f",
-        "submission_repo": "kim-em/626f5e295e4073d0e82bf8d157ef494d"
-      }
-    },
-    "GPT-5.5": {
-      "two_plus_two": {
-        "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
-        "issue_number": 43,
-        "production_description": "Seed submission to populate the leaderboard. Solved by GPT-5.5 via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators.",
-        "solved_at": "2026-05-01T03:11:33Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "da68385911d37e6916c310f347d152022a1a4c85",
-        "submission_repo": "kim-em/ce24eda45a01b835b8697d240308fcb9"
-      }
-    },
-    "Gemini 3.1 Pro": {
-      "two_plus_two": {
-        "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
-        "issue_number": 44,
-        "production_description": "Seed submission to populate the leaderboard. Solved by Gemini 3.1 Pro via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators.",
-        "solved_at": "2026-05-01T03:44:12Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "c4deee32c0418ef7f3f6ed2d9900e7f347930919",
-        "submission_repo": "kim-em/a6470f0ab82fa73f923d85dd964cf501"
-      }
-    },
-    "Grok 4.3": {
-      "two_plus_two": {
-        "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
-        "issue_number": 46,
-        "production_description": "Seed submission to populate the leaderboard. Solved by Grok 4.3 via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators.",
-        "solved_at": "2026-05-01T03:55:50Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "730ee114f8fdae4cc3cdca00931b78833097a978",
-        "submission_repo": "kim-em/11fe79b3ff4112a8db688b5925586f7c"
-      }
-    },
-    "Kimi K2.6": {
-      "two_plus_two": {
-        "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
+    {
+      "accepted_at": "2026-05-01T03:20:56Z",
+      "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
+      "declared_model": "Kimi K2.6",
+      "intake": {
         "issue_number": 49,
-        "production_description": "Seed submission to populate the leaderboard. Solved by Kimi K2.6 via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators.",
-        "solved_at": "2026-05-01T03:20:56Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "813801e70c6b76749fcb636a8f4b3a0d06f5b6e2",
-        "submission_repo": "kim-em/a571fe19cb7a77a48fffe941dc970577"
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Seed submission to populate the leaderboard. Solved by Kimi K2.6 via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators."
+      },
+      "result_id": "r2_1deabf543920a28c048f6c5636ba53c034772ae68ce60cf32d9aed52dcacf541",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "813801e70c6b76749fcb636a8f4b3a0d06f5b6e2",
+        "repo": "kim-em/a571fe19cb7a77a48fffe941dc970577"
       }
     },
-    "Mistral Large 3": {
-      "two_plus_two": {
-        "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
-        "issue_number": 51,
-        "production_description": "Seed submission to populate the leaderboard. Solved by Mistral Large 3 via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators.",
-        "solved_at": "2026-05-01T03:43:52Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "bdc70d0a887e7b351fd3868751d2414ff01fa525",
-        "submission_repo": "kim-em/1ba370e1c56f56f91f7db5007223fa4d"
+    {
+      "accepted_at": "2026-05-01T04:46:23Z",
+      "benchmark_commit": "126de1f3e6b053a0e8a7f67681045804cf12712e",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 62,
+        "kind": "issue"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies — proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility."
+      },
+      "result_id": "r2_5e195621c73467c4a97e111009ea5347bdade7677a05df4c4308ea6d6a6a6744",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "cdffb90c53ee5fdcf41369769f15130fa6bd6b3b",
+        "repo": "kim-em/ba837b9520ea4ec64c7945bb1f0cf10f"
       }
     },
-    "Qwen3.6 Max": {
-      "two_plus_two": {
-        "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
+    {
+      "accepted_at": "2026-05-01T03:55:01Z",
+      "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
+      "declared_model": "Qwen3.6 Max",
+      "intake": {
         "issue_number": 47,
-        "production_description": "Seed submission to populate the leaderboard. Solved by Qwen3.6 Max via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators.",
-        "solved_at": "2026-05-01T03:55:01Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "62b7a0a44e4ac9c67be030ce2c382fee10209e11",
-        "submission_repo": "kim-em/399479d951188afdbc6ad90c25f7cddb"
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Seed submission to populate the leaderboard. Solved by Qwen3.6 Max via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators."
+      },
+      "result_id": "r2_72bb3f4c2c1a84d7a195278569eabc83f5ed28f3a57a38bdf20d9f4e2a2294d9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "62b7a0a44e4ac9c67be030ce2c382fee10209e11",
+        "repo": "kim-em/399479d951188afdbc6ad90c25f7cddb"
+      }
+    },
+    {
+      "accepted_at": "2026-05-01T15:38:32Z",
+      "benchmark_commit": "a88fb3c997d78064f7aaa8a8c830ca7b963f750d",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 71,
+        "kind": "issue"
+      },
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies — proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility."
+      },
+      "result_id": "r2_87ddbbbe157a8d4300cb2eeffd1d37f21d941bb10e7532c5bbf570e116d5b6fd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "e950873aef479ab789df674fa8d5a21097f24092",
+        "repo": "kim-em/e6dd59ee0fcb958f116764a20bf374d3"
+      }
+    },
+    {
+      "accepted_at": "2026-05-01T04:08:56Z",
+      "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 58,
+        "kind": "issue"
+      },
+      "problem_id": "ci_regenerate_main_check",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies — proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility."
+      },
+      "result_id": "r2_95635252ed2e591dd94312ba355db9a3a7f70db9d4862a7a3887e4a962bd6d1b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "fc7a817912cd276ff3fca7bdabe02bcc904bef8d",
+        "repo": "kim-em/d50dde8f11006b2d975671123d0acddd"
+      }
+    },
+    {
+      "accepted_at": "2026-05-01T04:08:39Z",
+      "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 61,
+        "kind": "issue"
+      },
+      "problem_id": "mulCayley_connected_iff_closure_eq_top",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies — proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility."
+      },
+      "result_id": "r2_9e65f521962da6d8726694c7bcc1ca58648188732132158783374d86979575b0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "accf5aa1d158976df301d07f784a4c8ae8c35618",
+        "repo": "kim-em/d692ae845fdc1f874946aecbf31a84d6"
+      }
+    },
+    {
+      "accepted_at": "2026-05-01T04:09:05Z",
+      "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 59,
+        "kind": "issue"
+      },
+      "problem_id": "list_append_singleton_length",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies — proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility."
+      },
+      "result_id": "r2_a1f7537504328d27f15460ccc30ce79048937ecc8d0d1c11b506abd3fbe51aee",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "e33579d39754d2fc53e00f725191eb3a17f495f8",
+        "repo": "kim-em/87ef9e588d516f7901475e64a77b350d"
+      }
+    },
+    {
+      "accepted_at": "2026-05-02T10:53:04Z",
+      "benchmark_commit": "852c67d442ce24ac7e8db16d6c17d7e9c72c6756",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 90,
+        "kind": "issue"
+      },
+      "problem_id": "bvp_comparison",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies — proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility."
+      },
+      "result_id": "r2_ab83fc8b36b2063e1a29aaa1b3b21a67b96578484f21101b41a2cf6c2c1938eb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "83181e9586a8fe41e7fa7168047271add60789bb",
+        "repo": "kim-em/e63b6679f735afd3ba4d5945a83a810d"
+      }
+    },
+    {
+      "accepted_at": "2026-05-01T03:59:26Z",
+      "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
+      "declared_model": "Claude Sonnet 4.6",
+      "intake": {
+        "issue_number": 56,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Seed submission to populate the leaderboard. Solved by Claude Sonnet 4.6 via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators."
+      },
+      "result_id": "r2_ae725260390818adf4761af9f4c08a0d180adb316ebd1485cca52e360a7be9de",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "abc391f430430e663b2b71050c7a362d7591bbe3",
+        "repo": "kim-em/0429e116fa42128b951113658a123eab"
+      }
+    },
+    {
+      "accepted_at": "2026-05-01T03:43:52Z",
+      "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
+      "declared_model": "Mistral Large 3",
+      "intake": {
+        "issue_number": 51,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Seed submission to populate the leaderboard. Solved by Mistral Large 3 via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators."
+      },
+      "result_id": "r2_afe7bcd2f8ebec4ec89ff17fc56e71ea336fce97d9ea3d0a19d558e9f33caa40",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "bdc70d0a887e7b351fd3868751d2414ff01fa525",
+        "repo": "kim-em/1ba370e1c56f56f91f7db5007223fa4d"
+      }
+    },
+    {
+      "accepted_at": "2026-05-01T03:16:18Z",
+      "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
+      "declared_model": "Claude Opus 4.7",
+      "intake": {
+        "issue_number": 45,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Seed submission to populate the leaderboard. Solved by Claude Opus 4.7 via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators."
+      },
+      "result_id": "r2_bffc1a8d61d2b385a857c4030ef1509fd3f55e1258fcc2d3413e8ee8e7a7912c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "567b8d1feebbc6ccbb1f8ebb0a7bbcf5e914f135",
+        "repo": "kim-em/22bad2dccd67bcca0df87c01d072ef39"
+      }
+    },
+    {
+      "accepted_at": "2026-05-01T04:09:27Z",
+      "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 60,
+        "kind": "issue"
+      },
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies — proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility."
+      },
+      "result_id": "r2_c162541c3c6d88aaa70b9506a45bc0d73e8a74bb6e98a65cba3898041cd6ff16",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "13d74bd985294975f54a1457633364117c38f840",
+        "repo": "kim-em/15cab769a93e323f4a87f68ecb84ffb8"
+      }
+    },
+    {
+      "accepted_at": "2026-05-01T03:48:53Z",
+      "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
+      "declared_model": "DeepSeek V4 Pro",
+      "intake": {
+        "issue_number": 48,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Seed submission to populate the leaderboard. Solved by DeepSeek V4 Pro via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators."
+      },
+      "result_id": "r2_c9a72ad7edc87e368492d348fb3d182267e1e39173e8d4ac78417e347a2a8182",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "ccfef2885c0266c48386e243ee59e009dedb8d9f",
+        "repo": "kim-em/626f5e295e4073d0e82bf8d157ef494d"
+      }
+    },
+    {
+      "accepted_at": "2026-05-01T03:44:12Z",
+      "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
+      "declared_model": "Gemini 3.1 Pro",
+      "intake": {
+        "issue_number": 44,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Seed submission to populate the leaderboard. Solved by Gemini 3.1 Pro via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators."
+      },
+      "result_id": "r2_cecdfb4b2215613debe4ff7f591b066134288ff006ada166d6fa7fd56decbd8f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "c4deee32c0418ef7f3f6ed2d9900e7f347930919",
+        "repo": "kim-em/a6470f0ab82fa73f923d85dd964cf501"
+      }
+    },
+    {
+      "accepted_at": "2026-05-01T04:09:08Z",
+      "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 57,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies — proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility."
+      },
+      "result_id": "r2_d94aa72137fb9c6d7a4bfecf78cea989c7db883e6766a67b3f87952dc036160f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "4b214dba34932bed874a770e65d8177b80c96b13",
+        "repo": "kim-em/e29d0c42ccdda277d3b14b024f5e7c64"
+      }
+    },
+    {
+      "accepted_at": "2026-05-01T03:55:50Z",
+      "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
+      "declared_model": "Grok 4.3",
+      "intake": {
+        "issue_number": 46,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Seed submission to populate the leaderboard. Solved by Grok 4.3 via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators."
+      },
+      "result_id": "r2_e502f17e00909c6b1c5f59dba38d6d881f2855fdcee5fb25e4e1cdb9c1a26fb6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "730ee114f8fdae4cc3cdca00931b78833097a978",
+        "repo": "kim-em/11fe79b3ff4112a8db688b5925586f7c"
+      }
+    },
+    {
+      "accepted_at": "2026-05-01T03:11:33Z",
+      "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
+      "declared_model": "GPT-5.5",
+      "intake": {
+        "issue_number": 43,
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Seed submission to populate the leaderboard. Solved by GPT-5.5 via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators."
+      },
+      "result_id": "r2_f7f3a89b008ef341b5a44f2f3c8bb8dfeded87374a4ec12e74b37390511d4489",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "da68385911d37e6916c310f347d152022a1a4c85",
+        "repo": "kim-em/ce24eda45a01b835b8697d240308fcb9"
+      }
+    },
+    {
+      "accepted_at": "2026-05-03T05:01:14Z",
+      "benchmark_commit": "276a580e44cad4d6a1be2cb90f0874d73457296f",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 112,
+        "kind": "issue"
+      },
+      "problem_id": "instance_hole_example",
+      "production_metadata": {
+        "production_description": "Solved by the Aristotle automated theorem prover (Harmonic) via the `aristotle` CLI v1.0.1, with submission orchestration by Kim Morrison. The proof was generated against Aristotle's default Lean v4.28.0 / Mathlib v4.28.0 target; submitted here against the benchmark's pinned Lean v4.30.0-rc2 + pinned Mathlib commit. Comparator's verdict applies — proofs that exploit features added to Mathlib after v4.28.0 will compile; those that rely on tactic behaviour that changed are at the mercy of forward compatibility."
+      },
+      "result_id": "r2_fefd0066fe926ec6f4481640b597c61a2fb2d8bfebffc41f882ce746ec7404c3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "94dfb27eaa0edf18ce51da4591aa4b09d21a89e0",
+        "repo": "kim-em/029a31248cea54e2d04b060b27e5e8f4"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "kim-em"
 }

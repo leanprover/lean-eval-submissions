@@ -1,35 +1,63 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "EVO": {
-      "bvp_comparison": {
-        "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
-        "issue_number": 131,
-        "solved_at": "2026-05-30T12:13:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "c89281e3c32435ebe6490b2afbc026eaafdfefd3",
-        "submission_repo": "machinelearning2014/deepthought_lean_eval"
-      },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+  "results": [
+    {
+      "accepted_at": "2026-05-20T01:29:50Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "EVO",
+      "intake": {
         "issue_number": 9,
-        "solved_at": "2026-05-20T01:29:50Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "a1e0792d6a3c8ef61256554f03d3e2b66dee95ff",
-        "submission_repo": "machinelearning2014/deepthought_lean_eval"
+        "kind": "issue"
       },
-      "two_plus_two": {
-        "benchmark_commit": "9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66",
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {},
+      "result_id": "r2_a783437337548645b104b558611e9c195eba191873d65c3805e9b296a0dd243e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "a1e0792d6a3c8ef61256554f03d3e2b66dee95ff",
+        "repo": "machinelearning2014/deepthought_lean_eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-18T12:57:08Z",
+      "benchmark_commit": "9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66",
+      "declared_model": "EVO",
+      "intake": {
         "issue_number": 265,
-        "solved_at": "2026-05-18T12:57:08Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "5b6982157c2bda310624556e6f0fef74f559c9e8",
-        "submission_repo": "machinelearning2014/deepthought_lean_eval"
+        "kind": "issue"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {},
+      "result_id": "r2_e3ac881464ef50a51b3645b5b1fde905fbb8ffff3c03e3e583f0ddf6fbb437ec",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "5b6982157c2bda310624556e6f0fef74f559c9e8",
+        "repo": "machinelearning2014/deepthought_lean_eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-30T12:13:22Z",
+      "benchmark_commit": "9c163a4f449f96f3c46840ff8efa729e65a03197",
+      "declared_model": "EVO",
+      "intake": {
+        "issue_number": 131,
+        "kind": "issue"
+      },
+      "problem_id": "bvp_comparison",
+      "production_metadata": {},
+      "result_id": "r2_ea9d2b20a33464918abc4df047633b2a5b5e2f155ac592235812cdab6c8a5cd0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "c89281e3c32435ebe6490b2afbc026eaafdfefd3",
+        "repo": "machinelearning2014/deepthought_lean_eval"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "machinelearning2014"
 }

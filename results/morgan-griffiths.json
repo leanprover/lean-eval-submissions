@@ -1,1107 +1,2321 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "GPT-5.5": {
-      "brauer_character_in_cyclotomic": {
-        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
-        "issue_number": 46,
-        "production_description": "Generated via an LMP",
-        "solved_at": "2026-05-23T20:09:14Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "aa6af3605a939af31c219c540940de95a99afdc4",
-        "submission_repo": "Morgan-Griffiths/997b9a415edd5b3300f67b0b86e2d6d3"
+  "results": [
+    {
+      "accepted_at": "2026-07-12T23:18:02Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 768,
+        "kind": "issue"
       },
-      "contractibleSpace_houseWithTwoRooms": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 254,
-        "production_description": "autonomous lmp",
-        "solved_at": "2026-06-07T19:04:59Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "21697ed3e6191030c3763cd5533dbe9daea8d558",
-        "submission_repo": "Morgan-Griffiths/ab1fa300a44533da6e88f8f813e8db15"
-      },
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
-        "issue_number": 47,
-        "production_description": "Generated via an LMP",
-        "solved_at": "2026-05-23T20:08:07Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "df2507d7a55fa45e93a751ede355a1e9766cb789",
-        "submission_repo": "Morgan-Griffiths/1795fd65bee80ec5bd54080789cde3fa"
-      },
-      "dirichlet_eigenvalues_eq_nat_sq": {
-        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
-        "issue_number": 49,
-        "production_description": "Generated via an LMP",
-        "solved_at": "2026-05-23T20:09:35Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "f99ff369694089eaa380b08a98ca9d931446a5fe",
-        "submission_repo": "Morgan-Griffiths/38d9086a96f7c2789ec6c9b666bea346"
-      },
-      "heat_kernel_solves_heat_equation": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 253,
-        "production_description": "autonomous lmp",
-        "solved_at": "2026-06-07T19:04:15Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "e8b3c7cacece586503b95731ba8fb0c76b44fa39",
-        "submission_repo": "Morgan-Griffiths/a608e78316f8f803f034f796ce6fa044"
-      },
-      "linear_ode_asymptotic_stability": {
-        "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
-        "issue_number": 262,
-        "production_description": "autonomous lmp",
-        "solved_at": "2026-06-08T19:30:46Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "79d5f1dc697791c818041e72ec985b45f3bcaaa6",
-        "submission_repo": "Morgan-Griffiths/9dc19b1be880c99ed3113b30903333f7"
-      },
-      "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
-        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
-        "issue_number": 36,
-        "solved_at": "2026-05-22T19:52:32Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "db96b4ce22c3aadf0d9a5a436b5b28b7aef0bd5f",
-        "submission_repo": "Morgan-Griffiths/2190083efd46fb1e5720b71603940a24"
-      },
-      "oppenheim_inequality": {
-        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
-        "issue_number": 38,
-        "production_description": "Autonomous lmp",
-        "solved_at": "2026-05-22T20:11:01Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "9024c01533ea012383110196915bcb582331bcce",
-        "submission_repo": "Morgan-Griffiths/5a6dfcdd13165a579e6fe9101c1568a0"
-      },
-      "posSemidef_map_exp": {
-        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
-        "issue_number": 37,
-        "solved_at": "2026-05-22T20:09:53Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "c8c99fc3f82132045106510b592d4111d4b31e0b",
-        "submission_repo": "Morgan-Griffiths/c71279c880cb7d2fc2bf0cd90fca4bb8"
-      },
-      "sturm_separation": {
-        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
-        "issue_number": 48,
-        "production_description": "Generated via an LMP",
-        "solved_at": "2026-05-23T20:08:29Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "f6fbbec44403ca1deb935e418096d549b3667820",
-        "submission_repo": "Morgan-Griffiths/ed35c85db9f1469c0d65d88810a4ed46"
+      "problem_id": "lax_approximation",
+      "production_metadata": {},
+      "result_id": "r2_035c3a890092f101fa84288c90015e89d04071bb8deb25dd7a19f4a4e89385c9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "9abccf6e7221db1fd584d6a8f015d589a478d49c",
+        "repo": "Morgan-Griffiths/4bdee1299a2cb3e5ad3ee11129659885"
       }
     },
-    "GPT-5.6": {
-      "H1_not_closedComplemented": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 736,
-        "solved_at": "2026-07-12T21:50:05Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "52e07d7521d93fdad3e9d350278c107d0178460c",
-        "submission_repo": "Morgan-Griffiths/2f0ba88293a3bd2fda5eba4ea4f18de7"
-      },
-      "abel_ruffini": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 701,
-        "solved_at": "2026-07-10T19:52:37Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "65c67bd01510786eeccadb5fd5d7de8c3cc97d2d",
-        "submission_repo": "Morgan-Griffiths/8b08d1d260bc7bcd5e9a60be7b2c1008"
-      },
-      "anosov_bowen_shadowing": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 766,
-        "solved_at": "2026-07-12T23:10:38Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "4439ba4f1a8acfd2a242688ca434a1f1cefcb18d",
-        "submission_repo": "Morgan-Griffiths/0261071fa866f1f0673da54117d8e421"
-      },
-      "baer_suzuki": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 836,
-        "solved_at": "2026-07-16T21:01:10Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "b1b571d9f5b0b9f484d8f4b452a4183e190e2d25",
-        "submission_repo": "Morgan-Griffiths/20323aef3e1f7f8207efc7c31ac573e1"
-      },
-      "balanceable_bounded_partitions": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 730,
-        "solved_at": "2026-07-12T21:36:06Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "e5a056dd2d69ade1ae63496460d4d083c001e900",
-        "submission_repo": "Morgan-Griffiths/1414b07ada2da6174faf83a5ec3bfe88"
-      },
-      "banach_alaoglu_bourbaki": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 606,
-        "solved_at": "2026-07-09T00:02:23Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "061d2d2ef30798ca3ab613640310a458a44186da",
-        "submission_repo": "Morgan-Griffiths/25f682c5be2f9770bc3c9ec197eec218"
-      },
-      "bauer_extreme_point_uniqueness": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 607,
-        "solved_at": "2026-07-09T00:09:45Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "764267419b971e796eeb8df6d26b5352bc318848",
-        "submission_repo": "Morgan-Griffiths/64f5344ff64616ecc9c7131b33f9989e"
-      },
-      "boone_higman_embedding": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 608,
-        "solved_at": "2026-07-09T00:09:41Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "65af68184fe56b242024c8f09452b314de54077f",
-        "submission_repo": "Morgan-Griffiths/3c5d89f05eafef6dc114d92a1e4d95a9"
-      },
-      "boone_higman_simple": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 609,
-        "solved_at": "2026-07-09T00:13:29Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "73caf238a3e1a09007a2ec1add120a2f754e41ca",
-        "submission_repo": "Morgan-Griffiths/214e146d1fcd8773c5b1e6cd88bdb0de"
-      },
-      "brauer_character_in_cyclotomic": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 610,
-        "solved_at": "2026-07-09T00:14:41Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "731503ba44fd2d5577b73ecdae648c4cb328ae95",
-        "submission_repo": "Morgan-Griffiths/5adae5ecbe042f4af8ff161c19130718"
-      },
-      "brauer_fowler": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 611,
-        "solved_at": "2026-07-09T00:17:10Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "4f31035adedc1e8e82771c0cac3c6960a96b2f83",
-        "submission_repo": "Morgan-Griffiths/3ba76fbd347bd915ff400e31402617e1"
-      },
-      "brouwer_fixed_point": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 760,
-        "solved_at": "2026-07-12T22:40:34Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "830dc01a6d4256de008e47a0e17591d1bf9217bf",
-        "submission_repo": "Morgan-Griffiths/c12f3115960dc0f85d72d9284db8368f"
-      },
-      "brun_constant_converges": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 731,
-        "solved_at": "2026-07-12T21:37:00Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "1411aff318f15966cbdce83dbc20b681521f1bcd",
-        "submission_repo": "Morgan-Griffiths/31fe931d423ce48a65e7841a44bb3ae2"
-      },
-      "bvp_comparison": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 636,
-        "solved_at": "2026-07-10T07:57:51Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "653a3624adecc8bff6b7741c54817e807bf39444",
-        "submission_repo": "Morgan-Griffiths/a99039e8cb5f299ca69e4e35f32ca59d"
-      },
-      "cauchy_kovalevskaya": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 786,
-        "solved_at": "2026-07-13T20:13:46Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "4d215e47c8980d027cf5251698ebbfe02529a2d0",
-        "submission_repo": "Morgan-Griffiths/e6a6e9a37e0157e6060c4a1d50409481"
-      },
-      "choquet_representation_theorem": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 732,
-        "solved_at": "2026-07-12T21:40:16Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "b9e43711649bf21f73d6d316b358a2e280f41f61",
-        "submission_repo": "Morgan-Griffiths/d4402e0c405f79cadca5e9fc0462df7f"
-      },
-      "compact_group_semisimple": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 612,
-        "solved_at": "2026-07-09T00:18:27Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "9a33b713eaf0ca2fa6e0d33b7c661481af141734",
-        "submission_repo": "Morgan-Griffiths/29ea9d24ba2fec3771fd5f5e8b7635ed"
-      },
-      "contractibleSpace_houseWithTwoRooms": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 785,
-        "solved_at": "2026-07-13T20:09:47Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "c982ce24b5fe275623527ff91d33e7ab29991c00",
-        "submission_repo": "Morgan-Griffiths/b1bee672ea506137b8a2621cba0106be"
-      },
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 637,
-        "solved_at": "2026-07-10T08:02:06Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "53b7f928b22a425284845940d093274726dccf49",
-        "submission_repo": "Morgan-Griffiths/c1632c5bd608e583fc20d39a0b60081b"
-      },
-      "cyclotomic_integer_house_le_two": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 638,
-        "solved_at": "2026-07-10T08:02:57Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "43b1483b9f1e8bdafda30761f41ae28d3b9ee4c4",
-        "submission_repo": "Morgan-Griffiths/27ca726e09266653cfceeb599848d828"
-      },
-      "dirichlet_eigenvalues_eq_nat_sq": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 639,
-        "solved_at": "2026-07-10T08:06:22Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "70c279d1732fb56710cfc5805a32bef1929fd8c5",
-        "submission_repo": "Morgan-Griffiths/80ae1ccc77ca273c9c1833bb1b960a8f"
-      },
-      "dvd_card_connectedComponent_markoffGraph": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 661,
-        "solved_at": "2026-07-10T08:53:44Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "69ba98236173e47d48344ade80c618ebe46f4687",
-        "submission_repo": "Morgan-Griffiths/3943a5e83e745b931be846b7489d8bb9"
-      },
-      "euler_lagrange_equation": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 640,
-        "solved_at": "2026-07-10T08:07:38Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "d86004c71135982567ea2c6473974bd4a95876fb",
-        "submission_repo": "Morgan-Griffiths/64cee9e7405b2a2d72b51a55b7c440e9"
-      },
-      "exists_complementary_polynomial_on_unit_circle": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 702,
-        "solved_at": "2026-07-10T19:52:27Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "8a8032266c2e902939e46eb7a704ef01929e266c",
-        "submission_repo": "Morgan-Griffiths/fe88ea3081ebae519d6f8007c7d2f863"
-      },
-      "exists_nonisotopic_knots": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 770,
-        "solved_at": "2026-07-12T23:36:05Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "d69310743225f4218c2a947d4b18cafcdcbf959c",
-        "submission_repo": "Morgan-Griffiths/0d48af57b4895e76a796f044613384d3"
-      },
-      "exists_nonisotopic_link": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 691,
-        "solved_at": "2026-07-10T19:00:41Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "aab228f3ab4d93aa9873141fc2527ef71d7c0ec7",
-        "submission_repo": "Morgan-Griffiths/f256ad4d78f9bb5649d8a52a1f2a4d56"
-      },
-      "families_of_maps_b01": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 837,
-        "solved_at": "2026-07-16T21:01:59Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "9c5123c91fd4a835c990f4028a363235bf8ef331",
-        "submission_repo": "Morgan-Griffiths/f0cba1ee07411cfa88e89fe110c3dfc7"
-      },
-      "fang_xia_tiling_partition_transitive": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 692,
-        "solved_at": "2026-07-10T19:00:43Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "269baf4059a45e056df561c5192fe08b83199f5e",
-        "submission_repo": "Morgan-Griffiths/d36712362b2f41b41a87a49100ef8cdd"
-      },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 613,
-        "solved_at": "2026-07-09T00:20:49Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "151e5ddffa73450f4b29b260a6d2d386d99b8424",
-        "submission_repo": "Morgan-Griffiths/99767ba4d2e88708ce9b70b690509719"
-      },
-      "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 663,
-        "solved_at": "2026-07-10T08:59:11Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "7c5c2363bea9731ec1af3f9fb8891a0f20891601",
-        "submission_repo": "Morgan-Griffiths/7282b8c5e0428998922f897e6ffc50cc"
-      },
-      "fourier_dirichlet_fejer": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 643,
-        "solved_at": "2026-07-10T08:15:18Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "30bb0035fb46e0e50dbf9d4a4b36d5be0f9558c8",
-        "submission_repo": "Morgan-Griffiths/f7aebe5e692e4849494404f3eec2ef1a"
-      },
-      "fraser_kakeya_fourier_decay": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 664,
-        "solved_at": "2026-07-10T08:59:08Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "e2fa6e048d4722483d7e01bfc068d9d6f4cf7b61",
-        "submission_repo": "Morgan-Griffiths/6fc76b0e84111e805981c7c8b8713718"
-      },
-      "frobenius_group_determinant": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 733,
-        "solved_at": "2026-07-12T21:41:48Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "88d74e2e07a0b5508c1cc395af4ad2ec5d5313ec",
-        "submission_repo": "Morgan-Griffiths/f87791b394cdf020cb3acdc49159697a"
-      },
-      "frobenius_kernel_isNormal": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 734,
-        "solved_at": "2026-07-12T21:45:35Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "f98d96062469094da87ae7b213eaea505c145695",
-        "submission_repo": "Morgan-Griffiths/ab8cc1cf0b7849889ba367776f371c61"
-      },
-      "fundamental_topos_theory": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 735,
-        "solved_at": "2026-07-12T21:45:30Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "52bb27df52fb40fc6a859ae96acb8f5b796dd239",
-        "submission_repo": "Morgan-Griffiths/37a70e6d246ae30dfa991068601a641f"
-      },
-      "furstenberg_topological": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 614,
-        "solved_at": "2026-07-09T00:21:56Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "90fbd330586bb51cb8caa4c4fdf7bcaa6be6529f",
-        "submission_repo": "Morgan-Griffiths/a06c4da996c1e02a0e72c8119117ce4e"
-      },
-      "gauss_wantzel_constructible_polygon": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 693,
-        "solved_at": "2026-07-10T19:05:50Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "3111c22d3f295f28a38d994cfa6fcaa88320b702",
-        "submission_repo": "Morgan-Griffiths/f3f0a9f626c34b424579e80a45cd7283"
-      },
-      "glAction_range_eq_centralizer_symAction": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 644,
-        "solved_at": "2026-07-10T08:15:16Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "6feb0202b4e6a482c9dd1257dee4b55138da43b3",
-        "submission_repo": "Morgan-Griffiths/18af9dc302297145e74591c05626ee96"
-      },
-      "golod_shafarevich_inequality": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 820,
-        "solved_at": "2026-07-15T06:06:49Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "e00d8ef0fa1dac1f04c75e6e35b1c2a6850f11ad",
-        "submission_repo": "Morgan-Griffiths/798e0d455c559794ea8020f44fd3b57a"
-      },
-      "halmos_generic_weak_mixing": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 819,
-        "solved_at": "2026-07-15T06:05:40Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "d009cfa385246c8806db58c074f042771b34f205",
-        "submission_repo": "Morgan-Griffiths/82c28da480c21ecb0bb221bfda2f8376"
-      },
-      "hausdorff_absolute_continuity": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 694,
-        "solved_at": "2026-07-10T19:05:29Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "a4b169e33045c9049fbb0a0d60f0315f62c63027",
-        "submission_repo": "Morgan-Griffiths/6d6a9a3ac396d30dfd85e708a45b518d"
-      },
-      "hausdorff_hildebrandt_schoenberg": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 737,
-        "solved_at": "2026-07-12T21:50:11Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "a42070f820c307f3283920d7ae95efecc13a6af8",
-        "submission_repo": "Morgan-Griffiths/dd5caf5ecee62d74ae84856622d021c8"
-      },
-      "hausdorff_positivity_criterion": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 667,
-        "solved_at": "2026-07-10T09:07:54Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "a9a989589d25306407ae110bd2351723e05b3ecc",
-        "submission_repo": "Morgan-Griffiths/eae644c3d41694260ee3b1f751165acc"
-      },
-      "heat_kernel_solves_heat_equation": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 668,
-        "solved_at": "2026-07-10T09:08:17Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "f1f54b51a26594f700a76a33881e8e30c5d361e3",
-        "submission_repo": "Morgan-Griffiths/8d90abaa8d5124f6888bfb159b197f3f"
-      },
-      "hippocrates_lunes": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 695,
-        "solved_at": "2026-07-10T19:09:55Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "c0021eb1278b192b1b130428a50fc66e7192908a",
-        "submission_repo": "Morgan-Griffiths/7d0261d5f4d2c238b562a1b42927014e"
-      },
-      "hopf_umlaufsatz": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 784,
-        "solved_at": "2026-07-13T20:09:33Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "a1934b954dda684f1d4d56d83cadce7eb44280b5",
-        "submission_repo": "Morgan-Griffiths/2071fa2ff61976103b44b17da441e25e"
-      },
-      "hurewicz_h1_abelianization": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 771,
-        "solved_at": "2026-07-12T23:35:18Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "2a127c6475611992612fa228ca879480766948b1",
-        "submission_repo": "Morgan-Griffiths/b23e5d9675d44891a9567acd67d658ac"
-      },
-      "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 646,
-        "solved_at": "2026-07-10T08:19:30Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "1c946921291ae4422636e1a20f913d20f969a96f",
-        "submission_repo": "Morgan-Griffiths/516ffdc4fda3a02f51e18d641a9e2f17"
-      },
-      "jordan_normal_form": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 767,
-        "solved_at": "2026-07-12T23:16:22Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "290db00801db3ad78445f57637294ebf3b4add23",
-        "submission_repo": "Morgan-Griffiths/679b8fd88bbe8170f2ca47ceea77610f"
-      },
-      "kakutani_fixed_point": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 739,
-        "solved_at": "2026-07-12T21:54:26Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "6b21d754372f3f216db37250b80d86037cf7b81b",
-        "submission_repo": "Morgan-Griffiths/c4ae4962a94f8ff4d8bd5615990ce8f2"
-      },
-      "kirk_normal_structure": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 647,
-        "solved_at": "2026-07-10T08:23:49Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "5169ee192001ff8f384ddc6b61ab63f83b7db9f3",
-        "submission_repo": "Morgan-Griffiths/ef738adc32b5c688156c5ac7cf800d7b"
-      },
-      "kolmogorov_arnold_superposition": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 740,
-        "solved_at": "2026-07-12T21:58:14Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "076fed46419ca5eb201668f044cb030ef3a9f837",
-        "submission_repo": "Morgan-Griffiths/1fcb6a0659c9da2dd5f61d0b106d103b"
-      },
-      "koszul_formula": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 615,
-        "solved_at": "2026-07-09T00:25:25Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "db914ee50d478dc11a007a35afbda357fa1ff641",
-        "submission_repo": "Morgan-Griffiths/8a4017b23fb42306a9aa770842982639"
-      },
-      "landsberg_schaar": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 669,
-        "solved_at": "2026-07-10T09:12:51Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "bda82a78e6406dc29f54ee6569dc188160eca9a2",
-        "submission_repo": "Morgan-Griffiths/c8e3b90b163954206462e8c39337164d"
-      },
-      "lax_approximation": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 768,
-        "solved_at": "2026-07-12T23:18:02Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "9abccf6e7221db1fd584d6a8f015d589a478d49c",
-        "submission_repo": "Morgan-Griffiths/4bdee1299a2cb3e5ad3ee11129659885"
-      },
-      "levi_civita_exists_unique": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 742,
-        "solved_at": "2026-07-12T22:03:24Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "32e9a4c5d47112403211462a8f03067d66184c52",
-        "submission_repo": "Morgan-Griffiths/1e21d5f20d827408df54db0286247aef"
-      },
-      "lidskii_inequality": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 743,
-        "solved_at": "2026-07-12T22:03:11Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "60c24e87556c539ce3612a355fda74b92685f879",
-        "submission_repo": "Morgan-Griffiths/452e55e7d6d38cbeba192c9c0f012c65"
-      },
-      "lidskii_last": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 616,
-        "solved_at": "2026-07-09T00:25:58Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "9b7f84fedb04e5a8f80252683f52bc5321b0a9ae",
-        "submission_repo": "Morgan-Griffiths/a21fc47d6f492abd13e6957f13910414"
-      },
-      "lindemann": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 617,
-        "solved_at": "2026-07-09T00:29:45Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "c1a511ed44edd253896dfe9dadcf6570dccc8449",
-        "submission_repo": "Morgan-Griffiths/deadfcf9d6e7a188fdec33c27e079729"
-      },
-      "lindemann_weierstrass": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 744,
-        "solved_at": "2026-07-12T22:07:47Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "ad0f468f7d4049b36924960709295cd804268645",
-        "submission_repo": "Morgan-Griffiths/447c39cc95090748126d411f53f69439"
-      },
-      "linear_ode_asymptotic_stability": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 696,
-        "solved_at": "2026-07-10T19:10:26Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "e825ce028029fcb16af64e4897fcfab5131eeac1",
-        "submission_repo": "Morgan-Griffiths/dd5bc3397b34432fdb94651f0968774c"
-      },
-      "liouville_arnold": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 772,
-        "solved_at": "2026-07-12T23:40:11Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "ded4137b13836423747a5e2df85e8a846852804c",
-        "submission_repo": "Morgan-Griffiths/d5d60a2332c5b25a8f5c999e9c98a372"
-      },
-      "lp_maximum_principle": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 697,
-        "solved_at": "2026-07-10T19:14:19Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "2720e6deee9b83edb1b607cecd6d9a276009f2a5",
-        "submission_repo": "Morgan-Griffiths/e910a41543dbc28daaccd33bb32c65fd"
-      },
-      "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 618,
-        "solved_at": "2026-07-09T00:30:02Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "02cc9f15e3151571959fb4a78b36669e93e68702",
-        "submission_repo": "Morgan-Griffiths/67c4cbeca2d3a7346c826ca7d182d9d4"
-      },
-      "monge_kantorovich": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 619,
-        "solved_at": "2026-07-09T00:34:08Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "e15345ad33050099449c851e918a113e5c623008",
-        "submission_repo": "Morgan-Griffiths/db45800bb5a0ea2810c0bbb455d802c3"
-      },
-      "moran_equality_affine": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 670,
-        "solved_at": "2026-07-10T09:12:39Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "5a0bbc2bde67160764a2f7ac8fdcdbf6c5b9a6de",
-        "submission_repo": "Morgan-Griffiths/5be82f906fcb2fa4b830079c0f6ce2d3"
-      },
-      "morley_theorem": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 703,
-        "solved_at": "2026-07-10T19:56:51Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "7a3787b5be045c9321696992a41927e8b26ef313",
-        "submission_repo": "Morgan-Griffiths/9930e79d4171e6a3f1291fec2d8450dc"
-      },
-      "mountain_pass": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 671,
-        "solved_at": "2026-07-10T09:17:11Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "12acb37d53c11afc4d2bef90fc2bb937bf0ce271",
-        "submission_repo": "Morgan-Griffiths/d2ffe99cdf5c509904bbed4191e42fb0"
-      },
-      "mulCayley_connected_iff_closure_eq_top": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 620,
-        "solved_at": "2026-07-09T00:33:49Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "4bea25dea4d3b4553cf1b114fdec1210096b9a29",
-        "submission_repo": "Morgan-Griffiths/c3190745d7e99c5759588c981477eb62"
-      },
-      "nash_equilibrium_exists": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 745,
-        "solved_at": "2026-07-12T22:07:28Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "44d92e9c926e63b74b73fb86229b800cbd59eba2",
-        "submission_repo": "Morgan-Griffiths/6157b449862f609a3b6496abd9536345"
-      },
-      "nonlinear_three_manifold_group": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 805,
-        "solved_at": "2026-07-13T22:52:25Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "6f82a6d95d269d05a82b971392a2771dc25cd916",
-        "submission_repo": "Morgan-Griffiths/bde6a33aa213727d89552987ce5136ac"
-      },
-      "normal_spectral_theorem": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 672,
-        "solved_at": "2026-07-10T09:17:17Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "56eceecc63adc11fc6af4e6210bc5dfc453bc891",
-        "submission_repo": "Morgan-Griffiths/6912ec18a341f14c5cbc7fdfb8023b59"
-      },
-      "nyquist_shannon_sampling": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 650,
-        "solved_at": "2026-07-10T08:28:51Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "a87a6094dce4b6dc89073f9638b74db2be2b974c",
-        "submission_repo": "Morgan-Griffiths/d06fc6691006559f507b2b5e4195bb49"
-      },
-      "oppenheim_inequality": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 704,
-        "solved_at": "2026-07-10T19:57:01Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "d16c718b3406fc5af545ce3d882eca17f2d39f6d",
-        "submission_repo": "Morgan-Griffiths/0db860bef27b738b80454f4a8c50249e"
-      },
-      "ornstein_weiss_rokhlin": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 825,
-        "solved_at": "2026-07-15T23:34:11Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "087195f22207f721509ee0a4b3f5f10169bea96c",
-        "submission_repo": "Morgan-Griffiths/lean-eval-submission-ornstein-weiss-rokhlin"
-      },
-      "parallel_postulate_independent": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 823,
-        "solved_at": "2026-07-15T17:23:05Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "606d0e299450afef1e250de704b28c062cffc73a",
-        "submission_repo": "Morgan-Griffiths/d3ed52d2164df1e310e1c6433c91e527"
-      },
-      "pascal": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 621,
-        "solved_at": "2026-07-09T00:37:46Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "172776c4d5161ec875deb1894e068bc713e34222",
-        "submission_repo": "Morgan-Griffiths/ccde85f22fc4d6961b2241875c7ae72c"
-      },
-      "peano_existence": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 746,
-        "solved_at": "2026-07-12T22:12:03Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "4dd33a32fe3551e405be57444fe4aa9dcda33805",
-        "submission_repo": "Morgan-Griffiths/a6583fbbe80007297a6118ba337707a7"
-      },
-      "pell_solution_convergent": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 622,
-        "solved_at": "2026-07-09T00:37:58Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "0fc7774e6646c0a7499e2a0a04b4c43a8413c6a2",
-        "submission_repo": "Morgan-Griffiths/57454342e110f1f6d3fa0fb1ca384944"
-      },
-      "permute_to_unimodal": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 698,
-        "solved_at": "2026-07-10T19:14:26Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "a30a0bfd0d0aed5e881ebba0572381ab1ff80aa4",
-        "submission_repo": "Morgan-Griffiths/5c7eff24be4c5f746cb9986db767bfbd"
-      },
-      "pi1_circle_mulEquiv_int": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 652,
-        "solved_at": "2026-07-10T08:32:41Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "3d573dd3d0815b0b57b248556eb1e789976b575c",
-        "submission_repo": "Morgan-Griffiths/71c61eb47b97f5d6e4b34134ddb57d3a"
-      },
-      "poincare_siegel_linearisation": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 747,
-        "solved_at": "2026-07-12T22:12:07Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "c63a46ec067b68ab857a09945459609779e4ee02",
-        "submission_repo": "Morgan-Griffiths/99f1fce622758e70d1cad5cdde4449d3"
-      },
-      "posSemidef_map_exp": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 705,
-        "solved_at": "2026-07-10T20:00:41Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "bf98451d98231d496d8c12397da2d978031ba454",
-        "submission_repo": "Morgan-Griffiths/7fc3af3784b848cf840a957fd73d7ed0"
-      },
-      "radon_transform_inversion": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 653,
-        "solved_at": "2026-07-10T08:36:01Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "5fb5493af4bdfd54cd003412ec4316b46f1c34f8",
-        "submission_repo": "Morgan-Griffiths/339b0a809919a3948830cf821d56fce8"
-      },
-      "regular_value_ae": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 748,
-        "solved_at": "2026-07-12T22:16:15Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "92c730bf577ff3696a149a4645cfce67b972e68d",
-        "submission_repo": "Morgan-Griffiths/6c6dcc377a262995ccf517357f691e8d"
-      },
-      "riesz_brothers_theorem": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 700,
-        "solved_at": "2026-07-10T19:18:53Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "3cae0696782fe09c7dcb7abd3044df8a7e2f513b",
-        "submission_repo": "Morgan-Griffiths/1317622108694eab3466c104d3925a9f"
-      },
-      "rising_sun_lemma": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 699,
-        "solved_at": "2026-07-10T19:18:20Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "0e379873480af89c0ad777d244ffc487563a2030",
-        "submission_repo": "Morgan-Griffiths/57e230c8a1a0971eb63c8a7bf0b504f8"
-      },
-      "rokhlin_lemma": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 774,
-        "solved_at": "2026-07-13T00:14:36Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "b608beedd8fad8808099dc108f022c1353565a48",
-        "submission_repo": "Morgan-Griffiths/1f34a8aebc600b31b4a92a6426aa6a22"
-      },
-      "rouche_zero_count_eq": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 655,
-        "solved_at": "2026-07-10T08:40:57Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "9cddf6bbcc366e5ed969c2ce0ba5951ad372e7e3",
-        "submission_repo": "Morgan-Griffiths/43a200a8bf1d5dc6c3ecd8f49ff93803"
-      },
-      "runge_theorem": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 750,
-        "solved_at": "2026-07-12T22:20:28Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "077f02f82fde9b1136f368f446abe8106ce31ed1",
-        "submission_repo": "Morgan-Griffiths/8378138f7fbb292e87c02e38e494c4db"
-      },
-      "sard_theorem": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 751,
-        "solved_at": "2026-07-12T22:21:05Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "532c8124f570a0a8b7684d05e05f31142585a72a",
-        "submission_repo": "Morgan-Griffiths/fa7499915002fdf2211ad111372c4cda"
-      },
-      "schauder_fixed_point": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 752,
-        "solved_at": "2026-07-12T22:24:14Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "edba23c7ecc5ce88495b385cdb696961439f9bab",
-        "submission_repo": "Morgan-Griffiths/9696b2ac9d473ab1f3a267a98507992e"
-      },
-      "semilinear_poisson_radial_symmetry": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 753,
-        "solved_at": "2026-07-12T22:26:25Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "c7ecb5d4e7f12df4b21e74894ee5a835d31ef6c8",
-        "submission_repo": "Morgan-Griffiths/9fc61a5e9dc970c89c66508af027caba"
-      },
-      "shannon_capacity_pentagon": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 754,
-        "solved_at": "2026-07-12T22:27:50Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "e8310813b56515bb402a1398774b860f53412acb",
-        "submission_repo": "Morgan-Griffiths/2e46890de40418e9707464131d862539"
-      },
-      "sobolev_embedding_morrey": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 773,
-        "solved_at": "2026-07-12T23:41:06Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "99f075a026dda35c28500557bf69528a6d161bab",
-        "submission_repo": "Morgan-Griffiths/b80cd8674fc76d067cfa7871204edab8"
-      },
-      "solvable_by_radicals_converse": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 657,
-        "solved_at": "2026-07-10T08:45:16Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "3e1df889cc28a618ad3752bb92a041deffdab6ab",
-        "submission_repo": "Morgan-Griffiths/55a1e09afeaaf73fbbf94bd414c0e74a"
-      },
-      "stable_unstable_manifolds": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 755,
-        "solved_at": "2026-07-12T22:31:19Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "85d5d859906b3107bdf07c59a84f5d2462634c13",
-        "submission_repo": "Morgan-Griffiths/cf48f3535b6ce451c51ce3b3e5b5f161"
-      },
-      "strong_subadditivity": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 769,
-        "solved_at": "2026-07-12T23:21:02Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "e189afe9513aafe445e592cb8668b0c62aa8081a",
-        "submission_repo": "Morgan-Griffiths/05b5c5ab2268116386740b92f4c80e58"
-      },
-      "sturm": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 623,
-        "solved_at": "2026-07-09T00:41:47Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "9b9b408a36de489841229bc6b2722eea4d03a5b4",
-        "submission_repo": "Morgan-Griffiths/f25d92dc77b9dc55b5996f5bd8cee03c"
-      },
-      "sturm_separation": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 658,
-        "solved_at": "2026-07-10T08:45:10Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "55a8851a3515651692af3b1a50ed386d5b2d8787",
-        "submission_repo": "Morgan-Griffiths/da255071700d91d6c0754311d3fb0e17"
-      },
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 624,
-        "solved_at": "2026-07-09T00:41:54Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "dc991b32fcdcaac5525d483a9973a71276c8b33d",
-        "submission_repo": "Morgan-Griffiths/71eeb5ba681cde3561b6f966a90a660f"
-      },
-      "symAction_range_eq_centralizer_glAction": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 660,
-        "solved_at": "2026-07-10T08:50:00Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "92bb36d3e61dcd27962c1a21f7b8ea77b7a40de0",
-        "submission_repo": "Morgan-Griffiths/623c02ac757b2afc312af8607fa5a6d8"
-      },
-      "symplectic_matrix_det": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+    {
+      "accepted_at": "2026-07-10T09:21:52Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
         "issue_number": 674,
-        "solved_at": "2026-07-10T09:21:52Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "368d6470379ba525e783e4cd594c0fe1943883e3",
-        "submission_repo": "Morgan-Griffiths/540d938ce971aabb2511aae2ea81e911"
+        "kind": "issue"
       },
-      "trace_cayley_hamilton_newton": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 625,
-        "solved_at": "2026-07-09T00:45:51Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "c072ed0afa440cbeb6d4d4c3b4d3015c0fdacc2a",
-        "submission_repo": "Morgan-Griffiths/8f516932d0cdadccff14f619865d1608"
+      "problem_id": "symplectic_matrix_det",
+      "production_metadata": {},
+      "result_id": "r2_050dcbe9df70c3380b557651eebc9d4e1fac80218c13a48d2af04e5ca3e4823c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "368d6470379ba525e783e4cd594c0fe1943883e3",
+        "repo": "Morgan-Griffiths/540d938ce971aabb2511aae2ea81e911"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:37:58Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 622,
+        "kind": "issue"
       },
-      "turing_recursive_equiv": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "problem_id": "pell_solution_convergent",
+      "production_metadata": {},
+      "result_id": "r2_05c6d32eae9da9d6ff40a92266ea3e1ae352a4c22be137e6478c53fd00d2766f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "0fc7774e6646c0a7499e2a0a04b4c43a8413c6a2",
+        "repo": "Morgan-Griffiths/57454342e110f1f6d3fa0fb1ca384944"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T23:35:18Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 771,
+        "kind": "issue"
+      },
+      "problem_id": "hurewicz_h1_abelianization",
+      "production_metadata": {},
+      "result_id": "r2_08623290b285d19acb626c34c329e78c8e82d5749018201772594be76096f383",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "2a127c6475611992612fa228ca879480766948b1",
+        "repo": "Morgan-Griffiths/b23e5d9675d44891a9567acd67d658ac"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:09:55Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 695,
+        "kind": "issue"
+      },
+      "problem_id": "hippocrates_lunes",
+      "production_metadata": {},
+      "result_id": "r2_0e6362eccda152493aa130495ea9e741bce4c96ccc4824a7c470c62789fdf991",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "c0021eb1278b192b1b130428a50fc66e7192908a",
+        "repo": "Morgan-Griffiths/7d0261d5f4d2c238b562a1b42927014e"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:52:37Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 701,
+        "kind": "issue"
+      },
+      "problem_id": "abel_ruffini",
+      "production_metadata": {},
+      "result_id": "r2_0e9170cfd1a9fcc2841e4bd65eb0c0ea595e65c5a3f008e3e4addc425f4bd959",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "65c67bd01510786eeccadb5fd5d7de8c3cc97d2d",
+        "repo": "Morgan-Griffiths/8b08d1d260bc7bcd5e9a60be7b2c1008"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T21:50:11Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 737,
+        "kind": "issue"
+      },
+      "problem_id": "hausdorff_hildebrandt_schoenberg",
+      "production_metadata": {},
+      "result_id": "r2_0f86a2e6bc7259fb9c747ae1724e0f4a8bb9cc6e6965980cccb67bf97e6d4717",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "a42070f820c307f3283920d7ae95efecc13a6af8",
+        "repo": "Morgan-Griffiths/dd5caf5ecee62d74ae84856622d021c8"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:36:01Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 653,
+        "kind": "issue"
+      },
+      "problem_id": "radon_transform_inversion",
+      "production_metadata": {},
+      "result_id": "r2_11a4c5d6ba017e49286a6c18fb7b8502091db3fdf7625eb2e9f799604eefa832",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "5fb5493af4bdfd54cd003412ec4316b46f1c34f8",
+        "repo": "Morgan-Griffiths/339b0a809919a3948830cf821d56fce8"
+      }
+    },
+    {
+      "accepted_at": "2026-06-07T19:04:59Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "GPT-5.5",
+      "intake": {
+        "issue_number": 254,
+        "kind": "issue"
+      },
+      "problem_id": "contractibleSpace_houseWithTwoRooms",
+      "production_metadata": {
+        "production_description": "autonomous lmp"
+      },
+      "result_id": "r2_13422772a5aab4ad6d68b61f762f661e28e700959046276ab2c8414e0d25aae7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "21697ed3e6191030c3763cd5533dbe9daea8d558",
+        "repo": "Morgan-Griffiths/ab1fa300a44533da6e88f8f813e8db15"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T21:36:06Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 730,
+        "kind": "issue"
+      },
+      "problem_id": "balanceable_bounded_partitions",
+      "production_metadata": {},
+      "result_id": "r2_13d7c5713dd870d84cb4518fadd1a90aa03f08036663ea0c5fefab2194334605",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "e5a056dd2d69ade1ae63496460d4d083c001e900",
+        "repo": "Morgan-Griffiths/1414b07ada2da6174faf83a5ec3bfe88"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:13:29Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 609,
+        "kind": "issue"
+      },
+      "problem_id": "boone_higman_simple",
+      "production_metadata": {},
+      "result_id": "r2_152e276247517fa9ce69214c9bd45e9ddd732eff396e5c4416c740b301474de8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "73caf238a3e1a09007a2ec1add120a2f754e41ca",
+        "repo": "Morgan-Griffiths/214e146d1fcd8773c5b1e6cd88bdb0de"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:12:07Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 747,
+        "kind": "issue"
+      },
+      "problem_id": "poincare_siegel_linearisation",
+      "production_metadata": {},
+      "result_id": "r2_1572042848bb5d1196f5faaea0f9bbcd321c7f7a0f972f94ebe683b8dfabbb07",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "c63a46ec067b68ab857a09945459609779e4ee02",
+        "repo": "Morgan-Griffiths/99f1fce622758e70d1cad5cdde4449d3"
+      }
+    },
+    {
+      "accepted_at": "2026-05-23T20:08:29Z",
+      "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+      "declared_model": "GPT-5.5",
+      "intake": {
+        "issue_number": 48,
+        "kind": "issue"
+      },
+      "problem_id": "sturm_separation",
+      "production_metadata": {
+        "production_description": "Generated via an LMP"
+      },
+      "result_id": "r2_16bd7ff43129e8f618fc3db475bd66ceabfe90713bd2ce306531c2af36a56065",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "f6fbbec44403ca1deb935e418096d549b3667820",
+        "repo": "Morgan-Griffiths/ed35c85db9f1469c0d65d88810a4ed46"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:41:54Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 624,
+        "kind": "issue"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {},
+      "result_id": "r2_18dd7f2919383b2ade3efeda0a21e2fc1c220e72afe14fee49209abb5f410033",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "dc991b32fcdcaac5525d483a9973a71276c8b33d",
+        "repo": "Morgan-Griffiths/71eeb5ba681cde3561b6f966a90a660f"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T20:00:41Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 705,
+        "kind": "issue"
+      },
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {},
+      "result_id": "r2_1acb15a145bc25ef26a2886e2b129882842f29ea01dd8b1b6dfaa476bcf4b7b3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "bf98451d98231d496d8c12397da2d978031ba454",
+        "repo": "Morgan-Griffiths/7fc3af3784b848cf840a957fd73d7ed0"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:00:43Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 692,
+        "kind": "issue"
+      },
+      "problem_id": "fang_xia_tiling_partition_transitive",
+      "production_metadata": {},
+      "result_id": "r2_1add457a008fcca32a61446b0122280230bc495e457ac24655e37b53721fbb6a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "269baf4059a45e056df561c5192fe08b83199f5e",
+        "repo": "Morgan-Griffiths/d36712362b2f41b41a87a49100ef8cdd"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T09:12:51Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 669,
+        "kind": "issue"
+      },
+      "problem_id": "landsberg_schaar",
+      "production_metadata": {},
+      "result_id": "r2_1c24132a41aeeb07a543403be456eeb9a19a8fadd9096a08ecf59cd00c5a2783",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "bda82a78e6406dc29f54ee6569dc188160eca9a2",
+        "repo": "Morgan-Griffiths/c8e3b90b163954206462e8c39337164d"
+      }
+    },
+    {
+      "accepted_at": "2026-05-22T20:09:53Z",
+      "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+      "declared_model": "GPT-5.5",
+      "intake": {
+        "issue_number": 37,
+        "kind": "issue"
+      },
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {},
+      "result_id": "r2_1f7b471f466ab784938178deb6d653596551156fdf4ac5d0e43cbc6100fa738b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "c8c99fc3f82132045106510b592d4111d4b31e0b",
+        "repo": "Morgan-Griffiths/c71279c880cb7d2fc2bf0cd90fca4bb8"
+      }
+    },
+    {
+      "accepted_at": "2026-05-23T20:09:14Z",
+      "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+      "declared_model": "GPT-5.5",
+      "intake": {
+        "issue_number": 46,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_character_in_cyclotomic",
+      "production_metadata": {
+        "production_description": "Generated via an LMP"
+      },
+      "result_id": "r2_229c58b6ee96526e5336eb96f73bbe19199955c350f84b0860999e26931df0b7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "aa6af3605a939af31c219c540940de95a99afdc4",
+        "repo": "Morgan-Griffiths/997b9a415edd5b3300f67b0b86e2d6d3"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:20:28Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 750,
+        "kind": "issue"
+      },
+      "problem_id": "runge_theorem",
+      "production_metadata": {},
+      "result_id": "r2_26a3054d32d8d9cf04e619ed141c17b25822a3f52fc8cf12fcf8c727fd6c9592",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "077f02f82fde9b1136f368f446abe8106ce31ed1",
+        "repo": "Morgan-Griffiths/8378138f7fbb292e87c02e38e494c4db"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:24:14Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 752,
+        "kind": "issue"
+      },
+      "problem_id": "schauder_fixed_point",
+      "production_metadata": {},
+      "result_id": "r2_26b6d7e5b4c8b3be468bd1ba836ef56a38b8194c2b194357d472df80b01ac227",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "edba23c7ecc5ce88495b385cdb696961439f9bab",
+        "repo": "Morgan-Griffiths/9696b2ac9d473ab1f3a267a98507992e"
+      }
+    },
+    {
+      "accepted_at": "2026-05-23T20:09:35Z",
+      "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+      "declared_model": "GPT-5.5",
+      "intake": {
+        "issue_number": 49,
+        "kind": "issue"
+      },
+      "problem_id": "dirichlet_eigenvalues_eq_nat_sq",
+      "production_metadata": {
+        "production_description": "Generated via an LMP"
+      },
+      "result_id": "r2_27f16e6b2c83af0b7cace9ef3e10828977c5145647afc793575ad56a0e971e14",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "f99ff369694089eaa380b08a98ca9d931446a5fe",
+        "repo": "Morgan-Griffiths/38d9086a96f7c2789ec6c9b666bea346"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:56:51Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 703,
+        "kind": "issue"
+      },
+      "problem_id": "morley_theorem",
+      "production_metadata": {},
+      "result_id": "r2_29de20e91642011940b0de5500ac1023a6750437ce726904afb3c9c54d5050e3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "7a3787b5be045c9321696992a41927e8b26ef313",
+        "repo": "Morgan-Griffiths/9930e79d4171e6a3f1291fec2d8450dc"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:03:11Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 743,
+        "kind": "issue"
+      },
+      "problem_id": "lidskii_inequality",
+      "production_metadata": {},
+      "result_id": "r2_2aceae506063a71f2bd90b3f9a76af02bdce81233747ef020c3af584e780ff86",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "60c24e87556c539ce3612a355fda74b92685f879",
+        "repo": "Morgan-Griffiths/452e55e7d6d38cbeba192c9c0f012c65"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:50:59Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
         "issue_number": 765,
-        "solved_at": "2026-07-12T22:50:59Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "e4b10cf1dd1bf34a2ceaa5b58ef927616203c0e7",
-        "submission_repo": "Morgan-Griffiths/352dfcb64d9ced421d332bae7000964d"
+        "kind": "issue"
       },
-      "tverberg_theorem": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 757,
-        "solved_at": "2026-07-12T22:35:48Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "1120b835da746c8ceeb23ed0efa6ba7d345432d9",
-        "submission_repo": "Morgan-Griffiths/c2735374fbad7602f670548053eeb926"
+      "problem_id": "turing_recursive_equiv",
+      "production_metadata": {},
+      "result_id": "r2_2c82335e5bae48e6aba6e810767a38445b35597b126f5cd6622c8df4f5704ab5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "e4b10cf1dd1bf34a2ceaa5b58ef927616203c0e7",
+        "repo": "Morgan-Griffiths/352dfcb64d9ced421d332bae7000964d"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:00:41Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 691,
+        "kind": "issue"
       },
-      "vonNeumann_doubleCommutant_tfae": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 675,
-        "solved_at": "2026-07-10T09:24:53Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "7e2c7304a396429cc97ebc9b3e56abc330bc0bc0",
-        "submission_repo": "Morgan-Griffiths/8f1e9b44ec572b340e15cdbdd79b2947"
+      "problem_id": "exists_nonisotopic_link",
+      "production_metadata": {},
+      "result_id": "r2_34db435c59b937314adb2416a9c3b5cc8df6b867bd44d0d64ba20982247af910",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "aab228f3ab4d93aa9873141fc2527ef71d7c0ec7",
+        "repo": "Morgan-Griffiths/f256ad4d78f9bb5649d8a52a1f2a4d56"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:21:56Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 614,
+        "kind": "issue"
       },
-      "wiener_atom_detection": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "problem_id": "furstenberg_topological",
+      "production_metadata": {},
+      "result_id": "r2_38c939e7b6baf400bae7c7f1dd67d47a17978ce58e982bd18bac919325dbea55",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "90fbd330586bb51cb8caa4c4fdf7bcaa6be6529f",
+        "repo": "Morgan-Griffiths/a06c4da996c1e02a0e72c8119117ce4e"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:27:50Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 754,
+        "kind": "issue"
+      },
+      "problem_id": "shannon_capacity_pentagon",
+      "production_metadata": {},
+      "result_id": "r2_390fb38f62d3d1d06ec3c82a217b6ebaae58e474cfcb398442b4ee95699f3d17",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "e8310813b56515bb402a1398774b860f53412acb",
+        "repo": "Morgan-Griffiths/2e46890de40418e9707464131d862539"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T09:08:17Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 668,
+        "kind": "issue"
+      },
+      "problem_id": "heat_kernel_solves_heat_equation",
+      "production_metadata": {},
+      "result_id": "r2_3e93ef96634dc3971a7b6a8dbdd6d9d70b5ffe422f64fd7be2e3a3cfcd899c0e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "f1f54b51a26594f700a76a33881e8e30c5d361e3",
+        "repo": "Morgan-Griffiths/8d90abaa8d5124f6888bfb159b197f3f"
+      }
+    },
+    {
+      "accepted_at": "2026-07-15T17:23:05Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 823,
+        "kind": "issue"
+      },
+      "problem_id": "parallel_postulate_independent",
+      "production_metadata": {},
+      "result_id": "r2_3f72bff4a532a6639fe45277d47d5bf549e798d7345aace77f4e27877aa837f4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "606d0e299450afef1e250de704b28c062cffc73a",
+        "repo": "Morgan-Griffiths/d3ed52d2164df1e310e1c6433c91e527"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:05:29Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 694,
+        "kind": "issue"
+      },
+      "problem_id": "hausdorff_absolute_continuity",
+      "production_metadata": {},
+      "result_id": "r2_4127bfc96f42adea161b1a955e8f23379f94a8e11d0eb18734e0ccf4b1339914",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "a4b169e33045c9049fbb0a0d60f0315f62c63027",
+        "repo": "Morgan-Griffiths/6d6a9a3ac396d30dfd85e708a45b518d"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:18:27Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 612,
+        "kind": "issue"
+      },
+      "problem_id": "compact_group_semisimple",
+      "production_metadata": {},
+      "result_id": "r2_43bbe33fdaf2018de8a465aef2baf3034c255a8c75ad9d8752d1e7b03251b4a6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "9a33b713eaf0ca2fa6e0d33b7c661481af141734",
+        "repo": "Morgan-Griffiths/29ea9d24ba2fec3771fd5f5e8b7635ed"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:20:49Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 613,
+        "kind": "issue"
+      },
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {},
+      "result_id": "r2_441dadd2d6b3a49e9d01f9e56f25cb806c6a11157918125a66e383be2ce12e73",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "151e5ddffa73450f4b29b260a6d2d386d99b8424",
+        "repo": "Morgan-Griffiths/99767ba4d2e88708ce9b70b690509719"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:34:08Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 619,
+        "kind": "issue"
+      },
+      "problem_id": "monge_kantorovich",
+      "production_metadata": {},
+      "result_id": "r2_453d9ac1cd889cb223e77ef624b583954b757b69d121ca8d7247564a612550e3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "e15345ad33050099449c851e918a113e5c623008",
+        "repo": "Morgan-Griffiths/db45800bb5a0ea2810c0bbb455d802c3"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T21:50:05Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 736,
+        "kind": "issue"
+      },
+      "problem_id": "H1_not_closedComplemented",
+      "production_metadata": {},
+      "result_id": "r2_46f26973dcb1ea4e24384bdbc1ebaf84419554a0d5c477f21a1621fc03ff798f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "52e07d7521d93fdad3e9d350278c107d0178460c",
+        "repo": "Morgan-Griffiths/2f0ba88293a3bd2fda5eba4ea4f18de7"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T23:16:22Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 767,
+        "kind": "issue"
+      },
+      "problem_id": "jordan_normal_form",
+      "production_metadata": {},
+      "result_id": "r2_475118ac342ac75534f083f161cfce52dafe614c7c299e1e3e732275d58b4a5f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "290db00801db3ad78445f57637294ebf3b4add23",
+        "repo": "Morgan-Griffiths/679b8fd88bbe8170f2ca47ceea77610f"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:28:51Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 650,
+        "kind": "issue"
+      },
+      "problem_id": "nyquist_shannon_sampling",
+      "production_metadata": {},
+      "result_id": "r2_4ae2e6e80d2478ff61874e723fbaa7d7f64d366aebd2b79949e0b0595009d3f6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "a87a6094dce4b6dc89073f9638b74db2be2b974c",
+        "repo": "Morgan-Griffiths/d06fc6691006559f507b2b5e4195bb49"
+      }
+    },
+    {
+      "accepted_at": "2026-07-13T22:52:25Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 805,
+        "kind": "issue"
+      },
+      "problem_id": "nonlinear_three_manifold_group",
+      "production_metadata": {},
+      "result_id": "r2_4b6bede3fa7ea7cc67d3b416e21e8d3919267864d92ce93f95c5265f856c8cec",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "6f82a6d95d269d05a82b971392a2771dc25cd916",
+        "repo": "Morgan-Griffiths/bde6a33aa213727d89552987ce5136ac"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T09:17:17Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 672,
+        "kind": "issue"
+      },
+      "problem_id": "normal_spectral_theorem",
+      "production_metadata": {},
+      "result_id": "r2_4b7b1022a1748a0206d2abbdae92fe662c96f25b26e906435690ded3d9b333eb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "56eceecc63adc11fc6af4e6210bc5dfc453bc891",
+        "repo": "Morgan-Griffiths/6912ec18a341f14c5cbc7fdfb8023b59"
+      }
+    },
+    {
+      "accepted_at": "2026-06-08T19:30:46Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "GPT-5.5",
+      "intake": {
+        "issue_number": 262,
+        "kind": "issue"
+      },
+      "problem_id": "linear_ode_asymptotic_stability",
+      "production_metadata": {
+        "production_description": "autonomous lmp"
+      },
+      "result_id": "r2_4ca054af677de3c2d257467e93fe7b7fe0c3b7da82306fffbd022ba0f52e58e1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "79d5f1dc697791c818041e72ec985b45f3bcaaa6",
+        "repo": "Morgan-Griffiths/9dc19b1be880c99ed3113b30903333f7"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T07:57:51Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 636,
+        "kind": "issue"
+      },
+      "problem_id": "bvp_comparison",
+      "production_metadata": {},
+      "result_id": "r2_4cd6187464be5d029d1af8d4c7c7a2a34e4bce580e421754cc3172df86553ecc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "653a3624adecc8bff6b7741c54817e807bf39444",
+        "repo": "Morgan-Griffiths/a99039e8cb5f299ca69e4e35f32ca59d"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T21:45:35Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 734,
+        "kind": "issue"
+      },
+      "problem_id": "frobenius_kernel_isNormal",
+      "production_metadata": {},
+      "result_id": "r2_4d61a276f0233a4eb1c4c5bcf1ecca5b5b1cc8a062488422184f62549b9d157e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "f98d96062469094da87ae7b213eaea505c145695",
+        "repo": "Morgan-Griffiths/ab8cc1cf0b7849889ba367776f371c61"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:07:28Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 745,
+        "kind": "issue"
+      },
+      "problem_id": "nash_equilibrium_exists",
+      "production_metadata": {},
+      "result_id": "r2_4ea83e4e4815087c78149ade054ff3e4a32d70d3eae5e58571deaf5d988d6c73",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "44d92e9c926e63b74b73fb86229b800cbd59eba2",
+        "repo": "Morgan-Griffiths/6157b449862f609a3b6496abd9536345"
+      }
+    },
+    {
+      "accepted_at": "2026-07-13T20:13:46Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 786,
+        "kind": "issue"
+      },
+      "problem_id": "cauchy_kovalevskaya",
+      "production_metadata": {},
+      "result_id": "r2_4f3f84f1ddbbe2ef31a5d738313536e6d9eeeb1462eb542cc3868a3cabad3478",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "4d215e47c8980d027cf5251698ebbfe02529a2d0",
+        "repo": "Morgan-Griffiths/e6a6e9a37e0157e6060c4a1d50409481"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T21:54:26Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 739,
+        "kind": "issue"
+      },
+      "problem_id": "kakutani_fixed_point",
+      "production_metadata": {},
+      "result_id": "r2_5a61d3a4a203581edf2aa3798717adaf3c59fc7c593d2718c7b8bb4c395606cd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "6b21d754372f3f216db37250b80d86037cf7b81b",
+        "repo": "Morgan-Griffiths/c4ae4962a94f8ff4d8bd5615990ce8f2"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:07:38Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 640,
+        "kind": "issue"
+      },
+      "problem_id": "euler_lagrange_equation",
+      "production_metadata": {},
+      "result_id": "r2_5cc8440f78bc2fe42facbad0e119312e4f70c7ca07a2e1d55d5ad50c0ebfe013",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "d86004c71135982567ea2c6473974bd4a95876fb",
+        "repo": "Morgan-Griffiths/64cee9e7405b2a2d72b51a55b7c440e9"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:15:18Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 643,
+        "kind": "issue"
+      },
+      "problem_id": "fourier_dirichlet_fejer",
+      "production_metadata": {},
+      "result_id": "r2_5cda90dde8fbcdf1c80d6942b666d8f4b661d61ea479b209b4b308a3485614c1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "30bb0035fb46e0e50dbf9d4a4b36d5be0f9558c8",
+        "repo": "Morgan-Griffiths/f7aebe5e692e4849494404f3eec2ef1a"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:18:53Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 700,
+        "kind": "issue"
+      },
+      "problem_id": "riesz_brothers_theorem",
+      "production_metadata": {},
+      "result_id": "r2_5cef9df092c3cdd3f14fb1d55a8748fdc98dcaf7579ca0a2c955df131819fb4d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "3cae0696782fe09c7dcb7abd3044df8a7e2f513b",
+        "repo": "Morgan-Griffiths/1317622108694eab3466c104d3925a9f"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:45:51Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 625,
+        "kind": "issue"
+      },
+      "problem_id": "trace_cayley_hamilton_newton",
+      "production_metadata": {},
+      "result_id": "r2_633e5c2be56ceadccd62b786a56fe213084dcb977361202afeb026774c9106aa",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "c072ed0afa440cbeb6d4d4c3b4d3015c0fdacc2a",
+        "repo": "Morgan-Griffiths/8f516932d0cdadccff14f619865d1608"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:09:45Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 607,
+        "kind": "issue"
+      },
+      "problem_id": "bauer_extreme_point_uniqueness",
+      "production_metadata": {},
+      "result_id": "r2_6503c17b4232bd7462bb141f20c34677fa3241c86629880b2103a1417870a787",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "764267419b971e796eeb8df6d26b5352bc318848",
+        "repo": "Morgan-Griffiths/64f5344ff64616ecc9c7131b33f9989e"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:46:22Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
         "issue_number": 626,
-        "solved_at": "2026-07-09T00:46:22Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "843b65672ca974ca7718ed6b8986e89db44f14d5",
-        "submission_repo": "Morgan-Griffiths/c5a10aa4d5091ccbb6abbc3bd086fc14"
+        "kind": "issue"
       },
-      "wiener_inverse_closed": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "problem_id": "wiener_atom_detection",
+      "production_metadata": {},
+      "result_id": "r2_65e36e3c5aab9ad870598c2f561ed1b5a6a04a6806aae74467faff7363aa54dc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "843b65672ca974ca7718ed6b8986e89db44f14d5",
+        "repo": "Morgan-Griffiths/c5a10aa4d5091ccbb6abbc3bd086fc14"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:14:26Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 698,
+        "kind": "issue"
+      },
+      "problem_id": "permute_to_unimodal",
+      "production_metadata": {},
+      "result_id": "r2_660a9cb62f5424b4ee5b39efa9fc87a010f096f503ee40c9396b27dcb06e19c4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "a30a0bfd0d0aed5e881ebba0572381ab1ff80aa4",
+        "repo": "Morgan-Griffiths/5c7eff24be4c5f746cb9986db767bfbd"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T23:41:06Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 773,
+        "kind": "issue"
+      },
+      "problem_id": "sobolev_embedding_morrey",
+      "production_metadata": {},
+      "result_id": "r2_6826994e9cc349d7d7965acb90a217a692a4913aa41039feb60831ea632979c9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "99f075a026dda35c28500557bf69528a6d161bab",
+        "repo": "Morgan-Griffiths/b80cd8674fc76d067cfa7871204edab8"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:05:50Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 693,
+        "kind": "issue"
+      },
+      "problem_id": "gauss_wantzel_constructible_polygon",
+      "production_metadata": {},
+      "result_id": "r2_6dbedbece976195fac03127c3860c657ab7d32d3e6851b4c4a70ca1c908b89ff",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "3111c22d3f295f28a38d994cfa6fcaa88320b702",
+        "repo": "Morgan-Griffiths/f3f0a9f626c34b424579e80a45cd7283"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:41:47Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 623,
+        "kind": "issue"
+      },
+      "problem_id": "sturm",
+      "production_metadata": {},
+      "result_id": "r2_6fd9c5a47a1740ff2f6c34eeff2e36185d55e63115ab61b6483eb546f677a793",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "9b9b408a36de489841229bc6b2722eea4d03a5b4",
+        "repo": "Morgan-Griffiths/f25d92dc77b9dc55b5996f5bd8cee03c"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:31:19Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 755,
+        "kind": "issue"
+      },
+      "problem_id": "stable_unstable_manifolds",
+      "production_metadata": {},
+      "result_id": "r2_7082f15963e7b0ad693f72ebd5950accba40d13b8adfad82ce4637820e7cd2be",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "85d5d859906b3107bdf07c59a84f5d2462634c13",
+        "repo": "Morgan-Griffiths/cf48f3535b6ce451c51ce3b3e5b5f161"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:16:15Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 748,
+        "kind": "issue"
+      },
+      "problem_id": "regular_value_ae",
+      "production_metadata": {},
+      "result_id": "r2_72cecd81cd43bafdec82928df776b776912ae0195ef602a7bd39d4a32fefca63",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "92c730bf577ff3696a149a4645cfce67b972e68d",
+        "repo": "Morgan-Griffiths/6c6dcc377a262995ccf517357f691e8d"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T21:37:00Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 731,
+        "kind": "issue"
+      },
+      "problem_id": "brun_constant_converges",
+      "production_metadata": {},
+      "result_id": "r2_72f8813f80944e431d925f1b78a08440a7ee0fdab10fb34fd17dc6d857ceb5f8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "1411aff318f15966cbdce83dbc20b681521f1bcd",
+        "repo": "Morgan-Griffiths/31fe931d423ce48a65e7841a44bb3ae2"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:19:30Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 646,
+        "kind": "issue"
+      },
+      "problem_id": "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius",
+      "production_metadata": {},
+      "result_id": "r2_737cbb0fa99bad1cf0e2370f001f6676616757be6c9f0d0a223befffc38e1340",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "1c946921291ae4422636e1a20f913d20f969a96f",
+        "repo": "Morgan-Griffiths/516ffdc4fda3a02f51e18d641a9e2f17"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:30:02Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 618,
+        "kind": "issue"
+      },
+      "problem_id": "mem_convexHull_finset_extremePoints_of_mem_compact_convex",
+      "production_metadata": {},
+      "result_id": "r2_752b4d4f9596dadb5002dbc48048c0ddd05cfb2a8423836f5a95faa124dfa3f1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "02cc9f15e3151571959fb4a78b36669e93e68702",
+        "repo": "Morgan-Griffiths/67c4cbeca2d3a7346c826ca7d182d9d4"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:23:49Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 647,
+        "kind": "issue"
+      },
+      "problem_id": "kirk_normal_structure",
+      "production_metadata": {},
+      "result_id": "r2_76026a07be78d02f82d14ba4b43bff59eb0f2b7e7dd40c4a6b53e4ad4b269a17",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "5169ee192001ff8f384ddc6b61ab63f83b7db9f3",
+        "repo": "Morgan-Griffiths/ef738adc32b5c688156c5ac7cf800d7b"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:59:08Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 664,
+        "kind": "issue"
+      },
+      "problem_id": "fraser_kakeya_fourier_decay",
+      "production_metadata": {},
+      "result_id": "r2_7630897b2cacc0a5cdbfe1df3db4c3c904db65d35406a718081d19dc2d4088ba",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "e2fa6e048d4722483d7e01bfc068d9d6f4cf7b61",
+        "repo": "Morgan-Griffiths/6fc76b0e84111e805981c7c8b8713718"
+      }
+    },
+    {
+      "accepted_at": "2026-07-11T19:02:25Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
         "issue_number": 712,
-        "solved_at": "2026-07-11T19:02:25Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "3464a918acbae6e75987c5d93914f73727fba7f4",
-        "submission_repo": "Morgan-Griffiths/0a8dd2aa7feb764e403b3d6175da0701"
+        "kind": "issue"
       },
-      "wiener_levy_analytic_calculus": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "problem_id": "wiener_inverse_closed",
+      "production_metadata": {},
+      "result_id": "r2_7fb2ba904fef3691e300e393e20f2c27ab6334ed54538599c07769f1bbce0310",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "3464a918acbae6e75987c5d93914f73727fba7f4",
+        "repo": "Morgan-Griffiths/0a8dd2aa7feb764e403b3d6175da0701"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:21:05Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 751,
+        "kind": "issue"
+      },
+      "problem_id": "sard_theorem",
+      "production_metadata": {},
+      "result_id": "r2_7fd33f85e5c81db3c0b33b457d8168ecedb12be8bdf2ec3328f399121114a8c8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "532c8124f570a0a8b7684d05e05f31142585a72a",
+        "repo": "Morgan-Griffiths/fa7499915002fdf2211ad111372c4cda"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:45:10Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 658,
+        "kind": "issue"
+      },
+      "problem_id": "sturm_separation",
+      "production_metadata": {},
+      "result_id": "r2_83eb13f5bbe5551bb9aba55f1b968ecb809527ad96b08a9aa27593442015bf12",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "55a8851a3515651692af3b1a50ed386d5b2d8787",
+        "repo": "Morgan-Griffiths/da255071700d91d6c0754311d3fb0e17"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:18:20Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 699,
+        "kind": "issue"
+      },
+      "problem_id": "rising_sun_lemma",
+      "production_metadata": {},
+      "result_id": "r2_87e98a717f34e483e36cf95d46e1fea7fee210810f75ad962cc47f9ce94e1d38",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "0e379873480af89c0ad777d244ffc487563a2030",
+        "repo": "Morgan-Griffiths/57e230c8a1a0971eb63c8a7bf0b504f8"
+      }
+    },
+    {
+      "accepted_at": "2026-07-13T00:14:36Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 774,
+        "kind": "issue"
+      },
+      "problem_id": "rokhlin_lemma",
+      "production_metadata": {},
+      "result_id": "r2_89b995f3eada18add191fe456e64f0b6db0e0e5a27256826a67e05909850a340",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "b608beedd8fad8808099dc108f022c1353565a48",
+        "repo": "Morgan-Griffiths/1f34a8aebc600b31b4a92a6426aa6a22"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:59:11Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 663,
+        "kind": "issue"
+      },
+      "problem_id": "finite_group_isSolvable_of_card_eq_prime_pow_mul_prime_pow",
+      "production_metadata": {},
+      "result_id": "r2_8cf1a0c6ddb447c331fba35fb0b600cb8fc3ab347bd055f84d2b4bcbd8f418f7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "7c5c2363bea9731ec1af3f9fb8891a0f20891601",
+        "repo": "Morgan-Griffiths/7282b8c5e0428998922f897e6ffc50cc"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:03:24Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 742,
+        "kind": "issue"
+      },
+      "problem_id": "levi_civita_exists_unique",
+      "production_metadata": {},
+      "result_id": "r2_8d45bdca4dff88a9527e865bf813aba6e456428721a8385aa42cb07c2db25db5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "32e9a4c5d47112403211462a8f03067d66184c52",
+        "repo": "Morgan-Griffiths/1e21d5f20d827408df54db0286247aef"
+      }
+    },
+    {
+      "accepted_at": "2026-05-22T19:52:32Z",
+      "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+      "declared_model": "GPT-5.5",
+      "intake": {
+        "issue_number": 36,
+        "kind": "issue"
+      },
+      "problem_id": "mem_convexHull_finset_extremePoints_of_mem_compact_convex",
+      "production_metadata": {},
+      "result_id": "r2_912391e25bb4742ffa5b17cdadefaedaf78263f27200e7ac6a9784f534866d1d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "db96b4ce22c3aadf0d9a5a436b5b28b7aef0bd5f",
+        "repo": "Morgan-Griffiths/2190083efd46fb1e5720b71603940a24"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:25:58Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 616,
+        "kind": "issue"
+      },
+      "problem_id": "lidskii_last",
+      "production_metadata": {},
+      "result_id": "r2_94c353fe0ad4bae5a500bf58a21e07a6753fc8ed072bfee9e15e29938be8b14a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "9b7f84fedb04e5a8f80252683f52bc5321b0a9ae",
+        "repo": "Morgan-Griffiths/a21fc47d6f492abd13e6957f13910414"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:50:00Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 660,
+        "kind": "issue"
+      },
+      "problem_id": "symAction_range_eq_centralizer_glAction",
+      "production_metadata": {},
+      "result_id": "r2_94d86f274839bbda996ef0230ffb620e65ba92294b5648ed329fa5e377cefbee",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "92bb36d3e61dcd27962c1a21f7b8ea77b7a40de0",
+        "repo": "Morgan-Griffiths/623c02ac757b2afc312af8607fa5a6d8"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T21:45:30Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 735,
+        "kind": "issue"
+      },
+      "problem_id": "fundamental_topos_theory",
+      "production_metadata": {},
+      "result_id": "r2_9cc578a6aa71c67b71ea98a8b20c60e7c641dd639bd575c61dc70ef5baad8035",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "52bb27df52fb40fc6a859ae96acb8f5b796dd239",
+        "repo": "Morgan-Griffiths/37a70e6d246ae30dfa991068601a641f"
+      }
+    },
+    {
+      "accepted_at": "2026-05-22T20:11:01Z",
+      "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+      "declared_model": "GPT-5.5",
+      "intake": {
+        "issue_number": 38,
+        "kind": "issue"
+      },
+      "problem_id": "oppenheim_inequality",
+      "production_metadata": {
+        "production_description": "Autonomous lmp"
+      },
+      "result_id": "r2_9d0df3099905c4dbadee66b9a9e0a4e59c3f3a5c1c4d6290f5ce51277ad1e8d0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "9024c01533ea012383110196915bcb582331bcce",
+        "repo": "Morgan-Griffiths/5a6dfcdd13165a579e6fe9101c1568a0"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:15:16Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 644,
+        "kind": "issue"
+      },
+      "problem_id": "glAction_range_eq_centralizer_symAction",
+      "production_metadata": {},
+      "result_id": "r2_a0b09a724ffbe48162ae50338ccf866c9fd9d6876354fba93d79d9ddf5c80cb0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "6feb0202b4e6a482c9dd1257dee4b55138da43b3",
+        "repo": "Morgan-Griffiths/18af9dc302297145e74591c05626ee96"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T21:41:48Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 733,
+        "kind": "issue"
+      },
+      "problem_id": "frobenius_group_determinant",
+      "production_metadata": {},
+      "result_id": "r2_a58a2702c04a8eff9a3ccb433de8e6a6f35d393a6fcb44f4af2649923252b465",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "88d74e2e07a0b5508c1cc395af4ad2ec5d5313ec",
+        "repo": "Morgan-Griffiths/f87791b394cdf020cb3acdc49159697a"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:40:34Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 760,
+        "kind": "issue"
+      },
+      "problem_id": "brouwer_fixed_point",
+      "production_metadata": {},
+      "result_id": "r2_a6624ceb2318b29a1f869233fc5299ae15f6df84e0ce489d377e293b2513bbd5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "830dc01a6d4256de008e47a0e17591d1bf9217bf",
+        "repo": "Morgan-Griffiths/c12f3115960dc0f85d72d9284db8368f"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:09:41Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 608,
+        "kind": "issue"
+      },
+      "problem_id": "boone_higman_embedding",
+      "production_metadata": {},
+      "result_id": "r2_a7516ac8d3f97fb60f114e5ef33a74d84abe36b4378f5246a1253db39f5f27da",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "65af68184fe56b242024c8f09452b314de54077f",
+        "repo": "Morgan-Griffiths/3c5d89f05eafef6dc114d92a1e4d95a9"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:14:41Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 610,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_character_in_cyclotomic",
+      "production_metadata": {},
+      "result_id": "r2_b06da9e2d48860c914e2b238de1cd30f451c7d9dff6d6e02c9203643917d1f30",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "731503ba44fd2d5577b73ecdae648c4cb328ae95",
+        "repo": "Morgan-Griffiths/5adae5ecbe042f4af8ff161c19130718"
+      }
+    },
+    {
+      "accepted_at": "2026-07-13T20:09:47Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 785,
+        "kind": "issue"
+      },
+      "problem_id": "contractibleSpace_houseWithTwoRooms",
+      "production_metadata": {},
+      "result_id": "r2_b3a66d168d0ef7eaf46e37666ae88019720b4b2b627dc97ab2e98b8dd0ec8fe4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "c982ce24b5fe275623527ff91d33e7ab29991c00",
+        "repo": "Morgan-Griffiths/b1bee672ea506137b8a2621cba0106be"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:53:44Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 661,
+        "kind": "issue"
+      },
+      "problem_id": "dvd_card_connectedComponent_markoffGraph",
+      "production_metadata": {},
+      "result_id": "r2_b5a2b86ebecf082fa4dde1a3aa2193ecec49bbc87e7f0d3a8096a90b073dc340",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "69ba98236173e47d48344ade80c618ebe46f4687",
+        "repo": "Morgan-Griffiths/3943a5e83e745b931be846b7489d8bb9"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T09:07:54Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 667,
+        "kind": "issue"
+      },
+      "problem_id": "hausdorff_positivity_criterion",
+      "production_metadata": {},
+      "result_id": "r2_ba4dfa3dd06cc498cbec4279992fd23f997c35739e89370906bf1810aa0c440e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "a9a989589d25306407ae110bd2351723e05b3ecc",
+        "repo": "Morgan-Griffiths/eae644c3d41694260ee3b1f751165acc"
+      }
+    },
+    {
+      "accepted_at": "2026-07-15T06:06:49Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 820,
+        "kind": "issue"
+      },
+      "problem_id": "golod_shafarevich_inequality",
+      "production_metadata": {},
+      "result_id": "r2_ba7b8f07c68763a7e3031faa35dab7a32ee5bb6f7fab9d5c359b3aa31a2be031",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "e00d8ef0fa1dac1f04c75e6e35b1c2a6850f11ad",
+        "repo": "Morgan-Griffiths/798e0d455c559794ea8020f44fd3b57a"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:36:22Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
         "issue_number": 758,
-        "solved_at": "2026-07-12T22:36:22Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "af9cd916c35d7fe55423a56e9ad511d59de600b6",
-        "submission_repo": "Morgan-Griffiths/5dc56d73717b4c2dd6bfec5356c89854"
+        "kind": "issue"
       },
-      "wigner_semicircle": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "problem_id": "wiener_levy_analytic_calculus",
+      "production_metadata": {},
+      "result_id": "r2_ba9995094b937c1377d247bf0f8259cb71fddbb3684f860a975ac9e7ea8da2bd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "af9cd916c35d7fe55423a56e9ad511d59de600b6",
+        "repo": "Morgan-Griffiths/5dc56d73717b4c2dd6bfec5356c89854"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:52:27Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 702,
+        "kind": "issue"
+      },
+      "problem_id": "exists_complementary_polynomial_on_unit_circle",
+      "production_metadata": {},
+      "result_id": "r2_bb64e26b088d013222b1d17ce965027ef9348a0876d6aa9408233910a5770494",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "8a8032266c2e902939e46eb7a704ef01929e266c",
+        "repo": "Morgan-Griffiths/fe88ea3081ebae519d6f8007c7d2f863"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:37:46Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 621,
+        "kind": "issue"
+      },
+      "problem_id": "pascal",
+      "production_metadata": {},
+      "result_id": "r2_bbf5a20e69e0eea92681026c9547af83518dc0cacc313bfb2ec3cbc56714ad4c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "172776c4d5161ec875deb1894e068bc713e34222",
+        "repo": "Morgan-Griffiths/ccde85f22fc4d6961b2241875c7ae72c"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:12:03Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 746,
+        "kind": "issue"
+      },
+      "problem_id": "peano_existence",
+      "production_metadata": {},
+      "result_id": "r2_c0da1430ce4d64d9e1bfebcc9b9571107d550736edd4450f3e64be78ee8b670a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "4dd33a32fe3551e405be57444fe4aa9dcda33805",
+        "repo": "Morgan-Griffiths/a6583fbbe80007297a6118ba337707a7"
+      }
+    },
+    {
+      "accepted_at": "2026-07-15T06:05:40Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 819,
+        "kind": "issue"
+      },
+      "problem_id": "halmos_generic_weak_mixing",
+      "production_metadata": {},
+      "result_id": "r2_c3c9cc4c1125518736bf2faab07aa9c2f36b8202f2a572e67a1523d90f5be4fc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "d009cfa385246c8806db58c074f042771b34f205",
+        "repo": "Morgan-Griffiths/82c28da480c21ecb0bb221bfda2f8376"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:02:06Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 637,
+        "kind": "issue"
+      },
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {},
+      "result_id": "r2_c44dda41eba583d9e31c93934d28514c125a016e61e45c42244a5e1dccee6f6d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "53b7f928b22a425284845940d093274726dccf49",
+        "repo": "Morgan-Griffiths/c1632c5bd608e583fc20d39a0b60081b"
+      }
+    },
+    {
+      "accepted_at": "2026-07-15T02:44:57Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
         "issue_number": 818,
-        "solved_at": "2026-07-15T02:44:57Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "3423df0ee231386711330e111f0485df74eb4b6d",
-        "submission_repo": "Morgan-Griffiths/2f017ae87b0266a80612af927254eede"
+        "kind": "issue"
+      },
+      "problem_id": "wigner_semicircle",
+      "production_metadata": {},
+      "result_id": "r2_c6b6ec66d1a01a7f7196fc94304822edfac554916d8254c45407e2affc166c40",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "3423df0ee231386711330e111f0485df74eb4b6d",
+        "repo": "Morgan-Griffiths/2f017ae87b0266a80612af927254eede"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:40:57Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 655,
+        "kind": "issue"
+      },
+      "problem_id": "rouche_zero_count_eq",
+      "production_metadata": {},
+      "result_id": "r2_c6f301152f766642711223ecf33b5b34938a36ec65a33881b81da5bb4d0f56b0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "9cddf6bbcc366e5ed969c2ce0ba5951ad372e7e3",
+        "repo": "Morgan-Griffiths/43a200a8bf1d5dc6c3ecd8f49ff93803"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:33:49Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 620,
+        "kind": "issue"
+      },
+      "problem_id": "mulCayley_connected_iff_closure_eq_top",
+      "production_metadata": {},
+      "result_id": "r2_c7f105c558d455b6aa182878f8d7f572c66302c74a4739ed8ead00319954bfc3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "4bea25dea4d3b4553cf1b114fdec1210096b9a29",
+        "repo": "Morgan-Griffiths/c3190745d7e99c5759588c981477eb62"
+      }
+    },
+    {
+      "accepted_at": "2026-07-16T21:01:59Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 837,
+        "kind": "issue"
+      },
+      "problem_id": "families_of_maps_b01",
+      "production_metadata": {},
+      "result_id": "r2_c87544d81ea38a3bf6c37c712ec3863ba3d1c1c47744c30413d92a963438482f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "9c5123c91fd4a835c990f4028a363235bf8ef331",
+        "repo": "Morgan-Griffiths/f0cba1ee07411cfa88e89fe110c3dfc7"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T09:17:11Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 671,
+        "kind": "issue"
+      },
+      "problem_id": "mountain_pass",
+      "production_metadata": {},
+      "result_id": "r2_c9ea299f582c4b07ee84d5c35181e23b3e076531245df4115b72c12c0ed8671e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "12acb37d53c11afc4d2bef90fc2bb937bf0ce271",
+        "repo": "Morgan-Griffiths/d2ffe99cdf5c509904bbed4191e42fb0"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T23:36:05Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 770,
+        "kind": "issue"
+      },
+      "problem_id": "exists_nonisotopic_knots",
+      "production_metadata": {},
+      "result_id": "r2_ce582e0079ef3c42dc8538c5b1134435810db4b7b06fb6fbce3e802dfdf8c563",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "d69310743225f4218c2a947d4b18cafcdcbf959c",
+        "repo": "Morgan-Griffiths/0d48af57b4895e76a796f044613384d3"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:35:48Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 757,
+        "kind": "issue"
+      },
+      "problem_id": "tverberg_theorem",
+      "production_metadata": {},
+      "result_id": "r2_ceb9498fbf71030e5b85d257eb2e49e489e03531b81c7e1f46a019cfeed96b5f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "1120b835da746c8ceeb23ed0efa6ba7d345432d9",
+        "repo": "Morgan-Griffiths/c2735374fbad7602f670548053eeb926"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:02:57Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 638,
+        "kind": "issue"
+      },
+      "problem_id": "cyclotomic_integer_house_le_two",
+      "production_metadata": {},
+      "result_id": "r2_d012b1506f076e158620e6d00dd957319fa4b20d3fe9f398c45fbb0c607d45d1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "43b1483b9f1e8bdafda30761f41ae28d3b9ee4c4",
+        "repo": "Morgan-Griffiths/27ca726e09266653cfceeb599848d828"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:06:22Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 639,
+        "kind": "issue"
+      },
+      "problem_id": "dirichlet_eigenvalues_eq_nat_sq",
+      "production_metadata": {},
+      "result_id": "r2_d4bded3d41f3160cc37b856faae967802e105604d0350dfc0c45bb312e83159d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "70c279d1732fb56710cfc5805a32bef1929fd8c5",
+        "repo": "Morgan-Griffiths/80ae1ccc77ca273c9c1833bb1b960a8f"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:10:26Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 696,
+        "kind": "issue"
+      },
+      "problem_id": "linear_ode_asymptotic_stability",
+      "production_metadata": {},
+      "result_id": "r2_d68e1a6f86f4ff8b43e4ec826d93c3f26b9f34d32fdcacbc8af0bc8cdb779ef7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "e825ce028029fcb16af64e4897fcfab5131eeac1",
+        "repo": "Morgan-Griffiths/dd5bc3397b34432fdb94651f0968774c"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:07:47Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 744,
+        "kind": "issue"
+      },
+      "problem_id": "lindemann_weierstrass",
+      "production_metadata": {},
+      "result_id": "r2_d9f640808afddf8c04fbeecb08da9d1f3b2e68455e7966cdd3016a8c764ff688",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "ad0f468f7d4049b36924960709295cd804268645",
+        "repo": "Morgan-Griffiths/447c39cc95090748126d411f53f69439"
+      }
+    },
+    {
+      "accepted_at": "2026-07-13T20:09:33Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 784,
+        "kind": "issue"
+      },
+      "problem_id": "hopf_umlaufsatz",
+      "production_metadata": {},
+      "result_id": "r2_dbbff61b9bceb384de38606a484269132c5c20cc4037c65efe05196ac0ae6fe8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "a1934b954dda684f1d4d56d83cadce7eb44280b5",
+        "repo": "Morgan-Griffiths/2071fa2ff61976103b44b17da441e25e"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:45:16Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 657,
+        "kind": "issue"
+      },
+      "problem_id": "solvable_by_radicals_converse",
+      "production_metadata": {},
+      "result_id": "r2_e497816ac7e6eac896563415e37cca6f24c63310800a612e585434acfb37ae85",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "3e1df889cc28a618ad3752bb92a041deffdab6ab",
+        "repo": "Morgan-Griffiths/55a1e09afeaaf73fbbf94bd414c0e74a"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T23:10:38Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 766,
+        "kind": "issue"
+      },
+      "problem_id": "anosov_bowen_shadowing",
+      "production_metadata": {},
+      "result_id": "r2_e4c09d252cd3570e42016afa589aff8c2327dd981886b6bfa34fd49d3808a4f4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "4439ba4f1a8acfd2a242688ca434a1f1cefcb18d",
+        "repo": "Morgan-Griffiths/0261071fa866f1f0673da54117d8e421"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T21:40:16Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 732,
+        "kind": "issue"
+      },
+      "problem_id": "choquet_representation_theorem",
+      "production_metadata": {},
+      "result_id": "r2_e5ecb8521e398d6f39c7aa737f6edd42c7c0b6565e02bb5c22b08afcb6d83610",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "b9e43711649bf21f73d6d316b358a2e280f41f61",
+        "repo": "Morgan-Griffiths/d4402e0c405f79cadca5e9fc0462df7f"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T23:21:02Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 769,
+        "kind": "issue"
+      },
+      "problem_id": "strong_subadditivity",
+      "production_metadata": {},
+      "result_id": "r2_e738697d77e49fb9f2eb6fdab7b1df63b3c1a6c574b82f23e6f64a3f504f31b4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "e189afe9513aafe445e592cb8668b0c62aa8081a",
+        "repo": "Morgan-Griffiths/05b5c5ab2268116386740b92f4c80e58"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:02:23Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 606,
+        "kind": "issue"
+      },
+      "problem_id": "banach_alaoglu_bourbaki",
+      "production_metadata": {},
+      "result_id": "r2_e8c0092cb54eb3b92bf9a79bb1347429469d10ed52d055945e29422959b9031b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "061d2d2ef30798ca3ab613640310a458a44186da",
+        "repo": "Morgan-Griffiths/25f682c5be2f9770bc3c9ec197eec218"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:25:25Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 615,
+        "kind": "issue"
+      },
+      "problem_id": "koszul_formula",
+      "production_metadata": {},
+      "result_id": "r2_eae104a24e02e822113bcb7f48d3f9834625d5fb815f5b42152f34e5986e3b57",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "db914ee50d478dc11a007a35afbda357fa1ff641",
+        "repo": "Morgan-Griffiths/8a4017b23fb42306a9aa770842982639"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T08:32:41Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 652,
+        "kind": "issue"
+      },
+      "problem_id": "pi1_circle_mulEquiv_int",
+      "production_metadata": {},
+      "result_id": "r2_eb3052db0059522052c0de99f4b1aa3071c5f1bbaccc1482f71e30306a7c7023",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "3d573dd3d0815b0b57b248556eb1e789976b575c",
+        "repo": "Morgan-Griffiths/71c61eb47b97f5d6e4b34134ddb57d3a"
+      }
+    },
+    {
+      "accepted_at": "2026-07-15T23:34:11Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 825,
+        "kind": "issue"
+      },
+      "problem_id": "ornstein_weiss_rokhlin",
+      "production_metadata": {},
+      "result_id": "r2_ebda3b9cae5b09875a09d3517c37965633228e548d51dbf0072d42811527aeac",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "087195f22207f721509ee0a4b3f5f10169bea96c",
+        "repo": "Morgan-Griffiths/lean-eval-submission-ornstein-weiss-rokhlin"
+      }
+    },
+    {
+      "accepted_at": "2026-05-23T20:08:07Z",
+      "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+      "declared_model": "GPT-5.5",
+      "intake": {
+        "issue_number": 47,
+        "kind": "issue"
+      },
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {
+        "production_description": "Generated via an LMP"
+      },
+      "result_id": "r2_ec2a88309c3d18a362a43866d7bea22adb703ece40f788e14296cf124e9ee3a0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "df2507d7a55fa45e93a751ede355a1e9766cb789",
+        "repo": "Morgan-Griffiths/1795fd65bee80ec5bd54080789cde3fa"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T09:12:39Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 670,
+        "kind": "issue"
+      },
+      "problem_id": "moran_equality_affine",
+      "production_metadata": {},
+      "result_id": "r2_efa71e117e301a077bc1e729e49d105c6e4510920b35dbfe7a923e782fb735c8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "5a0bbc2bde67160764a2f7ac8fdcdbf6c5b9a6de",
+        "repo": "Morgan-Griffiths/5be82f906fcb2fa4b830079c0f6ce2d3"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T23:40:11Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 772,
+        "kind": "issue"
+      },
+      "problem_id": "liouville_arnold",
+      "production_metadata": {},
+      "result_id": "r2_f488053bda527654b183f02f72c5c68f97130d96b5c913ea66e7d1ef2d46bb7d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "ded4137b13836423747a5e2df85e8a846852804c",
+        "repo": "Morgan-Griffiths/d5d60a2332c5b25a8f5c999e9c98a372"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T21:58:14Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 740,
+        "kind": "issue"
+      },
+      "problem_id": "kolmogorov_arnold_superposition",
+      "production_metadata": {},
+      "result_id": "r2_f70b987ec5546570ecd159a6c9bd767ceb4b5b71f22778bb16d6033d7658b94c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "076fed46419ca5eb201668f044cb030ef3a9f837",
+        "repo": "Morgan-Griffiths/1fcb6a0659c9da2dd5f61d0b106d103b"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T22:26:25Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 753,
+        "kind": "issue"
+      },
+      "problem_id": "semilinear_poisson_radial_symmetry",
+      "production_metadata": {},
+      "result_id": "r2_f7e9b8f2b3cfc23ab158bfdda3fbcd441dd99c99bff62f2bd7ad7bed24c56cda",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "c7ecb5d4e7f12df4b21e74894ee5a835d31ef6c8",
+        "repo": "Morgan-Griffiths/9fc61a5e9dc970c89c66508af027caba"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:14:19Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 697,
+        "kind": "issue"
+      },
+      "problem_id": "lp_maximum_principle",
+      "production_metadata": {},
+      "result_id": "r2_f99a913fc9039f7011d207ab7a10d8baa215dfbf38e263380bccb29a153617dd",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "2720e6deee9b83edb1b607cecd6d9a276009f2a5",
+        "repo": "Morgan-Griffiths/e910a41543dbc28daaccd33bb32c65fd"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T19:57:01Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 704,
+        "kind": "issue"
+      },
+      "problem_id": "oppenheim_inequality",
+      "production_metadata": {},
+      "result_id": "r2_f9c2d071025d796fc438d202ecb11f2f29992af940bba760ad4e167c26e77b3f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "d16c718b3406fc5af545ce3d882eca17f2d39f6d",
+        "repo": "Morgan-Griffiths/0db860bef27b738b80454f4a8c50249e"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T09:24:53Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 675,
+        "kind": "issue"
+      },
+      "problem_id": "vonNeumann_doubleCommutant_tfae",
+      "production_metadata": {},
+      "result_id": "r2_fa91c0c57ec78fce5b5b9390653b502693ea48ac76a4772839b47f7fa977c838",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "7e2c7304a396429cc97ebc9b3e56abc330bc0bc0",
+        "repo": "Morgan-Griffiths/8f1e9b44ec572b340e15cdbdd79b2947"
+      }
+    },
+    {
+      "accepted_at": "2026-07-16T21:01:10Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 836,
+        "kind": "issue"
+      },
+      "problem_id": "baer_suzuki",
+      "production_metadata": {},
+      "result_id": "r2_fcac906c42f7668a22af5af3bcc21978b69d25d666bc518ffea51f42a8952d77",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "b1b571d9f5b0b9f484d8f4b452a4183e190e2d25",
+        "repo": "Morgan-Griffiths/20323aef3e1f7f8207efc7c31ac573e1"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:29:45Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 617,
+        "kind": "issue"
+      },
+      "problem_id": "lindemann",
+      "production_metadata": {},
+      "result_id": "r2_fdfc9352da9f0855c63c9e654541177da35d4adf90e287ba41de24d5e9be4f37",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "c1a511ed44edd253896dfe9dadcf6570dccc8449",
+        "repo": "Morgan-Griffiths/deadfcf9d6e7a188fdec33c27e079729"
+      }
+    },
+    {
+      "accepted_at": "2026-06-07T19:04:15Z",
+      "benchmark_commit": "6ee592acc40eac8d1a7102dafed368b341b3cd42",
+      "declared_model": "GPT-5.5",
+      "intake": {
+        "issue_number": 253,
+        "kind": "issue"
+      },
+      "problem_id": "heat_kernel_solves_heat_equation",
+      "production_metadata": {
+        "production_description": "autonomous lmp"
+      },
+      "result_id": "r2_fe41d58bdef28df6a7d5a42de319d0c114226e4ff9e3905af0e7c06e2241c9e6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "e8b3c7cacece586503b95731ba8fb0c76b44fa39",
+        "repo": "Morgan-Griffiths/a608e78316f8f803f034f796ce6fa044"
+      }
+    },
+    {
+      "accepted_at": "2026-07-09T00:17:10Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 611,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_fowler",
+      "production_metadata": {},
+      "result_id": "r2_ff5e23ecebe015c46260a625156e3e00bb04ddc527b3e356a641570f48ffb0af",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "4f31035adedc1e8e82771c0cac3c6960a96b2f83",
+        "repo": "Morgan-Griffiths/3ba76fbd347bd915ff400e31402617e1"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "Morgan-Griffiths"
 }

@@ -1,426 +1,884 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "Aristotle (Harmonic)": {
-      "adoCharZero": {
-        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
-        "issue_number": 984,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-09T23:15:54Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "6cc218f3fc4961bf49452d383e6c74b8c322e295",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "adoIwasawa": {
-        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
-        "issue_number": 988,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-10T15:47:50Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "5af5fda8fc47a2390fdeac01ed6f28ac5e89f037",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "alternating_sign_matrix_count": {
-        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
-        "issue_number": 980,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-09T23:45:02Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "fad86081e6551a69dcac3266bfe47f76287dd585",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "annals_equiangular_lines_fixed_angle": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1123,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-19T16:19:11Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f695bd2482d71ca32958e5c6ee79b37eea9d0caa",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "annals_fractional_expectation_thresholds": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1122,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-19T16:18:41Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "66f4fb5c6f4be4cc9313a3bb2f7d40e65602caad",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "annals_improved_bounds_sunflower_lemma": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1104,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-18T23:30:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e27090ce378a20f3e257e309fd61adcfd84a9202",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "annals_local_global_apollonian_circle_packings": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1110,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-19T03:54:28Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "f5c54c75d8a7d03043dc6ffaee915cda665976eb",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "annals_on_approximation_of_reals": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1127,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-19T22:35:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "099eea87e43467da27c7231ee51c412d0308d59f",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "annals_optimal_moebius": {
-        "benchmark_commit": "547b00ed345bc0737dd94847d6b67cb681b6178a",
-        "issue_number": 1167,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-20T16:56:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "6681e910c5fd143f10528b234a3c24869e9114e0",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "annals_periodic_tiling_conjecture": {
-        "benchmark_commit": "547b00ed345bc0737dd94847d6b67cb681b6178a",
-        "issue_number": 1168,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-20T16:59:16Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "72e87496879d01c4603ccd4a1b7e9ba39fca54d9",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "annals_rademacher_enflo_type": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1105,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-18T23:30:35Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "0fe9fdc5fc0c9fdec2654d8b05a9dcba29a69eb7",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "annals_supremum_of_selector_processes": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1155,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-20T04:59:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "0b9c1fa7d651a0e1685c4e83b5b05991602c9212",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "annals_unit_conjecture": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1106,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-18T23:28:56Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "8d7542db71f56abf541487e83dff823fdd587bad",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "brauer_fowler": {
-        "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
-        "issue_number": 103,
-        "production_description": "Auto-formalized by Aristotle",
-        "solved_at": "2026-05-26T22:18:15Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "03a356c462f76d0244af5b2e9e1aa00b21a3004e",
-        "submission_repo": "LorenzoLuccioli/lean-eval-private"
-      },
-      "brauer_splitting_field": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1092,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-18T15:54:56Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "203ca0b1d1088379685c6d5b508d746cec0d2609",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "chudnovsky_formula_for_pi_inv": {
-        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
-        "issue_number": 981,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-09T23:12:28Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "0e33976042b6df6c167247fd529057e815979f90",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "coherent_cohomology_finite_dimensional": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1149,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-20T03:50:04Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "591dfc1ff7d8d99ed1d93b958ad204ba8adeabdf",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "dehn_sommerville": {
-        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
-        "issue_number": 987,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-10T13:43:11Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "86ab7f85a13630feab761d39616591dc2388b0ba",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "duffin_schaeffer": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1101,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-18T17:52:39Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "e45c0521e15a0a7ac4cc69c223796c9db40354fe",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "fary_milnor": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1097,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-18T17:48:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7e6c76be55b9b7b0e3ed3ba62b5437def32afabb",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "fatou_julia_dichotomy": {
-        "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
-        "issue_number": 975,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-09T20:59:10Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "0dad7fa7d61c547f18e6eee7fdb812f03d162a11",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "gleason_theorem_finite": {
-        "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
-        "issue_number": 976,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-09T21:06:43Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "b0b2cc0964028acdd40e6578f1fd28e6542d0045",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "gleason_theorem_separable": {
-        "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
-        "issue_number": 977,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-09T21:09:41Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "60b30b278396edb17dfb9381a8770df8be5400cf",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "higman_infinite_simple": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1098,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-18T17:53:15Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "0e88375d59594a018f5fbd7f3c0ab42d16cd5d90",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "hippocrates_lunes": {
-        "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
+  "results": [
+    {
+      "accepted_at": "2026-06-09T23:04:53Z",
+      "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 269,
-        "production_description": "Autoformalized using Aristotle (Harmonic), orchestrated by Amogh Parab.",
-        "solved_at": "2026-06-09T23:04:53Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "3fd53ed5d047eab29f4d046368fdda62e16b3cc8",
-        "submission_repo": "parabamoghv/lean-eval"
+        "kind": "issue"
       },
-      "honeycomb_connective_constant": {
-        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
-        "issue_number": 1001,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-11T21:52:31Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "2bb84dbd00d4192e63b8aedc891f6a4ccfd78170",
-        "submission_repo": "parabamoghv/lean-eval-private"
+      "problem_id": "hippocrates_lunes",
+      "production_metadata": {
+        "production_description": "Autoformalized using Aristotle (Harmonic), orchestrated by Amogh Parab."
       },
-      "hopf_umlaufsatz": {
-        "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
-        "issue_number": 978,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-09T21:14:45Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "460696bfc10bebdb8b41fecd6535b4145738e0f7",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "jordan_curve": {
-        "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
+      "result_id": "r2_0588debe9240c090ab847a7d68e9cc36b3826d36659f26f3eb73a1ff065e7bc0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "3fd53ed5d047eab29f4d046368fdda62e16b3cc8",
+        "repo": "parabamoghv/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-08-09T21:14:27Z",
+      "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 979,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-09T21:14:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7210b4c835851c0605799f5fde27234b9b4798ce",
-        "submission_repo": "parabamoghv/lean-eval-private"
+        "kind": "issue"
       },
-      "m23_irrep_tensor_square_decomp": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1102,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-18T19:13:36Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "9a1543ef6646f631ed727d2e21a69a38bb46c460",
-        "submission_repo": "parabamoghv/lean-eval-private"
+      "problem_id": "jordan_curve",
+      "production_metadata": {
+        "solution_publication_status": "private"
       },
-      "mandelbrot_connected": {
-        "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
-        "issue_number": 971,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-08T04:04:16Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "13e076627e4b8bae6bd9cf92f9fd9d46cfc96f04",
-        "submission_repo": "parabamoghv/lean-eval-private"
-      },
-      "morse_inequality": {
-        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "result_id": "r2_080769289c10639bc27b5df24d1c5327618ffe82df86d3ea680392b76cdaafe9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7210b4c835851c0605799f5fde27234b9b4798ce",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-09T23:25:06Z",
+      "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 982,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-09T23:25:06Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "16121947818f88a18370e0d3dd4f078bd9ea0df8",
-        "submission_repo": "parabamoghv/lean-eval-private"
+        "kind": "issue"
       },
-      "nonlinear_three_manifold_group": {
-        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
-        "issue_number": 1000,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-11T22:00:09Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "14e69dbe28dbf165682d255bff4617f4cc6519f1",
-        "submission_repo": "parabamoghv/lean-eval-private"
+      "problem_id": "morse_inequality",
+      "production_metadata": {
+        "solution_publication_status": "private"
       },
-      "novikov_unsolvable": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
-        "issue_number": 1109,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-19T03:42:06Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "62e4533488b36297f3c6b7f41eaa24ae72e7d820",
-        "submission_repo": "parabamoghv/lean-eval-private"
+      "result_id": "r2_129bc3ce9b4b6ce2a0b5e5ebe2363118e75dbb9179e82ca00f81637f7e945b3b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "16121947818f88a18370e0d3dd4f078bd9ea0df8",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-19T16:18:41Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1122,
+        "kind": "issue"
       },
-      "pesin_formula": {
-        "benchmark_commit": "f349b7123ee1a41c879eba33faf092eab862e4d4",
+      "problem_id": "annals_fractional_expectation_thresholds",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_157b41429e55695053cc65f9c2dcf7f1739ca40f6c27bb345c47aec33c222451",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "66f4fb5c6f4be4cc9313a3bb2f7d40e65602caad",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-09T23:15:54Z",
+      "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 984,
+        "kind": "issue"
+      },
+      "problem_id": "adoCharZero",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_1f18158a8c05af479e8236bd4d9b85a48f8fb3602ef9fe2e89cb5e13c1d61a49",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6cc218f3fc4961bf49452d383e6c74b8c322e295",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-08T04:04:16Z",
+      "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 971,
+        "kind": "issue"
+      },
+      "problem_id": "mandelbrot_connected",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_22c43e47d9431ca055a00473f5391a05d94c369e5cad2c73aba0fd35d5f7ae59",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "13e076627e4b8bae6bd9cf92f9fd9d46cfc96f04",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-16T16:40:05Z",
+      "benchmark_commit": "f349b7123ee1a41c879eba33faf092eab862e4d4",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 1073,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-16T16:40:05Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "87ca3be9728dcab663e052844a4a2eb3fa38357a",
-        "submission_repo": "parabamoghv/lean-eval-private"
+        "kind": "issue"
       },
-      "rokhlin_lemma": {
-        "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
-        "issue_number": 268,
-        "solved_at": "2026-06-09T16:32:52Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "0fd6757519437214451709b32dca6225eac7bc6b",
-        "submission_repo": "parabamoghv/lean-eval"
+      "problem_id": "pesin_formula",
+      "production_metadata": {
+        "solution_publication_status": "private"
       },
-      "strong_mason_conjecture": {
-        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "result_id": "r2_2f0163d84fd18fbea2b74993bfff7b98eed1a9d9e903d4c5b2e5a0a9f31cbea4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "87ca3be9728dcab663e052844a4a2eb3fa38357a",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-18T23:28:56Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1106,
+        "kind": "issue"
+      },
+      "problem_id": "annals_unit_conjecture",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_3184b4df00b941d2402bd9009ffb013f02b9edd1c2ca05c78e7b099f13683bec",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "8d7542db71f56abf541487e83dff823fdd587bad",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-18T17:53:15Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1098,
+        "kind": "issue"
+      },
+      "problem_id": "higman_infinite_simple",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_3268f4e8348e75bdb8d87c35f2e0aa1de5b54e691a4ad6ad6e289ca524b04168",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0e88375d59594a018f5fbd7f3c0ab42d16cd5d90",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-09T23:17:55Z",
+      "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 983,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-09T23:17:55Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "7e61d07e373299ef940d295a584d689d16708eae",
-        "submission_repo": "parabamoghv/lean-eval-private"
+        "kind": "issue"
       },
-      "symAction_range_eq_centralizer_glAction": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 220,
-        "solved_at": "2026-05-12T06:38:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "08e15387a7d1e8c066ceb916e384d44c5e76296b",
-        "submission_repo": "parabamoghv/lean-eval"
+      "problem_id": "strong_mason_conjecture",
+      "production_metadata": {
+        "solution_publication_status": "private"
       },
-      "unit_distance_upper_bound": {
-        "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
-        "issue_number": 985,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-10T03:01:43Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "9b8ea935c19e5dd73b4ee69a9649205b869f7bad",
-        "submission_repo": "parabamoghv/lean-eval-private"
+      "result_id": "r2_3c1585490e37973dd5ced8e7307fa1562e3f832630f6e6cb6aeb5d22bc8941c6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7e61d07e373299ef940d295a584d689d16708eae",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-09T21:09:41Z",
+      "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 977,
+        "kind": "issue"
       },
-      "upper_bound_simplicial_spheres": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "problem_id": "gleason_theorem_separable",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_3fc341b107b5885f162d34f1a5374e82a3cd66edb991e6ea04b5321a4b3ed6c1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "60b30b278396edb17dfb9381a8770df8be5400cf",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-09T20:59:10Z",
+      "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 975,
+        "kind": "issue"
+      },
+      "problem_id": "fatou_julia_dichotomy",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_45af30cf0bb500d701d397885aaf00cc28e53b5df8504218dcaddde3899cfea9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0dad7fa7d61c547f18e6eee7fdb812f03d162a11",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-10T15:47:50Z",
+      "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 988,
+        "kind": "issue"
+      },
+      "problem_id": "adoIwasawa",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_5457fe43b1a3f57739cda9386c89c9e25ba07ae9763992c676198d36f7e857a7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5af5fda8fc47a2390fdeac01ed6f28ac5e89f037",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T04:00:02Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 1148,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-20T04:00:02Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "79d90c4c559533a3ae4bebd0901f7640a0ae28e6",
-        "submission_repo": "parabamoghv/lean-eval-private"
+        "kind": "issue"
       },
-      "vinogradov_mean_value": {
-        "benchmark_commit": "547b00ed345bc0737dd94847d6b67cb681b6178a",
-        "issue_number": 1169,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-20T17:06:38Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "258cbfa04a2788d18df69883d699fa28c8f9be67",
-        "submission_repo": "parabamoghv/lean-eval-private"
+      "problem_id": "upper_bound_simplicial_spheres",
+      "production_metadata": {
+        "solution_publication_status": "private"
       },
-      "weak_morse_inequality": {
-        "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
-        "issue_number": 969,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-07T17:50:19Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "cbc6888d6d1568b2769822e1f3f0e1df07126541",
-        "submission_repo": "parabamoghv/lean-eval-private"
+      "result_id": "r2_5a8f1251e0b4a0fabd2892464309180b7d8552d0232a710c1aec830fbb292405",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "79d90c4c559533a3ae4bebd0901f7640a0ae28e6",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-05-12T06:38:23Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 220,
+        "kind": "issue"
       },
-      "wieferich_g_three": {
-        "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "problem_id": "symAction_range_eq_centralizer_glAction",
+      "production_metadata": {},
+      "result_id": "r2_5b92f1d461156a0d7bad0a54f67934c182fb9a6a7f8d973581816c3e9bc5a445",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "08e15387a7d1e8c066ceb916e384d44c5e76296b",
+        "repo": "parabamoghv/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-08-10T13:43:11Z",
+      "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 987,
+        "kind": "issue"
+      },
+      "problem_id": "dehn_sommerville",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_716e23a675c5edcd64fd36d80a247d212580c1cd560082eace5288d435b0b282",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "86ab7f85a13630feab761d39616591dc2388b0ba",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-18T17:51:28Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 1100,
-        "solution_publication_status": "private",
-        "solved_at": "2026-08-18T17:51:28Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "a02279cf086672d8577cba502aa44ab94ab26ae6",
-        "submission_repo": "parabamoghv/lean-eval-private"
+        "kind": "issue"
+      },
+      "problem_id": "wieferich_g_three",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_81bf9ca8d0129679750ec00908040cfd04d1ddeadc062d6bb82cd6fcf474ad78",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "a02279cf086672d8577cba502aa44ab94ab26ae6",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-09T21:06:43Z",
+      "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 976,
+        "kind": "issue"
+      },
+      "problem_id": "gleason_theorem_finite",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_83a87981deef7f9760b18a55be095bac80b184e0427de61a631442e216e181c4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "b0b2cc0964028acdd40e6578f1fd28e6542d0045",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-09T21:14:45Z",
+      "benchmark_commit": "9e9e1b51eaa8917d0d7bd18b010b0721ad0b8c50",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 978,
+        "kind": "issue"
+      },
+      "problem_id": "hopf_umlaufsatz",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_83f378ea25c5c95f9e8570a2f0b41f219eba99d557e43a46f1cc624ca45d2af3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "460696bfc10bebdb8b41fecd6535b4145738e0f7",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-19T22:35:38Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1127,
+        "kind": "issue"
+      },
+      "problem_id": "annals_on_approximation_of_reals",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_87376bc09f6b911b4b4d1eb035e0a5325aa5863bf9ac8d2cb1238a9ba8b95380",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "099eea87e43467da27c7231ee51c412d0308d59f",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-11T22:00:09Z",
+      "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1000,
+        "kind": "issue"
+      },
+      "problem_id": "nonlinear_three_manifold_group",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_8998c071ac23c350e6d59211ca2fcd89bfe1071ecf9fd1b1d9bd2f1098dffbe2",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "14e69dbe28dbf165682d255bff4617f4cc6519f1",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T16:56:27Z",
+      "benchmark_commit": "547b00ed345bc0737dd94847d6b67cb681b6178a",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1167,
+        "kind": "issue"
+      },
+      "problem_id": "annals_optimal_moebius",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_8c50a5da5b818e5e77e879abe5440c2a1b524667048c1708ae4d7771967f8580",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6681e910c5fd143f10528b234a3c24869e9114e0",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T03:50:04Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1149,
+        "kind": "issue"
+      },
+      "problem_id": "coherent_cohomology_finite_dimensional",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_8d908267f6b9eb076ec05071537974859689af968d1310c41a88128d103e6d29",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "591dfc1ff7d8d99ed1d93b958ad204ba8adeabdf",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-05-26T22:18:15Z",
+      "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 103,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_fowler",
+      "production_metadata": {
+        "production_description": "Auto-formalized by Aristotle"
+      },
+      "result_id": "r2_9678d7e341258dc3d43772c5622c043de85726fab588fb1ad7798e63509a3db4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "03a356c462f76d0244af5b2e9e1aa00b21a3004e",
+        "repo": "LorenzoLuccioli/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-18T23:30:48Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1104,
+        "kind": "issue"
+      },
+      "problem_id": "annals_improved_bounds_sunflower_lemma",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_9a54953a5b5b2d83066e454fdc33c2c26cbf034b5bc6d37412c5a9507a378676",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e27090ce378a20f3e257e309fd61adcfd84a9202",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T16:59:16Z",
+      "benchmark_commit": "547b00ed345bc0737dd94847d6b67cb681b6178a",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1168,
+        "kind": "issue"
+      },
+      "problem_id": "annals_periodic_tiling_conjecture",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_a34d823f1cd612e89493b50b7a1924ec145f410729095c19b6d79e5b225661c0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "72e87496879d01c4603ccd4a1b7e9ba39fca54d9",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-19T16:19:11Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1123,
+        "kind": "issue"
+      },
+      "problem_id": "annals_equiangular_lines_fixed_angle",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_ae316973731868596fa242b9fb8f2665eee8a3ab088aa4a8943b68a396303637",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f695bd2482d71ca32958e5c6ee79b37eea9d0caa",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-18T15:54:56Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1092,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_splitting_field",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_baa1b8640635f2df6da1f49be4c89b0635c9c6939e21d5c2ce15f4c0fa50a89c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "203ca0b1d1088379685c6d5b508d746cec0d2609",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T04:59:38Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1155,
+        "kind": "issue"
+      },
+      "problem_id": "annals_supremum_of_selector_processes",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_c48c5486c52acdd00e6badc87f89c1fe414c1cead424fe7be9a57a52f9aa634e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0b9c1fa7d651a0e1685c4e83b5b05991602c9212",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-09T23:45:02Z",
+      "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 980,
+        "kind": "issue"
+      },
+      "problem_id": "alternating_sign_matrix_count",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_c8036accb48d36cdf14be8a8bee680dbe9ab6401a4517d6e4278a4476ca274e5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "fad86081e6551a69dcac3266bfe47f76287dd585",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-19T03:54:28Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1110,
+        "kind": "issue"
+      },
+      "problem_id": "annals_local_global_apollonian_circle_packings",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_c980ea87b6976940fb5eb66bf335dd250eb2730f248752cec958e700bba8fadb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f5c54c75d8a7d03043dc6ffaee915cda665976eb",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-11T21:52:31Z",
+      "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1001,
+        "kind": "issue"
+      },
+      "problem_id": "honeycomb_connective_constant",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_ce72e726d4e2d37e2092a704e2a19c674ee0561457e86d312f839e5ac70be09c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "2bb84dbd00d4192e63b8aedc891f6a4ccfd78170",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-18T17:48:17Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1097,
+        "kind": "issue"
+      },
+      "problem_id": "fary_milnor",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_d1a960d8b488d0309be0b3f6e827dd02b3f2f10b38bab291f3a7ef97822e4cd2",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7e6c76be55b9b7b0e3ed3ba62b5437def32afabb",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-19T03:42:06Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1109,
+        "kind": "issue"
+      },
+      "problem_id": "novikov_unsolvable",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_d3244a3a177d3b43a19b18e6983c936d89872d621700b87431e506c5c73a4e9b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "62e4533488b36297f3c6b7f41eaa24ae72e7d820",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-18T19:13:36Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1102,
+        "kind": "issue"
+      },
+      "problem_id": "m23_irrep_tensor_square_decomp",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_dfa6cc3d49d335e0506e814671f6791e6736e739f06282c7a4905e7fcf05d94c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9a1543ef6646f631ed727d2e21a69a38bb46c460",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-18T17:52:39Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1101,
+        "kind": "issue"
+      },
+      "problem_id": "duffin_schaeffer",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_dfce33c61cebe73c454c916819e6726254963f7730fc1d95ff7998f0c624682f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e45c0521e15a0a7ac4cc69c223796c9db40354fe",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-18T23:30:35Z",
+      "benchmark_commit": "7699436464052268e6c04b41554bfbc2c6908ec5",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1105,
+        "kind": "issue"
+      },
+      "problem_id": "annals_rademacher_enflo_type",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_ecff8900ab9a85cd06db7c87716fcf2f5c19905e05823985c62ce05a679fb73a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0fe9fdc5fc0c9fdec2654d8b05a9dcba29a69eb7",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-09T23:12:28Z",
+      "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 981,
+        "kind": "issue"
+      },
+      "problem_id": "chudnovsky_formula_for_pi_inv",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_ee7e6efbc8cbf8b8044ae4a44248a6b059697792f1bbc658aec256a551a23334",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0e33976042b6df6c167247fd529057e815979f90",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-20T17:06:38Z",
+      "benchmark_commit": "547b00ed345bc0737dd94847d6b67cb681b6178a",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 1169,
+        "kind": "issue"
+      },
+      "problem_id": "vinogradov_mean_value",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_f2e20c0bd83862fe404e8af14d62220011a4cb460e4598a2d9c4858edf1e1805",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "258cbfa04a2788d18df69883d699fa28c8f9be67",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-08-10T03:01:43Z",
+      "benchmark_commit": "ff6a35e74faa1a62388aaa064239f65bf2e6baf8",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 985,
+        "kind": "issue"
+      },
+      "problem_id": "unit_distance_upper_bound",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_faded2679c66c840ae6309e44d890535ddef367a0a524ad08a682b6068c4355d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "9b8ea935c19e5dd73b4ee69a9649205b869f7bad",
+        "repo": "parabamoghv/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-06-09T16:32:52Z",
+      "benchmark_commit": "4cfc90d96463ebf1e4881bcff5451ea2097b2d52",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 268,
+        "kind": "issue"
+      },
+      "problem_id": "rokhlin_lemma",
+      "production_metadata": {},
+      "result_id": "r2_fcac14c8e5fa49f6f096f05d8c93725f717967846382c0f32d7fc24cea762980",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "0fd6757519437214451709b32dca6225eac7bc6b",
+        "repo": "parabamoghv/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-08-07T17:50:19Z",
+      "benchmark_commit": "53348531969dc984e02e3be0379a7282c664abd9",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
+        "issue_number": 969,
+        "kind": "issue"
+      },
+      "problem_id": "weak_morse_inequality",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_ff82e7c849a20065b6a7746ecaa9339bd1e1c2ecb8bd8821597d67ad641d517c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "cbc6888d6d1568b2769822e1f3f0e1df07126541",
+        "repo": "parabamoghv/lean-eval-private"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "parabamoghv"
 }

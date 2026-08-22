@@ -1,38 +1,69 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "GPT-5.6": {
-      "baer_suzuki": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+  "results": [
+    {
+      "accepted_at": "2026-07-21T18:48:30Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
         "issue_number": 860,
-        "production_description": "The solution was produced using GPT-5.6 Sol in Codex, based on the existing formalization of the theorem in Coq. The LLM worked autonomously for several days, with minimal steering to keep the work productive and on target. The entire work was paid for with a ChatGPT Pro subscription (with 2 available usage resets). The repo also includes submissions to `baer_suzuki` and `brauer_character_in_cyclotomic` as derivatives of the main effort on `feit_thompson`.",
-        "solved_at": "2026-07-21T18:48:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "9cd5890db35dbaf88c62f414bc9f37bf17da1b16",
-        "submission_repo": "eohjelle/feit-thompson-odd-order-theorem"
+        "kind": "issue"
       },
-      "brauer_character_in_cyclotomic": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 860,
-        "production_description": "The solution was produced using GPT-5.6 Sol in Codex, based on the existing formalization of the theorem in Coq. The LLM worked autonomously for several days, with minimal steering to keep the work productive and on target. The entire work was paid for with a ChatGPT Pro subscription (with 2 available usage resets). The repo also includes submissions to `baer_suzuki` and `brauer_character_in_cyclotomic` as derivatives of the main effort on `feit_thompson`.",
-        "solved_at": "2026-07-21T18:48:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "9cd5890db35dbaf88c62f414bc9f37bf17da1b16",
-        "submission_repo": "eohjelle/feit-thompson-odd-order-theorem"
+      "problem_id": "brauer_character_in_cyclotomic",
+      "production_metadata": {
+        "production_description": "The solution was produced using GPT-5.6 Sol in Codex, based on the existing formalization of the theorem in Coq. The LLM worked autonomously for several days, with minimal steering to keep the work productive and on target. The entire work was paid for with a ChatGPT Pro subscription (with 2 available usage resets). The repo also includes submissions to `baer_suzuki` and `brauer_character_in_cyclotomic` as derivatives of the main effort on `feit_thompson`."
       },
-      "feit_thompson": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "result_id": "r2_3c33fe88436f5f34c5a5a7f1018706a69b0890085ee82edf86755049f9c06f30",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "9cd5890db35dbaf88c62f414bc9f37bf17da1b16",
+        "repo": "eohjelle/feit-thompson-odd-order-theorem"
+      }
+    },
+    {
+      "accepted_at": "2026-07-21T18:48:30Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
         "issue_number": 860,
-        "production_description": "The solution was produced using GPT-5.6 Sol in Codex, based on the existing formalization of the theorem in Coq. The LLM worked autonomously for several days, with minimal steering to keep the work productive and on target. The entire work was paid for with a ChatGPT Pro subscription (with 2 available usage resets). The repo also includes submissions to `baer_suzuki` and `brauer_character_in_cyclotomic` as derivatives of the main effort on `feit_thompson`.",
-        "solved_at": "2026-07-21T18:48:30Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "9cd5890db35dbaf88c62f414bc9f37bf17da1b16",
-        "submission_repo": "eohjelle/feit-thompson-odd-order-theorem"
+        "kind": "issue"
+      },
+      "problem_id": "baer_suzuki",
+      "production_metadata": {
+        "production_description": "The solution was produced using GPT-5.6 Sol in Codex, based on the existing formalization of the theorem in Coq. The LLM worked autonomously for several days, with minimal steering to keep the work productive and on target. The entire work was paid for with a ChatGPT Pro subscription (with 2 available usage resets). The repo also includes submissions to `baer_suzuki` and `brauer_character_in_cyclotomic` as derivatives of the main effort on `feit_thompson`."
+      },
+      "result_id": "r2_b04866f3834e47dd0dcb0de87f18ea11e0ac7de09f71531bfb2c7cb92973fd9d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "9cd5890db35dbaf88c62f414bc9f37bf17da1b16",
+        "repo": "eohjelle/feit-thompson-odd-order-theorem"
+      }
+    },
+    {
+      "accepted_at": "2026-07-21T18:48:30Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "GPT-5.6",
+      "intake": {
+        "issue_number": 860,
+        "kind": "issue"
+      },
+      "problem_id": "feit_thompson",
+      "production_metadata": {
+        "production_description": "The solution was produced using GPT-5.6 Sol in Codex, based on the existing formalization of the theorem in Coq. The LLM worked autonomously for several days, with minimal steering to keep the work productive and on target. The entire work was paid for with a ChatGPT Pro subscription (with 2 available usage resets). The repo also includes submissions to `baer_suzuki` and `brauer_character_in_cyclotomic` as derivatives of the main effort on `feit_thompson`."
+      },
+      "result_id": "r2_e2ed0905582e1d2c71f717870a19df838986149d2add36df1a03e5d3463f7b7f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "9cd5890db35dbaf88c62f414bc9f37bf17da1b16",
+        "repo": "eohjelle/feit-thompson-odd-order-theorem"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "eohjelle"
 }

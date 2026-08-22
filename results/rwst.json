@@ -1,184 +1,363 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "DeepSeek V4 Flash": {
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 727,
-        "production_description": "Setup: Opencode with lean-lsp MCP installed, model \"DeepSeek V4 Flash Free\" (under \"Opencode Zen\"). Prompt: \"prove Submission.lean\". Solve time: 40 minutes. Cost: $0.00.",
-        "solved_at": "2026-07-12T15:46:59Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "a6e695305cd467da272c1d58148eb02cba64822b",
-        "submission_repo": "rwst/lean-eval"
-      },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 728,
-        "production_description": "Setup: Opencode with lean-lsp MCP installed, model \"DeepSeek V4 Flash Free\" (under \"Opencode Zen\"). Prompt: \"prove Submission.lean\", adding the informal solution. Solve time: 45 min. Cost: $0.00.",
-        "solved_at": "2026-07-12T16:45:47Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "f6947c8e2b6f91ae67ba75d47bc6ea1cd6846560",
-        "submission_repo": "rwst/lean-eval"
-      },
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 726,
-        "production_description": "Setup: Opencode with lean-lsp MCP installed, model \"DeepSeek V4 Flash Free\" (under \"Opencode Zen\"). Prompt: \"prove Submission.lean\". Solve time: 1 hours. Cost: $0.00.",
-        "solved_at": "2026-07-12T14:56:47Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "fef72b0175764d2dfdae4e4596f5ca5520b517ba",
-        "submission_repo": "rwst/lean-eval"
-      }
-    },
-    "Grok 4.5": {
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 864,
-        "production_description": "Setup: Grok CLI, picking up lean4-skills and lean-lsp MCP. Prompt: \"/lean4:prove @Submission.lean --commit=never --golf=yes\". Time: 40 min. Cost: 0$ (currently free).",
-        "solved_at": "2026-07-22T18:26:11Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "b8806118473eabebd19b9abefc099393c8f77c6f",
-        "submission_repo": "rwst/lean-eval"
-      },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
-        "issue_number": 873,
-        "production_description": "Setup: Grok CLI, picking up lean4-skills and lean-lsp MCP. Prompt: \"/lean4:prove @Submission.lean --commit=never --golf=yes\". Time: 15 min. Cost: 0$ (currently free).",
-        "solved_at": "2026-07-23T11:30:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "36a1b7a9ae93bd54a32b99c8d52d8c7d35874aed",
-        "submission_repo": "rwst/lean-eval"
-      },
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
-        "issue_number": 873,
-        "production_description": "Setup: Grok CLI, picking up lean4-skills and lean-lsp MCP. Prompt: \"/lean4:prove @Submission.lean --commit=never --golf=yes\". Time: 15 min. Cost: 0$ (currently free).",
-        "solved_at": "2026-07-23T11:30:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "36a1b7a9ae93bd54a32b99c8d52d8c7d35874aed",
-        "submission_repo": "rwst/lean-eval"
-      }
-    },
-    "Hy3": {
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 719,
-        "production_description": "Setup: Opencode with lean-lsp MCP installed, model \"Hy3 Free\" (under \"Opencode Zen\". Prompt: \"prove Submission.lean\". Solve time: 2 hours. Cost: $0.00.",
-        "solved_at": "2026-07-12T08:29:14Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "1759e0460ee8a7df046a31e5b1be9f7ca0441e7d",
-        "submission_repo": "rwst/lean-eval"
-      }
-    },
-    "Kimi K2.7": {
-      "ci_regenerate_main_check": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+  "results": [
+    {
+      "accepted_at": "2026-07-06T13:55:17Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Kimi K2.7",
+      "intake": {
         "issue_number": 584,
-        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription.",
-        "solved_at": "2026-07-06T13:55:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
-        "submission_repo": "rwst/lean-eval"
+        "kind": "issue"
       },
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "problem_id": "list_append_singleton_length",
+      "production_metadata": {
+        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription."
+      },
+      "result_id": "r2_00d3df2f9a799b3eb91b652b6a0776a4b2d4a4072df653a98a951153dde1f046",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-23T11:30:48Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "Grok 4.5",
+      "intake": {
+        "issue_number": 873,
+        "kind": "issue"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {
+        "production_description": "Setup: Grok CLI, picking up lean4-skills and lean-lsp MCP. Prompt: \"/lean4:prove @Submission.lean --commit=never --golf=yes\". Time: 15 min. Cost: 0$ (currently free)."
+      },
+      "result_id": "r2_0648e9744a6c6153c73597ee5b5e540206e61e2d9d9991f4dd1b43898399a439",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "36a1b7a9ae93bd54a32b99c8d52d8c7d35874aed",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-10T11:07:53Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Kimi K2.7",
+      "intake": {
         "issue_number": 681,
-        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: /lean4:prove Submission.lean . Then only giving permissions that were asked for. When the context reached 60% of the window the commands \"Prepare for compaction\", \"/compact\", \"continue\" were given. Used one hour of a $20/month subscription.",
-        "solved_at": "2026-07-10T11:07:53Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "31793aa34225d12440d2ded270af408e71f2dfb3",
-        "submission_repo": "rwst/lean-eval"
+        "kind": "issue"
       },
-      "def_hole_example": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 584,
-        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription.",
-        "solved_at": "2026-07-06T13:55:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
-        "submission_repo": "rwst/lean-eval"
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {
+        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: /lean4:prove Submission.lean . Then only giving permissions that were asked for. When the context reached 60% of the window the commands \"Prepare for compaction\", \"/compact\", \"continue\" were given. Used one hour of a $20/month subscription."
       },
-      "instance_hole_example": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 584,
-        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription.",
-        "solved_at": "2026-07-06T13:55:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
-        "submission_repo": "rwst/lean-eval"
+      "result_id": "r2_1020d7ef90a0c3f276f06e6d5d20c626d4063a2a5d682194b55d6b38fec51404",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "31793aa34225d12440d2ded270af408e71f2dfb3",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T15:46:59Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "DeepSeek V4 Flash",
+      "intake": {
+        "issue_number": 727,
+        "kind": "issue"
       },
-      "list_append_singleton_length": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 584,
-        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription.",
-        "solved_at": "2026-07-06T13:55:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
-        "submission_repo": "rwst/lean-eval"
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {
+        "production_description": "Setup: Opencode with lean-lsp MCP installed, model \"DeepSeek V4 Flash Free\" (under \"Opencode Zen\"). Prompt: \"prove Submission.lean\". Solve time: 40 minutes. Cost: $0.00."
       },
-      "multi_hole_helpers_example": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "result_id": "r2_1ba55e1793fcd76ea6aff1f8020f9e42c64dedbd6b65791c8d30bd22713f1222",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "a6e695305cd467da272c1d58148eb02cba64822b",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-06T13:55:17Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Kimi K2.7",
+      "intake": {
         "issue_number": 584,
-        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription.",
-        "solved_at": "2026-07-06T13:55:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
-        "submission_repo": "rwst/lean-eval"
+        "kind": "issue"
       },
-      "noncomputable_hole_example": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 584,
-        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription.",
-        "solved_at": "2026-07-06T13:55:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
-        "submission_repo": "rwst/lean-eval"
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription."
       },
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "result_id": "r2_1d0f28df2f71a47f89336fb5e27bed62058e348b5ac466650c644a529eefc538",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-06T13:55:17Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Kimi K2.7",
+      "intake": {
         "issue_number": 584,
-        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription.",
-        "solved_at": "2026-07-06T13:55:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
-        "submission_repo": "rwst/lean-eval"
+        "kind": "issue"
       },
-      "two_plus_two": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
-        "issue_number": 584,
-        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription.",
-        "solved_at": "2026-07-06T13:55:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
-        "submission_repo": "rwst/lean-eval"
+      "problem_id": "multi_hole_helpers_example",
+      "production_metadata": {
+        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription."
       },
-      "variable_binder_example": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "result_id": "r2_22563eaf8110e4ba358ed5267b65b4659ecf4493160b762779f163dc1b4aeb9a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-06T13:55:17Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Kimi K2.7",
+      "intake": {
         "issue_number": 584,
-        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription.",
-        "solved_at": "2026-07-06T13:55:17Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
-        "submission_repo": "rwst/lean-eval"
+        "kind": "issue"
+      },
+      "problem_id": "ci_regenerate_main_check",
+      "production_metadata": {
+        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription."
+      },
+      "result_id": "r2_2babc4f0182e82d9eb9ed056700ffd4b3fdba05e0f624651524a127911535de0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-23T11:30:48Z",
+      "benchmark_commit": "a5ae89150653968fa8f1ca993b354207f38901ea",
+      "declared_model": "Grok 4.5",
+      "intake": {
+        "issue_number": 873,
+        "kind": "issue"
+      },
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {
+        "production_description": "Setup: Grok CLI, picking up lean4-skills and lean-lsp MCP. Prompt: \"/lean4:prove @Submission.lean --commit=never --golf=yes\". Time: 15 min. Cost: 0$ (currently free)."
+      },
+      "result_id": "r2_346390aff853c1ed6b287d540f775a2aedd01d4357fa80353f3b3bc66a5dc8db",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "36a1b7a9ae93bd54a32b99c8d52d8c7d35874aed",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-06T13:55:17Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Kimi K2.7",
+      "intake": {
+        "issue_number": 584,
+        "kind": "issue"
+      },
+      "problem_id": "instance_hole_example",
+      "production_metadata": {
+        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription."
+      },
+      "result_id": "r2_4013e5951511c7a7cac3cfa39160cde9dabc049b0be9b257bebbf847771a8720",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-06T13:55:17Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Kimi K2.7",
+      "intake": {
+        "issue_number": 584,
+        "kind": "issue"
+      },
+      "problem_id": "def_hole_example",
+      "production_metadata": {
+        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription."
+      },
+      "result_id": "r2_4b305f08ac0425bb10d8ece85206cd4cab66e01e13c8abc8dc9711fde00fd16f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T08:29:14Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Hy3",
+      "intake": {
+        "issue_number": 719,
+        "kind": "issue"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {
+        "production_description": "Setup: Opencode with lean-lsp MCP installed, model \"Hy3 Free\" (under \"Opencode Zen\". Prompt: \"prove Submission.lean\". Solve time: 2 hours. Cost: $0.00."
+      },
+      "result_id": "r2_554f7f49d490626e8aa865ea3d457bb57a09315cdd6033830b25b405e6d06139",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "1759e0460ee8a7df046a31e5b1be9f7ca0441e7d",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T16:45:47Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "DeepSeek V4 Flash",
+      "intake": {
+        "issue_number": 728,
+        "kind": "issue"
+      },
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {
+        "production_description": "Setup: Opencode with lean-lsp MCP installed, model \"DeepSeek V4 Flash Free\" (under \"Opencode Zen\"). Prompt: \"prove Submission.lean\", adding the informal solution. Solve time: 45 min. Cost: $0.00."
+      },
+      "result_id": "r2_691d02afb5718df826269fea399a44a1535a05e75b0a85ea17ee005a03cff238",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "f6947c8e2b6f91ae67ba75d47bc6ea1cd6846560",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-06T13:55:17Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Kimi K2.7",
+      "intake": {
+        "issue_number": 584,
+        "kind": "issue"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {
+        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription."
+      },
+      "result_id": "r2_9de5440866db48bff3c6b8cda7e23e1e5b59733a7153d35798baaae962ee9f2a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-06T13:55:17Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Kimi K2.7",
+      "intake": {
+        "issue_number": 584,
+        "kind": "issue"
+      },
+      "problem_id": "variable_binder_example",
+      "production_metadata": {
+        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription."
+      },
+      "result_id": "r2_ac3a50d5f682c3d87e8233d85636c407c03f1f300ca1163bae758f0d59e012ce",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-22T18:26:11Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Grok 4.5",
+      "intake": {
+        "issue_number": 864,
+        "kind": "issue"
+      },
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {
+        "production_description": "Setup: Grok CLI, picking up lean4-skills and lean-lsp MCP. Prompt: \"/lean4:prove @Submission.lean --commit=never --golf=yes\". Time: 40 min. Cost: 0$ (currently free)."
+      },
+      "result_id": "r2_c43c3f64c4dd78e1738a017881bc3d50f1e60b43b601ec2dc76240c99a100848",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "b8806118473eabebd19b9abefc099393c8f77c6f",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-06T13:55:17Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Kimi K2.7",
+      "intake": {
+        "issue_number": 584,
+        "kind": "issue"
+      },
+      "problem_id": "noncomputable_hole_example",
+      "production_metadata": {
+        "production_description": "Freshly started Kimi Code with a Kimi version of the cameronfreer/lean4-skills plugin. Model K2.7, default settings. Command: `/lean4:prove Submission.lean` . Then only giving permissions that were asked for. No input during proof process. The question of golfing was answered positively. Uses small part of a $20/month subscription."
+      },
+      "result_id": "r2_dc4e0855eb35d2bd659f8ea6fd0ded81025bf7c690bc477c9253dba08f9b3f31",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "2f544449d66f7cacbf409c58c86c4aaa6cc6d35d",
+        "repo": "rwst/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-07-12T14:56:47Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "DeepSeek V4 Flash",
+      "intake": {
+        "issue_number": 726,
+        "kind": "issue"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {
+        "production_description": "Setup: Opencode with lean-lsp MCP installed, model \"DeepSeek V4 Flash Free\" (under \"Opencode Zen\"). Prompt: \"prove Submission.lean\". Solve time: 1 hours. Cost: $0.00."
+      },
+      "result_id": "r2_ef59df30dbf3d4b08e22be427e65c6abf72d35abcd304040913056d29cfa56c5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "fef72b0175764d2dfdae4e4596f5ca5520b517ba",
+        "repo": "rwst/lean-eval"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "rwst"
 }

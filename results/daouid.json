@@ -1,262 +1,540 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)": {
-      "brauer_character_in_cyclotomic": {
-        "benchmark_commit": "9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66",
-        "issue_number": 267,
-        "production_description": "Antigravity orchestrated the solving using [Jules](https://jules.google.com/) and guided the agent during the task.\n\nDirect Spectral Decomposition Approach\nStrategy: Instead of moving to the global virtual character ring, we perform a local eigenvalue decomposition at the element level.\n\n1. We state that the trace of the linear operator $\\rho(g)$ is the sum of its eigenvalues (roots of the characteristic polynomial) using the Mathlib lemma: Module.End.trace_eq_sum_roots_charpoly_of_splits\n2. Because $g^{\\exp(G)} = 1$ in the group, we have $\\rho(g)^{\\exp(G)} = 1$.\n3. By the Spectral Mapping Theorem (spectrum.pow_mem_pow), if $x$ is an eigenvalue of $\\rho(g)$, then $x^{\\exp(G)}$ must be an eigenvalue of the identity operator, forcing $x^{\\exp(G)} = 1$.\n4. Thus, every individual eigenvalue is an $\\exp(G)$-th root of unity.\n5. The range of our cyclotomic embedding $\\varphi$ contains the image of the primitive root $\\zeta_{\\exp(G)}$, which algebraically generates all $\\exp(G)$-th roots of unity in $\\mathbb{C}$. Hence, each individual eigenvalue lies in $\\varphi\\text{.range}$.\n6. Since $\\varphi\\text{.range}$ is a subring (subsemiring in Mathlib), it is closed under addition, and the trace (the sum of the eigenvalues) automatically lies in $\\varphi\\text{.range}$.",
-        "solved_at": "2026-05-18T13:58:49Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "603ecada7f44c090db7568566e665309a5582f7f",
-        "submission_repo": "daouid/lean-eval"
-      },
-      "bvp_comparison": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+  "results": [
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
         "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
+        "kind": "issue"
       },
-      "ci_regenerate_main_check": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
+      "problem_id": "instance_hole_example",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
       },
-      "contractibleSpace_houseWithTwoRooms": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 243,
-        "production_description": "POC of how a moderately advanced harness / scaffolding can deliver: antigravity, SKILLS.md / AGENTS.md , MCP server.\n\nThe human in the loop is not a mathematician, nor a software engineer, just someone curious and armed with patience, and acting as a babysitter:\n\nwith simple encouragements like\n\"remember, if we dont have the needed bricks, we build them and lay them\nsearch online for guidance if needed\nstep by step, brick by brick, we are progressing we have time, you are doing great, try to address 1 thing at a time\nthink using sequential thinking tool as needed, take your time and proceed with care\nno shortcuts, no cheating, we have time\nthe sky is the limit, this is not an open problem, you got this ! \"\n\nAI did all the thinking.\n\nNo golfing done.\n\nThis 7,000+ line proof was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE (a VS Code fork). Due to the massive scale of the deformation retraction, the solution was driven by cycling through the entire suite of available frontier models as quota constraints required.\n\nThe formal verification relied on a specialized scaffolding pipeline:\n\nIterative Prompt Engineering: The task was initialized using structured prompts ([contractibleSpace_houseWithTwoRooms.md](https://github.com/user-attachments/files/27707778/contractibleSpace_houseWithTwoRooms.md) that enforce Mathlib style guides (e.g., \"Rely on existing Mathlib structural lemmas\" and \"Abstract into lemmas parameterized by characteristics\").\n\nFailure Feedback Loop: When intermediate attempts failed (e.g., due to type class synthesis errors or unsolved goals), the raw lake build trace logs and compiler outputs were automatically captured and injected back into the prompt context. This allowed the models to iteratively diagnose and correct their own errors.\n\nModel Context Protocol (MCP): The agents interacted with the Lean 4 compiler in real-time via the lean-lsp MCP server, gaining high-fidelity \"Language Server to Agent\" access:\nProof State Tracking (lean_goal): Real-time extraction of tactic states to track the 24 nested sub-cubes of the retraction.\nDiagnostics (lean_diagnostic_messages): Immediate compiler feedback on type mismatches and syntax errors to keep the massive 7,000-line construction mathematically sound.\n\nStructural Synthesis: The proof was built constructively by the ensemble over multiple sessions. The agents defined the 24 topological spaces (C_1 through C_24), constructed explicit piecewise continuous projections (proj_1 through proj_24), and systematically eliminated sorry placeholders until the full deformation retraction onto the point was rigorously verified by the Lean compiler.",
-        "solved_at": "2026-05-13T12:04:58Z",
-        "submission_kind": "gist",
-        "submission_public": true,
-        "submission_ref": "f3ec57f3111929e08560cc8209d9664b3f17893e",
-        "submission_repo": "daouid/73182095262a4e329bcec8579bdd573a"
-      },
-      "cubic_decay_asymptotic": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 246,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T14:47:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "50b4d43ba912ea3ae79d128a43a478184dffec43",
-        "submission_repo": "daouid/lean-eval"
-      },
-      "cyclotomic_integer_house_le_two": {
-        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
-        "issue_number": 22,
-        "solved_at": "2026-05-22T10:23:40Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "ffb92010a8ee7c1824d31ec96031b6f0910dd51b",
-        "submission_repo": "daouid/lean-eval"
-      },
-      "def_hole_example": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
-      },
-      "dirichlet_eigenvalues_eq_nat_sq": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
-      },
-      "exists_complementary_polynomial_on_unit_circle": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 4,
-        "solved_at": "2026-05-19T21:06:19Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "6d77c88ed6db82e990b092a900b197de2db3b6b1",
-        "submission_repo": "daouid/lean-eval"
-      },
-      "exists_nonisotopic_link": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
-        "issue_number": 7,
-        "solved_at": "2026-05-19T23:08:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "288e702189aefa88044372a196ac102c7f3de98b",
-        "submission_repo": "daouid/lean-eval"
-      },
-      "finite_graph_ramsey_theorem": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
-      },
-      "heat_kernel_solves_heat_equation": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
-      },
-      "instance_hole_example": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
-      },
-      "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "result_id": "r2_01796647e9d86558f03057c1017a7f12fd8120c0c3cd4a93496e27fa80679450",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T22:45:27Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
         "issue_number": 249,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T22:45:27Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "49edbc5532e271c0a40b1538db98cadd2ac3219d",
-        "submission_repo": "daouid/lean-eval"
+        "kind": "issue"
       },
-      "linear_ode_asymptotic_stability": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "problem_id": "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_2da775131a3e0a31a4106c9bf45f6f1bb61397db2c76ea7bc9ed974fdbed7fa7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "49edbc5532e271c0a40b1538db98cadd2ac3219d",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
         "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
+        "kind": "issue"
       },
-      "list_append_singleton_length": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_33b9244edc78b6e60755790df97b9af33d9a82fdd581dcb7721a2eddcc3d40b7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
         "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
+        "kind": "issue"
       },
-      "mem_convexHull_finset_extremePoints_of_mem_compact_convex": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 251,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-14T11:27:23Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "46f806927dd92bed763a8bc71fe106a417c66259",
-        "submission_repo": "daouid/lean-eval"
+      "problem_id": "def_hole_example",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
       },
-      "mulCayley_connected_iff_closure_eq_top": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "result_id": "r2_54460453c16a040ef20aea73937c16e77e306df2c5b68fb8414aedc0824a51a1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-19T21:06:19Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 4,
+        "kind": "issue"
+      },
+      "problem_id": "exists_complementary_polynomial_on_unit_circle",
+      "production_metadata": {},
+      "result_id": "r2_6bd733dd65fb07209845ad4b1174fe5648df34ea9ca1f83598fc457643916bff",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "6d77c88ed6db82e990b092a900b197de2db3b6b1",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-18T13:58:49Z",
+      "benchmark_commit": "9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 267,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_character_in_cyclotomic",
+      "production_metadata": {
+        "production_description": "Antigravity orchestrated the solving using [Jules](https://jules.google.com/) and guided the agent during the task.\n\nDirect Spectral Decomposition Approach\nStrategy: Instead of moving to the global virtual character ring, we perform a local eigenvalue decomposition at the element level.\n\n1. We state that the trace of the linear operator $\\rho(g)$ is the sum of its eigenvalues (roots of the characteristic polynomial) using the Mathlib lemma: Module.End.trace_eq_sum_roots_charpoly_of_splits\n2. Because $g^{\\exp(G)} = 1$ in the group, we have $\\rho(g)^{\\exp(G)} = 1$.\n3. By the Spectral Mapping Theorem (spectrum.pow_mem_pow), if $x$ is an eigenvalue of $\\rho(g)$, then $x^{\\exp(G)}$ must be an eigenvalue of the identity operator, forcing $x^{\\exp(G)} = 1$.\n4. Thus, every individual eigenvalue is an $\\exp(G)$-th root of unity.\n5. The range of our cyclotomic embedding $\\varphi$ contains the image of the primitive root $\\zeta_{\\exp(G)}$, which algebraically generates all $\\exp(G)$-th roots of unity in $\\mathbb{C}$. Hence, each individual eigenvalue lies in $\\varphi\\text{.range}$.\n6. Since $\\varphi\\text{.range}$ is a subring (subsemiring in Mathlib), it is closed under addition, and the trace (the sum of the eigenvalues) automatically lies in $\\varphi\\text{.range}$."
+      },
+      "result_id": "r2_6d005a38d3b46f786268567d9e19f23131a4aa9f82748e7f8f3bfd5311285847",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "603ecada7f44c090db7568566e665309a5582f7f",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-19T23:08:32Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 7,
+        "kind": "issue"
+      },
+      "problem_id": "exists_nonisotopic_link",
+      "production_metadata": {},
+      "result_id": "r2_6fd1567c4bcdaa9373ecf2ad8a3f412cca39ace72f9d80101770e57a2a4ecfd6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "288e702189aefa88044372a196ac102c7f3de98b",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
         "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
+        "kind": "issue"
       },
-      "oppenheim_inequality": {
-        "benchmark_commit": "9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66",
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_721d49d87e2176e4bbdb3748bfb98ce6ba62f36fd5df50f2497dd8735f7dc0ea",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-18T15:55:34Z",
+      "benchmark_commit": "9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
         "issue_number": 268,
-        "solved_at": "2026-05-18T15:55:34Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "26b8057f1ef181b15beeab762febd29bf3e6f895",
-        "submission_repo": "daouid/lean-eval"
+        "kind": "issue"
       },
-      "pi1_circle_mulEquiv_int": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "problem_id": "oppenheim_inequality",
+      "production_metadata": {},
+      "result_id": "r2_76198041534f3a962726b46763bbd538af5db67bbab91e0f7fec9c598a9fa8d6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "26b8057f1ef181b15beeab762febd29bf3e6f895",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
         "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
+        "kind": "issue"
       },
-      "posSemidef_map_exp": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_7c480c07c8d77f764f70df81d191884479a847a9a9a468e0c88ffc0389bade5b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
         "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
+        "kind": "issue"
       },
-      "rouche_zero_count_eq": {
-        "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_7f06de488d3708c42c111cc0c114425946a5964d4929c35bd8cfc3c0e8d22758",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T14:47:27Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 246,
+        "kind": "issue"
+      },
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_81636c3e16b2da560b9bc86514a3646b0dcc69ec1e8cc26ded1abc6db4f7eb68",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "50b4d43ba912ea3ae79d128a43a478184dffec43",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 245,
+        "kind": "issue"
+      },
+      "problem_id": "list_append_singleton_length",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_90a05f8516a2d7507c9e45c904f2268f6501fce3f12df8c0c4b6a03595e3995d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 245,
+        "kind": "issue"
+      },
+      "problem_id": "ci_regenerate_main_check",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_9431cf5d190178d6b410e6855073a2be8e5bd07eacd9f0c3c506c2539df8658d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 245,
+        "kind": "issue"
+      },
+      "problem_id": "dirichlet_eigenvalues_eq_nat_sq",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_98e4d6394510bcdc10f9d4648b46c1f41a02811ffe202be9f191cf0373f29fab",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T12:04:58Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 243,
+        "kind": "issue"
+      },
+      "problem_id": "contractibleSpace_houseWithTwoRooms",
+      "production_metadata": {
+        "production_description": "POC of how a moderately advanced harness / scaffolding can deliver: antigravity, SKILLS.md / AGENTS.md , MCP server.\n\nThe human in the loop is not a mathematician, nor a software engineer, just someone curious and armed with patience, and acting as a babysitter:\n\nwith simple encouragements like\n\"remember, if we dont have the needed bricks, we build them and lay them\nsearch online for guidance if needed\nstep by step, brick by brick, we are progressing we have time, you are doing great, try to address 1 thing at a time\nthink using sequential thinking tool as needed, take your time and proceed with care\nno shortcuts, no cheating, we have time\nthe sky is the limit, this is not an open problem, you got this ! \"\n\nAI did all the thinking.\n\nNo golfing done.\n\nThis 7,000+ line proof was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE (a VS Code fork). Due to the massive scale of the deformation retraction, the solution was driven by cycling through the entire suite of available frontier models as quota constraints required.\n\nThe formal verification relied on a specialized scaffolding pipeline:\n\nIterative Prompt Engineering: The task was initialized using structured prompts ([contractibleSpace_houseWithTwoRooms.md](https://github.com/user-attachments/files/27707778/contractibleSpace_houseWithTwoRooms.md) that enforce Mathlib style guides (e.g., \"Rely on existing Mathlib structural lemmas\" and \"Abstract into lemmas parameterized by characteristics\").\n\nFailure Feedback Loop: When intermediate attempts failed (e.g., due to type class synthesis errors or unsolved goals), the raw lake build trace logs and compiler outputs were automatically captured and injected back into the prompt context. This allowed the models to iteratively diagnose and correct their own errors.\n\nModel Context Protocol (MCP): The agents interacted with the Lean 4 compiler in real-time via the lean-lsp MCP server, gaining high-fidelity \"Language Server to Agent\" access:\nProof State Tracking (lean_goal): Real-time extraction of tactic states to track the 24 nested sub-cubes of the retraction.\nDiagnostics (lean_diagnostic_messages): Immediate compiler feedback on type mismatches and syntax errors to keep the massive 7,000-line construction mathematically sound.\n\nStructural Synthesis: The proof was built constructively by the ensemble over multiple sessions. The agents defined the 24 topological spaces (C_1 through C_24), constructed explicit piecewise continuous projections (proj_1 through proj_24), and systematically eliminated sorry placeholders until the full deformation retraction onto the point was rigorously verified by the Lean compiler."
+      },
+      "result_id": "r2_abbc48bd15332eb145f86b5b00b40fdc48d20473fa941dd932e194d70afcbae0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "f3ec57f3111929e08560cc8209d9664b3f17893e",
+        "repo": "daouid/73182095262a4e329bcec8579bdd573a"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 245,
+        "kind": "issue"
+      },
+      "problem_id": "linear_ode_asymptotic_stability",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_af90dece11ee33da0b191e483580b152a1ca8ef922b6e6772689b1dd1f2493f3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 245,
+        "kind": "issue"
+      },
+      "problem_id": "pi1_circle_mulEquiv_int",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_b0167152f043f5c838f7b4ac4d0ea05137f65bcb19aaf1363cee86a54132efa6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-22T13:50:22Z",
+      "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
         "issue_number": 23,
-        "solved_at": "2026-05-22T13:50:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "af1b0c11fab8544e36697e0d7cb85d1aee926215",
-        "submission_repo": "daouid/lean-eval"
+        "kind": "issue"
       },
-      "sturm_separation": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "problem_id": "rouche_zero_count_eq",
+      "production_metadata": {},
+      "result_id": "r2_b5b390757b77428875af9284eb40322db6395474c6a22843a4e5fefd66ea09f8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "af1b0c11fab8544e36697e0d7cb85d1aee926215",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
         "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
+        "kind": "issue"
       },
-      "substInv_X_sub_X_sq_eq_catalan": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "problem_id": "bvp_comparison",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_bc47697cf79b86b2029ce17cb81d978ff1d9dd008927438f3783c5d3b0c19a75",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-14T11:27:23Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 251,
+        "kind": "issue"
+      },
+      "problem_id": "mem_convexHull_finset_extremePoints_of_mem_compact_convex",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_c8cd61bb3fc2f932c38431393fedd1cc37e8b6a1d660234b65697ac6c024864b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "46f806927dd92bed763a8bc71fe106a417c66259",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
         "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
+        "kind": "issue"
       },
-      "two_plus_two": {
-        "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
-        "issue_number": 245,
-        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback).",
-        "solved_at": "2026-05-13T13:12:22Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
-        "submission_repo": "daouid/lean-eval"
+      "problem_id": "sturm_separation",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
       },
-      "vonNeumann_doubleCommutant_tfae": {
-        "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "result_id": "r2_d2b27f7cea5deedab8365c2b984e5a27444a233d3f9ede9d2f57271c5e8618fc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-22T10:23:40Z",
+      "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 22,
+        "kind": "issue"
+      },
+      "problem_id": "cyclotomic_integer_house_le_two",
+      "production_metadata": {},
+      "result_id": "r2_e27fe23bbe7bd21d9c44c1d2898d34011d80dccef26b3792b6bef722abc8a511",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "ffb92010a8ee7c1824d31ec96031b6f0910dd51b",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-20T09:43:56Z",
+      "benchmark_commit": "39c3090ac7a8e38cb97ee7d9740be646b5e3b2a9",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
         "issue_number": 13,
-        "solved_at": "2026-05-20T09:43:56Z",
-        "submission_kind": "github_repo",
-        "submission_public": true,
-        "submission_ref": "fab2fd9d8801fa14b19706209bd9245500a97ce4",
-        "submission_repo": "daouid/lean-eval"
+        "kind": "issue"
+      },
+      "problem_id": "vonNeumann_doubleCommutant_tfae",
+      "production_metadata": {},
+      "result_id": "r2_e7e2b26a05e0b96fd65f1f5a3866cc4685ae549f91661744e4544c7007fa2e93",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "fab2fd9d8801fa14b19706209bd9245500a97ce4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 245,
+        "kind": "issue"
+      },
+      "problem_id": "heat_kernel_solves_heat_equation",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_ef314ef96d890755ce2e5b86d714791f17cc89362998be2cd81de38ef87eab96",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-05-13T13:12:22Z",
+      "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
+      "declared_model": "Antigravity (Multi-Model Ensemble: Gemini 3.1 Pro, Gemini 3 Flash, Claude 4.6 Sonnet/Opus)",
+      "intake": {
+        "issue_number": 245,
+        "kind": "issue"
+      },
+      "problem_id": "mulCayley_connected_iff_closure_eq_top",
+      "production_metadata": {
+        "production_description": "This solution was produced interactively via an AI-driven pair-programming workflow using Antigravity, Google's agentic IDE. The proof was built structurally by cycling through the available ensemble of frontier models over multiple sessions. The formal verification relied on a specialized scaffolding pipeline: (1) Iterative prompt engineering utilizing Mathlib style constraints. (2) A failure feedback loop that injected raw compiler diagnostics back into the prompt context to diagnose errors. (3) Real-time Model Context Protocol (MCP) integration with the lean-lsp server, providing high-fidelity \"Language Server to Agent\" access to lean_goal (tactic state tracking) and lean_diagnostic_messages (immediate compiler feedback)."
+      },
+      "result_id": "r2_f1abe540b7f6a0d8035e780336a5d63180d33bf2e5afa818797b121e921aeb16",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "be5ca99521362ea9131eca9a2d95d91ec6fff0f4",
+        "repo": "daouid/lean-eval"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "daouid"
 }

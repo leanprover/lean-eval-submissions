@@ -1,36 +1,65 @@
 {
-  "schema_version": 1,
-  "solved": {
-    "Aristotle (Harmonic)": {
-      "pi3_sphere_two_mulEquiv_int": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+  "results": [
+    {
+      "accepted_at": "2026-06-29T13:51:39Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 505,
-        "solved_at": "2026-06-29T13:51:39Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "45d60dd28e02f279a7a3a13296b934472cf2d67a",
-        "submission_repo": "adrianmartir/lean-eval-private"
+        "kind": "issue"
       },
-      "pin_sphere_n_mulEquiv_int": {
-        "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "problem_id": "pi3_sphere_two_mulEquiv_int",
+      "production_metadata": {},
+      "result_id": "r2_320ea2c951c161af1ea35e918a3be1fb26e4ddc48e7989d164a65520677c2a9d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "45d60dd28e02f279a7a3a13296b934472cf2d67a",
+        "repo": "adrianmartir/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-06-29T10:23:48Z",
+      "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 503,
-        "solved_at": "2026-06-29T10:23:48Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "baf5eb4bc26fbff87d8c8528128da5b50e3ecd56",
-        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+        "kind": "issue"
       },
-      "sturm": {
-        "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
+      "problem_id": "pin_sphere_n_mulEquiv_int",
+      "production_metadata": {},
+      "result_id": "r2_c1f039df250da9ee7a28615efcf29f83da82eb96101c698ec756097d64d3e630",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "baf5eb4bc26fbff87d8c8528128da5b50e3ecd56",
+        "repo": "LorenzoLuccioli/lean-eval-private"
+      }
+    },
+    {
+      "accepted_at": "2026-05-28T13:08:32Z",
+      "benchmark_commit": "fc1558cf1a1750c5a57b1c213eadedde9db02c43",
+      "declared_model": "Aristotle (Harmonic)",
+      "intake": {
         "issue_number": 111,
-        "production_description": "Solved autonomously by aristotle. Manually bumped to 4.30.0-rc2.",
-        "solved_at": "2026-05-28T13:08:32Z",
-        "submission_kind": "github_repo",
-        "submission_public": false,
-        "submission_ref": "095cb521420de37bb9e236c57f5dde738fc381f9",
-        "submission_repo": "LorenzoLuccioli/lean-eval-private"
+        "kind": "issue"
+      },
+      "problem_id": "sturm",
+      "production_metadata": {
+        "production_description": "Solved autonomously by aristotle. Manually bumped to 4.30.0-rc2."
+      },
+      "result_id": "r2_cf791ea1c230000528d40e668726ed15c47ff7739066bdaa186b0acb3646ffd6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "095cb521420de37bb9e236c57f5dde738fc381f9",
+        "repo": "LorenzoLuccioli/lean-eval-private"
       }
     }
-  },
+  ],
+  "schema_version": 2,
   "user": "adrianmartir"
 }
