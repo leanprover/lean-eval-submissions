@@ -55,11 +55,12 @@ main CI `32569954466` passed.
 
 The dedicated AWS account now holds the KMS keys, conditional one-use tables,
 and direct-Lambda unwrap gates described by D6. This is archive-key custody,
-not an AWS evaluation backend. Production role variables remain unset, and the
-separate provider-neutral disposable replay executor remains unselected.
-Synthetic staging run `32568604230` proved wrap, one consume/decrypt, identical
-second-use rejection, and credential-free local decryption; it did not run a
-private replay or write State.
+not an AWS evaluation backend. Production role variables remain unset.
+Cloudflare Sandbox is the selected provider-neutral disposable executor;
+protected deployment `32573880099` and synthetic acceptance `32574078784`
+proved its 12 GiB staging boundary, wrong-archive and reuse refusal, blocked
+egress, fixed-command decrypt, and destruction without writing State. General
+and production replay remain disabled.
 
 The FC-owned importer in `formal-conjectures#4951` now imports, verifies,
 classifies, and generates all FC100 declarations through the frozen generator
@@ -274,7 +275,9 @@ of ciphertext plus envelope. `scripts/aws_key_adapter.py` and
 `infrastructure/aws-key-adapter/template.yaml` implement the initial KMS wrap,
 direct-Lambda unwrap, and conditional DynamoDB consume boundary. Only the
 staging smoke has role variables; production remains disconnected. The
-disposable execution backend remains a separate unprovisioned launch gate.
+Cloudflare Sandbox backend is provisioned with general replay disabled;
+authoritative queue consumption and the 16 GiB production capacity requirement
+remain separate launch gates.
 
 **Contributor acknowledgement approved 2026-08-20:** “By submitting, I confirm
 that I have authority to provide this source. I authorize Lean Eval to store
