@@ -186,7 +186,7 @@ describe("atomic Git State append", () => {
     await expect(repository(fetcher).readSubmission(SUBMISSION_ID)).rejects.toMatchObject({ status: 502 });
   });
 
-  it("target-reads and authenticates v2 lifecycle summaries", async () => {
+  it("target-reads and authenticates lifecycle-aware summaries", async () => {
     const fetcher = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
@@ -238,7 +238,7 @@ describe("atomic Git State append", () => {
     expect(JSON.parse(updateRequestBody)).toEqual({ sha: NEW_COMMIT, force: false });
   });
 
-  it("atomically appends lifecycle events with the matching v2 submission view", async () => {
+  it("atomically appends lifecycle events with the matching lifecycle-aware submission view", async () => {
     const fetcher = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),

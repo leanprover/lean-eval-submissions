@@ -4,6 +4,11 @@ Tracks implementation and production rollout of the plan in
 [lean-eval#536](https://github.com/leanprover/lean-eval/pull/536) and the
 [public implementation program](https://gist.github.com/kim-em/cd6ac1c049f459ef9aa37d6cf551d9e4).
 
+Terminology: unqualified **v1** and **v2** name problem sets. The platform
+work is the **lifecycle overhaul**; machine-format versions are always
+qualified as **schema version 2**. Frozen identifiers and filenames remain
+unchanged.
+
 The detailed decision and operator procedures live in
 `docs/overhaul-rollout-runbook.md`. Use this single tracker rather than opening
 one issue per lane.
@@ -38,8 +43,8 @@ one issue per lane.
       changing archives or stable IDs. D6b accepts no provider-loss recovery.
       The capability implementation is delegated to the implementation review;
       concise contributor/release wording is approved.
-- [ ] D7: approve a fresh results-v2 migration report's exact source commit,
-      record count, and output digest.
+- [ ] D7: approve a fresh results schema-version-2 migration report's exact
+      source commit, record count, and output digest.
 - [x] D8: acknowledge UUID-prefix State paths and the durable Git writer lock
       as correctness-preserving deviations from the literal program text.
 - [x] D9: use two least-privilege GitHub Apps behind an organization-operated
@@ -62,10 +67,10 @@ one issue per lane.
 ## Existing-repository PRs
 
 - [x] Open catalog lifecycle/tags/audit PR.
-- [x] Open results-v2 compatibility and migration-tooling PR.
+- [x] Open results schema-version-2 compatibility and migration-tooling PR.
 - [x] Open intake-disabled Worker, deployment, rollback, threat-model, and
       infrastructure-ledger PR.
-- [x] Open leaderboard results-v2 preview PR.
+- [x] Open lifecycle-aware leaderboard preview PR.
 - [x] Open software-verification draft PR after D3 review.
 - [x] Open LeanEval generator-consumer PR after the public generator pin exists.
 
@@ -105,7 +110,7 @@ one issue per lane.
 
 ## Data and product rollout
 
-- [x] Produce a fresh results-v2 dry-run artifact.
+- [x] Produce a fresh results schema-version-2 dry-run artifact.
 - [ ] Review and approve its exact post-merge checksums (D7).
 - [ ] Execute the authorized migration and verify the writer lock is released.
 - [x] Define and audit the approved mechanical 118-member v1 base set.

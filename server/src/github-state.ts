@@ -661,7 +661,9 @@ export class GitHubStateRepository {
     }
     for (const event of events) validateStateEvent(event);
     const decodedView = decodeSubmissionView(nextView);
-    if (decodedView.schema_version !== 2) throw new TypeError("submission lifecycle requires a v2 view");
+    if (decodedView.schema_version !== 2) {
+      throw new TypeError("submission lifecycle requires submission-view schema version 2");
+    }
     if (events.some((event) => event.subject_id !== decodedView.submission_id)) {
       throw new TypeError("submission lifecycle event subjects disagree with the view");
     }
