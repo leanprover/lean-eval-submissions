@@ -4252,6 +4252,28 @@
         "ref": "5dc066a8751603e3636d74fbe3119559efed0684",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-08-22T04:21:08Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1219,
+        "kind": "issue"
+      },
+      "problem_id": "annals_duffin_schaeffer_conjecture",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_c4781d401f6a16b99826f64a14048ee61938a11db7c8eceebfae23c6aab4ea22",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0d086a9b4644b081f3d2166e6f5ae047a75c1b4d",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
