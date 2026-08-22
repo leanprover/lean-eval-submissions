@@ -62,12 +62,13 @@ one issue per lane.
 - [x] Replace LeanEval's local generator path with an exact public commit SHA.
 - [x] Verify generator byte parity after the remote pin (theorem- and
       definition-hole fixtures, 10/10 files each).
-- [ ] Merge generator fixes `lean-eval-generator#1` / `#2` and synchronization
-      PR `#3`, advance exact pins, rerun corpus/FC parity, and merge the draft
-      embedded-core removal in `lean-eval#553`. All three generator PRs are
-      green but cannot merge until the repository rules receive one approving
-      write-access review; no reviewer is assigned. The consumer test suites
-      are green.
+- [x] Merge generator fixes `lean-eval-generator#1` / `#2` and synchronization
+      PR `#3`, advance exact pins, rerun corpus parity, and merge the
+      embedded-core removal in `lean-eval#553`. All three generator PRs merged
+      into exact main commit `77373a53`; consumer `#553` merged as
+      `b91d4757`, after local parity/build/test checks and hosted run
+      `32559642804` passed all eight catalog shards, the inventory aggregate,
+      repository checks, and security/scoring smoke tests.
 - [x] Configure State rulesets and append-only validation.
 - [x] Publish the schema-validated public projection of private production
       State without exposing private source or operational metadata
@@ -89,10 +90,9 @@ one issue per lane.
       AWS one-submission key-adapter staging smoke `#1208`; both merged and
       deployed intake-disabled as exact commit `a34b2053`. The AWS workflow
       remains disabled because no AWS account or stack exists.
-- [x] Open disabled release planner `lean-eval-releases#1` and dependent draft
-      reconstruction smoke `#2`; both and terminology PR `#3` are green but
-      cannot merge until the repository rules receive one approving
-      write-access review; no reviewer is assigned.
+- [x] Merge disabled release terminology `lean-eval-releases#3`, planner `#1`,
+      and reconstruction smoke `#2`; final main is `f1f83344`, all hosted
+      validation is green, and publication remains disabled.
 
 ## Cloudflare bootstrap
 
