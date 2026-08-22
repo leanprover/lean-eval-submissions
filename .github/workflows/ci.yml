@@ -82,6 +82,7 @@ jobs:
           tests.test_key_capability_contract
           tests.test_aws_key_adapter
           tests.test_aws_key_infrastructure
+          tests.test_aws_key_adapter_staging_workflow
 
       - name: Replay contract and public smoke tests
         run: >-

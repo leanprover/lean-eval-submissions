@@ -7,12 +7,12 @@ until this ledger changes in the same pull request or an immediately linked
 operations pull request. Secret **names, owners, scopes, and rotation dates**
 belong here; secret values do not.
 
-Last reconciled: 2026-08-22 (Worker commit `a34b2053` deployed and
-smoke-tested in both environments with intake disabled; deployment tokens,
-State-writer tokens, browser OAuth Apps, and both broker GitHub Apps remain
-provisioned and preflighted; no Lean Eval AWS account or resource exists, and
-the six empty AWS workload environment shells and their exact ref policies are
-recorded below; the lifecycle-aware leaderboard cutover is live).
+Last reconciled: 2026-08-22 (Worker commit `a34b2053` remains deployed and
+intake-disabled in both environments; deployment tokens, State-writer tokens,
+browser OAuth Apps, and both broker GitHub Apps remain provisioned and
+preflighted; the dedicated AWS key-custody account and isolated staging and
+production stacks are provisioned; only the two staging OIDC role variables
+are connected; the lifecycle-aware leaderboard cutover is live).
 Temporary owner: Kim Morrison. Target owner: leanprover organization
 administrators. Service code:
 [`server/`](server/).
@@ -39,12 +39,15 @@ administrators. Service code:
 | GitHub Environment | `cloudflare-staging` (`20259250422`) | staging | **CREATED 2026-08-20; ACCOUNT ID SET; API TOKEN SET 2026-08-21** |
 | GitHub Environment | `cloudflare-production` (`20259250928`) | production | **CREATED 2026-08-20; ACCOUNT ID SET; API TOKEN SET 2026-08-21** |
 | GitHub Environment | `submission-dispatch-promotion` (`20259251430`) | shared | **CREATED 2026-08-20; REVIEW + GUARD CONFIGURED** |
-| GitHub Environment | `archive-staging` (`EN_kwDOSh7OzM8AAAAEu8r2_A`) | staging archive | **CREATED 2026-08-21; TAG POLICY SET; ROLE ARN NOT SET** |
+| GitHub Environment | `archive-staging` (`EN_kwDOSh7OzM8AAAAEu8r2_A`) | staging archive | **CREATED; TAG POLICY + WRAP ROLE ARN SET** |
 | GitHub Environment | `archive-production` (`EN_kwDOSh7OzM8AAAAEu8r25w`) | production archive | **CREATED 2026-08-21; TAG POLICY SET; ROLE ARN NOT SET** |
-| GitHub Environment | `replay-staging` (`EN_kwDOSh7OzM8AAAAEu8r21Q`) | staging replay | **CREATED 2026-08-21; MAIN + DISPATCH TAG POLICIES SET 2026-08-22; ROLE ARN NOT SET** |
+| GitHub Environment | `replay-staging` (`EN_kwDOSh7OzM8AAAAEu8r21Q`) | staging replay | **CREATED; MAIN + DISPATCH TAG POLICIES + INVOKER ROLE ARN SET** |
 | GitHub Environment | `replay-production` (`EN_kwDOSh7OzM8AAAAEu8r3MQ`) | production replay | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
 | GitHub Environment | `release-staging` (`EN_kwDOT-oWes8AAAAEu8r3Mw`) | staging release | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
 | GitHub Environment | `release-production` (`EN_kwDOT-oWes8AAAAEu8r3KQ`) | production release | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
+| AWS account | `lean-eval` (`161072922960`) | dedicated key custody | **CREATED; ROOT MFA ENABLED; NO ACCESS KEYS** |
+| AWS CloudFormation stack | `lean-eval-key-adapter-staging` | staging | **PROVISIONED 2026-08-22** |
+| AWS CloudFormation stack | `lean-eval-key-adapter-production` | production | **PROVISIONED 2026-08-22; NOT CONNECTED TO GITHUB** |
 | Replay execution backend | Lean-Eval-owned disposable executor | production | **TO BE DESIGNED AND PROVISIONED** |
 
 Do not change a status to provisioned without replacing every applicable
@@ -437,32 +440,53 @@ read path without affecting State writers or intake.
 
 ## Encrypted replay boundary
 
-The selected root-key platform is AWS KMS in a new dedicated AWS account. No
-Lean Eval AWS account exists yet. The implementation and linted SAM template
-exist, but no AWS resource has been created:
+The selected root-key platform is AWS KMS in the dedicated `lean-eval` AWS
+account. AWS holds archive identities and the small one-use unwrap gate only;
+it does not run Lean evaluation or replay compute.
 
 | Field | Recorded value |
 | --- | --- |
 | AWS account purpose | Lean Eval archive-envelope root and audit only |
-| AWS account ID | **TO BE RECORDED AFTER CREATION** |
-| Root/contact email | **TO BE RECORDED; NEVER A WORKLOAD CREDENTIAL** |
+| AWS account name / ID | `lean-eval` / `161072922960` |
+| Root/contact email | `kim+lean-eval@lean-fro.org`; never a workload credential |
 | Billing owner | Kim Morrison (temporary) |
-| Primary administrator | Kim Morrison |
+| Primary administrator | Kim Morrison; temporary root console sessions only, with MFA enabled and no root access key |
+| AWS Organizations / IAM Identity Center | not enabled in this standalone account; a future Lean FRO organization may invite the account and supply centralized administration |
 | Provider-loss recovery | None by design; planned migration requires the active provider |
 | KMS region | `us-east-1` selected for the initial small service; the stable contract is region-neutral |
-| Staging stack | `lean-eval-key-adapter-staging` — **TO BE PROVISIONED** |
-| Production stack | `lean-eval-key-adapter-production` — **TO BE PROVISIONED** |
-| KMS aliases | `alias/lean-eval-archive-identities-staging` and `-production` — **TO BE PROVISIONED** |
-| One-use tables | `lean-eval-capability-consumption-staging` and `-production` — **TO BE PROVISIONED** |
-| Unwrap functions | `lean-eval-archive-unwrap-staging` and `-production`, alias `live` — **TO BE PROVISIONED** |
-| Archive roles | `lean-eval-archive-wrap-staging` and `-production` (KMS Encrypt only) — **TO BE PROVISIONED** |
-| Replay controller roles | `lean-eval-replay-unwrap-invoker-staging` and `-production` in `lean-eval-submissions` (Lambda Invoke only) — **TO BE PROVISIONED** |
-| Release controller roles | `lean-eval-release-unwrap-invoker-staging` and `-production` in `lean-eval-releases` (Lambda Invoke only) — **TO BE PROVISIONED** |
-| Function roles | KMS Decrypt + conditional DynamoDB PutItem + logs only — **TO BE PROVISIONED** |
+| GitHub OIDC provider | `arn:aws:iam::161072922960:oidc-provider/token.actions.githubusercontent.com`; sole audience `sts.amazonaws.com`; thumbprint `ab9d0263244dd0326eb67015705a667e79cfe998` |
+| Staging stack | `lean-eval-key-adapter-staging`; `CREATE_COMPLETE`; stack ID `2251e410-9e15-11f1-a8ef-0eba172391bd` |
+| Production stack | `lean-eval-key-adapter-production`; `CREATE_COMPLETE`; stack ID `6ab5d7c0-9e15-11f1-9a35-0affda52f513` |
+| SAM artifact stack / bucket | `aws-sam-cli-managed-default` / `aws-sam-cli-managed-default-samclisourcebucket-ygefen7ybulh`; bucket blocks all public access, uses KMS server-side encryption, and has versioning enabled |
+
+Recorded stack outputs:
+
+| Output | Staging | Production |
+| --- | --- | --- |
+| Adapter | `aws-kms-v1` | `aws-kms-v1` |
+| KMS key ARN | `arn:aws:kms:us-east-1:161072922960:key/7e15960c-7de0-43ac-bb42-e31683cbea9f` | `arn:aws:kms:us-east-1:161072922960:key/219904f9-4952-400f-b60a-6f027c4d070b` |
+| KMS alias | `alias/lean-eval-archive-identities-staging` | `alias/lean-eval-archive-identities-production` |
+| One-use table | `lean-eval-capability-consumption-staging` | `lean-eval-capability-consumption-production` |
+| Versioned unwrap alias ARN | `arn:aws:lambda:us-east-1:161072922960:function:lean-eval-archive-unwrap-staging:live` | `arn:aws:lambda:us-east-1:161072922960:function:lean-eval-archive-unwrap-production:live` |
+| Archive Wrap role ARN | `arn:aws:iam::161072922960:role/lean-eval-archive-wrap-staging` | `arn:aws:iam::161072922960:role/lean-eval-archive-wrap-production` |
+| Replay invoker role ARN | `arn:aws:iam::161072922960:role/lean-eval-replay-unwrap-invoker-staging` | `arn:aws:iam::161072922960:role/lean-eval-replay-unwrap-invoker-production` |
+| Release invoker role ARN | `arn:aws:iam::161072922960:role/lean-eval-release-unwrap-invoker-staging` | `arn:aws:iam::161072922960:role/lean-eval-release-unwrap-invoker-production` |
+| Function role | `lean-eval-archive-unwrap-function-staging` | `lean-eval-archive-unwrap-function-production` |
+
+Both keys are enabled customer-managed symmetric keys with annual rotation.
+Both one-use tables are active, on-demand, server-side encrypted, and use
+`expires_at_epoch` TTL. Both Lambda `live` aliases point to immutable version
+`1`; the functions are Python 3.13, 128 MiB, ten-second timeout, and have no
+Function URL or API Gateway. The account's minimum Lambda concurrency quota
+does not permit a reserved concurrency of one while retaining AWS's required
+ten unreserved executions. The function therefore has no reserved concurrency;
+the atomic conditional DynamoDB insert, not Lambda serialization, enforces
+one-use correctness.
 
 The GitHub environment shells were created before the AWS account so their ref
-boundaries could be verified without granting AWS authority. They currently
-contain no secrets and no variables:
+boundaries could be verified without granting AWS authority. Only the two
+staging environments now contain the non-secret role variables shown below;
+all four production/release environments remain unconnected:
 
 | Repository | Environment | Environment node | Protection rule | Ref policy | Policy ID |
 | --- | --- | --- | --- | --- | --- |
@@ -472,6 +496,11 @@ contain no secrets and no variables:
 | `leanprover/lean-eval-submissions` | `replay-production` | `EN_kwDOSh7OzM8AAAAEu8r3MQ` | `63321654` | protected branches only | not applicable |
 | `leanprover/lean-eval-releases` | `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | `63321653` | protected branches only | not applicable |
 | `leanprover/lean-eval-releases` | `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | `63321651` | protected branches only | not applicable |
+
+| Repository / environment | Variable | Value |
+| --- | --- | --- |
+| `leanprover/lean-eval-submissions` / `archive-staging` | `AWS_WRAP_ROLE_ARN` | `arn:aws:iam::161072922960:role/lean-eval-archive-wrap-staging` |
+| `leanprover/lean-eval-submissions` / `replay-staging` | `AWS_REPLAY_UNWRAP_ROLE_ARN` | `arn:aws:iam::161072922960:role/lean-eval-replay-unwrap-invoker-staging` |
 
 The manual `public-replay-smoke.yml` job uses `replay-staging` but needs and
 receives no environment secret, variable, OIDC permission, State token, archive
@@ -483,9 +512,9 @@ hardware are observed in the evidence artifact rather than pre-pinned, so this
 is a staging reproducibility smoke only. It cannot consume the State replay
 queue or satisfy the private/authoritative disposable-backend launch gate.
 
-After each AWS stack exists, set only its corresponding non-secret role ARN
-variable in these environments. Creating an environment shell does not enable
-a workflow, grant AWS authority, or change intake.
+Do not set the production archive/replay variables or either release variable
+until their workflows and launch gates are separately approved. The staging
+variables do not enable intake or connect any replay execution backend.
 
 AWS is an initial provider, not a stable protocol dependency. Archives remain
 standard `age` ciphertext. Each archive has a small provider-neutral envelope
@@ -612,13 +641,14 @@ compatibility fix or append a corrective event.
 | Standalone generator consumer merge | 2026-08-22 | `lean-eval#553` merged as `b91d4757aa0d7776c02540c9089df54fa0d0658a`, removing the embedded generator core and pinning standalone generator main `77373a539b31f8f304c852f288d7d8469cceebff`. Pull-request run `32559642804` passed repository and security/scoring checks, all eight catalog shards, the aggregate inventory check, and final verification. |
 | Lifecycle-aware deployment | 2026-08-21 | run `32481684831` promoted immutable tag `lean-eval-dispatch/344ae1dbd5aaf53985b20511a770caa3c52b5626`, deployed that exact commit to staging and production, and passed both structured smoke checks; the State lifecycle-aware submission-view prerequisites were already merged and green |
 | Staging E2E intake enable | 2026-08-21 | protected control run `32481885882` redeployed only staging intake version `ac11dee4-4bba-4328-9831-8545535d9b8f` at exact commit `344ae1dbd5aaf53985b20511a770caa3c52b5626`; health reports staging intake `true` while production remains `false` |
-| AWS workload environment shells | 2026-08-22 | six empty GitHub environments verified: archive staging/production restricted to tag `lean-eval-dispatch/*`; replay staging restricted to exact branch `main` and tag `lean-eval-dispatch/*`; replay production and release staging/production restricted to protected branches; exact node, protection-rule, and tag-policy IDs are recorded above; no secret, variable, or AWS authority is present |
+| AWS workload environment shells | 2026-08-22 | six GitHub environments verified: archive staging/production restricted to tag `lean-eval-dispatch/*`; replay staging restricted to exact branch `main` and tag `lean-eval-dispatch/*`; replay production and release staging/production restricted to protected branches. Only `archive-staging` and `replay-staging` contain their exact non-secret role ARN variable; the other four remain empty and unconnected. |
+| AWS key-custody provisioning | 2026-08-22 | dedicated account `lean-eval` (`161072922960`) verified with root MFA, no access keys, no Organization, and no Identity Center. GitHub OIDC provider and isolated staging/production stacks reached `CREATE_COMPLETE`; KMS rotation, exact repository/environment trust, Encrypt-only and alias-Invoke-only policies, DynamoDB conditional-write boundary/TTL/SSE, immutable Lambda aliases, and absence of public Lambda URLs were inspected. SAM bucket `aws-sam-cli-managed-default-samclisourcebucket-ygefen7ybulh` is private, KMS-encrypted, and versioned. An initial staging rollback caused by the new account's minimum Lambda concurrency quota scheduled unused key `292b5069-d782-474b-afbb-071d7be281f3` for deletion on 2026-09-21; no alias or usable authority remains. The unnecessary reserved-concurrency setting was removed because the atomic DynamoDB insert enforces one-use. Production role variables remain unset. |
 | Archive-before-evaluation deployment | 2026-08-21 | run `32488170650` promoted immutable tag `lean-eval-dispatch/b64a30293e82e77cc76da1f74e6f1633747e1bf0`, deployed exact commit `b64a3029` to staging (broker `edeb2d01-5acf-4099-8329-cf3e52f431e1`, intake `366c8c6d-671b-4c53-b488-e2cb86320dd3`) and production (broker `1ebdfbe1-57be-4ee4-ba80-23a9bf740fc6`, intake `3d2658ec-0fda-4bf1-9619-e7500fa61d52`), and passed both structured smoke checks; obsolete docs-only run `32482830556` at commit `5027d7dc` was cancelled without deploying so it could not block the current non-cancelling concurrency group |
 | Staging intake re-enable after archive deployment | 2026-08-21 | protected control run `32488534189` verified the immutable `b64a3029` tag and deployed staging intake version `39e8392d-dcc4-46e4-9bc7-afaff28b01a5`; final health is staging `true`, production `false`, both at exact commit `b64a3029` |
 | Credential-free public replay | 2026-08-21 | hosted run `32499490261` at workflow commit `757b0831018dd6ad88092eff8a2f4b3245a456d6` restored exact public source/benchmark/evaluator revisions, passed landrun and environment probes, and reproduced `two_plus_two` revision 1 through nanoda and Lean's default kernel; the downloaded three-JSON artifact independently validated with no source payload |
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
-| AWS key-adapter staging round trip | blocked | workflow is implemented; dedicated account, stacks, and staging OIDC role variables are not provisioned |
-| Replay decrypt and destruction | blocked | D6 key/provider work intentionally not provisioned |
+| AWS key-adapter staging round trip | in progress | account, both stacks, and staging OIDC role variables are provisioned. Initial run `32568171403` proved immutable-tag gating, OIDC role assumption, and KMS wrapping, then failed before unwrap because the workflow contained a mistyped `actions/download-artifact` SHA; the pin is corrected in the provisioning PR before the authoritative rerun. |
+| Replay decrypt and destruction | blocked | key custody is provisioned; the disposable replay executor remains unselected and unprovisioned |
 | Release reconstruction | blocked | Publication remains disabled |
 
 ## Reconciliation checklist
@@ -630,4 +660,7 @@ At least quarterly, and after every infrastructure change:
 2. compare GitHub environments, secret names, credentials, permissions,
    repository visibility, rulesets, and runner labels to this file;
 3. verify staging cannot reach production State and vice versa;
-4. update `Last reconciled`, owners, identifiers, dates, and deployment results here.
+4. compare AWS account, OIDC provider, CloudFormation outputs, KMS aliases and
+   rotation, DynamoDB TTL, Lambda aliases/endpoints, IAM trusts/policies, and
+   GitHub environment variables to the records above;
+5. update `Last reconciled`, owners, identifiers, dates, and deployment results here.

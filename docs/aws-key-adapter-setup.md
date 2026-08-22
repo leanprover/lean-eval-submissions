@@ -1,16 +1,20 @@
 # Dedicated AWS key-adapter setup
 
-This is the remaining manual D6 infrastructure step. It creates no replay VM
-and does not enable intake or release. The same template creates isolated
-staging and production resources in one dedicated Lean Eval AWS account.
+This procedure was completed on 2026-08-22. It creates no replay VM and does
+not enable intake or release. The same template creates isolated staging and
+production resources in one dedicated Lean Eval AWS account; exact live
+identifiers and the latest smoke evidence belong in `INFRASTRUCTURE.md`.
 
 ## 1. Create the account
 
 Create a new AWS account used only for Lean Eval archive identities. Record its
 account ID, root/contact email, billing owner, and administrator in
 `INFRASTRUCTURE.md`; never record a password, recovery code, or token. Enable
-MFA for the root user, perform ordinary administration through IAM Identity
-Center, and do not create an IAM access key.
+MFA for the root user and do not create an IAM access key. This standalone
+bootstrap account deliberately does not create an AWS Organization or IAM
+Identity Center instance: a future Lean FRO organization can invite the
+account and supply centralized administration. Until then, use only short-lived
+root console sessions for narrowly scoped administration and log out afterward.
 
 Use `us-east-1` for the initial service. The archive and capability contracts
 do not contain the account or region, so this choice does not prevent a later
@@ -69,7 +73,10 @@ sam deploy \
 
 The build artifact contains only `aws_key_adapter.py` and
 `key_capability_contract.py`. The template creates no public URL, API Gateway,
-access key, backup system, alarm system, or recovery provider.
+access key, backup system, alarm system, or recovery provider. One-use is an
+atomic DynamoDB condition and does not depend on Lambda reserved concurrency;
+this also permits deployment in a new account with AWS's minimum regional
+concurrency quota.
 
 ## 4. Record outputs; do not connect production yet
 
@@ -86,8 +93,10 @@ The six GitHub environment shells already exist:
 - `release-staging` and `release-production` in
   `leanprover/lean-eval-releases`, each restricted to protected branches.
 
-They are intentionally empty: no secret or variable is installed and they
-grant no AWS authority. Do not recreate or broaden them.
+Before provisioning they are intentionally empty. After a reviewed staging
+deployment, only the two staging role variables below are installed. Do not
+recreate or broaden the environments, and do not connect production merely
+because its dormant stack exists.
 
 For each stack, copy the seven non-secret outputs into `INFRASTRUCTURE.md`:
 
