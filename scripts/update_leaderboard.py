@@ -3,7 +3,8 @@
 Merge comparator results into the lean-eval-submissions results store.
 
 Implements the sticky-no-op semantics documented in this repository's
-README (results record schema v2). Reads v1 or v2 and always writes v2.
+README (results record schema version 2). Reads schema version 1 or 2 and
+always writes schema version 2.
 Does not run git; the caller is
 responsible for checking out the results store, committing the modified
 file, and pushing.
@@ -277,7 +278,7 @@ def _load_evaluation_results(path: pathlib.Path) -> tuple[list[str], dict[str, i
         raise UpdateError(f"'passed' in {path} must be a list of strings")
     revisions = data.get("statement_revisions")
     if revisions is None:
-        # Compatibility with in-flight artifacts created before schema v2.
+        # Compatibility with artifacts created before results schema version 2.
         revisions = {problem_id: 1 for problem_id in passed}
     if not isinstance(revisions, dict) or not all(
         isinstance(problem_id, str)

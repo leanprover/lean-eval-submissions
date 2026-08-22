@@ -198,8 +198,9 @@ when public intake is disabled.
   `submission-ref` and `benchmark-commit` as 40-char hex SHAs,
   `submission-repo` as `owner/name`, `submission-kind` as `github_repo`
   or `gist`, `--user` as a GitHub login regex, and the statement revision
-  frozen into the uncredentialed evaluator's artifact. It accepts schema v1
-  and v2 but validates the complete v2 envelope and identifier before writing.
+  frozen into the uncredentialed evaluator's artifact. It accepts results
+  schema versions 1 and 2 but validates the complete schema-version-2 envelope
+  and identifier before writing.
 - **Sticky no-op writes.** A result for an already-recorded
   `(user, verbatim model, problem, statement revision)` tuple is a no-op;
   base records only grow. See the README's record-schema section.
@@ -207,7 +208,8 @@ when public intake is disabled.
   `lean-eval-recorder` GitHub App, which is the explicit branch-protection
   bypass actor for this repo's `main` (see `docs/ci-secrets.md`). Only
   this workflow holds that App's credentials.
-- **Migration serialization.** The v2 migration uses that same App and first
+- **Migration serialization.** The results schema-version-2 migration uses
+  that same App and first
   commits a durable `results-store-writer` lock. Record jobs keep evaluating
   and archiving, then fetch and wait at the credentialed write boundary. The
   lock is removed atomically with the migration commit. See

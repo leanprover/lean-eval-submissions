@@ -91,7 +91,8 @@ Before `INTAKE_ENABLED` changes to `true`, reviewers must have evidence for:
 
 1. OAuth and agent-challenge contract tests, including nonce contention and
    provider failure;
-2. end-to-end synthetic staging intake through archive, evaluation, results v2,
+2. end-to-end synthetic staging intake through archive, evaluation, results
+   schema version 2,
    and State materialization;
 3. abuse controls and metadata size/encoding limits;
 4. the combined per-submission replay/release key design;

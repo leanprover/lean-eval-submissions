@@ -106,7 +106,8 @@ stores only `SHA256("lean-eval-auth-nonce-v1\\0" + purpose + "\\0" + nonce)`;
 the raw nonce and signed token never enter State. Production and staging State
 deploy the matching `authentication.nonce_consumed`,
 `submission.metadata_amended`, and `submission.publication_changed` schemas
-and materializer. Lifecycle-aware submission view v2 additionally
+and materializer. The lifecycle-aware submission view (wire schema version 2)
+additionally
 authenticates its referenced archive, evaluation, and result events without
 scanning the full ledger. Staging uses this contract for the end-to-end
 fixture; production intake remains disabled.
@@ -116,7 +117,8 @@ fixture; production intake remains disabled.
 The approved implementation puts separate source-reader and workflow-dispatch
 GitHub App private keys in a private `lean-eval-github-broker-{environment}`
 Worker. The public intake Worker reaches it only through the `GITHUB_BROKER`
-service binding and sends a strict v1 request containing an audience,
+service binding and sends a strict broker-protocol schema-version-1 request
+containing an audience,
 authority, repository, operation, and immutable workflow/source commit where
 applicable. The broker mints repository-scoped, one-hour-or-shorter
 installation tokens, rejects every non-allowlisted GitHub path, and never
@@ -153,8 +155,9 @@ a one-minute scheduled handler reconciles bounded UUIDv7-tail shards. Owner
 routes target that view plus its referenced immutable events and never scan the
 complete ledger. Provider success removes the outbox; provider failure records
 a bounded backoff. State validation must deploy the matching view/outbox
-contract before intake is enabled. View v1 remains readable for pre-lifecycle
-records; any lifecycle append upgrades the same canonical path to strict v2.
+contract before intake is enabled. Submission-view schema version 1 remains
+readable for pre-lifecycle records; any lifecycle append upgrades the same
+canonical path to the strict lifecycle-aware schema.
 State independently reconstructs archive/evaluation/result summaries from the
 immutable event graph and rejects a stale or fabricated view. The safe current
 behavior remains `INTAKE_ENABLED=false` until the staged live path and all
