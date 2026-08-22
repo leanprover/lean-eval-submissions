@@ -151,10 +151,10 @@ single-repository installation on `leanprover/lean-eval-submissions`.
 Keep production `INTAKE_ENABLED=false`.
 
 1. The approved Cloudflare Sandbox replay backend is being implemented. Its
-   deployment remains blocked until both deployment tokens have Containers:
-   Edit and its staging acceptance test has passed. The controller must call
-   the Lambda through its Invoke-only role and must not pass AWS or Cloudflare
-   credentials into the untrusted sandbox.
+   two deployment tokens were operator-confirmed with Containers: Edit on
+   2026-08-22; the first staging container publication must still verify that
+   permission before production promotion. The controller must not pass AWS,
+   GitHub, or Cloudflare credentials into the untrusted sandbox.
 2. Keep all production AWS role variables unset until the corresponding
    archive, replay, and release workflows and their launch gates are reviewed.
 

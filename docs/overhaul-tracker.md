@@ -108,8 +108,10 @@ one issue per lane.
       environments.
 - [x] Install the Cloudflare account ID in both environments.
 - [x] Install distinct scoped deployment API tokens in those environments.
-- [ ] Add Containers: Edit to both existing account-scoped deployment tokens;
-      retain Workers Scripts: Edit and no other account or zone permission.
+- [x] Add Containers: Edit to both existing account-scoped deployment tokens;
+      operator-confirmed 2026-08-22, retaining Workers Scripts: Edit and no
+      other account or zone permission. Live verification remains part of the
+      first staging container deployment.
 - [x] Create the protected `submission-dispatch-promotion` environment and the
       immutable `lean-eval-dispatch/*` tag ruleset.
 - [x] Install distinct random `AUTH_TOKEN_SECRET` and `READINESS_TOKEN` values.

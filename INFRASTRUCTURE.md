@@ -110,9 +110,10 @@ This manual bootstrap does not replace deployment automation.
 `CLOUDFLARE_API_TOKEN` are installed in each Cloudflare environment. The
 2026-08-21 post-merge deployment verified both opaque tokens successfully.
 Cloudflare Sandbox was selected for the disposable replay executor on
-2026-08-22. Container image publication requires adding Containers: Edit to
-both existing tokens; that expansion is pending and is recorded rather than
-assumed.
+2026-08-22. The operator added Containers: Edit to both existing deployment
+tokens on 2026-08-22. Because GitHub and Cloudflare do not expose an installed
+secret's permission policy through GitHub, this remains operator-confirmed
+until a staging container publication and rollout exercise the permission.
 
 The namespace IDs are user-defined positive integers and must remain unique in
 the Cloudflare account; bindings with the same ID share counters. Configuration
@@ -158,8 +159,8 @@ Recorded deployment tokens, both account-owned in the `lean-eval` account:
 
 | Token name | Environment | Permission | Created | Expiry |
 | --- | --- | --- | --- | --- |
-| `lean-eval-deploy-staging` | `cloudflare-staging` | Workers Scripts: Edit; Containers: Edit requested 2026-08-22; entire `lean-eval` account | 2026-08-21 | none |
-| `lean-eval-deploy-production` | `cloudflare-production` | Workers Scripts: Edit; Containers: Edit requested 2026-08-22; entire `lean-eval` account | 2026-08-21 | none |
+| `lean-eval-deploy-staging` | `cloudflare-staging` | Workers Scripts: Edit; Containers: Edit operator-configured 2026-08-22, live deployment verification pending; entire `lean-eval` account | 2026-08-21 | none |
+| `lean-eval-deploy-production` | `cloudflare-production` | Workers Scripts: Edit; Containers: Edit operator-configured 2026-08-22, live deployment verification pending; entire `lean-eval` account | 2026-08-21 | none |
 
 Neither token may carry any other permission. Each was checked at creation
 against `/accounts/<id>/tokens/verify` (active), `/accounts/<id>/workers/scripts`
