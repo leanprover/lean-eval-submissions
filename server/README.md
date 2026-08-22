@@ -61,7 +61,7 @@ preflight uses `READINESS_TOKEN`, remains available while intake is disabled,
 and is invoked through `verify-state-writer.yml` so the State credential never
 leaves its Worker secret binding.
 
-## Local `/api/v1` contract
+## Local API version 1 (`/api/v1`) contract
 
 The intake-disabled build implements these routes for local workerd and
 contract testing:

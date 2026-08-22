@@ -88,7 +88,7 @@ def _make_recipients(dir: pathlib.Path) -> pathlib.Path:
 
 
 def _fake_age(args, **kwargs):
-    """subprocess.run side_effect that writes a structurally valid v1 ciphertext."""
+    """Write a structurally valid age format-version-1 ciphertext."""
     idx = args.index("--output")
     output_path = pathlib.Path(args[idx + 1])
     output_path.write_bytes(

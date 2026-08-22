@@ -275,14 +275,18 @@ def _encrypt(args: argparse.Namespace) -> int:
         ciphertext.unlink(missing_ok=True)
         sys.exit(f"age encryption failed (exit {proc.returncode}):\n{proc.stderr}")
 
-    # Sanity check the output before we trust it. age v1 ciphertexts start
+    # Sanity check the output before we trust it. Age format-version-1
+    # ciphertexts start
     # with `age-encryption.org/v1\n`; reject anything else so a misbehaving
     # binary cannot silently produce a zero-length or plaintext file.
     with ciphertext.open("rb") as fh:
         header = fh.read(32)
     if not header.startswith(b"age-encryption.org/v1\n"):
         ciphertext.unlink(missing_ok=True)
-        sys.exit(f"age output does not have the expected v1 header: {header!r}")
+        sys.exit(
+            "age output does not have the expected format-version-1 header: "
+            f"{header!r}"
+        )
 
     sidecar = {
         "schema_version": (

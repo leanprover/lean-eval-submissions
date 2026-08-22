@@ -124,11 +124,12 @@ def _convert_v1_record(
     problem_id: str,
     record: Any,
 ) -> dict[str, Any]:
-    old = _require_object(record, f"v1 record {declared_model!r}/{problem_id!r}")
+    label = f"schema-version-1 record {declared_model!r}/{problem_id!r}"
+    old = _require_object(record, label)
     unknown = set(old) - V1_RECORD_FIELDS
     if unknown:
         raise ResultsSchemaError(
-            f"v1 record {declared_model!r}/{problem_id!r} has unknown fields: "
+            f"{label} has unknown fields: "
             + ", ".join(sorted(unknown))
         )
     required = V1_RECORD_FIELDS - {
@@ -139,7 +140,7 @@ def _convert_v1_record(
     missing = required - set(old)
     if missing:
         raise ResultsSchemaError(
-            f"v1 record {declared_model!r}/{problem_id!r} is missing fields: "
+            f"{label} is missing fields: "
             + ", ".join(sorted(missing))
         )
     statement_revision = 1
@@ -177,11 +178,11 @@ def convert_v1(data: Any, *, context: str = "results file") -> dict[str, Any]:
     unknown = set(old) - V1_TOP_LEVEL_FIELDS
     if unknown:
         raise ResultsSchemaError(
-            f"{context} schema v1 has unknown top-level fields: "
+            f"{context} schema version 1 has unknown top-level fields: "
             + ", ".join(sorted(unknown))
         )
     if old.get("schema_version") != 1:
-        raise ResultsSchemaError(f"{context} is not schema v1")
+        raise ResultsSchemaError(f"{context} is not schema version 1")
     user = _require_string(old.get("user"), f"{context}.user")
     solved = _require_object(old.get("solved"), f"{context}.solved")
     records: list[dict[str, Any]] = []

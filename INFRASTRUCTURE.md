@@ -312,8 +312,8 @@ multi-environment callbacks are forbidden.
 The production source-verification and dispatch mechanism is the implemented
 private Cloudflare service-binding broker. One App can read repository
 metadata and tags; the other can dispatch only the pinned workflow in
-`leanprover/lean-eval-submissions`. The broker validates an exact v1 audience,
-authority, operation, repository, and immutable commit, mints scoped
+`leanprover/lean-eval-submissions`. The broker validates an exact
+protocol-version-1 audience, authority, operation, repository, and immutable commit, mints scoped
 installation tokens, and never returns them to intake. This internal protocol
 is the provider seam: another provider can replace the broker without changing
 public API, State, archive, or result identifiers. Do not provision the static
@@ -415,8 +415,8 @@ Raw State and its internal `materialized/domain.json` remain private. Production
 State PR `#4` (merge `e9477c7c88f71127bda3a7442d35068fd2d7a5dd`)
 and its staging mirror `#4` (merge
 `685f293dae9e64a32d5466211a06c9e6bc892a3b`) define the strict
-`public-state-projection-v1` contract. It contains only recorded results,
-public credit/production metadata, acceptance provenance, replay measurements,
+`public-state-projection-v1` contract (schema version 1). It contains only
+recorded results, public credit/production metadata, acceptance provenance, replay measurements,
 release status, and released-solution links. It omits pending/rejected
 submissions, submission IDs, source/archive locators, and authentication
 nonces. Result identities are recomputed, metadata fields are closed, and the
