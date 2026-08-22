@@ -15,7 +15,8 @@ provisioned and preflighted; the dedicated AWS key-custody account and isolated
 staging and production stacks are provisioned; only the two staging OIDC role
 variables are connected; the lifecycle-aware leaderboard cutover is live; D7
 migrated all 44 results files and 1,298 records to schema version 2 at commit
-`c3491661`).
+`c3491661`; publication-disabled release reconstruction run `32574614106`
+passed at release commit `f1f83344`).
 Temporary owner: Kim Morrison. Target owner: leanprover organization
 administrators. Service code:
 [`server/`](server/).
@@ -36,7 +37,7 @@ administrators. Service code:
 | GitHub state repository | `leanprover/lean-eval-state-staging` | staging | **CREATED PRIVATE 2026-08-20** |
 | GitHub state repository | `leanprover/lean-eval-state` | production | **CREATED PRIVATE 2026-08-20** |
 | GitHub generator repository | `leanprover/lean-eval-generator` | shared | **CREATED PUBLIC 2026-08-20** |
-| GitHub release repository | `leanprover/lean-eval-releases` | production | **CREATED PUBLIC 2026-08-20; PUBLICATION DISABLED** |
+| GitHub release repository | `leanprover/lean-eval-releases` | production | **CREATED PUBLIC 2026-08-20; SYNTHETIC RECONSTRUCTION PASSED; PUBLICATION DISABLED** |
 | GitHub branch ruleset | `lean-eval-generator` `Protect main` (`21094079`) | shared | **ACTIVE; PR + LINEAR HISTORY + `check` REQUIRED; APPROVAL COUNT 0** |
 | GitHub branch ruleset | `lean-eval-releases` `Protect main` (`21094082`) | production | **ACTIVE; PR + LINEAR HISTORY + `validate` REQUIRED; APPROVAL COUNT 0** |
 | GitHub Environment | `cloudflare-staging` (`20259250422`) | staging | **CREATED 2026-08-20; ACCOUNT ID SET; API TOKEN SET 2026-08-21** |
@@ -699,7 +700,7 @@ compatibility fix or append a corrective event.
 | Cloudflare replay deployment and synthetic acceptance | 2026-08-22 | PR `#1242` merged the provider-neutral executor as `75d1f7a6`; PR `#1243` added the image's explicit Python runtime as `160bd6e3`. Protected deployment run `32573880099` published exact staging/production images through the two expanded deployment tokens, deployed the version and application IDs recorded above, and passed exact-commit health with intake and replay disabled. Acceptance run `32574078784` at immutable tag `lean-eval-dispatch/160bd6e395495eeb5ff94c6f6bc3e714f53d7560` passed wrong-archive refusal before consumption, one successful unwrap, identical reuse refusal, AWS-authority removal, exact ciphertext/marker verification inside a fresh 12 GiB Sandbox, blocked public egress, source-free evidence, and confirmed destruction. Live tail independently recorded fixed-command exit `0`, 20.414-second execution, `destroy` success in 272 ms, and zero mounts. Diagnostic runs `32573615982` / `32573716928` exposed the missing image runtime; both still confirmed Sandbox destruction and wrote no State event, result, release, or production authority. After verifying the two active digests, the broken unreferenced diagnostic tags `5a304d0d` (`sha256:8d714e45…`) and `b8e41176` (`sha256:37bd9f5c…`) were deleted; registry inventory now contains only active tags `c97d7986` and `2459f8fa`, both reproducible from protected source. |
 | Results schema version 2 migration (D7) | 2026-08-22 | maintainer approved fresh dry run `32569220655` at source `ddc0e4ec8980296a5312844dedd5513d1d604e5b`, source digest `884c38373f8ecafbbc3894a6cb90cdca476f558bb32fe44d0af08e8c62fd2e05`, 1,298 records, and canonical output digest `b78fb207d4711c2f59970fd3e769c483cf7eab8f5afb1fec07abe7cadbfc24c4`. Apply run `32569936026` created lock commit `fd1259b3`, rewrote 43 legacy files / 1,088 legacy records, removed the lock, and produced main `c3491661da9dcdad908d1b1e78576d9f64f112f4`. Independent post-apply validation found 44/44 files at schema version 2, 1,298/1,298 records, no duplicates, unchanged canonical output digest, zero further changes, no queued submission writers, and green main CI `32569954466`. |
 | Replay decrypt and destruction | 2026-08-22 | staging acceptance run `32574078784` passed the fixed-command decrypt, wrong-archive and reuse refusal, egress denial, source-free evidence, and confirmed unconditional destruction; authoritative queue consumption and production replay remain disabled |
-| Release reconstruction | blocked | Publication remains disabled |
+| Release reconstruction | 2026-08-22 | protected `lean-eval-releases` run `32574614106` at exact main commit `f1f83344017333650b4066a533e5ff4eefda5b54` passed all tooling tests, planned one due synthetic release, reconstructed and validated its manifest, proved the exact public-file allowlist excludes `private-note.txt`, and left the checkout clean. The run used only a harmless local plaintext fixture: it wrote neither State nor the release repository, exercised no AWS authority, and did not enable publication. |
 
 ## Reconciliation checklist
 
