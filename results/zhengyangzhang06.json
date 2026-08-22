@@ -4340,6 +4340,28 @@
         "ref": "0b372364c129daaf3f08d915f76f5dfddd12a4ab",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-08-22T04:26:16Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1218,
+        "kind": "issue"
+      },
+      "problem_id": "annals_algebraic_integers",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_b44469672d05bc44d5b219f3c0b0ebca38d43114dd06a9f71bf4160be5668a91",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e3f93f6dbed76f45f76ebcc8ab56cbff1ff2d07b",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
