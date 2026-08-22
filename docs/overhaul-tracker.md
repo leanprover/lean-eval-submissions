@@ -63,8 +63,9 @@ one issue per lane.
 - [x] Verify generator byte parity after the remote pin (theorem- and
       definition-hole fixtures, 10/10 files each).
 - [ ] Merge generator fixes `lean-eval-generator#1` / `#2` and synchronization
-      PR `#3`, advance exact pins, rerun corpus/FC parity, and remove LeanEval's
-      embedded generator core.
+      PR `#3`, advance exact pins, rerun corpus/FC parity, and merge the draft
+      embedded-core removal in `lean-eval#553`. All three generator PRs are
+      green and await independent review; the consumer test suites are green.
 - [x] Configure State rulesets and append-only validation.
 - [x] Publish the schema-validated public projection of private production
       State without exposing private source or operational metadata
@@ -81,6 +82,11 @@ one issue per lane.
 - [x] Open lifecycle-aware leaderboard preview PR.
 - [x] Open software-verification draft PR after D3 review.
 - [x] Open LeanEval generator-consumer PR after the public generator pin exists.
+- [x] Open independent-kernel shadow smoke `lean-eval-submissions#1207` and
+      AWS one-submission key-adapter staging smoke `#1208`; both are green and
+      await independent security review.
+- [x] Open disabled release planner `lean-eval-releases#1` and dependent draft
+      reconstruction smoke `#2`; both are green and await independent review.
 
 ## Cloudflare bootstrap
 
@@ -133,9 +139,12 @@ one issue per lane.
       written.
 - [x] Demonstrate credential-free historical public replay (hosted run
       `32499490261`, workflow commit `757b0831`).
-- [ ] Demonstrate isolated private replay.
-- [ ] Verify single-submission decrypt, VM destruction, and release
-      reconstruction before enabling those features.
+- [ ] Demonstrate isolated private replay. Provider-neutral contracts and the
+      disabled AWS adapter are implemented, but no AWS stack or disposable VM
+      backend is provisioned.
+- [ ] Verify single-submission decrypt, second-use and wrong-archive refusal,
+      VM destruction, and release reconstruction before enabling those
+      features.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
       window.
 - [ ] Complete leaderboard preview review and cut over with rollback retained.
@@ -146,12 +155,18 @@ one issue per lane.
 
 - [x] Coordinate the published generator contract through lean-eval#533 and
       formal-conjectures#4951.
-- [x] Reproduce the whole-FC100 answer-slot/target audit: 89/100 source
-      extractions pass and 87/89 of those build at LeanEval pins. Keep import
-      blocked on the 11 extraction failures, two target incompatibilities,
-      quoted-module decoder fix, unique-ID fix, and corrected 92-open set.
+- [x] Close the whole-FC100 extraction findings in the FC-owned importer:
+      current `formal-conjectures#4951` imports, verifies, classifies, and
+      generates all 100 declarations (92 research-open and 8 research-solved).
+      Its pinned baseline builds 97/100 at LeanEval pins with three exact known
+      failures; generator PRs `#1` / `#2` retire Erdos125, and the independently
+      verified FC toolchain bump retires the remaining two.
 - [x] Reproduce the FC100 dependency audit before import: 100/100 declarations
       resolved, 280 closure edges, no target-to-target dependency, and one
       fail-closed `Erdos324.erdos_324.match_1` orphan recorded upstream.
-- [ ] Launch FC100/open-conjectures only after the FC-owned importer supplies a
-      compatible output contract.
+- [x] Obtain a compatible FC-owned importer/output contract with strict,
+      deterministic provenance (`formal-conjectures#4951`, green at head
+      `58c3851463a9a95a7b72b4802ae120fb945331b6`).
+- [ ] Launch FC100/open-conjectures only after generator pins advance, the
+      importer receives FC maintainer review, and the production launch gates
+      are satisfied.

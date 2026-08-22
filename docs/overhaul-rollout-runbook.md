@@ -24,12 +24,12 @@ primary checkout is not the integration workspace.
 
 | Repository / lane | Published commit or pull request |
 | --- | --- |
-| `lean-eval-generator` | `a726789593eeac5c32ad82760061cd5bf6cae662` on `main`; fixes `#1` / `#2` and synchronization `#3` await independent review |
+| `lean-eval-generator` | `a726789593eeac5c32ad82760061cd5bf6cae662` on `main`; green fixes `#1` / `#2` and synchronization `#3` await independent review; draft LeanEval consumer `#553` removes the embedded core |
 | production State | `e9477c7c88f71127bda3a7442d35068fd2d7a5dd` on private `main`; strict redacted public projection enabled |
 | staging State | `b2160515cc18b2a871135dbe6d49df7e1bd8306d` on private `main`; full deliberate-rejection lifecycle and projection contract recorded |
-| `lean-eval-releases` | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` on `main`; publication disabled |
+| `lean-eval-releases` | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` on `main`; publication disabled; planner `#1` and dependent reconstruction draft `#2` are green and await independent review |
 | catalog, generator consumer, software verification | merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; current main `6109e877069fd06ea5a6889465cace096f4653f2` |
-| results schema version 2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198`; exact-blob archive verification and dependency promotion in `#1213` / `#1214`; runtime-only deployment trigger in `#1217`; current main `d0b4caa0541a8f74c855bfefedb75e6e73af5ccc` |
+| results schema version 2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198`; exact-blob archive verification and dependency promotion in `#1213` / `#1214`; runtime-only deployment trigger in `#1217`; infrastructure refresh in `#1225`; current main `28672cb51f3852bae96f4e11eab7be1fb1c0a26f`; green kernel/AWS smokes `#1207` / `#1208` await independent review |
 | lifecycle-aware leaderboard preview | preview foundation merged as `lean-eval-leaderboard#69`; cutover plus public-State consumption remains reviewable in `#72` and at `https://lean-lang.org/eval/preview/`; read-only State deploy key `160968617` is provisioned |
 
 The private broker and intake Workers are deployed in staging and production
@@ -53,6 +53,15 @@ output digest `340eaa0cce486aed35874ae1571425cb6e8912009f99822ea75fa945ea931a9e`
 and no duplicate result IDs. That report is now historical because the live
 store advanced; D7 requires a fresh report after the maintainer lifts the hold.
 D7 remains explicitly unapproved and unapplied.
+
+The FC-owned importer in `formal-conjectures#4951` now imports, verifies,
+classifies, and generates all FC100 declarations through the frozen generator
+contract. Its current baseline audit builds 97/100 Challenges at LeanEval pins
+with three exact registered failures. Generator fixes `#1` / `#2` retire the
+Erdos125 failure, and the separately verified FC toolchain bump retires the
+remaining two. Launch still waits for those exact pins, FC maintainer review,
+and the production gates; the compatible output contract itself is no longer
+missing.
 
 ## Decisions required from maintainers
 
