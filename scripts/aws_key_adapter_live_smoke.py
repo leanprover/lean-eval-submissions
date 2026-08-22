@@ -221,7 +221,7 @@ def validate_artifact(root: pathlib.Path) -> tuple[dict[str, Any], dict[str, Any
     except OSError as error:
         raise LiveSmokeError("cannot read ciphertext") from error
     if not header.startswith(b"age-encryption.org/v1\n"):
-        raise LiveSmokeError("ciphertext does not have an age v1 header")
+        raise LiveSmokeError("ciphertext does not have an age format-version-1 header")
     if _sha256(ciphertext) != envelope["archive_ciphertext_sha256"]:
         raise LiveSmokeError("ciphertext digest does not match envelope")
     if envelope["submission_id"] != SUBMISSION_ID or envelope["adapter"] != "aws-kms-v1":

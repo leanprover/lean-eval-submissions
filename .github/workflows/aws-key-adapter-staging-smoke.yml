@@ -180,7 +180,7 @@ jobs:
           test "$(/tmp/age/age --version)" = "v1.3.1"
           echo /tmp/age >> "$GITHUB_PATH"
 
-      - name: Require the preinstalled AWS CLI v2
+      - name: Require the preinstalled AWS CLI version 2
         run: |
           unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
           aws --version 2>&1 | grep -E '^aws-cli/2\.'
