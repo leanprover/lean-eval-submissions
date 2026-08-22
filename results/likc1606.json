@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-08-22T14:44:56Z",
+      "benchmark_commit": "b91d4757aa0d7776c02540c9089df54fa0d0658a",
+      "declared_model": "DeepScientist + GPT-5.6",
+      "intake": {
+        "issue_number": 1246,
+        "kind": "issue"
+      },
+      "problem_id": "annals_unit_conjecture",
+      "production_metadata": {
+        "production_description": "DeepScientist mathematical research and Team mode using GPT-5.6, with Lean 4 kernel-guided iteration and official LeanEval comparator, nanoda, and Lean kernel verification.",
+        "solution_publication_date": "2026-08-22",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_6b05f51cab69eb2055c8c1e30b007a4336e1ba9cfcfe9e830cf5791a08e366bf",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "gist",
+        "public": true,
+        "ref": "1062b1e6c3d5bda6ae4a218e41bd34dbf11a2c35",
+        "repo": "LikC1606/7570e284ff8b474a4139db2092de6eec"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "LikC1606"
+}
