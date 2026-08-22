@@ -4164,6 +4164,28 @@
         "ref": "5dc066a8751603e3636d74fbe3119559efed0684",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-08-22T01:38:03Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanize RLCR: GPT-5.6-sol (max) worker + reviewer",
+      "intake": {
+        "issue_number": 1212,
+        "kind": "issue"
+      },
+      "problem_id": "annals_viscosity_solutions",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_ec04ff7db5b379f76a8b553c881e69a343aac127975489b05dea4fba8b3d3768",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "31fd5df6d5224ec2782b5705d8940d961cb6cbe9",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
