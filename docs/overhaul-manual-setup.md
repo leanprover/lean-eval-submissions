@@ -147,6 +147,11 @@ Keep production `INTAKE_ENABLED=false`.
    through the controller's Invoke-only role and must not pass AWS credentials
    into the untrusted VM.
 
+When the production launch gates are later satisfied, use
+[`intake-transition-announcements.md`](intake-transition-announcements.md) for
+the dated server-launch notice and the separate evidence-backed issue-intake
+closure notice. The template does not authorize either action.
+
 The archive callback uses a distinct random `LIFECYCLE_CALLBACK_TOKEN` in each
 Worker and the matching `cloudflare-staging` or `cloudflare-production` GitHub
 environment. Both pairs were installed on 2026-08-21. Never copy this value
