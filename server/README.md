@@ -117,7 +117,7 @@ fixture; production intake remains disabled.
 The approved implementation puts separate source-reader and workflow-dispatch
 GitHub App private keys in a private `lean-eval-github-broker-{environment}`
 Worker. The public intake Worker reaches it only through the `GITHUB_BROKER`
-service binding and sends a strict broker-protocol schema-version-1 request
+service binding and sends a strict broker-protocol schema version 1 request
 containing an audience,
 authority, repository, operation, and immutable workflow/source commit where
 applicable. The broker mints repository-scoped, one-hour-or-shorter

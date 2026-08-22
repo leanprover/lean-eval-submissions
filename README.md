@@ -133,7 +133,7 @@ the same user no longer proves it.
 }
 ```
 
-The exact identifier contract, full field definitions, schema-version-1
+The exact identifier contract, full field definitions, schema version 1
 mapping, language-neutral fixtures, and guarded migration procedure are documented in
 [`docs/results-schema-v2.md`](docs/results-schema-v2.md). Readers accept
 results schema versions 1 and 2 during migration; every newly changed file is
@@ -144,11 +144,11 @@ written using schema version 2.
 When the submission CI records a successful submission:
 
 1. It reads and validates schema version 1 or 2, or starts an empty
-   schema-version-2 array.
+   schema version 2 array.
 2. It computes the stable ID from login, verbatim model, problem, and the
    statement revision frozen into the evaluation artifact.
 3. If that ID exists, it does nothing; otherwise it appends a
-   schema-version-2 record.
+   schema version 2 record.
 4. If at least one new record was added, the CI commits and pushes;
    otherwise it makes no commit.
 
