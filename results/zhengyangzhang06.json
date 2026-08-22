@@ -4362,6 +4362,28 @@
         "ref": "e3f93f6dbed76f45f76ebcc8ab56cbff1ff2d07b",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-08-22T09:32:25Z",
+      "benchmark_commit": "b91d4757aa0d7776c02540c9089df54fa0d0658a",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1237,
+        "kind": "issue"
+      },
+      "problem_id": "annals_viscosity_solutions",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_dcc46c4a4cd4c23d64a34a49f700f8b54031dfa472119ecdda5d30284f8752ea",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "31fd5df6d5224ec2782b5705d8940d961cb6cbe9",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
