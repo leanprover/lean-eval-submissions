@@ -43,8 +43,9 @@ one issue per lane.
       changing archives or stable IDs. D6b accepts no provider-loss recovery.
       The capability implementation is delegated to the implementation review;
       concise contributor/release wording is approved.
-- [ ] D7: approve a fresh results schema version 2 migration report's exact
-      source commit, record count, and output digest.
+- [x] D7: approve fresh dry run `32569220655` at source `ddc0e4ec`, source
+      digest `884c3837`, 1,298 records, and output digest `b78fb207`; apply run
+      `32569936026` completed as `c3491661` and independent validation passed.
 - [x] D8: acknowledge UUID-prefix State paths and the durable Git writer lock
       as correctness-preserving deviations from the literal program text.
 - [x] D9: use two least-privilege GitHub Apps behind an organization-operated
@@ -138,8 +139,11 @@ one issue per lane.
 ## Data and product rollout
 
 - [x] Produce a fresh results schema version 2 dry-run artifact.
-- [ ] Review and approve its exact post-merge checksums (D7).
-- [ ] Execute the authorized migration and verify the writer lock is released.
+- [x] Review and approve dry run `32569220655` and its exact source commit,
+      source digest, 1,298-record count, and canonical output digest (D7).
+- [x] Execute authorized run `32569936026`; main `c3491661` contains 44/44
+      schema-version-2 files, the writer lock is absent, no record was lost or
+      duplicated, no submission writer is queued, and main CI is green.
 - [x] Define and audit the approved mechanical 118-member v1 base set.
 - [x] Freeze the v1 set when its reviewed PR merges (`lean-eval#540`,
       merge commit `547b00ed345bc0737dd94847d6b67cb681b6178a`).
