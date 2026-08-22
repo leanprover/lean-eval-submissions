@@ -7,12 +7,13 @@ until this ledger changes in the same pull request or an immediately linked
 operations pull request. Secret **names, owners, scopes, and rotation dates**
 belong here; secret values do not.
 
-Last reconciled: 2026-08-22 (Worker commit `a34b2053` remains deployed and
+Last reconciled: 2026-08-22 (Worker commit `d487c9d5` is deployed and
 intake-disabled in both environments; deployment tokens, State-writer tokens,
 browser OAuth Apps, and both broker GitHub Apps remain provisioned and
 preflighted; the dedicated AWS key-custody account and isolated staging and
 production stacks are provisioned; only the two staging OIDC role variables
-are connected; the lifecycle-aware leaderboard cutover is live).
+are connected; staging key-adapter run `32568604230` passed; the
+lifecycle-aware leaderboard cutover is live).
 Temporary owner: Kim Morrison. Target owner: leanprover organization
 administrators. Service code:
 [`server/`](server/).
@@ -96,12 +97,12 @@ Wrangler must be copied here immediately.
 The intake-disabled bootstrap was performed manually with Wrangler OAuth. The
 dedicated deployment tokens are installed and exercised by every normal
 deployment. Current versions use exact commit
-`a34b2053ce8c4e7e9833d57de893ab2aa62e797b`:
+`d487c9d5b1a22a7a7dd27d729f3eb642c6474b1a`:
 
 | Environment | Private broker version | Intake Worker version | Health verification |
 | --- | --- | --- | --- |
-| staging | `fa8deb74-db7c-4bb5-96ee-566397a9fdf6` | `9707b29b-b67d-49dc-93e9-d32aa530c7f5` | environment `staging`, intake `false`, exact commit |
-| production | `5684fc28-b3ca-4c60-9992-e79d2f8bd576` | `3d3d9c54-4552-4a46-a1ee-6a5ec6aea5e8` | environment `production`, intake `false`, exact commit |
+| staging | `74bc2395-cbab-4dc5-b889-a0d7d52ccdf1` | `ec858ec9-336e-4a9b-9c9b-21e5f345c37b` | environment `staging`, intake `false`, exact commit |
+| production | `7c5edcca-2d9f-44aa-b02b-eae603968ab3` | `a38255d0-dc57-4b4c-94cb-47ee7f1a0f21` | environment `production`, intake `false`, exact commit |
 
 This manual bootstrap does not replace deployment automation.
 `CLOUDFLARE_ACCOUNT_ID` and a distinct, narrowly scoped
@@ -458,6 +459,7 @@ it does not run Lean evaluation or replay compute.
 | Staging stack | `lean-eval-key-adapter-staging`; `CREATE_COMPLETE`; stack ID `2251e410-9e15-11f1-a8ef-0eba172391bd` |
 | Production stack | `lean-eval-key-adapter-production`; `CREATE_COMPLETE`; stack ID `6ab5d7c0-9e15-11f1-9a35-0affda52f513` |
 | SAM artifact stack / bucket | `aws-sam-cli-managed-default` / `aws-sam-cli-managed-default-samclisourcebucket-ygefen7ybulh`; bucket blocks all public access, uses KMS server-side encryption, and has versioning enabled |
+| Account-default resources | AWS-managed service-linked roles for Resource Explorer, Support, and Trusted Advisor; one local Resource Explorer index in `ap-southeast-2` with no view; none grants Lean Eval workload authority |
 
 Recorded stack outputs:
 
@@ -482,6 +484,11 @@ does not permit a reserved concurrency of one while retaining AWS's required
 ten unreserved executions. The function therefore has no reserved concurrency;
 the atomic conditional DynamoDB insert, not Lambda serialization, enforces
 one-use correctness.
+The first live staging invocation automatically created CloudWatch log group
+`/aws/lambda/lean-eval-archive-unwrap-staging` with AWS's default indefinite
+retention; its only application error is the expected synthetic second-use
+rejection and contains no source or identity. Production has not been invoked
+and has no corresponding log group.
 
 The GitHub environment shells were created before the AWS account so their ref
 boundaries could be verified without granting AWS authority. Only the two
@@ -643,11 +650,12 @@ compatibility fix or append a corrective event.
 | Staging E2E intake enable | 2026-08-21 | protected control run `32481885882` redeployed only staging intake version `ac11dee4-4bba-4328-9831-8545535d9b8f` at exact commit `344ae1dbd5aaf53985b20511a770caa3c52b5626`; health reports staging intake `true` while production remains `false` |
 | AWS workload environment shells | 2026-08-22 | six GitHub environments verified: archive staging/production restricted to tag `lean-eval-dispatch/*`; replay staging restricted to exact branch `main` and tag `lean-eval-dispatch/*`; replay production and release staging/production restricted to protected branches. Only `archive-staging` and `replay-staging` contain their exact non-secret role ARN variable; the other four remain empty and unconnected. |
 | AWS key-custody provisioning | 2026-08-22 | dedicated account `lean-eval` (`161072922960`) verified with root MFA, no access keys, no Organization, and no Identity Center. GitHub OIDC provider and isolated staging/production stacks reached `CREATE_COMPLETE`; KMS rotation, exact repository/environment trust, Encrypt-only and alias-Invoke-only policies, DynamoDB conditional-write boundary/TTL/SSE, immutable Lambda aliases, and absence of public Lambda URLs were inspected. SAM bucket `aws-sam-cli-managed-default-samclisourcebucket-ygefen7ybulh` is private, KMS-encrypted, and versioned. An initial staging rollback caused by the new account's minimum Lambda concurrency quota scheduled unused key `292b5069-d782-474b-afbb-071d7be281f3` for deletion on 2026-09-21; no alias or usable authority remains. The unnecessary reserved-concurrency setting was removed because the atomic DynamoDB insert enforces one-use. Production role variables remain unset. |
+| AWS provisioning merge deployment | 2026-08-22 | PR `#1239` merged as `d487c9d5`; protected run `32568464179` promoted immutable tag `lean-eval-dispatch/d487c9d5b1a22a7a7dd27d729f3eb642c6474b1a`, deployed staging broker/intake versions `74bc2395-cbab-4dc5-b889-a0d7d52ccdf1` / `ec858ec9-336e-4a9b-9c9b-21e5f345c37b` and production versions `7c5edcca-2d9f-44aa-b02b-eae603968ab3` / `a38255d0-dc57-4b4c-94cb-47ee7f1a0f21`, and passed both exact-commit intake-disabled health checks. |
 | Archive-before-evaluation deployment | 2026-08-21 | run `32488170650` promoted immutable tag `lean-eval-dispatch/b64a30293e82e77cc76da1f74e6f1633747e1bf0`, deployed exact commit `b64a3029` to staging (broker `edeb2d01-5acf-4099-8329-cf3e52f431e1`, intake `366c8c6d-671b-4c53-b488-e2cb86320dd3`) and production (broker `1ebdfbe1-57be-4ee4-ba80-23a9bf740fc6`, intake `3d2658ec-0fda-4bf1-9619-e7500fa61d52`), and passed both structured smoke checks; obsolete docs-only run `32482830556` at commit `5027d7dc` was cancelled without deploying so it could not block the current non-cancelling concurrency group |
 | Staging intake re-enable after archive deployment | 2026-08-21 | protected control run `32488534189` verified the immutable `b64a3029` tag and deployed staging intake version `39e8392d-dcc4-46e4-9bc7-afaff28b01a5`; final health is staging `true`, production `false`, both at exact commit `b64a3029` |
 | Credential-free public replay | 2026-08-21 | hosted run `32499490261` at workflow commit `757b0831018dd6ad88092eff8a2f4b3245a456d6` restored exact public source/benchmark/evaluator revisions, passed landrun and environment probes, and reproduced `two_plus_two` revision 1 through nanoda and Lean's default kernel; the downloaded three-JSON artifact independently validated with no source payload |
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
-| AWS key-adapter staging round trip | in progress | account, both stacks, and staging OIDC role variables are provisioned. Initial run `32568171403` proved immutable-tag gating, OIDC role assumption, and KMS wrapping, then failed before unwrap because the workflow contained a mistyped `actions/download-artifact` SHA; the pin is corrected in the provisioning PR before the authoritative rerun. |
+| AWS key-adapter staging round trip | 2026-08-22 | authoritative run `32568604230` at immutable tag/commit `d487c9d5b1a22a7a7dd27d729f3eb642c6474b1a` passed gate, Encrypt-only OIDC assumption and wrap, source-free ciphertext handoff, Invoke-only assumption, first consume/decrypt, identical second-use rejection, AWS-authority removal, and local synthetic-source decryption. Staging contains one synthetic TTL item; production contains zero. Initial run `32568171403` had stopped before unwrap on the mistyped action pin corrected by `#1239`. No State event, result, release, production AWS variable, or replay backend was created. |
 | Replay decrypt and destruction | blocked | key custody is provisioned; the disposable replay executor remains unselected and unprovisioned |
 | Release reconstruction | blocked | Publication remains disabled |
 

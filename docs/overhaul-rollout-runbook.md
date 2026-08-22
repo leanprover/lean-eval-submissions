@@ -29,12 +29,12 @@ primary checkout is not the integration workspace.
 | staging State | `1e76ea66405ed692bf7564f5accbfb3efd9c25f0` on private `main`; full deliberate-rejection lifecycle and projection contract recorded, with schema terminology qualified |
 | `lean-eval-releases` | `f1f83344017333650b4066a533e5ff4eefda5b54` on `main`; terminology `#3`, planner `#1`, and reconstruction `#2` are merged and green; publication remains disabled |
 | catalog, generator consumer, software verification | v1 freeze merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; terminology rule merged in `#554`; standalone-generator consumer merged in `#553`; current main `b91d4757aa0d7776c02540c9089df54fa0d0658a` |
-| results schema version 2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198`; exact-blob archive verification and dependency promotion in `#1213` / `#1214`; runtime-only deployment trigger in `#1217`; infrastructure refresh in `#1225`; schema terminology in `#1227`; kernel/AWS smokes `#1207` / `#1208` merged and deployed as exact runtime `a34b2053ce8c4e7e9833d57de893ab2aa62e797b` with intake disabled |
-| AWS archive-key custody | dedicated account `lean-eval` (`161072922960`), exact GitHub OIDC provider, and isolated staging/production CloudFormation stacks provisioned 2026-08-22; only staging role variables connected; no replay compute and no production workflow connected |
+| results schema version 2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198`; exact-blob archive verification and dependency promotion in `#1213` / `#1214`; runtime-only deployment trigger in `#1217`; infrastructure refresh in `#1225`; schema terminology in `#1227`; kernel/AWS smokes `#1207` / `#1208`; AWS provisioning `#1239`; exact runtime `d487c9d5b1a22a7a7dd27d729f3eb642c6474b1a` is deployed with intake disabled |
+| AWS archive-key custody | dedicated account `lean-eval` (`161072922960`), exact GitHub OIDC provider, and isolated staging/production CloudFormation stacks provisioned 2026-08-22; staging one-use run `32568604230` passed; only staging role variables connected; no replay compute and no production workflow connected |
 | lifecycle-aware leaderboard | preview foundation merged as `lean-eval-leaderboard#69`; UI terminology merged in `#73`; deeper schema terminology merged in `#74`; cutover `#72` is merged and live at `https://lean-lang.org/eval/`, with `/legacy/` retained and read-only State deploy key `160968617` provisioned |
 
 The private broker and intake Workers are deployed in staging and production
-from exact commit `a34b2053ce8c4e7e9833d57de893ab2aa62e797b`.
+from exact commit `d487c9d5b1a22a7a7dd27d729f3eb642c6474b1a`.
 Deployment, OAuth,
 readiness, authentication, State-writer, and broker App secrets are installed.
 Both State-writer tokens are organization-approved and preflighted, and both
@@ -59,6 +59,9 @@ The dedicated AWS account now holds the KMS keys, conditional one-use tables,
 and direct-Lambda unwrap gates described by D6. This is archive-key custody,
 not an AWS evaluation backend. Production role variables remain unset, and the
 separate provider-neutral disposable replay executor remains unselected.
+Synthetic staging run `32568604230` proved wrap, one consume/decrypt, identical
+second-use rejection, and credential-free local decryption; it did not run a
+private replay or write State.
 
 The FC-owned importer in `formal-conjectures#4951` now imports, verifies,
 classifies, and generates all FC100 declarations through the frozen generator

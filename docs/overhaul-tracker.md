@@ -93,6 +93,10 @@ one issue per lane.
       provider, and isolated staging/production key-adapter stacks. Only the
       staging wrap and replay-invoker role variables are connected; production
       remains dormant and intake-disabled.
+- [x] Pass the synthetic staging key-adapter round trip from protected immutable
+      commit `d487c9d5` (run `32568604230`): Encrypt-only wrap, source-free
+      handoff, Invoke-only unwrap, second-use rejection, authority removal, and
+      local decryption. This is not a private replay/backend demonstration.
 - [x] Merge disabled release terminology `lean-eval-releases#3`, planner `#1`,
       and reconstruction smoke `#2`; final main is `f1f83344`, all hosted
       validation is green, and publication remains disabled.
