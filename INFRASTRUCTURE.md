@@ -7,9 +7,8 @@ until this ledger changes in the same pull request or an immediately linked
 operations pull request. Secret **names, owners, scopes, and rotation dates**
 belong here; secret values do not.
 
-Last reconciled: 2026-08-21 (archive-before-evaluation Worker commit
-`b64a3029` deployed and smoke-tested in both environments; staging intake
-enabled only for the end-to-end fixture, production intake disabled; deployment tokens,
+Last reconciled: 2026-08-22 (Worker commit `70acbc1f` deployed and
+smoke-tested in both environments with intake disabled; deployment tokens,
 State-writer tokens, browser OAuth Apps, and both broker GitHub Apps remain
 provisioned and preflighted; the six empty AWS workload environment shells and
 their exact ref policies are recorded below).
@@ -39,7 +38,7 @@ administrators. Service code:
 | GitHub Environment | `submission-dispatch-promotion` (`20259251430`) | shared | **CREATED 2026-08-20; REVIEW + GUARD CONFIGURED** |
 | GitHub Environment | `archive-staging` (`EN_kwDOSh7OzM8AAAAEu8r2_A`) | staging archive | **CREATED 2026-08-21; TAG POLICY SET; ROLE ARN NOT SET** |
 | GitHub Environment | `archive-production` (`EN_kwDOSh7OzM8AAAAEu8r25w`) | production archive | **CREATED 2026-08-21; TAG POLICY SET; ROLE ARN NOT SET** |
-| GitHub Environment | `replay-staging` (`EN_kwDOSh7OzM8AAAAEu8r21Q`) | staging replay | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
+| GitHub Environment | `replay-staging` (`EN_kwDOSh7OzM8AAAAEu8r21Q`) | staging replay | **CREATED 2026-08-21; MAIN + DISPATCH TAG POLICIES SET 2026-08-22; ROLE ARN NOT SET** |
 | GitHub Environment | `replay-production` (`EN_kwDOSh7OzM8AAAAEu8r3MQ`) | production replay | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
 | GitHub Environment | `release-staging` (`EN_kwDOT-oWes8AAAAEu8r3Mw`) | staging release | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
 | GitHub Environment | `release-production` (`EN_kwDOT-oWes8AAAAEu8r3KQ`) | production release | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
@@ -466,7 +465,7 @@ contain no secrets and no variables:
 | --- | --- | --- | --- | --- | --- |
 | `leanprover/lean-eval-submissions` | `archive-staging` | `EN_kwDOSh7OzM8AAAAEu8r2_A` | `63321649` | tag `lean-eval-dispatch/*` | `57914845` |
 | `leanprover/lean-eval-submissions` | `archive-production` | `EN_kwDOSh7OzM8AAAAEu8r25w` | `63321647` | tag `lean-eval-dispatch/*` | `57914846` |
-| `leanprover/lean-eval-submissions` | `replay-staging` | `EN_kwDOSh7OzM8AAAAEu8r21Q` | `63321645` | protected branches only | not applicable |
+| `leanprover/lean-eval-submissions` | `replay-staging` | `EN_kwDOSh7OzM8AAAAEu8r21Q` | `63352004` | branch `main`; tag `lean-eval-dispatch/*` | `57941304`; `57941307` |
 | `leanprover/lean-eval-submissions` | `replay-production` | `EN_kwDOSh7OzM8AAAAEu8r3MQ` | `63321654` | protected branches only | not applicable |
 | `leanprover/lean-eval-releases` | `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | `63321653` | protected branches only | not applicable |
 | `leanprover/lean-eval-releases` | `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | `63321651` | protected branches only | not applicable |
@@ -513,11 +512,12 @@ decrypt with its KMS key.
 
 The archive GitHub environments select the **tag** pattern
 `lean-eval-dispatch/*`, because server dispatch runs the reviewed workflow from
-that immutable tag. Replay environments in `lean-eval-submissions` and release
-environments in `lean-eval-releases` select protected branches only. Never
-configure the archive environments as “protected branches only” or the
-legitimate dispatch ref will be denied; never configure any of these six
-environments with unrestricted branches and tags.
+that immutable tag. `replay-staging` selects exact branch `main` for the public
+replay workflow and tag pattern `lean-eval-dispatch/*` for the private replay
+smoke. `replay-production` and both release environments select protected
+branches only. Never configure the archive environments as “protected branches
+only” or the legitimate dispatch ref will be denied; never configure any of
+these six environments with unrestricted branches and tags.
 
 The one-use table's partition key is `capability_digest`; `PutItem` uses
 `attribute_not_exists(capability_digest)` before decrypt. Its
@@ -604,7 +604,7 @@ compatibility fix or append a corrective event.
 | Schema-terminology deployment | 2026-08-22 | PR `#1227` merged as `70acbc1f96e38ee0838a9f1141e7e844adab07e5`; protected run `32553871300` promoted the matching immutable dispatch tag, deployed staging broker/intake versions `0c5cfbf5-1f96-4772-bc13-f44d933f8872` / `bab28e02-2e78-4dd3-9f9b-512dc2d215c0` and production broker/intake versions `36534671-b7b2-41b1-bcbb-46e6a9fce662` / `86451263-3b92-4507-a392-77b90154cdb9`, and passed exact-commit structured smoke checks with intake disabled in both environments |
 | Lifecycle-aware deployment | 2026-08-21 | run `32481684831` promoted immutable tag `lean-eval-dispatch/344ae1dbd5aaf53985b20511a770caa3c52b5626`, deployed that exact commit to staging and production, and passed both structured smoke checks; the State lifecycle-aware submission-view prerequisites were already merged and green |
 | Staging E2E intake enable | 2026-08-21 | protected control run `32481885882` redeployed only staging intake version `ac11dee4-4bba-4328-9831-8545535d9b8f` at exact commit `344ae1dbd5aaf53985b20511a770caa3c52b5626`; health reports staging intake `true` while production remains `false` |
-| AWS workload environment shells | 2026-08-21 | created six empty GitHub environments: archive staging/production restricted to tag `lean-eval-dispatch/*`, replay staging/production and release staging/production restricted to protected branches; exact node, protection-rule, and tag-policy IDs are recorded above; no secret, variable, or AWS authority is present |
+| AWS workload environment shells | 2026-08-22 | six empty GitHub environments verified: archive staging/production restricted to tag `lean-eval-dispatch/*`; replay staging restricted to exact branch `main` and tag `lean-eval-dispatch/*`; replay production and release staging/production restricted to protected branches; exact node, protection-rule, and tag-policy IDs are recorded above; no secret, variable, or AWS authority is present |
 | Archive-before-evaluation deployment | 2026-08-21 | run `32488170650` promoted immutable tag `lean-eval-dispatch/b64a30293e82e77cc76da1f74e6f1633747e1bf0`, deployed exact commit `b64a3029` to staging (broker `edeb2d01-5acf-4099-8329-cf3e52f431e1`, intake `366c8c6d-671b-4c53-b488-e2cb86320dd3`) and production (broker `1ebdfbe1-57be-4ee4-ba80-23a9bf740fc6`, intake `3d2658ec-0fda-4bf1-9619-e7500fa61d52`), and passed both structured smoke checks; obsolete docs-only run `32482830556` at commit `5027d7dc` was cancelled without deploying so it could not block the current non-cancelling concurrency group |
 | Staging intake re-enable after archive deployment | 2026-08-21 | protected control run `32488534189` verified the immutable `b64a3029` tag and deployed staging intake version `39e8392d-dcc4-46e4-9bc7-afaff28b01a5`; final health is staging `true`, production `false`, both at exact commit `b64a3029` |
 | Credential-free public replay | 2026-08-21 | hosted run `32499490261` at workflow commit `757b0831018dd6ad88092eff8a2f4b3245a456d6` restored exact public source/benchmark/evaluator revisions, passed landrun and environment probes, and reproduced `two_plus_two` revision 1 through nanoda and Lean's default kernel; the downloaded three-JSON artifact independently validated with no source payload |
