@@ -7,11 +7,12 @@ until this ledger changes in the same pull request or an immediately linked
 operations pull request. Secret **names, owners, scopes, and rotation dates**
 belong here; secret values do not.
 
-Last reconciled: 2026-08-22 (Worker commit `70acbc1f` deployed and
+Last reconciled: 2026-08-22 (Worker commit `a34b2053` deployed and
 smoke-tested in both environments with intake disabled; deployment tokens,
 State-writer tokens, browser OAuth Apps, and both broker GitHub Apps remain
-provisioned and preflighted; the six empty AWS workload environment shells and
-their exact ref policies are recorded below).
+provisioned and preflighted; no Lean Eval AWS account or resource exists, and
+the six empty AWS workload environment shells and their exact ref policies are
+recorded below).
 Temporary owner: Kim Morrison. Target owner: leanprover organization
 administrators. Service code:
 [`server/`](server/).
@@ -21,11 +22,11 @@ administrators. Service code:
 | Resource | Desired identifier | Environment | Status |
 | --- | --- | --- | --- |
 | Cloudflare account | `lean-eval` (`a46b90978a1c29cc4795f30677e7e4b8`) | temporary dedicated | **PROVISIONED 2026-08-20** |
-| Cloudflare Worker | `lean-eval-submission-server-staging` | staging | **PROVISIONED 2026-08-20; INTAKE ENABLED FOR E2E FIXTURE 2026-08-21** |
+| Cloudflare Worker | `lean-eval-submission-server-staging` | staging | **PROVISIONED 2026-08-20; INTAKE DISABLED AFTER E2E FIXTURE** |
 | Cloudflare Worker | `lean-eval-submission-server` | production | **PROVISIONED 2026-08-20; INTAKE DISABLED** |
 | Private GitHub broker Worker | `lean-eval-github-broker-staging` | staging | **PROVISIONED 2026-08-20; APP SECRETS INSTALLED 2026-08-21** |
 | Private GitHub broker Worker | `lean-eval-github-broker-production` | production | **PROVISIONED 2026-08-20; APP SECRETS INSTALLED 2026-08-21** |
-| Temporary Worker route | `lean-eval-submission-server-staging.lean-eval.workers.dev` | staging | **ACTIVE 2026-08-20; INTAKE ENABLED FOR E2E FIXTURE 2026-08-21** |
+| Temporary Worker route | `lean-eval-submission-server-staging.lean-eval.workers.dev` | staging | **ACTIVE 2026-08-20; INTAKE DISABLED AFTER E2E FIXTURE** |
 | Temporary Worker route | `lean-eval-submission-server.lean-eval.workers.dev` | production | **ACTIVE 2026-08-20; INTAKE DISABLED** |
 | Target Worker custom domain | `eval-submit-staging.lean-lang.org` | staging | **DEFERRED; ZONE ABSENT** |
 | Target Worker custom domain | `eval-submit.lean-lang.org` | production | **DEFERRED; ZONE ABSENT** |
@@ -89,13 +90,13 @@ Wrangler must be copied here immediately.
 
 The intake-disabled bootstrap was performed manually with Wrangler OAuth. The
 dedicated deployment tokens are installed and exercised by every normal
-deployment. Current versions use exact lifecycle-terminology commit
-`70acbc1f96e38ee0838a9f1141e7e844adab07e5`:
+deployment. Current versions use exact commit
+`a34b2053ce8c4e7e9833d57de893ab2aa62e797b`:
 
 | Environment | Private broker version | Intake Worker version | Health verification |
 | --- | --- | --- | --- |
-| staging | `0c5cfbf5-1f96-4772-bc13-f44d933f8872` | `bab28e02-2e78-4dd3-9f9b-512dc2d215c0` | environment `staging`, intake `false`, exact commit |
-| production | `36534671-b7b2-41b1-bcbb-46e6a9fce662` | `86451263-3b92-4507-a392-77b90154cdb9` | environment `production`, intake `false`, exact commit |
+| staging | `fa8deb74-db7c-4bb5-96ee-566397a9fdf6` | `9707b29b-b67d-49dc-93e9-d32aa530c7f5` | environment `staging`, intake `false`, exact commit |
+| production | `5684fc28-b3ca-4c60-9992-e79d2f8bd576` | `3d3d9c54-4552-4a46-a1ee-6a5ec6aea5e8` | environment `production`, intake `false`, exact commit |
 
 This manual bootstrap does not replace deployment automation.
 `CLOUDFLARE_ACCOUNT_ID` and a distinct, narrowly scoped
@@ -434,9 +435,9 @@ read path without affecting State writers or intake.
 
 ## Encrypted replay boundary
 
-The selected root-key platform is AWS KMS in a new dedicated AWS account. The
-implementation and linted SAM template exist, but no AWS resource has been
-created yet:
+The selected root-key platform is AWS KMS in a new dedicated AWS account. No
+Lean Eval AWS account exists yet. The implementation and linted SAM template
+exist, but no AWS resource has been created:
 
 | Field | Recorded value |
 | --- | --- |
@@ -598,11 +599,12 @@ compatibility fix or append a corrective event.
 | Automated deployment verification | 2026-08-21 | run `32437703335` created the protected immutable dispatch tag, deployed broker and intake versions for exact commit `a928be873db6569e2b4ccb3fb8b399d0f19b2e78` to staging then production, and passed both structured intake-disabled smoke checks; PRs `#1172` and `#1174` fixed the checkout-free promotion directory and payload-propagation retry discovered during the first live exercise |
 | Lifecycle-overhaul terminology deployment | 2026-08-22 | run `32540475554` promoted immutable tag `lean-eval-dispatch/ee73dd0992811b1b60549fae86e59ffde4f17dc8`, deployed exact commit `ee73dd09` to staging (broker `a078c48d-6269-4d11-a0e1-80afff7dde41`, intake `f2f29886-21a7-41f3-968f-f32f913a36e7`) and production (broker `ce147759-47c7-424d-ba78-c6a01f05964f`, intake `7bf3b058-e708-473b-b9cc-a3f530209579`), and passed both structured intake-disabled smoke checks |
 | Archive-verification recovery deployment | 2026-08-22 | PRs `#1213` / `#1214` changed immutable verification to decode the exact Git blob and made trusted script/recipient changes promote a fresh dispatch ref; run `32546480178` promoted `lean-eval-dispatch/1738baeb1934b28bdf44a4eb6fecaec00846ee75`, deployed staging broker/intake versions `367a191a-e779-4d2e-ba67-d21b1ecc5c4c` / `c243be75-d0a5-4e81-bd49-ab4a20106364` and production versions `ab214097-abd6-4d5d-954f-c3fedf9edcb5` / `137f4553-ea1a-468f-8dbf-ccdbc0c9129f`, and passed both structured intake-disabled smoke checks |
-| Redacted public State projection | 2026-08-22 | production/staging State PRs `#4` merged as `e9477c7c` / `685f293d`; 63 tests in each repository verify strict identities, metadata, lifecycle evidence, and absence of private identifiers; read-only production deploy key `160968617` and leaderboard secret `PRODUCTION_STATE_READ_KEY` were provisioned for held cutover PR `lean-eval-leaderboard#72` |
+| Redacted public State projection | 2026-08-22 | production/staging State PRs `#4` merged as `e9477c7c` / `685f293d`; 63 tests in each repository verify strict identities, metadata, lifecycle evidence, and absence of private identifiers; read-only production deploy key `160968617` and leaderboard secret `PRODUCTION_STATE_READ_KEY` were provisioned for merged cutover PR `lean-eval-leaderboard#72` |
 | Staging private-source E2E completion | 2026-08-22 | submission `01a02427-9e09-7b63-9ab7-5ff6b9ef8a09`, hosted run `32546606639`, and exact server commit `1738baeb1934b28bdf44a4eb6fecaec00846ee75` completed archive, archive-State callback, evaluation, and evaluation-State callback; the deliberate stale-proof fixture was rejected, staging State advanced to `b2160515cc18b2a871135dbe6d49df7e1bd8306d` with seven valid events and no result, and the redacted projection validated with zero results |
 | Runtime-only automatic deployment trigger | 2026-08-22 | PR `#1217` excludes `server/*.md` and nested Markdown from main-branch Worker deployment while retaining runtime/config/script/audit-recipient/workflow triggers; docs-only run `32548922158` was cancelled before promotion with no Worker change; approved run `32549095770` promoted immutable tag `lean-eval-dispatch/b0a505372ddc332b5413b63e0554ee2dee690fd8`, deployed staging broker/intake `1c0cc274-4234-42c8-887a-e129a350b36e` / `ec7375aa-911e-449c-805d-5051056eb12c` and production broker/intake `56513157-722a-455f-8cb1-3b6898b9b0a2` / `e16c398f-df4b-4fb3-957c-473a2a911d8c`, and passed exact-commit intake-disabled smoke checks |
 | Post-ledger live health recheck | 2026-08-22 | direct `/healthz` reads returned `status ok`, exact deployed commit `b0a505372ddc332b5413b63e0554ee2dee690fd8`, matching staging/production environment names, and `intake_enabled false` for both Workers |
 | Schema-terminology deployment | 2026-08-22 | PR `#1227` merged as `70acbc1f96e38ee0838a9f1141e7e844adab07e5`; protected run `32553871300` promoted the matching immutable dispatch tag, deployed staging broker/intake versions `0c5cfbf5-1f96-4772-bc13-f44d933f8872` / `bab28e02-2e78-4dd3-9f9b-512dc2d215c0` and production broker/intake versions `36534671-b7b2-41b1-bcbb-46e6a9fce662` / `86451263-3b92-4507-a392-77b90154cdb9`, and passed exact-commit structured smoke checks with intake disabled in both environments |
+| Kernel-shadow and disabled AWS-adapter deployment | 2026-08-22 | PRs `#1207` / `#1208` merged as `f47dd08c` / `a34b2053`; protected runs `32557663566` / `32557817462` passed checks, promotion, staging deploy/smoke, and production deploy/smoke. The current exact `a34b2053` versions are staging broker/intake `fa8deb74-db7c-4bb5-96ee-566397a9fdf6` / `9707b29b-b67d-49dc-93e9-d32aa530c7f5` and production broker/intake `5684fc28-b3ca-4c60-9992-e79d2f8bd576` / `3d3d9c54-4552-4a46-a1ee-6a5ec6aea5e8`; both live health responses match the commit and environment with intake disabled. No AWS account, stack, secret, variable, or authority was created. |
 | Lifecycle-aware deployment | 2026-08-21 | run `32481684831` promoted immutable tag `lean-eval-dispatch/344ae1dbd5aaf53985b20511a770caa3c52b5626`, deployed that exact commit to staging and production, and passed both structured smoke checks; the State lifecycle-aware submission-view prerequisites were already merged and green |
 | Staging E2E intake enable | 2026-08-21 | protected control run `32481885882` redeployed only staging intake version `ac11dee4-4bba-4328-9831-8545535d9b8f` at exact commit `344ae1dbd5aaf53985b20511a770caa3c52b5626`; health reports staging intake `true` while production remains `false` |
 | AWS workload environment shells | 2026-08-22 | six empty GitHub environments verified: archive staging/production restricted to tag `lean-eval-dispatch/*`; replay staging restricted to exact branch `main` and tag `lean-eval-dispatch/*`; replay production and release staging/production restricted to protected branches; exact node, protection-rule, and tag-policy IDs are recorded above; no secret, variable, or AWS authority is present |
