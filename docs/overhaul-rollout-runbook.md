@@ -5,6 +5,11 @@ credential operations that require a maintainer. It supplements
 [`INFRASTRUCTURE.md`](../INFRASTRUCTURE.md); the infrastructure ledger remains
 the source of truth after resources are created.
 
+Terminology: unqualified **v1** and **v2** name problem sets. The platform
+work is the **lifecycle overhaul**, and machine-format versions are always
+qualified as **schema version 2**. Frozen identifiers and filenames are not
+renamed.
+
 For the short, current list of UI and secret-entry work, use
 [`overhaul-manual-setup.md`](overhaul-manual-setup.md). The longer sections
 below retain decision rationale and the full rollout sequence.
@@ -19,33 +24,44 @@ primary checkout is not the integration workspace.
 
 | Repository / lane | Published commit or pull request |
 | --- | --- |
-| `lean-eval-generator` | `a726789593eeac5c32ad82760061cd5bf6cae662` on `main` |
-| production State | `320b545ac3d07376cf96ed9bd22d2ff88e6df464` on private `main`; lifecycle-aware view v2 enabled |
-| staging State | `535774735317a2716e5ce505ebd40fdcdfedaa18` on private `main`; lifecycle-aware view v2 enabled |
-| `lean-eval-releases` | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` on `main`; publication disabled |
-| catalog, generator consumer, software verification | merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; current main `21c6c02178e14cccc54b6e90e4836d1ca0e9c7e6` |
-| results v2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198` |
-| leaderboard v2 preview | preview foundation merged as `lean-eval-leaderboard#69`; lifecycle-aware cutover remains reviewable in `#70` and at `https://lean-lang.org/eval/preview/` |
+| `lean-eval-generator` | `a726789593eeac5c32ad82760061cd5bf6cae662` on `main`; green fixes `#1` / `#2` and synchronization `#3` await independent review; draft LeanEval consumer `#553` removes the embedded core |
+| production State | `e9477c7c88f71127bda3a7442d35068fd2d7a5dd` on private `main`; strict redacted public projection enabled |
+| staging State | `b2160515cc18b2a871135dbe6d49df7e1bd8306d` on private `main`; full deliberate-rejection lifecycle and projection contract recorded |
+| `lean-eval-releases` | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` on `main`; publication disabled; planner `#1` and dependent reconstruction draft `#2` are green and await independent review |
+| catalog, generator consumer, software verification | merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; current main `6109e877069fd06ea5a6889465cace096f4653f2` |
+| results schema version 2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198`; exact-blob archive verification and dependency promotion in `#1213` / `#1214`; runtime-only deployment trigger in `#1217`; infrastructure refresh in `#1225`; current main `28672cb51f3852bae96f4e11eab7be1fb1c0a26f`; green kernel/AWS smokes `#1207` / `#1208` await independent review |
+| lifecycle-aware leaderboard preview | preview foundation merged as `lean-eval-leaderboard#69`; cutover plus public-State consumption remains reviewable in `#72` and at `https://lean-lang.org/eval/preview/`; read-only State deploy key `160968617` is provisioned |
 
 The private broker and intake Workers are deployed in staging and production
-from archive-before-evaluation commit
-`b64a30293e82e77cc76da1f74e6f1633747e1bf0`. Deployment, OAuth,
+from exact runtime-only deployment-trigger commit
+`b0a505372ddc332b5413b63e0554ee2dee690fd8`. Deployment, OAuth,
 readiness, authentication, State-writer, and broker App secrets are installed.
 Both State-writer tokens are organization-approved and preflighted, and both
 broker App registrations transferred to `leanprover` without changing their
 IDs or the dispatcher installation. The trusted archive job now persists the
-encrypted snapshot before any evaluation job can start. Staging intake is
-enabled only for the end-to-end fixture; production remains disabled. The
-fixture's Source Reader preflight is green, but the separate `lean-eval-bot`
-(App ID `3346375`, not Source Reader App ID `4666604`) used by the evaluation
-workflow still returns a repository-scoped 404 until that fixture is added to
-its repository selection. Exact Worker
+encrypted snapshot before any evaluation job can start. Both Workers are
+currently intake-disabled. Browser and headless staging intake, exact-ref
+dispatch, both private-read paths, and the UUIDv7 archive callback have been
+exercised. The separate `lean-eval-bot` (App ID `3346375`, not Source Reader
+App ID `4666604`) is installed on the private fixture and both archival and
+evaluation fetches succeed. Exact Worker
 version identifiers are recorded in `INFRASTRUCTURE.md`. The live results store
 has not been migrated. Dry-run `32442394883` reports source commit
 `91c55f3c1a515f87f33b3f8c45a4fd4565a0028f`, 44 files / 1,285 records,
 source digest `9c6ab2e17186d4498d33816010b01ba330122d0863efa300d7de6aaf07356db4`,
 output digest `340eaa0cce486aed35874ae1571425cb6e8912009f99822ea75fa945ea931a9e`,
-and no duplicate result IDs. D7 remains explicitly unapproved and unapplied.
+and no duplicate result IDs. That report is now historical because the live
+store advanced; D7 requires a fresh report after the maintainer lifts the hold.
+D7 remains explicitly unapproved and unapplied.
+
+The FC-owned importer in `formal-conjectures#4951` now imports, verifies,
+classifies, and generates all FC100 declarations through the frozen generator
+contract. Its current baseline audit builds 97/100 Challenges at LeanEval pins
+with three exact registered failures. Generator fixes `#1` / `#2` retire the
+Erdos125 failure, and the separately verified FC toolchain bump retires the
+remaining two. Launch still waits for those exact pins, FC maintainer review,
+and the production gates; the compatible output contract itself is no longer
+missing.
 
 ## Decisions required from maintainers
 
@@ -261,7 +277,7 @@ under the Apache License 2.0. I will not submit secrets or material I am not
 authorized to disclose.” Keep this acknowledgement adjacent to the submit
 action rather than expanding it into a separate policy questionnaire.
 
-### D7: live results-v2 migration
+### D7: live results schema version 2 migration
 
 Workflow dry run `32442394883` preserved 1,285 of 1,285 records across 44
 files at submissions commit
@@ -273,8 +289,8 @@ That evidence becomes stale if any results file on `main` changes.
 
 Authorization must name the fresh workflow run and approve its exact source
 commit, record count, and output digest. `apply=true` is a separate decision
-from merging the migration tooling. After the first v2-only record lands,
-repairs are forward-only.
+from merging the migration tooling. After the first schema version 2-only
+record lands, repairs are forward-only.
 
 ### D8: two correctness-preserving plan deviations
 
@@ -584,7 +600,7 @@ tokens. Custom domains can be added later without changing the API contracts.
 
 ## Results migration walkthrough
 
-After the results-v2 tooling PR is merged:
+After the results schema version 2 tooling PR is merged:
 
 1. Run `migrate-results-v2.yml` with `apply=false`.
 2. Download and retain the report artifact.
@@ -593,9 +609,9 @@ After the results-v2 tooling PR is merged:
 4. Record approval of those exact values in the tracker.
 5. Run the workflow with `apply=true` and the three expected values copied from
    that fresh report.
-6. Confirm every live results file is schema v2, the writer lock was removed,
-   queued record jobs completed, and v1/v2 leaderboard projections still
-   match.
+6. Confirm every live results file uses schema version 2, the writer lock was
+   removed, queued record jobs completed, and schema versions 1 and 2 leaderboard
+   projections still match.
 7. If apply fails after acquiring the lock, leave it fail-closed. Review the
    run and use `resume_locked_migration` only with a new report; never delete the
    lock merely to unblock writers.
@@ -608,12 +624,13 @@ After the results-v2 tooling PR is merged:
    SHA and reverify parity.
 4. Publish State, staging State, and disabled releases tooling; configure State
    rulesets.
-5. Publish draft PRs for catalog, results-v2/Worker, leaderboard preview, and
+5. Publish draft PRs for catalog, results schema version 2/Worker,
+   lifecycle-aware leaderboard preview, and
    software-verification statements.
 6. Create Cloudflare GitHub environments and credentials.
 7. Merge/deploy the intake-disabled Worker, verify staging/production health,
    and update the infrastructure ledger.
-8. Approve and execute the fresh results-v2 migration.
+8. Approve and execute the fresh results schema version 2 migration.
 9. Freeze the maintainer-approved v1 set.
 10. Continue OAuth/agent intake, wire it to the implemented UUIDv7 archive
     writer/State locator, and complete replay implementation in staging;

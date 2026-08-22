@@ -2,7 +2,7 @@
 # produced first. `apply` additionally installs a durable Git writer lock so
 # independently running submission workflows wait without GitHub concurrency's
 # lossy "one pending run" behavior.
-name: Migrate results schema v2
+name: Migrate results schema version 2
 
 on:
   workflow_dispatch:
@@ -99,7 +99,7 @@ jobs:
             SOURCE_COMMIT=$(git -C results-store rev-parse HEAD)
             SOURCE_COMMIT="$SOURCE_COMMIT" python -c 'import json,os,pathlib; pathlib.Path("results-store/.results-store-writer-lock.json").write_text(json.dumps({"group": os.environ["RESULTS_STORE_WRITER_GROUP"], "source_commit": os.environ["SOURCE_COMMIT"], "workflow_run_url": os.environ["RUN_URL"]}, indent=2, sort_keys=True) + "\n")'
             git -C results-store add .results-store-writer-lock.json
-            git -C results-store commit -m "migration: acquire results-v2 writer lock"
+            git -C results-store commit -m "migration: acquire schema-version-2 writer lock"
             if git -C results-store push origin HEAD:main; then
               break
             fi
@@ -173,7 +173,7 @@ jobs:
             --report /tmp/results-v2-applied-report.json
           git -C results-store add results/
           git -C results-store rm .results-store-writer-lock.json
-          git -C results-store commit -m "migration: rewrite results store as schema v2"
+          git -C results-store commit -m "migration: rewrite results store as schema version 2"
           git -C results-store push origin HEAD:main
 
       # actions/upload-artifact pinned to 043fb46d (= refs/tags/v7.0.1 as of 2026-07-30).

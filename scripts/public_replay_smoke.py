@@ -271,8 +271,9 @@ def build_evidence(
     results = _object(results_value, "results")
     # The pinned legacy evaluator predates explicit statement revisions.  Its
     # exact output is therefore only the solved-problem list; revision 1 is
-    # bound by the reviewed fixture under the documented v1 compatibility
-    # rule, rather than being attributed to historical evaluator output.
+    # bound by the reviewed fixture under the documented schema-version-1
+    # compatibility rule, rather than being attributed to historical evaluator
+    # output.
     if set(results) != {"passed"}:
         raise SmokeError("results fields are not canonical")
     if results["passed"] != [config["problem_id"]]:

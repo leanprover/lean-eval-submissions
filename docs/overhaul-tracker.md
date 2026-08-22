@@ -1,8 +1,13 @@
-# [overhaul] implementation tracker
+# [lifecycle overhaul] implementation tracker
 
 Tracks implementation and production rollout of the plan in
 [lean-eval#536](https://github.com/leanprover/lean-eval/pull/536) and the
 [public implementation program](https://gist.github.com/kim-em/cd6ac1c049f459ef9aa37d6cf551d9e4).
+
+Terminology: unqualified **v1** and **v2** name problem sets. The platform
+work is the **lifecycle overhaul**; machine-format versions are always
+qualified as **schema version 2**. Frozen identifiers and filenames remain
+unchanged.
 
 The detailed decision and operator procedures live in
 `docs/overhaul-rollout-runbook.md`. Use this single tracker rather than opening
@@ -38,8 +43,8 @@ one issue per lane.
       changing archives or stable IDs. D6b accepts no provider-loss recovery.
       The capability implementation is delegated to the implementation review;
       concise contributor/release wording is approved.
-- [ ] D7: approve a fresh results-v2 migration report's exact source commit,
-      record count, and output digest.
+- [ ] D7: approve a fresh results schema version 2 migration report's exact
+      source commit, record count, and output digest.
 - [x] D8: acknowledge UUID-prefix State paths and the durable Git writer lock
       as correctness-preserving deviations from the literal program text.
 - [x] D9: use two least-privilege GitHub Apps behind an organization-operated
@@ -57,17 +62,31 @@ one issue per lane.
 - [x] Replace LeanEval's local generator path with an exact public commit SHA.
 - [x] Verify generator byte parity after the remote pin (theorem- and
       definition-hole fixtures, 10/10 files each).
+- [ ] Merge generator fixes `lean-eval-generator#1` / `#2` and synchronization
+      PR `#3`, advance exact pins, rerun corpus/FC parity, and merge the draft
+      embedded-core removal in `lean-eval#553`. All three generator PRs are
+      green and await independent review; the consumer test suites are green.
 - [x] Configure State rulesets and append-only validation.
+- [x] Publish the schema-validated public projection of private production
+      State without exposing private source or operational metadata
+      (`lean-eval-state#4`; staging mirror `lean-eval-state-staging#4`).
+- [ ] Complete lifecycle-aware leaderboard consumption and publish the exact
+      validated projection after the held cutover PR is approved.
 
 ## Existing-repository PRs
 
 - [x] Open catalog lifecycle/tags/audit PR.
-- [x] Open results-v2 compatibility and migration-tooling PR.
+- [x] Open results schema version 2 compatibility and migration-tooling PR.
 - [x] Open intake-disabled Worker, deployment, rollback, threat-model, and
       infrastructure-ledger PR.
-- [x] Open leaderboard results-v2 preview PR.
+- [x] Open lifecycle-aware leaderboard preview PR.
 - [x] Open software-verification draft PR after D3 review.
 - [x] Open LeanEval generator-consumer PR after the public generator pin exists.
+- [x] Open independent-kernel shadow smoke `lean-eval-submissions#1207` and
+      AWS one-submission key-adapter staging smoke `#1208`; both are green and
+      await independent security review.
+- [x] Open disabled release planner `lean-eval-releases#1` and dependent draft
+      reconstruction smoke `#2`; both are green and await independent review.
 
 ## Cloudflare bootstrap
 
@@ -105,7 +124,7 @@ one issue per lane.
 
 ## Data and product rollout
 
-- [x] Produce a fresh results-v2 dry-run artifact.
+- [x] Produce a fresh results schema version 2 dry-run artifact.
 - [ ] Review and approve its exact post-merge checksums (D7).
 - [ ] Execute the authorized migration and verify the writer lock is released.
 - [x] Define and audit the approved mechanical 118-member v1 base set.
@@ -113,13 +132,19 @@ one issue per lane.
       merge commit `547b00ed345bc0737dd94847d6b67cb681b6178a`).
 - [x] Add the ten explicitly approved post-audit problems in `lean-eval#548`;
       final v1 membership is 128 at merge `21c6c021`.
-- [ ] Complete staging OAuth/agent intake and exact-ref dispatch; wire its
-      artifacts through the implemented UUIDv7 archive writer and into State.
+- [x] Complete staging OAuth/agent intake and exact-ref dispatch. Hosted run
+      `32546606639` archived the exact private fixture, produced the deliberate
+      rejection, and recorded archive completion plus evaluation start/reject
+      events through staging State commit `b2160515`; no accepted result was
+      written.
 - [x] Demonstrate credential-free historical public replay (hosted run
       `32499490261`, workflow commit `757b0831`).
-- [ ] Demonstrate isolated private replay.
-- [ ] Verify single-submission decrypt, VM destruction, and release
-      reconstruction before enabling those features.
+- [ ] Demonstrate isolated private replay. Provider-neutral contracts and the
+      disabled AWS adapter are implemented, but no AWS stack or disposable VM
+      backend is provisioned.
+- [ ] Verify single-submission decrypt, second-use and wrong-archive refusal,
+      VM destruction, and release reconstruction before enabling those
+      features.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
       window.
 - [ ] Complete leaderboard preview review and cut over with rollback retained.
@@ -130,12 +155,18 @@ one issue per lane.
 
 - [x] Coordinate the published generator contract through lean-eval#533 and
       formal-conjectures#4951.
-- [x] Reproduce the whole-FC100 answer-slot/target audit: 89/100 source
-      extractions pass and 87/89 of those build at LeanEval pins. Keep import
-      blocked on the 11 extraction failures, two target incompatibilities,
-      quoted-module decoder fix, unique-ID fix, and corrected 92-open set.
+- [x] Close the whole-FC100 extraction findings in the FC-owned importer:
+      current `formal-conjectures#4951` imports, verifies, classifies, and
+      generates all 100 declarations (92 research-open and 8 research-solved).
+      Its pinned baseline builds 97/100 at LeanEval pins with three exact known
+      failures; generator PRs `#1` / `#2` retire Erdos125, and the independently
+      verified FC toolchain bump retires the remaining two.
 - [x] Reproduce the FC100 dependency audit before import: 100/100 declarations
       resolved, 280 closure edges, no target-to-target dependency, and one
       fail-closed `Erdos324.erdos_324.match_1` orphan recorded upstream.
-- [ ] Launch FC100/open-conjectures only after the FC-owned importer supplies a
-      compatible output contract.
+- [x] Obtain a compatible FC-owned importer/output contract with strict,
+      deterministic provenance (`formal-conjectures#4951`, green at head
+      `58c3851463a9a95a7b72b4802ae120fb945331b6`).
+- [ ] Launch FC100/open-conjectures only after generator pins advance, the
+      importer receives FC maintainer review, and the production launch gates
+      are satisfied.

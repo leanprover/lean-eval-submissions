@@ -4164,6 +4164,204 @@
         "ref": "5dc066a8751603e3636d74fbe3119559efed0684",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-08-22T01:38:03Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanize RLCR: GPT-5.6-sol (max) worker + reviewer",
+      "intake": {
+        "issue_number": 1212,
+        "kind": "issue"
+      },
+      "problem_id": "annals_viscosity_solutions",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_ec04ff7db5b379f76a8b553c881e69a343aac127975489b05dea4fba8b3d3768",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "31fd5df6d5224ec2782b5705d8940d961cb6cbe9",
+        "repo": "humanfia/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-08-22T03:32:50Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanize RLCR: GPT-5.6-sol (max) worker + reviewer",
+      "intake": {
+        "issue_number": 1215,
+        "kind": "issue"
+      },
+      "problem_id": "schmidt_subspace",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_a4553b2103e90baf957d40b681728f3fb243175b7edde03196446ffd582f7dd5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "57647cba1307f3eada7c1e9c49a6030d521437e7",
+        "repo": "humanfia/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-08-22T04:12:52Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1224,
+        "kind": "issue"
+      },
+      "problem_id": "annals_van_der_waerden_conjecture",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_1fe9b529513b5c89dbf218124e9ba3adddc55f4e9d5c7fb7c372b208797b0b92",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "f08be1a97d39650807d22504eae930e3eff04653",
+        "repo": "humanfia/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-08-22T04:20:02Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1223,
+        "kind": "issue"
+      },
+      "problem_id": "annals_reverse_minkowski",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_4970249b698587e90d72509cc59415ee8647333c9eaa4b7b6049670b1fe421bc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5dc066a8751603e3636d74fbe3119559efed0684",
+        "repo": "humanfia/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-08-22T04:21:08Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1219,
+        "kind": "issue"
+      },
+      "problem_id": "annals_duffin_schaeffer_conjecture",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_c4781d401f6a16b99826f64a14048ee61938a11db7c8eceebfae23c6aab4ea22",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0d086a9b4644b081f3d2166e6f5ae047a75c1b4d",
+        "repo": "humanfia/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-08-22T04:23:17Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1221,
+        "kind": "issue"
+      },
+      "problem_id": "annals_linear_subspaces",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_a2dc154c9f318a0b4a610ca320dce234ffbf018fc8ccd643be3bd3289d4f96a6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "61a52527ba76dd5e07a6ef9bfdbad92ee959e868",
+        "repo": "humanfia/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-08-22T04:25:02Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1220,
+        "kind": "issue"
+      },
+      "problem_id": "annals_hessian_estimates",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_1a7f2e39060181bb95580aacc978f6f646facb50895c9ba5c6ca9ad28659b762",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "af685656050aac78bb93426a5eb9610560996e1f",
+        "repo": "humanfia/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-08-22T04:25:18Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1222,
+        "kind": "issue"
+      },
+      "problem_id": "annals_random_bernoulli_matrices",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_ee4e05901fc06b8c414cbe3e2388c804d253abe87329e1f9ed100844fe259768",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "0b372364c129daaf3f08d915f76f5dfddd12a4ab",
+        "repo": "humanfia/lean-eval"
+      }
+    },
+    {
+      "accepted_at": "2026-08-22T04:26:16Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1218,
+        "kind": "issue"
+      },
+      "problem_id": "annals_algebraic_integers",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_b44469672d05bc44d5b219f3c0b0ebca38d43114dd06a9f71bf4160be5668a91",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "e3f93f6dbed76f45f76ebcc8ab56cbff1ff2d07b",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,

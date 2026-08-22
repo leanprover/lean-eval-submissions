@@ -63,7 +63,7 @@ CAPABILITY_FIELDS = {
 
 
 class ContractError(ValueError):
-    """An archive-key object violates the stable v1 contract."""
+    """An archive-key object violates the stable schema-version-1 contract."""
 
 
 class OneUseStore(Protocol):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan or apply the deterministic results-store schema-v2 migration."""
+"""Plan or apply the deterministic results-store schema-version-2 migration."""
 
 from __future__ import annotations
 

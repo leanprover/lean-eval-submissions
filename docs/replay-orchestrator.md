@@ -27,8 +27,8 @@ SHA256(UTF8("lean-eval-replay-measurement-config-v1\0") ++ canonical-json(measur
 ```
 
 Canonical JSON uses UTF-8, lexicographically sorted object keys, no whitespace,
-and the v1 value subset of objects, arrays, strings, booleans, null, and
-integers. The planner recomputes both digests and the locked replay task ID. It
+and the schema-version-1 value subset of objects, arrays, strings, booleans,
+null, and integers. The planner recomputes both digests and the locked replay task ID. It
 rejects unknown fields, unsorted or duplicate work, a toolchain mismatch, and
 any source/archive path that is not derived from the submission UUID.
 

@@ -95,7 +95,7 @@ TASK_FIELDS = {
 
 
 class ReplayError(ValueError):
-    """A queue, configuration, plan, or verdict violates replay v1."""
+    """A replay object violates replay schema version 1."""
 
 
 class PrivateReplayProvider(Protocol):
@@ -167,7 +167,7 @@ def _timestamp(value: Any, label: str) -> str:
 
 
 def canonical_json_bytes(value: Any) -> bytes:
-    """Canonical JSON for the v1 integer/string/object configuration subset."""
+    """Canonical JSON for the schema-version-1 configuration value subset."""
     try:
         return json.dumps(
             value,
@@ -390,7 +390,9 @@ def plan_next(
     if profile["toolchain"] != task["toolchain"]:
         raise ReplayError("execution profile toolchain does not match queued toolchain")
     if task["checker"] != "nanoda":
-        raise ReplayError("execution profile v1 supports only the pinned nanoda checker")
+        raise ReplayError(
+            "execution profile schema version 1 supports only the pinned nanoda checker"
+        )
     if task["source_visibility"] == "private":
         return {
             "schema_version": 1,

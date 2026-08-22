@@ -1,9 +1,9 @@
-# Results schema v2
+# Results schema version 2
 
-Schema v2 is a flat, append-only base-results format. During migration,
-readers accept v1 and v2; writers always emit v2. Later corrections, model
-aliases, retractions, and publication actions belong in the state event log
-and do not mutate these records.
+Results schema version 2 is a flat, append-only base-results format. During
+migration, readers accept schema versions 1 and 2; writers always emit schema
+version 2. Later corrections, model aliases, retractions, and publication
+actions belong in the state event log and do not mutate these records.
 
 The machine-readable envelope is `schemas/results-v2.schema.json`. The Python
 validator additionally recomputes every stable ID and enforces uniqueness and
@@ -71,7 +71,7 @@ or `gist`. The structured
 `production_metadata` object preserves submission-time declarations; changes
 after acceptance are events.
 
-Legacy v1 results are assigned `statement_revision = 1`. The migration maps
+Legacy schema version 1 results are assigned `statement_revision = 1`. The migration maps
 `solved_at` to `accepted_at`, nests the source fields under `submission`, nests
 `issue_number` under `intake`, and moves the three optional production and
 publication fields into `production_metadata`. No legacy field is discarded.
@@ -80,7 +80,8 @@ publication fields into `production_metadata`. No legacy field is discarded.
 
 `scripts/migrate_results_v2.py` defaults to a read-only dry run. It reports
 the captured commit, source and output record counts, source digest, canonical
-output digest, changed files, duplicate IDs, and an exact v1 projection check.
+output digest, changed files, duplicate IDs, and an exact schema version 1
+projection check.
 `--apply` additionally requires all three reviewed expectations:
 `--expect-source-digest`, `--expect-record-count`, and
 `--expect-output-digest`. This makes applying a report to different live data
@@ -99,7 +100,7 @@ group and would cancel older submissions during a burst. Instead, apply first
 commits `.results-store-writer-lock.json`; record jobs repeatedly fetch
 `origin/main` and wait while that lock exists. CAS pushes close the race between
 checking and acquiring the lock. Migration removes the lock in the same commit
-that writes v2. If that final push fails, the lock deliberately remains for
+that writes schema version 2. If that final push fails, the lock deliberately remains for
 operator review rather than allowing mixed writes. After confirming the lock's
 recorded workflow URL and repository state, an operator can rerun apply with
 `resume_locked_migration`; the workflow validates the lock group and creates a
