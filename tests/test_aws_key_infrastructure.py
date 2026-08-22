@@ -95,7 +95,9 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
         ):
             self.assertIn(f"kms:EncryptionContext:{name}: false", role)
         function = _section(self.template, "  UnwrapFunction:\n", "  ReplayInvokerRole:\n")
-        self.assertIn("ReservedConcurrentExecutions: 1", function)
+        # One-use is enforced atomically by DynamoDB, so correctness must not
+        # depend on Lambda serialization or an account concurrency quota.
+        self.assertNotIn("ReservedConcurrentExecutions", function)
         self.assertIn("AutoPublishAlias: live", function)
         self.assertNotIn("Events:", function)
 

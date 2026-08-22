@@ -88,8 +88,11 @@ one issue per lane.
 - [x] Open LeanEval generator-consumer PR after the public generator pin exists.
 - [x] Open independent-kernel shadow smoke `lean-eval-submissions#1207` and
       AWS one-submission key-adapter staging smoke `#1208`; both merged and
-      deployed intake-disabled as exact commit `a34b2053`. The AWS workflow
-      remains disabled because no AWS account or stack exists.
+      deployed intake-disabled as exact commit `a34b2053`.
+- [x] Provision dedicated AWS account `161072922960`, exact GitHub OIDC
+      provider, and isolated staging/production key-adapter stacks. Only the
+      staging wrap and replay-invoker role variables are connected; production
+      remains dormant and intake-disabled.
 - [x] Merge disabled release terminology `lean-eval-releases#3`, planner `#1`,
       and reconstruction smoke `#2`; final main is `f1f83344`, all hosted
       validation is green, and publication remains disabled.
@@ -146,11 +149,13 @@ one issue per lane.
 - [x] Demonstrate credential-free historical public replay (hosted run
       `32499490261`, workflow commit `757b0831`).
 - [ ] Demonstrate isolated private replay. Provider-neutral contracts and the
-      disabled AWS adapter are implemented, but no AWS stack or disposable VM
-      backend is provisioned.
+      AWS key adapter are implemented and provisioned, but no disposable VM
+      backend is selected or provisioned. The synthetic key-adapter round trip
+      is not a private replay demonstration.
 - [ ] Verify single-submission decrypt, second-use and wrong-archive refusal,
       VM destruction, and release reconstruction before enabling those
-      features.
+      features. Unit tests cover the refusal paths; live staging round-trip
+      evidence is recorded separately in `INFRASTRUCTURE.md`.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
       window.
 - [x] Complete leaderboard preview review and cut over with rollback retained

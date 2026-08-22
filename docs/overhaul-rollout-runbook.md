@@ -30,6 +30,7 @@ primary checkout is not the integration workspace.
 | `lean-eval-releases` | `f1f83344017333650b4066a533e5ff4eefda5b54` on `main`; terminology `#3`, planner `#1`, and reconstruction `#2` are merged and green; publication remains disabled |
 | catalog, generator consumer, software verification | v1 freeze merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; terminology rule merged in `#554`; standalone-generator consumer merged in `#553`; current main `b91d4757aa0d7776c02540c9089df54fa0d0658a` |
 | results schema version 2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198`; exact-blob archive verification and dependency promotion in `#1213` / `#1214`; runtime-only deployment trigger in `#1217`; infrastructure refresh in `#1225`; schema terminology in `#1227`; kernel/AWS smokes `#1207` / `#1208` merged and deployed as exact runtime `a34b2053ce8c4e7e9833d57de893ab2aa62e797b` with intake disabled |
+| AWS archive-key custody | dedicated account `lean-eval` (`161072922960`), exact GitHub OIDC provider, and isolated staging/production CloudFormation stacks provisioned 2026-08-22; only staging role variables connected; no replay compute and no production workflow connected |
 | lifecycle-aware leaderboard | preview foundation merged as `lean-eval-leaderboard#69`; UI terminology merged in `#73`; deeper schema terminology merged in `#74`; cutover `#72` is merged and live at `https://lean-lang.org/eval/`, with `/legacy/` retained and read-only State deploy key `160968617` provisioned |
 
 The private broker and intake Workers are deployed in staging and production
@@ -53,6 +54,11 @@ output digest `340eaa0cce486aed35874ae1571425cb6e8912009f99822ea75fa945ea931a9e`
 and no duplicate result IDs. That report is now historical because the live
 store advanced; D7 requires a fresh report after the maintainer lifts the hold.
 D7 remains explicitly unapproved and unapplied.
+
+The dedicated AWS account now holds the KMS keys, conditional one-use tables,
+and direct-Lambda unwrap gates described by D6. This is archive-key custody,
+not an AWS evaluation backend. Production role variables remain unset, and the
+separate provider-neutral disposable replay executor remains unselected.
 
 The FC-owned importer in `formal-conjectures#4951` now imports, verifies,
 classifies, and generates all FC100 declarations through the frozen generator
@@ -253,8 +259,9 @@ do not change. No new State event or dual-provider scheme is required.
 AWS becomes permanently unavailable before migration, the affected private
 archives may be unrecoverable. This is an accepted simplification.
 
-No AWS resources need to be created during this contract pass. When the account
-and key are created, record their identifiers in `INFRASTRUCTURE.md`. The
+The dedicated account and both isolated key-adapter stacks were provisioned on
+2026-08-22; their exact identifiers and live verification evidence are recorded
+in `INFRASTRUCTURE.md`. The
 provider-neutral envelope, ten-minute replay/release capability claims, stable
 `ak1_` identity, `uc1_` audit digest, and consume-before-unwrap interface are
 frozen in `schemas/archive-key-envelope-v1.schema.json`,
@@ -264,10 +271,9 @@ the trusted, provider-neutral archive preparation side: one fresh PQ-hybrid age
 identity per archive, strict stdin-only adapter wrapping, and atomic publication
 of ciphertext plus envelope. `scripts/aws_key_adapter.py` and
 `infrastructure/aws-key-adapter/template.yaml` implement the initial KMS wrap,
-direct-Lambda unwrap, and conditional DynamoDB consume boundary. Both remain
-deliberately disconnected from the submission workflow until the dedicated AWS
-account is provisioned and live single-use checks pass. The disposable
-execution backend remains a separate unprovisioned launch gate.
+direct-Lambda unwrap, and conditional DynamoDB consume boundary. Only the
+staging smoke has role variables; production remains disconnected. The
+disposable execution backend remains a separate unprovisioned launch gate.
 
 **Contributor acknowledgement approved 2026-08-20:** “By submitting, I confirm
 that I have authority to provide this source. I authorize Lean Eval to store

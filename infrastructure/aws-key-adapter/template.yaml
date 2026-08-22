@@ -164,7 +164,6 @@ Resources:
       Role: !GetAtt UnwrapFunctionRole.Arn
       MemorySize: 128
       Timeout: 10
-      ReservedConcurrentExecutions: 1
       AutoPublishAlias: live
       Tracing: PassThrough
       LoggingConfig:

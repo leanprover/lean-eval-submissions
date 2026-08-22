@@ -1,7 +1,8 @@
 # Manual setup record and remaining actions
 
-The four provisioning procedures below were completed on 2026-08-21. The two
-State-writer tokens are approved and preflighted, and both broker GitHub Apps
+The four provisioning procedures below were completed on 2026-08-21, and the
+dedicated AWS key-custody account and stacks were provisioned on 2026-08-22.
+The two State-writer tokens are approved and preflighted, and both broker GitHub Apps
 are owned by `leanprover` with unchanged IDs. The source reader is installed
 only on the private staging fixture and passed its live broker preflight. The
 separate evaluation App is also installed on that fixture; exact private
@@ -125,27 +126,14 @@ single-repository installation on `leanprover/lean-eval-submissions`.
 
 Keep production `INTAKE_ENABLED=false`.
 
-1. Review the live leaderboard at <https://lean-lang.org/eval/preview/> and
-   approve or request changes to `lean-eval-leaderboard#72` before cutover.
-   The production-only, repository-scoped read key and the redacted State
-   projection contract are already provisioned; no additional credential setup
-   is required for this review.
-2. Leave D7 unapplied until explicitly approving a current dry report's exact
+1. Leave D7 unapplied until explicitly approving a current dry report's exact
    source commit, record count, and output digest.
-3. Create the dedicated Lean Eval AWS account. In `us-east-1`, add GitHub's OIDC
-   provider (`https://token.actions.githubusercontent.com`, audience
-   `sts.amazonaws.com`), then deploy
-   `infrastructure/aws-key-adapter/template.yaml` as
-   `lean-eval-key-adapter-staging` and
-   `lean-eval-key-adapter-production` with the corresponding environment
-   parameter and that provider ARN. Record the stack outputs in
-   `INFRASTRUCTURE.md`; never create an IAM access key. The template is ready,
-   but no AWS resource exists yet. Exact commands and output fields are in
-   [`aws-key-adapter-setup.md`](aws-key-adapter-setup.md).
-4. A reviewed disposable replay backend is still required before private
+2. A reviewed disposable replay backend is still required before private
    replay, automatic release, or production intake. It must call the Lambda
    through the controller's Invoke-only role and must not pass AWS credentials
    into the untrusted VM.
+3. Keep all production AWS role variables unset until the corresponding
+   archive, replay, and release workflows and their launch gates are reviewed.
 
 When the production launch gates are later satisfied, use
 [`intake-transition-announcements.md`](intake-transition-announcements.md) for
