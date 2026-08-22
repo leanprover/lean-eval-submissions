@@ -25,16 +25,16 @@ primary checkout is not the integration workspace.
 | Repository / lane | Published commit or pull request |
 | --- | --- |
 | `lean-eval-generator` | `a726789593eeac5c32ad82760061cd5bf6cae662` on `main`; green fixes `#1` / `#2` and synchronization `#3` await independent review; draft LeanEval consumer `#553` removes the embedded core |
-| production State | `e9477c7c88f71127bda3a7442d35068fd2d7a5dd` on private `main`; strict redacted public projection enabled |
-| staging State | `b2160515cc18b2a871135dbe6d49df7e1bd8306d` on private `main`; full deliberate-rejection lifecycle and projection contract recorded |
+| production State | `d6d566bd8f92f157bee68d3890aaf8a30c339c9d` on private `main`; strict redacted public projection enabled and schema terminology qualified |
+| staging State | `1e76ea66405ed692bf7564f5accbfb3efd9c25f0` on private `main`; full deliberate-rejection lifecycle and projection contract recorded, with schema terminology qualified |
 | `lean-eval-releases` | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` on `main`; publication disabled; planner `#1` and dependent reconstruction draft `#2` are green and await independent review |
-| catalog, generator consumer, software verification | merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; current main `6109e877069fd06ea5a6889465cace096f4653f2` |
-| results schema version 2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198`; exact-blob archive verification and dependency promotion in `#1213` / `#1214`; runtime-only deployment trigger in `#1217`; infrastructure refresh in `#1225`; current main `28672cb51f3852bae96f4e11eab7be1fb1c0a26f`; green kernel/AWS smokes `#1207` / `#1208` await independent review |
-| lifecycle-aware leaderboard preview | preview foundation merged as `lean-eval-leaderboard#69`; cutover plus public-State consumption remains reviewable in `#72` and at `https://lean-lang.org/eval/preview/`; read-only State deploy key `160968617` is provisioned |
+| catalog, generator consumer, software verification | v1 freeze merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; terminology rule merged in `#554`; current main `ef8d22e06f39c6d3e7c09b43f97c7a5e14074d07` |
+| results schema version 2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198`; exact-blob archive verification and dependency promotion in `#1213` / `#1214`; runtime-only deployment trigger in `#1217`; infrastructure refresh in `#1225`; schema terminology in `#1227`; exact deployed runtime `70acbc1f96e38ee0838a9f1141e7e844adab07e5` is recorded by `#1228`; green kernel/AWS smokes `#1207` / `#1208` await independent review |
+| lifecycle-aware leaderboard preview | preview foundation merged as `lean-eval-leaderboard#69`; UI terminology merged in `#73`; deeper schema terminology merged in `#74`; held cutover plus public-State consumption remains reviewable in `#72` and at `https://lean-lang.org/eval/preview/`; read-only State deploy key `160968617` is provisioned |
 
 The private broker and intake Workers are deployed in staging and production
-from exact runtime-only deployment-trigger commit
-`b0a505372ddc332b5413b63e0554ee2dee690fd8`. Deployment, OAuth,
+from exact schema-terminology commit
+`70acbc1f96e38ee0838a9f1141e7e844adab07e5`. Deployment, OAuth,
 readiness, authentication, State-writer, and broker App secrets are installed.
 Both State-writer tokens are organization-approved and preflighted, and both
 broker App registrations transferred to `leanprover` without changing their
