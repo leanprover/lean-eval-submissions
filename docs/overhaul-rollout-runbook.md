@@ -29,12 +29,12 @@ primary checkout is not the integration workspace.
 | staging State | `b2160515cc18b2a871135dbe6d49df7e1bd8306d` on private `main`; full deliberate-rejection lifecycle and projection contract recorded |
 | `lean-eval-releases` | `3edc8dcd7dfebf8a3c649d32755437ad2087b9d0` on `main`; publication disabled |
 | catalog, generator consumer, software verification | merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; current main `6109e877069fd06ea5a6889465cace096f4653f2` |
-| results schema version 2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198`; exact-blob archive verification and dependency promotion in `#1213` / `#1214`; current main `1738baeb1934b28bdf44a4eb6fecaec00846ee75` |
+| results schema version 2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198`; exact-blob archive verification and dependency promotion in `#1213` / `#1214`; runtime-only deployment trigger in `#1217`; current main `d0b4caa0541a8f74c855bfefedb75e6e73af5ccc` |
 | lifecycle-aware leaderboard preview | preview foundation merged as `lean-eval-leaderboard#69`; cutover plus public-State consumption remains reviewable in `#72` and at `https://lean-lang.org/eval/preview/`; read-only State deploy key `160968617` is provisioned |
 
 The private broker and intake Workers are deployed in staging and production
-from exact dispatch-dependency promotion commit
-`1738baeb1934b28bdf44a4eb6fecaec00846ee75`. Deployment, OAuth,
+from exact runtime-only deployment-trigger commit
+`b0a505372ddc332b5413b63e0554ee2dee690fd8`. Deployment, OAuth,
 readiness, authentication, State-writer, and broker App secrets are installed.
 Both State-writer tokens are organization-approved and preflighted, and both
 broker App registrations transferred to `leanprover` without changing their
