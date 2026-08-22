@@ -4186,6 +4186,28 @@
         "ref": "31fd5df6d5224ec2782b5705d8940d961cb6cbe9",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-08-22T03:32:50Z",
+      "benchmark_commit": "6109e877069fd06ea5a6889465cace096f4653f2",
+      "declared_model": "Humanize RLCR: GPT-5.6-sol (max) worker + reviewer",
+      "intake": {
+        "issue_number": 1215,
+        "kind": "issue"
+      },
+      "problem_id": "schmidt_subspace",
+      "production_metadata": {
+        "solution_publication_date": "2026-08-31",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_a4553b2103e90baf957d40b681728f3fb243175b7edde03196446ffd582f7dd5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "57647cba1307f3eada7c1e9c49a6030d521437e7",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
