@@ -150,14 +150,7 @@ single-repository installation on `leanprover/lean-eval-submissions`.
 
 Keep production `INTAKE_ENABLED=false`.
 
-1. The Cloudflare Sandbox replay backend and automatic deployment are
-   implemented. Workers Paid is active and both deployment tokens were
-   operator-confirmed with Containers: Edit on 2026-08-22. The first protected
-   deployment and source-free staging acceptance must still verify image
-   publication, rollout, OIDC, network denial, refusal, and destruction. The
-   controller does not pass AWS, GitHub, or Cloudflare credentials into the
-   untrusted sandbox.
-2. Keep all production AWS role variables unset until the corresponding
+1. Keep all production AWS role variables unset until the corresponding
    archive, replay, and release workflows and their launch gates are reviewed.
 
 When the production launch gates are later satisfied, use
