@@ -54,9 +54,12 @@ gate there remains mandatory while intake is disabled.
 `wrangler.replay.jsonc`, `Dockerfile.replay`, and `src/replay-*.ts` define the
 separate Cloudflare Sandbox replay boundary. It is automatically deployed after
 merge with the broker and intake Worker, but general replay stays disabled in
-both environments. Staging alone exposes the synthetic acceptance route to the
-exact protected `replay-staging` GitHub environment via GitHub OIDC. Production
-acceptance and replay are both disabled.
+both environments. Staging exposes the synthetic acceptance route and the
+separate accepted-archive boundary route only to the exact protected
+`replay-staging` GitHub environment via GitHub OIDC. The accepted-archive route
+verifies a State-selected ciphertext, plaintext digest, safe tar shape, blocked
+egress, and destruction without running the checker or writing State.
+Production acceptance and replay are both disabled.
 
 Each request creates a fresh nonce-derived Sandbox, uses no persistent default
 session, runs one fixed image command with public networking disabled, and

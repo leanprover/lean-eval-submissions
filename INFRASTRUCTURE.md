@@ -98,14 +98,14 @@ Replay Worker and container configuration is separately declarative in
 - one `standard-4` container at most per environment (4 vCPU, 12 GiB RAM,
   20 GB disk), with SSH disabled and public network access disabled in the
   Sandbox class;
-- staging exposes only the synthetic acceptance endpoint; general replay is
-  disabled in staging and both acceptance and replay are disabled in production;
+- staging exposes the synthetic and accepted-archive acceptance endpoints;
+  general replay is disabled in staging and both acceptance and replay are
+  disabled in production;
 - every request gets a fresh nonce-derived sandbox ID, no default persistent
   session, a fixed command, bounded inputs, and unconditional `destroy()`;
-- 12 GiB is the approved staging acceptance capacity. Production replay has a
-  recorded 16 GiB launch gate and cannot be enabled on the current 12 GiB
-  `standard-4` declaration until Cloudflare grants the required limit and the
-  configuration is reviewed;
+- one 12 GiB `standard-4` is the approved staging and production ceiling;
+  resource-limit outcomes do not authorize retry on an unreviewed larger
+  profile;
 - the stable request/evidence contract contains no Cloudflare identifier, so a
   later execution-provider migration does not alter State, archive, capability,
   or verdict formats.
@@ -612,12 +612,10 @@ interface. No pre-existing project infrastructure or shared runner is part of
 the trust boundary. For each
 task the selected backend creates a fresh isolated instance, gives it one
 single-submission decryption capability, and destroys it after the job without
-a persistent workspace. The concrete backend remains a separate reviewed
-decision and can be replaced without changing State, archive, request, or
-verdict contracts.
-
-Selection of a local hypervisor, hosted VM API, sandbox service, or other
-implementation is deferred; no existing project runner is the default.
+a persistent workspace. The selected initial backend is the dedicated
+Cloudflare Sandbox executor recorded above. It remains replaceable without
+changing State, archive, request, or verdict contracts; no existing project
+runner is part of the boundary.
 
 New UUIDv7 intakes must archive ciphertext at
 `archives/<first-two-submission-UUID-hex>/<submission-UUID>.tar.age`. The
