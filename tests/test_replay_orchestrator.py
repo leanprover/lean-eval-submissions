@@ -144,19 +144,26 @@ class ReplayOrchestratorTests(unittest.TestCase):
             task["event_id"],
         )
 
-    def test_private_source_is_nonterminally_blocked_until_d6(self) -> None:
+    def test_private_source_plans_the_exact_d6_archive_without_git_locator(self) -> None:
         queue, profile, measurement = self.inputs()
-        queue["tasks"][0]["source_visibility"] = "private"
+        task = queue["tasks"][0]
+        task["source_visibility"] = "private"
         plan = plan_next(queue, profile, measurement)
-        self.assertEqual(plan, {
-            "schema_version": 1,
-            "kind": "blocked",
-            "replay_task_id": queue["tasks"][0]["replay_task_id"],
-            "queue_event_id": queue["tasks"][0]["event_id"],
-            "blocking_reason": "private_replay_requires_d6",
+        self.assertEqual(plan["kind"], "execution")
+        self.assertEqual(plan["request"]["source"], {
+            "visibility": "private",
+            "archive": private_replay_locator(task),
         })
-        self.assertNotIn("transition", plan)
-        self.assertEqual(queue["tasks"][0]["status"], "queued")
+        self.assertNotIn("repository", plan["request"]["source"])
+        self.assertNotIn("commit", plan["request"]["source"])
+        self.assertEqual(
+            plan["request"]["network"]["fetch_phase"],
+            "controller_pinned_archive_only",
+        )
+        self.assertEqual(
+            plan["started_transition"]["causation_event_id"],
+            task["event_id"],
+        )
 
     def test_permanent_unavailability_requires_evidence(self) -> None:
         queue, _, _ = self.inputs()
@@ -204,6 +211,17 @@ class ReplayOrchestratorTests(unittest.TestCase):
         locator_text = json.dumps(provider.locators[0], sort_keys=True).lower()
         for forbidden in ("private_key", "master_key", "unwrap", "capability", "secret"):
             self.assertNotIn(forbidden, locator_text)
+
+    def test_private_execution_plan_supports_the_normal_terminal_contract(self) -> None:
+        queue, profile, measurement = self.inputs()
+        queue["tasks"][0]["source_visibility"] = "private"
+        plan = plan_next(queue, profile, measurement)
+        transition = terminal_transition(
+            plan,
+            load_fixture("replay-verdict-accepted-v1.json"),
+            "0198abcd-0000-7000-8000-000000000008",
+        )
+        self.assertEqual(transition["event_type"], "replay.accepted")
 
     def test_archive_path_is_correlated_to_submission_uuid(self) -> None:
         queue, _, _ = self.inputs()

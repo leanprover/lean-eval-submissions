@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan public replay work and validate disposable-runner verdict handoffs."""
+"""Plan authoritative replay work and validate disposable-runner handoffs."""
 
 from __future__ import annotations
 
@@ -49,7 +49,6 @@ UNAVAILABLE_REASONS = {
     "execution_profile_permanently_unavailable",
     "source_ref_permanently_unavailable",
 }
-BLOCKING_REASONS = {"private_replay_requires_d6"}
 CHECKER_OUTCOMES = {
     "accepted": "replay.accepted",
     "rejected": "replay.rejected",
@@ -99,7 +98,7 @@ class ReplayError(ValueError):
 
 
 class PrivateReplayProvider(Protocol):
-    """Future D6-owned adapter; no production implementation exists here."""
+    """D6-owned adapter receiving one exact encrypted archive locator."""
 
     def prepare(self, locator: dict[str, Any]) -> dict[str, Any]:
         """Prepare one private archive without exposing a general key."""
@@ -361,6 +360,34 @@ def private_replay_locator(task: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def validate_private_replay_locator(value: Any) -> dict[str, Any]:
+    locator = _object(value, "private replay locator")
+    _fields(
+        locator,
+        {
+            "schema_version",
+            "submission_id",
+            "archive_repository",
+            "archive_commit",
+            "archive_path",
+            "archive_ciphertext_sha256",
+            "encrypted",
+        },
+        "private replay locator",
+    )
+    if locator["schema_version"] != 1 or isinstance(locator["schema_version"], bool):
+        raise ReplayError("private replay locator schema_version must be integer 1")
+    submission_id = _match(UUID7, locator["submission_id"], "private replay locator.submission_id")
+    _match(REPOSITORY, locator["archive_repository"], "private replay locator.archive_repository")
+    _match(COMMIT, locator["archive_commit"], "private replay locator.archive_commit")
+    _match(DIGEST, locator["archive_ciphertext_sha256"], "private replay locator.archive_ciphertext_sha256")
+    if locator["archive_path"] != canonical_archive_path(submission_id):
+        raise ReplayError("private replay locator archive_path is not canonical")
+    if locator["encrypted"] is not True:
+        raise ReplayError("private replay locator must be encrypted")
+    return locator
+
+
 def exercise_private_provider_for_test(
     task: dict[str, Any], provider: PrivateReplayProvider
 ) -> dict[str, Any]:
@@ -393,23 +420,24 @@ def plan_next(
         raise ReplayError(
             "execution profile schema version 1 supports only the pinned nanoda checker"
         )
-    if task["source_visibility"] == "private":
-        return {
-            "schema_version": 1,
-            "kind": "blocked",
-            "replay_task_id": task["replay_task_id"],
-            "queue_event_id": task["event_id"],
-            "blocking_reason": "private_replay_requires_d6",
+    private_source = task["source_visibility"] == "private"
+    source = (
+        {
+            "visibility": "private",
+            "archive": validate_private_replay_locator(private_replay_locator(task)),
         }
+        if private_source
+        else {
+            "repository": task["source_repository"],
+            "commit": task["source_commit"],
+            "visibility": "public",
+        }
+    )
     request = {
         "schema_version": 1,
         "replay_task_id": task["replay_task_id"],
         "attempt": task["attempt"] + 1,
-        "source": {
-            "repository": task["source_repository"],
-            "commit": task["source_commit"],
-            "visibility": "public",
-        },
+        "source": source,
         "benchmark": {
             "repository": task["benchmark_repository"],
             "commit": task["benchmark_commit"],
@@ -429,7 +457,11 @@ def plan_next(
         "execution_profile": profile,
         "measurement_config": measurement,
         "network": {
-            "fetch_phase": "public_https_only",
+            "fetch_phase": (
+                "controller_pinned_archive_only"
+                if private_source
+                else "public_https_only"
+            ),
             "untrusted_execution_phase": "disabled",
         },
         "untrusted_environment": {},
@@ -519,11 +551,17 @@ def validate_execution_plan(value: Any) -> dict[str, Any]:
     task_identity = _match(REPLAY_ID, request["replay_task_id"], "request.replay_task_id")
     attempt = _integer(request["attempt"], "request.attempt", 1)
     source = _object(request["source"], "request.source")
-    _fields(source, {"repository", "commit", "visibility"}, "request.source")
-    _match(REPOSITORY, source["repository"], "request.source.repository")
-    _match(COMMIT, source["commit"], "request.source.commit")
-    if source["visibility"] != "public":
-        raise ReplayError("request source must be public")
+    if source.get("visibility") == "public":
+        _fields(source, {"repository", "commit", "visibility"}, "request.source")
+        _match(REPOSITORY, source["repository"], "request.source.repository")
+        _match(COMMIT, source["commit"], "request.source.commit")
+        expected_fetch_phase = "public_https_only"
+    elif source.get("visibility") == "private":
+        _fields(source, {"visibility", "archive"}, "request.source")
+        archive = validate_private_replay_locator(source["archive"])
+        expected_fetch_phase = "controller_pinned_archive_only"
+    else:
+        raise ReplayError("request source visibility is invalid")
     benchmark = _object(request["benchmark"], "request.benchmark")
     _fields(benchmark, {"repository", "commit", "toolchain"}, "request.benchmark")
     _match(REPOSITORY, benchmark["repository"], "request.benchmark.repository")
@@ -576,10 +614,12 @@ def validate_execution_plan(value: Any) -> dict[str, Any]:
     network = _object(request["network"], "request.network")
     _fields(network, {"fetch_phase", "untrusted_execution_phase"}, "request.network")
     if network != {
-        "fetch_phase": "public_https_only",
+        "fetch_phase": expected_fetch_phase,
         "untrusted_execution_phase": "disabled",
     }:
         raise ReplayError("request network policy is not canonical")
+    if source["visibility"] == "private" and archive["submission_id"] != result["submission_id"]:
+        raise ReplayError("private archive submission differs from replay result")
     environment = _object(request["untrusted_environment"], "request.untrusted_environment")
     if environment:
         raise ReplayError("request untrusted environment must be empty")

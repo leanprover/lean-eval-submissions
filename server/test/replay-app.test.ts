@@ -24,7 +24,7 @@ const ENV = {
   REPLAY_ENABLED: "false",
   STAGING_ACCEPTANCE_ENABLED: "true",
   STAGING_MEMORY_LIMIT_BYTES: "12884901888",
-  PRODUCTION_MEMORY_GATE_BYTES: "17179869184",
+  PRODUCTION_MEMORY_GATE_BYTES: "12884901888",
   GITHUB_OIDC_AUDIENCE: "lean-eval-replay-staging",
   GITHUB_OIDC_ENVIRONMENT: "replay-staging",
 } as ReplayRuntimeEnv;
@@ -37,7 +37,7 @@ describe("Cloudflare replay executor", () => {
       replay_enabled: false,
       staging_acceptance_enabled: true,
       staging_memory_limit_bytes: 12_884_901_888,
-      production_memory_gate_bytes: 17_179_869_184,
+      production_memory_gate_bytes: 12_884_901_888,
     });
   });
 

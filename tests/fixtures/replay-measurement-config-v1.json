@@ -1,5 +1,5 @@
 {
-  "memory_limit_bytes": 17179869184,
+  "memory_limit_bytes": 12884901888,
   "retired_instructions": {
     "perf_event": "instructions:u",
     "required": false

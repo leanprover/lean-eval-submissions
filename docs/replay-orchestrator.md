@@ -109,7 +109,7 @@ Promotion still requires no incorrect Arena verdicts, full current-corpus
 support, agreement with adjudicated historical results, distinct recording of
 reject/decline/crash/timeout, and acceptable profile-pinned runtime. The
 workflow is fixed to public source and must not be generalized to private
-archives; private replay remains behind D6.
+archives; private replay uses the distinct encrypted-archive controller path.
 
 ### Authoritative queue path
 
@@ -129,19 +129,23 @@ writer supplies the cryptographically random UUIDv7 and canonical timestamp,
 appends that event, and gives its event ID to verdict conversion. This CLI
 never generates State identity or time and never writes the ledger.
 
-A private task produces a non-event `{"kind":"blocked", ...}` plan with
-`private_replay_requires_d6`. It contains no transition body, does not consume
-an attempt, and leaves the same task in State's replay queue. Re-running the
-planner after D6 approval can therefore execute the original deterministic
-task instead of encountering a false terminal state.
+A private task produces the same execution-plan envelope, but its source is an
+encrypted archive locator pinned by repository, commit, canonical path, and
+ciphertext digest. It contains no source Git repository or source commit. The
+controller must fetch exactly that ciphertext, obtain a submission-bound
+single-use unwrap, and pass only the plaintext per-archive identity into the
+fresh executor. Planning private work is now supported; production queue
+consumption remains disabled until the reviewed controller and State-writer
+handoff are deployed and their staging evidence is recorded.
 
 The VM controller must execute these phases:
 
 1. Create a fresh VM from the profile's pinned image digest. Persistent or
    reused runners are invalid.
-2. Fetch only the public source repository/commit and benchmark
-   repository/commit from the request. Verify the checked-out commits exactly;
-   branches, tags, default branches, and pull-request merge refs are invalid.
+2. Fetch only the pinned public source repository/commit or the exact private
+   archive locator, plus the benchmark repository/commit. Verify every commit
+   and digest exactly; branches, tags, default branches, pull-request merge
+   refs, and archive-directory enumeration are invalid.
 3. Install only the exact toolchains and component commits in the profile.
 4. Remove all `.git` directories and fetch-process environment before any Lean
    elaboration. The request's `untrusted_environment` is exactly empty; a

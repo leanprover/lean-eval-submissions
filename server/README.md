@@ -61,9 +61,10 @@ acceptance and replay are both disabled.
 Each request creates a fresh nonce-derived Sandbox, uses no persistent default
 session, runs one fixed image command with public networking disabled, and
 calls `destroy()` before returning source-free evidence. The container is
-limited to one `standard-4` instance (12 GiB) with SSH disabled. The recorded
-production launch requirement remains 16 GiB, so the present declaration
-cannot be mistaken for production readiness. `npm run deploy:dry-run` validates
+limited to one `standard-4` instance (12 GiB) with SSH disabled. That 12 GiB
+ceiling is the reviewed production profile; exceeding it is a resource-limit
+outcome and does not authorize a larger unreviewed executor. Production remains
+disabled until the other replay gates pass. `npm run deploy:dry-run` validates
 Worker configuration without building a local container; normal protected-main
 deployment performs the real image build and rollout.
 
