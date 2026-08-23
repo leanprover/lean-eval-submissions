@@ -424,6 +424,32 @@
         "ref": "c1e504a3acce2da2ee77054ca45e6c251b143545",
         "repo": "kim-em/lean-eval-intake-fixture"
       }
+    },
+    {
+      "accepted_at": "2026-08-23T04:17:55Z",
+      "benchmark_commit": "b91d4757aa0d7776c02540c9089df54fa0d0658a",
+      "declared_model": "Codex release staging fixture",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "billing_mode": "unknown",
+        "credit_identity": "LeanEval release-controller staging fixture",
+        "harness": "isolated credentialed release-boundary validation",
+        "human_involvement": "Fixture proof selected and submitted by the overhaul operator",
+        "notes": "Accepted staging-only KMS release-boundary validation; never a production benchmark claim.",
+        "web_access": false
+      },
+      "result_id": "r2_3f28ce10fd9bad352dc29394254ec7c414b57269757c3488cd108bd544186423",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c1e504a3acce2da2ee77054ca45e6c251b143545",
+        "repo": "kim-em/lean-eval-intake-fixture"
+      }
     }
   ],
   "schema_version": 2,
