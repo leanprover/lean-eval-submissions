@@ -19,6 +19,7 @@ is unrelated to this pipeline.
 | `lean-eval-archiver` | GitHub App | `LEAN_EVAL_ARCHIVER_CLIENT_ID`, `LEAN_EVAL_ARCHIVER_PRIVATE_KEY` | `submission.yml` (archive) |
 | `LEADERBOARD_WRITE_TOKEN` | Fine-grained PAT | `LEADERBOARD_WRITE_TOKEN` | `submission.yml` (leaderboard redeploy dispatch) |
 | Ruleset `main protection` | Repository Ruleset | (config in this file, applied via API) | branch protection on `main` |
+| Ruleset `Protect staging Results` | Repository Ruleset | (config in this file, applied via API) | branch protection on `staging-results` |
 
 The legacy `LEAN_EVAL_{BOT,RECORDER,ARCHIVER}_APP_ID` secrets were
 superseded by the Client ID secrets on 2026-07-31. Delete each legacy
@@ -97,7 +98,8 @@ from-scratch rebuild:
 
 Used by [`.github/workflows/submission.yml`](../.github/workflows/submission.yml)
 to push the `record:` commit (a results-store update) directly to this
-repo's `main`, bypassing branch protection.
+repo's `main` or isolated `staging-results` branch, bypassing the matching
+branch ruleset.
 
 ### App settings
 
@@ -158,8 +160,8 @@ workflow has the app's secrets.
    gh secret set LEAN_EVAL_RECORDER_CLIENT_ID -R leanprover/lean-eval-submissions --body <CLIENT_ID>
    gh secret set LEAN_EVAL_RECORDER_PRIVATE_KEY -R leanprover/lean-eval-submissions < path/to/key.pem
    ```
-7. Add the App ID to the `main` ruleset's bypass list (see Ruleset
-   section below).
+7. Add the App ID to the `main` and `Protect staging Results` rulesets'
+   bypass lists (see Ruleset section below).
 
 ## GitHub App: `lean-eval-archiver`
 
@@ -330,6 +332,18 @@ check of the same name.
    gh api -X POST /repos/leanprover/lean-eval-submissions/rulesets \
        --input /tmp/main-ruleset.json
    ```
+
+### Staging Results ruleset
+
+Create `staging-results` from the reviewed `main` commit before the first
+staging intake run. Ruleset `Protect staging Results` targets only
+`refs/heads/staging-results`, forbids deletion and non-fast-forward updates,
+requires ordinary writers to use a pull request, and gives the same
+`lean-eval-recorder` integration the sole always-bypass. It deliberately has
+no required status check: recorder commits contain staging data, not reviewed
+code, and never deploy the public leaderboard. The live ruleset ID created on
+2026-08-23 is `21220656`; reconstruct by copying the `main protection` payload,
+changing the name and include condition, and omitting `required_status_checks`.
 
 ### Acceptable consequences of the bypass
 

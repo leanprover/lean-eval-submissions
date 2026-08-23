@@ -72,7 +72,7 @@ function environment(): BrokerRuntimeEnv {
 }
 
 function brokerRequest(
-  authority: "source" | "dispatch",
+  authority: "source" | "dispatch" | "results",
   url: string,
   options: Readonly<{ method?: string; body?: string | null; expectedCommit?: string | null }> = {},
 ): Request {
@@ -239,6 +239,60 @@ describe("GitHub App broker", () => {
     expect(response.status).toBe(204);
   });
 
+  it("allows only exact-commit Results reads through the dispatch installation", async () => {
+    const upstream = vi.fn<typeof fetch>((input, init) => {
+      const url = inputUrl(input);
+      if (url.endsWith("/repos/leanprover/lean-eval-submissions/installation")) {
+        return Promise.resolve(Response.json({ id: 789 }));
+      }
+      if (url.endsWith("/app/installations/789/access_tokens")) {
+        expect(JSON.parse(bodyText(init?.body))).toEqual({
+          repositories: ["lean-eval-submissions"],
+          permissions: { contents: "read", metadata: "read" },
+        });
+        return Promise.resolve(Response.json({
+          token: "ghs_results-installation-token",
+          expires_at: new Date(NOW + 3_600_000).toISOString(),
+        }));
+      }
+      expect(url).toBe(
+        `https://api.github.com/repos/leanprover/lean-eval-submissions/contents/results/alice.json?ref=${COMMIT}`,
+      );
+      expect(new Headers(init?.headers).get("authorization"))
+        .toBe("Bearer ghs_results-installation-token");
+      return Promise.resolve(Response.json({
+        type: "file",
+        path: "results/alice.json",
+        encoding: "base64",
+        content: "e30=",
+        size: 2,
+      }));
+    });
+    const response = await handleBrokerRequest(
+      brokerRequest(
+        "results",
+        `https://api.github.com/repos/leanprover/lean-eval-submissions/contents/results/alice.json?ref=${COMMIT}`,
+        { expectedCommit: COMMIT },
+      ),
+      environment(),
+      upstream,
+      NOW,
+    );
+    expect(response.status).toBe(200);
+
+    const rejected = await handleBrokerRequest(
+      brokerRequest(
+        "results",
+        `https://api.github.com/repos/leanprover/lean-eval-submissions/contents/README.md?ref=${COMMIT}`,
+        { expectedCommit: COMMIT },
+      ),
+      environment(),
+      upstream,
+      NOW,
+    );
+    expect(rejected.status).toBe(403);
+  });
+
   it("serializes an explicit audience, authority, and tag commit for the service binding", async () => {
     const bindingFetch = vi.fn<Pick<Fetcher, "fetch">["fetch"]>((_input, init) => {
       const payload = JSON.parse(bodyText(init?.body)) as Record<string, unknown>;
@@ -251,6 +305,21 @@ describe("GitHub App broker", () => {
     const response = await proxied("https://api.github.com/repos/alice/proofs/git/tags/" + "b".repeat(40), {
       headers: { "x-lean-eval-expected-commit": COMMIT },
     });
+    expect(response.status).toBe(200);
+  });
+
+  it("serializes the separate exact-commit Results authority", async () => {
+    const bindingFetch = vi.fn<Pick<Fetcher, "fetch">["fetch"]>((_input, init) => {
+      const payload = JSON.parse(bodyText(init?.body)) as Record<string, unknown>;
+      expect(payload.authority).toBe("results");
+      expect(payload.expected_commit).toBe(COMMIT);
+      return Promise.resolve(Response.json({ ok: true }));
+    });
+    const proxied = githubBrokerFetch({ fetch: bindingFetch }, "results");
+    const response = await proxied(
+      `https://api.github.com/repos/leanprover/lean-eval-submissions/contents/results/alice.json?ref=${COMMIT}`,
+      { headers: { "x-lean-eval-expected-commit": COMMIT } },
+    );
     expect(response.status).toBe(200);
   });
 });

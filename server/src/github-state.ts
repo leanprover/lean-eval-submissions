@@ -1,6 +1,7 @@
 import {
   stateEventPath,
   type StateEvent,
+  type WritableResultLifecycleEvent,
   type WritableSubmissionLifecycleEvent,
   type WritableStateEvent,
   validateStateEvent,
@@ -700,6 +701,9 @@ export class GitHubStateRepository {
       if (latestLifecycleEventId(current) !== expectedLifecycleEventId) {
         throw new StateEventConflictError(viewPath);
       }
+      if (current.mutation_event_id !== decodedView.mutation_event_id) {
+        throw new StateEventConflictError(viewPath);
+      }
       const existing = await Promise.all(paths.map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)));
       if (existing.some((entry) => entry.found)) {
         throw new StateEventConflictError(paths[existing.findIndex((entry) => entry.found)] ?? viewPath);
@@ -721,6 +725,104 @@ export class GitHubStateRepository {
       await pause(attempt);
     }
     throw new Error("unreachable submission lifecycle update");
+  }
+
+  async recordAcceptedResult(
+    events: readonly WritableResultLifecycleEvent[],
+    expectedLifecycleEventId: string,
+    nextView: SubmissionView,
+  ): Promise<{ commit: string; created: boolean; view: SubmissionView }> {
+    if (events.length < 1 || events.length > 2) {
+      throw new TypeError("result lifecycle batch must contain result recording and optional release schedule");
+    }
+    for (const event of events) validateStateEvent(event);
+    const result = events[0];
+    if (result?.event_type !== "result.recorded") {
+      throw new TypeError("result lifecycle batch must begin with result.recorded");
+    }
+    const decodedView = decodeSubmissionView(nextView);
+    if (
+      decodedView.schema_version !== 2 ||
+      decodedView.result_id !== result.subject_id ||
+      decodedView.result_event_id !== result.event_id ||
+      result.causation_event_id !== expectedLifecycleEventId ||
+      result.payload.submission_id !== decodedView.submission_id ||
+      result.payload.problem_id !== decodedView.submission.problem_id ||
+      result.payload.statement_revision !== decodedView.submission.statement_revision
+    ) {
+      throw new TypeError("result lifecycle identities disagree with the submission view");
+    }
+    const release = events[1];
+    const releaseRequired =
+      decodedView.submission.problem_group !== "open-conjectures" &&
+      decodedView.publication_choice === "scheduled";
+    if (releaseRequired !== (release !== undefined)) {
+      throw new TypeError("result lifecycle release scheduling disagrees with problem policy");
+    }
+    if (
+      release !== undefined &&
+      (release.event_type !== "release.scheduled" ||
+        release.subject_id !== result.subject_id ||
+        release.payload.result_id !== result.subject_id ||
+        release.causation_event_id !== result.event_id ||
+        Date.parse(release.occurred_at) <= Date.parse(result.occurred_at))
+    ) {
+      throw new TypeError("release schedule does not follow its recorded result");
+    }
+    const paths = events.map(stateEventPath);
+    const viewPath = submissionViewPath(decodedView.submission_id);
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+      const current = await readSubmissionAt(
+        this.#config,
+        this.#fetcher,
+        decodedView.submission_id,
+        snapshot.headSha,
+      );
+      if (current === null) throw new GitHubStateError(404, "submission view does not exist");
+      if (current.schema_version === 2 && current.result_event_id === result.event_id) {
+        const existing = await Promise.all(
+          paths.map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)),
+        );
+        if (
+          existing.some((entry, index) =>
+            !entry.found || canonicalJson(entry.value) !== canonicalJson(events[index])) ||
+          canonicalJson(current) !== canonicalJson(decodedView)
+        ) {
+          throw new StateEventConflictError(viewPath);
+        }
+        return { commit: snapshot.headSha, created: false, view: current };
+      }
+      if (
+        (current.schema_version === 2 && current.result_event_id !== null) ||
+        latestLifecycleEventId(current) !== expectedLifecycleEventId ||
+        current.mutation_event_id !== decodedView.mutation_event_id
+      ) {
+        throw new StateEventConflictError(viewPath);
+      }
+      const existing = await Promise.all(
+        paths.map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)),
+      );
+      if (existing.some((entry) => entry.found)) {
+        throw new StateEventConflictError(paths[existing.findIndex((entry) => entry.found)] ?? viewPath);
+      }
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        events,
+        [{ path: viewPath, value: decodedView }],
+        `Record accepted result ${result.subject_id} for ${decodedView.submission_id}`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return { commit, created: true, view: decodedView };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) {
+        throw new GitHubStateError(409, "State branch kept changing during result recording");
+      }
+      await pause(attempt);
+    }
+    throw new Error("unreachable result recording attempt");
   }
 
   async appendEvents(events: readonly WritableStateEvent[]): Promise<{

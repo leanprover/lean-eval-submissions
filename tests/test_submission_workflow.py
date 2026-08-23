@@ -94,7 +94,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
                 "  intake:", "  evaluate:", "  archive_issue:",
                 "  archive_server:", "  archive:",
                 "  archive_failure_state:", "  archive_state:",
-                "  evaluation_state:", "  record:", "  notify:",
+                "  evaluation_state:", "  record:", "  result_state:", "  notify:",
             ],
             "expected exactly the reviewed submission jobs",
         )
@@ -292,7 +292,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn("--leaderboard-dir results-store", self.text)
         self.assertRegex(
             self.text,
-            r"git -C results-store reset --hard origin/main",
+            r'git -C results-store reset --hard "origin/\$RESULTS_BRANCH"',
             "the reset/push loop must target the results-store checkout",
         )
 
@@ -316,7 +316,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
     def test_archive_state_callback_is_source_free_and_step_scoped(self) -> None:
         self.assertEqual(
             self.text.count("LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}"),
-            3,
+            4,
         )
         failure_callback = self.text.split("\n  archive_failure_state:", 1)[1].split("\n  archive_state:", 1)[0]
         self.assertIn("/internal/v1/archive-failed", failure_callback)
@@ -334,6 +334,22 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertNotIn("submission-audit-ciphertext", evaluation_callback)
         evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive_issue:", 1)[0]
         self.assertNotIn("LIFECYCLE_CALLBACK_TOKEN", evaluate)
+        result_callback = self.text.split("\n  result_state:", 1)[1].split("\n  # Catches", 1)[0]
+        self.assertIn("/internal/v1/result-completed", result_callback)
+        self.assertIn("name: submission-result-completion", result_callback)
+        self.assertNotIn("submission-results", result_callback)
+        self.assertNotIn("actions/checkout", result_callback)
+
+    def test_staging_results_are_isolated_and_receipted(self) -> None:
+        record = self.text.split("\n  record:", 1)[1].split("\n  result_state:", 1)[0]
+        self.assertIn("'staging-results' || 'main'", record)
+        self.assertIn('push origin "HEAD:$RESULTS_BRANCH"', record)
+        self.assertIn("scripts/build_result_receipt.py", record)
+        self.assertIn("name: submission-result-completion", record)
+        self.assertIn(
+            "if: github.event_name == 'issues' || inputs.callback_environment == 'production'",
+            record,
+        )
 
     def test_record_waits_on_archive(self) -> None:
         # Policy: a recorded leaderboard entry implies a durable

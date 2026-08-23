@@ -4,6 +4,7 @@ import {
   ApiDecodeError,
   assertSourcePolicy,
   decodeArchiveCompletion,
+  decodeResultCompletion,
   decodeSourceReaderPreflight,
   decodeSubmissionInput,
   readJson,
@@ -20,6 +21,7 @@ import { handleRequest, handleScheduled, type RuntimeEnv, type StateAccess } fro
 import { buildDispatchRequest, GitHubProvider } from "../src/github-provider";
 import {
   validateStateEvent,
+  type WritableResultLifecycleEvent,
   type WritableStateEvent,
   type WritableSubmissionLifecycleEvent,
 } from "../src/state-event";
@@ -78,6 +80,22 @@ class MemoryState implements StateAccess {
     const current = this.views.get(nextView.submission_id);
     if (!current || latestLifecycleEventId(current) !== expectedLifecycleEventId) {
       throw new Error("lifecycle conflict");
+    }
+    const decoded = decodeSubmissionView(nextView);
+    this.events.push(...events);
+    this.views.set(decoded.submission_id, decoded);
+    return Promise.resolve({ created: true, view: decoded });
+  }
+
+  recordAcceptedResult(
+    events: readonly WritableResultLifecycleEvent[],
+    expectedLifecycleEventId: string,
+    nextView: SubmissionView,
+  ): Promise<{ created: boolean; view: SubmissionView }> {
+    events.forEach((event) => validateStateEvent(event));
+    const current = this.views.get(nextView.submission_id);
+    if (!current || latestLifecycleEventId(current) !== expectedLifecycleEventId) {
+      throw new Error("result lifecycle conflict");
     }
     const decoded = decodeSubmissionView(nextView);
     this.events.push(...events);
@@ -179,6 +197,41 @@ function pendingView(
   };
 }
 
+function acceptedView(submissionId: string): SubmissionView {
+  const base = pendingView(submissionId, "2026-01-30T00:00:00.000Z", 1, "succeeded");
+  return {
+    ...base,
+    schema_version: 2,
+    archive: {
+      status: "completed",
+      event_id: "019c0a80-1000-7000-8000-000000000001",
+      occurred_at: "2026-01-30T01:00:00.000Z",
+      archive_repository: "leanprover/lean-eval-audit",
+      archive_commit: "d".repeat(40),
+      archive_path: `archives/${submissionId.replaceAll("-", "").slice(0, 2)}/${submissionId}.tar.age`,
+      archive_ciphertext_sha256: "e".repeat(64),
+      encrypted: true,
+    },
+    evaluation: {
+      status: "accepted",
+      event_id: "019c0da3-6b80-7000-8000-000000000002",
+      occurred_at: "2026-01-31T12:34:56.789Z",
+      attempt: 1,
+      benchmark_repository: "leanprover/lean-eval",
+      benchmark_commit: "c".repeat(40),
+      toolchain: "leanprover/lean4:v4.32.0",
+      evaluator_version: "b".repeat(40),
+    },
+    result_id: null,
+    result_event_id: null,
+  };
+}
+
+async function digest(value: string): Promise<string> {
+  const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 describe("strict API contract", () => {
   it("rejects extra fields, policy mismatches, and oversized bodies", async () => {
     expect(() => decodeSubmissionInput({ ...SUBMISSION, surprise: true })).toThrow(ApiDecodeError);
@@ -268,6 +321,27 @@ describe("strict API contract", () => {
       ...completion,
       locator: { ...completion.locator, archive_path: `archives/ff/${submissionId}.tar.age` },
     })).toThrow(/path/);
+  });
+
+  it("strictly decodes a result receipt", () => {
+    const completion = {
+      schema_version: 1,
+      submission_id: "0198abcd-1111-7000-8000-000000000001",
+      occurred_at: "2026-02-01T00:00:00.000Z",
+      result_id: `r2_${"a".repeat(64)}`,
+      problem_id: "two_plus_two",
+      statement_revision: 2,
+      result_repository: "leanprover/lean-eval-submissions",
+      result_branch: "staging-results",
+      result_commit: "b".repeat(40),
+      result_path: "results/alice.json",
+      result_tree_digest: "c".repeat(64),
+    } as const;
+    expect(decodeResultCompletion(completion)).toEqual(completion);
+    expect(() => decodeResultCompletion({ ...completion, result_path: "results/../alice.json" }))
+      .toThrow(/path/);
+    expect(() => decodeResultCompletion({ ...completion, result_branch: "main-copy" }))
+      .toThrow(/pins/);
   });
 
   it("strictly decodes and authenticates the staging source-reader preflight", async () => {
@@ -456,6 +530,104 @@ describe("strict API contract", () => {
       archive: { status: "failed", reason_code: "source_fetch_failed", retryable: true },
       evaluation: { status: "pending" },
     });
+  });
+
+  it("verifies an exact staging Results blob and atomically records result and release", async () => {
+    const state = new MemoryState();
+    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    const accepted = acceptedView(submissionId);
+    state.views.set(submissionId, accepted);
+    const resultId = `r2_${await digest(`lean-eval-result-v2\0${JSON.stringify([
+      "alice", SUBMISSION.declared_model, SUBMISSION.problem_id, SUBMISSION.statement_revision,
+    ])}`)}`;
+    expect(resultId).toBe("r2_ecad1e075c37192258a92f9c40ffa743864404c99cd14f790ecd26e80dc4ddaf");
+    const resultFile = JSON.stringify({
+      schema_version: 2,
+      user: "Alice",
+      results: [{
+        result_id: resultId,
+        problem_id: SUBMISSION.problem_id,
+        statement_revision: SUBMISSION.statement_revision,
+        declared_model: SUBMISSION.declared_model,
+      }],
+    });
+    const fileBytes = new TextEncoder().encode(resultFile);
+    const fileDigest = await digest(resultFile);
+    const treeDigest = await digest(`lean-eval-result-tree-v1\0${JSON.stringify([{
+      path: "results/alice.json",
+      sha256: fileDigest,
+      size: fileBytes.byteLength,
+    }])}`);
+    expect(treeDigest).toBe("00e10d25d0f8a5a1acb0f838db8011a2d570677bb062925cd100b7297fc4f0b2");
+    const resultFetch = vi.fn<typeof fetch>((input, init) => {
+      const url = input instanceof Request
+        ? input.url
+        : typeof input === "string"
+          ? input
+          : input.toString();
+      expect(url).toContain(`/contents/results/alice.json?ref=${"f".repeat(40)}`);
+      expect(new Headers(init?.headers).get("x-lean-eval-expected-commit")).toBe("f".repeat(40));
+      let binary = "";
+      for (const byte of fileBytes) binary += String.fromCharCode(byte);
+      return Promise.resolve(Response.json({
+        type: "file",
+        path: "results/alice.json",
+        encoding: "base64",
+        content: btoa(binary),
+        size: fileBytes.byteLength,
+      }));
+    });
+    const completion = {
+      schema_version: 1,
+      submission_id: submissionId,
+      occurred_at: "2026-02-01T00:00:00.000Z",
+      result_id: resultId,
+      problem_id: SUBMISSION.problem_id,
+      statement_revision: SUBMISSION.statement_revision,
+      result_repository: "leanprover/lean-eval-submissions",
+      result_branch: "staging-results",
+      result_commit: "f".repeat(40),
+      result_path: "results/alice.json",
+      result_tree_digest: treeDigest,
+    };
+    const request = jsonRequest("/internal/v1/result-completed", completion);
+    request.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+    const response = await handleRequest(
+      request,
+      { ...ENV, INTAKE_ENABLED: "false" },
+      LIFECYCLE,
+      {
+        state,
+        provider: new GitHubProvider(undefined, undefined, undefined, undefined, resultFetch),
+      },
+    );
+    expect(response.status).toBe(201);
+    expect(state.events.slice(-2)).toMatchObject([
+      {
+        event_type: "result.recorded",
+        subject_id: resultId,
+        causation_event_id: accepted.evaluation.status === "accepted"
+          ? accepted.evaluation.event_id
+          : "unreachable",
+        payload: {
+          submission_id: submissionId,
+          problem_id: SUBMISSION.problem_id,
+          statement_revision: SUBMISSION.statement_revision,
+          result_commit: completion.result_commit,
+          tree_digest: treeDigest,
+        },
+      },
+      {
+        event_type: "release.scheduled",
+        subject_id: resultId,
+        payload: { result_id: resultId, release_at: "2026-03-31T12:34:56.789Z" },
+      },
+    ]);
+    expect(state.views.get(submissionId)).toMatchObject({
+      result_id: resultId,
+      result_event_id: state.events.at(-2)?.event_id,
+    });
+    expect(resultFetch).toHaveBeenCalledOnce();
   });
 
   it("fails closed with 429 when the Cloudflare limiter denies or errors", async () => {

@@ -1096,15 +1096,18 @@ jobs:
     timeout-minutes: 45
     env:
       RESULTS_STORE_WRITER_GROUP: results-store-writer
+      RESULTS_BRANCH: ${{ github.event_name == 'workflow_dispatch' && inputs.callback_environment == 'staging' && 'staging-results' || 'main' }}
     permissions:
       contents: read
       issues: write
+    outputs:
+      result_receipt_ready: ${{ steps.result_receipt.outputs.ready }}
     steps:
       # Two checkouts of this repo. `code/` is read-only and pinned to
       # this workflow's own SHA: it supplies scripts/update_leaderboard.py
       # and must NOT be touched by the push-retry loop. `results-store/`
       # is the writable working copy the loop resets/commits/pushes — so
-      # the loop can `git reset --hard origin/main` without yanking the
+      # the loop can reset to the selected Results branch without yanking the
       # script out from under the running process.
       # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1125,8 +1128,8 @@ jobs:
           path: /tmp/submission-results
 
       # The writable results store. Checked out with the lean-eval-recorder
-      # App token so the `record:` push to this repo's protected `main`
-      # bypasses branch protection (the App is the ruleset bypass actor;
+      # App token so the `record:` push to this repo's protected production or
+      # staging Results branch bypasses its ruleset (the App is the bypass actor;
       # see docs/ci-secrets.md).
       - name: Mint lean-eval-recorder installation token
         id: recorder_token
@@ -1140,6 +1143,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           token: ${{ steps.recorder_token.outputs.token }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.callback_environment == 'staging' && 'staging-results' || 'main' }}
           # The push-retry loop below authenticates through .git/config.
           persist-credentials: true
           path: results-store
@@ -1217,8 +1221,8 @@ jobs:
             # this record lands first or its push is rejected and the next
             # iteration observes the lock.
             for wait_attempt in $(seq 1 120); do
-              git -C results-store fetch origin main
-              git -C results-store reset --hard origin/main
+              git -C results-store fetch origin "$RESULTS_BRANCH"
+              git -C results-store reset --hard "origin/$RESULTS_BRANCH"
               if [ ! -f results-store/.results-store-writer-lock.json ]; then
                 break
               fi
@@ -1254,7 +1258,7 @@ jobs:
             COMMIT_MSG=$(python -c "import json,sys; print(json.loads(sys.argv[1])['commit_message'])" "$OUTPUT")
             git -C results-store add results/
             git -C results-store commit -m "$COMMIT_MSG"
-            if git -C results-store push origin HEAD:main; then
+            if git -C results-store push origin "HEAD:$RESULTS_BRANCH"; then
               echo "results push succeeded on attempt $attempt"
               break
             fi
@@ -1270,7 +1274,62 @@ jobs:
             fi
           done
 
+      - name: Detect accepted server result
+        id: accepted_result
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          PROBLEM_ID: ${{ inputs.problem_id }}
+          RESULTS_PATH: /tmp/submission-results/results.json
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+
+          with open(os.environ["RESULTS_PATH"], encoding="utf-8") as stream:
+              results = json.load(stream)
+          accepted = os.environ["PROBLEM_ID"] in results.get("passed", [])
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"accepted={str(accepted).lower()}\n")
+          PY
+
+      - name: Build exact Results receipt
+        id: result_receipt
+        if: steps.accepted_result.outputs.accepted == 'true'
+        env:
+          DECLARED_MODEL: ${{ inputs.declared_model }}
+          PROBLEM_ID: ${{ inputs.problem_id }}
+          STATEMENT_REVISION: ${{ inputs.statement_revision }}
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+          SUBMITTED_BY: ${{ inputs.submitted_by }}
+        run: |
+          set -euo pipefail
+          occurred_at=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
+          result_commit=$(git -C results-store rev-parse HEAD)
+          python code/scripts/build_result_receipt.py \
+            --results-file "results-store/results/${SUBMITTED_BY}.json" \
+            --results-root results-store \
+            --submission-id "$SUBMISSION_ID" \
+            --user "$SUBMITTED_BY" \
+            --declared-model "$DECLARED_MODEL" \
+            --problem-id "$PROBLEM_ID" \
+            --statement-revision "$STATEMENT_REVISION" \
+            --result-branch "$RESULTS_BRANCH" \
+            --result-commit "$result_commit" \
+            --occurred-at "$occurred_at" \
+            --output /tmp/result-completion.json
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Upload source-free Results receipt
+        if: steps.result_receipt.outputs.ready == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: submission-result-completion
+          path: /tmp/result-completion.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Redeploy leaderboard
+        if: github.event_name == 'issues' || inputs.callback_environment == 'production'
         # Fire a repository_dispatch so the leaderboard rebuilds with the
         # new result. Best-effort: if the dispatch fails AFTER the result
         # push succeeded, the data advanced but the site did not — surface
@@ -1348,6 +1407,67 @@ jobs:
           gh issue close ${{ github.event.issue.number }} \
             --repo "${{ github.repository }}" \
             --reason "completed"
+
+  result_state:
+    needs: [evaluation_state, record]
+    if: |
+      always()
+      && github.event_name == 'workflow_dispatch'
+      && needs.evaluation_state.result == 'success'
+      && needs.record.result == 'success'
+      && needs.record.outputs.result_receipt_ready == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment:
+      name: cloudflare-${{ inputs.callback_environment }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: submission-result-completion
+          path: /tmp/result-completion
+
+      - name: Record verified result completion in State
+        env:
+          CALLBACK_ENVIRONMENT: ${{ inputs.callback_environment }}
+          LIFECYCLE_CALLBACK_TOKEN: ${{ secrets.LIFECYCLE_CALLBACK_TOKEN }}
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+        run: |
+          set -euo pipefail
+          case "$CALLBACK_ENVIRONMENT" in
+            staging)
+              endpoint="https://lean-eval-submission-server-staging.lean-eval.workers.dev/internal/v1/result-completed"
+              ;;
+            production)
+              endpoint="https://lean-eval-submission-server.lean-eval.workers.dev/internal/v1/result-completed"
+              ;;
+            *)
+              echo "unsupported callback environment" >&2
+              exit 1
+              ;;
+          esac
+          response_file=$(mktemp)
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer ${LIFECYCLE_CALLBACK_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data-binary @/tmp/result-completion/result-completion.json \
+            --output "$response_file" \
+            "$endpoint"
+          RESPONSE_FILE="$response_file" python3 - <<'PY'
+          import json
+          import os
+
+          with open(os.environ["RESPONSE_FILE"], encoding="utf-8") as stream:
+              payload = json.load(stream)
+          if payload.get("status") not in {"recorded", "already_recorded"}:
+              raise SystemExit("result completion callback did not confirm State")
+          if payload.get("submission_id") != os.environ["SUBMISSION_ID"]:
+              raise SystemExit("result completion callback confirmed the wrong submission")
+          if not isinstance(payload.get("result_id"), str):
+              raise SystemExit("result completion callback omitted the result identity")
+          PY
 
   # Catches the case where the archival fetch and size check succeeded but
   # archive persistence, evaluation, or recording did not complete cleanly.

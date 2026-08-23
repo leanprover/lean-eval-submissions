@@ -17,8 +17,8 @@ class MigrationWorkflowStructureTests(unittest.TestCase):
     def test_record_waits_on_durable_lock_without_lossy_job_concurrency(self) -> None:
         record = SUBMISSION.split("\n  record:", 1)[1].split("\n  notify:", 1)[0]
         self.assertIn(".results-store-writer-lock.json", record)
-        self.assertIn("git -C results-store fetch origin main", record)
-        self.assertIn("git -C results-store reset --hard origin/main", record)
+        self.assertIn('git -C results-store fetch origin "$RESULTS_BRANCH"', record)
+        self.assertIn('git -C results-store reset --hard "origin/$RESULTS_BRANCH"', record)
         self.assertNotIn("concurrency:", record)
         self.assertIn("timeout-minutes: 45", record)
 
