@@ -77,7 +77,7 @@ jobs:
           {
             echo '### Recovered one stale replay attempt'
             echo
-            echo '- appended one retryable `runner_lost` event; no credential was acquired and no new replay was started'
+            echo "- appended one retryable \`runner_lost\` event; no credential was acquired and no new replay was started"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Report a still-running controller and stop
