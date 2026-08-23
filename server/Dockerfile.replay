@@ -18,7 +18,9 @@ RUN apt-get update \
 
 COPY replay-image/replay-staging-acceptance /opt/lean-eval/replay-staging-acceptance
 COPY replay-image/replay-archive-acceptance /opt/lean-eval/replay-archive-acceptance
+COPY replay-image/replay-measure /opt/lean-eval/replay-measure
 RUN chmod 0555 /opt/lean-eval/replay-staging-acceptance \
-    /opt/lean-eval/replay-archive-acceptance
+    /opt/lean-eval/replay-archive-acceptance \
+    /opt/lean-eval/replay-measure
 
 EXPOSE 3000

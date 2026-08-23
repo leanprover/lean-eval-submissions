@@ -1,0 +1,241 @@
+#!/usr/bin/env python3
+"""Measure one comparator-owned Landrun phase for authoritative replay."""
+
+from __future__ import annotations
+
+import json
+import ctypes
+import errno
+import fcntl
+import os
+import pathlib
+import struct
+import subprocess
+import sys
+import tempfile
+import time
+from typing import Any
+
+METRICS_PATH = pathlib.Path("/run/lean-eval/metrics.json")
+LANDRUN = "/usr/local/bin/landrun"
+PHASES = {"build", "checker"}
+COUNTER_REASONS = {
+    "counter_not_reported",
+    "counter_not_supported",
+    "counter_permission_denied",
+}
+
+
+class MeasurementError(ValueError):
+    """The trusted measurement invocation or metrics store is invalid."""
+
+
+def parse_invocation(argv: list[str]) -> tuple[str, list[str]]:
+    if len(argv) < 4 or argv[0] != "--phase" or argv[2] != "--":
+        raise MeasurementError("measurement invocation is not canonical")
+    phase = argv[1]
+    command = argv[3:]
+    if phase not in PHASES or not command or command[0] != LANDRUN:
+        raise MeasurementError("measurement phase or command is not allowed")
+    if any("\0" in argument for argument in command):
+        raise MeasurementError("measurement command contains NUL")
+    return phase, command
+
+
+def unavailable_reason(error_number: int) -> str:
+    if error_number in {errno.EACCES, errno.EPERM}:
+        return "counter_permission_denied"
+    if error_number in {
+        errno.E2BIG,
+        errno.EINVAL,
+        errno.ENOENT,
+        errno.ENOSYS,
+        errno.EOPNOTSUPP,
+    }:
+        return "counter_not_supported"
+    return "counter_not_reported"
+
+
+def open_counter() -> tuple[int | None, str | None]:
+    """Open an inherited userspace retired-instruction counter.
+
+    `perf_event_attr` version 0 is exactly 64 bytes. Keeping the kernel ABI
+    boundary this small avoids depending on a host-specific `perf` binary.
+    The counter starts disabled, counts descendants, and excludes kernel and
+    hypervisor instructions: the same semantics as `instructions:u`.
+    """
+    syscall_numbers = {"x86_64": 298, "aarch64": 241}
+    number = syscall_numbers.get(os.uname().machine)
+    if number is None:
+        return None, "counter_not_supported"
+    attributes = bytearray(64)
+    struct.pack_into("=IIQ", attributes, 0, 0, 64, 1)
+    flags = (1 << 0) | (1 << 1) | (1 << 5) | (1 << 6)
+    struct.pack_into("=Q", attributes, 40, flags)
+    buffer = (ctypes.c_ubyte * len(attributes)).from_buffer(attributes)
+    libc = ctypes.CDLL(None, use_errno=True)
+    descriptor = libc.syscall(number, ctypes.byref(buffer), 0, -1, -1, 0)
+    if descriptor < 0:
+        return None, unavailable_reason(ctypes.get_errno())
+    return descriptor, None
+
+
+def run_measured(command: list[str]) -> tuple[int, int, dict[str, Any]]:
+    descriptor, reason = open_counter()
+    # PERF_EVENT_IOC_* uses the `_IO('$', n)` encoding on Linux.
+    if descriptor is not None:
+        try:
+            fcntl.ioctl(descriptor, 0x2403, 0)  # reset
+            fcntl.ioctl(descriptor, 0x2400, 0)  # enable
+        except OSError as error:
+            os.close(descriptor)
+            descriptor = None
+            reason = unavailable_reason(error.errno)
+    started = time.monotonic_ns()
+    try:
+        result = subprocess.run(command, check=False)
+    except OSError as error:
+        raise MeasurementError("measurement could not start landrun") from error
+    finally:
+        elapsed_ms = max(0, (time.monotonic_ns() - started) // 1_000_000)
+    value: int | None = None
+    if descriptor is not None:
+        try:
+            fcntl.ioctl(descriptor, 0x2401, 0)  # disable
+            raw = os.read(descriptor, 8)
+            if len(raw) == 8:
+                value = struct.unpack("=Q", raw)[0]
+        except OSError as error:
+            reason = unavailable_reason(error.errno)
+        finally:
+            os.close(descriptor)
+    counter: dict[str, Any]
+    if value is not None:
+        counter = {"status": "measured", "value": value}
+    else:
+        counter = {
+            "status": "unavailable",
+            "reason": reason or "counter_not_reported",
+        }
+    return result.returncode, elapsed_ms, counter
+
+
+def empty_metrics() -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "phases": {
+            phase: {
+                "invocations": 0,
+                "wall_time_ms": 0,
+                "retired_instructions": {"status": "measured", "value": 0},
+            }
+            for phase in sorted(PHASES)
+        },
+    }
+
+
+def validate_metrics(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {"schema_version", "phases"}:
+        raise MeasurementError("metrics store is invalid")
+    if value["schema_version"] != 1 or not isinstance(value["phases"], dict):
+        raise MeasurementError("metrics store schema is invalid")
+    if set(value["phases"]) != PHASES:
+        raise MeasurementError("metrics phases are invalid")
+    for phase in PHASES:
+        record = value["phases"][phase]
+        if not isinstance(record, dict) or set(record) != {
+            "invocations",
+            "wall_time_ms",
+            "retired_instructions",
+        }:
+            raise MeasurementError("metrics phase record is invalid")
+        for field in ("invocations", "wall_time_ms"):
+            if (
+                isinstance(record[field], bool)
+                or not isinstance(record[field], int)
+                or record[field] < 0
+            ):
+                raise MeasurementError("metrics integer is invalid")
+        counter = record["retired_instructions"]
+        if not isinstance(counter, dict):
+            raise MeasurementError("metrics counter is invalid")
+        if counter.get("status") == "measured":
+            if set(counter) != {"status", "value"} or (
+                isinstance(counter["value"], bool)
+                or not isinstance(counter["value"], int)
+                or counter["value"] < 0
+            ):
+                raise MeasurementError("measured counter is invalid")
+        elif counter.get("status") == "unavailable":
+            if set(counter) != {"status", "reason"} or counter["reason"] not in COUNTER_REASONS:
+                raise MeasurementError("unavailable counter is invalid")
+        else:
+            raise MeasurementError("metrics counter status is invalid")
+    return value
+
+
+def aggregate(
+    value: dict[str, Any], phase: str, wall_time_ms: int, counter: dict[str, Any]
+) -> dict[str, Any]:
+    metrics = validate_metrics(value)
+    record = metrics["phases"][phase]
+    record["invocations"] += 1
+    record["wall_time_ms"] += wall_time_ms
+    previous = record["retired_instructions"]
+    if previous["status"] == "measured" and counter["status"] == "measured":
+        previous["value"] += counter["value"]
+    elif previous["status"] == "measured":
+        record["retired_instructions"] = counter
+    return metrics
+
+
+def load_metrics() -> dict[str, Any]:
+    try:
+        descriptor = os.open(METRICS_PATH, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return empty_metrics()
+    except OSError as error:
+        raise MeasurementError("metrics store cannot be opened safely") from error
+    try:
+        with os.fdopen(descriptor, "rb") as source:
+            raw = source.read(16_385)
+    except OSError as error:
+        raise MeasurementError("metrics store cannot be read") from error
+    if len(raw) > 16_384:
+        raise MeasurementError("metrics store exceeds size limit")
+    try:
+        return validate_metrics(json.loads(raw.decode("utf-8")))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise MeasurementError("metrics store is not JSON") from error
+
+
+def save_metrics(value: dict[str, Any]) -> None:
+    metrics = validate_metrics(value)
+    METRICS_PATH.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    raw = json.dumps(metrics, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    descriptor, temporary = tempfile.mkstemp(prefix=".metrics-", dir=METRICS_PATH.parent)
+    path = pathlib.Path(temporary)
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "wb") as output:
+            output.write(raw)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(path, METRICS_PATH)
+    finally:
+        path.unlink(missing_ok=True)
+
+
+def main(argv: list[str] | None = None) -> int:
+    try:
+        phase, command = parse_invocation(list(sys.argv[1:] if argv is None else argv))
+        returncode, wall_time_ms, counter = run_measured(command)
+        save_metrics(aggregate(load_metrics(), phase, wall_time_ms, counter))
+        return 128 + (-returncode) if returncode < 0 else returncode
+    except MeasurementError as error:
+        print(f"replay-measure: {error}", file=sys.stderr)
+        return 125
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

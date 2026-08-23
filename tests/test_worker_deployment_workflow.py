@@ -100,6 +100,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("await sandbox.destroy()", REPLAY_APP)
         self.assertIn("/api/v1/staging-archive-acceptance", REPLAY_APP)
         self.assertIn("/opt/lean-eval/replay-archive-acceptance", REPLAY_DOCKERFILE)
+        self.assertIn("/opt/lean-eval/replay-measure", REPLAY_DOCKERFILE)
         self.assertIn("ca-certificates curl python3", REPLAY_DOCKERFILE)
         self.assertIn("test \"$(age --version)\" = 'v1.3.1'", REPLAY_DOCKERFILE)
 
