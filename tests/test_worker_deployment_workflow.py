@@ -113,6 +113,28 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         dry_run = PACKAGE["scripts"]["deploy:dry-run"]
         self.assertEqual(dry_run.count("--containers-rollout=none"), 2)
 
+    def test_deployment_waits_for_each_exact_container_rollout(self) -> None:
+        self.assertEqual(DEPLOY.count("wait_replay_container_rollout.py"), 2)
+        for environment, application in (
+            (
+                "staging",
+                "lean-eval-replay-executor-staging-replaysandbox-staging",
+            ),
+            (
+                "production",
+                "lean-eval-replay-executor-replaysandbox-production",
+            ),
+        ):
+            deployment = DEPLOY.index(
+                f"wrangler deploy --config wrangler.replay.jsonc --env {environment}"
+            )
+            wait = DEPLOY.index(f"--application {application}")
+            smoke = DEPLOY.index(
+                f"Smoke-test disabled {environment} replay executor"
+            )
+            self.assertLess(deployment, wait)
+            self.assertLess(wait, smoke)
+
     def test_reviewed_promotion_uses_only_contents_write(self) -> None:
         block = DEPLOY.split("\n  promote-dispatch-ref:", 1)[1].split(
             "\n  deploy-staging:", 1
