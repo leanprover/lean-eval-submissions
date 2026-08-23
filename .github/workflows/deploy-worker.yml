@@ -206,7 +206,7 @@ jobs:
               "production_memory_gate_bytes": 12 * 1024**3,
               "reviewed_execution_profile_digest": "0" * 64,
               "reviewed_measurement_config_digest": "0" * 64,
-              "reviewed_vm_image_digest": "sha256:" + "0" * 64,
+              "reviewed_vm_image_digest": "sha256:53d1964edc01f736ae66d7faa715d5b1fb67c96dcc167b4c5012282d8c14c807",
           }
           PY
             then
@@ -306,7 +306,7 @@ jobs:
               "production_memory_gate_bytes": 12 * 1024**3,
               "reviewed_execution_profile_digest": "0" * 64,
               "reviewed_measurement_config_digest": "0" * 64,
-              "reviewed_vm_image_digest": "sha256:" + "0" * 64,
+              "reviewed_vm_image_digest": "sha256:53d1964edc01f736ae66d7faa715d5b1fb67c96dcc167b4c5012282d8c14c807",
           }
           PY
             then

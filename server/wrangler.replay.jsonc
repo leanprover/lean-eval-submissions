@@ -18,7 +18,7 @@
       "containers": [
         {
           "class_name": "ReplaySandbox",
-          "image": "./Dockerfile.replay",
+          "image": "registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative:fdcabb95085edccd70c81dc079c27bcaf20a4b16",
           "instance_type": "standard-4",
           "max_instances": 1,
           "ssh": { "enabled": false }
@@ -43,7 +43,7 @@
         "PRODUCTION_MEMORY_GATE_BYTES": "12884901888",
         "REVIEWED_EXECUTION_PROFILE_DIGEST": "0000000000000000000000000000000000000000000000000000000000000000",
         "REVIEWED_MEASUREMENT_CONFIG_DIGEST": "0000000000000000000000000000000000000000000000000000000000000000",
-        "REVIEWED_VM_IMAGE_DIGEST": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "REVIEWED_VM_IMAGE_DIGEST": "sha256:53d1964edc01f736ae66d7faa715d5b1fb67c96dcc167b4c5012282d8c14c807",
         "SANDBOX_TRANSPORT": "rpc"
       }
     },
@@ -54,7 +54,7 @@
       "containers": [
         {
           "class_name": "ReplaySandbox",
-          "image": "./Dockerfile.replay",
+          "image": "registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative:fdcabb95085edccd70c81dc079c27bcaf20a4b16",
           "instance_type": "standard-4",
           "max_instances": 1,
           "ssh": { "enabled": false }
@@ -79,7 +79,7 @@
         "PRODUCTION_MEMORY_GATE_BYTES": "12884901888",
         "REVIEWED_EXECUTION_PROFILE_DIGEST": "0000000000000000000000000000000000000000000000000000000000000000",
         "REVIEWED_MEASUREMENT_CONFIG_DIGEST": "0000000000000000000000000000000000000000000000000000000000000000",
-        "REVIEWED_VM_IMAGE_DIGEST": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "REVIEWED_VM_IMAGE_DIGEST": "sha256:53d1964edc01f736ae66d7faa715d5b1fb67c96dcc167b4c5012282d8c14c807",
         "SANDBOX_TRANSPORT": "rpc"
       }
     }

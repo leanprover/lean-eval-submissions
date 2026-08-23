@@ -39,7 +39,11 @@ try:
     if not isinstance(containers, list) or len(containers) != 1:
         raise ValueError("deployment must contain exactly one replay container")
     image = containers[0]["image"]
-    match = re.fullmatch(r"(lean-eval-authoritative):([0-9a-f]{40})", image)
+    match = re.fullmatch(
+        r"registry\.cloudflare\.com/([0-9a-f]{32})/"
+        r"(lean-eval-authoritative):([0-9a-f]{40})",
+        image,
+    )
     digest = selected["vars"]["REVIEWED_VM_IMAGE_DIGEST"]
     if match is None or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None:
         raise ValueError("reviewed image reference is not immutable")
@@ -51,16 +55,22 @@ except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueE
 
 print(match.group(1))
 print(match.group(2))
+print(match.group(3))
 print(digest)
 PY
 )
-if [ "${#reference[@]}" -ne 3 ]; then
+if [ "${#reference[@]}" -ne 4 ]; then
   echo "authoritative image reference did not produce one canonical binding" >&2
   exit 1
 fi
-repository=${reference[0]}
-tag=${reference[1]}
-expected_digest=${reference[2]}
+account_id=${reference[0]}
+repository=${reference[1]}
+tag=${reference[2]}
+expected_digest=${reference[3]}
+if [ "$account_id" != "$CLOUDFLARE_ACCOUNT_ID" ]; then
+  echo "reviewed image account does not match the deployment authority" >&2
+  exit 1
+fi
 
 script_directory=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 server_directory=$(dirname "$script_directory")/server
@@ -85,7 +95,7 @@ curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
   --user "$registry_username:$registry_password" \
   --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
   --head \
-  "https://registry.cloudflare.com/v2/$CLOUDFLARE_ACCOUNT_ID/$repository/manifests/$tag" \
+  "https://registry.cloudflare.com/v2/$account_id/$repository/manifests/$tag" \
   --dump-header "$headers" \
   --output /dev/null
 actual_digest=$(sed -n \

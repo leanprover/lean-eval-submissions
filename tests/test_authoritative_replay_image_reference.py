@@ -6,6 +6,12 @@ import unittest
 
 
 ROOT = pathlib.Path(__file__).parents[1]
+IMAGE_TAG = "fdcabb95085edccd70c81dc079c27bcaf20a4b16"
+IMAGE_DIGEST = "sha256:53d1964edc01f736ae66d7faa715d5b1fb67c96dcc167b4c5012282d8c14c807"
+IMAGE_REFERENCE = (
+    "registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/"
+    f"lean-eval-authoritative:{IMAGE_TAG}"
+)
 SCRIPT = ROOT / "scripts" / "verify_authoritative_replay_image_reference"
 DEPLOY = ROOT / ".github" / "workflows" / "deploy-worker.yml"
 WRANGLER = json.loads(
@@ -20,17 +26,19 @@ class AuthoritativeReplayImageReferenceTests(unittest.TestCase):
         cls.deploy = DEPLOY.read_text(encoding="utf-8")
 
     def test_reference_is_immutable_nonplaceholder_and_environment_bounded(self) -> None:
+        self.assertIn(r"registry\.cloudflare\.com", self.script)
         self.assertIn("lean-eval-authoritative", self.script)
         self.assertIn("[0-9a-f]{40}", self.script)
         self.assertIn('digest == "sha256:" + "0" * 64', self.script)
         self.assertIn('!= staging ] && [ "$environment" != production', self.script)
 
     def test_registry_head_is_bound_to_the_reviewed_manifest(self) -> None:
-        self.assertIn("registry.cloudflare.com/v2/$CLOUDFLARE_ACCOUNT_ID", self.script)
+        self.assertIn("registry.cloudflare.com/v2/$account_id", self.script)
         self.assertIn("ocker-[Cc]ontent-[Dd]igest", self.script)
         self.assertIn("timeout 60s npx", self.script)
         self.assertIn("--max-time 30", self.script)
         self.assertIn('if [ "$actual_digest" != "$expected_digest" ]', self.script)
+        self.assertIn('if [ "$account_id" != "$CLOUDFLARE_ACCOUNT_ID" ]', self.script)
         self.assertNotIn("containers push", self.script)
         self.assertEqual(self.script.count("::add-mask::"), 2)
         self.assertIn("unset CLOUDFLARE_API_TOKEN", self.script)
@@ -63,6 +71,19 @@ class AuthoritativeReplayImageReferenceTests(unittest.TestCase):
         self.assertEqual(
             staging["vars"]["REVIEWED_VM_IMAGE_DIGEST"],
             production["vars"]["REVIEWED_VM_IMAGE_DIGEST"],
+        )
+        self.assertEqual(
+            staging["containers"][0]["image"],
+            IMAGE_REFERENCE,
+        )
+        self.assertEqual(staging["vars"]["REVIEWED_VM_IMAGE_DIGEST"], IMAGE_DIGEST)
+
+    def test_disabled_deployment_smokes_expect_the_reviewed_manifest(self) -> None:
+        self.assertEqual(
+            self.deploy.count(
+                f'"reviewed_vm_image_digest": "{IMAGE_DIGEST}"'
+            ),
+            2,
         )
 
 
