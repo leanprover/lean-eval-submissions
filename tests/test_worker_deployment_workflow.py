@@ -70,7 +70,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertEqual(DEPLOY.count('echo "replay health payload did not converge'), 2)
         self.assertNotIn("curl --fail --retry", DEPLOY)
 
-    def test_replay_executor_is_isolated_capacity_bounded_and_disabled(self) -> None:
+    def test_replay_executor_is_isolated_capacity_bounded_and_staging_only(self) -> None:
         expected_urls = {
             "staging": "https://lean-eval-replay-executor-staging.lean-eval.workers.dev/healthz",
             "production": "https://lean-eval-replay-executor.lean-eval.workers.dev/healthz",
@@ -86,7 +86,10 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 self.assertEqual(container["ssh"], {"enabled": False})
                 self.assertIs(configuration["workers_dev"], True)
                 self.assertIs(configuration["preview_urls"], False)
-                self.assertEqual(variables["REPLAY_ENABLED"], "false")
+                self.assertEqual(
+                    variables["REPLAY_ENABLED"],
+                    "true" if environment == "staging" else "false",
+                )
                 self.assertEqual(
                     variables["STAGING_ACCEPTANCE_ENABLED"],
                     "true" if environment == "staging" else "false",
@@ -129,8 +132,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 f"wrangler deploy --config wrangler.replay.jsonc --env {environment}"
             )
             wait = DEPLOY.index(f"--application {application}")
+            expected_state = "enabled" if environment == "staging" else "disabled"
             smoke = DEPLOY.index(
-                f"Smoke-test disabled {environment} replay executor"
+                f"Smoke-test {expected_state} {environment} replay executor"
             )
             self.assertLess(deployment, wait)
             self.assertLess(wait, smoke)
