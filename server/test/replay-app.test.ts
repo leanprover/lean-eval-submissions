@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { handleReplayRequest, type ReplayRuntimeEnv } from "../src/replay-app";
 
+const PROFILE_DIGEST = "3".repeat(64);
+const MEASUREMENT_DIGEST = "4".repeat(64);
+const VM_IMAGE_DIGEST = `sha256:${"5".repeat(64)}`;
+
 async function input(): Promise<Record<string, unknown>> {
   const ciphertext = btoa("age-encryption.org/v1\nfixture");
   const bytes = Uint8Array.from(atob(ciphertext), (character) => character.charCodeAt(0));
@@ -49,9 +53,9 @@ async function authoritativeInput(): Promise<Record<string, unknown>> {
     request: {
       replay_task_id: `rt1_${"2".repeat(64)}`,
       attempt: 1,
-      execution_profile_digest: "0".repeat(64),
-      measurement_config_digest: "0".repeat(64),
-      execution_profile: { vm_image_digest: `sha256:${"0".repeat(64)}` },
+      execution_profile_digest: PROFILE_DIGEST,
+      measurement_config_digest: MEASUREMENT_DIGEST,
+      execution_profile: { vm_image_digest: VM_IMAGE_DIGEST },
       source: {
         visibility: "private",
         archive: {
@@ -87,6 +91,13 @@ const ENV = {
   GITHUB_OIDC_ENVIRONMENT: "replay-staging",
 } as ReplayRuntimeEnv;
 
+const REVIEWED_ENV = {
+  ...ENV,
+  REVIEWED_EXECUTION_PROFILE_DIGEST: PROFILE_DIGEST,
+  REVIEWED_MEASUREMENT_CONFIG_DIGEST: MEASUREMENT_DIGEST,
+  REVIEWED_VM_IMAGE_DIGEST: VM_IMAGE_DIGEST,
+} as ReplayRuntimeEnv;
+
 describe("Cloudflare replay executor", () => {
   it("refuses the authoritative route before authentication while disabled", async () => {
     let authenticated = false;
@@ -115,7 +126,7 @@ describe("Cloudflare replay executor", () => {
     const response = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {
       method: "POST",
       body: JSON.stringify(body),
-    }), { ...ENV, REPLAY_ENABLED: "true" }, {
+    }), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
       authenticate: () => Promise.resolve(),
       sandbox: () => ({
         writeFile: (path) => {
@@ -175,7 +186,7 @@ describe("Cloudflare replay executor", () => {
     const response = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {
       method: "POST",
       body: JSON.stringify(await authoritativeInput()),
-    }), { ...ENV, REPLAY_ENABLED: "true" }, {
+    }), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
       authenticate: () => Promise.resolve(),
       sandbox: () => ({
         writeFile: (path) => Promise.resolve({ success: false, path, timestamp: "fixture" }),

@@ -1,4 +1,5 @@
 const DIGEST = /^[0-9a-f]{64}$/;
+const ZERO_DIGEST = "0".repeat(64);
 const UUID7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const REPLAY_ID = /^rt1_[0-9a-f]{64}$/;
 const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
@@ -100,7 +101,10 @@ export async function readAuthoritativeReplayRequest(
   if (
     !DIGEST.test(reviewedProfileDigest) ||
     !DIGEST.test(reviewedMeasurementDigest) ||
-    !/^sha256:[0-9a-f]{64}$/.test(reviewedVmImageDigest)
+    !/^sha256:[0-9a-f]{64}$/.test(reviewedVmImageDigest) ||
+    reviewedProfileDigest === ZERO_DIGEST ||
+    reviewedMeasurementDigest === ZERO_DIGEST ||
+    reviewedVmImageDigest === `sha256:${ZERO_DIGEST}`
   ) {
     throw new AuthoritativeReplayContractError("reviewed replay digests are not configured");
   }

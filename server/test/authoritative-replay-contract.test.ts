@@ -92,6 +92,22 @@ describe("authoritative replay boundary contract", () => {
       .toThrow("does not match");
   });
 
+  it("rejects placeholder reviewed digests before reading the request", async () => {
+    const request = () => new Request("https://example.test", {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    await expect(readAuthoritativeReplayRequest(
+      request(), "0".repeat(64), MEASUREMENT_DIGEST, VM_IMAGE_DIGEST,
+    )).rejects.toThrow("not configured");
+    await expect(readAuthoritativeReplayRequest(
+      request(), PROFILE_DIGEST, "0".repeat(64), VM_IMAGE_DIGEST,
+    )).rejects.toThrow("not configured");
+    await expect(readAuthoritativeReplayRequest(
+      request(), PROFILE_DIGEST, MEASUREMENT_DIGEST, `sha256:${"0".repeat(64)}`,
+    )).rejects.toThrow("not configured");
+  });
+
   it("rejects a profile whose VM image differs from the reviewed manifest", async () => {
     await expect(readAuthoritativeReplayRequest(new Request("https://example.test", {
       method: "POST",
