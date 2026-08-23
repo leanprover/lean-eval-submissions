@@ -73,7 +73,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-npx --prefix "$server_directory" wrangler containers registries credentials \
+timeout 60s npx --prefix "$server_directory" wrangler containers registries credentials \
   registry.cloudflare.com --pull --expiration-minutes 5 --json > "$credentials"
 unset CLOUDFLARE_API_TOKEN
 registry_username=$(jq -er .username "$credentials")
@@ -81,6 +81,7 @@ registry_password=$(jq -er .password "$credentials")
 echo "::add-mask::$registry_username"
 echo "::add-mask::$registry_password"
 curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+  --max-time 30 \
   --user "$registry_username:$registry_password" \
   --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
   --head \

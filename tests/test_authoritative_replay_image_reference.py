@@ -28,6 +28,8 @@ class AuthoritativeReplayImageReferenceTests(unittest.TestCase):
     def test_registry_head_is_bound_to_the_reviewed_manifest(self) -> None:
         self.assertIn("registry.cloudflare.com/v2/$CLOUDFLARE_ACCOUNT_ID", self.script)
         self.assertIn("ocker-[Cc]ontent-[Dd]igest", self.script)
+        self.assertIn("timeout 60s npx", self.script)
+        self.assertIn("--max-time 30", self.script)
         self.assertIn('if [ "$actual_digest" != "$expected_digest" ]', self.script)
         self.assertNotIn("containers push", self.script)
         self.assertEqual(self.script.count("::add-mask::"), 2)
