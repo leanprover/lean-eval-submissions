@@ -132,19 +132,26 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
       - run: npm ci
-      - name: Deploy staging GitHub broker
+      - name: Verify reviewed staging replay image manifest
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: >-
-          npx wrangler deploy --config wrangler.broker.jsonc --env staging
-          --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+          ../scripts/verify_authoritative_replay_image_reference
+          --config wrangler.replay.jsonc --environment staging
       - name: Deploy staging replay executor and container
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: >-
           npx wrangler deploy --config wrangler.replay.jsonc --env staging
+          --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+      - name: Deploy staging GitHub broker
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          npx wrangler deploy --config wrangler.broker.jsonc --env staging
           --var "DEPLOYED_COMMIT:$GITHUB_SHA"
       - name: Deploy staging submission Worker
         env:
@@ -199,7 +206,7 @@ jobs:
               "production_memory_gate_bytes": 12 * 1024**3,
               "reviewed_execution_profile_digest": "0" * 64,
               "reviewed_measurement_config_digest": "0" * 64,
-              "reviewed_vm_image_digest": "sha256:" + "0" * 64,
+              "reviewed_vm_image_digest": "sha256:53d1964edc01f736ae66d7faa715d5b1fb67c96dcc167b4c5012282d8c14c807",
           }
           PY
             then
@@ -225,19 +232,26 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
       - run: npm ci
-      - name: Deploy production GitHub broker
+      - name: Verify reviewed production replay image manifest
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: >-
-          npx wrangler deploy --config wrangler.broker.jsonc --env production
-          --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+          ../scripts/verify_authoritative_replay_image_reference
+          --config wrangler.replay.jsonc --environment production
       - name: Deploy disabled production replay executor and container
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: >-
           npx wrangler deploy --config wrangler.replay.jsonc --env production
+          --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+      - name: Deploy production GitHub broker
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          npx wrangler deploy --config wrangler.broker.jsonc --env production
           --var "DEPLOYED_COMMIT:$GITHUB_SHA"
       - name: Deploy production submission Worker
         env:
@@ -292,7 +306,7 @@ jobs:
               "production_memory_gate_bytes": 12 * 1024**3,
               "reviewed_execution_profile_digest": "0" * 64,
               "reviewed_measurement_config_digest": "0" * 64,
-              "reviewed_vm_image_digest": "sha256:" + "0" * 64,
+              "reviewed_vm_image_digest": "sha256:53d1964edc01f736ae66d7faa715d5b1fb67c96dcc167b4c5012282d8c14c807",
           }
           PY
             then

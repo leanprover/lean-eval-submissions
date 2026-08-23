@@ -41,7 +41,7 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
             {"comparator", "landrun", "lean4export", "nanoda"},
         )
 
-    def test_image_is_build_gated_but_not_live(self) -> None:
+    def test_image_is_build_gated_and_pinned_but_replay_is_disabled(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
         replay_config = (ROOT / "server" / "wrangler.replay.jsonc").read_text(
             encoding="utf-8"
@@ -49,7 +49,21 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
         self.assertIn("21474836480", workflow)
         self.assertIn("--network none", workflow)
         self.assertIn("persist-credentials: false", workflow)
-        self.assertNotIn("Dockerfile.replay-authoritative", replay_config)
+        self.assertEqual(
+            replay_config.count(
+                '"image": "registry.cloudflare.com/'
+                'a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative:'
+                'fdcabb95085edccd70c81dc079c27bcaf20a4b16"'
+            ),
+            2,
+        )
+        self.assertEqual(
+            replay_config.count(
+                '"REVIEWED_VM_IMAGE_DIGEST": '
+                '"sha256:53d1964edc01f736ae66d7faa715d5b1fb67c96dcc167b4c5012282d8c14c807"'
+            ),
+            2,
+        )
         self.assertEqual(replay_config.count('"REPLAY_ENABLED": "false"'), 2)
 
     def test_runner_uses_the_baked_elan_home(self) -> None:
