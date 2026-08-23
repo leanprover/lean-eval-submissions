@@ -30,6 +30,8 @@ async function signedRequest(overrides: Record<string, unknown> = {}): Promise<{
     aud: "lean-eval-replay-staging",
     sub: "repo:leanprover/lean-eval-submissions:environment:replay-staging",
     repository: "leanprover/lean-eval-submissions",
+    repository_id: "1243533004",
+    repository_owner_id: "7233018",
     environment: "replay-staging",
     ref_protected: "true",
     ref: `refs/tags/lean-eval-dispatch/${sha}`,
@@ -85,6 +87,14 @@ describe("GitHub OIDC replay authentication", () => {
       wrongEnvironment.fetcher,
       1_787_395_200,
     )).rejects.toThrow("environment");
+
+    const wrongRepositoryId = await signedRequest({ repository_id: "1243533005" });
+    await expect(verifyGithubOidc(
+      wrongRepositoryId.request,
+      ENV,
+      wrongRepositoryId.fetcher,
+      1_787_395_200,
+    )).rejects.toThrow("repository subject");
 
     const mutable = await signedRequest({ ref: "refs/heads/main" });
     await expect(verifyGithubOidc(mutable.request, ENV, mutable.fetcher, 1_787_395_200))
