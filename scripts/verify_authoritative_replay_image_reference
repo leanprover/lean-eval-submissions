@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: verify_authoritative_replay_image_reference --config FILE --environment NAME" >&2
+  exit 2
+}
+
+configuration=
+environment=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --config) configuration=${2:-}; shift 2 ;;
+    --environment) environment=${2:-}; shift 2 ;;
+    *) usage ;;
+  esac
+done
+
+if [ -z "$configuration" ] || [ -z "$environment" ]; then usage; fi
+if [ "$environment" != staging ] && [ "$environment" != production ]; then
+  echo "authoritative image verification is restricted to a reviewed deployment environment" >&2
+  exit 1
+fi
+if [[ ! "${CLOUDFLARE_ACCOUNT_ID:-}" =~ ^[0-9a-f]{32}$ ]] || [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+  echo "Cloudflare deployment authority is unavailable" >&2
+  exit 1
+fi
+
+mapfile -t reference < <(python - "$configuration" "$environment" <<'PY'
+import json
+import pathlib
+import re
+import sys
+
+try:
+    config = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+    selected = config["env"][sys.argv[2]]
+    containers = selected["containers"]
+    if not isinstance(containers, list) or len(containers) != 1:
+        raise ValueError("deployment must contain exactly one replay container")
+    image = containers[0]["image"]
+    match = re.fullmatch(r"(lean-eval-authoritative):([0-9a-f]{40})", image)
+    digest = selected["vars"]["REVIEWED_VM_IMAGE_DIGEST"]
+    if match is None or re.fullmatch(r"sha256:[0-9a-f]{64}", digest) is None:
+        raise ValueError("reviewed image reference is not immutable")
+    if digest == "sha256:" + "0" * 64:
+        raise ValueError("reviewed image manifest digest is still a placeholder")
+except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError, ValueError) as error:
+    print(f"authoritative image reference: {error}", file=sys.stderr)
+    raise SystemExit(1)
+
+print(match.group(1))
+print(match.group(2))
+print(digest)
+PY
+)
+if [ "${#reference[@]}" -ne 3 ]; then
+  echo "authoritative image reference did not produce one canonical binding" >&2
+  exit 1
+fi
+repository=${reference[0]}
+tag=${reference[1]}
+expected_digest=${reference[2]}
+
+script_directory=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+server_directory=$(dirname "$script_directory")/server
+credentials=$(mktemp "${RUNNER_TEMP:-/tmp}/replay-registry-credentials.XXXXXX")
+headers=$(mktemp "${RUNNER_TEMP:-/tmp}/replay-registry-headers.XXXXXX")
+cleanup() {
+  unset registry_username registry_password
+  if [ -f "$credentials" ]; then shred --remove "$credentials"; fi
+  rm -f "$headers"
+}
+trap cleanup EXIT
+
+npx --prefix "$server_directory" wrangler containers registries credentials \
+  registry.cloudflare.com --pull --expiration-minutes 5 --json > "$credentials"
+unset CLOUDFLARE_API_TOKEN
+registry_username=$(jq -er .username "$credentials")
+registry_password=$(jq -er .password "$credentials")
+echo "::add-mask::$registry_username"
+echo "::add-mask::$registry_password"
+curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+  --user "$registry_username:$registry_password" \
+  --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+  --head \
+  "https://registry.cloudflare.com/v2/$CLOUDFLARE_ACCOUNT_ID/$repository/manifests/$tag" \
+  --dump-header "$headers" \
+  --output /dev/null
+actual_digest=$(sed -n \
+  's/^[Dd]ocker-[Cc]ontent-[Dd]igest:[[:space:]]*\(sha256:[0-9a-f]\{64\}\)[[:space:]\r]*$/\1/p' \
+  "$headers")
+if [ "$actual_digest" != "$expected_digest" ]; then
+  echo "registry manifest digest does not match the reviewed VM image" >&2
+  exit 1
+fi
+
+echo "verified $repository:$tag at $expected_digest"

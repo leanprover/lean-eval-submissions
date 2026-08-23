@@ -139,6 +139,13 @@ jobs:
         run: >-
           npx wrangler deploy --config wrangler.broker.jsonc --env staging
           --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+      - name: Verify reviewed staging replay image manifest
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          ../scripts/verify_authoritative_replay_image_reference
+          --config wrangler.replay.jsonc --environment staging
       - name: Deploy staging replay executor and container
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -232,6 +239,13 @@ jobs:
         run: >-
           npx wrangler deploy --config wrangler.broker.jsonc --env production
           --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+      - name: Verify reviewed production replay image manifest
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          ../scripts/verify_authoritative_replay_image_reference
+          --config wrangler.replay.jsonc --environment production
       - name: Deploy disabled production replay executor and container
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
