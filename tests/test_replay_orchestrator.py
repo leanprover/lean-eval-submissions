@@ -189,7 +189,7 @@ class ReplayOrchestratorTests(unittest.TestCase):
         with self.assertRaisesRegex(ReplayError, "not registered"):
             unavailable_transition(
                 queue,
-                "private_replay_requires_d6",
+                "transient_provider_failure",
                 UNAVAILABILITY_EVIDENCE,
             )
         invalid_evidence = {**UNAVAILABILITY_EVIDENCE, "path": "../claim.json"}
@@ -403,6 +403,29 @@ class ReplayOrchestratorTests(unittest.TestCase):
             with self.subTest(path=path):
                 json.loads(path.read_text(encoding="utf-8"))
 
-
+    def test_replay_schemas_describe_the_private_execution_union(self) -> None:
+        request_schema = json.loads(
+            (ROOT / "schemas/replay-execution-request-v1.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        source_variants = request_schema["properties"]["source"]["oneOf"]
+        self.assertEqual(
+            {variant["properties"]["visibility"]["const"] for variant in source_variants},
+            {"public", "private"},
+        )
+        private_source = next(
+            variant
+            for variant in source_variants
+            if variant["properties"]["visibility"]["const"] == "private"
+        )
+        self.assertEqual(set(private_source["required"]), {"visibility", "archive"})
+        plan_schema = json.loads(
+            (ROOT / "schemas/replay-plan-v1.schema.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            {variant["properties"]["kind"]["const"] for variant in plan_schema["oneOf"]},
+            {"empty", "execution"},
+        )
 if __name__ == "__main__":
     unittest.main()
