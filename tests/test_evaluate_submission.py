@@ -433,6 +433,78 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
             )
         self.assertEqual(result["results"]["passed"], ["two_plus_two"])
 
+    def test_locked_problem_ignores_other_submission_workspaces(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, manifest_dir = self._setup_repo_like(tmp_path)
+            _write_pristine(generated, "two_plus_two")
+            _write_pristine(generated, "other_problem")
+            _write_manifest(
+                manifest_dir,
+                ["two_plus_two", "other_problem"],
+                statement_revision=3,
+            )
+            src = tmp_path / "src"
+            _write_submitter_workspace(src, "selected", "two_plus_two")
+            _write_submitter_workspace(src, "other", "other_problem")
+            seen: list[list[str]] = []
+
+            def runner(*, problem_ids: list[str], workspaces_root: pathlib.Path) -> dict:
+                seen.append(problem_ids)
+                return _fake_runner_factory(["two_plus_two"])(
+                    problem_ids=problem_ids,
+                    workspaces_root=workspaces_root,
+                )
+
+            result = ev.evaluate_submission(
+                source_dir=src,
+                generated_root=generated,
+                manifest_dir=manifest_dir,
+                output_dir=tmp_path / "out",
+                repo_root=tmp_path,
+                problem_id="two_plus_two",
+                statement_revision=3,
+                run_eval_runner=runner,
+            )
+
+        self.assertEqual(seen, [["two_plus_two"]])
+        self.assertEqual(result["results"]["passed"], ["two_plus_two"])
+
+    def test_locked_problem_and_revision_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, manifest_dir = self._setup_repo_like(tmp_path)
+            _write_pristine(generated, "two_plus_two")
+            _write_manifest(
+                manifest_dir,
+                ["two_plus_two"],
+                statement_revision=3,
+            )
+            src = tmp_path / "src"
+            _write_submitter_workspace(src, ".", "two_plus_two")
+            common = {
+                "source_dir": src,
+                "generated_root": generated,
+                "manifest_dir": manifest_dir,
+                "output_dir": tmp_path / "out",
+                "repo_root": tmp_path,
+                "run_eval_runner": _fake_runner_factory([]),
+            }
+            with self.assertRaisesRegex(ev.EvaluateError, "locked together"):
+                ev.evaluate_submission(problem_id="two_plus_two", **common)
+            with self.assertRaisesRegex(ev.EvaluateError, "absent from the benchmark"):
+                ev.evaluate_submission(
+                    problem_id="missing_problem",
+                    statement_revision=3,
+                    **common,
+                )
+            with self.assertRaisesRegex(ev.EvaluateError, "does not match"):
+                ev.evaluate_submission(
+                    problem_id="two_plus_two",
+                    statement_revision=2,
+                    **common,
+                )
+
     def test_fork_everything_solve_a_few(self) -> None:
         # Mirrors the real submission case from issue #20: a fork that
         # carries every generated workspace but only solves a subset.

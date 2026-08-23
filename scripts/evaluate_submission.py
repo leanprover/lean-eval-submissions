@@ -585,6 +585,8 @@ def evaluate_submission(
     output_dir: pathlib.Path,
     repo_root: pathlib.Path,
     shared_packages: pathlib.Path | None = None,
+    problem_id: str | None = None,
+    statement_revision: int | None = None,
     run_eval_runner=None,
 ) -> dict:
     """Run the full evaluation pipeline and write results.json + summary.json.
@@ -598,6 +600,22 @@ def evaluate_submission(
     re-unpacking Mathlib for each.
     """
     manifest_revisions = _load_manifest_revisions(manifest_dir)
+    if (problem_id is None) != (statement_revision is None):
+        raise EvaluateError(
+            "problem_id and statement_revision must be locked together"
+        )
+    if problem_id is not None:
+        actual_revision = manifest_revisions.get(problem_id)
+        if actual_revision is None:
+            raise EvaluateError(
+                f"Locked problem {problem_id!r} is absent from the benchmark"
+            )
+        if actual_revision != statement_revision:
+            raise EvaluateError(
+                f"Locked statement revision {statement_revision} does not match "
+                f"benchmark revision {actual_revision} for {problem_id}"
+            )
+        manifest_revisions = {problem_id: actual_revision}
     matches = detect_matches(
         source_dir, set(manifest_revisions), generated_root=generated_root
     )
@@ -713,6 +731,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "stays in lock-step with the benchmark on dep revs."
         ),
     )
+    parser.add_argument(
+        "--problem-id",
+        default=None,
+        help="Evaluate only this State-locked problem identifier.",
+    )
+    parser.add_argument(
+        "--statement-revision",
+        type=int,
+        default=None,
+        help="Require this exact revision for --problem-id.",
+    )
     return parser.parse_args(argv)
 
 
@@ -739,6 +768,8 @@ def main(argv: list[str] | None = None) -> int:
                 if args.shared_packages is not None
                 else None
             ),
+            problem_id=args.problem_id,
+            statement_revision=args.statement_revision,
         )
     except EvaluateError as exc:
         print(str(exc), file=sys.stderr)
