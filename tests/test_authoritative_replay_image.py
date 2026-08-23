@@ -19,6 +19,12 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
         self.assertEqual(len(from_lines), 4)
         for line in from_lines:
             self.assertRegex(line, r"@sha256:[0-9a-f]{64}(?: AS [a-z-]+)?$")
+        self.assertIn(
+            "FROM docker.io/cloudflare/sandbox:0.12.7-python@sha256:"
+            "6dfa7301e69d3e5cd8e0404b92fd240026fe834ed7101ee29cb66337b0af0981",
+            from_lines,
+        )
+        self.assertNotIn("ca-certificates curl python3", dockerfile)
         for commit in (
             "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
             "68d5ca9db226849b41a6fff59d796ff19d0a8840",
@@ -70,7 +76,18 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
         runner = RUNNER.read_text(encoding="utf-8")
         self.assertIn("/opt/lean-eval/home/.elan/bin", runner)
         self.assertNotIn("/root/.elan/bin", runner)
+        self.assertIn("sys.executable", runner)
+        self.assertNotIn('"/usr/bin/python3"', runner)
         self.assertRegex(runner, r'"--authoritative-checker",\s*"nanoda"')
+
+    def test_image_gates_the_authoritative_python_imports(self) -> None:
+        dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        for source in (dockerfile, workflow):
+            with self.subTest(source=source[:32]):
+                self.assertIn("sys.version_info.major", source)
+                self.assertIn("import sys, tomllib", source)
+                self.assertIn("from evaluate_submission import detect_matches", source)
 
     def test_image_contains_every_fixed_replay_command(self) -> None:
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")

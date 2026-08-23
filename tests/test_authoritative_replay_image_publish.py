@@ -44,6 +44,9 @@ class AuthoritativeReplayImagePublishTests(unittest.TestCase):
         self.assertIn("lake-manifest.json | wc -l", workflow)
         self.assertIn("nanoda_bin", workflow)
         self.assertIn("workspace_manifest_count", workflow)
+        self.assertIn("sys.version_info.major", workflow)
+        self.assertIn("import sys, tomllib", workflow)
+        self.assertIn("from evaluate_submission import detect_matches", workflow)
 
     def test_actions_are_commit_pinned_and_permissions_are_read_only(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")

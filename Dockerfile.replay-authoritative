@@ -102,7 +102,7 @@ RUN git init /build/benchmark \
       /runtime/home/.elan/toolchains/
 
 
-FROM docker.io/cloudflare/sandbox:0.12.7@sha256:6d741713aef266e8ae0831a5709c6f2d7b77b4952ac79b549f4f4e380af86fbe
+FROM docker.io/cloudflare/sandbox:0.12.7-python@sha256:6dfa7301e69d3e5cd8e0404b92fd240026fe834ed7101ee29cb66337b0af0981
 
 USER root
 ENV HOME=/opt/lean-eval/home
@@ -110,7 +110,7 @@ ENV ELAN_HOME=/opt/lean-eval/home/.elan
 ENV PATH=/opt/lean-eval/bin:/opt/lean-eval/home/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends ca-certificates curl python3 \
+    && apt-get install --yes --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/* \
     && curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
       https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz \
@@ -146,6 +146,8 @@ RUN chmod 0555 /usr/local/bin/landrun /opt/lean-eval/bin/* \
     && test "$(cat /opt/lean-eval/benchmark/lean-toolchain)" = \
       'leanprover/lean4:v4.33.0' \
     && test "$(find /opt/lean-eval -type d -name .git -print -quit)" = '' \
+    && test "$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" = 3.11 \
+    && python3 -c 'import sys, tomllib; sys.path.insert(0, "/opt/lean-eval"); from evaluate_submission import detect_matches; assert callable(detect_matches)' \
     && test "$(python3 -c 'import json; print(json.load(open("/opt/lean-eval/replay-profile-lock.json"))["schema_version"])')" = 1
 
 EXPOSE 3000
