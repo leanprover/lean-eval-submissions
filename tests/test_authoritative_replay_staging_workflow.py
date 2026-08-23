@@ -42,7 +42,7 @@ class AuthoritativeReplayStagingWorkflowTests(unittest.TestCase):
         self.assertIn('test -z "${AWS_SESSION_TOKEN:-}"', section)
         self.assertIn('test -z "${STATE_WRITE_KEY:-}"', section)
         self.assertNotIn("STAGING_STATE_WRITE_KEY", section)
-        self.assertIn("--max-time 21900", section)
+        self.assertIn("--max-time 20400", section)
 
     def test_every_started_attempt_gets_terminal_or_explicit_failure(self) -> None:
         self.assertIn("state-event terminal", self.text)
