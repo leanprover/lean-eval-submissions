@@ -82,9 +82,94 @@ const ARCHIVE_COMMAND_FAILURES = new Map([
   ["network isolation failed", "network_isolation_failed"],
 ]);
 
+const AUTHORITATIVE_COMMAND_PREFIX = "replay-authoritative: ";
+const AUTHORITATIVE_COMMAND_FAILURES = new Map([
+  ["request does not match the baked profile lock", "profile_lock_mismatch"],
+  ["baked benchmark identity is unavailable", "benchmark_identity_unavailable"],
+  ["baked benchmark identity mismatch", "benchmark_identity_mismatch"],
+  ["runtime does not match the execution profile", "runtime_profile_mismatch"],
+  [
+    "measurement configuration does not match the executor limits",
+    "measurement_limits_mismatch",
+  ],
+  ["ciphertext digest mismatch", "ciphertext_digest_mismatch"],
+  ["archive decryption failed", "archive_decryption_failed"],
+  ["archive plaintext identity mismatch", "archive_plaintext_identity_mismatch"],
+  ["archive does not contain one locked workspace", "workspace_not_found"],
+  ["network isolation failed", "network_isolation_failed"],
+  ["baked evaluator is unavailable", "evaluator_unavailable"],
+  ["locked evaluator did not terminate", "evaluator_did_not_terminate"],
+  ["measurement evidence is unavailable", "measurement_evidence_unavailable"],
+  ["evaluator results is unavailable", "evaluator_results_unavailable"],
+]);
+
+function authoritativeCommandFailureDetail(stderr: string): string {
+  const output = stderr.trim();
+  if (output.includes("\n") || !output.startsWith(AUTHORITATIVE_COMMAND_PREFIX)) {
+    return "unclassified_authoritative_failure";
+  }
+  const message = output.slice(AUTHORITATIVE_COMMAND_PREFIX.length);
+  const exact = AUTHORITATIVE_COMMAND_FAILURES.get(message);
+  if (exact !== undefined) return exact;
+  if (
+    message.startsWith("measurement ")
+    || message.startsWith("measured counter ")
+    || message.startsWith("unavailable counter ")
+    || message.startsWith("build measurement ")
+    || message.startsWith("checker measurement ")
+  ) {
+    return "measurement_evidence_invalid";
+  }
+  if (
+    message.startsWith("evaluator results ")
+    || message.startsWith("accepted result ")
+    || message.startsWith("rejected result ")
+    || message.startsWith("failed result ")
+    || message === "reported execution outcome is invalid"
+  ) {
+    return "evaluator_results_invalid";
+  }
+  if (
+    message.startsWith("verdict ")
+    || message.startsWith("statistics.")
+    || message.startsWith("completed execution ")
+    || message.startsWith("failed execution ")
+    || message.startsWith("reported execution ")
+    || message.startsWith("crash or timeout ")
+    || message.startsWith("execution_outcome ")
+    || message === "required retired-instruction counter was unavailable"
+  ) {
+    return "verdict_invalid";
+  }
+  if (
+    message.startsWith("archive ")
+    || message.startsWith("decrypted archive ")
+    || message.startsWith("encoded replay input ")
+    || message.startsWith("decoded replay input ")
+    || message.startsWith("submission statistics ")
+  ) {
+    return "archive_input_invalid";
+  }
+  if (
+    message.startsWith("execution request ")
+    || message.startsWith("request ")
+    || message.startsWith("profile lock ")
+    || message.startsWith("archive expectation ")
+    || message === "value is not canonical JSON"
+  ) {
+    return "execution_request_invalid";
+  }
+  return "unclassified_authoritative_failure";
+}
+
 function safeCommandFailureDetail(command: string, stderr: string): string | undefined {
-  if (command !== "/opt/lean-eval/replay-archive-acceptance") return undefined;
-  return ARCHIVE_COMMAND_FAILURES.get(stderr.trim()) ?? "unclassified_archive_failure";
+  if (command === "/opt/lean-eval/replay-authoritative") {
+    return authoritativeCommandFailureDetail(stderr);
+  }
+  if (command === "/opt/lean-eval/replay-archive-acceptance") {
+    return ARCHIVE_COMMAND_FAILURES.get(stderr.trim()) ?? "unclassified_archive_failure";
+  }
+  return undefined;
 }
 
 async function writeSandboxFile(
@@ -159,6 +244,16 @@ function recordExecutorFailure(route: string, error: unknown): void {
   }));
 }
 
+function authoritativeExecutorFailure(error: unknown): Response {
+  const reason = error instanceof ReplayExecutorError ? error.reason : "unexpected_failure";
+  const detail = error instanceof ReplayExecutorError ? error.detail : undefined;
+  return json({
+    error: "executor_failed",
+    reason,
+    ...(detail === undefined ? {} : { detail }),
+  }, 500);
+}
+
 function health(env: ReplayRuntimeEnv): Response {
   return json({
     status: "ok",
@@ -229,7 +324,7 @@ export async function handleReplayRequest(
         return json({ error: "invalid_request" }, 400);
       }
       recordExecutorFailure("authoritative_replay", error);
-      return json({ error: "executor_failed" }, 500);
+      return authoritativeExecutorFailure(error);
     }
   }
   if (env.DEPLOYMENT_ENVIRONMENT !== "staging" || env.STAGING_ACCEPTANCE_ENABLED !== "true") {

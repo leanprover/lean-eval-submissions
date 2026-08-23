@@ -284,7 +284,7 @@ jobs:
             "$RUNNER_TEMP/replay-oidc-response.json")
           test -n "$replay_oidc_token"
           rm "$RUNNER_TEMP/replay-oidc-response.json"
-          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+          curl --proto '=https' --tlsv1.2 --fail-with-body --silent --show-error \
             --max-time 20400 \
             --header "Authorization: Bearer $replay_oidc_token" \
             --header 'Content-Type: application/json' \
@@ -336,6 +336,15 @@ jobs:
           set -euo pipefail
           test -z "${AWS_ACCESS_KEY_ID:-}"
           if [ -f "$RUNNER_TEMP/identity.age" ]; then shred --remove "$RUNNER_TEMP/identity.age"; fi
+          sanitized_failure=$(
+            python scripts/sanitize_executor_failure.py \
+              "$RUNNER_TEMP/executor-response.json" || true
+          )
+          if [ -n "$sanitized_failure" ]; then
+            echo "::notice title=Sanitized authoritative executor failure::$sanitized_failure"
+            echo "Sanitized authoritative executor failure: \`$sanitized_failure\`" \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
           reason=$(cat "$RUNNER_TEMP/failure-reason")
           python scripts/replay_controller.py state-event failed \
             --plan "$RUNNER_TEMP/replay-plan.json" \
@@ -413,6 +422,12 @@ jobs:
             "$RUNNER_TEMP/unwrap-response.json" \
             "$RUNNER_TEMP/unwrap-metadata.json" \
             "$RUNNER_TEMP/executor-request.json" \
+            "$RUNNER_TEMP/executor-response.json" \
             "$RUNNER_TEMP/replay-oidc-response.json" \
             "$RUNNER_TEMP/replay-health.json" \
+            "$RUNNER_TEMP/replay-plan.json" \
+            "$RUNNER_TEMP/replay-verdict.json" \
+            "$RUNNER_TEMP/started-event.json" \
+            "$RUNNER_TEMP/terminal-event.json" \
+            "$RUNNER_TEMP/failure-event.json" \
             "$RUNNER_TEMP/failure-reason"

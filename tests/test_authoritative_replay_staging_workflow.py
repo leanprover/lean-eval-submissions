@@ -68,6 +68,19 @@ class AuthoritativeReplayStagingWorkflowTests(unittest.TestCase):
             self.text,
         )
 
+    def test_executor_failure_diagnostic_is_bounded_and_sanitized(self) -> None:
+        executor = self.text.split(
+            "- name: Invoke the reviewed endpoint without AWS or State write authority", 1
+        )[1].split("- name: Append the exact reported terminal outcome", 1)[0]
+        failure = self.text.split(
+            "- name: Fail a started attempt explicitly if orchestration did not finish", 1
+        )[1].split("- name: Write source-free successful replay evidence", 1)[0]
+        self.assertIn("--fail-with-body", executor)
+        self.assertIn('scripts/sanitize_executor_failure.py', failure)
+        self.assertIn('sanitized_failure', failure)
+        self.assertNotIn('cat "$RUNNER_TEMP/executor-response.json"', failure)
+        self.assertNotIn('jq', failure)
+
     def test_aws_authority_is_unconditionally_dropped_before_state_finalization(self) -> None:
         cleanup = self.text.index(
             "Drop any remaining AWS authority before executor or State writer"
