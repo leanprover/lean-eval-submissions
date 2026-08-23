@@ -1,0 +1,274 @@
+name: Server archive lane
+
+on:
+  workflow_call:
+    inputs:
+      workflow_commit: {required: true, type: string}
+      submission_id: {required: true, type: string}
+      source_repository: {required: true, type: string}
+      callback_environment: {required: true, type: string}
+    secrets:
+      LEAN_EVAL_BOT_CLIENT_ID: {required: true}
+      LEAN_EVAL_BOT_PRIVATE_KEY: {required: true}
+      LEAN_EVAL_ARCHIVER_CLIENT_ID: {required: true}
+      LEAN_EVAL_ARCHIVER_PRIVATE_KEY: {required: true}
+    outputs:
+      fetch_succeeded:
+        value: ${{ jobs.archive.outputs.fetch_succeeded }}
+      size_within_cap:
+        value: ${{ jobs.archive.outputs.size_within_cap }}
+      audit_ciphertext_ready:
+        value: ${{ jobs.archive.outputs.audit_ciphertext_ready }}
+      source_metadata_sha256:
+        value: ${{ jobs.archive.outputs.source_metadata_sha256 }}
+      benchmark_commit:
+        value: ${{ jobs.archive.outputs.benchmark_commit }}
+      toolchain:
+        value: ${{ jobs.archive.outputs.toolchain }}
+
+jobs:
+  archive:
+    environment: archive-${{ inputs.callback_environment }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      fetch_succeeded: ${{ steps.fetch_status.outputs.succeeded }}
+      size_within_cap: ${{ steps.size_status.outputs.within_cap }}
+      audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}
+      source_metadata_sha256: ${{ steps.source_identity.outputs.metadata_sha256 }}
+      benchmark_commit: ${{ steps.benchmark.outputs.sha }}
+      toolchain: ${{ steps.benchmark.outputs.toolchain }}
+    steps:
+      - name: Assert immutable server workflow ref
+        env:
+          EXPECTED_WORKFLOW_COMMIT: ${{ inputs.workflow_commit }}
+          CALLBACK_ENVIRONMENT: ${{ inputs.callback_environment }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_SHA" = "$EXPECTED_WORKFLOW_COMMIT"
+          test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$EXPECTED_WORKFLOW_COMMIT"
+          case "$CALLBACK_ENVIRONMENT" in staging|production) ;; *) exit 1 ;; esac
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+        with:
+          repository: leanprover/lean-eval
+          ref: main
+          path: lean-eval
+          persist-credentials: false
+
+      - name: Freeze benchmark identity
+        id: benchmark
+        run: |
+          echo "sha=$(git -C lean-eval rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "toolchain=$(cat lean-eval/lean-toolchain)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+        with:
+          python-version: '3.11.10'
+
+      - name: Resolve source owner
+        id: source_owner
+        env:
+          SOURCE_REPOSITORY: ${{ inputs.source_repository }}
+        run: |
+          if [[ ! "$SOURCE_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+            exit 1
+          fi
+          echo "owner=${SOURCE_REPOSITORY%%/*}" >> "$GITHUB_OUTPUT"
+
+      - name: Mint source-reader installation token
+        id: source_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        continue-on-error: true
+        with:
+          client-id: ${{ secrets.LEAN_EVAL_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
+          owner: ${{ steps.source_owner.outputs.owner }}
+
+      - name: Fetch exact source for archive
+        id: fetch
+        env:
+          APP_INSTALLATION_TOKEN: ${{ steps.source_token.outputs.token }}
+        run: |
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          rm -rf /tmp/archive-fetch /tmp/archive-envelope
+          python scripts/fetch_submission.py \
+            --event-path "$GITHUB_EVENT_PATH" \
+            --server-dispatch \
+            --output-dir /tmp/archive-fetch
+
+      - name: Record fetch status and frozen metadata digest
+        id: fetch_status
+        if: always()
+        run: |
+          if [ "${{ steps.fetch.outcome }}" = success ]; then
+            echo succeeded=true >> "$GITHUB_OUTPUT"
+          else
+            echo succeeded=false >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Freeze source identity
+        id: source_identity
+        if: steps.fetch.outcome == 'success'
+        run: echo "metadata_sha256=$(sha256sum /tmp/archive-fetch/metadata.json | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce source size cap
+        id: size_check
+        if: steps.fetch.outcome == 'success'
+        run: test "$(stat -c %s /tmp/archive-fetch/source.tar.gz)" -le $((10 * 1024 * 1024))
+
+      - name: Record size-cap status
+        id: size_status
+        if: always()
+        run: |
+          if [ "${{ steps.size_check.outcome }}" = success ]; then
+            echo within_cap=true >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.size_check.outcome }}" = failure ]; then
+            echo within_cap=false >> "$GITHUB_OUTPUT"
+          else
+            echo within_cap=not_attempted >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install hash-locked AWS adapter dependencies
+        if: steps.size_check.outcome == 'success'
+        run: |
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          python -m pip install --disable-pip-version-check --require-hashes \
+            -r infrastructure/aws-key-adapter/requirements-workflow.txt
+
+      - name: Install checksum-pinned age 1.3.1
+        if: steps.size_check.outcome == 'success'
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz \
+            --output /tmp/age-v1.3.1.tar.gz
+          echo 'bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377  /tmp/age-v1.3.1.tar.gz' \
+            | sha256sum --check --strict
+          tar --extract --gzip --file /tmp/age-v1.3.1.tar.gz --directory /tmp
+          test "$(/tmp/age/age --version)" = v1.3.1
+          echo /tmp/age >> "$GITHUB_PATH"
+
+      - name: Assume the environment-specific Encrypt-only role
+        if: steps.size_check.outcome == 'success'
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.AWS_WRAP_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: lean-eval-archive-${{ inputs.callback_environment }}
+          mask-aws-account-id: true
+
+      - name: Encrypt with one fresh identity and wrap only that identity
+        id: encrypt
+        if: steps.size_check.outcome == 'success'
+        env:
+          LEAN_EVAL_KMS_KEY_ID: alias/lean-eval-archive-identities-${{ inputs.callback_environment }}
+          LEAN_EVAL_ADAPTER_NAME: aws-kms-v1
+        run: |
+          set -euo pipefail
+          clear_aws() {
+            unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+            {
+              echo AWS_ACCESS_KEY_ID=
+              echo AWS_SECRET_ACCESS_KEY=
+              echo AWS_SESSION_TOKEN=
+            } >> "$GITHUB_ENV"
+          }
+          trap clear_aws EXIT
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          python scripts/archive_envelope.py \
+            --source-tar /tmp/archive-fetch/source.tar.gz \
+            --submission-id "${{ inputs.submission_id }}" \
+            --output-dir /tmp/archive-envelope \
+            --adapter-executable scripts/aws_key_adapter.py \
+            --adapter-name aws-kms-v1
+          python scripts/archive_submission.py prepare-envelope-sidecar \
+            --source-tar /tmp/archive-fetch/source.tar.gz \
+            --metadata /tmp/archive-fetch/metadata.json \
+            --ciphertext /tmp/archive-envelope/source.tar.gz.age \
+            --envelope /tmp/archive-envelope/archive-key-envelope.json \
+            --output /tmp/archive-envelope/sidecar.partial.json
+          clear_aws
+
+      - name: Record audit-ciphertext readiness
+        id: audit_status
+        if: always()
+        run: |
+          if [ "${{ steps.encrypt.outcome }}" = success ]; then
+            echo ready=true >> "$GITHUB_OUTPUT"
+          else
+            echo ready=false >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Mint audit-archive writer token after dropping AWS authority
+        id: archiver_token
+        if: steps.encrypt.outcome == 'success'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        env:
+          AWS_ACCESS_KEY_ID: ''
+          AWS_SECRET_ACCESS_KEY: ''
+          AWS_SESSION_TOKEN: ''
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+        with:
+          client-id: ${{ secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_ARCHIVER_PRIVATE_KEY }}
+          owner: leanprover
+          repositories: lean-eval-audit
+
+      - name: Persist ciphertext and public envelope sidecar
+        if: steps.encrypt.outcome == 'success'
+        env:
+          ARCHIVER_TOKEN: ${{ steps.archiver_token.outputs.token }}
+          AWS_ACCESS_KEY_ID: ''
+          AWS_SECRET_ACCESS_KEY: ''
+          AWS_SESSION_TOKEN: ''
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          python scripts/archive_submission.py push \
+            --ciphertext /tmp/archive-envelope/source.tar.gz.age \
+            --sidecar /tmp/archive-envelope/sidecar.partial.json \
+            --benchmark-commit "${{ steps.benchmark.outputs.sha }}" \
+            --workflow-run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --locator-output /tmp/archive-locator.json \
+            --completion-output /tmp/archive-completion.json
+
+      - name: Remove plaintext and authority-bearing scratch
+        if: always()
+        run: rm -rf /tmp/archive-fetch /tmp/archive-envelope
+
+      - name: Upload verified archive locator
+        if: steps.encrypt.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: submission-archive-locator
+          path: /tmp/archive-locator.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload verified archive completion
+        if: steps.encrypt.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: submission-archive-completion
+          path: /tmp/archive-completion.json
+          if-no-files-found: error
+          retention-days: 7

@@ -26,11 +26,35 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import archive_submission as arch  # noqa: E402
+from key_capability_contract import archive_key_id  # noqa: E402
 
 
 VALID_REF = "0123456789abcdef0123456789abcdef01234567"
 VALID_PLAINTEXT_SHA = "a" * 64
 VALID_SUBMISSION_ID = "0198c4ee-7d2d-7b35-8d20-cd5db8aa9a6f"
+VALID_RECIPIENT = "age1" + "q" * 60
+
+
+def _make_envelope(
+    directory: pathlib.Path,
+    ciphertext: pathlib.Path,
+    *,
+    submission_id: str = VALID_SUBMISSION_ID,
+    digest: str | None = None,
+) -> pathlib.Path:
+    ciphertext_digest = digest or hashlib.sha256(ciphertext.read_bytes()).hexdigest()
+    envelope = {
+        "schema_version": 1,
+        "submission_id": submission_id,
+        "archive_ciphertext_sha256": ciphertext_digest,
+        "data_key_id": archive_key_id(submission_id, VALID_RECIPIENT),
+        "age_recipient": VALID_RECIPIENT,
+        "adapter": "aws-kms-v1",
+        "wrapped_identity": base64.b64encode(b"wrapped identity").decode("ascii"),
+    }
+    path = directory / "archive-key-envelope.json"
+    path.write_text(json.dumps(envelope), encoding="utf-8")
+    return path
 
 
 def _make_source_tar(dir: pathlib.Path, *, size_padding: int = 0) -> pathlib.Path:
@@ -346,6 +370,77 @@ class EncryptTests(unittest.TestCase):
                     "--output-dir", str(tmp / "out"),
                 ])
             self.assertIn("submission_kind", str(ctx.exception))
+
+
+class PrepareEnvelopeSidecarTests(unittest.TestCase):
+    def test_prepares_schema_version_3_sidecar_bound_to_ciphertext(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            source = _make_source_tar(tmp)
+            metadata = _make_server_metadata(tmp)
+            ciphertext = tmp / "source.tar.gz.age"
+            ciphertext.write_bytes(b"age-encryption.org/v1\nfixture")
+            envelope = _make_envelope(tmp, ciphertext)
+            output = tmp / "sidecar.partial.json"
+
+            rc = arch.main([
+                "prepare-envelope-sidecar",
+                "--source-tar", str(source),
+                "--metadata", str(metadata),
+                "--ciphertext", str(ciphertext),
+                "--envelope", str(envelope),
+                "--output", str(output),
+            ])
+
+            self.assertEqual(rc, 0)
+            sidecar = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(sidecar["schema_version"], 3)
+            self.assertEqual(sidecar["submission_id"], VALID_SUBMISSION_ID)
+            self.assertEqual(
+                sidecar["key_envelope"]["archive_ciphertext_sha256"],
+                hashlib.sha256(ciphertext.read_bytes()).hexdigest(),
+            )
+
+    def test_rejects_envelope_for_another_submission(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            source = _make_source_tar(tmp)
+            metadata = _make_server_metadata(tmp)
+            ciphertext = tmp / "source.tar.gz.age"
+            ciphertext.write_bytes(b"age-encryption.org/v1\nfixture")
+            other = "0198c4ee-7d2d-7b35-9d20-cd5db8aa9a6f"
+            envelope = _make_envelope(tmp, ciphertext, submission_id=other)
+
+            with self.assertRaises(SystemExit) as ctx:
+                arch.main([
+                    "prepare-envelope-sidecar",
+                    "--source-tar", str(source),
+                    "--metadata", str(metadata),
+                    "--ciphertext", str(ciphertext),
+                    "--envelope", str(envelope),
+                    "--output", str(tmp / "sidecar.partial.json"),
+                ])
+            self.assertIn("different submission", str(ctx.exception))
+
+    def test_rejects_envelope_with_wrong_ciphertext_digest(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = pathlib.Path(td)
+            source = _make_source_tar(tmp)
+            metadata = _make_server_metadata(tmp)
+            ciphertext = tmp / "source.tar.gz.age"
+            ciphertext.write_bytes(b"age-encryption.org/v1\nfixture")
+            envelope = _make_envelope(tmp, ciphertext, digest="f" * 64)
+
+            with self.assertRaises(SystemExit) as ctx:
+                arch.main([
+                    "prepare-envelope-sidecar",
+                    "--source-tar", str(source),
+                    "--metadata", str(metadata),
+                    "--ciphertext", str(ciphertext),
+                    "--envelope", str(envelope),
+                    "--output", str(tmp / "sidecar.partial.json"),
+                ])
+            self.assertIn("digest does not match", str(ctx.exception))
 
 
 class PushTests(unittest.TestCase):

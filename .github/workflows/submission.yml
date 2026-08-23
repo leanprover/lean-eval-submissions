@@ -43,7 +43,7 @@ on:
       publication_choice: {description: 'scheduled or withheld', required: true, type: string}
       production_metadata_json: {description: 'Strict bounded production metadata object', required: true, type: string}
       archive_locator_required: {description: 'Must be literal true', required: true, type: string}
-      archive_sidecar_schema: {description: 'Must be literal 2', required: true, type: string}
+      archive_sidecar_schema: {description: 'Must be literal 3', required: true, type: string}
       archive_state_callback_required: {description: 'Must be literal true', required: true, type: string}
       callback_environment:
         description: 'Worker environment receiving trusted lifecycle callbacks'
@@ -478,17 +478,17 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  archive:
+  archive_issue:
     # Trusted precondition for evaluation. This job independently fetches the
     # requested source, freezes the benchmark/source identities, encrypts the
     # source, and persists it to lean-eval-audit. It never runs untrusted Lean.
-    # Evaluation cannot start until this job succeeds (and, for server intake,
-    # until `archive_state` durably records the verified locator).
+    # This is the compatibility lane for Issue Form submissions. Server intake
+    # uses the isolated KMS-backed reusable workflow below.
     needs: intake
     if: >-
       always() &&
-      (github.event_name == 'workflow_dispatch' ||
-       (github.event.action == 'labeled' && github.event.label.name == 'submission') ||
+      github.event_name == 'issues' &&
+      ((github.event.action == 'labeled' && github.event.label.name == 'submission') ||
        (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -755,6 +755,89 @@ jobs:
           path: /tmp/archive-completion.json
           if-no-files-found: error
           retention-days: 7
+
+  archive_server:
+    # A reusable job is a hard authority boundary: only server dispatch enters
+    # the environment carrying the Encrypt-only AWS role. The legacy issue
+    # lane above never receives OIDC permission or KMS configuration.
+    needs: intake
+    if: always() && github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/server-archive.yml
+    with:
+      workflow_commit: ${{ inputs.workflow_commit }}
+      submission_id: ${{ inputs.submission_id }}
+      source_repository: ${{ inputs.source_repository }}
+      callback_environment: ${{ inputs.callback_environment }}
+    secrets:
+      LEAN_EVAL_BOT_CLIENT_ID: ${{ secrets.LEAN_EVAL_BOT_CLIENT_ID }}
+      LEAN_EVAL_BOT_PRIVATE_KEY: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
+      LEAN_EVAL_ARCHIVER_CLIENT_ID: ${{ secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID }}
+      LEAN_EVAL_ARCHIVER_PRIVATE_KEY: ${{ secrets.LEAN_EVAL_ARCHIVER_PRIVATE_KEY }}
+
+  archive:
+    # Normalize the mutually exclusive issue/server archive lanes into the
+    # single output and result contract consumed by evaluation and callbacks.
+    needs: [intake, archive_issue, archive_server]
+    if: >-
+      always() &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'issues' &&
+        ((github.event.action == 'labeled' && github.event.label.name == 'submission') ||
+         (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true'))))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    outputs:
+      fetch_succeeded: ${{ steps.select.outputs.fetch_succeeded }}
+      size_within_cap: ${{ steps.select.outputs.size_within_cap }}
+      audit_ciphertext_ready: ${{ steps.select.outputs.audit_ciphertext_ready }}
+      source_metadata_sha256: ${{ steps.select.outputs.source_metadata_sha256 }}
+      benchmark_commit: ${{ steps.select.outputs.benchmark_commit }}
+      toolchain: ${{ steps.select.outputs.toolchain }}
+    steps:
+      - name: Select archive lane outputs
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_FETCH_SUCCEEDED: ${{ needs.archive_issue.outputs.fetch_succeeded }}
+          ISSUE_SIZE_WITHIN_CAP: ${{ needs.archive_issue.outputs.size_within_cap }}
+          ISSUE_AUDIT_CIPHERTEXT_READY: ${{ needs.archive_issue.outputs.audit_ciphertext_ready }}
+          ISSUE_SOURCE_METADATA_SHA256: ${{ needs.archive_issue.outputs.source_metadata_sha256 }}
+          ISSUE_BENCHMARK_COMMIT: ${{ needs.archive_issue.outputs.benchmark_commit }}
+          ISSUE_TOOLCHAIN: ${{ needs.archive_issue.outputs.toolchain }}
+          SERVER_FETCH_SUCCEEDED: ${{ needs.archive_server.outputs.fetch_succeeded }}
+          SERVER_SIZE_WITHIN_CAP: ${{ needs.archive_server.outputs.size_within_cap }}
+          SERVER_AUDIT_CIPHERTEXT_READY: ${{ needs.archive_server.outputs.audit_ciphertext_ready }}
+          SERVER_SOURCE_METADATA_SHA256: ${{ needs.archive_server.outputs.source_metadata_sha256 }}
+          SERVER_BENCHMARK_COMMIT: ${{ needs.archive_server.outputs.benchmark_commit }}
+          SERVER_TOOLCHAIN: ${{ needs.archive_server.outputs.toolchain }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            prefix=SERVER
+          else
+            prefix=ISSUE
+          fi
+          for name in FETCH_SUCCEEDED SIZE_WITHIN_CAP AUDIT_CIPHERTEXT_READY SOURCE_METADATA_SHA256 BENCHMARK_COMMIT TOOLCHAIN; do
+            variable="${prefix}_${name}"
+            printf '%s=%s\n' "$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')" "${!variable}" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Require selected archive lane success
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_RESULT: ${{ needs.archive_issue.result }}
+          SERVER_RESULT: ${{ needs.archive_server.result }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            test "$SERVER_RESULT" = success
+          else
+            test "$ISSUE_RESULT" = success
+          fi
 
   archive_failure_state:
     needs: archive

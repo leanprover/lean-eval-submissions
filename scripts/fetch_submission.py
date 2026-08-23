@@ -653,7 +653,7 @@ def fetch_server_submission(
         raise FetchError("server dispatch has unknown or missing input fields")
     if (
         inputs.get("archive_locator_required") != "true"
-        or inputs.get("archive_sidecar_schema") != "2"
+        or inputs.get("archive_sidecar_schema") != "3"
         or inputs.get("archive_state_callback_required") != "true"
         or inputs.get("callback_environment") not in {"staging", "production"}
     ):

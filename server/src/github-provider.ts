@@ -266,7 +266,7 @@ export function buildDispatchRequest(
         publication_choice: submission.publication_choice,
         production_metadata_json: JSON.stringify(submission.production_metadata),
         archive_locator_required: "true",
-        archive_sidecar_schema: "2",
+        archive_sidecar_schema: "3",
         archive_state_callback_required: "true",
         callback_environment: callbackEnvironment,
       },
