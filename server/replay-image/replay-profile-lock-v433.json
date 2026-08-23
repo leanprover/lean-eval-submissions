@@ -1,0 +1,31 @@
+{
+  "benchmark_commit": "b91d4757aa0d7776c02540c9089df54fa0d0658a",
+  "benchmark_repository": "leanprover/lean-eval",
+  "cache_state": "cold",
+  "components": {
+    "comparator": {
+      "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+      "repository": "leanprover/comparator"
+    },
+    "landrun": {
+      "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+      "repository": "zouuup/landrun"
+    },
+    "lean4export": {
+      "commit": "15f6055e299ad5b89345e533cc2192f4cc00f659",
+      "repository": "leanprover/lean4export"
+    },
+    "nanoda": {
+      "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+      "repository": "robsimmons/nanoda_lib"
+    }
+  },
+  "go_toolchain": "go1.25.12",
+  "measurement_command": [
+    "/opt/lean-eval/replay-measure"
+  ],
+  "runner_profile": "cloudflare-sandbox-standard-4-v1",
+  "rust_toolchain": "rustc-1.89.0",
+  "schema_version": 1,
+  "toolchain": "leanprover/lean4:v4.33.0"
+}

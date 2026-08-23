@@ -23,6 +23,8 @@ MAX_CIPHERTEXT = 11 * 1024 * 1024
 MAX_PLAINTEXT = 10 * 1024 * 1024
 MAX_EXPANDED = 50 * 1024 * 1024
 MAX_MEMBERS = 4096
+MEMORY_LIMIT_BYTES = 12 * 1024 * 1024 * 1024
+WALL_TIME_LIMIT_MS = 21_600_000
 
 
 class AuthoritativeReplayError(ValueError):
@@ -190,6 +192,17 @@ def validate_runtime_profile(
         or cpu_model != profile["cpu_model"]
     ):
         raise AuthoritativeReplayError("runtime does not match the execution profile")
+
+
+def validate_measurement_limits(request: dict[str, Any]) -> None:
+    measurement = request["measurement_config"]
+    if (
+        measurement["memory_limit_bytes"] != MEMORY_LIMIT_BYTES
+        or measurement["wall_time_limit_ms"] != WALL_TIME_LIMIT_MS
+    ):
+        raise AuthoritativeReplayError(
+            "measurement configuration does not match the executor limits"
+        )
 
 
 def extract_archive(path: pathlib.Path, destination: pathlib.Path) -> pathlib.Path:
@@ -398,6 +411,7 @@ def main() -> None:
             load_json(INSTALL / "replay-profile-lock.json", "profile lock", 4096),
             request,
         )
+        validate_measurement_limits(request)
         validate_runtime_profile(request, *platform_evidence())
         decode_file(WORKSPACE / "archive.tar.gz.age.b64", ciphertext, MAX_CIPHERTEXT)
         decode_file(WORKSPACE / "identity.age.b64", identity, 4096)
@@ -426,41 +440,49 @@ def main() -> None:
         revision = request["result"]["statement_revision"]
         file_count, lines_of_code = source_statistics(source_root, problem_id)
         METRICS.unlink(missing_ok=True)
-        process = subprocess.run(
-            [
-                "/usr/bin/python3",
-                str(INSTALL / "evaluate_submission.py"),
-                "--source-dir",
-                str(source_root),
-                "--generated-root",
-                str(BENCHMARK / "generated"),
-                "--manifest-dir",
-                str(BENCHMARK / "manifests" / "problems"),
-                "--output-dir",
-                str(output),
-                "--repo-root",
-                str(BENCHMARK),
-                "--shared-packages",
-                str(BENCHMARK / ".lake" / "packages"),
-                "--problem-id",
-                problem_id,
-                "--statement-revision",
-                str(revision),
-                "--measurement-command-json",
-                '["/opt/lean-eval/replay-measure"]',
-                "--preprimed-workspaces",
-            ],
-            check=False,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env={
-                "PATH": "/opt/lean-eval/bin:/root/.elan/bin:/usr/local/bin:/usr/bin:/bin",
-                "HOME": "/opt/lean-eval/home",
-                "COMPARATOR_BIN": "/opt/lean-eval/bin/comparator",
-                "COMPARATOR_LANDRUN": "/usr/local/bin/landrun",
-            },
-        )
+        try:
+            process = subprocess.run(
+                [
+                    "/usr/bin/python3",
+                    str(INSTALL / "evaluate_submission.py"),
+                    "--source-dir",
+                    str(source_root),
+                    "--generated-root",
+                    str(BENCHMARK / "generated"),
+                    "--manifest-dir",
+                    str(BENCHMARK / "manifests" / "problems"),
+                    "--output-dir",
+                    str(output),
+                    "--repo-root",
+                    str(BENCHMARK),
+                    "--shared-packages",
+                    str(BENCHMARK / ".lake" / "packages"),
+                    "--problem-id",
+                    problem_id,
+                    "--statement-revision",
+                    str(revision),
+                    "--measurement-command-json",
+                    '["/opt/lean-eval/replay-measure"]',
+                    "--authoritative-checker",
+                    "nanoda",
+                    "--preprimed-workspaces",
+                ],
+                check=False,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                env={
+                    "PATH": "/opt/lean-eval/bin:/opt/lean-eval/home/.elan/bin:/usr/local/bin:/usr/bin:/bin",
+                    "HOME": "/opt/lean-eval/home",
+                    "COMPARATOR_BIN": "/opt/lean-eval/bin/comparator",
+                    "COMPARATOR_LANDRUN": "/usr/local/bin/landrun",
+                },
+                timeout=WALL_TIME_LIMIT_MS / 1000,
+            )
+        except subprocess.TimeoutExpired as error:
+            raise AuthoritativeReplayError(
+                "locked evaluator exceeded the wall-time limit"
+            ) from error
         if process.returncode != 0:
             raise AuthoritativeReplayError("locked evaluator failed")
         verdict = build_verdict(

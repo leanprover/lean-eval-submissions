@@ -92,6 +92,7 @@ jobs:
         run: >-
           python -m unittest
           tests.test_replay_orchestrator
+          tests.test_authoritative_replay_image
           tests.test_public_replay_smoke
           tests.test_public_replay_workflow
 

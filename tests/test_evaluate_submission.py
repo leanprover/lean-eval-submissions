@@ -260,6 +260,7 @@ class OverlayMatchTests(unittest.TestCase):
                 generated_root=generated,
                 workspaces_root=workspaces,
                 measurement_command=["/opt/lean-eval/replay-measure"],
+                authoritative_checker="nanoda",
                 prime=False,
             )
             config = json.loads(
@@ -269,6 +270,7 @@ class OverlayMatchTests(unittest.TestCase):
         self.assertEqual(
             config["measurement_command"], ["/opt/lean-eval/replay-measure"]
         )
+        self.assertIs(config["enable_nanoda"], True)
 
     def test_measurement_command_is_strict_and_cannot_overwrite_pristine(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -280,6 +282,20 @@ class OverlayMatchTests(unittest.TestCase):
                 ev._configure_measurement(target, ["trusted"])
             with self.assertRaisesRegex(ev.EvaluateError, "non-empty safe argv"):
                 ev._configure_measurement(target, [])
+
+    def test_authoritative_checker_is_closed_and_requires_pristine_setting(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = pathlib.Path(tmp)
+            (target / "config.json").write_text(
+                '{"enable_nanoda":false}\n', encoding="utf-8"
+            )
+            ev._configure_measurement(target, ["trusted"], "nanoda")
+            self.assertIs(
+                json.loads((target / "config.json").read_text())["enable_nanoda"],
+                True,
+            )
+            with self.assertRaisesRegex(ev.EvaluateError, "not registered"):
+                ev._configure_measurement(target, ["trusted"], "other")
 
     def test_overlay_copies_submission_lean_and_subdir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
