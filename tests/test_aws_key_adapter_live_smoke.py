@@ -213,7 +213,7 @@ class AwsKeyAdapterLiveSmokeTests(unittest.TestCase):
             "kernel_release": "fixture-kernel",
             "cpu_model": "fixture-cpu",
             "staging_memory_limit_bytes": 12 * 1024**3,
-            "production_memory_gate_bytes": 16 * 1024**3,
+            "production_memory_gate_bytes": 12 * 1024**3,
         }))
         evidence = validate_executor_response(executor_request, executor_response)
         self.assertNotIn("plaintext_identity_base64", evidence)

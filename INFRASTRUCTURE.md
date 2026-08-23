@@ -516,6 +516,18 @@ Recorded stack outputs:
 | Release invoker role ARN | `arn:aws:iam::161072922960:role/lean-eval-release-unwrap-invoker-staging` | `arn:aws:iam::161072922960:role/lean-eval-release-unwrap-invoker-production` |
 | Function role | `lean-eval-archive-unwrap-function-staging` | `lean-eval-archive-unwrap-function-production` |
 
+GitHub's repository OIDC API currently reports subject prefixes
+`repo:leanprover/lean-eval-submissions` and
+`repo:leanprover@7233018/lean-eval-releases@1340741242`. The releases repository
+was transferred after GitHub's immutable-subject rollout, so its owner and
+repository IDs are part of every token subject even though its display name is
+unchanged. The stack template pins these API-reported prefixes separately.
+Credentialed release staging run `32617539355` proved the previous live role
+still trusted the obsolete name-only release subject: it failed at STS before
+Lambda invocation, consumed no capability, and decrypted no source. Apply the
+reviewed stack update before repeating that smoke; do not opt the repository
+out of immutable subjects to preserve an obsolete trust policy.
+
 Both keys are enabled customer-managed symmetric keys with annual rotation.
 Both one-use tables are active, on-demand, server-side encrypted, and use
 `expires_at_epoch` TTL. Both Lambda `live` aliases point to immutable version
