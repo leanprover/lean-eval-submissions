@@ -91,7 +91,8 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertEqual(
             job_headers,
             [
-                "  intake:", "  evaluate:", "  archive:",
+                "  intake:", "  evaluate:", "  archive_issue:",
+                "  archive_server:", "  archive:",
                 "  archive_failure_state:", "  archive_state:",
                 "  evaluation_state:", "  record:", "  notify:",
             ],
@@ -103,9 +104,9 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             "the submission source must never be uploaded as an artifact",
         )
         self.assertNotIn("name: submission-audit-ciphertext", self.text)
-        evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive:", 1)[0]
-        archive = self.text.split("\n  archive:", 1)[1].split(
-            "\n  archive_failure_state:", 1
+        evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive_issue:", 1)[0]
+        archive = self.text.split("\n  archive_issue:", 1)[1].split(
+            "\n  archive_server:", 1
         )[0]
         self.assertIn("needs: [intake, archive, archive_state]", evaluate)
         self.assertIn("needs.archive.result == 'success'", evaluate)
@@ -120,6 +121,16 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn("python scripts/archive_submission.py encrypt", archive)
         self.assertIn("python scripts/archive_submission.py push", archive)
         self.assertNotIn("evaluate_submission.py", archive)
+        server = self.text.split("\n  archive_server:", 1)[1].split(
+            "\n  archive:", 1
+        )[0]
+        self.assertIn("uses: ./.github/workflows/server-archive.yml", server)
+        self.assertIn("id-token: write", server)
+        normalized = self.text.split("\n  archive:", 1)[1].split(
+            "\n  archive_failure_state:", 1
+        )[0]
+        self.assertIn("needs: [intake, archive_issue, archive_server]", normalized)
+        self.assertIn("Require selected archive lane success", normalized)
 
     def test_both_checkouts_disable_persisted_credentials(self) -> None:
         # The submissions checkout and the lean-eval checkout share the
@@ -321,7 +332,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn("scripts/build_evaluation_completion.py", evaluation_callback)
         self.assertIn("/internal/v1/evaluation-completed", evaluation_callback)
         self.assertNotIn("submission-audit-ciphertext", evaluation_callback)
-        evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive:", 1)[0]
+        evaluate = self.text.split("\n  evaluate:", 1)[1].split("\n  archive_issue:", 1)[0]
         self.assertNotIn("LIFECYCLE_CALLBACK_TOKEN", evaluate)
 
     def test_record_waits_on_archive(self) -> None:
@@ -412,8 +423,8 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertNotIn("submission-audit-ciphertext", self.text)
 
     def test_pre_evaluation_archive_does_not_claim_an_evaluator_verdict(self) -> None:
-        archive = self.text.split("\n  archive:", 1)[1].split(
-            "\n  archive_failure_state:", 1
+        archive = self.text.split("\n  archive_issue:", 1)[1].split(
+            "\n  archive_server:", 1
         )[0]
         self.assertNotIn("submission-results", archive)
         self.assertNotIn("--summary", archive)

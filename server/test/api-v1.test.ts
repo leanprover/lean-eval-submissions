@@ -239,7 +239,7 @@ describe("strict API contract", () => {
       submission_id: "0198abcd-1111-7000-8000-000000000001",
       source_commit: "a".repeat(40),
       archive_locator_required: "true",
-      archive_sidecar_schema: "2",
+      archive_sidecar_schema: "3",
       archive_state_callback_required: "true",
       callback_environment: "staging",
       workflow_commit: "b".repeat(40),

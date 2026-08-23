@@ -565,7 +565,7 @@ class ServerDispatchTests(unittest.TestCase):
     def _inputs(self, **overrides: str) -> dict[str, str]:
         values = {
             "archive_locator_required": "true",
-            "archive_sidecar_schema": "2",
+            "archive_sidecar_schema": "3",
             "archive_state_callback_required": "true",
             "callback_environment": "staging",
             "declared_model": "Example Model",

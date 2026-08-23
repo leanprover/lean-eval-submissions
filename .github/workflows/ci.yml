@@ -56,6 +56,7 @@ jobs:
         run: >-
           python -m unittest
           tests.test_submission_workflow
+          tests.test_server_archive_workflow
           tests.test_worker_deployment_workflow
 
       - name: Submission intake tests
@@ -78,6 +79,7 @@ jobs:
       - name: Archive key adapter tests
         run: >-
           python -m unittest
+          tests.test_archive_submission
           tests.test_archive_envelope
           tests.test_key_capability_contract
           tests.test_aws_key_adapter

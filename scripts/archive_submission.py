@@ -40,10 +40,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from key_capability_contract import ContractError, validate_envelope
+
 
 SIZE_CAP_BYTES = 10 * 1024 * 1024  # 10 MiB. Matches the workflow.
 SIDECAR_SCHEMA_VERSION = 1
 SERVER_SIDECAR_SCHEMA_VERSION = 2
+ENVELOPE_SIDECAR_SCHEMA_VERSION = 3
 ARCHIVE_LOCATOR_SCHEMA_VERSION = 1
 DEFAULT_AUDIT_REPO = "leanprover/lean-eval-audit"
 PUSH_RETRY_ATTEMPTS = 5
@@ -102,7 +105,10 @@ SUBMITTER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]*$")
 
 
 def _audit_path(sidecar: dict, archived_at: dt.datetime) -> str:
-    if sidecar.get("schema_version") == SERVER_SIDECAR_SCHEMA_VERSION:
+    if sidecar.get("schema_version") in (
+        SERVER_SIDECAR_SCHEMA_VERSION,
+        ENVELOPE_SIDECAR_SCHEMA_VERSION,
+    ):
         submission_id = str(sidecar["submission_id"])
         prefix = submission_id.replace("-", "")[:2]
         return f"archives/{prefix}/{submission_id}"
@@ -337,6 +343,71 @@ def _recipient_lines(path: pathlib.Path) -> list[str]:
     return lines
 
 
+def _prepare_envelope_sidecar(args: argparse.Namespace) -> int:
+    """Bind validated server metadata to one provider-neutral key envelope."""
+    source_tar = args.source_tar
+    ciphertext = args.ciphertext
+    if not source_tar.is_file() or source_tar.is_symlink():
+        sys.exit(f"source tar not found or not a regular file: {source_tar}")
+    if not ciphertext.is_file() or ciphertext.is_symlink():
+        sys.exit(f"ciphertext not found or not a regular file: {ciphertext}")
+    source_size = source_tar.stat().st_size
+    if source_size > SIZE_CAP_BYTES:
+        sys.exit(
+            f"source tarball is {source_size} bytes, over the {SIZE_CAP_BYTES}-byte "
+            "audit cap. The submission must be rejected."
+        )
+
+    metadata = _read_json(args.metadata)
+    required = (
+        "submission_id",
+        "submission_ref",
+        "submission_repo",
+        "submission_kind",
+        "submission_public",
+        "submitted_by",
+        "model",
+    )
+    missing = [key for key in required if key not in metadata]
+    if missing:
+        sys.exit(f"metadata.json missing required fields: {missing!r}")
+    if "issue_number" in metadata:
+        sys.exit("server metadata must not contain issue_number")
+
+    try:
+        envelope = validate_envelope(_read_json(args.envelope))
+    except ContractError as error:
+        sys.exit(f"invalid archive key envelope: {error}")
+    submission_id = metadata["submission_id"]
+    if envelope["submission_id"] != submission_id:
+        sys.exit("archive key envelope belongs to a different submission")
+    ciphertext_digest = _sha256_of_file(ciphertext)
+    if envelope["archive_ciphertext_sha256"] != ciphertext_digest:
+        sys.exit("archive key envelope digest does not match ciphertext")
+
+    sidecar = {
+        "schema_version": ENVELOPE_SIDECAR_SCHEMA_VERSION,
+        "submission_id": submission_id,
+        "submission_repo": metadata["submission_repo"],
+        "submission_ref": metadata["submission_ref"],
+        "submission_kind": metadata["submission_kind"],
+        "submission_public": metadata["submission_public"],
+        "submitter": metadata["submitted_by"],
+        "model": metadata["model"],
+        "size_bytes_plaintext_tar": source_size,
+        "sha256_plaintext_tar": _sha256_of_file(source_tar),
+        "key_envelope": envelope,
+    }
+    _validate_sidecar(sidecar)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(
+        json.dumps(sidecar, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(f"sidecar:   {args.output}")
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # push subcommand
 # ---------------------------------------------------------------------------
@@ -355,6 +426,7 @@ _COMMON_SIDECAR_FIELDS = {
     "production_description",
     "solution_publication_status",
     "solution_publication_date",
+    "key_envelope",
 }
 _FINAL_SIDECAR_FIELDS = {
     "sha256_ciphertext",
@@ -380,15 +452,20 @@ def _validate_sidecar(sidecar: dict, *, finalized: bool = False) -> None:
     if type(schema_version) is not int or schema_version not in (
         SIDECAR_SCHEMA_VERSION,
         SERVER_SIDECAR_SCHEMA_VERSION,
+        ENVELOPE_SIDECAR_SCHEMA_VERSION,
     ):
         sys.exit(
             "sidecar schema_version must be "
-            f"{SIDECAR_SCHEMA_VERSION} or {SERVER_SIDECAR_SCHEMA_VERSION}, "
+            f"{SIDECAR_SCHEMA_VERSION}, {SERVER_SIDECAR_SCHEMA_VERSION}, or "
+            f"{ENVELOPE_SIDECAR_SCHEMA_VERSION}, "
             f"got {schema_version!r}"
         )
     identity_field = (
         "submission_id"
-        if schema_version == SERVER_SIDECAR_SCHEMA_VERSION
+        if schema_version in (
+            SERVER_SIDECAR_SCHEMA_VERSION,
+            ENVELOPE_SIDECAR_SCHEMA_VERSION,
+        )
         else "issue"
     )
     allowed_fields = _COMMON_SIDECAR_FIELDS | {identity_field}
@@ -412,6 +489,16 @@ def _validate_sidecar(sidecar: dict, *, finalized: bool = False) -> None:
             )
         if "issue" in sidecar:
             sys.exit("server sidecar must not contain issue")
+    key_envelope = sidecar.get("key_envelope")
+    if schema_version == ENVELOPE_SIDECAR_SCHEMA_VERSION:
+        try:
+            envelope = validate_envelope(key_envelope)
+        except ContractError as error:
+            sys.exit(f"sidecar.key_envelope is invalid: {error}")
+        if envelope["submission_id"] != sidecar["submission_id"]:
+            sys.exit("sidecar.key_envelope belongs to a different submission")
+    elif key_envelope is not None:
+        sys.exit("only a schema-version-3 sidecar may contain key_envelope")
     submission_ref = sidecar.get("submission_ref")
     if not isinstance(submission_ref, str) or not SHA40_RE.fullmatch(submission_ref):
         sys.exit(f"sidecar.submission_ref must be a 40-char lowercase hex SHA, got {submission_ref!r}")
@@ -494,6 +581,11 @@ def _validate_sidecar(sidecar: dict, *, finalized: bool = False) -> None:
             or ciphertext_size <= 0
         ):
             sys.exit("final sidecar.size_bytes_ciphertext must be a positive integer")
+        if schema_version == ENVELOPE_SIDECAR_SCHEMA_VERSION:
+            if envelope["archive_ciphertext_sha256"] != ciphertext_sha:
+                sys.exit(
+                    "final sidecar ciphertext digest does not match key_envelope"
+                )
         archived_at = sidecar.get("archived_at")
         if not isinstance(archived_at, str) or re.fullmatch(
             r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", archived_at
@@ -553,7 +645,10 @@ _SERVER_IDENTITY_FIELDS = (
 
 
 def _identity_fields(sidecar: dict) -> tuple[str, ...]:
-    if sidecar.get("schema_version") == SERVER_SIDECAR_SCHEMA_VERSION:
+    if sidecar.get("schema_version") in (
+        SERVER_SIDECAR_SCHEMA_VERSION,
+        ENVELOPE_SIDECAR_SCHEMA_VERSION,
+    ):
         return _SERVER_IDENTITY_FIELDS
     return _LEGACY_IDENTITY_FIELDS
 
@@ -760,7 +855,10 @@ def _push(args: argparse.Namespace) -> int:
 
     _validate_sidecar(sidecar)
 
-    is_server_submission = sidecar["schema_version"] == SERVER_SIDECAR_SCHEMA_VERSION
+    is_server_submission = sidecar["schema_version"] in (
+        SERVER_SIDECAR_SCHEMA_VERSION,
+        ENVELOPE_SIDECAR_SCHEMA_VERSION,
+    )
     if is_server_submission and (
         args.locator_output is None or args.completion_output is None
     ):
@@ -816,6 +914,8 @@ def _push(args: argparse.Namespace) -> int:
                 sidecar["evaluator_verdict"] = verdict
         except (json.JSONDecodeError, OSError) as exc:
             print(f"warning: could not parse summary.json: {exc}", file=sys.stderr)
+
+    _validate_sidecar(sidecar, finalized=True)
 
     base_path = _audit_path(sidecar, archived_at)
     ciphertext_remote = f"{base_path}.tar.age"
@@ -1190,6 +1290,17 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p_enc.add_argument("--recipients", type=pathlib.Path, required=True)
     p_enc.add_argument("--output-dir", type=pathlib.Path, required=True)
     p_enc.set_defaults(func=_encrypt)
+
+    p_sidecar = sub.add_parser(
+        "prepare-envelope-sidecar",
+        help="Bind server metadata to an existing per-submission ciphertext envelope.",
+    )
+    p_sidecar.add_argument("--source-tar", type=pathlib.Path, required=True)
+    p_sidecar.add_argument("--metadata", type=pathlib.Path, required=True)
+    p_sidecar.add_argument("--ciphertext", type=pathlib.Path, required=True)
+    p_sidecar.add_argument("--envelope", type=pathlib.Path, required=True)
+    p_sidecar.add_argument("--output", type=pathlib.Path, required=True)
+    p_sidecar.set_defaults(func=_prepare_envelope_sidecar)
 
     p_push = sub.add_parser("push", help="Push ciphertext + sidecar to lean-eval-audit.")
     p_push.add_argument("--ciphertext", type=pathlib.Path, required=True)
