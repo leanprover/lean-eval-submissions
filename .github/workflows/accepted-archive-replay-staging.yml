@@ -57,6 +57,7 @@ jobs:
         run: |
           set -euo pipefail
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 15 \
             "$REPLAY_HEALTH_URL" --output "$RUNNER_TEMP/replay-health.json"
           jq -e --arg commit "$GITHUB_SHA" '
             .status == "ok" and
