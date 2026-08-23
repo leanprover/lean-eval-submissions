@@ -52,6 +52,7 @@ class AuthoritativeReplayImageReferenceTests(unittest.TestCase):
             )
             self.assertLess(verification, broker)
             self.assertLess(verification, deployment)
+            self.assertLess(deployment, broker)
 
     def test_staging_and_production_use_one_reviewed_manifest(self) -> None:
         staging = WRANGLER["env"]["staging"]
