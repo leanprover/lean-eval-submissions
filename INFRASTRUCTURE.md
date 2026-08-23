@@ -54,9 +54,9 @@ administrators. Service code:
 | AWS account | `lean-eval` (`161072922960`) | dedicated key custody | **CREATED; ROOT MFA ENABLED; NO ACCESS KEYS** |
 | AWS CloudFormation stack | `lean-eval-key-adapter-staging` | staging | **PROVISIONED; RELEASE OIDC TRUST UPDATE PENDING** |
 | AWS CloudFormation stack | `lean-eval-key-adapter-production` | production | **PROVISIONED; RELEASE OIDC TRUST UPDATE PENDING; INTAKE/REPLAY/PUBLICATION DISABLED** |
-| Cloudflare replay Worker | `lean-eval-replay-executor-staging` | staging | **FIRST AUTHORITATIVE ATTEMPT FAILED CLOSED 2026-08-23; REPLAY DISABLED PENDING DIAGNOSIS** |
+| Cloudflare replay Worker | `lean-eval-replay-executor-staging` | staging | **FIRST AUTHORITATIVE ATTEMPT FAILED CLOSED 2026-08-23; REPLAY DISABLED; CORRECTED IMAGE REBUILD PENDING** |
 | Cloudflare replay Worker | `lean-eval-replay-executor` | production | **PROVISIONED 2026-08-22; REPLAY AND ACCEPTANCE DISABLED** |
-| Replay execution backend | Cloudflare Sandbox, provider-neutral adapter | staging / production | **FIRST AUTHORITATIVE ATTEMPT RETURNED HTTP 500; STAGING/PRODUCTION REPLAY DISABLED PENDING DIAGNOSIS** |
+| Replay execution backend | Cloudflare Sandbox, provider-neutral adapter | staging / production | **HTTP 500 FOLLOW-UP ISOLATED AN IMAGE PACKAGING GAP; STAGING/PRODUCTION REPLAY DISABLED PENDING CORRECTED IMAGE EVIDENCE** |
 
 Do not change a status to provisioned without replacing every applicable
 placeholder in the inventory below and recording a verification date.
@@ -106,6 +106,12 @@ Cloudflare Registry tag and independently recorded manifest digest:
 - staging exposes the synthetic and accepted-archive acceptance endpoints;
   general replay is disabled in staging and both acceptance and replay are
   disabled in production;
+- the 2026-08-23 failed authoritative rollout was followed by disabled-state
+  acceptance probes; live Cloudflare logs showed exit code 127 because the
+  authoritative image omitted the two acceptance commands. The Dockerfile and
+  publication gate now require all three fixed commands; a corrected immutable
+  image must be published and pass the accepted-archive boundary before the
+  authoritative attempt is retried;
 - every request gets a fresh nonce-derived sandbox ID, no default persistent
   session, a fixed command, bounded inputs, and unconditional `destroy()`;
 - one 12 GiB `standard-4` is the approved staging and production ceiling;
