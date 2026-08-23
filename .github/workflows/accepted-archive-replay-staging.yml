@@ -103,6 +103,7 @@ jobs:
       - name: Bind the exact ciphertext and prepare a five-minute capability
         run: |
           set -euo pipefail
+          umask 077
           archive_commit=$(jq -r .archive_commit "$RUNNER_TEMP/replay-plan.json")
           archive_path=$(jq -r .archive_path "$RUNNER_TEMP/replay-plan.json")
           test "$(git -C audit rev-parse HEAD)" = "$archive_commit"
@@ -130,6 +131,7 @@ jobs:
       - name: Consume once, prove reuse refusal, and drop AWS authority
         run: |
           set -euo pipefail
+          umask 077
           cleanup() {
             unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
             {
@@ -173,10 +175,13 @@ jobs:
           REPLAY_EXECUTOR_URL: https://lean-eval-replay-executor-staging.lean-eval.workers.dev/api/v1/staging-archive-acceptance
         run: |
           set -euo pipefail
+          umask 077
           cleanup() {
             unset replay_oidc_token
-            rm -f "$RUNNER_TEMP/identity.age" \
-              "$RUNNER_TEMP/unwrap-request.json" \
+            if [ -f "$RUNNER_TEMP/identity.age" ]; then
+              shred --remove "$RUNNER_TEMP/identity.age"
+            fi
+            rm -f "$RUNNER_TEMP/unwrap-request.json" \
               "$RUNNER_TEMP/executor-request.json" \
               "$RUNNER_TEMP/executor-response.json" \
               "$RUNNER_TEMP/replay-oidc-response.json"
@@ -209,7 +214,7 @@ jobs:
             "$REPLAY_EXECUTOR_URL" \
             --output "$RUNNER_TEMP/executor-response.json"
           unset replay_oidc_token
-          rm "$RUNNER_TEMP/identity.age"
+          shred --remove "$RUNNER_TEMP/identity.age"
           python scripts/replay_archive_staging.py validate-response \
             --request "$RUNNER_TEMP/executor-request.json" \
             --response "$RUNNER_TEMP/executor-response.json"
@@ -266,12 +271,14 @@ jobs:
       - name: Remove all remaining private scratch
         if: always()
         run: |
+          if [ -f "$RUNNER_TEMP/identity.age" ]; then
+            shred --remove "$RUNNER_TEMP/identity.age"
+          fi
           rm -rf "$RUNNER_TEMP/state-views" audit
           rm -f "$RUNNER_TEMP/replay-plan.json" \
             "$RUNNER_TEMP/replay-health.json" \
             "$RUNNER_TEMP/archive.tar.age" \
             "$RUNNER_TEMP/archive-sidecar.json" \
-            "$RUNNER_TEMP/identity.age" \
             "$RUNNER_TEMP/unwrap-request.json" \
             "$RUNNER_TEMP/executor-request.json" \
             "$RUNNER_TEMP/executor-response.json" \

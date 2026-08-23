@@ -44,7 +44,8 @@ class ReplayArchiveStagingWorkflowTests(unittest.TestCase):
 
     def test_drops_authority_and_uploads_only_source_free_runtime_evidence(self) -> None:
         self.assertIn('test -z "${AWS_ACCESS_KEY_ID:-}"', WORKFLOW)
-        self.assertIn('rm "$RUNNER_TEMP/identity.age"', WORKFLOW)
+        self.assertIn('shred --remove "$RUNNER_TEMP/identity.age"', WORKFLOW)
+        self.assertGreaterEqual(WORKFLOW.count("umask 077"), 3)
         self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", WORKFLOW)
         self.assertIn("name: authoritative-replay-runtime-evidence", WORKFLOW)
         self.assertIn('"health": json.loads(', WORKFLOW)
