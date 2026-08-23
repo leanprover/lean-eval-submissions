@@ -32,6 +32,23 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
 
 type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy">;
 
+type ExecutorFailureReason =
+  | "input_transfer_failed"
+  | "command_rpc_failed"
+  | "command_failed"
+  | "command_output_invalid"
+  | "sandbox_destroy_failed"
+  | "unexpected_failure";
+
+class ReplayExecutorError extends Error {
+  constructor(
+    readonly reason: ExecutorFailureReason,
+    readonly detail?: string,
+  ) {
+    super(reason);
+  }
+}
+
 type Dependencies = {
   authenticate(request: Request, env: ReplayAuthEnvironment): Promise<void>;
   sandbox(env: ReplayRuntimeEnv, runnerNonce: string): SandboxClient;
@@ -46,6 +63,100 @@ const DEFAULT_DEPENDENCIES: Dependencies = {
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status, headers: { "cache-control": "no-store" } });
+}
+
+const ARCHIVE_COMMAND_FAILURES = new Map([
+  ["expectation is invalid", "expectation_invalid"],
+  ["expectation fields are invalid", "expectation_fields_invalid"],
+  ["expectation schema is invalid", "expectation_schema_invalid"],
+  ["encoded input is invalid", "encoded_input_invalid"],
+  ["decoded input exceeds size limit", "decoded_input_too_large"],
+  ["ciphertext digest mismatch", "ciphertext_digest_mismatch"],
+  ["archive decryption failed", "archive_decryption_failed"],
+  ["plaintext size mismatch", "plaintext_size_mismatch"],
+  ["plaintext digest mismatch", "plaintext_digest_mismatch"],
+  ["decrypted archive is invalid", "archive_invalid"],
+  ["decrypted archive member count is invalid", "archive_member_count_invalid"],
+  ["decrypted archive contains an unsafe member", "archive_member_unsafe"],
+  ["decrypted archive expands beyond its limit", "archive_expansion_too_large"],
+  ["network isolation failed", "network_isolation_failed"],
+]);
+
+function safeCommandFailureDetail(command: string, stderr: string): string | undefined {
+  if (command !== "/opt/lean-eval/replay-archive-acceptance") return undefined;
+  return ARCHIVE_COMMAND_FAILURES.get(stderr.trim()) ?? "unclassified_archive_failure";
+}
+
+async function writeSandboxFile(
+  sandbox: SandboxClient,
+  path: string,
+  contents: string,
+): Promise<void> {
+  let result: Awaited<ReturnType<SandboxClient["writeFile"]>>;
+  try {
+    result = await sandbox.writeFile(path, contents);
+  } catch {
+    throw new ReplayExecutorError("input_transfer_failed");
+  }
+  if (!result.success || result.path !== path) {
+    throw new ReplayExecutorError("input_transfer_failed");
+  }
+}
+
+async function executeSandboxCommand(
+  sandbox: SandboxClient,
+  command: string,
+  timeout: number,
+  maximumStdout: number,
+): Promise<string> {
+  let result: Awaited<ReturnType<SandboxClient["exec"]>>;
+  try {
+    result = await sandbox.exec(command, { timeout });
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  if (!result.success) {
+    throw new ReplayExecutorError(
+      "command_failed",
+      safeCommandFailureDetail(command, result.stderr),
+    );
+  }
+  if (result.stdout.length > maximumStdout) {
+    throw new ReplayExecutorError("command_output_invalid");
+  }
+  return result.stdout;
+}
+
+async function withSandboxDestruction<T>(
+  sandbox: SandboxClient,
+  operation: () => Promise<T>,
+): Promise<T> {
+  let outcome: { ok: true; value: T } | { ok: false; error: unknown };
+  try {
+    outcome = { ok: true, value: await operation() };
+  } catch (error) {
+    outcome = { ok: false, error };
+  }
+  let destructionFailed = false;
+  try {
+    await sandbox.destroy();
+  } catch {
+    destructionFailed = true;
+  }
+  if (!outcome.ok) throw outcome.error;
+  if (destructionFailed) throw new ReplayExecutorError("sandbox_destroy_failed");
+  return outcome.value;
+}
+
+function recordExecutorFailure(route: string, error: unknown): void {
+  const reason = error instanceof ReplayExecutorError ? error.reason : "unexpected_failure";
+  const detail = error instanceof ReplayExecutorError ? error.detail : undefined;
+  console.error(JSON.stringify({
+    event: "lean_eval_replay_executor_failure",
+    route,
+    reason,
+    ...(detail === undefined ? {} : { detail }),
+  }));
 }
 
 function health(env: ReplayRuntimeEnv): Response {
@@ -90,42 +201,34 @@ export async function handleReplayRequest(
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
       const sandbox = dependencies.sandbox(env, input.runner_nonce);
-      const verdict = await (async () => {
-        try {
-          const write = async (path: string, contents: string): Promise<void> => {
-            const result = await sandbox.writeFile(path, contents);
-            if (!result.success || result.path !== path) {
-              throw new Error("authoritative replay input transfer failed");
-            }
-          };
-          await write("/workspace/replay-request.json", JSON.stringify(input.request));
-          await write(
+      const verdict = await withSandboxDestruction(sandbox, async () => {
+          await writeSandboxFile(sandbox, "/workspace/replay-request.json", JSON.stringify(input.request));
+          await writeSandboxFile(
+            sandbox,
             "/workspace/archive-expectation.json",
             JSON.stringify(input.archive_expectation),
           );
-          await write("/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
-          await write("/workspace/identity.age.b64", input.plaintext_identity_base64);
-          const result = await sandbox.exec("/opt/lean-eval/replay-authoritative", {
-            timeout: 20_100_000,
-          });
-          if (!result.success || result.stdout.length > 64 * 1024) {
-            throw new Error("authoritative replay command failed");
-          }
+          await writeSandboxFile(sandbox, "/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
+          await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);
+          const stdout = await executeSandboxCommand(
+            sandbox,
+            "/opt/lean-eval/replay-authoritative",
+            20_100_000,
+            64 * 1024,
+          );
           try {
-            return validateReplayVerdict(JSON.parse(result.stdout) as unknown, input);
+            return validateReplayVerdict(JSON.parse(stdout) as unknown, input);
           } catch {
-            throw new Error("authoritative replay verdict was invalid");
+            throw new ReplayExecutorError("command_output_invalid");
           }
-        } finally {
-          await sandbox.destroy();
-        }
-      })();
+      });
       return json({ schema_version: 1, verdict, destruction: "confirmed" });
     } catch (error) {
       if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
       if (error instanceof AuthoritativeReplayContractError || error instanceof SyntaxError) {
         return json({ error: "invalid_request" }, 400);
       }
+      recordExecutorFailure("authoritative_replay", error);
       return json({ error: "executor_failed" }, 500);
     }
   }
@@ -137,11 +240,11 @@ export async function handleReplayRequest(
     if (archiveAcceptance) {
       const input = await readArchiveAcceptanceRequest(request);
       const sandbox = dependencies.sandbox(env, input.runner_nonce);
-      const evidence = await (async () => {
-        try {
-          await sandbox.writeFile("/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
-          await sandbox.writeFile("/workspace/identity.age.b64", input.plaintext_identity_base64);
-          await sandbox.writeFile(
+      const evidence = await withSandboxDestruction(sandbox, async () => {
+          await writeSandboxFile(sandbox, "/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
+          await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);
+          await writeSandboxFile(
+            sandbox,
             "/workspace/archive-expectation.json",
             JSON.stringify({
               schema_version: 1,
@@ -151,21 +254,18 @@ export async function handleReplayRequest(
               plaintext_tar_size: input.plaintext_tar_size,
             }),
           );
-          const result = await sandbox.exec("/opt/lean-eval/replay-archive-acceptance", {
-            timeout: 180_000,
-          });
-          if (!result.success || result.stdout.length > 4096) {
-            throw new Error("sandbox archive acceptance command failed");
-          }
+          const stdout = await executeSandboxCommand(
+            sandbox,
+            "/opt/lean-eval/replay-archive-acceptance",
+            180_000,
+            4096,
+          );
           try {
-            return validateArchiveEvidence(JSON.parse(result.stdout) as unknown, input);
+            return validateArchiveEvidence(JSON.parse(stdout) as unknown, input);
           } catch {
-            throw new Error("sandbox archive acceptance evidence was invalid");
+            throw new ReplayExecutorError("command_output_invalid");
           }
-        } finally {
-          await sandbox.destroy();
-        }
-      })();
+      });
       return json({
         schema_version: 1,
         service: "lean-eval-replay-executor",
@@ -188,11 +288,11 @@ export async function handleReplayRequest(
     }
     const input = await readAcceptanceRequest(request);
     const sandbox = dependencies.sandbox(env, input.runner_nonce);
-    const evidence = await (async () => {
-      try {
-        await sandbox.writeFile("/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
-        await sandbox.writeFile("/workspace/identity.age.b64", input.plaintext_identity_base64);
-        await sandbox.writeFile(
+    const evidence = await withSandboxDestruction(sandbox, async () => {
+        await writeSandboxFile(sandbox, "/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
+        await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);
+        await writeSandboxFile(
+          sandbox,
           "/workspace/expectation.json",
           JSON.stringify({
             schema_version: 1,
@@ -200,19 +300,18 @@ export async function handleReplayRequest(
             marker_sha256: input.marker_sha256,
           }),
         );
-        const result = await sandbox.exec("/opt/lean-eval/replay-staging-acceptance", { timeout: 120_000 });
-        if (!result.success || result.stdout.length > 4096) {
-          throw new Error("sandbox acceptance command failed");
-        }
+        const stdout = await executeSandboxCommand(
+          sandbox,
+          "/opt/lean-eval/replay-staging-acceptance",
+          120_000,
+          4096,
+        );
         try {
-          return validateSandboxEvidence(JSON.parse(result.stdout) as unknown, input);
+          return validateSandboxEvidence(JSON.parse(stdout) as unknown, input);
         } catch {
-          throw new Error("sandbox acceptance evidence was invalid");
+          throw new ReplayExecutorError("command_output_invalid");
         }
-      } finally {
-        await sandbox.destroy();
-      }
-    })();
+    });
     return json({
       schema_version: 1,
       service: "lean-eval-replay-executor",
@@ -239,6 +338,7 @@ export async function handleReplayRequest(
     ) {
       return json({ error: "invalid_request" }, 400);
     }
+    recordExecutorFailure(archiveAcceptance ? "archive_acceptance" : "synthetic_acceptance", error);
     return json({ error: "executor_failed" }, 500);
   }
 }

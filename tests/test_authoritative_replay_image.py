@@ -72,6 +72,21 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
         self.assertNotIn("/root/.elan/bin", runner)
         self.assertRegex(runner, r'"--authoritative-checker",\s*"nanoda"')
 
+    def test_image_contains_every_fixed_replay_command(self) -> None:
+        dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+        for command in (
+            "replay-authoritative",
+            "replay-staging-acceptance",
+            "replay-archive-acceptance",
+            "replay-measure",
+        ):
+            with self.subTest(command=command):
+                self.assertIn(
+                    f"COPY server/replay-image/{command} /opt/lean-eval/{command}",
+                    dockerfile,
+                )
+                self.assertIn(f"/opt/lean-eval/{command}", dockerfile)
+
     def test_workflow_actions_are_commit_pinned(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
         actions = re.findall(r"uses:\s*[^\s@]+@([^\s#]+)", workflow)

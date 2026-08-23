@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { handleReplayRequest, type ReplayRuntimeEnv } from "../src/replay-app";
 
@@ -328,6 +328,41 @@ describe("Cloudflare replay executor", () => {
       destruction: "confirmed",
       network_policy: "disabled",
     });
+  });
+
+  it("logs only an allowlisted archive command failure classification", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const response = await handleReplayRequest(new Request(
+        "https://example.test/api/v1/staging-archive-acceptance",
+        { method: "POST", body: JSON.stringify(await archiveInput()) },
+      ), ENV, {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => ({
+          writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+          exec: (command) => Promise.resolve({
+            success: false,
+            exitCode: 1,
+            stdout: "",
+            stderr: "archive decryption failed\n",
+            command,
+            duration: 1,
+            timestamp: "fixture",
+          }),
+          destroy: () => Promise.resolve(),
+        }),
+      });
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({ error: "executor_failed" });
+      expect(logged).toHaveBeenCalledExactlyOnceWith(JSON.stringify({
+        event: "lean_eval_replay_executor_failure",
+        route: "archive_acceptance",
+        reason: "command_failed",
+        detail: "archive_decryption_failed",
+      }));
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it("destroys the sandbox on execution failure without exposing diagnostics", async () => {

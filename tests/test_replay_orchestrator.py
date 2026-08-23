@@ -143,6 +143,7 @@ class ReplayOrchestratorTests(unittest.TestCase):
             attempt=2,
             reason_code="runner_lost",
             retryable=True,
+            runner_profile=profile["runner_profile"],
             event_id="0198abcd-0000-7000-8000-000000000009",
         )
         plan = plan_next(queue, profile, measurement)
@@ -152,6 +153,10 @@ class ReplayOrchestratorTests(unittest.TestCase):
             plan["started_transition"]["causation_event_id"],
             task["event_id"],
         )
+
+        task["runner_profile"] = "different-disposable-runner-v1"
+        with self.assertRaisesRegex(ReplayError, "runner profile"):
+            plan_next(queue, profile, measurement)
 
     def test_private_source_plans_the_exact_d6_archive_without_git_locator(self) -> None:
         queue, profile, measurement = self.inputs()

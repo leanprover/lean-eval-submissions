@@ -78,6 +78,8 @@ jobs:
             test -x /opt/lean-eval/bin/lean4export
             test -x /opt/lean-eval/bin/nanoda_bin
             test -x /opt/lean-eval/replay-authoritative
+            test -x /opt/lean-eval/replay-staging-acceptance
+            test -x /opt/lean-eval/replay-archive-acceptance
             test -x /opt/lean-eval/replay-measure
             elan run leanprover/lean4:v4.33.0 lean --version | grep -F "Lean (version 4.33.0,"
           '

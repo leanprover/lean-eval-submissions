@@ -130,11 +130,16 @@ COPY --from=lean-builder /runtime/home /opt/lean-eval/home
 COPY scripts/evaluate_submission.py /opt/lean-eval/evaluate_submission.py
 COPY scripts/replay_orchestrator.py /opt/lean-eval/replay_orchestrator.py
 COPY server/replay-image/replay-authoritative /opt/lean-eval/replay-authoritative
+COPY server/replay-image/replay-staging-acceptance /opt/lean-eval/replay-staging-acceptance
+COPY server/replay-image/replay-archive-acceptance /opt/lean-eval/replay-archive-acceptance
 COPY server/replay-image/replay-measure /opt/lean-eval/replay-measure
 COPY server/replay-image/replay-profile-lock-v433.json /opt/lean-eval/replay-profile-lock.json
 
 RUN chmod 0555 /usr/local/bin/landrun /opt/lean-eval/bin/* \
-      /opt/lean-eval/replay-authoritative /opt/lean-eval/replay-measure \
+      /opt/lean-eval/replay-authoritative \
+      /opt/lean-eval/replay-staging-acceptance \
+      /opt/lean-eval/replay-archive-acceptance \
+      /opt/lean-eval/replay-measure \
     && mkdir -p -m 0700 /run/lean-eval /workspace \
     && test "$(cat /opt/lean-eval/benchmark/.lean-eval-commit)" = \
       b91d4757aa0d7776c02540c9089df54fa0d0658a \

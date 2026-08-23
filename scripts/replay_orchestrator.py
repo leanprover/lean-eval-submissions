@@ -288,7 +288,11 @@ def _validate_task(value: Any, index: int) -> dict[str, Any]:
     label = f"tasks[{index}]"
     task = _object(value, label)
     status = task.get("status")
-    fields = TASK_FIELDS | ({"reason_code", "retryable"} if status == "failed" else set())
+    fields = TASK_FIELDS | (
+        {"reason_code", "retryable", "runner_profile"}
+        if status == "failed"
+        else set()
+    )
     _fields(task, fields, label)
     _match(REPLAY_ID, task["replay_task_id"], f"{label}.replay_task_id")
     result = _match(RESULT_ID, task["result_id"], f"{label}.result_id")
@@ -320,6 +324,7 @@ def _validate_task(value: Any, index: int) -> dict[str, Any]:
             raise ReplayError(f"{label}: failed queue task must be retryable after an attempt")
         if task["reason_code"] not in RETRYABLE_FAILURES:
             raise ReplayError(f"{label}.reason_code is not a retryable failure reason")
+        _string(task["runner_profile"], f"{label}.runner_profile")
     elif status != "queued":
         raise ReplayError(f"{label}.status is not queueable")
     _match(UUID7, task["event_id"], f"{label}.event_id")
@@ -416,6 +421,11 @@ def plan_next(
         raise ReplayError("measurement configuration digest does not match queued task")
     if profile["toolchain"] != task["toolchain"]:
         raise ReplayError("execution profile toolchain does not match queued toolchain")
+    if (
+        task["status"] == "failed"
+        and task["runner_profile"] != profile["runner_profile"]
+    ):
+        raise ReplayError("failed task runner profile does not match execution profile")
     if task["checker"] != "nanoda":
         raise ReplayError(
             "execution profile schema version 1 supports only the pinned nanoda checker"
