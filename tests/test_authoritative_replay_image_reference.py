@@ -78,7 +78,7 @@ class AuthoritativeReplayImageReferenceTests(unittest.TestCase):
         )
         self.assertEqual(staging["vars"]["REVIEWED_VM_IMAGE_DIGEST"], IMAGE_DIGEST)
 
-    def test_disabled_deployment_smokes_expect_the_reviewed_manifest(self) -> None:
+    def test_deployment_smokes_expect_the_reviewed_manifest(self) -> None:
         self.assertEqual(
             self.deploy.count(
                 f'"reviewed_vm_image_digest": "{IMAGE_DIGEST}"'
