@@ -120,10 +120,11 @@ Replay remains unavailable until all gates have evidence linked from
 - workflow review confirms no master identity or broad repository credential
   is available to the replay job or untrusted Lean.
 
-Cloudflare Sandbox is the initial provider. Staging uses one 12 GiB
-`standard-4` instance at most; SSH and public network access are disabled.
-Production replay stays disabled until Cloudflare can supply the separately
-approved 16 GiB launch capacity and every remaining gate has evidence. A future
-adapter must satisfy the same fresh-instance, credential-isolation,
-network-isolation, teardown, and evidence contract without changing the
-provider-neutral request or verdict formats.
+Cloudflare Sandbox is the initial provider. The reviewed staging and production
+profile uses one 12 GiB `standard-4` instance at most; SSH and public network
+access are disabled. This is the approved production capacity ceiling: work
+that exceeds it is recorded as a resource-limit outcome, not retried on an
+unreviewed larger profile. Production replay stays disabled until every
+remaining gate has evidence. A future adapter must satisfy the same
+fresh-instance, credential-isolation, network-isolation, teardown, and evidence
+contract without changing the provider-neutral request or verdict formats.

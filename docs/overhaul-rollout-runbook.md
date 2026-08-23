@@ -275,9 +275,10 @@ of ciphertext plus envelope. `scripts/aws_key_adapter.py` and
 `infrastructure/aws-key-adapter/template.yaml` implement the initial KMS wrap,
 direct-Lambda unwrap, and conditional DynamoDB consume boundary. Only the
 staging smoke has role variables; production remains disconnected. The
-Cloudflare Sandbox backend is provisioned with general replay disabled;
-authoritative queue consumption and the 16 GiB production capacity requirement
-remain separate launch gates.
+Cloudflare Sandbox backend is provisioned with general replay disabled. The
+reviewed production ceiling is one 12 GiB `standard-4` instance; authoritative
+queue consumption and the remaining isolation evidence are separate launch
+gates.
 
 **Contributor acknowledgement approved 2026-08-20:** “By submitting, I confirm
 that I have authority to provide this source. I authorize Lean Eval to store

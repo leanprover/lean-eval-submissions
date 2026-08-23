@@ -40,7 +40,7 @@
         "GITHUB_OIDC_AUDIENCE": "lean-eval-replay-staging",
         "GITHUB_OIDC_ENVIRONMENT": "replay-staging",
         "STAGING_MEMORY_LIMIT_BYTES": "12884901888",
-        "PRODUCTION_MEMORY_GATE_BYTES": "17179869184",
+        "PRODUCTION_MEMORY_GATE_BYTES": "12884901888",
         "SANDBOX_TRANSPORT": "rpc"
       }
     },
@@ -73,7 +73,7 @@
         "GITHUB_OIDC_AUDIENCE": "lean-eval-replay-production",
         "GITHUB_OIDC_ENVIRONMENT": "replay-production",
         "STAGING_MEMORY_LIMIT_BYTES": "12884901888",
-        "PRODUCTION_MEMORY_GATE_BYTES": "17179869184",
+        "PRODUCTION_MEMORY_GATE_BYTES": "12884901888",
         "SANDBOX_TRANSPORT": "rpc"
       }
     }

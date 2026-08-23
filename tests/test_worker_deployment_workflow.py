@@ -86,7 +86,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                     "true" if environment == "staging" else "false",
                 )
                 self.assertEqual(variables["STAGING_MEMORY_LIMIT_BYTES"], "12884901888")
-                self.assertEqual(variables["PRODUCTION_MEMORY_GATE_BYTES"], "17179869184")
+                self.assertEqual(variables["PRODUCTION_MEMORY_GATE_BYTES"], "12884901888")
                 self.assertIn(expected_urls[environment], DEPLOY)
 
         self.assertIn("override enableInternet = false", REPLAY_ENTRYPOINT)
