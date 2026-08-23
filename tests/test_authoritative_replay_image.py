@@ -93,7 +93,10 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("cp -a LeanEval EvalTools generated manifests", dockerfile)
-        self.assertIn("package-overrides.json", dockerfile)
+        self.assertIn(
+            "cp -a .lake/build .lake/packages .lake/package-overrides.json",
+            dockerfile,
+        )
         self.assertIn('"type": "path"', dockerfile)
         for source in (dockerfile, workflow):
             with self.subTest(source=source[:32]):

@@ -100,7 +100,8 @@ RUN git init /build/benchmark \
       lean-toolchain .lean-eval-commit \
       /runtime/benchmark/ \
     && mkdir -p /runtime/benchmark/.lake \
-    && cp -a .lake/build .lake/packages /runtime/benchmark/.lake/ \
+    && cp -a .lake/build .lake/packages .lake/package-overrides.json \
+      /runtime/benchmark/.lake/ \
     && cp /build/comparator/.lake/build/bin/comparator /runtime/bin/comparator \
     && cp /build/lean4export/.lake/build/bin/lean4export /runtime/bin/lean4export \
     && cp -a "$ELAN_HOME/bin" /runtime/home/.elan/bin \
