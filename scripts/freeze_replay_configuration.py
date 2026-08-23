@@ -52,7 +52,7 @@ PUBLICATION_FIELDS = {
 }
 RUNTIME_FIELDS = {"schema_version", "health", "probe"}
 HEALTH_FIELDS = {
-    "schema_version",
+    "status",
     "service",
     "environment",
     "deployed_commit",
@@ -183,7 +183,7 @@ def validate_runtime(value: Any, manifest: str) -> tuple[dict[str, Any], dict[st
     positive_integer(probe["plaintext_tar_size"], "probe plaintext size", 10 * 1024**2)
     if (
         runtime["schema_version"] != 1
-        or health["schema_version"] != 1
+        or health["status"] != "ok"
         or probe["schema_version"] != 1
         or health["service"] != "lean-eval-replay-executor"
         or probe["service"] != "lean-eval-replay-executor"

@@ -47,7 +47,7 @@ def runtime() -> dict:
     return {
         "schema_version": 1,
         "health": {
-            "schema_version": 1,
+            "status": "ok",
             "service": "lean-eval-replay-executor",
             "environment": "staging",
             "deployed_commit": WORKER_COMMIT,
