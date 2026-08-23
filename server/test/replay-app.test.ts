@@ -248,6 +248,34 @@ describe("Cloudflare replay executor", () => {
     }
   });
 
+  it("classifies evaluator preflight failures without exposing command output", async () => {
+    const response = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/replay",
+      { method: "POST", body: JSON.stringify(await authoritativeInput()) },
+    ), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => ({
+        writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+        exec: (command) => Promise.resolve({
+          success: false,
+          exitCode: 1,
+          stdout: "",
+          stderr: "replay-authoritative: evaluator failed before measurement\n",
+          command,
+          duration: 1,
+          timestamp: "fixture",
+        }),
+        destroy: () => Promise.resolve(),
+      }),
+    });
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: "executor_failed",
+      reason: "command_failed",
+      detail: "evaluator_preflight_failed",
+    });
+  });
+
   it("does not expose unclassified authoritative stderr", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const sensitive = "private identity fixture";

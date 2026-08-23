@@ -99,6 +99,7 @@ const AUTHORITATIVE_COMMAND_FAILURES = new Map([
   ["network isolation failed", "network_isolation_failed"],
   ["baked evaluator is unavailable", "evaluator_unavailable"],
   ["locked evaluator did not terminate", "evaluator_did_not_terminate"],
+  ["evaluator failed before measurement", "evaluator_preflight_failed"],
   ["measurement evidence is unavailable", "measurement_evidence_unavailable"],
   ["evaluator results is unavailable", "evaluator_results_unavailable"],
 ]);
