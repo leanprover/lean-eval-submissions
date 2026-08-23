@@ -54,9 +54,9 @@ administrators. Service code:
 | AWS account | `lean-eval` (`161072922960`) | dedicated key custody | **CREATED; ROOT MFA ENABLED; NO ACCESS KEYS** |
 | AWS CloudFormation stack | `lean-eval-key-adapter-staging` | staging | **PROVISIONED; RELEASE OIDC TRUST UPDATE PENDING** |
 | AWS CloudFormation stack | `lean-eval-key-adapter-production` | production | **PROVISIONED; RELEASE OIDC TRUST UPDATE PENDING; INTAKE/REPLAY/PUBLICATION DISABLED** |
-| Cloudflare replay Worker | `lean-eval-replay-executor-staging` | staging | **ONE REVIEWED AUTHORITATIVE TASK QUEUED; TEMPORARY STAGING-ONLY REPLAY ENABLE CONFIGURED** |
+| Cloudflare replay Worker | `lean-eval-replay-executor-staging` | staging | **FIRST AUTHORITATIVE ATTEMPT FAILED CLOSED 2026-08-23; REPLAY DISABLED PENDING DIAGNOSIS** |
 | Cloudflare replay Worker | `lean-eval-replay-executor` | production | **PROVISIONED 2026-08-22; REPLAY AND ACCEPTANCE DISABLED** |
-| Replay execution backend | Cloudflare Sandbox, provider-neutral adapter | staging / production | **FIRST AUTHORITATIVE STAGING CONTROLLER ROLLOUT IN PROGRESS; PRODUCTION REPLAY DISABLED** |
+| Replay execution backend | Cloudflare Sandbox, provider-neutral adapter | staging / production | **FIRST AUTHORITATIVE ATTEMPT RETURNED HTTP 500; STAGING/PRODUCTION REPLAY DISABLED PENDING DIAGNOSIS** |
 
 Do not change a status to provisioned without replacing every applicable
 placeholder in the inventory below and recording a verification date.
@@ -103,10 +103,9 @@ Cloudflare Registry tag and independently recorded manifest digest:
 - one `standard-4` container at most per environment (4 vCPU, 12 GiB RAM,
   20 GB disk), with SSH disabled and public network access disabled in the
   Sandbox class;
-- staging exposes the synthetic and accepted-archive acceptance endpoints and
-  temporarily enables general replay only for the protected first
-  authoritative controller run; both acceptance and replay are disabled in
-  production;
+- staging exposes the synthetic and accepted-archive acceptance endpoints;
+  general replay is disabled in staging and both acceptance and replay are
+  disabled in production;
 - every request gets a fresh nonce-derived sandbox ID, no default persistent
   session, a fixed command, bounded inputs, and unconditional `destroy()`;
 - one 12 GiB `standard-4` is the approved staging and production ceiling;
