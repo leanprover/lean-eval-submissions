@@ -1,0 +1,212 @@
+name: Prove one accepted staging archive replay boundary
+
+on:
+  workflow_dispatch:
+    inputs:
+      submission_id:
+        description: Accepted private staging submission UUIDv7
+        required: true
+        type: string
+      confirm_staging_acceptance:
+        description: Consume one staging replay capability and discard the decrypted source
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: lean-eval-accepted-archive-replay-staging
+  cancel-in-progress: false
+
+jobs:
+  accept-one:
+    if: inputs.confirm_staging_acceptance == true
+    environment: replay-staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-state-staging
+          ref: main
+          path: state
+          fetch-depth: 1
+          persist-credentials: false
+          ssh-key: ${{ secrets.STAGING_STATE_READ_KEY }}
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Validate staging State and select one accepted private archive
+        id: plan
+        env:
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+        run: |
+          set -euo pipefail
+          test "$(jq -r .environment state/state.json)" = staging
+          python state/scripts/state.py --root state validate
+          python state/scripts/state.py --root state materialize \
+            --output "$RUNNER_TEMP/state-views"
+          python scripts/replay_archive_staging.py plan \
+            --domain "$RUNNER_TEMP/state-views/domain.json" \
+            --submission-id "$SUBMISSION_ID" \
+            --output "$RUNNER_TEMP/replay-plan.json"
+          echo "archive_commit=$(jq -r .archive_commit "$RUNNER_TEMP/replay-plan.json")" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Check out the exact immutable audit commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          ref: ${{ steps.plan.outputs.archive_commit }}
+          path: audit
+          fetch-depth: 1
+          persist-credentials: false
+          ssh-key: ${{ secrets.AUDIT_READ_KEY }}
+
+      - name: Bind the exact ciphertext and prepare a five-minute capability
+        run: |
+          set -euo pipefail
+          archive_commit=$(jq -r .archive_commit "$RUNNER_TEMP/replay-plan.json")
+          archive_path=$(jq -r .archive_path "$RUNNER_TEMP/replay-plan.json")
+          test "$(git -C audit rev-parse HEAD)" = "$archive_commit"
+          test -f "audit/$archive_path"
+          sidecar_path="${archive_path%.tar.age}.json"
+          test -f "audit/$sidecar_path"
+          cp "audit/$archive_path" "$RUNNER_TEMP/archive.tar.age"
+          cp "audit/$sidecar_path" "$RUNNER_TEMP/archive-sidecar.json"
+          rm -rf audit
+          python scripts/replay_archive_staging.py prepare-unwrap \
+            --plan "$RUNNER_TEMP/replay-plan.json" \
+            --sidecar "$RUNNER_TEMP/archive-sidecar.json" \
+            --ciphertext "$RUNNER_TEMP/archive.tar.age" \
+            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+            --output "$RUNNER_TEMP/unwrap-request.json"
+
+      - name: Assume only the staging replay Invoke role
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.AWS_REPLAY_UNWRAP_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: lean-eval-accepted-archive-replay-staging
+          mask-aws-account-id: true
+
+      - name: Consume once, prove reuse refusal, and drop AWS authority
+        run: |
+          set -euo pipefail
+          cleanup() {
+            unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+            {
+              echo 'AWS_ACCESS_KEY_ID='
+              echo 'AWS_SECRET_ACCESS_KEY='
+              echo 'AWS_SESSION_TOKEN='
+            } >> "$GITHUB_ENV"
+            rm -f "$RUNNER_TEMP/unwrap-response.json" \
+              "$RUNNER_TEMP/unwrap-metadata.json" \
+              "$RUNNER_TEMP/reuse-response.json" \
+              "$RUNNER_TEMP/reuse-metadata.json"
+          }
+          trap cleanup EXIT
+          aws lambda invoke \
+            --function-name lean-eval-archive-unwrap-staging \
+            --qualifier live \
+            --cli-binary-format raw-in-base64-out \
+            --payload "fileb://$RUNNER_TEMP/unwrap-request.json" \
+            "$RUNNER_TEMP/unwrap-response.json" > "$RUNNER_TEMP/unwrap-metadata.json"
+          env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+            python scripts/aws_key_adapter_live_smoke.py validate-unwrap-response \
+              --request "$RUNNER_TEMP/unwrap-request.json" \
+              --metadata "$RUNNER_TEMP/unwrap-metadata.json" \
+              --response "$RUNNER_TEMP/unwrap-response.json" \
+              --identity-output "$RUNNER_TEMP/identity.age"
+          aws lambda invoke \
+            --function-name lean-eval-archive-unwrap-staging \
+            --qualifier live \
+            --cli-binary-format raw-in-base64-out \
+            --payload "fileb://$RUNNER_TEMP/unwrap-request.json" \
+            "$RUNNER_TEMP/reuse-response.json" > "$RUNNER_TEMP/reuse-metadata.json" || true
+          env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+            python scripts/aws_key_adapter_live_smoke.py validate-reuse-failure \
+              --metadata "$RUNNER_TEMP/reuse-metadata.json" \
+              --response "$RUNNER_TEMP/reuse-response.json"
+          cleanup
+          trap - EXIT
+
+      - name: Decrypt and attest only inside a fresh Cloudflare Sandbox
+        env:
+          REPLAY_EXECUTOR_URL: https://lean-eval-replay-executor-staging.lean-eval.workers.dev/api/v1/staging-archive-acceptance
+        run: |
+          set -euo pipefail
+          cleanup() {
+            unset replay_oidc_token
+            rm -f "$RUNNER_TEMP/identity.age" \
+              "$RUNNER_TEMP/unwrap-request.json" \
+              "$RUNNER_TEMP/executor-request.json" \
+              "$RUNNER_TEMP/executor-response.json" \
+              "$RUNNER_TEMP/replay-oidc-response.json"
+          }
+          trap cleanup EXIT
+          test -z "${AWS_ACCESS_KEY_ID:-}"
+          test -z "${AWS_SECRET_ACCESS_KEY:-}"
+          test -z "${AWS_SESSION_TOKEN:-}"
+          python scripts/replay_archive_staging.py build-executor-request \
+            --plan "$RUNNER_TEMP/replay-plan.json" \
+            --sidecar "$RUNNER_TEMP/archive-sidecar.json" \
+            --ciphertext "$RUNNER_TEMP/archive.tar.age" \
+            --unwrap "$RUNNER_TEMP/unwrap-request.json" \
+            --identity "$RUNNER_TEMP/identity.age" \
+            --output "$RUNNER_TEMP/executor-request.json"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-replay-staging" \
+            --output "$RUNNER_TEMP/replay-oidc-response.json"
+          replay_oidc_token=$(python -c \
+            'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["value"])' \
+            "$RUNNER_TEMP/replay-oidc-response.json")
+          test -n "$replay_oidc_token"
+          rm "$RUNNER_TEMP/replay-oidc-response.json"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --header "Authorization: Bearer $replay_oidc_token" \
+            --header 'Content-Type: application/json' \
+            --request POST \
+            --data-binary "@$RUNNER_TEMP/executor-request.json" \
+            "$REPLAY_EXECUTOR_URL" \
+            --output "$RUNNER_TEMP/executor-response.json"
+          unset replay_oidc_token
+          rm "$RUNNER_TEMP/identity.age"
+          python scripts/replay_archive_staging.py validate-response \
+            --request "$RUNNER_TEMP/executor-request.json" \
+            --response "$RUNNER_TEMP/executor-response.json"
+          submission_id=$(jq -r .submission_id "$RUNNER_TEMP/executor-response.json")
+          archive_digest=$(jq -r .archive_ciphertext_sha256 "$RUNNER_TEMP/executor-response.json")
+          {
+            echo '### Accepted staging archive replay boundary passed'
+            echo
+            echo "- submission: \`$submission_id\`"
+            echo "- immutable audit commit: \`${{ steps.plan.outputs.archive_commit }}\`"
+            echo "- ciphertext SHA-256: \`$archive_digest\`"
+            echo '- one-use refusal, blocked egress, plaintext digest, safe archive shape, and destruction were verified'
+            echo '- no source, identity, verdict, result, or State event was uploaded or published'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cleanup
+          trap - EXIT
+
+      - name: Remove all remaining private scratch
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/state-views" audit
+          rm -f "$RUNNER_TEMP/replay-plan.json" \
+            "$RUNNER_TEMP/archive.tar.age" \
+            "$RUNNER_TEMP/archive-sidecar.json" \
+            "$RUNNER_TEMP/identity.age" \
+            "$RUNNER_TEMP/unwrap-request.json" \
+            "$RUNNER_TEMP/executor-request.json" \
+            "$RUNNER_TEMP/executor-response.json"

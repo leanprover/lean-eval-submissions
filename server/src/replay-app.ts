@@ -2,6 +2,11 @@ import type { Sandbox } from "@cloudflare/sandbox";
 
 import { ReplayAuthError, type ReplayAuthEnvironment, verifyGithubOidc } from "./replay-auth";
 import {
+  ReplayArchiveContractError,
+  readArchiveAcceptanceRequest,
+  validateArchiveEvidence,
+} from "./replay-archive-contract";
+import {
   ReplayContractError,
   readAcceptanceRequest,
   validateSandboxEvidence,
@@ -55,7 +60,9 @@ export async function handleReplayRequest(
 ): Promise<Response> {
   const url = new URL(request.url);
   if (request.method === "GET" && url.pathname === "/healthz") return health(env);
-  if (url.pathname !== "/api/v1/staging-acceptance" || request.method !== "POST") {
+  const syntheticAcceptance = url.pathname === "/api/v1/staging-acceptance";
+  const archiveAcceptance = url.pathname === "/api/v1/staging-archive-acceptance";
+  if ((!syntheticAcceptance && !archiveAcceptance) || request.method !== "POST") {
     return json({ error: "not_found" }, 404);
   }
   if (env.DEPLOYMENT_ENVIRONMENT !== "staging" || env.STAGING_ACCEPTANCE_ENABLED !== "true") {
@@ -63,6 +70,58 @@ export async function handleReplayRequest(
   }
   try {
     await dependencies.authenticate(request, env);
+    if (archiveAcceptance) {
+      const input = await readArchiveAcceptanceRequest(request);
+      const sandbox = dependencies.sandbox(env, input.runner_nonce);
+      const evidence = await (async () => {
+        try {
+          await sandbox.writeFile("/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
+          await sandbox.writeFile("/workspace/identity.age.b64", input.plaintext_identity_base64);
+          await sandbox.writeFile(
+            "/workspace/archive-expectation.json",
+            JSON.stringify({
+              schema_version: 1,
+              submission_id: input.submission_id,
+              archive_ciphertext_sha256: input.archive_ciphertext_sha256,
+              plaintext_tar_sha256: input.plaintext_tar_sha256,
+              plaintext_tar_size: input.plaintext_tar_size,
+            }),
+          );
+          const result = await sandbox.exec("/opt/lean-eval/replay-archive-acceptance", {
+            timeout: 180_000,
+          });
+          if (!result.success || result.stdout.length > 4096) {
+            throw new Error("sandbox archive acceptance command failed");
+          }
+          try {
+            return validateArchiveEvidence(JSON.parse(result.stdout) as unknown, input);
+          } catch {
+            throw new Error("sandbox archive acceptance evidence was invalid");
+          }
+        } finally {
+          await sandbox.destroy();
+        }
+      })();
+      return json({
+        schema_version: 1,
+        service: "lean-eval-replay-executor",
+        environment: "staging",
+        request_id: input.request_id,
+        runner_nonce: input.runner_nonce,
+        submission_id: evidence.submission_id,
+        archive_ciphertext_sha256: evidence.archive_ciphertext_sha256,
+        plaintext_tar_sha256: evidence.plaintext_tar_sha256,
+        plaintext_tar_size: evidence.plaintext_tar_size,
+        network_policy: "disabled",
+        network_probe: evidence.network_probe,
+        destruction: "confirmed",
+        architecture: evidence.architecture,
+        kernel_release: evidence.kernel_release,
+        cpu_model: evidence.cpu_model,
+        staging_memory_limit_bytes: Number(env.STAGING_MEMORY_LIMIT_BYTES),
+        production_memory_gate_bytes: Number(env.PRODUCTION_MEMORY_GATE_BYTES),
+      });
+    }
     const input = await readAcceptanceRequest(request);
     const sandbox = dependencies.sandbox(env, input.runner_nonce);
     const evidence = await (async () => {
@@ -109,7 +168,11 @@ export async function handleReplayRequest(
     });
   } catch (error) {
     if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
-    if (error instanceof ReplayContractError || error instanceof SyntaxError) {
+    if (
+      error instanceof ReplayContractError ||
+      error instanceof ReplayArchiveContractError ||
+      error instanceof SyntaxError
+    ) {
       return json({ error: "invalid_request" }, 400);
     }
     return json({ error: "executor_failed" }, 500);

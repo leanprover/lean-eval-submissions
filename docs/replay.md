@@ -3,9 +3,13 @@
 Replay is a recovery and audit path for one archived submission. It is not a
 second intake path, a batch decryption service, or a place to give general
 archive keys to CI. The enabled workflows are a credential-free manual smoke
-for an already-public historical source and a synthetic, source-free staging
-acceptance for the private boundary. Neither has State/result/archive/release
-write authority. No authoritative queue-consuming replay workflow is enabled.
+for an already-public historical source, a synthetic source-free staging
+acceptance, and a protected accepted-archive staging acceptance. The last path
+selects one accepted private submission from staging State, consumes one replay
+unwrap, verifies its exact plaintext digest and safe tar shape only inside a
+fresh network-disabled Sandbox, proves reuse refusal, and discards the source.
+None has State/result/archive/release write authority. No authoritative
+queue-consuming replay workflow is enabled.
 
 The Wave 2 public planner, historical smoke, verdict contract, and disposable-
 VM operator sequence are documented in
