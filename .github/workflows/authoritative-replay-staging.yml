@@ -1,0 +1,418 @@
+name: Consume one authoritative staging replay
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_authoritative_replay:
+        description: Append started, consume one private queue task, and append its exact terminal outcome
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: lean-eval-authoritative-replay-staging-controller
+  cancel-in-progress: false
+
+jobs:
+  replay-one:
+    if: inputs.confirm_authoritative_replay == true
+    environment: replay-staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Require the exact protected dispatch tag
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$GITHUB_SHA"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-state-staging
+          ref: main
+          path: state
+          fetch-depth: 1
+          persist-credentials: false
+          ssh-key: ${{ secrets.STAGING_STATE_READ_KEY }}
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Validate State and recover only a stale running attempt
+        id: preflight
+        run: |
+          set -euo pipefail
+          test "$(jq -r .environment state/state.json)" = staging
+          python state/scripts/state.py --root state validate
+          python state/scripts/state.py --root state materialize \
+            --output "$RUNNER_TEMP/state-views"
+          python scripts/replay_controller.py recover \
+            --domain "$RUNNER_TEMP/state-views/domain.json" \
+            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+            --output "$RUNNER_TEMP/recovery.json"
+          echo "kind=$(jq -r .kind "$RUNNER_TEMP/recovery.json")" >> "$GITHUB_OUTPUT"
+          echo "state_head=$(git -C state rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish one stale-runner recovery and stop
+        if: steps.preflight.outputs.kind == 'failed'
+        env:
+          STATE_WRITE_KEY: ${{ secrets.STAGING_STATE_WRITE_KEY }}
+          EXPECTED_STATE_HEAD: ${{ steps.preflight.outputs.state_head }}
+        run: |
+          set -euo pipefail
+          jq .event "$RUNNER_TEMP/recovery.json" > "$RUNNER_TEMP/recovery-event.json"
+          scripts/publish_replay_state_event \
+            --root state \
+            --event "$RUNNER_TEMP/recovery-event.json" \
+            --expected-head "$EXPECTED_STATE_HEAD" \
+            --message "Recover stale authoritative replay runner"
+          {
+            echo '### Recovered one stale replay attempt'
+            echo
+            echo "- appended one retryable \`runner_lost\` event; no credential was acquired and no new replay was started"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report a still-running controller and stop
+        if: steps.preflight.outputs.kind == 'busy'
+        run: echo 'A non-stale replay is already running; no event or credential was created.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Plan the exact next queue task from reviewed configuration
+        id: plan
+        if: steps.preflight.outputs.kind == 'none'
+        run: |
+          set -euo pipefail
+          bundle=configuration/authoritative-replay-staging-v1.json
+          test -f "$bundle"
+          jq -e '.schema_version == 1' "$bundle" >/dev/null
+          jq .execution_profile "$bundle" > "$RUNNER_TEMP/execution-profile.json"
+          jq .measurement_config "$bundle" > "$RUNNER_TEMP/measurement-config.json"
+          python scripts/replay_orchestrator.py plan \
+            --queue "$RUNNER_TEMP/state-views/replay-queue.json" \
+            --execution-profile "$RUNNER_TEMP/execution-profile.json" \
+            --measurement-config "$RUNNER_TEMP/measurement-config.json" \
+            --output "$RUNNER_TEMP/replay-plan.json"
+          kind=$(jq -r .kind "$RUNNER_TEMP/replay-plan.json")
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          if [ "$kind" = execution ]; then
+            echo "archive_commit=$(jq -r .request.source.archive.archive_commit "$RUNNER_TEMP/replay-plan.json")" >> "$GITHUB_OUTPUT"
+          elif [ "$kind" = empty ]; then
+            echo 'The authoritative replay queue is empty.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "unexpected replay plan kind: $kind" >&2
+            exit 1
+          fi
+
+      - name: Require the exact enabled reviewed staging executor
+        if: steps.plan.outputs.kind == 'execution'
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 15 \
+            https://lean-eval-replay-executor-staging.lean-eval.workers.dev/healthz \
+            --output "$RUNNER_TEMP/replay-health.json"
+          python - "$RUNNER_TEMP/replay-health.json" \
+            configuration/authoritative-replay-staging-v1.json <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          health = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          bundle = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+          expected = {
+              "status": "ok",
+              "service": "lean-eval-replay-executor",
+              "environment": "staging",
+              "deployed_commit": os.environ["GITHUB_SHA"],
+              "replay_enabled": True,
+              "staging_acceptance_enabled": True,
+              "staging_memory_limit_bytes": 12 * 1024**3,
+              "production_memory_gate_bytes": 12 * 1024**3,
+              "reviewed_execution_profile_digest": bundle["execution_profile_digest"],
+              "reviewed_measurement_config_digest": bundle["measurement_config_digest"],
+              "reviewed_vm_image_digest": bundle["registry_manifest_digest"],
+          }
+          if health != expected:
+              raise SystemExit("staging replay executor is not the exact enabled review")
+          PY
+
+      - name: Append replay.started before acquiring any execution credential
+        id: started
+        if: steps.plan.outputs.kind == 'execution'
+        env:
+          STATE_WRITE_KEY: ${{ secrets.STAGING_STATE_WRITE_KEY }}
+          EXPECTED_STATE_HEAD: ${{ steps.preflight.outputs.state_head }}
+        run: |
+          set -euo pipefail
+          python scripts/replay_controller.py state-event started \
+            --plan "$RUNNER_TEMP/replay-plan.json" \
+            --queue "$RUNNER_TEMP/state-views/replay-queue.json" \
+            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+            --output "$RUNNER_TEMP/started-event.json"
+          state_head=$(scripts/publish_replay_state_event \
+            --root state \
+            --event "$RUNNER_TEMP/started-event.json" \
+            --expected-head "$EXPECTED_STATE_HEAD" \
+            --message "Start one authoritative staging replay")
+          echo 'source_fetch_failed' > "$RUNNER_TEMP/failure-reason"
+          echo "appended=true" >> "$GITHUB_OUTPUT"
+          echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
+
+      - name: Check out only the exact immutable audit commit
+        if: steps.started.outputs.appended == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          ref: ${{ steps.plan.outputs.archive_commit }}
+          path: audit
+          fetch-depth: 1
+          persist-credentials: false
+          ssh-key: ${{ secrets.AUDIT_READ_KEY }}
+
+      - name: Bind ciphertext and prepare one five-minute unwrap
+        if: steps.started.outputs.appended == 'true'
+        run: |
+          set -euo pipefail
+          umask 077
+          archive_commit=$(jq -r .request.source.archive.archive_commit "$RUNNER_TEMP/replay-plan.json")
+          archive_path=$(jq -r .request.source.archive.archive_path "$RUNNER_TEMP/replay-plan.json")
+          test "$(git -C audit rev-parse HEAD)" = "$archive_commit"
+          test -f "audit/$archive_path"
+          sidecar_path="${archive_path%.tar.age}.json"
+          test -f "audit/$sidecar_path"
+          cp "audit/$archive_path" "$RUNNER_TEMP/archive.tar.age"
+          cp "audit/$sidecar_path" "$RUNNER_TEMP/archive-sidecar.json"
+          rm -rf audit
+          python scripts/replay_controller.py prepare-unwrap \
+            --plan "$RUNNER_TEMP/replay-plan.json" \
+            --sidecar "$RUNNER_TEMP/archive-sidecar.json" \
+            --ciphertext "$RUNNER_TEMP/archive.tar.age" \
+            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+            --output "$RUNNER_TEMP/unwrap-request.json"
+          echo 'runner_start_failed' > "$RUNNER_TEMP/failure-reason"
+
+      - name: Assume only the staging replay Invoke role
+        if: steps.started.outputs.appended == 'true'
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.AWS_REPLAY_UNWRAP_ROLE_ARN }}
+          aws-region: us-east-1
+          role-session-name: lean-eval-authoritative-replay-staging
+          mask-aws-account-id: true
+
+      - name: Consume once, validate the exact identity, and drop AWS authority
+        if: steps.started.outputs.appended == 'true'
+        run: |
+          set -euo pipefail
+          umask 077
+          cleanup() {
+            unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+            {
+              echo 'AWS_ACCESS_KEY_ID='
+              echo 'AWS_SECRET_ACCESS_KEY='
+              echo 'AWS_SESSION_TOKEN='
+            } >> "$GITHUB_ENV"
+            rm -f "$RUNNER_TEMP/unwrap-response.json" "$RUNNER_TEMP/unwrap-metadata.json"
+          }
+          trap cleanup EXIT
+          aws lambda invoke \
+            --function-name lean-eval-archive-unwrap-staging \
+            --qualifier live \
+            --cli-binary-format raw-in-base64-out \
+            --payload "fileb://$RUNNER_TEMP/unwrap-request.json" \
+            "$RUNNER_TEMP/unwrap-response.json" > "$RUNNER_TEMP/unwrap-metadata.json"
+          env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+            python scripts/replay_controller.py unwrap-identity \
+              --request "$RUNNER_TEMP/unwrap-request.json" \
+              --response "$RUNNER_TEMP/unwrap-response.json" \
+              --metadata "$RUNNER_TEMP/unwrap-metadata.json" \
+              --output "$RUNNER_TEMP/identity.age"
+          cleanup
+          trap - EXIT
+
+      - name: Drop any remaining AWS authority before executor or State writer
+        if: always() && steps.started.outputs.appended == 'true'
+        run: |
+          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+          {
+            echo 'AWS_ACCESS_KEY_ID='
+            echo 'AWS_SECRET_ACCESS_KEY='
+            echo 'AWS_SESSION_TOKEN='
+          } >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/unwrap-response.json" "$RUNNER_TEMP/unwrap-metadata.json"
+
+      - name: Invoke the reviewed endpoint without AWS or State write authority
+        id: execute
+        if: steps.started.outputs.appended == 'true'
+        env:
+          REPLAY_EXECUTOR_URL: https://lean-eval-replay-executor-staging.lean-eval.workers.dev/api/v1/replay
+        run: |
+          set -euo pipefail
+          umask 077
+          cleanup() {
+            unset replay_oidc_token
+            rm -f "$RUNNER_TEMP/replay-oidc-response.json"
+          }
+          trap cleanup EXIT
+          test -z "${AWS_ACCESS_KEY_ID:-}"
+          test -z "${AWS_SECRET_ACCESS_KEY:-}"
+          test -z "${AWS_SESSION_TOKEN:-}"
+          test -z "${STATE_WRITE_KEY:-}"
+          python scripts/replay_controller.py build-executor-request \
+            --plan "$RUNNER_TEMP/replay-plan.json" \
+            --sidecar "$RUNNER_TEMP/archive-sidecar.json" \
+            --ciphertext "$RUNNER_TEMP/archive.tar.age" \
+            --unwrap "$RUNNER_TEMP/unwrap-request.json" \
+            --identity "$RUNNER_TEMP/identity.age" \
+            --output "$RUNNER_TEMP/executor-request.json"
+          echo 'runner_lost' > "$RUNNER_TEMP/failure-reason"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 15 \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-replay-staging" \
+            --output "$RUNNER_TEMP/replay-oidc-response.json"
+          replay_oidc_token=$(python -c \
+            'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["value"])' \
+            "$RUNNER_TEMP/replay-oidc-response.json")
+          test -n "$replay_oidc_token"
+          rm "$RUNNER_TEMP/replay-oidc-response.json"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 20400 \
+            --header "Authorization: Bearer $replay_oidc_token" \
+            --header 'Content-Type: application/json' \
+            --request POST \
+            --data-binary "@$RUNNER_TEMP/executor-request.json" \
+            "$REPLAY_EXECUTOR_URL" \
+            --output "$RUNNER_TEMP/executor-response.json"
+          unset replay_oidc_token
+          echo 'verdict_invalid' > "$RUNNER_TEMP/failure-reason"
+          python scripts/replay_controller.py validate-response \
+            --plan "$RUNNER_TEMP/replay-plan.json" \
+            --response "$RUNNER_TEMP/executor-response.json" \
+            --verdict-output "$RUNNER_TEMP/replay-verdict.json"
+          shred --remove "$RUNNER_TEMP/identity.age"
+          python scripts/replay_controller.py state-event terminal \
+            --plan "$RUNNER_TEMP/replay-plan.json" \
+            --started-event "$RUNNER_TEMP/started-event.json" \
+            --verdict "$RUNNER_TEMP/replay-verdict.json" \
+            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+            --output "$RUNNER_TEMP/terminal-event.json"
+          cleanup
+          trap - EXIT
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Append the exact reported terminal outcome
+        id: terminal
+        if: steps.execute.outputs.ready == 'true'
+        env:
+          STATE_WRITE_KEY: ${{ secrets.STAGING_STATE_WRITE_KEY }}
+          EXPECTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
+        run: |
+          set -euo pipefail
+          test -z "${AWS_ACCESS_KEY_ID:-}"
+          state_head=$(scripts/publish_replay_state_event \
+            --root state \
+            --event "$RUNNER_TEMP/terminal-event.json" \
+            --expected-head "$EXPECTED_STATE_HEAD" \
+            --message "Record authoritative staging replay outcome")
+          echo "appended=true" >> "$GITHUB_OUTPUT"
+          echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
+
+      - name: Fail a started attempt explicitly if orchestration did not finish
+        id: failure
+        if: always() && steps.started.outputs.appended == 'true' && steps.terminal.outputs.appended != 'true'
+        env:
+          STATE_WRITE_KEY: ${{ secrets.STAGING_STATE_WRITE_KEY }}
+          EXPECTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
+        run: |
+          set -euo pipefail
+          test -z "${AWS_ACCESS_KEY_ID:-}"
+          if [ -f "$RUNNER_TEMP/identity.age" ]; then shred --remove "$RUNNER_TEMP/identity.age"; fi
+          reason=$(cat "$RUNNER_TEMP/failure-reason")
+          python scripts/replay_controller.py state-event failed \
+            --plan "$RUNNER_TEMP/replay-plan.json" \
+            --started-event "$RUNNER_TEMP/started-event.json" \
+            --reason "$reason" \
+            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+            --output "$RUNNER_TEMP/failure-event.json"
+          state_head=$(scripts/publish_replay_state_event \
+            --root state \
+            --event "$RUNNER_TEMP/failure-event.json" \
+            --expected-head "$EXPECTED_STATE_HEAD" \
+            --message "Record authoritative staging replay failure")
+          echo "appended=true" >> "$GITHUB_OUTPUT"
+          echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
+
+      - name: Write source-free successful replay evidence
+        if: steps.terminal.outputs.appended == 'true'
+        env:
+          STARTED_STATE_COMMIT: ${{ steps.started.outputs.state_head }}
+          TERMINAL_STATE_COMMIT: ${{ steps.terminal.outputs.state_head }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+
+          temporary = pathlib.Path(os.environ["RUNNER_TEMP"])
+          plan = json.loads((temporary / "replay-plan.json").read_text(encoding="utf-8"))
+          evidence = {
+              "schema_version": 1,
+              "controller_commit": os.environ["GITHUB_SHA"],
+              "queue_source_digest": json.loads(
+                  (temporary / "state-views/replay-queue.json").read_text(encoding="utf-8")
+              )["source_digest"],
+              "execution_profile_digest": plan["request"]["execution_profile_digest"],
+              "measurement_config_digest": plan["request"]["measurement_config_digest"],
+              "executor_health": json.loads(
+                  (temporary / "replay-health.json").read_text(encoding="utf-8")
+              ),
+              "plan": plan,
+              "started_event": json.loads(
+                  (temporary / "started-event.json").read_text(encoding="utf-8")
+              ),
+              "executor_response": json.loads(
+                  (temporary / "executor-response.json").read_text(encoding="utf-8")
+              ),
+              "terminal_event": json.loads(
+                  (temporary / "terminal-event.json").read_text(encoding="utf-8")
+              ),
+              "started_state_commit": os.environ["STARTED_STATE_COMMIT"],
+              "terminal_state_commit": os.environ["TERMINAL_STATE_COMMIT"],
+          }
+          pathlib.Path("authoritative-replay-staging-evidence.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: steps.terminal.outputs.appended == 'true'
+        with:
+          name: authoritative-replay-staging-evidence
+          path: authoritative-replay-staging-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove all private and internal scratch
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/identity.age" ]; then shred --remove "$RUNNER_TEMP/identity.age"; fi
+          rm -rf audit "$RUNNER_TEMP/state-views"
+          rm -f "$RUNNER_TEMP/archive.tar.age" \
+            "$RUNNER_TEMP/archive-sidecar.json" \
+            "$RUNNER_TEMP/unwrap-request.json" \
+            "$RUNNER_TEMP/unwrap-response.json" \
+            "$RUNNER_TEMP/unwrap-metadata.json" \
+            "$RUNNER_TEMP/executor-request.json" \
+            "$RUNNER_TEMP/replay-oidc-response.json" \
+            "$RUNNER_TEMP/replay-health.json" \
+            "$RUNNER_TEMP/failure-reason"
