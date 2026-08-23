@@ -40,31 +40,36 @@ class ReplayMeasureTests(unittest.TestCase):
     def test_aggregates_wall_time_and_counters_by_phase(self) -> None:
         metrics = replay_measure.empty_metrics()
         replay_measure.aggregate(
-            metrics, "build", 10, {"status": "measured", "value": 20}
+            metrics, "build", 10, {"status": "measured", "value": 20}, 0
         )
         replay_measure.aggregate(
-            metrics, "build", 11, {"status": "measured", "value": 21}
+            metrics, "build", 11, {"status": "measured", "value": 21}, 1
         )
         self.assertEqual(metrics["phases"]["build"], {
             "invocations": 2,
             "wall_time_ms": 21,
             "retired_instructions": {"status": "measured", "value": 41},
+            "terminations": [
+                {"kind": "exited", "code": 0},
+                {"kind": "exited", "code": 1},
+            ],
         })
         self.assertEqual(metrics["phases"]["checker"]["invocations"], 0)
 
     def test_unavailable_counter_taints_the_whole_aggregate(self) -> None:
         metrics = replay_measure.empty_metrics()
         replay_measure.aggregate(
-            metrics, "checker", 2, {"status": "measured", "value": 3}
+            metrics, "checker", 2, {"status": "measured", "value": 3}, 0
         )
         replay_measure.aggregate(
             metrics,
             "checker",
             5,
             {"status": "unavailable", "reason": "counter_permission_denied"},
+            -9,
         )
         replay_measure.aggregate(
-            metrics, "checker", 7, {"status": "measured", "value": 11}
+            metrics, "checker", 7, {"status": "measured", "value": 11}, 2
         )
         self.assertEqual(metrics["phases"]["checker"], {
             "invocations": 3,
@@ -73,6 +78,11 @@ class ReplayMeasureTests(unittest.TestCase):
                 "status": "unavailable",
                 "reason": "counter_permission_denied",
             },
+            "terminations": [
+                {"kind": "exited", "code": 0},
+                {"kind": "signaled", "signal": 9},
+                {"kind": "exited", "code": 2},
+            ],
         })
 
     def test_rejects_noncanonical_metrics(self) -> None:
@@ -125,6 +135,10 @@ class ReplayMeasureTests(unittest.TestCase):
                     json.loads(metrics.read_text(encoding="utf-8"))
                 )
             self.assertEqual(value["phases"]["checker"]["invocations"], 1)
+            self.assertEqual(
+                value["phases"]["checker"]["terminations"],
+                [{"kind": "exited", "code": 0}],
+            )
             self.assertEqual(
                 value["phases"]["checker"]["retired_instructions"],
                 {"status": "unavailable", "reason": "counter_not_supported"},

@@ -56,7 +56,7 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
         runner = RUNNER.read_text(encoding="utf-8")
         self.assertIn("/opt/lean-eval/home/.elan/bin", runner)
         self.assertNotIn("/root/.elan/bin", runner)
-        self.assertIn('"--authoritative-checker",\n                    "nanoda"', runner)
+        self.assertRegex(runner, r'"--authoritative-checker",\s*"nanoda"')
 
     def test_workflow_actions_are_commit_pinned(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")

@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import pathlib
+import signal
 import shutil
 import subprocess
 import sys
@@ -279,19 +280,15 @@ def source_statistics(source_root: pathlib.Path, problem_id: str) -> tuple[int, 
 
 
 def counter_or_unavailable(record: dict[str, Any]) -> dict[str, Any]:
+    if record["invocations"] == 0:
+        return {"status": "unavailable", "reason": "counter_not_reported"}
     counter = record["retired_instructions"]
     if counter["status"] == "measured":
         return {"status": "measured", "value": counter["value"]}
     return {"status": "unavailable", "reason": counter["reason"]}
 
 
-def build_verdict(
-    request: dict[str, Any],
-    results: Any,
-    metrics_value: Any,
-    file_count: int,
-    lines_of_code: int,
-) -> dict[str, Any]:
+def normalize_metrics(metrics_value: Any) -> dict[str, dict[str, Any]]:
     metrics = object_value(metrics_value, "measurement evidence")
     exact_fields(metrics, {"schema_version", "phases"}, "measurement evidence")
     phases = object_value(metrics["phases"], "measurement phases")
@@ -302,7 +299,12 @@ def build_verdict(
         record = object_value(phases[phase], f"{phase} measurement")
         exact_fields(
             record,
-            {"invocations", "wall_time_ms", "retired_instructions"},
+            {
+                "invocations",
+                "wall_time_ms",
+                "retired_instructions",
+                "terminations",
+            },
             f"{phase} measurement",
         )
         if (
@@ -331,33 +333,146 @@ def build_verdict(
                 raise AuthoritativeReplayError("unavailable counter is invalid")
         else:
             raise AuthoritativeReplayError("measurement counter status is invalid")
+        terminations = record["terminations"]
+        if (
+            not isinstance(terminations, list)
+            or len(terminations) != record["invocations"]
+        ):
+            raise AuthoritativeReplayError("measurement terminations are invalid")
+        for termination_value in terminations:
+            termination = object_value(termination_value, "measurement termination")
+            if termination.get("kind") == "exited":
+                if set(termination) != {"kind", "code"} or (
+                    isinstance(termination["code"], bool)
+                    or not isinstance(termination["code"], int)
+                    or not 0 <= termination["code"] <= 255
+                ):
+                    raise AuthoritativeReplayError("measurement exit status is invalid")
+            elif termination.get("kind") == "signaled":
+                if set(termination) != {"kind", "signal"} or (
+                    isinstance(termination["signal"], bool)
+                    or not isinstance(termination["signal"], int)
+                    or not 1 <= termination["signal"] <= 127
+                ):
+                    raise AuthoritativeReplayError("measurement signal status is invalid")
+            else:
+                raise AuthoritativeReplayError("measurement termination kind is invalid")
         normalized[phase] = record
+    if (
+        normalized["build"]["invocations"] > 2
+        or normalized["checker"]["invocations"] > 1
+    ):
+        raise AuthoritativeReplayError("measurement has impossible phase counts")
+    return normalized
+
+
+def termination_crashed(termination: dict[str, Any]) -> bool:
+    return termination["kind"] == "signaled" or termination.get("code", 0) >= 125
+
+
+def verdict_statistics(
+    normalized: dict[str, dict[str, Any]],
+    file_count: int,
+    lines_of_code: int,
+    *,
+    timed_out: bool = False,
+) -> dict[str, Any]:
+    build = normalized["build"]
+    checker = normalized["checker"]
+    build_wall = build["wall_time_ms"]
+    checker_wall = checker["wall_time_ms"]
+    if timed_out:
+        if build["invocations"] == 2:
+            checker_wall = max(checker_wall, WALL_TIME_LIMIT_MS - build_wall)
+        else:
+            build_wall = max(build_wall, WALL_TIME_LIMIT_MS - checker_wall)
+    return {
+        "checker_wall_time_ms": checker_wall,
+        "checker_retired_instructions": counter_or_unavailable(checker),
+        "build_wall_time_ms": build_wall,
+        "build_retired_instructions": counter_or_unavailable(build),
+        "lines_of_code": lines_of_code,
+        "file_count": file_count,
+    }
+
+
+def reported_execution_verdict(
+    request: dict[str, Any],
+    execution_outcome: str,
+    normalized: dict[str, dict[str, Any]],
+    file_count: int,
+    lines_of_code: int,
+) -> dict[str, Any]:
+    if execution_outcome not in {"crashed", "timed_out"}:
+        raise AuthoritativeReplayError("reported execution outcome is invalid")
+    return {
+        "schema_version": 1,
+        "replay_task_id": request["replay_task_id"],
+        "attempt": request["attempt"],
+        "execution_outcome": execution_outcome,
+        "checker_outcome": None,
+        "failure_reason": None,
+        "statistics": verdict_statistics(
+            normalized,
+            file_count,
+            lines_of_code,
+            timed_out=execution_outcome == "timed_out",
+        ),
+    }
+
+
+def build_verdict(
+    request: dict[str, Any],
+    results: Any,
+    metrics_value: Any,
+    file_count: int,
+    lines_of_code: int,
+) -> dict[str, Any]:
+    normalized = normalize_metrics(metrics_value)
     result = object_value(results, "evaluator results")
     exact_fields(result, {"passed", "statement_revisions"}, "evaluator results")
     passed = result["passed"]
     problem_id = request["result"]["problem_id"]
     revision = request["result"]["statement_revision"]
-    if passed == [problem_id] and result["statement_revisions"] == {problem_id: revision}:
-        checker_outcome = "accepted"
-    elif passed == [] and result["statement_revisions"] == {}:
-        checker_outcome = "rejected"
-    else:
+    accepted = passed == [problem_id] and result["statement_revisions"] == {
+        problem_id: revision
+    }
+    failed = passed == [] and result["statement_revisions"] == {}
+    if not accepted and not failed:
         raise AuthoritativeReplayError("evaluator results escape the locked problem")
     build = normalized["build"]
     checker = normalized["checker"]
-    if checker_outcome == "accepted" and (
+    if any(
+        termination_crashed(termination)
+        for phase in (build, checker)
+        for termination in phase["terminations"]
+    ):
+        return reported_execution_verdict(
+            request, "crashed", normalized, file_count, lines_of_code
+        )
+    if accepted and (
         build["invocations"] != 2 or checker["invocations"] != 1
     ):
         raise AuthoritativeReplayError("accepted result has impossible phase counts")
-    if checker_outcome == "rejected" and (
-        build["invocations"] not in {1, 2} or checker["invocations"] not in {0, 1}
+    if accepted and any(
+        termination != {"kind": "exited", "code": 0}
+        for phase in (build, checker)
+        for termination in phase["terminations"]
+    ):
+        raise AuthoritativeReplayError("accepted result has a failing phase")
+    if failed and (
+        build["invocations"] not in {1, 2}
+        or checker["invocations"] not in {0, 1}
     ):
         raise AuthoritativeReplayError("rejected result has impossible phase counts")
-    checker_counter = (
-        counter_or_unavailable(checker)
-        if checker["invocations"] > 0
-        else {"status": "unavailable", "reason": "counter_not_reported"}
-    )
+    if accepted:
+        checker_outcome = "accepted"
+    elif checker["invocations"] == 0:
+        checker_outcome = "rejected"
+    elif checker["terminations"][-1] == {"kind": "exited", "code": 0}:
+        raise AuthoritativeReplayError("failed result has a successful checker")
+    else:
+        checker_outcome = "declined"
     return {
         "schema_version": 1,
         "replay_task_id": request["replay_task_id"],
@@ -365,20 +480,47 @@ def build_verdict(
         "execution_outcome": "completed",
         "checker_outcome": checker_outcome,
         "failure_reason": None,
-        "statistics": {
-            "checker_wall_time_ms": checker["wall_time_ms"],
-            "checker_retired_instructions": checker_counter,
-            "build_wall_time_ms": build["wall_time_ms"],
-            "build_retired_instructions": counter_or_unavailable(build),
-            "lines_of_code": lines_of_code,
-            "file_count": file_count,
+        "statistics": verdict_statistics(normalized, file_count, lines_of_code),
+    }
+
+
+def empty_metrics() -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "phases": {
+            phase: {
+                "invocations": 0,
+                "wall_time_ms": 0,
+                "retired_instructions": {"status": "measured", "value": 0},
+                "terminations": [],
+            }
+            for phase in ("build", "checker")
         },
     }
 
 
+def load_metrics_after_execution() -> dict[str, Any]:
+    try:
+        value = load_json(METRICS, "measurement evidence", 16 * 1024)
+    except AuthoritativeReplayError:
+        if METRICS.exists() or METRICS.is_symlink():
+            raise
+        value = empty_metrics()
+    normalize_metrics(value)
+    return value
+
+
 def network_probe() -> None:
     result = subprocess.run(
-        ["curl", "--fail", "--silent", "--show-error", "--max-time", "5", "https://example.com/"],
+        [
+            "curl",
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--max-time",
+            "5",
+            "https://example.com/",
+        ],
         check=False,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -387,6 +529,32 @@ def network_probe() -> None:
     )
     if result.returncode == 0:
         raise AuthoritativeReplayError("network isolation failed")
+
+
+def run_process_group(
+    command: list[str], environment: dict[str, str], timeout_seconds: float
+) -> tuple[int, bool]:
+    process = subprocess.Popen(
+        command,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=environment,
+        start_new_session=True,
+    )
+    timed_out = False
+    try:
+        process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        process.wait()
+    if process.returncode is None:
+        raise AuthoritativeReplayError("locked evaluator did not terminate")
+    return process.returncode, timed_out
 
 
 def main() -> None:
@@ -440,58 +608,58 @@ def main() -> None:
         revision = request["result"]["statement_revision"]
         file_count, lines_of_code = source_statistics(source_root, problem_id)
         METRICS.unlink(missing_ok=True)
-        try:
-            process = subprocess.run(
-                [
-                    "/usr/bin/python3",
-                    str(INSTALL / "evaluate_submission.py"),
-                    "--source-dir",
-                    str(source_root),
-                    "--generated-root",
-                    str(BENCHMARK / "generated"),
-                    "--manifest-dir",
-                    str(BENCHMARK / "manifests" / "problems"),
-                    "--output-dir",
-                    str(output),
-                    "--repo-root",
-                    str(BENCHMARK),
-                    "--shared-packages",
-                    str(BENCHMARK / ".lake" / "packages"),
-                    "--problem-id",
-                    problem_id,
-                    "--statement-revision",
-                    str(revision),
-                    "--measurement-command-json",
-                    '["/opt/lean-eval/replay-measure"]',
-                    "--authoritative-checker",
-                    "nanoda",
-                    "--preprimed-workspaces",
-                ],
-                check=False,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                env={
-                    "PATH": "/opt/lean-eval/bin:/opt/lean-eval/home/.elan/bin:/usr/local/bin:/usr/bin:/bin",
-                    "HOME": "/opt/lean-eval/home",
-                    "COMPARATOR_BIN": "/opt/lean-eval/bin/comparator",
-                    "COMPARATOR_LANDRUN": "/usr/local/bin/landrun",
-                },
-                timeout=WALL_TIME_LIMIT_MS / 1000,
-            )
-        except subprocess.TimeoutExpired as error:
-            raise AuthoritativeReplayError(
-                "locked evaluator exceeded the wall-time limit"
-            ) from error
-        if process.returncode != 0:
-            raise AuthoritativeReplayError("locked evaluator failed")
-        verdict = build_verdict(
-            request,
-            load_json(output / "results.json", "evaluator results", 64 * 1024),
-            load_json(METRICS, "measurement evidence", 16 * 1024),
-            file_count,
-            lines_of_code,
+        returncode, timed_out = run_process_group(
+            [
+                "/usr/bin/python3",
+                str(INSTALL / "evaluate_submission.py"),
+                "--source-dir",
+                str(source_root),
+                "--generated-root",
+                str(BENCHMARK / "generated"),
+                "--manifest-dir",
+                str(BENCHMARK / "manifests" / "problems"),
+                "--output-dir",
+                str(output),
+                "--repo-root",
+                str(BENCHMARK),
+                "--shared-packages",
+                str(BENCHMARK / ".lake" / "packages"),
+                "--problem-id",
+                problem_id,
+                "--statement-revision",
+                str(revision),
+                "--measurement-command-json",
+                '["/opt/lean-eval/replay-measure"]',
+                "--authoritative-checker",
+                "nanoda",
+                "--preprimed-workspaces",
+            ],
+            {
+                "PATH": "/opt/lean-eval/bin:/opt/lean-eval/home/.elan/bin:/usr/local/bin:/usr/bin:/bin",
+                "HOME": "/opt/lean-eval/home",
+                "COMPARATOR_BIN": "/opt/lean-eval/bin/comparator",
+                "COMPARATOR_LANDRUN": "/usr/local/bin/landrun",
+            },
+            WALL_TIME_LIMIT_MS / 1000,
         )
+        metrics_value = load_metrics_after_execution()
+        normalized = normalize_metrics(metrics_value)
+        if timed_out:
+            verdict = reported_execution_verdict(
+                request, "timed_out", normalized, file_count, lines_of_code
+            )
+        elif returncode != 0:
+            verdict = reported_execution_verdict(
+                request, "crashed", normalized, file_count, lines_of_code
+            )
+        else:
+            verdict = build_verdict(
+                request,
+                load_json(output / "results.json", "evaluator results", 64 * 1024),
+                metrics_value,
+                file_count,
+                lines_of_code,
+            )
         validate_verdict(verdict, request)
         print(json.dumps(verdict, separators=(",", ":"), sort_keys=True))
     finally:
