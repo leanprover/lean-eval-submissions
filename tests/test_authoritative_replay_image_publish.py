@@ -22,6 +22,9 @@ class AuthoritativeReplayImagePublishTests(unittest.TestCase):
     def test_registry_push_is_digest_resolved_without_account_evidence(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn('wrangler containers push "$IMAGE"', workflow)
+        push = workflow.index('wrangler containers push "$IMAGE"')
+        self.assertLess(workflow.index('current_main=$(git ls-remote', push - 1000), push)
+        self.assertIn("refusing stale publication", workflow)
         self.assertIn("refusing to overwrite it", workflow)
         self.assertIn("ocker-[Cc]ontent-[Dd]igest", workflow)
         self.assertIn('"registry_manifest_digest"', workflow)
@@ -29,6 +32,7 @@ class AuthoritativeReplayImagePublishTests(unittest.TestCase):
         self.assertIn("registry-credentials.json", workflow)
         self.assertIn('registry_username=$(jq -er .username', workflow)
         self.assertIn('--user "$registry_username:$registry_password"', workflow)
+        self.assertEqual(workflow.count("::add-mask::"), 2)
 
     def test_publish_repeats_the_image_content_and_size_gates(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
