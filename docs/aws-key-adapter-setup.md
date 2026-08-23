@@ -58,7 +58,9 @@ sam deploy \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     EnvironmentName=staging \
-    GitHubOidcProviderArn="$OIDC_PROVIDER_ARN"
+    GitHubOidcProviderArn="$OIDC_PROVIDER_ARN" \
+    SubmissionGitHubSubjectPrefix=leanprover/lean-eval-submissions \
+    ReleaseGitHubSubjectPrefix=leanprover@7233018/lean-eval-releases@1340741242
 
 sam deploy \
   --template-file .aws-sam/build/template.yaml \
@@ -68,8 +70,18 @@ sam deploy \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     EnvironmentName=production \
-    GitHubOidcProviderArn="$OIDC_PROVIDER_ARN"
+    GitHubOidcProviderArn="$OIDC_PROVIDER_ARN" \
+    SubmissionGitHubSubjectPrefix=leanprover/lean-eval-submissions \
+    ReleaseGitHubSubjectPrefix=leanprover@7233018/lean-eval-releases@1340741242
 ```
+
+The subject prefixes are read from GitHub's repository OIDC customization API
+before every stack deployment. Repositories created or transferred after
+GitHub's immutable-subject rollout include stable owner and repository IDs in
+that prefix. The release repository currently uses the immutable prefix above;
+the older submissions repository retains its name-based prefix. Never infer a
+subject from the display repository name when the API reports a different
+prefix.
 
 The build artifact contains only `aws_key_adapter.py` and
 `key_capability_contract.py`. The template creates no public URL, API Gateway,

@@ -64,7 +64,7 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
         self.assertIn("token.actions.githubusercontent.com:aud: sts.amazonaws.com", role)
         self.assertIn(
             "token.actions.githubusercontent.com:sub: !Sub "
-            "repo:${SubmissionGitHubRepository}:environment:archive-${EnvironmentName}",
+            "repo:${SubmissionGitHubSubjectPrefix}:environment:archive-${EnvironmentName}",
             role,
         )
         self.assertIn("Action: kms:Encrypt", role)
@@ -79,6 +79,16 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
         ):
             self.assertIn(f"- {name}", role)
             self.assertIn(f"kms:EncryptionContext:{name}: false", role)
+
+    def test_oidc_subject_prefixes_match_github_repository_configuration(self) -> None:
+        parameters = _section(self.template, "Parameters:\n", "Resources:\n")
+        self.assertIn("Default: leanprover/lean-eval-submissions", parameters)
+        self.assertIn(
+            "Default: leanprover@7233018/lean-eval-releases@1340741242",
+            parameters,
+        )
+        self.assertIn("(?:@[0-9]+)?", parameters)
+        self.assertNotIn("GitHubRepository", parameters)
 
     def test_function_role_alone_can_consume_and_decrypt(self) -> None:
         role = _section(self.template, "  UnwrapFunctionRole:\n", "  UnwrapFunction:\n")
@@ -105,15 +115,15 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
         replay = _section(self.template, "  ReplayInvokerRole:\n", "  ReleaseInvokerRole:\n")
         release = _section(self.template, "  ReleaseInvokerRole:\n", "Outputs:\n")
         self.assertIn(
-            "repo:${SubmissionGitHubRepository}:environment:replay-${EnvironmentName}",
+            "repo:${SubmissionGitHubSubjectPrefix}:environment:replay-${EnvironmentName}",
             replay,
         )
-        self.assertNotIn("ReleaseGitHubRepository", replay)
+        self.assertNotIn("ReleaseGitHubSubjectPrefix", replay)
         self.assertIn(
-            "repo:${ReleaseGitHubRepository}:environment:release-${EnvironmentName}",
+            "repo:${ReleaseGitHubSubjectPrefix}:environment:release-${EnvironmentName}",
             release,
         )
-        self.assertNotIn("SubmissionGitHubRepository", release)
+        self.assertNotIn("SubmissionGitHubSubjectPrefix", release)
         for role in (replay, release):
             self.assertIn("Action: lambda:InvokeFunction", role)
             self.assertIn("Resource: !Sub ${UnwrapFunction.Arn}:live", role)

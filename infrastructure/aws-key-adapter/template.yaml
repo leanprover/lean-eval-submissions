@@ -11,14 +11,14 @@ Parameters:
   GitHubOidcProviderArn:
     Type: String
     AllowedPattern: ^arn:aws:iam::[0-9]{12}:oidc-provider/token\.actions\.githubusercontent\.com$
-  SubmissionGitHubRepository:
+  SubmissionGitHubSubjectPrefix:
     Type: String
     Default: leanprover/lean-eval-submissions
-    AllowedPattern: ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$
-  ReleaseGitHubRepository:
+    AllowedPattern: ^[A-Za-z0-9_.-]+(?:@[0-9]+)?/[A-Za-z0-9_.-]+(?:@[0-9]+)?$
+  ReleaseGitHubSubjectPrefix:
     Type: String
-    Default: leanprover/lean-eval-releases
-    AllowedPattern: ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$
+    Default: leanprover@7233018/lean-eval-releases@1340741242
+    AllowedPattern: ^[A-Za-z0-9_.-]+(?:@[0-9]+)?/[A-Za-z0-9_.-]+(?:@[0-9]+)?$
 
 Resources:
   ArchiveIdentityKey:
@@ -74,7 +74,7 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub repo:${SubmissionGitHubRepository}:environment:archive-${EnvironmentName}
+                token.actions.githubusercontent.com:sub: !Sub repo:${SubmissionGitHubSubjectPrefix}:environment:archive-${EnvironmentName}
       Policies:
         - PolicyName: EncryptOneArchiveIdentity
           PolicyDocument:
@@ -191,7 +191,7 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub repo:${SubmissionGitHubRepository}:environment:replay-${EnvironmentName}
+                token.actions.githubusercontent.com:sub: !Sub repo:${SubmissionGitHubSubjectPrefix}:environment:replay-${EnvironmentName}
       Policies:
         - PolicyName: InvokeOnlyTheUnwrapAlias
           PolicyDocument:
@@ -216,7 +216,7 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub repo:${ReleaseGitHubRepository}:environment:release-${EnvironmentName}
+                token.actions.githubusercontent.com:sub: !Sub repo:${ReleaseGitHubSubjectPrefix}:environment:release-${EnvironmentName}
       Policies:
         - PolicyName: InvokeOnlyTheUnwrapAlias
           PolicyDocument:
