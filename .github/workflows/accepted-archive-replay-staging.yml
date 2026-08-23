@@ -28,6 +28,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
+      - name: Require the immutable promoted dispatch ref
+        run: |
+          set -euo pipefail
+          expected_ref="refs/tags/lean-eval-dispatch/$GITHUB_SHA"
+          test "$GITHUB_REF" = "$expected_ref"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false

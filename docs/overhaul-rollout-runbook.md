@@ -25,12 +25,12 @@ primary checkout is not the integration workspace.
 | Repository / lane | Published commit or pull request |
 | --- | --- |
 | `lean-eval-generator` | `77373a539b31f8f304c852f288d7d8469cceebff` on `main`; fixes `#1` / `#2` and synchronization `#3` are merged and green; merged LeanEval consumer `#553` pins this exact commit and removes the embedded core |
-| production State | `d6d566bd8f92f157bee68d3890aaf8a30c339c9d` on private `main`; strict redacted public projection enabled and schema terminology qualified |
-| staging State | `1e76ea66405ed692bf7564f5accbfb3efd9c25f0` on private `main`; full deliberate-rejection lifecycle and projection contract recorded, with schema terminology qualified |
-| `lean-eval-releases` | `f1f83344017333650b4066a533e5ff4eefda5b54` on `main`; terminology `#3`, planner `#1`, and reconstruction `#2` are merged and green; publication remains disabled |
+| production State | `cf1a1f0d62ebfda9c51a64c1b3b375fe26218f75` on private `main`; strict redacted public projection and ordered release opt-out cutoff enabled |
+| staging State | `583778969da009368e347e30eb357702d5440015` on private `main`; accepted archive/result lifecycle and ordered release opt-out cutoff recorded |
+| `lean-eval-releases` | `a0caa9688d10cbefc8efad4151de9878114276c6` on `main`; automatic controller, scoped audit reader, and credentialed staging smoke are merged; publication remains disabled |
 | catalog, generator consumer, software verification | v1 freeze merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; terminology rule merged in `#554`; standalone-generator consumer merged in `#553`; current main `b91d4757aa0d7776c02540c9089df54fa0d0658a` |
-| results schema version 2, intake server, replay contracts | foundations merged in `lean-eval-submissions#1165`; lifecycle status in `#1190`; archive-before-evaluation in `#1198`; exact-blob archive verification and dependency promotion in `#1213` / `#1214`; runtime-only deployment trigger in `#1217`; infrastructure refresh in `#1225`; schema terminology in `#1227`; kernel/AWS smokes `#1207` / `#1208`; AWS provisioning `#1239`; D7 migration main `c3491661`; exact Worker runtime `d487c9d5b1a22a7a7dd27d729f3eb642c6474b1a` remains deployed with intake disabled |
-| AWS archive-key custody | dedicated account `lean-eval` (`161072922960`), exact GitHub OIDC provider, and isolated staging/production CloudFormation stacks provisioned 2026-08-22; staging one-use run `32568604230` passed; only staging role variables connected; no replay compute and no production workflow connected |
+| results schema version 2, intake server, replay contracts | schema-version-3 per-submission archive lane `#1250`, accepted result lifecycle `#1251`, guarded historical migration `#1252`, private replay planning/schema alignment `#1253` / `#1254`, accepted-archive staging boundary `#1255`, and immutable release OIDC trust `#1256` are merged; exact runtime `12da2fa504ea4b9408d9fb24773886df02e20d66` is deployed intake- and replay-disabled |
+| AWS archive-key custody | dedicated account `lean-eval` (`161072922960`) and isolated stacks are provisioned; accepted-archive staging run `32618166048` passed. Release OIDC template correction is merged but the live stacks still require an authenticated operator update; production intake archive/replay roles remain disconnected |
 | lifecycle-aware leaderboard | preview foundation merged as `lean-eval-leaderboard#69`; UI terminology merged in `#73`; deeper schema terminology merged in `#74`; cutover `#72` is merged and live at `https://lean-lang.org/eval/`, with `/legacy/` retained and read-only State deploy key `160968617` provisioned |
 
 The private broker and intake Workers are deployed in staging and production
@@ -61,6 +61,15 @@ protected deployment `32573880099` and synthetic acceptance `32574078784`
 proved its 12 GiB staging boundary, wrong-archive and reuse refusal, blocked
 egress, fixed-command decrypt, and destruction without writing State. General
 and production replay remain disabled.
+
+The live server archive lane now creates a fresh provider-neutral KMS envelope
+for every submission before evaluation. Two accepted staging submissions have
+completed this lane. Deployment run `32617911271` published exact commit
+`12da2fa504ea4b9408d9fb24773886df02e20d66` with the approved 12 GiB ceiling,
+and immutable-tag run `32618166048` passed the real accepted-archive boundary.
+The authoritative Lean/checker execution image and queue-consuming State writer
+remain launch gates; the accepted-archive workflow only attests recovery and
+destruction.
 
 The FC-owned importer in `formal-conjectures#4951` now imports, verifies,
 classifies, and generates all FC100 declarations through the frozen generator
