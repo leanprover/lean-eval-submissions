@@ -11,6 +11,7 @@ from scripts.freeze_replay_configuration import (
     IMAGE_LIMIT_BYTES,
     MEMORY_LIMIT_BYTES,
     PROFILE_LOCK,
+    WALL_TIME_LIMIT_MS,
     FreezeError,
     freeze,
 )
@@ -91,6 +92,10 @@ class FreezeReplayConfigurationTests(unittest.TestCase):
         self.assertEqual(
             result["measurement_config"]["memory_limit_bytes"], MEMORY_LIMIT_BYTES
         )
+        self.assertEqual(
+            result["measurement_config"]["wall_time_limit_ms"], WALL_TIME_LIMIT_MS
+        )
+        self.assertEqual(WALL_TIME_LIMIT_MS, 19_800_000)
         self.assertRegex(result["execution_profile_digest"], r"^[0-9a-f]{64}$")
         self.assertRegex(result["measurement_config_digest"], r"^[0-9a-f]{64}$")
         self.assertNotEqual(

@@ -106,7 +106,7 @@ export async function handleReplayRequest(
           await write("/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
           await write("/workspace/identity.age.b64", input.plaintext_identity_base64);
           const result = await sandbox.exec("/opt/lean-eval/replay-authoritative", {
-            timeout: 21_900_000,
+            timeout: 20_100_000,
           });
           if (!result.success || result.stdout.length > 64 * 1024) {
             throw new Error("authoritative replay command failed");

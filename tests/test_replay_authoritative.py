@@ -75,7 +75,7 @@ def request() -> dict:
         },
         "measurement_config": {
             "schema_version": 1,
-            "wall_time_limit_ms": 21_600_000,
+            "wall_time_limit_ms": 19_800_000,
             "memory_limit_bytes": 12 * 1024**3,
             "retired_instructions": {
                 "required": False,

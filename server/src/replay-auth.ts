@@ -1,4 +1,7 @@
 const GITHUB_ISSUER = "https://token.actions.githubusercontent.com";
+const GITHUB_REPOSITORY = "leanprover/lean-eval-submissions";
+const GITHUB_REPOSITORY_ID = "1243533004";
+const GITHUB_OWNER_ID = "7233018";
 const DISPATCH_REF = /^refs\/tags\/lean-eval-dispatch\/([0-9a-f]{40})$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 
@@ -78,12 +81,16 @@ async function githubKey(kid: string, fetcher: typeof fetch): Promise<JsonWebKey
 }
 
 function validateClaims(claims: JwtClaims, env: ReplayAuthEnvironment, nowSeconds: number): void {
-  const repository = "leanprover/lean-eval-submissions";
-  const expectedSubject = `repo:${repository}:environment:${env.GITHUB_OIDC_ENVIRONMENT}`;
+  const expectedSubject = `repo:${GITHUB_REPOSITORY}:environment:${env.GITHUB_OIDC_ENVIRONMENT}`;
   if (claims.iss !== GITHUB_ISSUER || claims.aud !== env.GITHUB_OIDC_AUDIENCE) {
     throw new ReplayAuthError("token issuer or audience is invalid");
   }
-  if (claims.sub !== expectedSubject || claims.repository !== repository) {
+  if (
+    claims.sub !== expectedSubject ||
+    claims.repository !== GITHUB_REPOSITORY ||
+    claims.repository_id !== GITHUB_REPOSITORY_ID ||
+    claims.repository_owner_id !== GITHUB_OWNER_ID
+  ) {
     throw new ReplayAuthError("token repository subject is invalid");
   }
   if (claims.environment !== env.GITHUB_OIDC_ENVIRONMENT || claims.ref_protected !== "true") {

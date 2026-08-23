@@ -100,12 +100,21 @@ jobs:
             exit 1
           fi
           rm -f "$RUNNER_TEMP/registry-images.json"
+          current_main=$(git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            refs/heads/main | cut -f1)
+          if [ "$current_main" != "$GITHUB_SHA" ]; then
+            echo "protected main advanced during the image build; refusing stale publication" >&2
+            exit 1
+          fi
           npx --prefix server wrangler containers push "$IMAGE"
           npx --prefix server wrangler containers registries credentials \
             registry.cloudflare.com --pull --expiration-minutes 5 --json \
             > "$RUNNER_TEMP/registry-credentials.json"
           registry_username=$(jq -er .username "$RUNNER_TEMP/registry-credentials.json")
           registry_password=$(jq -er .password "$RUNNER_TEMP/registry-credentials.json")
+          echo "::add-mask::$registry_username"
+          echo "::add-mask::$registry_password"
           trap 'unset registry_username registry_password; rm -f "$RUNNER_TEMP/registry-credentials.json" "$RUNNER_TEMP/registry-headers" "$RUNNER_TEMP/registry-images.json"' EXIT
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
             --user "$registry_username:$registry_password" \
