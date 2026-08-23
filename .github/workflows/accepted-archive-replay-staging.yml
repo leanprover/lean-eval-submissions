@@ -51,6 +51,28 @@ jobs:
         with:
           python-version: '3.11.10'
 
+      - name: Bind source-free health evidence to this disabled deployment
+        env:
+          REPLAY_HEALTH_URL: https://lean-eval-replay-executor-staging.lean-eval.workers.dev/healthz
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            "$REPLAY_HEALTH_URL" --output "$RUNNER_TEMP/replay-health.json"
+          jq -e --arg commit "$GITHUB_SHA" '
+            .status == "ok" and
+            .service == "lean-eval-replay-executor" and
+            .environment == "staging" and
+            .deployed_commit == $commit and
+            .replay_enabled == false and
+            .staging_acceptance_enabled == true and
+            .staging_memory_limit_bytes == 12884901888 and
+            .production_memory_gate_bytes == 12884901888 and
+            .reviewed_execution_profile_digest == ("0" * 64) and
+            .reviewed_measurement_config_digest == ("0" * 64) and
+            (.reviewed_vm_image_digest | test("^sha256:[0-9a-f]{64}$")) and
+            .reviewed_vm_image_digest != ("sha256:" + ("0" * 64))
+          ' "$RUNNER_TEMP/replay-health.json" >/dev/null
+
       - name: Validate staging State and select one accepted private archive
         id: plan
         env:
@@ -191,6 +213,8 @@ jobs:
           python scripts/replay_archive_staging.py validate-response \
             --request "$RUNNER_TEMP/executor-request.json" \
             --response "$RUNNER_TEMP/executor-response.json"
+          cp "$RUNNER_TEMP/executor-response.json" \
+            "$GITHUB_WORKSPACE/authoritative-runtime-probe.json"
           submission_id=$(jq -r .submission_id "$RUNNER_TEMP/executor-response.json")
           archive_digest=$(jq -r .archive_ciphertext_sha256 "$RUNNER_TEMP/executor-response.json")
           {
@@ -205,14 +229,51 @@ jobs:
           cleanup
           trap - EXIT
 
+      - name: Write only the image-bound source-free runtime evidence
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+
+          temporary = pathlib.Path(os.environ["RUNNER_TEMP"])
+          workspace = pathlib.Path(os.environ["GITHUB_WORKSPACE"])
+          evidence = {
+              "schema_version": 1,
+              "health": json.loads(
+                  (temporary / "replay-health.json").read_text(encoding="utf-8")
+              ),
+              "probe": json.loads(
+                  (workspace / "authoritative-runtime-probe.json").read_text(
+                      encoding="utf-8"
+                  )
+              ),
+          }
+          (workspace / "authoritative-replay-runtime-evidence.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      # actions/upload-artifact pinned to v7.0.1.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: authoritative-replay-runtime-evidence
+          path: authoritative-replay-runtime-evidence.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Remove all remaining private scratch
         if: always()
         run: |
           rm -rf "$RUNNER_TEMP/state-views" audit
           rm -f "$RUNNER_TEMP/replay-plan.json" \
+            "$RUNNER_TEMP/replay-health.json" \
             "$RUNNER_TEMP/archive.tar.age" \
             "$RUNNER_TEMP/archive-sidecar.json" \
             "$RUNNER_TEMP/identity.age" \
             "$RUNNER_TEMP/unwrap-request.json" \
             "$RUNNER_TEMP/executor-request.json" \
-            "$RUNNER_TEMP/executor-response.json"
+            "$RUNNER_TEMP/executor-response.json" \
+            authoritative-runtime-probe.json \
+            authoritative-replay-runtime-evidence.json
