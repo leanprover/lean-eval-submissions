@@ -7,16 +7,17 @@ until this ledger changes in the same pull request or an immediately linked
 operations pull request. Secret **names, owners, scopes, and rotation dates**
 belong here; secret values do not.
 
-Last reconciled: 2026-08-22 (Worker commit `160bd6e3` is deployed and
-intake-disabled in both environments; deployment tokens now exercise Workers
-and Containers; staging replay acceptance run `32574078784` passed;
+Last reconciled: 2026-08-23 (Worker commit `12da2fa5` is deployed and
+intake-disabled in both environments; deployment tokens exercise Workers and
+Containers; accepted-archive staging replay run `32618166048` passed;
 State-writer tokens, browser OAuth Apps, and both broker GitHub Apps remain
 provisioned and preflighted; the dedicated AWS key-custody account and isolated
-staging and production stacks are provisioned; only the two staging OIDC role
-variables are connected; the lifecycle-aware leaderboard cutover is live; D7
+staging and production stacks are provisioned; archive/replay staging,
+historical migration, and both release role variables are connected; the
+lifecycle-aware leaderboard cutover is live; D7
 migrated all 44 results files and 1,298 records to schema version 2 at commit
-`c3491661`; publication-disabled release reconstruction run `32574614106`
-passed at release commit `f1f83344`).
+`c3491661`; automatic release tooling is merged at `a0caa968`, with
+publication still disabled and its live AWS trust update pending).
 Temporary owner: Kim Morrison. Target owner: leanprover organization
 administrators. Service code:
 [`server/`](server/).
@@ -37,7 +38,7 @@ administrators. Service code:
 | GitHub state repository | `leanprover/lean-eval-state-staging` | staging | **CREATED PRIVATE 2026-08-20** |
 | GitHub state repository | `leanprover/lean-eval-state` | production | **CREATED PRIVATE 2026-08-20** |
 | GitHub generator repository | `leanprover/lean-eval-generator` | shared | **CREATED PUBLIC 2026-08-20** |
-| GitHub release repository | `leanprover/lean-eval-releases` | production | **CREATED PUBLIC 2026-08-20; SYNTHETIC RECONSTRUCTION PASSED; PUBLICATION DISABLED** |
+| GitHub release repository | `leanprover/lean-eval-releases` | production | **AUTOMATIC CONTROLLER MERGED; CREDENTIALED STAGING TRUST UPDATE PENDING; PUBLICATION DISABLED** |
 | GitHub branch ruleset | `lean-eval-generator` `Protect main` (`21094079`) | shared | **ACTIVE; PR + LINEAR HISTORY + `check` REQUIRED; APPROVAL COUNT 0** |
 | GitHub branch ruleset | `lean-eval-releases` `Protect main` (`21094082`) | production | **ACTIVE; PR + LINEAR HISTORY + `validate` REQUIRED; APPROVAL COUNT 0** |
 | GitHub Environment | `cloudflare-staging` (`20259250422`) | staging | **CREATED 2026-08-20; ACCOUNT ID SET; API TOKEN SET 2026-08-21** |
@@ -47,14 +48,15 @@ administrators. Service code:
 | GitHub Environment | `archive-production` (`EN_kwDOSh7OzM8AAAAEu8r25w`) | production archive | **CREATED 2026-08-21; TAG POLICY SET; ROLE ARN NOT SET** |
 | GitHub Environment | `replay-staging` (`EN_kwDOSh7OzM8AAAAEu8r21Q`) | staging replay | **CREATED; MAIN + DISPATCH TAG POLICIES + INVOKER ROLE ARN SET** |
 | GitHub Environment | `replay-production` (`EN_kwDOSh7OzM8AAAAEu8r3MQ`) | production replay | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
-| GitHub Environment | `release-staging` (`EN_kwDOT-oWes8AAAAEu8r3Mw`) | staging release | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
-| GitHub Environment | `release-production` (`EN_kwDOT-oWes8AAAAEu8r3KQ`) | production release | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
+| GitHub Environment | `archive-migration-production` (`EN_kwDOSh7OzM8AAAAEwLDSMQ`) | historical migration | **CREATED 2026-08-23; READ KEY + PRODUCTION WRAP ROLE SET; LEGACY IDENTITY ABSENT** |
+| GitHub Environment | `release-staging` (`EN_kwDOT-oWes8AAAAEu8r3Mw`) | staging release | **ROLE + READ KEYS SET; LIVE OIDC TRUST UPDATE PENDING** |
+| GitHub Environment | `release-production` (`EN_kwDOT-oWes8AAAAEu8r3KQ`) | production release | **ROLE + CONTROLLER/PUBLISH KEYS SET; PUBLICATION VARIABLE ABSENT** |
 | AWS account | `lean-eval` (`161072922960`) | dedicated key custody | **CREATED; ROOT MFA ENABLED; NO ACCESS KEYS** |
-| AWS CloudFormation stack | `lean-eval-key-adapter-staging` | staging | **PROVISIONED 2026-08-22** |
-| AWS CloudFormation stack | `lean-eval-key-adapter-production` | production | **PROVISIONED 2026-08-22; NOT CONNECTED TO GITHUB** |
-| Cloudflare replay Worker | `lean-eval-replay-executor-staging` | staging | **PROVISIONED 2026-08-22; SYNTHETIC ACCEPTANCE PASSED; GENERAL REPLAY DISABLED** |
+| AWS CloudFormation stack | `lean-eval-key-adapter-staging` | staging | **PROVISIONED; RELEASE OIDC TRUST UPDATE PENDING** |
+| AWS CloudFormation stack | `lean-eval-key-adapter-production` | production | **PROVISIONED; RELEASE OIDC TRUST UPDATE PENDING; INTAKE/REPLAY/PUBLICATION DISABLED** |
+| Cloudflare replay Worker | `lean-eval-replay-executor-staging` | staging | **REAL ACCEPTED-ARCHIVE BOUNDARY PASSED 2026-08-23; GENERAL REPLAY DISABLED** |
 | Cloudflare replay Worker | `lean-eval-replay-executor` | production | **PROVISIONED 2026-08-22; REPLAY AND ACCEPTANCE DISABLED** |
-| Replay execution backend | Cloudflare Sandbox, provider-neutral adapter | staging / production | **STAGING BOUNDARY ACCEPTED 2026-08-22; AUTHORITATIVE/PRODUCTION REPLAY DISABLED** |
+| Replay execution backend | Cloudflare Sandbox, provider-neutral adapter | staging / production | **REAL STAGING ARCHIVE BOUNDARY ACCEPTED 2026-08-23; AUTHORITATIVE/PRODUCTION REPLAY DISABLED** |
 
 Do not change a status to provisioned without replacing every applicable
 placeholder in the inventory below and recording a verification date.
@@ -123,12 +125,12 @@ Wrangler must be copied here immediately.
 The intake-disabled bootstrap was performed manually with Wrangler OAuth. The
 dedicated deployment tokens are installed and exercised by every normal
 deployment. Current versions use exact commit
-`160bd6e395495eeb5ff94c6f6bc3e714f53d7560`:
+`12da2fa504ea4b9408d9fb24773886df02e20d66`:
 
 | Environment | Private broker version | Replay Worker version / container application / digest | Intake Worker version | Health verification |
 | --- | --- | --- | --- | --- |
-| staging | `9e3897d1-f392-4e68-a56f-af5de3ba5718` | `c97d7986-b9e2-4777-8ef5-3b2679bb97f3` / `a0361b52-feb3-4ee7-a68e-1ce63d78f2ec` / `sha256:83fd76390c7aaf8455d93241a10d7b189819639158fad6c48653d04dedc92238` | `df66d18a-ea0f-4e57-96c8-0d6701470de0` | environment `staging`, intake `false`, replay `false`, acceptance `true`, exact commit |
-| production | `25f35f36-b94f-4215-8da9-d1e1d2c036c1` | `2459f8fa-bfc7-4826-8fee-e8da438aae7f` / `a03ed768-89ad-4a0d-ad8d-cccdabc7775d` / `sha256:ba1c31c9c2485a201bf6396bd4b24199a2c288d71fb2038da4bbd4b63d301e93` | `5c77c00f-f33a-49f3-85fd-d6740adb6e69` | environment `production`, intake `false`, replay `false`, acceptance `false`, exact commit |
+| staging | `d4c25df8-c51e-436f-9bf8-1026521f111e` | `ea923507-01cc-4d05-bcc2-19a00e37bc47` / `a0361b52-feb3-4ee7-a68e-1ce63d78f2ec` / `sha256:a067a3ded4ea70c9063e78ebb4c6c8da2cfa7d11c5883d550f86dbf08d639b76` | `8fd16847-e491-44f8-9b3e-137b6512cb95` | environment `staging`, intake `false`, replay `false`, acceptance `true`, both memory fields `12884901888`, exact commit |
+| production | `dd5d24df-9cb7-40ec-9958-0b66454bbf94` | `a22bfd7f-a162-4bbe-8ee7-eafe897dcad6` / `a03ed768-89ad-4a0d-ad8d-cccdabc7775d` / `sha256:bc4a4c5405cef246eb29666f9ed8baf37d65377cfa65cc72cc5870c50cd386fa` | `b689fed9-444f-440e-923e-3f829162e307` | environment `production`, intake `false`, replay `false`, acceptance `false`, both memory fields `12884901888`, exact commit |
 
 This manual bootstrap does not replace deployment automation.
 `CLOUDFLARE_ACCOUNT_ID` and a distinct, narrowly scoped
@@ -544,9 +546,10 @@ rejection and contains no source or identity. Production has not been invoked
 and has no corresponding log group.
 
 The GitHub environment shells were created before the AWS account so their ref
-boundaries could be verified without granting AWS authority. Only the two
-staging environments now contain the non-secret role variables shown below;
-all four production/release environments remain unconnected:
+boundaries could be verified without granting AWS authority. Archive and replay
+staging, the guarded historical migration, and both release environments now
+contain the non-secret role variables shown below. Production archive and
+production replay remain unconnected; release publication remains disabled:
 
 | Repository | Environment | Environment node | Protection rule | Ref policy | Policy ID |
 | --- | --- | --- | --- | --- | --- |
@@ -554,6 +557,7 @@ all four production/release environments remain unconnected:
 | `leanprover/lean-eval-submissions` | `archive-production` | `EN_kwDOSh7OzM8AAAAEu8r25w` | `63321647` | tag `lean-eval-dispatch/*` | `57914846` |
 | `leanprover/lean-eval-submissions` | `replay-staging` | `EN_kwDOSh7OzM8AAAAEu8r21Q` | `63352004` | branch `main`; tag `lean-eval-dispatch/*` | `57941304`; `57941307` |
 | `leanprover/lean-eval-submissions` | `replay-production` | `EN_kwDOSh7OzM8AAAAEu8r3MQ` | `63321654` | protected branches only | not applicable |
+| `leanprover/lean-eval-submissions` | `archive-migration-production` | `EN_kwDOSh7OzM8AAAAEwLDSMQ` | `63434355` | protected branches only | not applicable |
 | `leanprover/lean-eval-releases` | `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | `63321653` | protected branches only | not applicable |
 | `leanprover/lean-eval-releases` | `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | `63321651` | protected branches only | not applicable |
 
@@ -561,6 +565,18 @@ all four production/release environments remain unconnected:
 | --- | --- | --- |
 | `leanprover/lean-eval-submissions` / `archive-staging` | `AWS_WRAP_ROLE_ARN` | `arn:aws:iam::161072922960:role/lean-eval-archive-wrap-staging` |
 | `leanprover/lean-eval-submissions` / `replay-staging` | `AWS_REPLAY_UNWRAP_ROLE_ARN` | `arn:aws:iam::161072922960:role/lean-eval-replay-unwrap-invoker-staging` |
+| `leanprover/lean-eval-submissions` / `archive-migration-production` | `AWS_WRAP_ROLE_ARN` | `arn:aws:iam::161072922960:role/lean-eval-archive-wrap-production` |
+| `leanprover/lean-eval-releases` / `release-staging` | `AWS_RELEASE_UNWRAP_ROLE_ARN` | `arn:aws:iam::161072922960:role/lean-eval-release-unwrap-invoker-staging` |
+| `leanprover/lean-eval-releases` / `release-production` | `AWS_RELEASE_UNWRAP_ROLE_ARN` | `arn:aws:iam::161072922960:role/lean-eval-release-unwrap-invoker-production` |
+
+Read/write deploy-key inventory: release staging uses audit key `161041215`
+and State key `161041214`; release production uses audit key `161041000`,
+write-capable State controller key `161040898`, and release publisher key
+`161040897`. The production secrets are installed, but no
+publication-enabling variable exists.
+Historical migration uses read-only audit key `161041934`; its required
+`LEGACY_ARCHIVE_IDENTITY` secret is deliberately absent. Accepted-archive
+replay uses distinct read-only State key `161043118` and audit key `161043119`.
 
 The manual `public-replay-smoke.yml` job uses `replay-staging` but needs and
 receives no environment secret, variable, OIDC permission, State token, archive
@@ -572,9 +588,10 @@ hardware are observed in the evidence artifact rather than pre-pinned, so this
 is a staging reproducibility smoke only. It cannot consume the State replay
 queue or satisfy the private/authoritative disposable-backend launch gate.
 
-Do not set the production archive/replay variables or either release variable
-until their workflows and launch gates are separately approved. The staging
-variables do not enable intake or connect any replay execution backend.
+Do not set the production archive/replay variables. The installed release role
+variables and keys do not enable publication: the controller still requires
+its separate publication variable, which is absent. Staging variables do not
+enable intake or authoritative queue consumption.
 
 AWS is an initial provider, not a stable protocol dependency. Archives remain
 standard `age` ciphertext. Each archive has a small provider-neutral envelope
@@ -708,8 +725,11 @@ compatibility fix or append a corrective event.
 | Worker rollback | not run | Use only if an actual deployment needs rollback |
 | AWS key-adapter staging round trip | 2026-08-22 | authoritative run `32568604230` at immutable tag/commit `d487c9d5b1a22a7a7dd27d729f3eb642c6474b1a` passed gate, Encrypt-only OIDC assumption and wrap, source-free ciphertext handoff, Invoke-only assumption, first consume/decrypt, identical second-use rejection, AWS-authority removal, and local synthetic-source decryption. Staging contains one synthetic TTL item; production contains zero. Initial run `32568171403` had stopped before unwrap on the mistyped action pin corrected by `#1239`. No State event, result, release, production AWS variable, or replay backend was created. |
 | Cloudflare replay deployment and synthetic acceptance | 2026-08-22 | PR `#1242` merged the provider-neutral executor as `75d1f7a6`; PR `#1243` added the image's explicit Python runtime as `160bd6e3`. Protected deployment run `32573880099` published exact staging/production images through the two expanded deployment tokens, deployed the version and application IDs recorded above, and passed exact-commit health with intake and replay disabled. Acceptance run `32574078784` at immutable tag `lean-eval-dispatch/160bd6e395495eeb5ff94c6f6bc3e714f53d7560` passed wrong-archive refusal before consumption, one successful unwrap, identical reuse refusal, AWS-authority removal, exact ciphertext/marker verification inside a fresh 12 GiB Sandbox, blocked public egress, source-free evidence, and confirmed destruction. Live tail independently recorded fixed-command exit `0`, 20.414-second execution, `destroy` success in 272 ms, and zero mounts. Diagnostic runs `32573615982` / `32573716928` exposed the missing image runtime; both still confirmed Sandbox destruction and wrote no State event, result, release, or production authority. After verifying the two active digests, the broken unreferenced diagnostic tags `5a304d0d` (`sha256:8d714e45…`) and `b8e41176` (`sha256:37bd9f5c…`) were deleted; registry inventory now contains only active tags `c97d7986` and `2459f8fa`, both reproducible from protected source. |
+| Schema-version-3 archive and accepted-result staging | 2026-08-23 | PRs `#1250` / `#1251` replaced the server archive path with one fresh KMS envelope per submission and completed the accepted result/State callback. Submission `01a02c83-79f7-730b-9bcd-8cdac4fa5d7a` archived at audit commit `3ac5dfdcd9f8fde336775f194fe4e9fad1a182bc` and produced accepted result `r2_99df81809318fd2673d82da042b451f77b55606c6b506beb4526828ee1e7079e`; submission `01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584` completed run `32615934053`, archived at `92b95c162ad9bf38d027e11193683ca61ed2a994`, and wrote its accepted result and State callback. Production intake remained disabled. |
+| Historical archive migration dry run | 2026-08-23 | PR `#1252` merged guarded, source-free migration tooling. Credentialed dry run `32616816083` at audit commit `92b95c162ad9bf38d027e11193683ca61ed2a994` validated exactly 1,040 migrations and two retained schema-version-3 objects with canonical digest `48f55807f430d8754e4a7b79cb391d582028df6abce347d037bd810a0e3decfa`; all decrypt, wrap, and write operations were skipped. Apply remains blocked on the custodian-supplied `LEGACY_ARCHIVE_IDENTITY`. |
+| Accepted staging archive replay boundary | 2026-08-23 | PRs `#1253`–`#1256` added exact private execution planning, aligned the public schema, introduced the separately credentialed accepted-archive route, pinned the 12 GiB production ceiling, and corrected immutable release OIDC trust in the template. Deployment run `32617911271` promoted and deployed exact commit `12da2fa504ea4b9408d9fb24773886df02e20d66` to both environments and passed all intake-/replay-disabled health checks. Immutable-tag run `32618166048` selected accepted submission `01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584`, bound audit commit `92b95c162ad9bf38d027e11193683ca61ed2a994`, consumed one exact replay capability, proved identical reuse refusal and AWS-authority removal, verified plaintext digest/size and safe tar shape only in a fresh network-disabled Sandbox, and confirmed destruction. It uploaded and wrote nothing. Earlier run `32618094637` deliberately failed closed with HTTP 401 because it was mistakenly dispatched from mutable `main`; it consumed one capability before the independent Worker OIDC check, so the workflow now rejects mutable refs before State reads or AWS assumption. Authoritative checker execution, State queue consumption, general replay, and production replay remain disabled. |
 | Results schema version 2 migration (D7) | 2026-08-22 | maintainer approved fresh dry run `32569220655` at source `ddc0e4ec8980296a5312844dedd5513d1d604e5b`, source digest `884c38373f8ecafbbc3894a6cb90cdca476f558bb32fe44d0af08e8c62fd2e05`, 1,298 records, and canonical output digest `b78fb207d4711c2f59970fd3e769c483cf7eab8f5afb1fec07abe7cadbfc24c4`. Apply run `32569936026` created lock commit `fd1259b3`, rewrote 43 legacy files / 1,088 legacy records, removed the lock, and produced main `c3491661da9dcdad908d1b1e78576d9f64f112f4`. Independent post-apply validation found 44/44 files at schema version 2, 1,298/1,298 records, no duplicates, unchanged canonical output digest, zero further changes, no queued submission writers, and green main CI `32569954466`. |
-| Replay decrypt and destruction | 2026-08-22 | staging acceptance run `32574078784` passed the fixed-command decrypt, wrong-archive and reuse refusal, egress denial, source-free evidence, and confirmed unconditional destruction; authoritative queue consumption and production replay remain disabled |
+| Replay decrypt and destruction | 2026-08-23 | synthetic run `32574078784` and real accepted-archive run `32618166048` passed fixed-command decrypt, reuse refusal, egress denial, source-free evidence, and confirmed unconditional destruction; authoritative queue consumption and production replay remain disabled |
 | Release reconstruction | 2026-08-22 | protected `lean-eval-releases` run `32574614106` at exact main commit `f1f83344017333650b4066a533e5ff4eefda5b54` passed all tooling tests, planned one due synthetic release, reconstructed and validated its manifest, proved the exact public-file allowlist excludes `private-note.txt`, and left the checkout clean. The run used only a harmless local plaintext fixture: it wrote neither State nor the release repository, exercised no AWS authority, and did not enable publication. |
 
 ## Reconciliation checklist

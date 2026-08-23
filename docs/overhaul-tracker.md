@@ -169,6 +169,13 @@ one issue per lane.
 - [x] Verify synthetic single-archive decrypt, second-use and wrong-archive
       refusal, blocked egress, and sandbox destruction before enabling private
       replay. Evidence is recorded in `INFRASTRUCTURE.md`.
+- [x] Prove the same boundary with a real accepted schema-version-3 staging
+      archive. Immutable-tag run `32618166048` selected submission
+      `01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584` from State, consumed and refused
+      reuse of its exact KMS capability, verified the plaintext digest and safe
+      archive shape only inside the network-disabled Sandbox, and confirmed
+      destruction without any write authority. Authoritative queue execution
+      and production replay remain disabled.
 - [x] Demonstrate release reconstruction separately without enabling release
       or publication. Protected `lean-eval-releases` run `32574614106` at exact
       main commit `f1f83344` planned one due synthetic release, reconstructed

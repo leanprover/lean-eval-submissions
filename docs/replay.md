@@ -11,6 +11,22 @@ fresh network-disabled Sandbox, proves reuse refusal, and discards the source.
 None has State/result/archive/release write authority. No authoritative
 queue-consuming replay workflow is enabled.
 
+Dispatch the accepted-archive staging acceptance only from an immutable tag
+created by the reviewed deployment workflow, never from `main`:
+
+```bash
+commit=<reviewed-40-character-commit>
+gh workflow run accepted-archive-replay-staging.yml \
+  --repo leanprover/lean-eval-submissions \
+  --ref "lean-eval-dispatch/$commit" \
+  -f submission_id=<accepted-staging-submission-uuidv7> \
+  -f confirm_staging_acceptance=true
+```
+
+The workflow rejects any other ref before reading State or assuming AWS
+authority. The Worker independently verifies the GitHub OIDC token's protected
+environment and exact tag-to-commit binding.
+
 The Wave 2 public planner, historical smoke, verdict contract, and disposable-
 VM operator sequence are documented in
 [`replay-orchestrator.md`](replay-orchestrator.md). Cloudflare Sandbox is the

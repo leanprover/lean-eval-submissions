@@ -33,6 +33,15 @@ class ReplayArchiveStagingWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(required, WORKFLOW)
 
+    def test_rejects_mutable_dispatch_before_consuming_a_capability(self) -> None:
+        immutable_guard = 'test "$GITHUB_REF" = "$expected_ref"'
+        self.assertIn('expected_ref="refs/tags/lean-eval-dispatch/$GITHUB_SHA"', WORKFLOW)
+        self.assertLess(WORKFLOW.index(immutable_guard), WORKFLOW.index("Validate staging State"))
+        self.assertLess(
+            WORKFLOW.index(immutable_guard),
+            WORKFLOW.index("Assume only the staging replay Invoke role"),
+        )
+
     def test_drops_authority_and_never_uploads_private_material(self) -> None:
         self.assertIn('test -z "${AWS_ACCESS_KEY_ID:-}"', WORKFLOW)
         self.assertIn('rm "$RUNNER_TEMP/identity.age"', WORKFLOW)
