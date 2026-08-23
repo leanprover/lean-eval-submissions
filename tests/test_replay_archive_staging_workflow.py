@@ -59,6 +59,7 @@ class ReplayArchiveStagingWorkflowTests(unittest.TestCase):
     def test_runtime_evidence_requires_the_disabled_exact_image_deployment(self) -> None:
         self.assertIn('.status == "ok"', WORKFLOW)
         self.assertIn("--max-time 15", WORKFLOW)
+        self.assertIn("--max-time 240", WORKFLOW)
         self.assertIn('.deployed_commit == $commit', WORKFLOW)
         self.assertIn('.replay_enabled == false', WORKFLOW)
         self.assertIn('.reviewed_execution_profile_digest == ("0" * 64)', WORKFLOW)

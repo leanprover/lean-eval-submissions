@@ -208,6 +208,7 @@ jobs:
           test -n "$replay_oidc_token"
           rm "$RUNNER_TEMP/replay-oidc-response.json"
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 240 \
             --header "Authorization: Bearer $replay_oidc_token" \
             --header 'Content-Type: application/json' \
             --request POST \
