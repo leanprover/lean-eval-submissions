@@ -1,0 +1,489 @@
+#!/usr/bin/env python3
+"""Fixed command for one profile-locked authoritative private replay."""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import json
+import os
+import pathlib
+import shutil
+import subprocess
+import sys
+import tarfile
+from typing import Any
+
+WORKSPACE = pathlib.Path("/workspace")
+INSTALL = pathlib.Path("/opt/lean-eval")
+BENCHMARK = INSTALL / "benchmark"
+METRICS = pathlib.Path("/run/lean-eval/metrics.json")
+MAX_JSON = 256 * 1024
+MAX_CIPHERTEXT = 11 * 1024 * 1024
+MAX_PLAINTEXT = 10 * 1024 * 1024
+MAX_EXPANDED = 50 * 1024 * 1024
+MAX_MEMBERS = 4096
+
+
+class AuthoritativeReplayError(ValueError):
+    """An authoritative replay input or execution result is invalid."""
+
+
+def object_value(value: Any, label: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+        raise AuthoritativeReplayError(f"{label} must be an object")
+    return value
+
+
+def exact_fields(value: dict[str, Any], fields: set[str], label: str) -> None:
+    if set(value) != fields:
+        raise AuthoritativeReplayError(f"{label} fields are not canonical")
+
+
+def load_json(path: pathlib.Path, label: str, maximum: int = MAX_JSON) -> Any:
+    try:
+        raw = path.read_bytes()
+    except OSError as error:
+        raise AuthoritativeReplayError(f"{label} is unavailable") from error
+    if not raw or len(raw) > maximum:
+        raise AuthoritativeReplayError(f"{label} exceeds its size limit")
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise AuthoritativeReplayError(f"{label} is not UTF-8 JSON") from error
+
+
+def decode_file(source: pathlib.Path, destination: pathlib.Path, maximum: int) -> None:
+    try:
+        encoded_size = source.stat().st_size
+        if encoded_size < 1 or encoded_size > ((maximum + 2) // 3) * 4:
+            raise AuthoritativeReplayError("encoded replay input exceeds its size limit")
+        decoded = base64.b64decode(source.read_bytes(), validate=True)
+    except (OSError, ValueError) as error:
+        raise AuthoritativeReplayError("encoded replay input is invalid") from error
+    if not decoded or len(decoded) > maximum:
+        raise AuthoritativeReplayError("decoded replay input exceeds its size limit")
+    descriptor = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, "wb") as output:
+        output.write(decoded)
+
+
+def sha256(path: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as error:
+        raise AuthoritativeReplayError("replay input cannot be hashed") from error
+    return digest.hexdigest()
+
+
+def validate_expectation(value: Any, request: dict[str, Any]) -> dict[str, Any]:
+    expectation = object_value(value, "archive expectation")
+    exact_fields(
+        expectation,
+        {
+            "schema_version",
+            "submission_id",
+            "archive_ciphertext_sha256",
+            "plaintext_tar_sha256",
+            "plaintext_tar_size",
+        },
+        "archive expectation",
+    )
+    source = request["source"]
+    if source.get("visibility") != "private":
+        raise AuthoritativeReplayError("authoritative archive replay requires private source")
+    archive = source["archive"]
+    expected = {
+        "schema_version": 1,
+        "submission_id": request["result"]["submission_id"],
+        "archive_ciphertext_sha256": archive["archive_ciphertext_sha256"],
+    }
+    for field, wanted in expected.items():
+        if expectation.get(field) != wanted:
+            raise AuthoritativeReplayError(f"archive expectation {field} mismatch")
+    size = expectation["plaintext_tar_size"]
+    digest = expectation["plaintext_tar_sha256"]
+    if (
+        isinstance(size, bool)
+        or not isinstance(size, int)
+        or size < 1
+        or size > MAX_PLAINTEXT
+        or not isinstance(digest, str)
+        or len(digest) != 64
+        or any(character not in "0123456789abcdef" for character in digest)
+    ):
+        raise AuthoritativeReplayError("archive plaintext expectation is invalid")
+    return expectation
+
+
+def validate_profile_lock(value: Any, request: dict[str, Any]) -> dict[str, Any]:
+    lock = object_value(value, "profile lock")
+    exact_fields(
+        lock,
+        {
+            "schema_version",
+            "benchmark_repository",
+            "benchmark_commit",
+            "toolchain",
+            "runner_profile",
+            "go_toolchain",
+            "rust_toolchain",
+            "cache_state",
+            "measurement_command",
+            "components",
+        },
+        "profile lock",
+    )
+    profile = request["execution_profile"]
+    expected = {
+        "schema_version": 1,
+        "benchmark_repository": request["benchmark"]["repository"],
+        "benchmark_commit": request["benchmark"]["commit"],
+        "toolchain": request["benchmark"]["toolchain"],
+        "runner_profile": profile["runner_profile"],
+        "go_toolchain": profile["go_toolchain"],
+        "rust_toolchain": profile["rust_toolchain"],
+        "cache_state": profile["cache_state"],
+        "measurement_command": profile["measurement_command"],
+        "components": profile["components"],
+    }
+    if lock != expected:
+        raise AuthoritativeReplayError("request does not match the baked profile lock")
+    try:
+        baked_commit = (BENCHMARK / ".lean-eval-commit").read_text(
+            encoding="ascii"
+        ).strip()
+        baked_toolchain = (BENCHMARK / "lean-toolchain").read_text(
+            encoding="ascii"
+        ).strip()
+    except (OSError, UnicodeError) as error:
+        raise AuthoritativeReplayError("baked benchmark identity is unavailable") from error
+    if baked_commit != lock["benchmark_commit"] or baked_toolchain != lock["toolchain"]:
+        raise AuthoritativeReplayError("baked benchmark identity mismatch")
+    return lock
+
+
+def platform_evidence() -> tuple[str, str, str]:
+    cpu_model = "unavailable"
+    try:
+        cpuinfo = pathlib.Path("/proc/cpuinfo").read_text(encoding="utf-8")
+        for line in cpuinfo.splitlines():
+            if line.lower().startswith("model name") and ":" in line:
+                cpu_model = line.split(":", 1)[1].strip()[:256] or "unavailable"
+                break
+    except OSError:
+        pass
+    identity = os.uname()
+    return identity.machine[:128], identity.release[:256], cpu_model
+
+
+def validate_runtime_profile(
+    request: dict[str, Any], architecture: str, kernel_release: str, cpu_model: str
+) -> None:
+    profile = request["execution_profile"]
+    if (
+        architecture != profile["architecture"]
+        or kernel_release != profile["kernel_release"]
+        or cpu_model != profile["cpu_model"]
+    ):
+        raise AuthoritativeReplayError("runtime does not match the execution profile")
+
+
+def extract_archive(path: pathlib.Path, destination: pathlib.Path) -> pathlib.Path:
+    try:
+        archive = tarfile.open(path, "r:gz")
+    except (OSError, tarfile.TarError) as error:
+        raise AuthoritativeReplayError("decrypted archive is invalid") from error
+    with archive:
+        members = archive.getmembers()
+        if not members or len(members) > MAX_MEMBERS:
+            raise AuthoritativeReplayError("decrypted archive member count is invalid")
+        expanded = 0
+        validated: list[tuple[tarfile.TarInfo, pathlib.PurePosixPath]] = []
+        for member in members:
+            relative = pathlib.PurePosixPath(member.name)
+            if (
+                relative.is_absolute()
+                or not relative.parts
+                or relative.parts[0] != "source"
+                or any(part in {"", ".", "..", ".git"} for part in relative.parts)
+                or not (member.isfile() or member.isdir())
+            ):
+                raise AuthoritativeReplayError("decrypted archive contains an unsafe member")
+            if member.isfile():
+                expanded += member.size
+                if member.size < 0 or expanded > MAX_EXPANDED:
+                    raise AuthoritativeReplayError("decrypted archive expands beyond its limit")
+            validated.append((member, relative))
+        destination.mkdir(mode=0o700, parents=True, exist_ok=False)
+        for member, relative in validated:
+            target = destination.joinpath(*relative.parts)
+            if member.isdir():
+                target.mkdir(mode=0o700, parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            source = archive.extractfile(member)
+            if source is None:
+                raise AuthoritativeReplayError("archive member cannot be read")
+            descriptor = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with source, os.fdopen(descriptor, "wb") as output:
+                shutil.copyfileobj(source, output, 1024 * 1024)
+    source_root = destination / "source"
+    if not source_root.is_dir():
+        raise AuthoritativeReplayError("archive has no source directory")
+    return source_root
+
+
+def source_statistics(source_root: pathlib.Path, problem_id: str) -> tuple[int, int]:
+    try:
+        from evaluate_submission import detect_matches
+    except ImportError as error:
+        raise AuthoritativeReplayError("baked evaluator is unavailable") from error
+    matches = [
+        match
+        for match in detect_matches(source_root, {problem_id})
+        if match.skip_reason is None
+    ]
+    if len(matches) != 1:
+        raise AuthoritativeReplayError("archive does not contain one locked workspace")
+    workspace = matches[0].source_dir
+    paths = [workspace / "Submission.lean"]
+    submission_dir = workspace / "Submission"
+    if submission_dir.is_dir():
+        paths.extend(sorted(submission_dir.rglob("*.lean")))
+    lines = 0
+    for path in paths:
+        if path.is_symlink() or not path.is_file():
+            raise AuthoritativeReplayError("submission statistics found an unsafe file")
+        try:
+            lines += len(path.read_bytes().splitlines())
+        except OSError as error:
+            raise AuthoritativeReplayError("submission statistics cannot read source") from error
+    return len(paths), lines
+
+
+def counter_or_unavailable(record: dict[str, Any]) -> dict[str, Any]:
+    counter = record["retired_instructions"]
+    if counter["status"] == "measured":
+        return {"status": "measured", "value": counter["value"]}
+    return {"status": "unavailable", "reason": counter["reason"]}
+
+
+def build_verdict(
+    request: dict[str, Any],
+    results: Any,
+    metrics_value: Any,
+    file_count: int,
+    lines_of_code: int,
+) -> dict[str, Any]:
+    metrics = object_value(metrics_value, "measurement evidence")
+    exact_fields(metrics, {"schema_version", "phases"}, "measurement evidence")
+    phases = object_value(metrics["phases"], "measurement phases")
+    if metrics["schema_version"] != 1 or set(phases) != {"build", "checker"}:
+        raise AuthoritativeReplayError("measurement evidence schema is invalid")
+    normalized: dict[str, dict[str, Any]] = {}
+    for phase in ("build", "checker"):
+        record = object_value(phases[phase], f"{phase} measurement")
+        exact_fields(
+            record,
+            {"invocations", "wall_time_ms", "retired_instructions"},
+            f"{phase} measurement",
+        )
+        if (
+            isinstance(record["invocations"], bool)
+            or not isinstance(record["invocations"], int)
+            or record["invocations"] < 0
+            or isinstance(record["wall_time_ms"], bool)
+            or not isinstance(record["wall_time_ms"], int)
+            or record["wall_time_ms"] < 0
+        ):
+            raise AuthoritativeReplayError("measurement integer is invalid")
+        counter = object_value(record["retired_instructions"], "measurement counter")
+        if counter.get("status") == "measured":
+            if set(counter) != {"status", "value"} or (
+                isinstance(counter["value"], bool)
+                or not isinstance(counter["value"], int)
+                or counter["value"] < 0
+            ):
+                raise AuthoritativeReplayError("measured counter is invalid")
+        elif counter.get("status") == "unavailable":
+            if set(counter) != {"status", "reason"} or counter["reason"] not in {
+                "counter_not_reported",
+                "counter_not_supported",
+                "counter_permission_denied",
+            }:
+                raise AuthoritativeReplayError("unavailable counter is invalid")
+        else:
+            raise AuthoritativeReplayError("measurement counter status is invalid")
+        normalized[phase] = record
+    result = object_value(results, "evaluator results")
+    exact_fields(result, {"passed", "statement_revisions"}, "evaluator results")
+    passed = result["passed"]
+    problem_id = request["result"]["problem_id"]
+    revision = request["result"]["statement_revision"]
+    if passed == [problem_id] and result["statement_revisions"] == {problem_id: revision}:
+        checker_outcome = "accepted"
+    elif passed == [] and result["statement_revisions"] == {}:
+        checker_outcome = "rejected"
+    else:
+        raise AuthoritativeReplayError("evaluator results escape the locked problem")
+    build = normalized["build"]
+    checker = normalized["checker"]
+    if checker_outcome == "accepted" and (
+        build["invocations"] != 2 or checker["invocations"] != 1
+    ):
+        raise AuthoritativeReplayError("accepted result has impossible phase counts")
+    if checker_outcome == "rejected" and (
+        build["invocations"] not in {1, 2} or checker["invocations"] not in {0, 1}
+    ):
+        raise AuthoritativeReplayError("rejected result has impossible phase counts")
+    checker_counter = (
+        counter_or_unavailable(checker)
+        if checker["invocations"] > 0
+        else {"status": "unavailable", "reason": "counter_not_reported"}
+    )
+    return {
+        "schema_version": 1,
+        "replay_task_id": request["replay_task_id"],
+        "attempt": request["attempt"],
+        "execution_outcome": "completed",
+        "checker_outcome": checker_outcome,
+        "failure_reason": None,
+        "statistics": {
+            "checker_wall_time_ms": checker["wall_time_ms"],
+            "checker_retired_instructions": checker_counter,
+            "build_wall_time_ms": build["wall_time_ms"],
+            "build_retired_instructions": counter_or_unavailable(build),
+            "lines_of_code": lines_of_code,
+            "file_count": file_count,
+        },
+    }
+
+
+def network_probe() -> None:
+    result = subprocess.run(
+        ["curl", "--fail", "--silent", "--show-error", "--max-time", "5", "https://example.com/"],
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env={"PATH": "/usr/bin:/bin"},
+    )
+    if result.returncode == 0:
+        raise AuthoritativeReplayError("network isolation failed")
+
+
+def main() -> None:
+    os.umask(0o077)
+    sys.path.insert(0, str(INSTALL))
+    from replay_orchestrator import validate_execution_request, validate_verdict
+
+    scratch = WORKSPACE / "authoritative"
+    ciphertext = WORKSPACE / "accepted-source.tar.gz.age"
+    identity = WORKSPACE / "accepted-source.identity.age"
+    plaintext = WORKSPACE / "accepted-source.tar.gz"
+    output = WORKSPACE / "replay-output"
+    try:
+        request = validate_execution_request(
+            load_json(WORKSPACE / "replay-request.json", "execution request")
+        )
+        expectation = validate_expectation(
+            load_json(WORKSPACE / "archive-expectation.json", "archive expectation", 4096),
+            request,
+        )
+        validate_profile_lock(
+            load_json(INSTALL / "replay-profile-lock.json", "profile lock", 4096),
+            request,
+        )
+        validate_runtime_profile(request, *platform_evidence())
+        decode_file(WORKSPACE / "archive.tar.gz.age.b64", ciphertext, MAX_CIPHERTEXT)
+        decode_file(WORKSPACE / "identity.age.b64", identity, 4096)
+        if sha256(ciphertext) != expectation["archive_ciphertext_sha256"]:
+            raise AuthoritativeReplayError("ciphertext digest mismatch")
+        decrypt = subprocess.run(
+            ["age", "--decrypt", "--identity", str(identity), "--output", str(plaintext), str(ciphertext)],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env={"PATH": "/usr/local/bin:/usr/bin:/bin"},
+        )
+        identity.unlink(missing_ok=True)
+        if decrypt.returncode != 0 or not plaintext.is_file():
+            raise AuthoritativeReplayError("archive decryption failed")
+        if (
+            plaintext.stat().st_size != expectation["plaintext_tar_size"]
+            or sha256(plaintext) != expectation["plaintext_tar_sha256"]
+        ):
+            raise AuthoritativeReplayError("archive plaintext identity mismatch")
+        source_root = extract_archive(plaintext, scratch)
+        plaintext.unlink(missing_ok=True)
+        network_probe()
+        problem_id = request["result"]["problem_id"]
+        revision = request["result"]["statement_revision"]
+        file_count, lines_of_code = source_statistics(source_root, problem_id)
+        METRICS.unlink(missing_ok=True)
+        process = subprocess.run(
+            [
+                "/usr/bin/python3",
+                str(INSTALL / "evaluate_submission.py"),
+                "--source-dir",
+                str(source_root),
+                "--generated-root",
+                str(BENCHMARK / "generated"),
+                "--manifest-dir",
+                str(BENCHMARK / "manifests" / "problems"),
+                "--output-dir",
+                str(output),
+                "--repo-root",
+                str(BENCHMARK),
+                "--shared-packages",
+                str(BENCHMARK / ".lake" / "packages"),
+                "--problem-id",
+                problem_id,
+                "--statement-revision",
+                str(revision),
+                "--measurement-command-json",
+                '["/opt/lean-eval/replay-measure"]',
+                "--preprimed-workspaces",
+            ],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env={
+                "PATH": "/opt/lean-eval/bin:/root/.elan/bin:/usr/local/bin:/usr/bin:/bin",
+                "HOME": "/opt/lean-eval/home",
+                "COMPARATOR_BIN": "/opt/lean-eval/bin/comparator",
+                "COMPARATOR_LANDRUN": "/usr/local/bin/landrun",
+            },
+        )
+        if process.returncode != 0:
+            raise AuthoritativeReplayError("locked evaluator failed")
+        verdict = build_verdict(
+            request,
+            load_json(output / "results.json", "evaluator results", 64 * 1024),
+            load_json(METRICS, "measurement evidence", 16 * 1024),
+            file_count,
+            lines_of_code,
+        )
+        validate_verdict(verdict, request)
+        print(json.dumps(verdict, separators=(",", ":"), sort_keys=True))
+    finally:
+        identity.unlink(missing_ok=True)
+        plaintext.unlink(missing_ok=True)
+        ciphertext.unlink(missing_ok=True)
+        METRICS.unlink(missing_ok=True)
+        shutil.rmtree(scratch, ignore_errors=True)
+        shutil.rmtree(output, ignore_errors=True)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (AuthoritativeReplayError, ValueError, OSError) as error:
+        print(f"replay-authoritative: {error}", file=sys.stderr)
+        raise SystemExit(1)

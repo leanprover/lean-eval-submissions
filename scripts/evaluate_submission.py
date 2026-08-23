@@ -309,6 +309,29 @@ def _share_packages(
     return None
 
 
+def _configure_measurement(target: pathlib.Path, command: list[str] | None) -> None:
+    """Add one trusted comparator adapter to the pristine workspace config."""
+    if command is None:
+        return
+    if not command or any(
+        not isinstance(argument, str) or not argument or "\0" in argument
+        for argument in command
+    ):
+        raise EvaluateError("measurement command must be a non-empty safe argv array")
+    path = target / "config.json"
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise EvaluateError(f"Cannot configure measurement in {path}: {exc}") from exc
+    if not isinstance(value, dict) or "measurement_command" in value:
+        raise EvaluateError("pristine config cannot accept a measurement command")
+    value["measurement_command"] = command
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def _prime_workspace(target: pathlib.Path) -> None:
     """Populate the workspace's packages outside of landrun.
 
@@ -378,13 +401,25 @@ def _prime_workspace(target: pathlib.Path) -> None:
             )
 
 
+def _require_preprimed_workspace(target: pathlib.Path) -> None:
+    """Verify the network-free replay image already primed this workspace."""
+    manifest = target / "lake-manifest.json"
+    packages = target / ".lake" / "packages"
+    if manifest.is_symlink() or not manifest.is_file():
+        raise EvaluateError(f"Preprimed workspace manifest is unavailable: {manifest}")
+    if not packages.is_symlink() or not packages.resolve().is_dir():
+        raise EvaluateError(f"Preprimed workspace packages are unavailable: {packages}")
+
+
 def overlay_match(
     match: WorkspaceMatch,
     *,
     generated_root: pathlib.Path,
     workspaces_root: pathlib.Path,
     shared_packages: pathlib.Path | None = None,
+    measurement_command: list[str] | None = None,
     prime: bool = True,
+    require_preprimed: bool = False,
 ) -> dict:
     """Copy generated/<id>/ to workspaces/<id>/, overlay submitter content.
 
@@ -419,6 +454,7 @@ def overlay_match(
             "shared_packages": False,
         }
     _copy_tree(pristine, target)
+    _configure_measurement(target, measurement_command)
 
     shared_state: bool | str = False
     if shared_packages is not None:
@@ -474,6 +510,8 @@ def overlay_match(
     #    packages into paths landrun will deny.
     if prime:
         _prime_workspace(target)
+    elif require_preprimed:
+        _require_preprimed_workspace(target)
 
     return {
         "problem_id": match.problem_id,
@@ -587,6 +625,8 @@ def evaluate_submission(
     shared_packages: pathlib.Path | None = None,
     problem_id: str | None = None,
     statement_revision: int | None = None,
+    measurement_command: list[str] | None = None,
+    preprimed_workspaces: bool = False,
     run_eval_runner=None,
 ) -> dict:
     """Run the full evaluation pipeline and write results.json + summary.json.
@@ -637,10 +677,12 @@ def evaluate_submission(
                 generated_root=generated_root,
                 workspaces_root=workspaces_root,
                 shared_packages=shared_packages,
+                measurement_command=measurement_command,
                 # If a fake run-eval runner is injected (tests), the
                 # synthetic pristine workspaces don't carry a real lakefile
                 # so skip the real `lake update` + `lake exe cache get`.
-                prime=run_eval_runner is None,
+                prime=run_eval_runner is None and not preprimed_workspaces,
+                require_preprimed=preprimed_workspaces,
             )
             overlay_records.append(record)
             if record["overlaid"]:
@@ -742,7 +784,29 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Require this exact revision for --problem-id.",
     )
+    parser.add_argument(
+        "--measurement-command-json",
+        default=None,
+        help="Trusted replay-only comparator measurement adapter as a JSON argv array.",
+    )
+    parser.add_argument(
+        "--preprimed-workspaces",
+        action="store_true",
+        help="Require baked manifests/packages and perform no workspace network setup.",
+    )
     return parser.parse_args(argv)
+
+
+def _measurement_command(raw: str | None) -> list[str] | None:
+    if raw is None:
+        return None
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise EvaluateError("measurement command is not JSON") from exc
+    if not isinstance(value, list):
+        raise EvaluateError("measurement command must be a JSON argv array")
+    return value
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -770,6 +834,8 @@ def main(argv: list[str] | None = None) -> int:
             ),
             problem_id=args.problem_id,
             statement_revision=args.statement_revision,
+            measurement_command=_measurement_command(args.measurement_command_json),
+            preprimed_workspaces=args.preprimed_workspaces,
         )
     except EvaluateError as exc:
         print(str(exc), file=sys.stderr)
