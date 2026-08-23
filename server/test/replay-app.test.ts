@@ -110,6 +110,7 @@ describe("Cloudflare replay executor", () => {
     const execution = body.request as Record<string, unknown>;
     const writes: string[] = [];
     const commands: string[] = [];
+    const timeouts: number[] = [];
     let destroyed = false;
     const response = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {
       method: "POST",
@@ -121,8 +122,9 @@ describe("Cloudflare replay executor", () => {
           writes.push(path);
           return Promise.resolve({ success: true, path, timestamp: "fixture" });
         },
-        exec: (command) => {
+        exec: (command, options) => {
           commands.push(command);
+          timeouts.push(options?.timeout ?? 0);
           return Promise.resolve({
             success: true,
             exitCode: 0,
@@ -156,6 +158,7 @@ describe("Cloudflare replay executor", () => {
     });
     expect(response.status).toBe(200);
     expect(commands).toEqual(["/opt/lean-eval/replay-authoritative"]);
+    expect(timeouts).toEqual([20_100_000]);
     expect(writes).toEqual([
       "/workspace/replay-request.json",
       "/workspace/archive-expectation.json",
