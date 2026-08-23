@@ -197,6 +197,9 @@ jobs:
               "staging_acceptance_enabled": True,
               "staging_memory_limit_bytes": 12 * 1024**3,
               "production_memory_gate_bytes": 12 * 1024**3,
+              "reviewed_execution_profile_digest": "0" * 64,
+              "reviewed_measurement_config_digest": "0" * 64,
+              "reviewed_vm_image_digest": "sha256:" + "0" * 64,
           }
           PY
             then
@@ -287,6 +290,9 @@ jobs:
               "staging_acceptance_enabled": False,
               "staging_memory_limit_bytes": 12 * 1024**3,
               "production_memory_gate_bytes": 12 * 1024**3,
+              "reviewed_execution_profile_digest": "0" * 64,
+              "reviewed_measurement_config_digest": "0" * 64,
+              "reviewed_vm_image_digest": "sha256:" + "0" * 64,
           }
           PY
             then

@@ -1,5 +1,10 @@
 import type { Sandbox } from "@cloudflare/sandbox";
 
+import {
+  AuthoritativeReplayContractError,
+  readAuthoritativeReplayRequest,
+  validateReplayVerdict,
+} from "./authoritative-replay-contract";
 import { ReplayAuthError, type ReplayAuthEnvironment, verifyGithubOidc } from "./replay-auth";
 import {
   ReplayArchiveContractError,
@@ -20,6 +25,9 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
   STAGING_ACCEPTANCE_ENABLED: string;
   STAGING_MEMORY_LIMIT_BYTES: string;
   PRODUCTION_MEMORY_GATE_BYTES: string;
+  REVIEWED_EXECUTION_PROFILE_DIGEST: string;
+  REVIEWED_MEASUREMENT_CONFIG_DIGEST: string;
+  REVIEWED_VM_IMAGE_DIGEST: string;
 };
 
 type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy">;
@@ -50,6 +58,9 @@ function health(env: ReplayRuntimeEnv): Response {
     staging_acceptance_enabled: env.STAGING_ACCEPTANCE_ENABLED === "true",
     staging_memory_limit_bytes: Number(env.STAGING_MEMORY_LIMIT_BYTES),
     production_memory_gate_bytes: Number(env.PRODUCTION_MEMORY_GATE_BYTES),
+    reviewed_execution_profile_digest: env.REVIEWED_EXECUTION_PROFILE_DIGEST,
+    reviewed_measurement_config_digest: env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
+    reviewed_vm_image_digest: env.REVIEWED_VM_IMAGE_DIGEST,
   });
 }
 
@@ -62,8 +73,61 @@ export async function handleReplayRequest(
   if (request.method === "GET" && url.pathname === "/healthz") return health(env);
   const syntheticAcceptance = url.pathname === "/api/v1/staging-acceptance";
   const archiveAcceptance = url.pathname === "/api/v1/staging-archive-acceptance";
-  if ((!syntheticAcceptance && !archiveAcceptance) || request.method !== "POST") {
+  const authoritativeReplay = url.pathname === "/api/v1/replay";
+  if ((!syntheticAcceptance && !archiveAcceptance && !authoritativeReplay) || request.method !== "POST") {
     return json({ error: "not_found" }, 404);
+  }
+  if (authoritativeReplay && env.REPLAY_ENABLED !== "true") {
+    return json({ error: "replay_disabled" }, 503);
+  }
+  if (authoritativeReplay) {
+    try {
+      await dependencies.authenticate(request, env);
+      const input = await readAuthoritativeReplayRequest(
+        request,
+        env.REVIEWED_EXECUTION_PROFILE_DIGEST,
+        env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
+        env.REVIEWED_VM_IMAGE_DIGEST,
+      );
+      const sandbox = dependencies.sandbox(env, input.runner_nonce);
+      const verdict = await (async () => {
+        try {
+          const write = async (path: string, contents: string): Promise<void> => {
+            const result = await sandbox.writeFile(path, contents);
+            if (!result.success || result.path !== path) {
+              throw new Error("authoritative replay input transfer failed");
+            }
+          };
+          await write("/workspace/replay-request.json", JSON.stringify(input.request));
+          await write(
+            "/workspace/archive-expectation.json",
+            JSON.stringify(input.archive_expectation),
+          );
+          await write("/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
+          await write("/workspace/identity.age.b64", input.plaintext_identity_base64);
+          const result = await sandbox.exec("/opt/lean-eval/replay-authoritative", {
+            timeout: 21_900_000,
+          });
+          if (!result.success || result.stdout.length > 64 * 1024) {
+            throw new Error("authoritative replay command failed");
+          }
+          try {
+            return validateReplayVerdict(JSON.parse(result.stdout) as unknown, input);
+          } catch {
+            throw new Error("authoritative replay verdict was invalid");
+          }
+        } finally {
+          await sandbox.destroy();
+        }
+      })();
+      return json({ schema_version: 1, verdict, destruction: "confirmed" });
+    } catch (error) {
+      if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
+      if (error instanceof AuthoritativeReplayContractError || error instanceof SyntaxError) {
+        return json({ error: "invalid_request" }, 400);
+      }
+      return json({ error: "executor_failed" }, 500);
+    }
   }
   if (env.DEPLOYMENT_ENVIRONMENT !== "staging" || env.STAGING_ACCEPTANCE_ENABLED !== "true") {
     return json({ error: "staging_acceptance_disabled" }, 503);
