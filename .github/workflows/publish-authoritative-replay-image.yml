@@ -90,6 +90,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
+          umask 077
           npx --prefix server wrangler containers images list \
             --filter '^lean-eval-authoritative$' --json \
             > "$RUNNER_TEMP/registry-images.json"
@@ -108,7 +109,7 @@ jobs:
             exit 1
           fi
           npx --prefix server wrangler containers push "$IMAGE"
-          npx --prefix server wrangler containers registries credentials \
+          timeout 60s npx --prefix server wrangler containers registries credentials \
             registry.cloudflare.com --pull --expiration-minutes 5 --json \
             > "$RUNNER_TEMP/registry-credentials.json"
           registry_username=$(jq -er .username "$RUNNER_TEMP/registry-credentials.json")
@@ -117,6 +118,7 @@ jobs:
           echo "::add-mask::$registry_password"
           trap 'unset registry_username registry_password; rm -f "$RUNNER_TEMP/registry-credentials.json" "$RUNNER_TEMP/registry-headers" "$RUNNER_TEMP/registry-images.json"' EXIT
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 30 \
             --user "$registry_username:$registry_password" \
             --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
             --head \

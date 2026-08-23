@@ -33,6 +33,9 @@ class AuthoritativeReplayImagePublishTests(unittest.TestCase):
         self.assertIn('registry_username=$(jq -er .username', workflow)
         self.assertIn('--user "$registry_username:$registry_password"', workflow)
         self.assertEqual(workflow.count("::add-mask::"), 2)
+        self.assertIn("umask 077", workflow)
+        self.assertIn("timeout 60s npx", workflow)
+        self.assertIn("--max-time 30", workflow)
 
     def test_publish_repeats_the_image_content_and_size_gates(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
