@@ -176,7 +176,8 @@ sandbox (see `leanprover/lean-eval`'s `SECURITY.md` §3 for the full
 The `record` job then writes the result. It uses **two checkouts of this
 repo**: a read-only `code/` checkout (pinned to the workflow SHA, supplies
 `update_leaderboard.py`) and a writable `results-store/` checkout. The
-push-retry loop resets `results-store/` to `origin/main` between attempts;
+push-retry loop resets `results-store/` to the selected protected Results
+branch (`main` for production/issues, `staging-results` for staging) between attempts;
 keeping the script in a separate checkout means the loop cannot reset the
 running script out from under itself.
 

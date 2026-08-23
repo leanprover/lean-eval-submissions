@@ -6,7 +6,7 @@ const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const DISPATCH_REF = /^lean-eval-dispatch\/([0-9a-f]{40})$/;
 
-type Authority = "source" | "dispatch";
+type Authority = "source" | "dispatch" | "results";
 type BrokerRequest = Readonly<{
   schema_version: 1;
   audience: "lean-eval-submission-server";
@@ -115,7 +115,7 @@ function decodeRequest(value: unknown): BrokerRequest {
   if (
     data.schema_version !== 1 ||
     data.audience !== "lean-eval-submission-server" ||
-    (data.authority !== "source" && data.authority !== "dispatch") ||
+    (data.authority !== "source" && data.authority !== "dispatch" && data.authority !== "results") ||
     (data.method !== "GET" && data.method !== "POST" && data.method !== "PATCH") ||
     typeof data.url !== "string" ||
     (data.body !== null && typeof data.body !== "string") ||
@@ -203,11 +203,28 @@ function assertDispatchRequest(request: BrokerRequest, url: URL, env: BrokerRunt
   return repository;
 }
 
+function assertResultsRequest(request: BrokerRequest, url: URL, env: BrokerRuntimeEnv): string {
+  const { repository, suffix } = repositoryFromPath(url.pathname);
+  if (
+    request.method !== "GET" ||
+    request.body !== null ||
+    request.expected_commit === null ||
+    repository.toLowerCase() !== env.DISPATCH_REPOSITORY.toLowerCase() ||
+    !/^\/contents\/results\/[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?\.json$/.test(suffix) ||
+    url.searchParams.size !== 1 ||
+    url.searchParams.get("ref") !== request.expected_commit
+  ) {
+    throw new BrokerError(403, "result verification operation was not allowlisted");
+  }
+  return repository;
+}
+
 function appFor(authority: Authority, env: BrokerRuntimeEnv): GitHubApp {
-  const appId = authority === "dispatch" ? env.DISPATCH_APP_ID : env.SOURCE_APP_ID;
-  const privateKey = authority === "dispatch" ? env.DISPATCH_APP_PRIVATE_KEY : env.SOURCE_APP_PRIVATE_KEY;
+  const dispatchAuthority = authority === "dispatch" || authority === "results";
+  const appId = dispatchAuthority ? env.DISPATCH_APP_ID : env.SOURCE_APP_ID;
+  const privateKey = dispatchAuthority ? env.DISPATCH_APP_PRIVATE_KEY : env.SOURCE_APP_PRIVATE_KEY;
   if (!appId || !APP_ID.test(appId) || !privateKey) {
-    throw new BrokerError(503, `${authority === "dispatch" ? "dispatch" : "source"} GitHub App is not configured`);
+    throw new BrokerError(503, `${dispatchAuthority ? "dispatch" : "source"} GitHub App is not configured`);
   }
   return { appId, privateKey };
 }
@@ -396,6 +413,31 @@ async function validateSourceResponse(response: Response, request: BrokerRequest
   }
 }
 
+async function validateResultsResponse(response: Response, url: URL): Promise<void> {
+  if (!response.ok) return;
+  let data: Record<string, unknown>;
+  try {
+    data = object(await response.clone().json<unknown>(), "GitHub result response");
+  } catch (error) {
+    if (error instanceof BrokerError) throw error;
+    throw new BrokerError(502, "GitHub result response was not valid JSON");
+  }
+  const expectedPath = repositoryFromPath(url.pathname).suffix.slice("/contents/".length);
+  if (
+    data.type !== "file" ||
+    data.path !== expectedPath ||
+    data.encoding !== "base64" ||
+    typeof data.content !== "string" ||
+    data.content.length > 3 * 1024 * 1024 ||
+    typeof data.size !== "number" ||
+    !Number.isSafeInteger(data.size) ||
+    data.size < 1 ||
+    data.size > 2 * 1024 * 1024
+  ) {
+    throw new BrokerError(502, "GitHub result response fields were invalid");
+  }
+}
+
 async function proxy(
   brokerRequest: BrokerRequest,
   env: BrokerRuntimeEnv,
@@ -413,7 +455,9 @@ async function proxy(
   }
   const repository = brokerRequest.authority === "source"
     ? assertSourceRequest(brokerRequest, url)
-    : assertDispatchRequest(brokerRequest, url, env);
+    : brokerRequest.authority === "dispatch"
+      ? assertDispatchRequest(brokerRequest, url, env)
+      : assertResultsRequest(brokerRequest, url, env);
   const token = await installationToken(brokerRequest.authority, repository, env, fetcher, nowMs);
   const headers = githubHeaders(token);
   if (brokerRequest.body !== null) headers.set("content-type", "application/json");
@@ -425,6 +469,8 @@ async function proxy(
   });
   if (brokerRequest.authority === "source") {
     await validateSourceResponse(response, brokerRequest, url, repository);
+  } else if (brokerRequest.authority === "results") {
+    await validateResultsResponse(response, url);
   }
   return safeResponse(response);
 }

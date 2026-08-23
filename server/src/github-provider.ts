@@ -3,6 +3,10 @@ const OAUTH_TOKEN_URL = "https://github.com/login/oauth/access_token";
 const LOGIN = /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const DISPATCH_REF = /^lean-eval-dispatch\/([0-9a-f]{40})$/;
+const RESULT_ID = /^r2_[0-9a-f]{64}$/;
+const MAX_RESULT_FILE_BYTES = 2 * 1024 * 1024;
+const RESULT_ID_DOMAIN = "lean-eval-result-v2\0";
+const RESULT_TREE_DOMAIN = "lean-eval-result-tree-v1\0";
 
 export type ProviderFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -10,6 +14,10 @@ export type GitHubIdentity = Readonly<{ id: number; login: string }>;
 export type GitHubRepository = Readonly<{
   fullName: string;
   private: boolean;
+}>;
+export type VerifiedResult = Readonly<{
+  resultId: string;
+  treeDigest: string;
 }>;
 
 export class GitHubProviderError extends Error {
@@ -53,17 +61,40 @@ async function jsonResponse(response: Response, label: string): Promise<Record<s
   }
 }
 
+async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function expectedResultId(
+  login: string,
+  declaredModel: string,
+  problemId: string,
+  statementRevision: number,
+): Promise<string> {
+  const identity = JSON.stringify([login.toLowerCase(), declaredModel, problemId, statementRevision]);
+  return `r2_${await sha256Hex(new TextEncoder().encode(RESULT_ID_DOMAIN + identity))}`;
+}
+
+async function resultTreeDigest(path: string, contents: Uint8Array): Promise<string> {
+  const fileDigest = await sha256Hex(contents);
+  const entry = JSON.stringify([{ path, sha256: fileDigest, size: contents.byteLength }]);
+  return sha256Hex(new TextEncoder().encode(RESULT_TREE_DOMAIN + entry));
+}
+
 export class GitHubProvider {
   readonly #fetcher: ProviderFetch;
   readonly #verificationToken: string | undefined;
   readonly #verificationFetcher: ProviderFetch | undefined;
   readonly #dispatchFetcher: ProviderFetch | undefined;
+  readonly #resultFetcher: ProviderFetch | undefined;
 
   constructor(
     fetcher: ProviderFetch = fetch,
     verificationToken?: string,
     verificationFetcher?: ProviderFetch,
     dispatchFetcher?: ProviderFetch,
+    resultFetcher?: ProviderFetch,
   ) {
     // A Worker runtime fetch function must be invoked without rebinding its
     // receiver. Calling a function-valued private field as `this.#fetcher()`
@@ -77,6 +108,9 @@ export class GitHubProvider {
     this.#dispatchFetcher = dispatchFetcher === undefined
       ? undefined
       : (input, init) => dispatchFetcher(input, init);
+    this.#resultFetcher = resultFetcher === undefined
+      ? undefined
+      : (input, init) => resultFetcher(input, init);
   }
 
   async exchangeOAuth(
@@ -217,6 +251,113 @@ export class GitHubProvider {
       signal: AbortSignal.timeout(5000),
     });
     if (response.status !== 204) throw await error(response);
+  }
+
+  async verifyResult(
+    completion: Readonly<{
+      result_id: string;
+      result_repository: string;
+      result_commit: string;
+      result_path: string;
+      result_tree_digest: string;
+    }>,
+    expected: Readonly<{
+      login: string;
+      declaredModel: string;
+      problemId: string;
+      statementRevision: number;
+    }>,
+  ): Promise<VerifiedResult> {
+    if (!this.#resultFetcher) {
+      throw new GitHubProviderError(503, "result verification authority is not configured");
+    }
+    if (
+      completion.result_repository !== "leanprover/lean-eval-submissions" ||
+      !COMMIT.test(completion.result_commit) ||
+      completion.result_path !== `results/${expected.login.toLowerCase()}.json` ||
+      !RESULT_ID.test(completion.result_id)
+    ) {
+      throw new GitHubProviderError(409, "result locator does not match the accepted identity");
+    }
+    const query = new URLSearchParams({ ref: completion.result_commit });
+    const headers = providerHeaders();
+    headers.set("x-lean-eval-expected-commit", completion.result_commit);
+    const response = await this.#resultFetcher(
+      `${API}/repos/${completion.result_repository}/contents/${completion.result_path}?${query.toString()}`,
+      { headers, signal: AbortSignal.timeout(5000) },
+    );
+    const data = await jsonResponse(response, "result contents response");
+    if (
+      data.type !== "file" ||
+      data.path !== completion.result_path ||
+      data.encoding !== "base64" ||
+      typeof data.content !== "string" ||
+      typeof data.size !== "number" ||
+      !Number.isSafeInteger(data.size) ||
+      data.size < 1 ||
+      data.size > MAX_RESULT_FILE_BYTES
+    ) {
+      throw new GitHubProviderError(502, "result contents response fields were invalid");
+    }
+    let contents: Uint8Array;
+    try {
+      const compact = data.content.replaceAll(/\s/g, "");
+      const binary = atob(compact);
+      contents = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    } catch {
+      throw new GitHubProviderError(502, "result contents were not valid base64");
+    }
+    if (contents.byteLength !== data.size) {
+      throw new GitHubProviderError(502, "result contents size disagreed with GitHub");
+    }
+    const treeDigest = await resultTreeDigest(completion.result_path, contents);
+    if (treeDigest !== completion.result_tree_digest) {
+      throw new GitHubProviderError(409, "result tree digest did not match the exact commit");
+    }
+    let document: Record<string, unknown>;
+    try {
+      document = object(
+        JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(contents)) as unknown,
+        "result file",
+      );
+    } catch (caught) {
+      if (caught instanceof GitHubProviderError) throw caught;
+      throw new GitHubProviderError(502, "result file was not valid UTF-8 JSON");
+    }
+    if (
+      document.schema_version !== 2 ||
+      typeof document.user !== "string" ||
+      document.user.toLowerCase() !== expected.login.toLowerCase() ||
+      !Array.isArray(document.results) ||
+      document.results.length > 4096
+    ) {
+      throw new GitHubProviderError(409, "result file envelope did not match the accepted identity");
+    }
+    const identifier = await expectedResultId(
+      expected.login,
+      expected.declaredModel,
+      expected.problemId,
+      expected.statementRevision,
+    );
+    if (completion.result_id !== identifier) {
+      throw new GitHubProviderError(409, "result identifier did not match the accepted identity");
+    }
+    const matches = document.results.filter((value) => {
+      if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+      return (value as Record<string, unknown>).result_id === identifier;
+    });
+    if (matches.length !== 1) {
+      throw new GitHubProviderError(409, "result file did not contain exactly one accepted identity");
+    }
+    const record = matches[0] as Record<string, unknown>;
+    if (
+      record.problem_id !== expected.problemId ||
+      record.statement_revision !== expected.statementRevision ||
+      record.declared_model !== expected.declaredModel
+    ) {
+      throw new GitHubProviderError(409, "result record disagreed with the accepted identity");
+    }
+    return { resultId: identifier, treeDigest };
   }
 }
 

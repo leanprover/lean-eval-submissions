@@ -6,7 +6,11 @@ import {
   StateEventConflictError,
   StateUpdateOutcomeUnknownError,
 } from "../src/github-state";
-import type { StateEvent, WritableSubmissionLifecycleEvent } from "../src/state-event";
+import type {
+  StateEvent,
+  WritableResultLifecycleEvent,
+  WritableSubmissionLifecycleEvent,
+} from "../src/state-event";
 import type { SubmissionView } from "../src/submission-view";
 
 const HEAD = "1".repeat(40);
@@ -115,6 +119,73 @@ const VIEW_V2: SubmissionView = {
     occurred_at: ARCHIVE_EVENT.occurred_at,
     ...ARCHIVE_EVENT.payload,
   },
+};
+const EVALUATION_STARTED: WritableSubmissionLifecycleEvent = {
+  schema_version: 1,
+  event_id: "0198abcd-1111-7000-8000-000000000004",
+  event_type: "evaluation.started",
+  occurred_at: "2026-08-20T06:07:10.000Z",
+  subject_id: SUBMISSION_ID,
+  causation_event_id: ARCHIVE_EVENT.event_id,
+  actor: { kind: "system" },
+  payload: {
+    attempt: 1,
+    benchmark_repository: "leanprover/lean-eval",
+    benchmark_commit: "e".repeat(40),
+    toolchain: "leanprover/lean4:v4.32.0",
+  },
+};
+const EVALUATION_ACCEPTED: WritableSubmissionLifecycleEvent = {
+  schema_version: 1,
+  event_id: "0198abcd-1111-7000-8000-000000000005",
+  event_type: "evaluation.accepted",
+  occurred_at: "2026-08-20T06:07:10.001Z",
+  subject_id: SUBMISSION_ID,
+  causation_event_id: EVALUATION_STARTED.event_id,
+  actor: { kind: "system" },
+  payload: { attempt: 1, evaluator_version: "f".repeat(40) },
+};
+const ACCEPTED_VIEW: SubmissionView = {
+  ...VIEW_V2,
+  evaluation: {
+    status: "accepted",
+    event_id: EVALUATION_ACCEPTED.event_id,
+    occurred_at: EVALUATION_ACCEPTED.occurred_at,
+    ...EVALUATION_STARTED.payload,
+    ...EVALUATION_ACCEPTED.payload,
+  },
+};
+const RESULT_ID = `r2_${"a".repeat(64)}`;
+const RESULT_EVENT: WritableResultLifecycleEvent = {
+  schema_version: 1,
+  event_id: "0198abcd-1111-7000-8000-000000000006",
+  event_type: "result.recorded",
+  occurred_at: "2026-08-20T06:07:11.000Z",
+  subject_id: RESULT_ID,
+  causation_event_id: EVALUATION_ACCEPTED.event_id,
+  actor: { kind: "system" },
+  payload: {
+    submission_id: SUBMISSION_ID,
+    problem_id: "two_plus_two",
+    statement_revision: 2,
+    result_commit: "9".repeat(40),
+    tree_digest: "8".repeat(64),
+  },
+};
+const RELEASE_EVENT: WritableResultLifecycleEvent = {
+  schema_version: 1,
+  event_id: "0198abcd-1111-7000-8000-000000000007",
+  event_type: "release.scheduled",
+  occurred_at: "2026-08-20T06:07:11.001Z",
+  subject_id: RESULT_ID,
+  causation_event_id: RESULT_EVENT.event_id,
+  actor: { kind: "system" },
+  payload: { result_id: RESULT_ID, release_at: "2026-10-20T06:07:10.001Z" },
+};
+const RESULT_VIEW: SubmissionView = {
+  ...ACCEPTED_VIEW,
+  result_id: RESULT_ID,
+  result_event_id: RESULT_EVENT.event_id,
 };
 
 function json(value: unknown, status = 200): Response {
@@ -260,6 +331,37 @@ describe("atomic Git State append", () => {
     const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
     expect(tree.tree.map((entry) => entry.path)).toEqual([
       `events/01/${ARCHIVE_EVENT.event_id}.json`,
+      `views/submissions/01/${SUBMISSION_ID}.json`,
+    ]);
+  });
+
+  it("atomically records a result, release schedule, and submission view", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      contents(ACCEPTED_VIEW),
+      contents(RECEIVED),
+      contents(METADATA),
+      contents(ARCHIVE_EVENT),
+      contents(EVALUATION_ACCEPTED),
+      contents(EVALUATION_STARTED),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    await expect(repository(fetcher).recordAcceptedResult(
+      [RESULT_EVENT, RELEASE_EVENT],
+      EVALUATION_ACCEPTED.event_id,
+      RESULT_VIEW,
+    )).resolves.toEqual({ commit: NEW_COMMIT, created: true, view: RESULT_VIEW });
+    const treeRequest = fetcher.mock.calls[10]?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
+    expect(tree.tree.map((entry) => entry.path)).toEqual([
+      `events/01/${RESULT_EVENT.event_id}.json`,
+      `events/01/${RELEASE_EVENT.event_id}.json`,
       `views/submissions/01/${SUBMISSION_ID}.json`,
     ]);
   });

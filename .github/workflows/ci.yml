@@ -66,6 +66,7 @@ jobs:
         run: >-
           python -m unittest
           tests.test_results_schema
+          tests.test_build_result_receipt
           tests.test_migrate_results_v2
           tests.test_update_leaderboard
           tests.test_migration_workflow

@@ -163,6 +163,18 @@ export type WritableSubmissionLifecycleEvent =
   | EvaluationAcceptedEvent
   | EvaluationRejectedEvent
   | EvaluationFailedEvent;
+export type ResultRecordedEvent = SubmissionLifecycleEvent<"result.recorded", {
+  problem_id: string;
+  result_commit: string;
+  statement_revision: number;
+  submission_id: string;
+  tree_digest: string;
+}>;
+export type ReleaseScheduledEvent = SubmissionLifecycleEvent<"release.scheduled", {
+  release_at: string;
+  result_id: string;
+}>;
+export type WritableResultLifecycleEvent = ResultRecordedEvent | ReleaseScheduledEvent;
 
 /** State events the public submission Worker is authorized to append. */
 export type WritableStateEvent =
@@ -171,7 +183,8 @@ export type WritableStateEvent =
   | AuthenticationNonceConsumedEvent
   | SubmissionMetadataAmendedEvent
   | SubmissionPublicationChangedEvent
-  | WritableSubmissionLifecycleEvent;
+  | WritableSubmissionLifecycleEvent
+  | WritableResultLifecycleEvent;
 
 type LifecycleEventType =
   | "archive.completed"

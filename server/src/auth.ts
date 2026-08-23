@@ -278,11 +278,19 @@ export async function lifecycleEventId(
     | "evaluation.started"
     | "evaluation.accepted"
     | "evaluation.rejected"
-    | "evaluation.failed",
+    | "evaluation.failed"
+    | "result.recorded"
+    | "release.scheduled",
   subjectId: string,
   occurredAt: string,
 ): Promise<string> {
-  if (!isUuidV7(subjectId)) throw new AuthError("lifecycle subject is invalid");
+  const submissionEvent = eventType.startsWith("archive.") || eventType.startsWith("evaluation.");
+  if (
+    (submissionEvent && !isUuidV7(subjectId)) ||
+    (!submissionEvent && !/^r2_[0-9a-f]{64}$/.test(subjectId))
+  ) {
+    throw new AuthError("lifecycle subject is invalid");
+  }
   const date = new Date(occurredAt);
   if (
     occurredAt.startsWith("0000-") ||

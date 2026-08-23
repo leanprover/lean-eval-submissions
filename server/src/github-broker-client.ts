@@ -4,7 +4,7 @@ import type { ProviderFetch } from "./github-provider";
 const BROKER_ENDPOINT = "https://github-broker.internal/v1/proxy";
 const MAX_UPSTREAM_BODY_BYTES = 256 * 1024;
 
-export type BrokerAuthority = "source" | "dispatch";
+export type BrokerAuthority = "source" | "dispatch" | "results";
 
 type BrokerRequest = Readonly<{
   schema_version: 1;

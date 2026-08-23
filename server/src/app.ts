@@ -4,6 +4,7 @@ import {
   decodeArchiveCompletion,
   decodeArchiveFailure,
   decodeEvaluationCompletion,
+  decodeResultCompletion,
   decodeAgentChallengeInput,
   decodeBrowserSubmission,
   decodeChallengeSubmission,
@@ -52,7 +53,10 @@ import {
   type EvaluationFailedEvent,
   type EvaluationRejectedEvent,
   type EvaluationStartedEvent,
+  type ReleaseScheduledEvent,
+  type ResultRecordedEvent,
   type WritableStateEvent,
+  type WritableResultLifecycleEvent,
   type WritableSubmissionLifecycleEvent,
 } from "./state-event";
 import {
@@ -110,6 +114,11 @@ export type StateAccess = Readonly<{
   appendEvent(event: WritableStateEvent): Promise<{ created: boolean }>;
   appendSubmissionLifecycle(
     events: readonly WritableSubmissionLifecycleEvent[],
+    expectedLifecycleEventId: string,
+    nextView: SubmissionView,
+  ): Promise<{ created: boolean; view: SubmissionView }>;
+  recordAcceptedResult(
+    events: readonly WritableResultLifecycleEvent[],
     expectedLifecycleEventId: string,
     nextView: SubmissionView,
   ): Promise<{ created: boolean; view: SubmissionView }>;
@@ -310,6 +319,7 @@ function provider(env: RuntimeEnv, dependencies: ApiDependencies): GitHubProvide
     env.GITHUB_VERIFICATION_TOKEN,
     env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "source") : undefined,
     env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "dispatch") : undefined,
+    env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "results") : undefined,
   );
 }
 
@@ -880,6 +890,146 @@ async function evaluationCompleted(
   }, outcome.created ? 201 : 200);
 }
 
+function addCalendarMonths(timestamp: string, months: number): string {
+  const date = new Date(timestamp);
+  const day = date.getUTCDate();
+  date.setUTCDate(1);
+  date.setUTCMonth(date.getUTCMonth() + months);
+  const endOfMonth = new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth() + 1,
+    0,
+  )).getUTCDate();
+  date.setUTCDate(Math.min(day, endOfMonth));
+  return date.toISOString();
+}
+
+async function resultCompleted(
+  request: Request,
+  env: RuntimeEnv,
+  dependencies: ApiDependencies,
+): Promise<Response> {
+  const configured = env.LIFECYCLE_CALLBACK_TOKEN;
+  const authorization = request.headers.get("authorization");
+  const supplied = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : "";
+  if (!configured) return json({ error: "callback_unavailable" }, 503);
+  if (!supplied || !(await equalToken(supplied, configured))) {
+    return json({ error: "authentication_failed" }, 401);
+  }
+  const completion = decodeResultCompletion(await readJson(request));
+  const expectedBranch = env.DEPLOYMENT_ENVIRONMENT === "staging" ? "staging-results" : "main";
+  if (completion.result_branch !== expectedBranch) {
+    throw new ApiDecodeError("result completion named the wrong environment branch");
+  }
+  const ledger = state(env, dependencies);
+  const view = await ledger.readSubmission(completion.submission_id);
+  if (view === null) return json({ error: "submission_not_found" }, 409);
+  if (view.evaluation.status !== "accepted") {
+    return json({ error: "submission_not_accepted" }, 409);
+  }
+  if (
+    completion.problem_id !== view.submission.problem_id ||
+    completion.statement_revision !== view.submission.statement_revision
+  ) {
+    throw new ApiDecodeError("result completion disagrees with submission identity");
+  }
+  if (Date.parse(completion.occurred_at) <= Date.parse(view.evaluation.occurred_at)) {
+    throw new ApiDecodeError("result completion must follow evaluation acceptance");
+  }
+  const verified = await provider(env, dependencies).verifyResult(completion, {
+    login: view.owner_login,
+    declaredModel: view.submission.declared_model,
+    problemId: view.submission.problem_id,
+    statementRevision: view.submission.statement_revision,
+  });
+  if (
+    verified.resultId !== completion.result_id ||
+    verified.treeDigest !== completion.result_tree_digest
+  ) {
+    throw new GitHubProviderError(409, "verified result disagreed with completion");
+  }
+  if (view.result_id !== null) {
+    if (view.result_id !== completion.result_id || view.result_event_id === null) {
+      throw new StateEventConflictError(`result completion ${completion.result_id}`);
+    }
+    return json({
+      status: "already_recorded",
+      submission_id: view.submission_id,
+      result_id: view.result_id,
+      event_id: view.result_event_id,
+      release_event_id: null,
+    });
+  }
+  const resultEventId = await lifecycleEventId(
+    "result.recorded",
+    completion.result_id,
+    completion.occurred_at,
+  );
+  const result: ResultRecordedEvent = {
+    schema_version: 1,
+    event_id: resultEventId,
+    event_type: "result.recorded",
+    occurred_at: completion.occurred_at,
+    subject_id: completion.result_id,
+    causation_event_id: view.evaluation.event_id,
+    actor: { kind: "system" },
+    payload: {
+      submission_id: view.submission_id,
+      problem_id: view.submission.problem_id,
+      statement_revision: view.submission.statement_revision,
+      result_commit: completion.result_commit,
+      tree_digest: completion.result_tree_digest,
+    },
+  };
+  const releaseRequired =
+    view.submission.problem_group !== "open-conjectures" &&
+    view.publication_choice === "scheduled";
+  let release: ReleaseScheduledEvent | undefined;
+  if (releaseRequired) {
+    const releaseOccurredAt = canonicalMilliseconds(Date.parse(completion.occurred_at) + 1);
+    release = {
+      schema_version: 1,
+      event_id: await lifecycleEventId(
+        "release.scheduled",
+        completion.result_id,
+        releaseOccurredAt,
+      ),
+      event_type: "release.scheduled",
+      occurred_at: releaseOccurredAt,
+      subject_id: completion.result_id,
+      causation_event_id: result.event_id,
+      actor: { kind: "system" },
+      payload: {
+        result_id: completion.result_id,
+        release_at: addCalendarMonths(view.evaluation.occurred_at, 2),
+      },
+    };
+  }
+  const nextView: SubmissionView = {
+    ...view,
+    schema_version: 2,
+    result_id: completion.result_id,
+    result_event_id: result.event_id,
+  };
+  const events: WritableResultLifecycleEvent[] = release === undefined
+    ? [result]
+    : [result, release];
+  const outcome = await ledger.recordAcceptedResult(
+    events,
+    view.evaluation.event_id,
+    nextView,
+  );
+  return json({
+    status: outcome.created ? "recorded" : "already_recorded",
+    submission_id: view.submission_id,
+    result_id: completion.result_id,
+    event_id: result.event_id,
+    release_event_id: release?.event_id ?? null,
+  }, outcome.created ? 201 : 200);
+}
+
 async function sourceReaderPreflight(
   request: Request,
   env: RuntimeEnv,
@@ -1112,6 +1262,13 @@ export async function handleRequest(
   if (request.method === "POST" && url.pathname === "/internal/v1/evaluation-completed") {
     try {
       return await evaluationCompleted(request, env, dependencies);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  }
+  if (request.method === "POST" && url.pathname === "/internal/v1/result-completed") {
+    try {
+      return await resultCompleted(request, env, dependencies);
     } catch (error) {
       return errorResponse(error);
     }

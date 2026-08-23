@@ -7,6 +7,8 @@ const PROBLEM = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/;
 const GIST_ID = /^[0-9a-f]{5,64}$/;
 const REASON = /^[a-z][a-z0-9_]{1,63}$/;
 const TOOLCHAIN = /^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+$/;
+const RESULT_ID = /^r2_[0-9a-f]{64}$/;
+const DIGEST = /^[0-9a-f]{64}$/;
 
 export const MAX_JSON_BYTES = 16 * 1024;
 
@@ -86,6 +88,19 @@ export type EvaluationCompletion = Readonly<{
   benchmark_commit: string;
   toolchain: string;
   outcome: EvaluationOutcome;
+}>;
+export type ResultCompletion = Readonly<{
+  schema_version: 1;
+  submission_id: string;
+  occurred_at: string;
+  result_id: string;
+  problem_id: string;
+  statement_revision: number;
+  result_repository: "leanprover/lean-eval-submissions";
+  result_branch: "main" | "staging-results";
+  result_commit: string;
+  result_path: string;
+  result_tree_digest: string;
 }>;
 
 export class ApiDecodeError extends Error {
@@ -467,6 +482,46 @@ export function decodeEvaluationCompletion(value: unknown): EvaluationCompletion
     throw new ApiDecodeError("evaluation outcome status is invalid");
   }
   return { ...data, outcome } as EvaluationCompletion;
+}
+
+export function decodeResultCompletion(value: unknown): ResultCompletion {
+  const data = object(value, "result completion");
+  exactFields(data, [
+    "occurred_at", "problem_id", "result_branch", "result_commit", "result_id",
+    "result_path", "result_repository", "result_tree_digest", "schema_version",
+    "statement_revision", "submission_id",
+  ], [], "result completion");
+  if (
+    data.schema_version !== 1 ||
+    typeof data.submission_id !== "string" || !UUID_V7.test(data.submission_id) ||
+    typeof data.result_id !== "string" || !RESULT_ID.test(data.result_id) ||
+    typeof data.problem_id !== "string" || !PROBLEM.test(data.problem_id) ||
+    typeof data.statement_revision !== "number" ||
+      !Number.isSafeInteger(data.statement_revision) || data.statement_revision < 1 ||
+    data.result_repository !== "leanprover/lean-eval-submissions" ||
+    (data.result_branch !== "main" && data.result_branch !== "staging-results") ||
+    typeof data.result_commit !== "string" || !COMMIT.test(data.result_commit) ||
+    typeof data.result_tree_digest !== "string" || !DIGEST.test(data.result_tree_digest) ||
+    typeof data.occurred_at !== "string"
+  ) {
+    throw new ApiDecodeError("result completion identity or pins are invalid");
+  }
+  const occurredAt = new Date(data.occurred_at);
+  if (
+    data.occurred_at.startsWith("0000-") ||
+    Number.isNaN(occurredAt.valueOf()) ||
+    occurredAt.toISOString() !== data.occurred_at
+  ) {
+    throw new ApiDecodeError("result completion timestamp is not canonical UTC milliseconds");
+  }
+  if (
+    typeof data.result_path !== "string" ||
+    !/^results\/[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?\.json$/.test(data.result_path) ||
+    data.result_path !== data.result_path.toLowerCase()
+  ) {
+    throw new ApiDecodeError("result completion path is invalid");
+  }
+  return data as ResultCompletion;
 }
 
 export function decodeSourceReaderPreflight(value: unknown): string {

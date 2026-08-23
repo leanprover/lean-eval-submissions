@@ -38,6 +38,38 @@ The identifier input is an RFC 8785 array containing only strings and a
 positive integer. Implementations must reject lone Unicode surrogates. GitHub
 login case is deliberately folded; all other strings are preserved exactly.
 
+## Exact-commit recording receipt
+
+Server intake does not infer State advancement from a successful record job.
+After the recorder has pushed, `scripts/build_result_receipt.py` validates the
+canonical schema-version-2 file and emits a source-free receipt naming the
+result ID, repository, environment branch, exact commit, path, and tree
+digest. Staging writes `staging-results`; production and legacy issue intake
+write `main`. Only production and issue writes trigger the public leaderboard.
+
+For the exact per-user file bytes at `path`:
+
+```text
+entry = RFC8785_CANONICAL_JSON([{
+  "path": path,
+  "sha256": lowercase_hex(SHA256(file_bytes)),
+  "size": len(file_bytes)
+}])
+
+result_tree_digest = lowercase_hex(
+  SHA256(UTF8("lean-eval-result-tree-v1\0") + UTF8(entry))
+)
+```
+
+The source-free callback job has no recorder credential. The submission
+Worker independently fetches the named blob through an allowlist restricted to
+`leanprover/lean-eval-submissions/results/<login>.json` at the exact commit,
+recomputes both IDs, and atomically appends `result.recorded`, the optional
+`release.scheduled`, and the updated submission view. Scheduled releases use
+the evaluation-acceptance timestamp plus two calendar months, clamped to the
+last day of the target month. Withheld and open-conjecture results are not
+scheduled.
+
 ## Per-user file
 
 ```json
