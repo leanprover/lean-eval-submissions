@@ -1,0 +1,53 @@
+{
+  "execution_profile": {
+    "architecture": "x86_64",
+    "cache_state": "cold",
+    "components": {
+      "comparator": {
+        "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+        "repository": "leanprover/comparator"
+      },
+      "landrun": {
+        "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+        "repository": "zouuup/landrun"
+      },
+      "lean4export": {
+        "commit": "15f6055e299ad5b89345e533cc2192f4cc00f659",
+        "repository": "leanprover/lean4export"
+      },
+      "nanoda": {
+        "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+        "repository": "robsimmons/nanoda_lib"
+      }
+    },
+    "cpu_model": "AMD EPYC",
+    "go_toolchain": "go1.25.12",
+    "kernel_release": "6.18.36-cloudflare-firecracker-2026.6.17",
+    "measurement_command": [
+      "/opt/lean-eval/replay-measure"
+    ],
+    "runner_profile": "cloudflare-sandbox-standard-4-v1",
+    "rust_toolchain": "rustc-1.89.0",
+    "schema_version": 1,
+    "toolchain": "leanprover/lean4:v4.33.0",
+    "vm_image_digest": "sha256:53d1964edc01f736ae66d7faa715d5b1fb67c96dcc167b4c5012282d8c14c807"
+  },
+  "execution_profile_digest": "8c106b325a1e5bd3a2dce9f4941a8d6c6768c1bdbd749a058d18fc99dcf7544a",
+  "image_source_commit": "fdcabb95085edccd70c81dc079c27bcaf20a4b16",
+  "measurement_config": {
+    "memory_limit_bytes": 12884901888,
+    "retired_instructions": {
+      "perf_event": "instructions:u",
+      "required": false
+    },
+    "schema_version": 1,
+    "wall_time_limit_ms": 19800000
+  },
+  "measurement_config_digest": "2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945",
+  "registry_manifest_digest": "sha256:53d1964edc01f736ae66d7faa715d5b1fb67c96dcc167b4c5012282d8c14c807",
+  "registry_repository": "lean-eval-authoritative",
+  "registry_tag": "fdcabb95085edccd70c81dc079c27bcaf20a4b16",
+  "runtime_evidence_sha256": "591174af29eb919e54e9ebc2d6e341145d76367c35bedd9330e45f315b71aea6",
+  "schema_version": 1,
+  "worker_deployed_commit": "801f5a8dee32163bb0fa7615c833164b0fc646ae"
+}
