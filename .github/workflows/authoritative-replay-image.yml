@@ -79,6 +79,8 @@ jobs:
             test -x /opt/lean-eval/replay-staging-acceptance
             test -x /opt/lean-eval/replay-archive-acceptance
             test -x /opt/lean-eval/replay-measure
+            test "$(python3 -c '"'"'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'"'"')" = 3.11
+            python3 -c '"'"'import sys, tomllib; sys.path.insert(0, "/opt/lean-eval"); from evaluate_submission import detect_matches; assert callable(detect_matches)'"'"'
             elan run leanprover/lean4:v4.33.0 lean --version | grep -F "Lean (version 4.33.0,"
           '
           echo "IMAGE_SIZE_BYTES=$image_size" >> "$GITHUB_ENV"

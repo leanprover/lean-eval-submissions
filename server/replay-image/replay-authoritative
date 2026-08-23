@@ -610,7 +610,7 @@ def main() -> None:
         METRICS.unlink(missing_ok=True)
         returncode, timed_out = run_process_group(
             [
-                "/usr/bin/python3",
+                sys.executable,
                 str(INSTALL / "evaluate_submission.py"),
                 "--source-dir",
                 str(source_root),
