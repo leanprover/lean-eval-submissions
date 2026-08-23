@@ -201,9 +201,94 @@ describe("Cloudflare replay executor", () => {
       }),
     });
     expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ error: "executor_failed" });
+    expect(await response.json()).toEqual({
+      error: "executor_failed",
+      reason: "input_transfer_failed",
+    });
     expect(executed).toBe(false);
     expect(destroyed).toBe(true);
+  });
+
+  it("returns and logs only an allowlisted authoritative failure classification", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const response = await handleReplayRequest(new Request(
+        "https://example.test/api/v1/replay",
+        { method: "POST", body: JSON.stringify(await authoritativeInput()) },
+      ), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => ({
+          writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+          exec: (command) => Promise.resolve({
+            success: false,
+            exitCode: 1,
+            stdout: "",
+            stderr: "replay-authoritative: measurement evidence is unavailable\n",
+            command,
+            duration: 1,
+            timestamp: "fixture",
+          }),
+          destroy: () => Promise.resolve(),
+        }),
+      });
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({
+        error: "executor_failed",
+        reason: "command_failed",
+        detail: "measurement_evidence_unavailable",
+      });
+      expect(logged).toHaveBeenCalledExactlyOnceWith(JSON.stringify({
+        event: "lean_eval_replay_executor_failure",
+        route: "authoritative_replay",
+        reason: "command_failed",
+        detail: "measurement_evidence_unavailable",
+      }));
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  it("does not expose unclassified authoritative stderr", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sensitive = "private identity fixture";
+    try {
+      const response = await handleReplayRequest(new Request(
+        "https://example.test/api/v1/replay",
+        { method: "POST", body: JSON.stringify(await authoritativeInput()) },
+      ), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => ({
+          writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+          exec: (command) => Promise.resolve({
+            success: false,
+            exitCode: 1,
+            stdout: "",
+            stderr: `replay-authoritative: ${sensitive}\n`,
+            command,
+            duration: 1,
+            timestamp: "fixture",
+          }),
+          destroy: () => Promise.resolve(),
+        }),
+      });
+      const body = await response.json();
+      expect(response.status).toBe(500);
+      expect(body).toEqual({
+        error: "executor_failed",
+        reason: "command_failed",
+        detail: "unclassified_authoritative_failure",
+      });
+      expect(JSON.stringify(body)).not.toContain(sensitive);
+      expect(logged).toHaveBeenCalledExactlyOnceWith(JSON.stringify({
+        event: "lean_eval_replay_executor_failure",
+        route: "authoritative_replay",
+        reason: "command_failed",
+        detail: "unclassified_authoritative_failure",
+      }));
+      expect(logged.mock.calls.flat().join(" ")).not.toContain(sensitive);
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it("keeps production execution disabled in public health", async () => {
