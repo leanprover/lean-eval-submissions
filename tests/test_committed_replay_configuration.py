@@ -36,10 +36,13 @@ class CommittedReplayConfigurationTests(unittest.TestCase):
             ),
         )
 
-    def test_both_disabled_environments_use_the_frozen_review(self) -> None:
+    def test_staging_only_enablement_uses_the_frozen_review(self) -> None:
         for environment in ("staging", "production"):
             selected = WRANGLER["env"][environment]
-            self.assertEqual(selected["vars"]["REPLAY_ENABLED"], "false")
+            self.assertEqual(
+                selected["vars"]["REPLAY_ENABLED"],
+                "true" if environment == "staging" else "false",
+            )
             self.assertEqual(
                 selected["vars"]["REVIEWED_EXECUTION_PROFILE_DIGEST"],
                 CONFIGURATION["execution_profile_digest"],
