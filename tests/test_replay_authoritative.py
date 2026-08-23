@@ -93,6 +93,10 @@ def metrics(*, checker_invocations: int = 1) -> dict:
                 "invocations": 2,
                 "wall_time_ms": 120,
                 "retired_instructions": {"status": "measured", "value": 500},
+                "terminations": [
+                    {"kind": "exited", "code": 0},
+                    {"kind": "exited", "code": 0},
+                ],
             },
             "checker": {
                 "invocations": checker_invocations,
@@ -101,6 +105,11 @@ def metrics(*, checker_invocations: int = 1) -> dict:
                     {"status": "measured", "value": 80}
                     if checker_invocations
                     else {"status": "measured", "value": 0}
+                ),
+                "terminations": (
+                    [{"kind": "exited", "code": 0}]
+                    if checker_invocations
+                    else []
                 ),
             },
         },
@@ -179,6 +188,23 @@ class AuthoritativeReplayTests(unittest.TestCase):
             authoritative.AuthoritativeReplayError, "executor limits"
         ):
             authoritative.validate_measurement_limits(replay_request)
+
+    def test_timeout_kills_the_entire_evaluator_process_group(self) -> None:
+        process = mock.Mock(pid=1234, returncode=-9)
+        process.wait.side_effect = [
+            __import__("subprocess").TimeoutExpired(["evaluator"], 1),
+            -9,
+        ]
+        with (
+            mock.patch.object(authoritative.subprocess, "Popen", return_value=process) as popen,
+            mock.patch.object(authoritative.os, "killpg") as killpg,
+        ):
+            returncode, timed_out = authoritative.run_process_group(
+                ["evaluator"], {"PATH": "/bin"}, 1
+            )
+        self.assertEqual((returncode, timed_out), (-9, True))
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+        killpg.assert_called_once_with(1234, authoritative.signal.SIGKILL)
 
     def test_encoded_input_limit_is_enforced_before_read(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -277,8 +303,53 @@ class AuthoritativeReplayTests(unittest.TestCase):
             {"status": "unavailable", "reason": "counter_not_reported"},
         )
 
+        declined_metrics = metrics()
+        declined_metrics["phases"]["checker"]["terminations"] = [
+            {"kind": "exited", "code": 1}
+        ]
+        declined = authoritative.build_verdict(
+            request(),
+            {"passed": [], "statement_revisions": {}},
+            declined_metrics,
+            2,
+            3,
+        )
+        self.assertEqual(declined["execution_outcome"], "completed")
+        self.assertEqual(declined["checker_outcome"], "declined")
+
+        crashed_metrics = metrics()
+        crashed_metrics["phases"]["checker"]["terminations"] = [
+            {"kind": "signaled", "signal": 9}
+        ]
+        crashed = authoritative.build_verdict(
+            request(),
+            {"passed": [], "statement_revisions": {}},
+            crashed_metrics,
+            2,
+            3,
+        )
+        self.assertEqual(crashed["execution_outcome"], "crashed")
+        self.assertIsNone(crashed["checker_outcome"])
+
+        timed_out = authoritative.reported_execution_verdict(
+            request(),
+            "timed_out",
+            authoritative.normalize_metrics(metrics(checker_invocations=0)),
+            2,
+            3,
+        )
+        self.assertEqual(timed_out["execution_outcome"], "timed_out")
+        self.assertEqual(
+            timed_out["statistics"]["build_wall_time_ms"]
+            + timed_out["statistics"]["checker_wall_time_ms"],
+            authoritative.WALL_TIME_LIMIT_MS,
+        )
+
         impossible = metrics()
         impossible["phases"]["build"]["invocations"] = 3
+        impossible["phases"]["build"]["terminations"].append(
+            {"kind": "exited", "code": 0}
+        )
         with self.assertRaisesRegex(
             authoritative.AuthoritativeReplayError, "impossible phase counts"
         ):
