@@ -15,21 +15,6 @@
     {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "schema_version", "kind", "replay_task_id", "queue_event_id",
-        "blocking_reason"
-      ],
-      "properties": {
-        "schema_version": { "const": 1 },
-        "kind": { "const": "blocked" },
-        "replay_task_id": { "$ref": "#/$defs/replayTaskId" },
-        "queue_event_id": { "$ref": "#/$defs/uuid7" },
-        "blocking_reason": { "const": "private_replay_requires_d6" }
-      }
-    },
-    {
-      "type": "object",
-      "additionalProperties": false,
       "required": ["schema_version", "kind", "started_transition", "request"],
       "properties": {
         "schema_version": { "const": 1 },

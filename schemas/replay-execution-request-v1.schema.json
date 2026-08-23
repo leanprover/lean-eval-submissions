@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/replay-execution-request-v1.schema.json",
-  "title": "LeanEval public-source replay execution request schema version 1",
+  "title": "LeanEval authoritative replay execution request schema version 1",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -14,14 +14,47 @@
     "replay_task_id": { "type": "string", "pattern": "^rt1_[0-9a-f]{64}$" },
     "attempt": { "type": "integer", "minimum": 1 },
     "source": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["repository", "commit", "visibility"],
-      "properties": {
-        "repository": { "$ref": "#/$defs/repository" },
-        "commit": { "$ref": "#/$defs/commit" },
-        "visibility": { "const": "public" }
-      }
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repository", "commit", "visibility"],
+          "properties": {
+            "repository": { "$ref": "#/$defs/repository" },
+            "commit": { "$ref": "#/$defs/commit" },
+            "visibility": { "const": "public" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["visibility", "archive"],
+          "properties": {
+            "visibility": { "const": "private" },
+            "archive": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "schema_version", "submission_id", "archive_repository",
+                "archive_commit", "archive_path", "archive_ciphertext_sha256",
+                "encrypted"
+              ],
+              "properties": {
+                "schema_version": { "const": 1 },
+                "submission_id": { "$ref": "#/$defs/uuid7" },
+                "archive_repository": { "$ref": "#/$defs/repository" },
+                "archive_commit": { "$ref": "#/$defs/commit" },
+                "archive_path": {
+                  "type": "string",
+                  "pattern": "^archives/[0-9a-f]{2}/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\\.tar\\.age$"
+                },
+                "archive_ciphertext_sha256": { "$ref": "#/$defs/digest" },
+                "encrypted": { "const": true }
+              }
+            }
+          }
+        }
+      ]
     },
     "benchmark": {
       "type": "object",
@@ -68,7 +101,9 @@
       "additionalProperties": false,
       "required": ["fetch_phase", "untrusted_execution_phase"],
       "properties": {
-        "fetch_phase": { "const": "public_https_only" },
+        "fetch_phase": {
+          "enum": ["public_https_only", "controller_pinned_archive_only"]
+        },
         "untrusted_execution_phase": { "const": "disabled" }
       }
     },
@@ -77,6 +112,44 @@
       "maxProperties": 0
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "properties": { "visibility": { "const": "public" } },
+            "required": ["visibility"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "network": {
+            "properties": { "fetch_phase": { "const": "public_https_only" } }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "source": {
+            "properties": { "visibility": { "const": "private" } },
+            "required": ["visibility"]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "network": {
+            "properties": {
+              "fetch_phase": { "const": "controller_pinned_archive_only" }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "uuid7": {
       "type": "string",
