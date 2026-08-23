@@ -398,6 +398,32 @@
         "ref": "94dfb27eaa0edf18ce51da4591aa4b09d21a89e0",
         "repo": "kim-em/029a31248cea54e2d04b060b27e5e8f4"
       }
+    },
+    {
+      "accepted_at": "2026-08-23T03:36:55Z",
+      "benchmark_commit": "b91d4757aa0d7776c02540c9089df54fa0d0658a",
+      "declared_model": "Codex staging fixture",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a02c83-79f7-730b-9bcd-8cdac4fa5d7a"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "billing_mode": "unknown",
+        "credit_identity": "LeanEval overhaul staging fixture",
+        "harness": "isolated end-to-end infrastructure validation",
+        "human_involvement": "Fixture proof selected and submitted by the overhaul operator",
+        "notes": "Accepted staging-only KMS archive and result-lifecycle validation; never a production benchmark claim.",
+        "web_access": false
+      },
+      "result_id": "r2_99df81809318fd2673d82da042b451f77b55606c6b506beb4526828ee1e7079e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c1e504a3acce2da2ee77054ca45e6c251b143545",
+        "repo": "kim-em/lean-eval-intake-fixture"
+      }
     }
   ],
   "schema_version": 2,
