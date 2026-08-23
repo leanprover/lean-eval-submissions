@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: publish_replay_state_event --root DIR --event FILE --expected-head SHA --message TEXT" >&2
+  exit 2
+}
+
+state_root=
+event_file=
+expected_head=
+commit_message=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --root) state_root=${2:-}; shift 2 ;;
+    --event) event_file=${2:-}; shift 2 ;;
+    --expected-head) expected_head=${2:-}; shift 2 ;;
+    --message) commit_message=${2:-}; shift 2 ;;
+    *) usage ;;
+  esac
+done
+
+if [ -z "$state_root" ] || [ -z "$event_file" ] || [ -z "$expected_head" ] || [ -z "$commit_message" ]; then
+  usage
+fi
+if ! printf '%s' "$expected_head" | grep -Eq '^[0-9a-f]{40}$'; then
+  echo "expected State head is not a lowercase commit SHA" >&2
+  exit 1
+fi
+if [ -z "${STATE_WRITE_KEY:-}" ] || [ -z "${RUNNER_TEMP:-}" ]; then
+  echo "isolated State writer credential or runner scratch is unavailable" >&2
+  exit 1
+fi
+if [ "$(git -C "$state_root" rev-parse HEAD)" != "$expected_head" ]; then
+  echo "State checkout no longer has the expected parent" >&2
+  exit 1
+fi
+if [ -n "$(git -C "$state_root" status --porcelain)" ]; then
+  echo "State checkout is not clean before the append" >&2
+  exit 1
+fi
+if [ "$(jq -r .environment "$state_root/state.json")" != staging ]; then
+  echo "refusing to write outside staging State" >&2
+  exit 1
+fi
+
+event_path=$(python "$state_root/scripts/state.py" --root "$state_root" append "$event_file")
+python "$state_root/scripts/state.py" --root "$state_root" validate >/dev/null
+git -C "$state_root" add -- "$event_path"
+expected_change=$(printf 'A\t%s' "$event_path")
+if [ "$(git -C "$state_root" diff --cached --name-status)" != "$expected_change" ]; then
+  echo "State append staged anything other than one new canonical event" >&2
+  exit 1
+fi
+git -C "$state_root" config user.name lean-eval-replay-controller
+git -C "$state_root" config user.email 41898282+github-actions[bot]@users.noreply.github.com
+git -C "$state_root" commit --no-gpg-sign --message "$commit_message" >/dev/null
+new_commit=$(git -C "$state_root" rev-parse HEAD)
+
+key_file=$(mktemp "$RUNNER_TEMP/replay-state-writer.XXXXXX")
+known_hosts=$(mktemp "$RUNNER_TEMP/replay-state-known-hosts.XXXXXX")
+cleanup() {
+  unset STATE_WRITE_KEY
+  if [ -f "$key_file" ]; then shred --remove "$key_file"; fi
+  if [ -f "$known_hosts" ]; then shred --remove "$known_hosts"; fi
+}
+trap cleanup EXIT
+chmod 0600 "$key_file" "$known_hosts"
+printf '%s\n' "$STATE_WRITE_KEY" > "$key_file"
+# GitHub's published Ed25519 host key. Keep this synchronized only from
+# https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
+printf '%s\n' \
+  'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+  > "$known_hosts"
+ssh_command="ssh -i $key_file -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts"
+remote=git@github.com:leanprover/lean-eval-state-staging.git
+if ! GIT_SSH_COMMAND="$ssh_command" git -C "$state_root" push --porcelain "$remote" HEAD:refs/heads/main >&2; then
+  remote_head=$(GIT_SSH_COMMAND="$ssh_command" git ls-remote "$remote" refs/heads/main | cut -f1 || true)
+  if [ "$remote_head" != "$new_commit" ]; then
+    echo "State reference update failed and the new commit is not the remote head" >&2
+    exit 1
+  fi
+fi
+printf '%s\n' "$new_commit"
