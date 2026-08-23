@@ -31,6 +31,9 @@ class PublishReplayStateEventTests(unittest.TestCase):
         self.assertIn("GitHub's published Ed25519 host key", self.text)
         self.assertIn("StrictHostKeyChecking=yes", self.text)
         self.assertIn("IdentitiesOnly=yes", self.text)
+        self.assertIn("ConnectTimeout=15", self.text)
+        self.assertIn("ServerAliveInterval=15", self.text)
+        self.assertIn("ServerAliveCountMax=3", self.text)
         self.assertIn('shred --remove "$key_file"', self.text)
         self.assertIn('unset STATE_WRITE_KEY', self.text)
 
