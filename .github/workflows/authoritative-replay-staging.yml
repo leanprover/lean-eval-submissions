@@ -162,6 +162,7 @@ jobs:
             --ciphertext "$RUNNER_TEMP/archive.tar.age" \
             --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
             --output "$RUNNER_TEMP/unwrap-request.json"
+          echo 'runner_start_failed' > "$RUNNER_TEMP/failure-reason"
 
       - name: Assume only the staging replay Invoke role
         if: steps.started.outputs.appended == 'true'
@@ -200,6 +201,17 @@ jobs:
               --output "$RUNNER_TEMP/identity.age"
           cleanup
           trap - EXIT
+
+      - name: Drop any remaining AWS authority before executor or State writer
+        if: always() && steps.started.outputs.appended == 'true'
+        run: |
+          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+          {
+            echo 'AWS_ACCESS_KEY_ID='
+            echo 'AWS_SECRET_ACCESS_KEY='
+            echo 'AWS_SESSION_TOKEN='
+          } >> "$GITHUB_ENV"
+          rm -f "$RUNNER_TEMP/unwrap-response.json" "$RUNNER_TEMP/unwrap-metadata.json"
 
       - name: Invoke the reviewed endpoint without AWS or State write authority
         id: execute

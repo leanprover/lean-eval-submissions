@@ -48,12 +48,29 @@ class AuthoritativeReplayStagingWorkflowTests(unittest.TestCase):
         self.assertIn("state-event terminal", self.text)
         self.assertIn("state-event failed", self.text)
         self.assertIn("runner_lost", self.text)
+        self.assertIn("runner_start_failed", self.text)
         self.assertIn("source_fetch_failed", self.text)
         self.assertIn("verdict_invalid", self.text)
         self.assertIn(
             "steps.started.outputs.appended == 'true' && steps.terminal.outputs.appended != 'true'",
             self.text,
         )
+
+    def test_aws_authority_is_unconditionally_dropped_before_state_finalization(self) -> None:
+        cleanup = self.text.index(
+            "Drop any remaining AWS authority before executor or State writer"
+        )
+        executor = self.text.index("Invoke the reviewed endpoint")
+        terminal = self.text.index("Append the exact reported terminal outcome")
+        failure = self.text.index("Fail a started attempt explicitly")
+        self.assertLess(cleanup, executor)
+        self.assertLess(cleanup, terminal)
+        self.assertLess(cleanup, failure)
+        section = self.text[cleanup:executor]
+        self.assertIn("always() && steps.started.outputs.appended == 'true'", section)
+        self.assertIn("AWS_ACCESS_KEY_ID=", section)
+        self.assertIn("AWS_SECRET_ACCESS_KEY=", section)
+        self.assertIn("AWS_SESSION_TOKEN=", section)
 
     def test_recovery_is_bounded_and_happens_before_new_planning(self) -> None:
         self.assertIn("replay_controller.py recover", self.text)
