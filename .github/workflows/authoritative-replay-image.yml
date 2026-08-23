@@ -1,0 +1,123 @@
+name: Build authoritative replay image
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/authoritative-replay-image.yml'
+      - '.dockerignore'
+      - 'Dockerfile.replay-authoritative'
+      - 'scripts/evaluate_submission.py'
+      - 'scripts/replay_orchestrator.py'
+      - 'server/replay-image/comparator-71b52-phase-metrics.patch'
+      - 'server/replay-image/replay-authoritative'
+      - 'server/replay-image/replay-measure'
+      - 'server/replay-image/replay-profile-lock-v433.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: authoritative-replay-image-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      IMAGE: lean-eval-authoritative:${{ github.event.pull_request.head.sha || github.sha }}
+      SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # The exact benchmark cache, build products, and final image need more
+      # space than a stock hosted runner exposes.
+      # jlumbroso/free-disk-space pinned to v1.3.1.
+      - uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - name: Build the exact source-locked image
+        run: >-
+          docker build --progress=plain
+          --tag "$IMAGE"
+          --file Dockerfile.replay-authoritative .
+
+      - name: Verify contents and Cloudflare image ceiling
+        env:
+          IMAGE_LIMIT_BYTES: '21474836480'
+        run: |
+          set -euo pipefail
+          image_size=$(docker image inspect "$IMAGE" --format '{{.Size}}')
+          if [ "$image_size" -gt "$IMAGE_LIMIT_BYTES" ]; then
+            echo "authoritative image is $image_size bytes; limit is $IMAGE_LIMIT_BYTES" >&2
+            exit 1
+          fi
+          docker run --rm --network none --entrypoint /bin/sh "$IMAGE" -c '
+            set -eu
+            test "$(cat /opt/lean-eval/benchmark/.lean-eval-commit)" = b91d4757aa0d7776c02540c9089df54fa0d0658a
+            test "$(cat /opt/lean-eval/benchmark/lean-toolchain)" = leanprover/lean4:v4.33.0
+            test "$(find /opt/lean-eval/benchmark/generated -mindepth 2 -maxdepth 2 -name lake-manifest.json | wc -l)" = 309
+            test "$(find /opt/lean-eval -type d -name .git -print -quit)" = ""
+            test -x /usr/local/bin/landrun
+            test -x /opt/lean-eval/bin/comparator
+            test -x /opt/lean-eval/bin/lean4export
+            test -x /opt/lean-eval/bin/nanoda_bin
+            test -x /opt/lean-eval/replay-authoritative
+            test -x /opt/lean-eval/replay-measure
+            elan run leanprover/lean4:v4.33.0 lean --version | grep -F "Lean (version 4.33.0,"
+          '
+          echo "IMAGE_SIZE_BYTES=$image_size" >> "$GITHUB_ENV"
+
+      - name: Write source-free build evidence
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import subprocess
+
+          def sha256(path: str) -> str:
+              return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+
+          image_id = subprocess.check_output(
+              ["docker", "image", "inspect", os.environ["IMAGE"], "--format", "{{.Id}}"],
+              text=True,
+          ).strip()
+          evidence = {
+              "schema_version": 1,
+              "source_commit": os.environ["SOURCE_COMMIT"],
+              "image_id": image_id,
+              "image_size_bytes": int(os.environ["IMAGE_SIZE_BYTES"]),
+              "dockerfile_sha256": sha256("Dockerfile.replay-authoritative"),
+              "profile_lock_sha256": sha256(
+                  "server/replay-image/replay-profile-lock-v433.json"
+              ),
+              "benchmark_commit": "b91d4757aa0d7776c02540c9089df54fa0d0658a",
+              "workspace_manifest_count": 309,
+              "cloudflare_image_limit_bytes": 20 * 1024**3,
+          }
+          pathlib.Path("authoritative-image-evidence.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      # actions/upload-artifact pinned to v7.0.1.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: authoritative-replay-image-evidence
+          path: authoritative-image-evidence.json
+          if-no-files-found: error
+          retention-days: 30

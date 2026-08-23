@@ -1,0 +1,11 @@
+**
+!Dockerfile.replay-authoritative
+!scripts/
+!scripts/evaluate_submission.py
+!scripts/replay_orchestrator.py
+!server/
+!server/replay-image/
+!server/replay-image/comparator-71b52-phase-metrics.patch
+!server/replay-image/replay-authoritative
+!server/replay-image/replay-measure
+!server/replay-image/replay-profile-lock-v433.json

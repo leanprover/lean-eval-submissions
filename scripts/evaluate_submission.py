@@ -309,14 +309,20 @@ def _share_packages(
     return None
 
 
-def _configure_measurement(target: pathlib.Path, command: list[str] | None) -> None:
-    """Add one trusted comparator adapter to the pristine workspace config."""
-    if command is None:
+def _configure_measurement(
+    target: pathlib.Path,
+    command: list[str] | None,
+    authoritative_checker: str | None = None,
+) -> None:
+    """Add trusted replay-only settings to the pristine workspace config."""
+    if command is None and authoritative_checker is None:
         return
-    if not command or any(
+    if authoritative_checker not in {None, "nanoda"}:
+        raise EvaluateError("authoritative checker is not registered")
+    if command is not None and (not command or any(
         not isinstance(argument, str) or not argument or "\0" in argument
         for argument in command
-    ):
+    )):
         raise EvaluateError("measurement command must be a non-empty safe argv array")
     path = target / "config.json"
     try:
@@ -325,7 +331,12 @@ def _configure_measurement(target: pathlib.Path, command: list[str] | None) -> N
         raise EvaluateError(f"Cannot configure measurement in {path}: {exc}") from exc
     if not isinstance(value, dict) or "measurement_command" in value:
         raise EvaluateError("pristine config cannot accept a measurement command")
-    value["measurement_command"] = command
+    if command is not None:
+        value["measurement_command"] = command
+    if authoritative_checker is not None:
+        if type(value.get("enable_nanoda")) is not bool:
+            raise EvaluateError("pristine config has no canonical nanoda setting")
+        value["enable_nanoda"] = True
     path.write_text(
         json.dumps(value, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
@@ -418,6 +429,7 @@ def overlay_match(
     workspaces_root: pathlib.Path,
     shared_packages: pathlib.Path | None = None,
     measurement_command: list[str] | None = None,
+    authoritative_checker: str | None = None,
     prime: bool = True,
     require_preprimed: bool = False,
 ) -> dict:
@@ -454,7 +466,7 @@ def overlay_match(
             "shared_packages": False,
         }
     _copy_tree(pristine, target)
-    _configure_measurement(target, measurement_command)
+    _configure_measurement(target, measurement_command, authoritative_checker)
 
     shared_state: bool | str = False
     if shared_packages is not None:
@@ -626,6 +638,7 @@ def evaluate_submission(
     problem_id: str | None = None,
     statement_revision: int | None = None,
     measurement_command: list[str] | None = None,
+    authoritative_checker: str | None = None,
     preprimed_workspaces: bool = False,
     run_eval_runner=None,
 ) -> dict:
@@ -678,6 +691,7 @@ def evaluate_submission(
                 workspaces_root=workspaces_root,
                 shared_packages=shared_packages,
                 measurement_command=measurement_command,
+                authoritative_checker=authoritative_checker,
                 # If a fake run-eval runner is injected (tests), the
                 # synthetic pristine workspaces don't carry a real lakefile
                 # so skip the real `lake update` + `lake exe cache get`.
@@ -790,6 +804,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Trusted replay-only comparator measurement adapter as a JSON argv array.",
     )
     parser.add_argument(
+        "--authoritative-checker",
+        choices=("nanoda",),
+        default=None,
+        help="Trusted replay-only independent checker override.",
+    )
+    parser.add_argument(
         "--preprimed-workspaces",
         action="store_true",
         help="Require baked manifests/packages and perform no workspace network setup.",
@@ -835,6 +855,7 @@ def main(argv: list[str] | None = None) -> int:
             problem_id=args.problem_id,
             statement_revision=args.statement_revision,
             measurement_command=_measurement_command(args.measurement_command_json),
+            authoritative_checker=args.authoritative_checker,
             preprimed_workspaces=args.preprimed_workspaces,
         )
     except EvaluateError as exc:

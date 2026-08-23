@@ -73,6 +73,15 @@ def request() -> dict:
                 },
             },
         },
+        "measurement_config": {
+            "schema_version": 1,
+            "wall_time_limit_ms": 21_600_000,
+            "memory_limit_bytes": 12 * 1024**3,
+            "retired_instructions": {
+                "required": False,
+                "perf_event": "instructions:u",
+            },
+        },
     }
 
 
@@ -161,6 +170,15 @@ class AuthoritativeReplayTests(unittest.TestCase):
             authoritative.validate_runtime_profile(
                 replay_request, "x86_64", "different-kernel", "fixture-cpu"
             )
+
+    def test_measurement_configuration_must_match_enforced_limits(self) -> None:
+        replay_request = request()
+        authoritative.validate_measurement_limits(replay_request)
+        replay_request["measurement_config"]["wall_time_limit_ms"] -= 1
+        with self.assertRaisesRegex(
+            authoritative.AuthoritativeReplayError, "executor limits"
+        ):
+            authoritative.validate_measurement_limits(replay_request)
 
     def test_encoded_input_limit_is_enforced_before_read(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
