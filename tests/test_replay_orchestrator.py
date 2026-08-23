@@ -20,6 +20,7 @@ from replay_orchestrator import (  # noqa: E402
     run_with_disposable_vm,
     terminal_transition,
     unavailable_transition,
+    validate_execution_request,
     validate_queue,
 )
 
@@ -90,6 +91,14 @@ class ReplayOrchestratorTests(unittest.TestCase):
         self.assertEqual(request["untrusted_environment"], {})
         self.assertEqual(request["network"]["untrusted_execution_phase"], "disabled")
         self.assertEqual(first["started_transition"]["payload"]["attempt"], 1)
+
+    def test_disposable_runner_can_validate_request_without_state_transition(self) -> None:
+        queue, profile, measurement = self.inputs()
+        request = plan_next(queue, profile, measurement)["request"]
+        self.assertIs(validate_execution_request(request), request)
+        request["untrusted_environment"] = {"TOKEN": "forbidden"}
+        with self.assertRaisesRegex(ReplayError, "environment must be empty"):
+            validate_execution_request(request)
 
     def test_queue_recomputes_identity_and_rejects_unknown_fields(self) -> None:
         queue, _, _ = self.inputs()

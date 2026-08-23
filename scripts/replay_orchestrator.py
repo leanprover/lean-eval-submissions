@@ -517,16 +517,9 @@ def unavailable_transition(
     }
 
 
-def validate_execution_plan(value: Any) -> dict[str, Any]:
-    plan = _object(value, "plan")
-    _fields(
-        plan,
-        {"schema_version", "kind", "started_transition", "request"},
-        "plan",
-    )
-    if plan["schema_version"] != 1 or plan["kind"] != "execution":
-        raise ReplayError("plan must be an execution plan at schema version 1")
-    request = _object(plan["request"], "plan.request")
+def validate_execution_request(value: Any) -> dict[str, Any]:
+    """Validate the exact source-free request handed to a disposable runner."""
+    request = _object(value, "execution request")
     _fields(
         request,
         {
@@ -623,6 +616,22 @@ def validate_execution_plan(value: Any) -> dict[str, Any]:
     environment = _object(request["untrusted_environment"], "request.untrusted_environment")
     if environment:
         raise ReplayError("request untrusted environment must be empty")
+    return request
+
+
+def validate_execution_plan(value: Any) -> dict[str, Any]:
+    plan = _object(value, "plan")
+    _fields(
+        plan,
+        {"schema_version", "kind", "started_transition", "request"},
+        "plan",
+    )
+    if plan["schema_version"] != 1 or plan["kind"] != "execution":
+        raise ReplayError("plan must be an execution plan at schema version 1")
+    request = validate_execution_request(plan["request"])
+    task_identity = request["replay_task_id"]
+    attempt = request["attempt"]
+    profile = request["execution_profile"]
     started = _object(plan["started_transition"], "plan.started_transition")
     _fields(
         started,

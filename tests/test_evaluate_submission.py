@@ -25,6 +25,9 @@ def _write_pristine(generated_root: pathlib.Path, problem_id: str) -> None:
     (target / "Challenge.lean").write_text("-- challenge\n", encoding="utf-8")
     (target / "Solution.lean").write_text("-- trusted solution\n", encoding="utf-8")
     (target / "Submission.lean").write_text("sorry\n", encoding="utf-8")
+    (target / "config.json").write_text(
+        '{"enable_nanoda": false}\n', encoding="utf-8"
+    )
     submission_dir = target / "Submission"
     submission_dir.mkdir()
     (submission_dir / "Helpers.lean").write_text("-- pristine helper\n", encoding="utf-8")
@@ -226,6 +229,58 @@ class DetectMatchesTests(unittest.TestCase):
 
 
 class OverlayMatchTests(unittest.TestCase):
+    def test_preprimed_workspace_requires_manifest_and_shared_packages(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            packages = root / "packages"
+            packages.mkdir()
+            (root / ".lake").mkdir()
+            (root / ".lake" / "packages").symlink_to(packages)
+            with self.assertRaisesRegex(ev.EvaluateError, "manifest"):
+                ev._require_preprimed_workspace(root)
+            (root / "lake-manifest.json").write_text("{}\n", encoding="utf-8")
+            ev._require_preprimed_workspace(root)
+
+    def test_trusted_measurement_command_enters_only_pristine_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated = tmp_path / "generated"
+            _write_pristine(generated, "two_plus_two")
+            src = tmp_path / "src"
+            _write_submitter_workspace(
+                src,
+                ".",
+                "two_plus_two",
+                extra_files={"config.json": '{"measurement_command":["evil"]}\n'},
+            )
+            workspaces = tmp_path / "ws"
+            workspaces.mkdir()
+            record = ev.overlay_match(
+                ev.WorkspaceMatch(problem_id="two_plus_two", source_dir=src),
+                generated_root=generated,
+                workspaces_root=workspaces,
+                measurement_command=["/opt/lean-eval/replay-measure"],
+                prime=False,
+            )
+            config = json.loads(
+                (workspaces / "two_plus_two" / "config.json").read_text()
+            )
+        self.assertTrue(record["overlaid"])
+        self.assertEqual(
+            config["measurement_command"], ["/opt/lean-eval/replay-measure"]
+        )
+
+    def test_measurement_command_is_strict_and_cannot_overwrite_pristine(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            target = pathlib.Path(tmp)
+            (target / "config.json").write_text(
+                '{"measurement_command":["existing"]}\n', encoding="utf-8"
+            )
+            with self.assertRaisesRegex(ev.EvaluateError, "cannot accept"):
+                ev._configure_measurement(target, ["trusted"])
+            with self.assertRaisesRegex(ev.EvaluateError, "non-empty safe argv"):
+                ev._configure_measurement(target, [])
+
     def test_overlay_copies_submission_lean_and_subdir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = pathlib.Path(tmp)
@@ -597,6 +652,16 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
 
 
 class RunEvalInvocationTests(unittest.TestCase):
+    def test_measurement_command_cli_requires_json_array(self) -> None:
+        self.assertEqual(
+            ev._measurement_command('["trusted", "--flag"]'),
+            ["trusted", "--flag"],
+        )
+        with self.assertRaisesRegex(ev.EvaluateError, "JSON argv array"):
+            ev._measurement_command('{"command":"bad"}')
+        with self.assertRaisesRegex(ev.EvaluateError, "not JSON"):
+            ev._measurement_command("[")
+
     def test_run_eval_streams_stderr_and_parses_stdout_json(self) -> None:
         class FakeProcess:
             def __init__(self) -> None:
