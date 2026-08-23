@@ -47,6 +47,10 @@ class AuthoritativeReplayImageReferenceTests(unittest.TestCase):
             deployment = self.deploy.index(
                 f"wrangler deploy --config wrangler.replay.jsonc --env {environment}"
             )
+            broker = self.deploy.index(
+                f"wrangler deploy --config wrangler.broker.jsonc --env {environment}"
+            )
+            self.assertLess(verification, broker)
             self.assertLess(verification, deployment)
 
     def test_staging_and_production_use_one_reviewed_manifest(self) -> None:
