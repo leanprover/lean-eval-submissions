@@ -368,6 +368,9 @@ jobs:
               )["source_digest"],
               "execution_profile_digest": plan["request"]["execution_profile_digest"],
               "measurement_config_digest": plan["request"]["measurement_config_digest"],
+              "executor_health": json.loads(
+                  (temporary / "replay-health.json").read_text(encoding="utf-8")
+              ),
               "plan": plan,
               "started_event": json.loads(
                   (temporary / "started-event.json").read_text(encoding="utf-8")

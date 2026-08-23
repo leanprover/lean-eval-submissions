@@ -98,6 +98,7 @@ class AuthoritativeReplayStagingWorkflowTests(unittest.TestCase):
         self.assertNotIn("identity.age", evidence)
         self.assertNotIn("archive.tar.age", evidence)
         self.assertNotIn("archive-sidecar", evidence)
+        self.assertIn('"executor_health"', evidence)
         self.assertIn('shred --remove "$RUNNER_TEMP/identity.age"', self.text)
 
     def test_actions_are_commit_pinned(self) -> None:
