@@ -1,0 +1,171 @@
+name: Publish reviewed authoritative replay image
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_registry_publication:
+        description: Build, verify, and publish one immutable-tagged Cloudflare image
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lean-eval-authoritative-image-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: inputs.confirm_registry_publication == true
+    environment: cloudflare-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      IMAGE: lean-eval-authoritative:${{ github.sha }}
+      IMAGE_LIMIT_BYTES: '21474836480'
+    steps:
+      - name: Require the reviewed protected main commit
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" = "$(git ls-remote https://github.com/leanprover/lean-eval-submissions.git refs/heads/main | cut -f1)"
+          test "${#GITHUB_SHA}" = 40
+
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # actions/setup-node pinned to v6.5.0.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.6.0'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      # jlumbroso/free-disk-space pinned to v1.3.1.
+      - uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - run: npm ci
+        working-directory: server
+
+      - name: Build and verify the exact reviewed image
+        run: |
+          set -euo pipefail
+          docker build --progress=plain \
+            --tag "$IMAGE" \
+            --file Dockerfile.replay-authoritative .
+          image_size=$(docker image inspect "$IMAGE" --format '{{.Size}}')
+          test "$image_size" -le "$IMAGE_LIMIT_BYTES"
+          docker run --rm --network none --entrypoint /bin/sh "$IMAGE" -c '
+            set -eu
+            test "$(cat /opt/lean-eval/benchmark/.lean-eval-commit)" = b91d4757aa0d7776c02540c9089df54fa0d0658a
+            test "$(cat /opt/lean-eval/benchmark/lean-toolchain)" = leanprover/lean4:v4.33.0
+            test "$(find /opt/lean-eval/benchmark/generated -mindepth 2 -maxdepth 2 -name lake-manifest.json | wc -l)" = 309
+            test "$(find /opt/lean-eval -type d -name .git -print -quit)" = ""
+            test -x /usr/local/bin/landrun
+            test -x /opt/lean-eval/bin/comparator
+            test -x /opt/lean-eval/bin/lean4export
+            test -x /opt/lean-eval/bin/nanoda_bin
+            test -x /opt/lean-eval/replay-authoritative
+            test -x /opt/lean-eval/replay-measure
+            elan run leanprover/lean4:v4.33.0 lean --version | grep -F "Lean (version 4.33.0,"
+          '
+          echo "IMAGE_SIZE_BYTES=$image_size" >> "$GITHUB_ENV"
+
+      - name: Push once and resolve the registry manifest digest
+        id: registry
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --prefix server wrangler containers images list \
+            --filter '^lean-eval-authoritative$' --json \
+            > "$RUNNER_TEMP/registry-images.json"
+          if jq -e --arg tag "$GITHUB_SHA" \
+            'any(.[]; .name == "lean-eval-authoritative" and any(.tags[]; . == $tag))' \
+            "$RUNNER_TEMP/registry-images.json" >/dev/null; then
+            echo "immutable registry tag already exists; refusing to overwrite it" >&2
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/registry-images.json"
+          npx --prefix server wrangler containers push "$IMAGE"
+          npx --prefix server wrangler containers registries credentials \
+            registry.cloudflare.com --pull --expiration-minutes 5 --json \
+            > "$RUNNER_TEMP/registry-credentials.json"
+          registry_username=$(jq -er .username "$RUNNER_TEMP/registry-credentials.json")
+          registry_password=$(jq -er .password "$RUNNER_TEMP/registry-credentials.json")
+          trap 'unset registry_username registry_password; rm -f "$RUNNER_TEMP/registry-credentials.json" "$RUNNER_TEMP/registry-headers" "$RUNNER_TEMP/registry-images.json"' EXIT
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --user "$registry_username:$registry_password" \
+            --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+            --head \
+            "https://registry.cloudflare.com/v2/$CLOUDFLARE_ACCOUNT_ID/lean-eval-authoritative/manifests/$GITHUB_SHA" \
+            --dump-header "$RUNNER_TEMP/registry-headers" \
+            --output /dev/null
+          image_digest=$(sed -n 's/^[Dd]ocker-[Cc]ontent-[Dd]igest:[[:space:]]*\(sha256:[0-9a-f]\{64\}\)[[:space:]\r]*$/\1/p' "$RUNNER_TEMP/registry-headers")
+          test "$(printf '%s' "$image_digest" | wc -l)" = 0
+          test "${#image_digest}" = 71
+          echo "digest=$image_digest" >> "$GITHUB_OUTPUT"
+          unset registry_username registry_password
+          rm -f "$RUNNER_TEMP/registry-credentials.json" "$RUNNER_TEMP/registry-headers"
+          trap - EXIT
+
+      - name: Write account-free publication evidence
+        env:
+          IMAGE_DIGEST: ${{ steps.registry.outputs.digest }}
+        run: |
+          python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+
+          def sha256(path: str) -> str:
+              return hashlib.sha256(pathlib.Path(path).read_bytes()).hexdigest()
+
+          evidence = {
+              "schema_version": 1,
+              "source_commit": os.environ["GITHUB_SHA"],
+              "registry_repository": "lean-eval-authoritative",
+              "registry_tag": os.environ["GITHUB_SHA"],
+              "registry_manifest_digest": os.environ["IMAGE_DIGEST"],
+              "image_size_bytes": int(os.environ["IMAGE_SIZE_BYTES"]),
+              "dockerfile_sha256": sha256("Dockerfile.replay-authoritative"),
+              "profile_lock_sha256": sha256(
+                  "server/replay-image/replay-profile-lock-v433.json"
+              ),
+              "benchmark_commit": "b91d4757aa0d7776c02540c9089df54fa0d0658a",
+              "workspace_manifest_count": 309,
+              "cloudflare_image_limit_bytes": 20 * 1024**3,
+          }
+          pathlib.Path("authoritative-image-publication.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      # actions/upload-artifact pinned to v7.0.1.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: authoritative-image-publication
+          path: authoritative-image-publication.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove registry scratch
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/registry-credentials.json" "$RUNNER_TEMP/registry-headers" \
+            "$RUNNER_TEMP/registry-images.json"
