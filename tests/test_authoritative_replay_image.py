@@ -97,10 +97,12 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
             with self.subTest(source=source[:32]):
                 self.assertIn("LeanEval/EasyProblems.lean", source)
                 self.assertIn("EvalTools/Main.lean", source)
-                self.assertIn(
-                    "lake build LeanEval.EasyProblems extract_theorem lean-eval",
-                    source,
-                )
+        self.assertNotIn(
+            "lake build LeanEval.EasyProblems extract_theorem lean-eval", dockerfile
+        )
+        self.assertIn(
+            "lake build LeanEval.EasyProblems extract_theorem lean-eval", workflow
+        )
 
     def test_image_contains_every_fixed_replay_command(self) -> None:
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")

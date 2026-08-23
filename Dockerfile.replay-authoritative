@@ -151,8 +151,6 @@ RUN chmod 0555 /usr/local/bin/landrun /opt/lean-eval/bin/* \
     && test "$(find /opt/lean-eval -type d -name .git -print -quit)" = '' \
     && test "$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" = 3.11 \
     && python3 -c 'import sys, tomllib; sys.path.insert(0, "/opt/lean-eval"); from evaluate_submission import detect_matches; assert callable(detect_matches)' \
-    && cd /opt/lean-eval/benchmark \
-    && lake build LeanEval.EasyProblems extract_theorem lean-eval \
     && test "$(python3 -c 'import json; print(json.load(open("/opt/lean-eval/replay-profile-lock.json"))["schema_version"])')" = 1
 
 EXPOSE 3000
