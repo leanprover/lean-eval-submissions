@@ -577,6 +577,12 @@ publication-enabling variable exists.
 Historical migration uses read-only audit key `161041934`; its required
 `LEGACY_ARCHIVE_IDENTITY` secret is deliberately absent. Accepted-archive
 replay uses distinct read-only State key `161043118` and audit key `161043119`.
+The staging authoritative replay controller additionally owns write-capable
+State key `161051584`; its private half exists only as
+`STAGING_STATE_WRITE_KEY` in protected environment `replay-staging`. Staging
+State ruleset `21094006` allows deploy-key bypass so this key can publish one
+locally validated non-force append. The two existing read-only deploy keys
+cannot use that bypass to write, and no production replay writer was created.
 
 The manual `public-replay-smoke.yml` job uses `replay-staging` but needs and
 receives no environment secret, variable, OIDC permission, State token, archive
@@ -695,7 +701,8 @@ compatibility fix or append a corrective event.
 | Readiness-secret rotation | 2026-08-20 | distinct staging/production values rotated in both Workers and matching protected GitHub environment secrets; resulting intake versions `92aa9ac5-4305-47ab-85f2-8495c6935123` / `46ef4231-1ace-4343-9f16-ce9ea60e194e`; health remained commit-exact and intake-disabled |
 | Deployment token provisioning | 2026-08-21 | `lean-eval-deploy-staging` and `lean-eval-deploy-production` created with Workers Scripts: Edit only; each verified active, reaching the four Lean Eval Workers, zero zones, KV denied; installed in the matching protected GitHub environment |
 | State-writer token provisioning | 2026-08-21 | two single-repository fine-grained tokens created, expiring 2026-11-19, installed as `GITHUB_STATE_TOKEN`, approved by `leanprover`, and verified through runs `32465890236` / `32465892118` without changing either State tree |
-| State ruleset bypasses | 2026-08-21 | `kim-em` (`User` 477956) is the sole always-allowed bypass actor on staging ruleset `21094006` and production ruleset `21094005`; all protection rules otherwise unchanged |
+| State ruleset bypasses | 2026-08-23 | Production ruleset `21094005` retains `kim-em` (`User` 477956) as its sole always-allowed bypass actor. Staging ruleset `21094006` retains that user and now also permits `DeployKey` bypass for authoritative replay writer key `161051584`; deletion, non-fast-forward, linear-history, pull-request, and exact `validate` status rules remain active. Existing staging deploy keys `161041214` / `161043118` are read-only. |
+| Staging replay State writer | 2026-08-23 | Write-capable deploy key `161051584` is scoped only to `leanprover/lean-eval-state-staging`; its private half was installed only as protected `replay-staging` secret `STAGING_STATE_WRITE_KEY` and securely removed from local scratch. Production State, replay, intake, and release configuration were unchanged. |
 | Browser OAuth App provisioning | 2026-08-21 | two Apps with exact per-environment callbacks; client ID and secret installed in the matching Worker |
 | Broker GitHub App provisioning | 2026-08-21 | source reader `4666604` (Metadata read, Contents read, no installation) and workflow dispatcher `4666633` (Metadata read, Contents read, Actions read/write, installation `155329316` limited to `leanprover/lean-eval-submissions`); four secrets installed in both broker environments |
 | Broker GitHub App ownership transfer | 2026-08-21 | both registrations accepted by `leanprover`; public records confirm unchanged IDs `4666604` / `4666633` and the exact reviewed permission split |

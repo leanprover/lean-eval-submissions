@@ -42,12 +42,27 @@ class ReplayArchiveStagingWorkflowTests(unittest.TestCase):
             WORKFLOW.index("Assume only the staging replay Invoke role"),
         )
 
-    def test_drops_authority_and_never_uploads_private_material(self) -> None:
+    def test_drops_authority_and_uploads_only_source_free_runtime_evidence(self) -> None:
         self.assertIn('test -z "${AWS_ACCESS_KEY_ID:-}"', WORKFLOW)
         self.assertIn('rm "$RUNNER_TEMP/identity.age"', WORKFLOW)
-        self.assertNotIn("actions/upload-artifact", WORKFLOW)
+        self.assertIn("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a", WORKFLOW)
+        self.assertIn("name: authoritative-replay-runtime-evidence", WORKFLOW)
+        self.assertIn('"health": json.loads(', WORKFLOW)
+        self.assertIn('"probe": json.loads(', WORKFLOW)
+        artifact_section = WORKFLOW.split("name: authoritative-replay-runtime-evidence", 1)[1]
+        self.assertNotIn("identity.age", artifact_section.split("Remove all remaining", 1)[0])
+        self.assertNotIn("archive.tar.age", artifact_section.split("Remove all remaining", 1)[0])
         self.assertNotIn("contents: write", WORKFLOW)
         self.assertNotIn("STATE_WRITE", WORKFLOW)
+
+    def test_runtime_evidence_requires_the_disabled_exact_image_deployment(self) -> None:
+        self.assertIn('.status == "ok"', WORKFLOW)
+        self.assertIn('.deployed_commit == $commit', WORKFLOW)
+        self.assertIn('.replay_enabled == false', WORKFLOW)
+        self.assertIn('.reviewed_execution_profile_digest == ("0" * 64)', WORKFLOW)
+        self.assertIn('.reviewed_measurement_config_digest == ("0" * 64)', WORKFLOW)
+        self.assertIn('.reviewed_vm_image_digest | test(', WORKFLOW)
+        self.assertIn('.production_memory_gate_bytes == 12884901888', WORKFLOW)
 
 
 if __name__ == "__main__":
