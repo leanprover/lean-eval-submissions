@@ -6,8 +6,8 @@ import unittest
 
 
 ROOT = pathlib.Path(__file__).parents[1]
-IMAGE_TAG = "fdcabb95085edccd70c81dc079c27bcaf20a4b16"
-IMAGE_DIGEST = "sha256:53d1964edc01f736ae66d7faa715d5b1fb67c96dcc167b4c5012282d8c14c807"
+IMAGE_TAG = "48525d13562f99fc8f24d8467ec3855005474195"
+IMAGE_DIGEST = "sha256:dd790c0c84eabac20c48e827a825809ea5a35e3baefd03c40609f9fdca80f6fc"
 IMAGE_REFERENCE = (
     "registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/"
     f"lean-eval-authoritative:{IMAGE_TAG}"
