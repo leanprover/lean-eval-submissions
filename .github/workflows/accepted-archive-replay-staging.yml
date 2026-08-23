@@ -199,6 +199,7 @@ jobs:
             --identity "$RUNNER_TEMP/identity.age" \
             --output "$RUNNER_TEMP/executor-request.json"
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 15 \
             --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-replay-staging" \
             --output "$RUNNER_TEMP/replay-oidc-response.json"
