@@ -103,9 +103,9 @@ Cloudflare Registry tag and independently recorded manifest digest:
 - one `standard-4` container at most per environment (4 vCPU, 12 GiB RAM,
   20 GB disk), with SSH disabled and public network access disabled in the
   Sandbox class;
-- staging exposes the synthetic and accepted-archive acceptance endpoints and
-  enables general replay only for one reviewed Python 3.11 retry; both
-  acceptance and replay remain disabled in production;
+- staging exposes the synthetic and accepted-archive acceptance endpoints;
+  general replay is disabled in staging and both acceptance and replay are
+  disabled in production;
 - the 2026-08-23 failed authoritative rollout was followed by disabled-state
   acceptance probes; live Cloudflare logs showed exit code 127 because the
   authoritative image omitted the two acceptance commands. The Dockerfile and
