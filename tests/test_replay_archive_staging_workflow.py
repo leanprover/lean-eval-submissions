@@ -64,12 +64,12 @@ class ReplayArchiveStagingWorkflowTests(unittest.TestCase):
         self.assertIn('.replay_enabled == false', WORKFLOW)
         self.assertIn(
             '.reviewed_execution_profile_digest == '
-            '("0" * 64)',
+            '"05b2602c71cd9ee168a11d0e79aa47c9c4ebfbd642b7a23ec988c8906d4f3483"',
             WORKFLOW,
         )
         self.assertIn(
             '.reviewed_measurement_config_digest == '
-            '("0" * 64)',
+            '"2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945"',
             WORKFLOW,
         )
         self.assertIn('.reviewed_vm_image_digest | test(', WORKFLOW)
