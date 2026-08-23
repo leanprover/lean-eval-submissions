@@ -110,6 +110,40 @@ jobs:
             exit 1
           fi
 
+      - name: Require the exact enabled reviewed staging executor
+        if: steps.plan.outputs.kind == 'execution'
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 15 \
+            https://lean-eval-replay-executor-staging.lean-eval.workers.dev/healthz \
+            --output "$RUNNER_TEMP/replay-health.json"
+          python - "$RUNNER_TEMP/replay-health.json" \
+            configuration/authoritative-replay-staging-v1.json <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          health = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+          bundle = json.loads(pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"))
+          expected = {
+              "status": "ok",
+              "service": "lean-eval-replay-executor",
+              "environment": "staging",
+              "deployed_commit": os.environ["GITHUB_SHA"],
+              "replay_enabled": True,
+              "staging_acceptance_enabled": True,
+              "staging_memory_limit_bytes": 12 * 1024**3,
+              "production_memory_gate_bytes": 12 * 1024**3,
+              "reviewed_execution_profile_digest": bundle["execution_profile_digest"],
+              "reviewed_measurement_config_digest": bundle["measurement_config_digest"],
+              "reviewed_vm_image_digest": bundle["registry_manifest_digest"],
+          }
+          if health != expected:
+              raise SystemExit("staging replay executor is not the exact enabled review")
+          PY
+
       - name: Append replay.started before acquiring any execution credential
         id: started
         if: steps.plan.outputs.kind == 'execution'
@@ -373,4 +407,5 @@ jobs:
             "$RUNNER_TEMP/unwrap-metadata.json" \
             "$RUNNER_TEMP/executor-request.json" \
             "$RUNNER_TEMP/replay-oidc-response.json" \
+            "$RUNNER_TEMP/replay-health.json" \
             "$RUNNER_TEMP/failure-reason"

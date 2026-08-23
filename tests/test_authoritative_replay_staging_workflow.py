@@ -33,6 +33,17 @@ class AuthoritativeReplayStagingWorkflowTests(unittest.TestCase):
         self.assertLess(started, executor)
         self.assertIn("scripts/publish_replay_state_event", self.text[started:audit])
 
+    def test_exact_enabled_health_is_required_before_started(self) -> None:
+        health = self.text.index("Require the exact enabled reviewed staging executor")
+        started = self.text.index("Append replay.started before acquiring")
+        self.assertLess(health, started)
+        section = self.text[health:started]
+        self.assertIn('"deployed_commit": os.environ["GITHUB_SHA"]', section)
+        self.assertIn('"replay_enabled": True', section)
+        self.assertIn('bundle["execution_profile_digest"]', section)
+        self.assertIn('bundle["measurement_config_digest"]', section)
+        self.assertIn('bundle["registry_manifest_digest"]', section)
+
     def test_executor_has_no_aws_or_state_write_authority(self) -> None:
         section = self.text.split(
             "- name: Invoke the reviewed endpoint without AWS or State write authority", 1
