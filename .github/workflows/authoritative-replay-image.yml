@@ -9,9 +9,11 @@ on:
       - 'scripts/evaluate_submission.py'
       - 'scripts/replay_orchestrator.py'
       - 'server/replay-image/comparator-71b52-phase-metrics.patch'
+      - 'server/replay-image/replay-archive-acceptance'
       - 'server/replay-image/replay-authoritative'
       - 'server/replay-image/replay-measure'
       - 'server/replay-image/replay-profile-lock-v433.json'
+      - 'server/replay-image/replay-staging-acceptance'
   workflow_dispatch:
 
 permissions:
@@ -74,6 +76,8 @@ jobs:
             test -x /opt/lean-eval/bin/lean4export
             test -x /opt/lean-eval/bin/nanoda_bin
             test -x /opt/lean-eval/replay-authoritative
+            test -x /opt/lean-eval/replay-staging-acceptance
+            test -x /opt/lean-eval/replay-archive-acceptance
             test -x /opt/lean-eval/replay-measure
             elan run leanprover/lean4:v4.33.0 lean --version | grep -F "Lean (version 4.33.0,"
           '

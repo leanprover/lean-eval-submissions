@@ -74,6 +74,7 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
 
     def test_image_contains_every_fixed_replay_command(self) -> None:
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+        workflow = WORKFLOW.read_text(encoding="utf-8")
         for command in (
             "replay-authoritative",
             "replay-staging-acceptance",
@@ -86,6 +87,8 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
                     dockerfile,
                 )
                 self.assertIn(f"/opt/lean-eval/{command}", dockerfile)
+                self.assertIn(f"'server/replay-image/{command}'", workflow)
+                self.assertIn(f"test -x /opt/lean-eval/{command}", workflow)
 
     def test_workflow_actions_are_commit_pinned(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
