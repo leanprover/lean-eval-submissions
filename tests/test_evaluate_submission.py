@@ -229,7 +229,7 @@ class DetectMatchesTests(unittest.TestCase):
 
 
 class OverlayMatchTests(unittest.TestCase):
-    def test_preprimed_workspace_requires_manifest_and_shared_packages(self) -> None:
+    def test_preprimed_workspace_requires_manifest_overrides_and_packages(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = pathlib.Path(raw)
             packages = root / "packages"
@@ -239,6 +239,11 @@ class OverlayMatchTests(unittest.TestCase):
             with self.assertRaisesRegex(ev.EvaluateError, "manifest"):
                 ev._require_preprimed_workspace(root)
             (root / "lake-manifest.json").write_text("{}\n", encoding="utf-8")
+            with self.assertRaisesRegex(ev.EvaluateError, "package overrides"):
+                ev._require_preprimed_workspace(root)
+            (root / ".lake" / "package-overrides.json").write_text(
+                '{"version":"1.2.0","packages":[]}\n', encoding="utf-8"
+            )
             ev._require_preprimed_workspace(root)
 
     def test_trusted_measurement_command_enters_only_pristine_config(self) -> None:

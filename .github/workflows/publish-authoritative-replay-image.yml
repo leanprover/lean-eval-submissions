@@ -74,6 +74,8 @@ jobs:
             test "$(find /opt/lean-eval/benchmark/generated -mindepth 2 -maxdepth 2 -name lake-manifest.json | wc -l)" = 309
             test -f /opt/lean-eval/benchmark/LeanEval/EasyProblems.lean
             test -f /opt/lean-eval/benchmark/EvalTools/Main.lean
+            test -f /opt/lean-eval/benchmark/.lake/package-overrides.json
+            test -f /opt/lean-eval/benchmark/generated/two_plus_two/.lake/package-overrides.json
             test "$(find /opt/lean-eval -type d -name .git -print -quit)" = ""
             test -x /usr/local/bin/landrun
             test -x /opt/lean-eval/bin/comparator
@@ -87,6 +89,7 @@ jobs:
             python3 -c '"'"'import sys, tomllib; sys.path.insert(0, "/opt/lean-eval"); from evaluate_submission import detect_matches; assert callable(detect_matches)'"'"'
             cd /opt/lean-eval/benchmark
             lake build LeanEval.EasyProblems extract_theorem lean-eval
+            lake --dir generated/two_plus_two build
             elan run leanprover/lean4:v4.33.0 lean --version | grep -F "Lean (version 4.33.0,"
           '
           echo "IMAGE_SIZE_BYTES=$image_size" >> "$GITHUB_ENV"

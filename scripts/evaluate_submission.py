@@ -415,9 +415,14 @@ def _prime_workspace(target: pathlib.Path) -> None:
 def _require_preprimed_workspace(target: pathlib.Path) -> None:
     """Verify the network-free replay image already primed this workspace."""
     manifest = target / "lake-manifest.json"
+    overrides = target / ".lake" / "package-overrides.json"
     packages = target / ".lake" / "packages"
     if manifest.is_symlink() or not manifest.is_file():
         raise EvaluateError(f"Preprimed workspace manifest is unavailable: {manifest}")
+    if overrides.is_symlink() or not overrides.is_file():
+        raise EvaluateError(
+            f"Preprimed workspace package overrides are unavailable: {overrides}"
+        )
     if not packages.is_symlink() or not packages.resolve().is_dir():
         raise EvaluateError(f"Preprimed workspace packages are unavailable: {packages}")
 
