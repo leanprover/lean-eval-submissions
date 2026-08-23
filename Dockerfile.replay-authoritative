@@ -86,13 +86,22 @@ RUN git init /build/benchmark \
          fi; \
        done \
     && test "$(find generated -mindepth 2 -maxdepth 2 -name lake-manifest.json | wc -l)" = 309 \
+    && python3 -c 'import json, pathlib; root = pathlib.Path("/build/benchmark"); manifest = json.loads((root / "lake-manifest.json").read_text()); packages = [{"type": "path", "dir": "/opt/lean-eval/benchmark/.lake/packages/" + package["name"].removeprefix("«").removesuffix("»"), "name": package["name"], "manifestFile": package["manifestFile"], "inherited": package["inherited"], "configFile": package["configFile"]} for package in manifest["packages"]]; (root / ".lake/package-overrides.json").write_text(json.dumps({"version": manifest["version"], "packages": packages}, indent=2, ensure_ascii=False, sort_keys=True) + "\n")' \
+    && for workspace in generated/*; do \
+         if [ -f "$workspace/lake-manifest.json" ]; then \
+           cp .lake/package-overrides.json "$workspace/.lake/package-overrides.json"; \
+         fi; \
+       done \
+    && test "$(find generated -mindepth 3 -maxdepth 3 -path '*/.lake/package-overrides.json' | wc -l)" = 309 \
     && find /build/benchmark -type d -name .git -prune -exec rm -rf '{}' + \
     && strip /build/benchmark/.lake/build/bin/lean-eval \
     && mkdir -p /runtime/benchmark /runtime/bin /runtime/home/.elan \
-    && cp -a generated manifests lakefile.toml lake-manifest.json lean-toolchain .lean-eval-commit \
+    && cp -a LeanEval EvalTools generated manifests lakefile.toml lake-manifest.json \
+      lean-toolchain .lean-eval-commit \
       /runtime/benchmark/ \
     && mkdir -p /runtime/benchmark/.lake \
-    && cp -a .lake/build .lake/packages /runtime/benchmark/.lake/ \
+    && cp -a .lake/build .lake/packages .lake/package-overrides.json \
+      /runtime/benchmark/.lake/ \
     && cp /build/comparator/.lake/build/bin/comparator /runtime/bin/comparator \
     && cp /build/lean4export/.lake/build/bin/lean4export /runtime/bin/lean4export \
     && cp -a "$ELAN_HOME/bin" /runtime/home/.elan/bin \
@@ -145,6 +154,10 @@ RUN chmod 0555 /usr/local/bin/landrun /opt/lean-eval/bin/* \
       b91d4757aa0d7776c02540c9089df54fa0d0658a \
     && test "$(cat /opt/lean-eval/benchmark/lean-toolchain)" = \
       'leanprover/lean4:v4.33.0' \
+    && test -f /opt/lean-eval/benchmark/LeanEval/EasyProblems.lean \
+    && test -f /opt/lean-eval/benchmark/EvalTools/Main.lean \
+    && test -f /opt/lean-eval/benchmark/.lake/package-overrides.json \
+    && test -f /opt/lean-eval/benchmark/generated/two_plus_two/.lake/package-overrides.json \
     && test "$(find /opt/lean-eval -type d -name .git -print -quit)" = '' \
     && test "$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" = 3.11 \
     && python3 -c 'import sys, tomllib; sys.path.insert(0, "/opt/lean-eval"); from evaluate_submission import detect_matches; assert callable(detect_matches)' \

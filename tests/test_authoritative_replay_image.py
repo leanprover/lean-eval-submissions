@@ -89,6 +89,27 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
                 self.assertIn("import sys, tomllib", source)
                 self.assertIn("from evaluate_submission import detect_matches", source)
 
+    def test_image_contains_and_builds_required_lean_sources_offline(self) -> None:
+        dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("cp -a LeanEval EvalTools generated manifests", dockerfile)
+        self.assertIn(
+            "cp -a .lake/build .lake/packages .lake/package-overrides.json",
+            dockerfile,
+        )
+        self.assertIn('"type": "path"', dockerfile)
+        for source in (dockerfile, workflow):
+            with self.subTest(source=source[:32]):
+                self.assertIn("LeanEval/EasyProblems.lean", source)
+                self.assertIn("EvalTools/Main.lean", source)
+        self.assertNotIn(
+            "lake build LeanEval.EasyProblems extract_theorem lean-eval", dockerfile
+        )
+        self.assertIn(
+            "lake build LeanEval.EasyProblems extract_theorem lean-eval", workflow
+        )
+        self.assertIn("lake --dir generated/two_plus_two build", workflow)
+
     def test_image_contains_every_fixed_replay_command(self) -> None:
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")
         workflow = WORKFLOW.read_text(encoding="utf-8")

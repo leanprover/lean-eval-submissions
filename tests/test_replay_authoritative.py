@@ -216,6 +216,20 @@ class AuthoritativeReplayTests(unittest.TestCase):
             ):
                 authoritative.decode_file(encoded, root / "decoded", 4)
 
+    def test_nonzero_evaluator_without_measurements_is_retryable_infrastructure_failure(
+        self,
+    ) -> None:
+        normalized = authoritative.normalize_metrics(authoritative.empty_metrics())
+        with self.assertRaisesRegex(
+            authoritative.AuthoritativeReplayError,
+            "evaluator failed before measurement",
+        ):
+            authoritative.require_measurement_after_evaluator_failure(1, normalized)
+
+        measured = authoritative.normalize_metrics(metrics(checker_invocations=0))
+        authoritative.require_measurement_after_evaluator_failure(1, measured)
+        authoritative.require_measurement_after_evaluator_failure(0, normalized)
+
     def test_archive_expectation_is_bound_to_request(self) -> None:
         value = {
             "schema_version": 1,

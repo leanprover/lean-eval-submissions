@@ -47,6 +47,13 @@ class AuthoritativeReplayImagePublishTests(unittest.TestCase):
         self.assertIn("sys.version_info.major", workflow)
         self.assertIn("import sys, tomllib", workflow)
         self.assertIn("from evaluate_submission import detect_matches", workflow)
+        self.assertIn("LeanEval/EasyProblems.lean", workflow)
+        self.assertIn("EvalTools/Main.lean", workflow)
+        self.assertIn(
+            "lake build LeanEval.EasyProblems extract_theorem lean-eval", workflow
+        )
+        self.assertIn("package-overrides.json", workflow)
+        self.assertIn("lake --dir generated/two_plus_two build", workflow)
 
     def test_actions_are_commit_pinned_and_permissions_are_read_only(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")

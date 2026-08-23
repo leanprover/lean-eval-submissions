@@ -510,6 +510,15 @@ def load_metrics_after_execution() -> dict[str, Any]:
     return value
 
 
+def require_measurement_after_evaluator_failure(
+    returncode: int, normalized: dict[str, Any]
+) -> None:
+    if returncode != 0 and all(
+        normalized[phase]["invocations"] == 0 for phase in ("build", "checker")
+    ):
+        raise AuthoritativeReplayError("evaluator failed before measurement")
+
+
 def network_probe() -> None:
     result = subprocess.run(
         [
@@ -649,6 +658,7 @@ def main() -> None:
                 request, "timed_out", normalized, file_count, lines_of_code
             )
         elif returncode != 0:
+            require_measurement_after_evaluator_failure(returncode, normalized)
             verdict = reported_execution_verdict(
                 request, "crashed", normalized, file_count, lines_of_code
             )
