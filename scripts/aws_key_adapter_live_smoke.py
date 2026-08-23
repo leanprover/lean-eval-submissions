@@ -469,7 +469,7 @@ def validate_executor_response(request_path: pathlib.Path, response_path: pathli
         "network_probe": "blocked",
         "destruction": "confirmed",
         "staging_memory_limit_bytes": 12 * 1024**3,
-        "production_memory_gate_bytes": 16 * 1024**3,
+        "production_memory_gate_bytes": 12 * 1024**3,
     }
     for field, value in expected.items():
         if response.get(field) != value:

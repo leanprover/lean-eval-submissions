@@ -196,7 +196,7 @@ jobs:
               "replay_enabled": False,
               "staging_acceptance_enabled": True,
               "staging_memory_limit_bytes": 12 * 1024**3,
-              "production_memory_gate_bytes": 16 * 1024**3,
+              "production_memory_gate_bytes": 12 * 1024**3,
           }
           PY
             then
@@ -286,7 +286,7 @@ jobs:
               "replay_enabled": False,
               "staging_acceptance_enabled": False,
               "staging_memory_limit_bytes": 12 * 1024**3,
-              "production_memory_gate_bytes": 16 * 1024**3,
+              "production_memory_gate_bytes": 12 * 1024**3,
           }
           PY
             then

@@ -9,6 +9,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEPLOY = (ROOT / ".github/workflows/deploy-worker.yml").read_text(encoding="utf-8")
+
 ROLLBACK = (ROOT / ".github/workflows/rollback-worker.yml").read_text(encoding="utf-8")
 STATE_WRITER_PREFLIGHT = (
     ROOT / ".github/workflows/verify-state-writer.yml"
@@ -29,6 +30,11 @@ REPLAY_DOCKERFILE = (ROOT / "server/Dockerfile.replay").read_text(encoding="utf-
 
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
+    def test_smoke_checks_use_approved_memory_limit_for_both_environments(self) -> None:
+        self.assertEqual(DEPLOY.count('"staging_memory_limit_bytes": 12 * 1024**3'), 2)
+        self.assertEqual(DEPLOY.count('"production_memory_gate_bytes": 12 * 1024**3'), 2)
+        self.assertNotIn('"production_memory_gate_bytes": 16 * 1024**3', DEPLOY)
+
     def test_state_writer_preflight_is_protected_and_intake_safe(self) -> None:
         self.assertIn("environment: cloudflare-${{ inputs.target_environment }}", STATE_WRITER_PREFLIGHT)
         self.assertIn("READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}", STATE_WRITER_PREFLIGHT)
