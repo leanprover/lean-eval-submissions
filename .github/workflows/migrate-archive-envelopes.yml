@@ -137,7 +137,7 @@ jobs:
             | sha256sum --check --strict
           tar --extract --gzip --file "$RUNNER_TEMP/age.tar.gz" --directory "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/age" >> "$GITHUB_PATH"
-          test "$($RUNNER_TEMP/age/age --version)" = v1.3.1
+          test "$("$RUNNER_TEMP/age/age" --version)" = v1.3.1
           rm -f "$RUNNER_TEMP/age.tar.gz"
 
       - name: Assume only the production Encrypt role
