@@ -59,6 +59,26 @@ class StagingPromotionCanaryReadinessTests(unittest.TestCase):
 
 
 class StagingPromotionCanaryTests(unittest.TestCase):
+    def test_http_error_classification_is_closed_and_source_free(self) -> None:
+        for detail, expected in CANARY.CANARY_INVALID_REQUEST_REASONS.items():
+            encoded = CANARY.json.dumps(
+                {"error": "invalid_request", "detail": detail},
+                separators=(",", ":"),
+            ).encode()
+            self.assertEqual(CANARY.http_failure_reason(400, encoded), expected)
+        self.assertEqual(
+            CANARY.http_failure_reason(
+                400,
+                b'{"error":"invalid_request","detail":"private upstream text"}',
+            ),
+            "invalid_request_other",
+        )
+        self.assertEqual(
+            CANARY.http_failure_reason(500, b'{"detail":"must not surface"}'),
+            "http_500",
+        )
+        self.assertEqual(CANARY.http_failure_reason(400, b"not-json"), "http_400")
+
     def test_main_retries_a_bounded_canary_transport_timeout(self) -> None:
         commit = "c" * 40
         args = types.SimpleNamespace(

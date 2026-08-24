@@ -34,6 +34,11 @@ CANARY_FIELDS = {
     "synthetic_intake",
     "workflow_dispatch",
 }
+CANARY_INVALID_REQUEST_REASONS = {
+    "promotion canary request must be an object": "request_not_object",
+    "promotion canary request is not canonical": "request_not_canonical",
+    "promotion canary request does not bind this exact deployment": "deployment_binding_mismatch",
+}
 
 
 class CanaryFailure(RuntimeError):
@@ -56,6 +61,23 @@ def opener() -> urllib.request.OpenerDirector:
         urllib.request.HTTPSHandler(context=ssl.create_default_context()),
         RejectRedirects(),
     )
+
+
+def http_failure_reason(status: int, encoded: bytes) -> str:
+    if status != 400 or len(encoded) > 4096:
+        return f"http_{status}"
+    try:
+        value = json.loads(encoded)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return "http_400"
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"detail", "error"}
+        or value.get("error") != "invalid_request"
+        or not isinstance(value.get("detail"), str)
+    ):
+        return "http_400"
+    return CANARY_INVALID_REQUEST_REASONS.get(value["detail"], "invalid_request_other")
 
 
 def request_json(
@@ -85,7 +107,8 @@ def request_json(
             status = response.status
             encoded = response.read(16 * 1024 + 1)
     except urllib.error.HTTPError as error:
-        raise CanaryFailure(f"{path} returned HTTP {error.code}") from None
+        reason = http_failure_reason(error.code, error.read(4097))
+        raise CanaryFailure(f"{path} returned HTTP {error.code} ({reason})") from None
     except (OSError, TimeoutError, urllib.error.URLError) as error:
         raise CanaryConnectivityFailure(
             f"{path} connectivity failed ({type(error).__name__})"
