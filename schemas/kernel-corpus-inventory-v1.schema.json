@@ -26,18 +26,23 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["result_id", "replay_attempt_id", "authoritative_outcome", "availability", "unavailability_evidence_sha256"],
+        "required": ["result_id", "replay_task_id", "replay_attempt", "terminal_verdict_sha256", "terminal_event_sha256", "report_entry_sha256", "replay_export_input_sha256", "authoritative_outcome", "availability", "unavailability_evidence_sha256"],
         "properties": {
           "result_id": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
-          "replay_attempt_id": {"type": "string", "pattern": "^rt1_[0-9a-f]{64}$"},
+          "replay_task_id": {"type": "string", "pattern": "^rt1_[0-9a-f]{64}$"},
+          "replay_attempt": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+          "terminal_verdict_sha256": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+          "terminal_event_sha256": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+          "report_entry_sha256": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
+          "replay_export_input_sha256": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
           "authoritative_outcome": {"type": ["string", "null"], "enum": ["accepted", "rejected", "declined", "crashed", "timed_out", null]},
           "availability": {"enum": ["ready", "replay_pending", "source_unavailable", "replay_unavailable"]},
           "unavailability_evidence_sha256": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]}
         },
         "allOf": [
-          {"if": {"properties": {"availability": {"const": "ready"}}}, "then": {"properties": {"authoritative_outcome": {"enum": ["accepted", "rejected", "declined", "crashed", "timed_out"]}, "unavailability_evidence_sha256": {"type": "null"}}}},
-          {"if": {"properties": {"availability": {"const": "replay_pending"}}}, "then": {"properties": {"authoritative_outcome": {"type": "null"}, "unavailability_evidence_sha256": {"type": "null"}}}},
-          {"if": {"properties": {"availability": {"enum": ["source_unavailable", "replay_unavailable"]}}}, "then": {"properties": {"authoritative_outcome": {"type": "null"}, "unavailability_evidence_sha256": {"$ref": "#/$defs/digest"}}}}
+          {"if": {"properties": {"availability": {"const": "ready"}}}, "then": {"properties": {"authoritative_outcome": {"enum": ["accepted", "rejected", "declined", "crashed", "timed_out"]}, "terminal_verdict_sha256": {"$ref": "#/$defs/digest"}, "terminal_event_sha256": {"$ref": "#/$defs/digest"}, "report_entry_sha256": {"$ref": "#/$defs/digest"}, "replay_export_input_sha256": {"$ref": "#/$defs/digest"}, "unavailability_evidence_sha256": {"type": "null"}}}},
+          {"if": {"properties": {"availability": {"const": "replay_pending"}}}, "then": {"properties": {"authoritative_outcome": {"type": "null"}, "terminal_verdict_sha256": {"type": "null"}, "terminal_event_sha256": {"type": "null"}, "report_entry_sha256": {"type": "null"}, "replay_export_input_sha256": {"type": "null"}, "unavailability_evidence_sha256": {"type": "null"}}}},
+          {"if": {"properties": {"availability": {"enum": ["source_unavailable", "replay_unavailable"]}}}, "then": {"properties": {"authoritative_outcome": {"type": "null"}, "terminal_verdict_sha256": {"type": "null"}, "terminal_event_sha256": {"type": "null"}, "report_entry_sha256": {"type": "null"}, "replay_export_input_sha256": {"type": "null"}, "unavailability_evidence_sha256": {"$ref": "#/$defs/digest"}}}}
         ]
       }
     }

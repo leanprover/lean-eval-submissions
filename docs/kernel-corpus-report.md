@@ -24,17 +24,26 @@ semantically:
    with only that ID omitted.
 2. `kernel-corpus-inventory-v1` binds a migration cutoff, exact results-store
    commit and tree digest, the historical replay report digest, and every
-   result/replay-attempt pair. `inventory_id` binds the complete canonical
-   object with only that ID omitted. Results are unique and sorted.
+   result/replay-task pair, positive replay attempt, and exact terminal verdict,
+   terminal State event, and report-entry digests. Every runnable row also
+   binds the digest of the source-free replay/export input. `inventory_id`
+   binds the complete canonical object with only that ID omitted. Results and
+   replay tasks are unique and sorted.
 3. `kernel-corpus-shard-plan-v1` assigns every inventory result to exactly one
    shard by `sha256(result_id) mod shard_count`. Every attempt ID binds the
-   configuration ID, inventory ID, result ID, and historical replay attempt
-   ID. Recomputing the plan rejects changed configurations, inventories,
-   attempts, shard counts, omissions, and duplicates.
+   configuration ID, inventory ID, result ID, replay task, positive replay
+   attempt, terminal evidence tuple, and replay/export input. Recomputing the
+   plan rejects changed configurations, inventories, attempts, shard counts,
+   omissions, and duplicates.
 4. `kernel-corpus-observations-v1` must match one plan position for position.
    No submission source, source path, URL, repository, or ref belongs in this
    artifact. The evidence digest for an inherited unavailable result must be
-   exactly the digest recorded by the inventory.
+   exactly the digest recorded by the inventory. Every action that executes the
+   candidate/export lane embeds a content-addressed source-free receipt. The
+   receipt binds its attempt and input, the exact series ID and digest, outcome,
+   statistics, resource-limit disposition, transcript digest, and runner
+   attestation digest. Pending or unavailable rows that did not execute cannot
+   claim a receipt.
 5. `kernel-corpus-report-v1` is a deterministic aggregate of every ordered
    shard. It binds the exact plan and observation sets, requires exactly-once
    full inventory coverage, records closed counters and performance summaries,
@@ -66,6 +75,10 @@ Only completed terminal observations contribute to performance statistics.
 The report uses deterministic upper-median and nearest-rank p95 wall time,
 minimum/maximum/sum wall time, maximum peak memory, and total checker
 invocations. No statistic is inferred for pending or unavailable results.
+Each executed measurement is bounded by the series wall-time and memory limits;
+checker invocation counts and aggregate sums are bounded to interoperable safe
+integers. `timed_out` must carry the wall-time disposition, while a memory-limit
+disposition is valid only for a crash at the configured bound.
 
 Any terminal candidate outcome that differs from the historical authoritative
 outcome creates an `adjudication: required` record and a blocking reason. The
@@ -99,8 +112,14 @@ python scripts/kernel_corpus_report.py aggregate \
 ```
 
 The tool refuses a nonempty preparation directory and refuses incomplete,
-mixed, reordered, duplicated, or altered plan/observation sets. It performs no
-network access and has no credential or repository-write interface.
+mixed, reordered, duplicated, or altered plan/observation sets. JSON reads are
+byte-, node-, depth-, and file-count-bounded; reject duplicate object keys; and
+accept only regular non-symlink files. Shard directories reject unknown names,
+FIFOs, devices, links, and membership differences. Outputs use no-follow,
+exclusive, same-directory atomic publication and never overwrite an existing
+path. Every runtime input and generated artifact is checked against its Draft
+2020-12 schema as well as the cross-artifact semantic validator. The tool
+performs no network access and has no credential or repository-write interface.
 
 ## Current rollout status
 

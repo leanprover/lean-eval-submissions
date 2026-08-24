@@ -13,8 +13,11 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import os
 import pathlib
 import re
+import secrets
+import stat
 import sys
 from typing import Any
 
@@ -23,7 +26,7 @@ DIGEST = re.compile(r"[0-9a-f]{64}")
 COMMIT = re.compile(r"[0-9a-f]{40}")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 RESULT_ID = re.compile(r"r2_[0-9a-f]{64}")
-REPLAY_ATTEMPT_ID = re.compile(r"rt1_[0-9a-f]{64}")
+REPLAY_TASK_ID = re.compile(r"rt1_[0-9a-f]{64}")
 CONFIGURATION_ID = re.compile(r"kcc1_[0-9a-f]{64}")
 INVENTORY_ID = re.compile(r"kci1_[0-9a-f]{64}")
 ATTEMPT_ID = re.compile(r"kca1_[0-9a-f]{64}")
@@ -68,7 +71,12 @@ INVENTORY_FIELDS = {
 }
 INVENTORY_RESULT_FIELDS = {
     "result_id",
-    "replay_attempt_id",
+    "replay_task_id",
+    "replay_attempt",
+    "terminal_verdict_sha256",
+    "terminal_event_sha256",
+    "report_entry_sha256",
+    "replay_export_input_sha256",
     "authoritative_outcome",
     "availability",
     "unavailability_evidence_sha256",
@@ -87,25 +95,61 @@ PLAN_FIELDS = {
 }
 ATTEMPT_FIELDS = {
     "result_id",
-    "replay_attempt_id",
+    "replay_task_id",
+    "replay_attempt",
+    "terminal_verdict_sha256",
+    "terminal_event_sha256",
+    "report_entry_sha256",
+    "replay_export_input_sha256",
     "attempt_id",
     "required_action",
 }
 OBSERVATION_SHARD_FIELDS = PLAN_FIELDS - {"attempts"} | {"observations"}
 OBSERVATION_FIELDS = {
     "result_id",
-    "replay_attempt_id",
+    "replay_task_id",
+    "replay_attempt",
     "attempt_id",
     "status",
     "outcome",
     "evidence_sha256",
     "statistics",
+    "execution_receipt",
 }
 STATISTICS_FIELDS = {
     "wall_time_ms",
     "peak_memory_bytes",
     "checker_invocations",
 }
+EXECUTION_RECEIPT_FIELDS = {
+    "schema_version",
+    "receipt_sha256",
+    "attempt_id",
+    "input_sha256",
+    "configuration_id",
+    "configuration_sha256",
+    "outcome",
+    "resource_limit_disposition",
+    "statistics",
+    "transcript_sha256",
+    "runner_attestation_sha256",
+    "source_free",
+}
+
+MAX_JSON_BYTES = 64 * 1024 * 1024
+MAX_JSON_DEPTH = 64
+MAX_JSON_NODES = 1_000_000
+MAX_SHARDS = 4_096
+MAX_CHECKER_INVOCATIONS = 1_000_000
+SCHEMA_DIRECTORY = pathlib.Path(__file__).resolve().parents[1] / "schemas"
+SCHEMA_FILES = {
+    "series": "kernel-checker-series-v1.schema.json",
+    "inventory": "kernel-corpus-inventory-v1.schema.json",
+    "plan": "kernel-corpus-shard-plan-v1.schema.json",
+    "observations": "kernel-corpus-observations-v1.schema.json",
+    "report": "kernel-corpus-report-v1.schema.json",
+}
+_SCHEMA_VALIDATORS: dict[str, Any] = {}
 
 
 class KernelCorpusError(ValueError):
@@ -185,11 +229,101 @@ def _integer(value: Any, label: str, minimum: int = 0) -> int:
     return value
 
 
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    output: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in output:
+            raise KernelCorpusError(f"duplicate JSON object key: {key}")
+        output[key] = value
+    return output
+
+
+def _reject_nonfinite_number(token: str) -> Any:
+    raise KernelCorpusError(f"non-finite JSON number: {token}")
+
+
+def _check_json_complexity(value: Any) -> None:
+    stack = [(value, 1)]
+    nodes = 0
+    while stack:
+        item, depth = stack.pop()
+        nodes += 1
+        if nodes > MAX_JSON_NODES:
+            raise KernelCorpusError("JSON artifact exceeds the node-count limit")
+        if depth > MAX_JSON_DEPTH:
+            raise KernelCorpusError("JSON artifact exceeds the nesting-depth limit")
+        if isinstance(item, dict):
+            stack.extend((child, depth + 1) for child in item.values())
+        elif isinstance(item, list):
+            stack.extend((child, depth + 1) for child in item)
+
+
 def _load(path: pathlib.Path) -> Any:
+    flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NONBLOCK
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        descriptor = os.open(path, flags)
+    except OSError as error:
         raise KernelCorpusError(f"{path}: cannot read JSON: {error}") from error
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise KernelCorpusError(f"{path}: JSON input must be a regular file")
+        if metadata.st_size > MAX_JSON_BYTES:
+            raise KernelCorpusError(f"{path}: JSON input exceeds the byte limit")
+        chunks: list[bytes] = []
+        total = 0
+        while True:
+            chunk = os.read(descriptor, min(1_048_576, MAX_JSON_BYTES + 1 - total))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+            if total > MAX_JSON_BYTES:
+                raise KernelCorpusError(f"{path}: JSON input exceeds the byte limit")
+    except OSError as error:
+        raise KernelCorpusError(f"{path}: cannot read JSON: {error}") from error
+    finally:
+        os.close(descriptor)
+    try:
+        value = json.loads(
+            b"".join(chunks).decode("utf-8"),
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_nonfinite_number,
+        )
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise KernelCorpusError(f"{path}: cannot parse JSON: {error}") from error
+    _check_json_complexity(value)
+    return value
+
+
+def _validate_schema(value: Any, kind: str) -> None:
+    try:
+        from jsonschema import Draft202012Validator
+        from jsonschema.exceptions import SchemaError, ValidationError
+    except ImportError as error:
+        raise KernelCorpusError(
+            "jsonschema is required for kernel corpus artifact validation"
+        ) from error
+    validator = _SCHEMA_VALIDATORS.get(kind)
+    if validator is None:
+        try:
+            schema = _load(SCHEMA_DIRECTORY / SCHEMA_FILES[kind])
+            Draft202012Validator.check_schema(schema)
+            validator = Draft202012Validator(schema)
+        except (KeyError, SchemaError) as error:
+            raise KernelCorpusError(
+                f"{kind} JSON Schema is invalid: {error}"
+            ) from error
+        _SCHEMA_VALIDATORS[kind] = validator
+    try:
+        validator.validate(value)
+    except ValidationError as error:
+        location = ".".join(str(item) for item in error.absolute_path) or "root"
+        raise KernelCorpusError(
+            f"{kind} fails JSON Schema at {location}: {error.message}"
+        ) from error
 
 
 def _component(value: Any, label: str, extra_fields: set[str]) -> dict[str, Any]:
@@ -258,13 +392,16 @@ def validate_series(value: Any) -> dict[str, Any]:
         {"wall_timeout_seconds", "max_memory_bytes"},
         "series.runner.resource_limits",
     )
-    _integer(limits["wall_timeout_seconds"], "wall_timeout_seconds", 1)
+    wall_timeout = _integer(limits["wall_timeout_seconds"], "wall_timeout_seconds", 1)
+    if wall_timeout > 9_007_199_254_740:
+        raise KernelCorpusError("wall_timeout_seconds cannot overflow milliseconds")
     _integer(limits["max_memory_bytes"], "max_memory_bytes", 1)
 
     if series["configuration_id"] != configuration_id(series):
         raise KernelCorpusError(
             "series.configuration_id does not bind the exact series"
         )
+    _validate_schema(series, "series")
     return series
 
 
@@ -295,24 +432,31 @@ def validate_inventory(value: Any) -> dict[str, Any]:
     if not results:
         raise KernelCorpusError("inventory.results must not be empty")
     identifiers: list[str] = []
-    replay_attempts: list[str] = []
+    replay_tasks: list[str] = []
     for index, raw in enumerate(results):
         label = f"inventory.results[{index}]"
         result = _object(raw, label)
         _fields(result, INVENTORY_RESULT_FIELDS, label)
         identifiers.append(_match(RESULT_ID, result["result_id"], f"{label}.result_id"))
-        replay_attempts.append(
+        replay_tasks.append(
             _match(
-                REPLAY_ATTEMPT_ID,
-                result["replay_attempt_id"],
-                f"{label}.replay_attempt_id",
+                REPLAY_TASK_ID,
+                result["replay_task_id"],
+                f"{label}.replay_task_id",
             )
         )
+        _integer(result["replay_attempt"], f"{label}.replay_attempt", 1)
         availability = result["availability"]
         if availability not in AVAILABILITIES:
             raise KernelCorpusError(f"{label}.availability is not registered")
         outcome = result["authoritative_outcome"]
         evidence = result["unavailability_evidence_sha256"]
+        terminal_digests = (
+            result["terminal_verdict_sha256"],
+            result["terminal_event_sha256"],
+            result["report_entry_sha256"],
+        )
+        replay_input = result["replay_export_input_sha256"]
         if availability == "ready":
             if outcome not in TERMINAL_OUTCOMES:
                 raise KernelCorpusError(
@@ -322,10 +466,22 @@ def validate_inventory(value: Any) -> dict[str, Any]:
                 raise KernelCorpusError(
                     f"{label} ready result cannot claim unavailability"
                 )
+            for field in (
+                "terminal_verdict_sha256",
+                "terminal_event_sha256",
+                "report_entry_sha256",
+                "replay_export_input_sha256",
+            ):
+                _match(DIGEST, result[field], f"{label}.{field}")
         elif availability == "replay_pending":
-            if outcome is not None or evidence is not None:
+            if (
+                outcome is not None
+                or evidence is not None
+                or replay_input is not None
+                or any(item is not None for item in terminal_digests)
+            ):
                 raise KernelCorpusError(
-                    f"{label} pending replay cannot claim outcome or unavailability"
+                    f"{label} pending replay cannot claim terminal/input evidence"
                 )
         else:
             if outcome is not None:
@@ -333,16 +489,23 @@ def validate_inventory(value: Any) -> dict[str, Any]:
                     f"{label} unavailable result cannot claim a terminal outcome"
                 )
             _match(DIGEST, evidence, f"{label}.unavailability_evidence_sha256")
+            if replay_input is not None or any(
+                item is not None for item in terminal_digests
+            ):
+                raise KernelCorpusError(
+                    f"{label} unavailable result cannot claim terminal/input evidence"
+                )
     if identifiers != sorted(identifiers):
         raise KernelCorpusError("inventory.results must be sorted by result_id")
     if len(set(identifiers)) != len(identifiers):
         raise KernelCorpusError("inventory contains duplicate result_id values")
-    if len(set(replay_attempts)) != len(replay_attempts):
-        raise KernelCorpusError("inventory contains duplicate replay_attempt_id values")
+    if len(set(replay_tasks)) != len(replay_tasks):
+        raise KernelCorpusError("inventory contains duplicate replay_task_id values")
     if inventory["inventory_id"] != inventory_id(inventory):
         raise KernelCorpusError(
             "inventory.inventory_id does not bind the exact inventory"
         )
+    _validate_schema(inventory, "inventory")
     return inventory
 
 
@@ -354,7 +517,12 @@ def attempt_id(
         {
             "configuration_id": series["configuration_id"],
             "inventory_id": inventory["inventory_id"],
-            "replay_attempt_id": result["replay_attempt_id"],
+            "replay_task_id": result["replay_task_id"],
+            "replay_attempt": result["replay_attempt"],
+            "terminal_verdict_sha256": result["terminal_verdict_sha256"],
+            "terminal_event_sha256": result["terminal_event_sha256"],
+            "report_entry_sha256": result["report_entry_sha256"],
+            "replay_export_input_sha256": result["replay_export_input_sha256"],
             "result_id": result["result_id"],
         },
     )
@@ -390,6 +558,8 @@ def build_shard_plans(
     series = validate_series(series_value)
     inventory = validate_inventory(inventory_value)
     _integer(shard_count, "shard_count", 1)
+    if shard_count > MAX_SHARDS:
+        raise KernelCorpusError(f"shard_count cannot exceed {MAX_SHARDS}")
     if shard_count > len(inventory["results"]):
         raise KernelCorpusError("shard_count cannot exceed inventory result count")
     assigned: list[list[dict[str, Any]]] = [[] for _ in range(shard_count)]
@@ -403,7 +573,12 @@ def build_shard_plans(
         assigned[_shard_index(result["result_id"], shard_count)].append(
             {
                 "result_id": result["result_id"],
-                "replay_attempt_id": result["replay_attempt_id"],
+                "replay_task_id": result["replay_task_id"],
+                "replay_attempt": result["replay_attempt"],
+                "terminal_verdict_sha256": result["terminal_verdict_sha256"],
+                "terminal_event_sha256": result["terminal_event_sha256"],
+                "report_entry_sha256": result["report_entry_sha256"],
+                "replay_export_input_sha256": result["replay_export_input_sha256"],
                 "attempt_id": attempt_id(series, inventory, result),
                 "required_action": action,
             }
@@ -412,6 +587,8 @@ def build_shard_plans(
     for index, attempts in enumerate(assigned):
         body = _plan_without_id(series, inventory, index, shard_count, attempts)
         plans.append({**body, "shard_id": _identity("ksh1_", body)})
+    for plan in plans:
+        _validate_schema(plan, "plan")
     return plans
 
 
@@ -432,6 +609,7 @@ def validate_plan(
     ]
     if plan != expected:
         raise KernelCorpusError("plan does not match the deterministic shard")
+    _validate_schema(plan, "plan")
     return plan
 
 
@@ -440,8 +618,80 @@ def _validate_statistics(value: Any, label: str) -> dict[str, Any]:
     _fields(statistics, STATISTICS_FIELDS, label)
     _integer(statistics["wall_time_ms"], f"{label}.wall_time_ms")
     _integer(statistics["peak_memory_bytes"], f"{label}.peak_memory_bytes")
-    _integer(statistics["checker_invocations"], f"{label}.checker_invocations", 1)
+    invocations = _integer(
+        statistics["checker_invocations"], f"{label}.checker_invocations", 1
+    )
+    if invocations > MAX_CHECKER_INVOCATIONS:
+        raise KernelCorpusError(
+            f"{label}.checker_invocations exceeds the contract limit"
+        )
     return statistics
+
+
+def execution_receipt_sha256(value: dict[str, Any]) -> str:
+    body = {key: item for key, item in value.items() if key != "receipt_sha256"}
+    return _digest(body)
+
+
+def validate_execution_receipt(
+    value: Any,
+    observation: dict[str, Any],
+    expected: dict[str, Any],
+    source: dict[str, Any],
+    series: dict[str, Any],
+    label: str,
+) -> dict[str, Any]:
+    receipt = _object(value, label)
+    _fields(receipt, EXECUTION_RECEIPT_FIELDS, label)
+    if receipt["schema_version"] != 1 or isinstance(receipt["schema_version"], bool):
+        raise KernelCorpusError(f"{label}.schema_version must be integer 1")
+    _match(DIGEST, receipt["receipt_sha256"], f"{label}.receipt_sha256")
+    _match(DIGEST, receipt["transcript_sha256"], f"{label}.transcript_sha256")
+    _match(
+        DIGEST,
+        receipt["runner_attestation_sha256"],
+        f"{label}.runner_attestation_sha256",
+    )
+    if receipt["source_free"] is not True:
+        raise KernelCorpusError(f"{label}.source_free must be true")
+    exact = {
+        "attempt_id": expected["attempt_id"],
+        "input_sha256": source["replay_export_input_sha256"],
+        "configuration_id": series["configuration_id"],
+        "configuration_sha256": _digest(series),
+        "outcome": observation["outcome"],
+    }
+    for field, expected_value in exact.items():
+        if receipt[field] != expected_value:
+            raise KernelCorpusError(f"{label}.{field} does not bind the execution")
+    statistics = _validate_statistics(receipt["statistics"], f"{label}.statistics")
+    if observation["statistics"] != statistics:
+        raise KernelCorpusError(f"{label}.statistics does not match the observation")
+    limits = series["runner"]["resource_limits"]
+    timeout_ms = limits["wall_timeout_seconds"] * 1_000
+    maximum_memory = limits["max_memory_bytes"]
+    if statistics["wall_time_ms"] > timeout_ms:
+        raise KernelCorpusError(f"{label}.statistics exceeds the series wall timeout")
+    if statistics["peak_memory_bytes"] > maximum_memory:
+        raise KernelCorpusError(f"{label}.statistics exceeds the series memory limit")
+    disposition = receipt["resource_limit_disposition"]
+    outcome = observation["outcome"]
+    if disposition == "wall_timeout":
+        if outcome != "timed_out" or statistics["wall_time_ms"] != timeout_ms:
+            raise KernelCorpusError(
+                f"{label} has an inconsistent wall-time disposition"
+            )
+    elif disposition == "memory_limit":
+        if outcome != "crashed" or statistics["peak_memory_bytes"] != maximum_memory:
+            raise KernelCorpusError(f"{label} has an inconsistent memory disposition")
+    elif disposition == "within_limits":
+        if outcome == "timed_out":
+            raise KernelCorpusError(f"{label} timed_out must record wall_timeout")
+    else:
+        raise KernelCorpusError(f"{label}.resource_limit_disposition is not registered")
+    if receipt["receipt_sha256"] != execution_receipt_sha256(receipt):
+        raise KernelCorpusError(f"{label}.receipt_sha256 does not bind the receipt")
+    return receipt
 
 
 def validate_observation_shard(
@@ -450,6 +700,7 @@ def validate_observation_shard(
     series_value: Any,
     inventory_value: Any,
 ) -> dict[str, Any]:
+    series = validate_series(series_value)
     plan = validate_plan(plan_value, series_value, inventory_value)
     inventory = validate_inventory(inventory_value)
     shard = _object(value, "observation shard")
@@ -473,7 +724,7 @@ def validate_observation_shard(
         label = f"observation shard.observations[{index}]"
         observation = _object(raw, label)
         _fields(observation, OBSERVATION_FIELDS, label)
-        for field in ("result_id", "replay_attempt_id", "attempt_id"):
+        for field in ("result_id", "replay_task_id", "replay_attempt", "attempt_id"):
             if observation[field] != expected[field]:
                 raise KernelCorpusError(
                     f"{label}.{field} does not match the planned attempt"
@@ -482,6 +733,7 @@ def validate_observation_shard(
         outcome = observation["outcome"]
         evidence = observation["evidence_sha256"]
         statistics = observation["statistics"]
+        receipt = observation["execution_receipt"]
         source = by_result[observation["result_id"]]
         required = expected["required_action"]
         if status == "completed":
@@ -516,9 +768,9 @@ def validate_observation_shard(
                 raise KernelCorpusError(
                     f"{label} does not preserve inherited unavailability evidence"
                 )
-            if statistics is not None:
+            if required != "run" and statistics is not None:
                 raise KernelCorpusError(
-                    f"{label} unavailable outcome cannot claim statistics"
+                    f"{label} inherited unavailability cannot claim statistics"
                 )
         elif status == "pending":
             expected_pending = {
@@ -536,12 +788,26 @@ def validate_observation_shard(
                     )
             else:
                 _match(DIGEST, evidence, f"{label}.evidence_sha256")
-            if statistics is not None:
+            if required != "run" and statistics is not None:
                 raise KernelCorpusError(
-                    f"{label} pending outcome cannot claim statistics"
+                    f"{label} inherited pending outcome cannot claim statistics"
                 )
         else:
             raise KernelCorpusError(f"{label}.status is not registered")
+        if required == "run":
+            validate_execution_receipt(
+                receipt,
+                observation,
+                expected,
+                source,
+                series,
+                f"{label}.execution_receipt",
+            )
+        elif receipt is not None:
+            raise KernelCorpusError(
+                f"{label} inherited pending/unavailability cannot claim execution"
+            )
+    _validate_schema(shard, "observations")
     return shard
 
 
@@ -553,24 +819,30 @@ def _quantile(values: list[int], numerator: int, denominator: int) -> int | None
     return ordered[max(rank, 1) - 1]
 
 
+def _safe_sum(values: list[int], label: str) -> int:
+    return _integer(sum(values), label)
+
+
 def _performance(observations: list[dict[str, Any]]) -> dict[str, Any]:
     terminal = [item for item in observations if item["status"] == "completed"]
     wall = [item["statistics"]["wall_time_ms"] for item in terminal]
     memory = [item["statistics"]["peak_memory_bytes"] for item in terminal]
     invocations = [item["statistics"]["checker_invocations"] for item in terminal]
     return {
-        "sample_count": len(terminal),
+        "sample_count": _integer(len(terminal), "performance.sample_count"),
         "wall_time_ms": {
             "minimum": min(wall) if wall else None,
             "maximum": max(wall) if wall else None,
             "median_upper": _quantile(wall, 1, 2),
             "p95_nearest_rank": _quantile(wall, 95, 100),
-            "sum": sum(wall),
+            "sum": _safe_sum(wall, "performance.wall_time_ms.sum"),
         },
         "peak_memory_bytes": {
             "maximum": max(memory) if memory else None,
         },
-        "checker_invocations": {"sum": sum(invocations)},
+        "checker_invocations": {
+            "sum": _safe_sum(invocations, "performance.checker_invocations.sum")
+        },
     }
 
 
@@ -638,7 +910,7 @@ def aggregate_report(
         blocking_reasons.append("export_format_review_required")
     if disagreements:
         blocking_reasons.append("disagreement_adjudication_required")
-    return {
+    report = {
         "schema_version": 1,
         "kind": "kernel_corpus_report",
         "configuration_id": series["configuration_id"],
@@ -661,6 +933,8 @@ def aggregate_report(
             "blocking_reasons": blocking_reasons,
         },
     }
+    _validate_schema(report, "report")
+    return report
 
 
 def validate_report(
@@ -679,14 +953,109 @@ def validate_report(
     )
     if report != expected:
         raise KernelCorpusError("report is not the deterministic corpus aggregate")
+    _validate_schema(report, "report")
     return report
 
 
+def _open_directory(path: pathlib.Path, create: bool = False) -> int:
+    if create:
+        try:
+            os.mkdir(path, 0o700)
+        except FileExistsError:
+            pass
+        except OSError as error:
+            raise KernelCorpusError(
+                f"{path}: cannot create output directory: {error}"
+            ) from error
+    flags = os.O_RDONLY | os.O_CLOEXEC
+    if hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as error:
+        raise KernelCorpusError(
+            f"{path}: unsafe or unavailable directory: {error}"
+        ) from error
+    if not stat.S_ISDIR(os.fstat(descriptor).st_mode):
+        os.close(descriptor)
+        raise KernelCorpusError(f"{path}: expected a directory")
+    return descriptor
+
+
+def _directory_entries(path: pathlib.Path) -> list[str]:
+    descriptor = _open_directory(path)
+    try:
+        with os.scandir(descriptor) as entries:
+            names = []
+            for entry in entries:
+                if entry.is_symlink() or not entry.is_file(follow_symlinks=False):
+                    raise KernelCorpusError(
+                        f"{path / entry.name}: shard artifact must be a regular file"
+                    )
+                names.append(entry.name)
+                if len(names) > MAX_SHARDS:
+                    raise KernelCorpusError(
+                        "shard directory exceeds the file-count limit"
+                    )
+    finally:
+        os.close(descriptor)
+    return sorted(names)
+
+
+def _load_shard_directory(path: pathlib.Path) -> dict[str, Any]:
+    names = _directory_entries(path)
+    pattern = re.compile(r"shard-[0-9]{4}\.json")
+    if any(pattern.fullmatch(name) is None for name in names):
+        raise KernelCorpusError(f"{path}: shard directory contains an unknown filename")
+    return {name: _load(path / name) for name in names}
+
+
 def _write_json(path: pathlib.Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
+    data = (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    if len(data) > MAX_JSON_BYTES:
+        raise KernelCorpusError(f"{path}: generated JSON exceeds the byte limit")
+    directory = _open_directory(path.parent, create=True)
+    temporary_name = f".{path.name}.tmp-{secrets.token_hex(16)}"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    temporary_descriptor: int | None = None
+    try:
+        temporary_descriptor = os.open(
+            temporary_name,
+            flags,
+            0o600,
+            dir_fd=directory,
+        )
+        position = 0
+        while position < len(data):
+            position += os.write(temporary_descriptor, data[position:])
+        os.fsync(temporary_descriptor)
+        os.close(temporary_descriptor)
+        temporary_descriptor = None
+        os.link(
+            temporary_name,
+            path.name,
+            src_dir_fd=directory,
+            dst_dir_fd=directory,
+            follow_symlinks=False,
+        )
+        os.unlink(temporary_name, dir_fd=directory)
+        os.fsync(directory)
+    except OSError as error:
+        if temporary_descriptor is not None:
+            os.close(temporary_descriptor)
+        try:
+            os.unlink(temporary_name, dir_fd=directory)
+        except OSError:
+            pass
+        raise KernelCorpusError(
+            f"{path}: refusing unsafe or existing output: {error}"
+        ) from error
+    finally:
+        os.close(directory)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -720,20 +1089,24 @@ def main(argv: list[str] | None = None) -> int:
             plans = build_shard_plans(
                 _load(args.series), _load(args.inventory), args.shard_count
             )
-            if args.output_dir.exists() and any(args.output_dir.iterdir()):
+            output_descriptor = _open_directory(args.output_dir, create=True)
+            os.close(output_descriptor)
+            if _directory_entries(args.output_dir):
                 raise KernelCorpusError("output directory must be absent or empty")
             for plan in plans:
                 _write_json(
                     args.output_dir / f"shard-{plan['shard_index']:04d}.json", plan
                 )
         else:
-            plans = [
-                _load(path) for path in sorted(args.plans_dir.glob("shard-*.json"))
-            ]
-            observations = [
-                _load(path)
-                for path in sorted(args.observations_dir.glob("shard-*.json"))
-            ]
+            plans_by_name = _load_shard_directory(args.plans_dir)
+            observations_by_name = _load_shard_directory(args.observations_dir)
+            if not plans_by_name or set(plans_by_name) != set(observations_by_name):
+                raise KernelCorpusError(
+                    "plan and observation directories must have exact nonempty membership"
+                )
+            names = sorted(plans_by_name)
+            plans = [plans_by_name[name] for name in names]
+            observations = [observations_by_name[name] for name in names]
             report = aggregate_report(
                 _load(args.series), _load(args.inventory), plans, observations
             )

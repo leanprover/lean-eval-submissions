@@ -2,22 +2,31 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import pathlib
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from kernel_corpus_report import (  # noqa: E402
+    MAX_CHECKER_INVOCATIONS,
+    MAX_JSON_BYTES,
     KernelCorpusError,
+    _load,
+    _directory_entries,
+    _safe_sum,
+    _write_json,
     aggregate_report,
     attempt_id,
     build_shard_plans,
     canonical_bytes,
     configuration_id,
+    execution_receipt_sha256,
     inventory_id,
     main,
     validate_inventory,
@@ -83,7 +92,20 @@ def inventory() -> dict:
     results = [
         {
             "result_id": "r2_" + suffix * 64,
-            "replay_attempt_id": "rt1_" + format(index + 1, "064x"),
+            "replay_task_id": "rt1_" + format(index + 1, "064x"),
+            "replay_attempt": index + 1,
+            "terminal_verdict_sha256": format(index + 20, "064x")
+            if availability == "ready"
+            else None,
+            "terminal_event_sha256": format(index + 40, "064x")
+            if availability == "ready"
+            else None,
+            "report_entry_sha256": format(index + 60, "064x")
+            if availability == "ready"
+            else None,
+            "replay_export_input_sha256": format(index + 80, "064x")
+            if availability == "ready"
+            else None,
             "authoritative_outcome": outcome,
             "availability": availability,
             "unavailability_evidence_sha256": evidence,
@@ -126,6 +148,7 @@ def observations(plans: list[dict]) -> list[dict]:
         "replay_unavailable": "b" * 64,
     }
     output = []
+    sources = {item["result_id"]: item for item in inventory()["results"]}
     for plan in plans:
         items = []
         for index, attempt in enumerate(plan["attempts"]):
@@ -140,23 +163,45 @@ def observations(plans: list[dict]) -> list[dict]:
                 status = "pending"
             else:
                 status = "completed"
+            executed = attempt["required_action"] == "run"
+            statistics = None
+            receipt = None
+            if executed:
+                statistics = {
+                    "wall_time_ms": 600_000 if outcome == "timed_out" else 100 + index,
+                    "peak_memory_bytes": 1_000 + index,
+                    "checker_invocations": 1,
+                }
+                receipt = {
+                    "schema_version": 1,
+                    "receipt_sha256": "",
+                    "attempt_id": attempt["attempt_id"],
+                    "input_sha256": sources[attempt["result_id"]][
+                        "replay_export_input_sha256"
+                    ],
+                    "configuration_id": plan["configuration_id"],
+                    "configuration_sha256": plan["configuration_sha256"],
+                    "outcome": outcome,
+                    "resource_limit_disposition": (
+                        "wall_timeout" if outcome == "timed_out" else "within_limits"
+                    ),
+                    "statistics": statistics,
+                    "transcript_sha256": "2" * 64,
+                    "runner_attestation_sha256": "3" * 64,
+                    "source_free": True,
+                }
+                receipt["receipt_sha256"] = execution_receipt_sha256(receipt)
             items.append(
                 {
                     "result_id": attempt["result_id"],
-                    "replay_attempt_id": attempt["replay_attempt_id"],
+                    "replay_task_id": attempt["replay_task_id"],
+                    "replay_attempt": attempt["replay_attempt"],
                     "attempt_id": attempt["attempt_id"],
                     "status": status,
                     "outcome": outcome,
                     "evidence_sha256": evidence.get(outcome),
-                    "statistics": (
-                        {
-                            "wall_time_ms": 100 + index,
-                            "peak_memory_bytes": 1_000 + index,
-                            "checker_invocations": 1,
-                        }
-                        if status == "completed"
-                        else None
-                    ),
+                    "statistics": statistics,
+                    "execution_receipt": receipt,
                 }
             )
         output.append(
@@ -234,6 +279,34 @@ class KernelCorpusReportTests(unittest.TestCase):
                 attempt["attempt_id"],
                 attempt_id(series(), inventory(), by_result[attempt["result_id"]]),
             )
+
+    def test_attempt_identity_binds_replay_task_attempt_terminal_tuple_and_input(
+        self,
+    ) -> None:
+        original_inventory = inventory()
+        original_plan = build_shard_plans(series(), original_inventory, 1)[0]
+        original_attempt = original_plan["attempts"][0]
+        for field in (
+            "replay_task_id",
+            "replay_attempt",
+            "terminal_verdict_sha256",
+            "terminal_event_sha256",
+            "report_entry_sha256",
+            "replay_export_input_sha256",
+        ):
+            self.assertEqual(
+                original_attempt[field], original_inventory["results"][0][field]
+            )
+
+        changed_inventory = copy.deepcopy(original_inventory)
+        changed_inventory["results"][0]["terminal_verdict_sha256"] = "f" * 64
+        changed_inventory["inventory_id"] = inventory_id(changed_inventory)
+        changed_attempt = build_shard_plans(series(), changed_inventory, 1)[0][
+            "attempts"
+        ][0]
+        self.assertNotEqual(
+            original_attempt["attempt_id"], changed_attempt["attempt_id"]
+        )
 
     def test_empty_deterministic_shards_remain_producible_and_aggregatable(
         self,
@@ -337,6 +410,94 @@ class KernelCorpusReportTests(unittest.TestCase):
         with self.assertRaisesRegex(KernelCorpusError, "availability class"):
             validate_observation_shard(relabeled, plans[0], series(), inventory())
 
+    def test_execution_receipt_binds_input_series_outcome_and_transcript(self) -> None:
+        plans = build_shard_plans(series(), inventory(), 1)
+        shard = observations(plans)[0]
+        target = next(
+            item for item in shard["observations"] if item["outcome"] == "accepted"
+        )
+        for field, value, message in (
+            ("input_sha256", "0" * 64, "input_sha256"),
+            ("configuration_sha256", "0" * 64, "configuration_sha256"),
+            ("outcome", "rejected", "outcome"),
+        ):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(shard)
+                receipt = next(
+                    item
+                    for item in changed["observations"]
+                    if item["attempt_id"] == target["attempt_id"]
+                )["execution_receipt"]
+                receipt[field] = value
+                receipt["receipt_sha256"] = execution_receipt_sha256(receipt)
+                with self.assertRaisesRegex(KernelCorpusError, message):
+                    validate_observation_shard(changed, plans[0], series(), inventory())
+
+        changed = copy.deepcopy(shard)
+        receipt = next(
+            item
+            for item in changed["observations"]
+            if item["attempt_id"] == target["attempt_id"]
+        )["execution_receipt"]
+        receipt["transcript_sha256"] = "0" * 64
+        with self.assertRaisesRegex(KernelCorpusError, "does not bind the receipt"):
+            validate_observation_shard(changed, plans[0], series(), inventory())
+
+        changed = copy.deepcopy(shard)
+        receipt = next(
+            item
+            for item in changed["observations"]
+            if item["attempt_id"] == target["attempt_id"]
+        )["execution_receipt"]
+        receipt["source_free"] = False
+        receipt["receipt_sha256"] = execution_receipt_sha256(receipt)
+        with self.assertRaisesRegex(KernelCorpusError, "source_free must be true"):
+            validate_observation_shard(changed, plans[0], series(), inventory())
+
+    def test_execution_measurements_are_series_bounded_and_outcome_aware(self) -> None:
+        plans = build_shard_plans(series(), inventory(), 1)
+        shard = observations(plans)[0]
+        accepted = next(
+            item for item in shard["observations"] if item["outcome"] == "accepted"
+        )
+        for field, value, message in (
+            ("wall_time_ms", 600_001, "wall timeout"),
+            ("peak_memory_bytes", 8_589_934_593, "memory limit"),
+            (
+                "checker_invocations",
+                MAX_CHECKER_INVOCATIONS + 1,
+                "contract limit",
+            ),
+        ):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(shard)
+                target = next(
+                    item
+                    for item in changed["observations"]
+                    if item["attempt_id"] == accepted["attempt_id"]
+                )
+                target["statistics"][field] = value
+                target["execution_receipt"]["statistics"][field] = value
+                target["execution_receipt"]["receipt_sha256"] = (
+                    execution_receipt_sha256(target["execution_receipt"])
+                )
+                with self.assertRaisesRegex(KernelCorpusError, message):
+                    validate_observation_shard(changed, plans[0], series(), inventory())
+
+        timed_out = next(
+            item for item in shard["observations"] if item["outcome"] == "timed_out"
+        )
+        timed_out["execution_receipt"]["resource_limit_disposition"] = "within_limits"
+        timed_out["execution_receipt"]["receipt_sha256"] = execution_receipt_sha256(
+            timed_out["execution_receipt"]
+        )
+        with self.assertRaisesRegex(KernelCorpusError, "must record wall_timeout"):
+            validate_observation_shard(shard, plans[0], series(), inventory())
+
+    def test_safe_sum_rejects_ieee754_overflow(self) -> None:
+        with self.assertRaisesRegex(KernelCorpusError, "IEEE-754 safe"):
+            _safe_sum([9_007_199_254_740_991, 1], "hostile sum")
+
     def test_report_is_complete_blocking_and_performance_deterministic(self) -> None:
         plans = build_shard_plans(series(), inventory(), 3)
         shards = observations(plans)
@@ -381,6 +542,10 @@ class KernelCorpusReportTests(unittest.TestCase):
             item for item in shards[0]["observations"] if item["outcome"] == "rejected"
         )
         target["outcome"] = "accepted"
+        target["execution_receipt"]["outcome"] = "accepted"
+        target["execution_receipt"]["receipt_sha256"] = execution_receipt_sha256(
+            target["execution_receipt"]
+        )
         report = aggregate_report(series(), inventory(), plans, shards)
         self.assertEqual(len(report["disagreements"]), 1)
         self.assertEqual(report["disagreements"][0]["adjudication"], "required")
@@ -450,6 +615,103 @@ class KernelCorpusReportTests(unittest.TestCase):
                         "3",
                         "--output-dir",
                         str(output),
+                    ]
+                ),
+                1,
+            )
+
+    def test_json_reads_reject_symlink_fifo_oversize_duplicate_and_depth(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            regular = root / "regular.json"
+            regular.write_text("{}", encoding="utf-8")
+            symlink = root / "symlink.json"
+            symlink.symlink_to(regular)
+            with self.assertRaisesRegex(KernelCorpusError, "cannot read JSON"):
+                _load(symlink)
+
+            fifo = root / "fifo.json"
+            os.mkfifo(fifo)
+            with self.assertRaisesRegex(KernelCorpusError, "regular file"):
+                _load(fifo)
+
+            oversized = root / "oversized.json"
+            with oversized.open("wb") as stream:
+                stream.truncate(MAX_JSON_BYTES + 1)
+            with self.assertRaisesRegex(KernelCorpusError, "byte limit"):
+                _load(oversized)
+
+            duplicate = root / "duplicate.json"
+            duplicate.write_text('{"same": 1, "same": 2}', encoding="utf-8")
+            with self.assertRaisesRegex(KernelCorpusError, "duplicate JSON"):
+                _load(duplicate)
+
+            nested = root / "nested.json"
+            nested.write_text("[" * 65 + "0" + "]" * 65, encoding="utf-8")
+            with self.assertRaisesRegex(KernelCorpusError, "nesting-depth"):
+                _load(nested)
+
+            nodes = root / "nodes.json"
+            nodes.write_text("[1, 2]", encoding="utf-8")
+            with mock.patch("kernel_corpus_report.MAX_JSON_NODES", 2):
+                with self.assertRaisesRegex(KernelCorpusError, "node-count"):
+                    _load(nodes)
+
+            shards = root / "shards"
+            shards.mkdir()
+            (shards / "shard-0000.json").write_text("{}", encoding="utf-8")
+            (shards / "shard-0001.json").write_text("{}", encoding="utf-8")
+            with mock.patch("kernel_corpus_report.MAX_SHARDS", 1):
+                with self.assertRaisesRegex(KernelCorpusError, "file-count"):
+                    _directory_entries(shards)
+
+    def test_outputs_are_no_follow_exclusive_and_aggregate_membership_is_exact(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            output = root / "output.json"
+            _write_json(output, {"first": True})
+            with self.assertRaisesRegex(KernelCorpusError, "existing output"):
+                _write_json(output, {"second": True})
+
+            target = root / "target.json"
+            target.write_text("unchanged", encoding="utf-8")
+            linked = root / "linked.json"
+            linked.symlink_to(target)
+            with self.assertRaisesRegex(KernelCorpusError, "existing output"):
+                _write_json(linked, {"changed": True})
+            self.assertEqual(target.read_text(encoding="utf-8"), "unchanged")
+
+            selected_series = series()
+            selected_inventory = inventory()
+            plans = build_shard_plans(selected_series, selected_inventory, 1)
+            shards = observations(plans)
+            plans_dir = root / "plans"
+            observations_dir = root / "observations"
+            plans_dir.mkdir()
+            observations_dir.mkdir()
+            _write_json(plans_dir / "shard-0000.json", plans[0])
+            _write_json(observations_dir / "shard-0000.json", shards[0])
+            (observations_dir / "rogue.json").write_text("{}", encoding="utf-8")
+            series_path = root / "series.json"
+            inventory_path = root / "inventory.json"
+            series_path.write_text(json.dumps(selected_series), encoding="utf-8")
+            inventory_path.write_text(json.dumps(selected_inventory), encoding="utf-8")
+            self.assertEqual(
+                main(
+                    [
+                        "aggregate",
+                        "--series",
+                        str(series_path),
+                        "--inventory",
+                        str(inventory_path),
+                        "--plans-dir",
+                        str(plans_dir),
+                        "--observations-dir",
+                        str(observations_dir),
+                        "--output",
+                        str(root / "report.json"),
                     ]
                 ),
                 1,
