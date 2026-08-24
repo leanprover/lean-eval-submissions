@@ -10,10 +10,11 @@
     "server/src/maintainer.ts",
     "server/src/result-amendment.ts",
     "server/src/result-owner.ts",
+    "server/src/scheduled-subrequest-budget.ts",
     "server/src/state-event.ts",
     "server/src/submission-view.ts"
   ],
-  "lifecycle_callback_contract_sha256": "29e0d55b75f4ad6703e5730847b4abc28a7c9d935a5740b5073d63cf7386def4",
+  "lifecycle_callback_contract_sha256": "2474ef7de067e33d57b9ce5f4133e7c82ee2f7c448d1cde3f45e990e689a03c3",
   "replay_durable_object_migration_tags": [
     "v1",
     "v2"
