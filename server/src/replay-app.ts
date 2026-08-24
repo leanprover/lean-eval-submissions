@@ -4,7 +4,9 @@ import {
   AuthoritativeReplayContractError,
   readAuthoritativeReplayRequest,
   readAuthoritativeReplayStatusRequest,
+  type AuthoritativeReplayInput,
   type AuthoritativeReplayStatusRequest,
+  type ReplayVerdict,
   validateReplayVerdict,
 } from "./authoritative-replay-contract";
 import { ReplayAuthError, type ReplayAuthEnvironment, verifyGithubOidc } from "./replay-auth";
@@ -18,9 +20,11 @@ import {
   readAcceptanceRequest,
   validateSandboxEvidence,
 } from "./replay-contract";
+import type { ReplayTerminalReceipt } from "./replay-terminal-receipt";
 
 export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
   REPLAY_SANDBOX: DurableObjectNamespace<Sandbox>;
+  REPLAY_TERMINAL_RECEIPT: DurableObjectNamespace<ReplayTerminalReceipt>;
   DEPLOYED_COMMIT: string;
   DEPLOYMENT_ENVIRONMENT: string;
   REPLAY_ENABLED: string;
@@ -34,6 +38,11 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
 
 type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy"> &
   Partial<Pick<Sandbox, "startProcess" | "getProcess">>;
+
+type TerminalReceiptStore = Pick<
+  ReplayTerminalReceipt,
+  "claimBinding" | "readBinding" | "readReceipt" | "prepareReceipt" | "confirmReceipt"
+>;
 
 type ExecutorFailureReason =
   | "input_transfer_failed"
@@ -55,6 +64,7 @@ class ReplayExecutorError extends Error {
 type Dependencies = {
   authenticate(request: Request, env: ReplayAuthEnvironment): Promise<void>;
   sandbox(env: ReplayRuntimeEnv, runnerNonce: string): SandboxClient;
+  receiptStore?(env: ReplayRuntimeEnv, runnerNonce: string): TerminalReceiptStore;
 };
 
 const DEFAULT_DEPENDENCIES: Dependencies = {
@@ -63,6 +73,17 @@ const DEFAULT_DEPENDENCIES: Dependencies = {
     throw new Error("sandbox dependency was not configured");
   },
 };
+
+function terminalReceiptStore(
+  dependencies: Dependencies,
+  env: ReplayRuntimeEnv,
+  runnerNonce: string,
+): TerminalReceiptStore {
+  if (dependencies.receiptStore === undefined) {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  return dependencies.receiptStore(env, runnerNonce);
+}
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status, headers: { "cache-control": "no-store" } });
@@ -89,6 +110,7 @@ const AUTHORITATIVE_COMMAND_PREFIX = "replay-authoritative: ";
 const AUTHORITATIVE_PROCESS_ID = "lean-eval-authoritative";
 const AUTHORITATIVE_COMMAND = "/opt/lean-eval/replay-authoritative";
 const AUTHORITATIVE_TIMEOUT_MS = 20_100_000;
+const AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const AUTHORITATIVE_COMMAND_FAILURES = new Map([
   ["request does not match the baked profile lock", "profile_lock_mismatch"],
   ["baked benchmark identity is unavailable", "benchmark_identity_unavailable"],
@@ -109,6 +131,28 @@ const AUTHORITATIVE_COMMAND_FAILURES = new Map([
   ["measurement evidence is unavailable", "measurement_evidence_unavailable"],
   ["evaluator results is unavailable", "evaluator_results_unavailable"],
 ]);
+
+type AuthoritativeFailureBody = {
+  error: "executor_failed";
+  reason: ExecutorFailureReason;
+  detail?: string;
+};
+
+type AuthoritativeTerminalReceipt = {
+  schema_version: 1;
+  binding: AuthoritativeReplayStatusRequest;
+  http_status: 200 | 500;
+  body:
+    | { schema_version: 1; verdict: ReplayVerdict; destruction: "confirmed" }
+    | AuthoritativeFailureBody;
+  destruction_state: "pending" | "confirmed";
+  stored_at_epoch_ms: number;
+  retained_until_epoch_ms: number;
+};
+
+type AuthoritativeActiveBinding = AuthoritativeReplayStatusRequest & {
+  retained_until_epoch_ms: number;
+};
 
 function authoritativeCommandFailureDetail(stderr: string): string {
   const output = stderr.trim();
@@ -205,10 +249,380 @@ async function startAuthoritativeProcess(
   }
 }
 
+function exactObjectFields(
+  value: Record<string, unknown>,
+  expected: readonly string[],
+): boolean {
+  const actual = Object.keys(value).sort();
+  const fields = [...expected].sort();
+  return actual.length === fields.length
+    && actual.every((field, index) => field === fields[index]);
+}
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function statusBinding(input: AuthoritativeReplayInput): AuthoritativeReplayStatusRequest {
+  return {
+    schema_version: 1,
+    runner_nonce: input.runner_nonce,
+    replay_task_id: input.request.replay_task_id as string,
+    attempt: input.request.attempt as number,
+    execution_profile_digest: input.request.execution_profile_digest as string,
+    measurement_config_digest: input.request.measurement_config_digest as string,
+    vm_image_digest: (input.request.execution_profile as Record<string, unknown>)
+      .vm_image_digest as string,
+  };
+}
+
+function sameStatusBinding(
+  value: unknown,
+  request: AuthoritativeReplayStatusRequest,
+): value is AuthoritativeReplayStatusRequest {
+  const binding = objectValue(value);
+  return binding !== null
+    && exactObjectFields(binding, [
+      "schema_version",
+      "runner_nonce",
+      "replay_task_id",
+      "attempt",
+      "execution_profile_digest",
+      "measurement_config_digest",
+      "vm_image_digest",
+    ])
+    && binding.schema_version === request.schema_version
+    && binding.runner_nonce === request.runner_nonce
+    && binding.replay_task_id === request.replay_task_id
+    && binding.attempt === request.attempt
+    && binding.execution_profile_digest === request.execution_profile_digest
+    && binding.measurement_config_digest === request.measurement_config_digest
+    && binding.vm_image_digest === request.vm_image_digest;
+}
+
+function activeBinding(
+  request: AuthoritativeReplayStatusRequest,
+  now = Date.now(),
+): AuthoritativeActiveBinding {
+  return {
+    ...request,
+    retained_until_epoch_ms: now + AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS,
+  };
+}
+
+function sameActiveBinding(
+  value: unknown,
+  request: AuthoritativeReplayStatusRequest,
+): value is AuthoritativeActiveBinding {
+  const binding = objectValue(value);
+  if (
+    binding === null
+    || !exactObjectFields(binding, [
+      "schema_version",
+      "runner_nonce",
+      "replay_task_id",
+      "attempt",
+      "execution_profile_digest",
+      "measurement_config_digest",
+      "vm_image_digest",
+      "retained_until_epoch_ms",
+    ])
+    || binding.schema_version !== 1
+    || typeof binding.runner_nonce !== "string"
+    || typeof binding.replay_task_id !== "string"
+    || !Number.isSafeInteger(binding.attempt)
+    || typeof binding.execution_profile_digest !== "string"
+    || typeof binding.measurement_config_digest !== "string"
+    || typeof binding.vm_image_digest !== "string"
+    || !Number.isSafeInteger(binding.retained_until_epoch_ms)
+  ) {
+    return false;
+  }
+  return sameStatusBinding({
+    schema_version: binding.schema_version,
+    runner_nonce: binding.runner_nonce,
+    replay_task_id: binding.replay_task_id,
+    attempt: binding.attempt,
+    execution_profile_digest: binding.execution_profile_digest,
+    measurement_config_digest: binding.measurement_config_digest,
+    vm_image_digest: binding.vm_image_digest,
+  }, request);
+}
+
+function rejectBindingMismatch(value: unknown): never {
+  const binding = objectValue(value);
+  if (
+    binding === null
+    || !exactObjectFields(binding, [
+      "schema_version",
+      "runner_nonce",
+      "replay_task_id",
+      "attempt",
+      "execution_profile_digest",
+      "measurement_config_digest",
+      "vm_image_digest",
+      "retained_until_epoch_ms",
+    ])
+    || binding.schema_version !== 1
+    || typeof binding.runner_nonce !== "string"
+    || typeof binding.replay_task_id !== "string"
+    || !Number.isSafeInteger(binding.attempt)
+    || typeof binding.execution_profile_digest !== "string"
+    || typeof binding.measurement_config_digest !== "string"
+    || typeof binding.vm_image_digest !== "string"
+    || !Number.isSafeInteger(binding.retained_until_epoch_ms)
+  ) {
+    throw new ReplayExecutorError("command_output_invalid");
+  }
+  throw new AuthoritativeReplayContractError("runner nonce is already bound");
+}
+
+async function claimActiveBinding(
+  store: TerminalReceiptStore,
+  request: AuthoritativeReplayStatusRequest,
+): Promise<void> {
+  let value: unknown;
+  try {
+    value = await store.claimBinding(activeBinding(request));
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  if (!sameActiveBinding(value, request)) rejectBindingMismatch(value);
+}
+
+async function requireActiveBinding(
+  store: TerminalReceiptStore,
+  request: AuthoritativeReplayStatusRequest,
+): Promise<void> {
+  let value: unknown;
+  try {
+    value = await store.readBinding();
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  if (value === null) throw new ReplayExecutorError("command_rpc_failed");
+  if (!sameActiveBinding(value, request)) rejectBindingMismatch(value);
+}
+
+function failureBody(error: unknown): AuthoritativeFailureBody {
+  const reason = error instanceof ReplayExecutorError ? error.reason : "unexpected_failure";
+  const detail = error instanceof ReplayExecutorError ? error.detail : undefined;
+  return {
+    error: "executor_failed",
+    reason,
+    ...(detail === undefined ? {} : { detail }),
+  };
+}
+
+function validateTerminalReceipt(
+  value: unknown,
+  request: AuthoritativeReplayStatusRequest,
+): AuthoritativeTerminalReceipt {
+  const receipt = objectValue(value);
+  if (
+    receipt === null
+    || !exactObjectFields(receipt, [
+      "schema_version",
+      "binding",
+      "http_status",
+      "body",
+      "destruction_state",
+      "stored_at_epoch_ms",
+      "retained_until_epoch_ms",
+    ])
+    || receipt.schema_version !== 1
+    || !sameStatusBinding(receipt.binding, request)
+    || !["pending", "confirmed"].includes(receipt.destruction_state as string)
+    || !Number.isSafeInteger(receipt.stored_at_epoch_ms)
+    || !Number.isSafeInteger(receipt.retained_until_epoch_ms)
+    || (receipt.retained_until_epoch_ms as number)
+      !== (receipt.stored_at_epoch_ms as number) + AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS
+  ) {
+    throw new ReplayExecutorError("command_output_invalid");
+  }
+  const body = objectValue(receipt.body);
+  if (receipt.http_status === 200 && body !== null) {
+    if (
+      !exactObjectFields(body, ["schema_version", "verdict", "destruction"])
+      || body.schema_version !== 1
+      || body.destruction !== "confirmed"
+    ) {
+      throw new ReplayExecutorError("command_output_invalid");
+    }
+    let verdict: ReplayVerdict;
+    try {
+      verdict = validateReplayVerdict(body.verdict, {
+        request: {
+          replay_task_id: request.replay_task_id,
+          attempt: request.attempt,
+        },
+      });
+    } catch {
+      throw new ReplayExecutorError("command_output_invalid");
+    }
+    return {
+      schema_version: 1,
+      binding: { ...request },
+      http_status: 200,
+      body: { schema_version: 1, verdict, destruction: "confirmed" },
+      destruction_state: receipt.destruction_state as "pending" | "confirmed",
+      stored_at_epoch_ms: receipt.stored_at_epoch_ms as number,
+      retained_until_epoch_ms: receipt.retained_until_epoch_ms as number,
+    };
+  }
+  if (receipt.http_status === 500 && body !== null) {
+    const hasDetail = Object.hasOwn(body, "detail");
+    if (
+      !exactObjectFields(body, hasDetail
+        ? ["error", "reason", "detail"]
+        : ["error", "reason"])
+      || body.error !== "executor_failed"
+      || ![
+        "input_transfer_failed",
+        "command_rpc_failed",
+        "command_failed",
+        "command_output_invalid",
+        "sandbox_destroy_failed",
+        "unexpected_failure",
+      ].includes(body.reason as string)
+      || (hasDetail
+        && (typeof body.detail !== "string" || !/^[a-z0-9_]{1,64}$/.test(body.detail)))
+    ) {
+      throw new ReplayExecutorError("command_output_invalid");
+    }
+    return {
+      schema_version: 1,
+      binding: { ...request },
+      http_status: 500,
+      body: {
+        error: "executor_failed",
+        reason: body.reason as ExecutorFailureReason,
+        ...(hasDetail ? { detail: body.detail as string } : {}),
+      },
+      destruction_state: receipt.destruction_state as "pending" | "confirmed",
+      stored_at_epoch_ms: receipt.stored_at_epoch_ms as number,
+      retained_until_epoch_ms: receipt.retained_until_epoch_ms as number,
+    };
+  }
+  throw new ReplayExecutorError("command_output_invalid");
+}
+
+async function readTerminalReceipt(
+  store: TerminalReceiptStore,
+  request: AuthoritativeReplayStatusRequest,
+): Promise<AuthoritativeTerminalReceipt | null> {
+  let value: unknown;
+  try {
+    value = await store.readReceipt();
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  return value === null ? null : validateTerminalReceipt(value, request);
+}
+
+async function prepareTerminalReceipt(
+  store: TerminalReceiptStore,
+  receipt: AuthoritativeTerminalReceipt,
+  request: AuthoritativeReplayStatusRequest,
+): Promise<AuthoritativeTerminalReceipt> {
+  let value: unknown;
+  try {
+    value = await store.prepareReceipt(receipt);
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  return validateTerminalReceipt(value, request);
+}
+
+function terminalReceiptResponse(receipt: AuthoritativeTerminalReceipt): Response {
+  if (receipt.destruction_state !== "confirmed") {
+    throw new ReplayExecutorError("sandbox_destroy_failed");
+  }
+  return json(receipt.body, receipt.http_status);
+}
+
+async function confirmTerminalReceipt(
+  sandbox: SandboxClient,
+  store: TerminalReceiptStore,
+  receipt: AuthoritativeTerminalReceipt,
+): Promise<AuthoritativeTerminalReceipt> {
+  if (receipt.destruction_state === "confirmed") return receipt;
+  try {
+    await sandbox.destroy();
+  } catch {
+    throw new ReplayExecutorError("sandbox_destroy_failed");
+  }
+  const confirmed: AuthoritativeTerminalReceipt = {
+    ...receipt,
+    destruction_state: "confirmed",
+  };
+  let value: unknown;
+  try {
+    value = await store.confirmReceipt();
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  return validateTerminalReceipt(value, confirmed.binding);
+}
+
+function terminalReceipt(
+  request: AuthoritativeReplayStatusRequest,
+  status: string,
+  logs: { stdout: string; stderr: string },
+  now = Date.now(),
+): AuthoritativeTerminalReceipt {
+  let httpStatus: 200 | 500;
+  let body: AuthoritativeTerminalReceipt["body"];
+  try {
+    if (status !== "completed") {
+      throw new ReplayExecutorError(
+        "command_failed",
+        safeCommandFailureDetail(AUTHORITATIVE_COMMAND, logs.stderr),
+      );
+    }
+    if (logs.stdout.length > 64 * 1024) {
+      throw new ReplayExecutorError("command_output_invalid");
+    }
+    let verdict: ReplayVerdict;
+    try {
+      verdict = validateReplayVerdict(JSON.parse(logs.stdout) as unknown, {
+        request: {
+          replay_task_id: request.replay_task_id,
+          attempt: request.attempt,
+        },
+      });
+    } catch {
+      throw new ReplayExecutorError("command_output_invalid");
+    }
+    httpStatus = 200;
+    body = { schema_version: 1, verdict, destruction: "confirmed" };
+  } catch (error) {
+    recordExecutorFailure("authoritative_replay_status", error);
+    httpStatus = 500;
+    body = failureBody(error);
+  }
+  return {
+    schema_version: 1,
+    binding: { ...request },
+    http_status: httpStatus,
+    body,
+    destruction_state: "pending",
+    stored_at_epoch_ms: now,
+    retained_until_epoch_ms: now + AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS,
+  };
+}
+
 async function authoritativeProcessStatus(
   sandbox: SandboxClient,
+  store: TerminalReceiptStore,
   request: AuthoritativeReplayStatusRequest,
 ): Promise<Response> {
+  const stored = await readTerminalReceipt(store, request);
+  if (stored !== null) {
+    return terminalReceiptResponse(await confirmTerminalReceipt(sandbox, store, stored));
+  }
   if (sandbox.getProcess === undefined) throw new ReplayExecutorError("command_rpc_failed");
   let process: Awaited<ReturnType<NonNullable<SandboxClient["getProcess"]>>>;
   try {
@@ -237,28 +651,12 @@ async function authoritativeProcessStatus(
   } catch {
     throw new ReplayExecutorError("command_rpc_failed");
   }
-  return withSandboxDestruction(sandbox, () => {
-    if (status !== "completed") {
-      throw new ReplayExecutorError(
-        "command_failed",
-        safeCommandFailureDetail(AUTHORITATIVE_COMMAND, logs.stderr),
-      );
-    }
-    if (logs.stdout.length > 64 * 1024) {
-      throw new ReplayExecutorError("command_output_invalid");
-    }
-    try {
-      const verdict = validateReplayVerdict(JSON.parse(logs.stdout) as unknown, {
-        request: {
-          replay_task_id: request.replay_task_id,
-          attempt: request.attempt,
-        },
-      });
-      return json({ schema_version: 1, verdict, destruction: "confirmed" });
-    } catch {
-      throw new ReplayExecutorError("command_output_invalid");
-    }
-  });
+  const receipt = await prepareTerminalReceipt(
+    store,
+    terminalReceipt(request, status, logs),
+    request,
+  );
+  return terminalReceiptResponse(await confirmTerminalReceipt(sandbox, store, receipt));
 }
 
 async function writeSandboxFile(
@@ -334,13 +732,7 @@ function recordExecutorFailure(route: string, error: unknown): void {
 }
 
 function authoritativeExecutorFailure(error: unknown): Response {
-  const reason = error instanceof ReplayExecutorError ? error.reason : "unexpected_failure";
-  const detail = error instanceof ReplayExecutorError ? error.detail : undefined;
-  return json({
-    error: "executor_failed",
-    reason,
-    ...(detail === undefined ? {} : { detail }),
-  }, 500);
+  return json(failureBody(error), 500);
 }
 
 function health(env: ReplayRuntimeEnv): Response {
@@ -389,8 +781,10 @@ export async function handleReplayRequest(
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
+      const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
+      await requireActiveBinding(store, input);
       sandbox = dependencies.sandbox(env, input.runner_nonce);
-      return await authoritativeProcessStatus(sandbox, input);
+      return await authoritativeProcessStatus(sandbox, store, input);
     } catch (error) {
       if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
       if (error instanceof AuthoritativeReplayContractError || error instanceof SyntaxError) {
@@ -409,6 +803,18 @@ export async function handleReplayRequest(
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
+      const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
+      const binding = statusBinding(input);
+      await claimActiveBinding(store, binding);
+      const existingReceipt = await readTerminalReceipt(store, binding);
+      if (existingReceipt !== null) {
+        return json({
+          schema_version: 1,
+          replay_task_id: input.request.replay_task_id,
+          attempt: input.request.attempt,
+          status: "running",
+        }, 202);
+      }
       const sandbox = dependencies.sandbox(env, input.runner_nonce);
       try {
         await startAuthoritativeProcess(sandbox, async () => {

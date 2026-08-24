@@ -28,6 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$GITHUB_SHA"
+          echo "REPLAY_JOB_STARTED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -287,6 +288,7 @@ jobs:
             curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
               --max-time 15 \
               --retry 3 \
+              --retry-max-time 60 \
               --retry-all-errors \
               --retry-delay 2 \
               --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
@@ -302,6 +304,7 @@ jobs:
           start_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
             --max-time 300 \
             --retry 3 \
+            --retry-max-time 300 \
             --retry-all-errors \
             --retry-delay 2 \
             --header "Authorization: Bearer $replay_oidc_token" \
@@ -323,13 +326,16 @@ jobs:
           shred --remove "$RUNNER_TEMP/identity.age" "$RUNNER_TEMP/executor-request.json"
           rm -f "$RUNNER_TEMP/archive.tar.age" "$RUNNER_TEMP/archive-sidecar.json"
 
-          deadline=$(( $(date +%s) + 20400 ))
+          process_deadline=$(( $(date +%s) + 20100 ))
+          job_deadline=$(( REPLAY_JOB_STARTED_EPOCH + 20880 ))
+          deadline=$process_deadline
+          if [ "$job_deadline" -lt "$deadline" ]; then deadline=$job_deadline; fi
           while [ "$(date +%s)" -lt "$deadline" ]; do
             sleep 15
             mint_oidc
             poll_status=000
             if poll_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
-              --max-time 300 \
+              --max-time 60 \
               --header "Authorization: Bearer $replay_oidc_token" \
               --header 'Content-Type: application/json' \
               --request POST \
@@ -346,7 +352,9 @@ jobs:
                 continue
               fi
               if [ "$poll_status" = 500 ] && jq -e \
-                '. == {error: "executor_failed", reason: "command_rpc_failed"}' \
+                '.error == "executor_failed" and
+                 (.reason == "command_rpc_failed" or .reason == "sandbox_destroy_failed") and
+                 (keys | sort) == ["error", "reason"]' \
                 "$RUNNER_TEMP/executor-poll-response.json" >/dev/null; then
                 rm "$RUNNER_TEMP/executor-poll-response.json"
                 continue

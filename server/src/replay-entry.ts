@@ -1,8 +1,9 @@
 import { ContainerProxy, getSandbox, Sandbox } from "@cloudflare/sandbox";
 
 import { handleReplayRequest, type ReplayRuntimeEnv } from "./replay-app";
+import { ReplayTerminalReceipt } from "./replay-terminal-receipt";
 
-export { ContainerProxy };
+export { ContainerProxy, ReplayTerminalReceipt };
 
 export class ReplaySandbox extends Sandbox {
   override enableInternet = false;
@@ -28,6 +29,9 @@ export default {
             portReadyTimeoutMS: 180_000,
           },
         });
+      },
+      receiptStore(runtime, runnerNonce) {
+        return runtime.REPLAY_TERMINAL_RECEIPT.getByName(`r-${runnerNonce.slice(0, 61)}`);
       },
     });
   },

@@ -26,11 +26,13 @@
       ],
       "durable_objects": {
         "bindings": [
-          { "name": "REPLAY_SANDBOX", "class_name": "ReplaySandbox" }
+          { "name": "REPLAY_SANDBOX", "class_name": "ReplaySandbox" },
+          { "name": "REPLAY_TERMINAL_RECEIPT", "class_name": "ReplayTerminalReceipt" }
         ]
       },
       "migrations": [
-        { "tag": "v1", "new_sqlite_classes": ["ReplaySandbox"] }
+        { "tag": "v1", "new_sqlite_classes": ["ReplaySandbox"] },
+        { "tag": "v2", "new_sqlite_classes": ["ReplayTerminalReceipt"] }
       ],
       "vars": {
         "DEPLOYED_COMMIT": "development",
@@ -62,11 +64,13 @@
       ],
       "durable_objects": {
         "bindings": [
-          { "name": "REPLAY_SANDBOX", "class_name": "ReplaySandbox" }
+          { "name": "REPLAY_SANDBOX", "class_name": "ReplaySandbox" },
+          { "name": "REPLAY_TERMINAL_RECEIPT", "class_name": "ReplayTerminalReceipt" }
         ]
       },
       "migrations": [
-        { "tag": "v1", "new_sqlite_classes": ["ReplaySandbox"] }
+        { "tag": "v1", "new_sqlite_classes": ["ReplaySandbox"] },
+        { "tag": "v2", "new_sqlite_classes": ["ReplayTerminalReceipt"] }
       ],
       "vars": {
         "DEPLOYED_COMMIT": "development",

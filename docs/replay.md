@@ -103,9 +103,13 @@ boundary and is not sufficient for automated replay.
    records the incident, audit, or recovery reason.
 2. A trusted preparation job resolves the immutable State event, ciphertext
    object, digests, evaluator commit, benchmark commit, and authorization.
-3. The Lean Eval controller creates a fresh nonce-specific Sandbox and starts
-   one fixed background process. Start is idempotent for that nonce. A
-   persistent or shared generic replay executor is a configuration error.
+3. The Lean Eval controller first atomically claims a durable, nonce-specific
+   binding to the exact task, attempt, execution profile, measurement config,
+   and image. Every start and status call must match it before the Sandbox is
+   looked up. It then creates a fresh nonce-specific Sandbox and starts one
+   fixed background process. A duplicate matching start is idempotent; a
+   differently bound duplicate fails closed. A persistent or shared generic
+   replay executor is a configuration error.
 4. The trusted controller verifies the exact ciphertext, consumes the one-use
    unwrap capability, drops AWS authority, and sends only that ciphertext, its
    per-archive identity, the nonce, and public expectations to the Sandbox.
@@ -123,11 +127,23 @@ boundary and is not sufficient for automated replay.
    plaintext, extracted source, metrics, and evaluator output in an
    unconditional `finally` path. The job publishes only the reviewed
    result/audit projection.
-8. The terminal poll validates bounded process output and destroys the Sandbox
-   before success is returned. Failure to confirm destruction fails the
-   request. If the controller disappears, the process cleanup still removes
-   private material and the five-minute idle timeout stops the disposable
-   Sandbox; State recovery records the lost runner before any retry.
+8. The terminal poll validates bounded process output and durably records the
+   exact source-free HTTP status/body in a separate nonce-specific receipt
+   Durable Object, bound to the nonce, task, attempt, execution profile,
+   measurement configuration, and image. Receipt preparation is an atomic
+   first-writer-wins operation, so concurrent terminal polls cannot replace the
+   canonical result; confirmation never regresses to pending. It then destroys
+   the Sandbox and durably marks destruction confirmed before returning that
+   status/body. A lost response at any boundary replays the pending destroy or
+   exact confirmed outcome; evaluator failures use the same protocol. The
+   binding and receipt are written transactionally with their dedicated alarm
+   and deleted after 24 hours. Terminal receipt retention starts when the
+   terminal outcome is observed, beyond both the six-hour job bound and the
+   seven-hour stale-runner recovery threshold.
+9. Failure to confirm destruction fails the request and is retried within the
+   controller deadline. If the controller disappears, the process cleanup
+   still removes private material and the five-minute idle timeout stops the
+   disposable Sandbox; State recovery records the lost runner before any retry.
 
 No source artifact crosses jobs. Fetch, decrypt, evaluate, and plaintext cleanup
 therefore remain in the same disposable replay job, matching the existing
