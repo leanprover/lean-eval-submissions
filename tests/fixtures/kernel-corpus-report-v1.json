@@ -33,7 +33,7 @@
     "sample_count": 2,
     "wall_time_ms": {
       "maximum": 101,
-      "median_upper": 100,
+      "median_upper": 101,
       "minimum": 100,
       "p95_nearest_rank": 101,
       "sum": 201

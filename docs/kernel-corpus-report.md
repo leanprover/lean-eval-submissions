@@ -77,7 +77,9 @@ minimum/maximum/sum wall time, maximum peak memory, and total checker
 invocations. No statistic is inferred for pending or unavailable results.
 Each executed measurement is bounded by the series wall-time and memory limits;
 checker invocation counts and aggregate sums are bounded to interoperable safe
-integers. `timed_out` must carry the wall-time disposition, while a memory-limit
+integers. Export-unavailable and export-format outcomes require exactly zero
+checker invocations; every checker terminal outcome requires at least one.
+`timed_out` must carry the wall-time disposition, while a memory-limit
 disposition is valid only for a crash at the configured bound.
 
 Any terminal candidate outcome that differs from the historical authoritative
@@ -113,7 +115,8 @@ python scripts/kernel_corpus_report.py aggregate \
 
 The tool refuses a nonempty preparation directory and refuses incomplete,
 mixed, reordered, duplicated, or altered plan/observation sets. JSON reads are
-byte-, node-, depth-, and file-count-bounded; reject duplicate object keys; and
+per-file and aggregate-directory byte-, node-, depth-, and file-count-bounded;
+reject duplicate object keys; and
 accept only regular non-symlink files. Shard directories reject unknown names,
 FIFOs, devices, links, and membership differences. Outputs use no-follow,
 exclusive, same-directory atomic publication and never overwrite an existing

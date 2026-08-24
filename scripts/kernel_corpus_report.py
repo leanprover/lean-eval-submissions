@@ -21,7 +21,6 @@ import stat
 import sys
 from typing import Any
 
-
 DIGEST = re.compile(r"[0-9a-f]{64}")
 COMMIT = re.compile(r"[0-9a-f]{40}")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
@@ -139,6 +138,8 @@ EXECUTION_RECEIPT_FIELDS = {
 MAX_JSON_BYTES = 64 * 1024 * 1024
 MAX_JSON_DEPTH = 64
 MAX_JSON_NODES = 1_000_000
+MAX_SHARD_DIRECTORY_BYTES = 256 * 1024 * 1024
+MAX_SHARD_DIRECTORY_NODES = 4_000_000
 MAX_SHARDS = 4_096
 MAX_CHECKER_INVOCATIONS = 1_000_000
 SCHEMA_DIRECTORY = pathlib.Path(__file__).resolve().parents[1] / "schemas"
@@ -215,7 +216,7 @@ def _match(pattern: re.Pattern[str], value: Any, label: str) -> str:
 def _timestamp(value: Any, label: str) -> str:
     text = _match(TIMESTAMP, value, label)
     try:
-        dt.datetime.strptime(text, "%Y-%m-%dT%H:%M:%S.%fZ")
+        dt.datetime.strptime(text, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=dt.UTC)
     except ValueError as error:
         raise KernelCorpusError(f"{label} is not a real UTC timestamp") from error
     return text
@@ -242,7 +243,7 @@ def _reject_nonfinite_number(token: str) -> Any:
     raise KernelCorpusError(f"non-finite JSON number: {token}")
 
 
-def _check_json_complexity(value: Any) -> None:
+def _check_json_complexity(value: Any) -> int:
     stack = [(value, 1)]
     nodes = 0
     while stack:
@@ -256,14 +257,21 @@ def _check_json_complexity(value: Any) -> None:
             stack.extend((child, depth + 1) for child in item.values())
         elif isinstance(item, list):
             stack.extend((child, depth + 1) for child in item)
+    return nodes
 
 
-def _load(path: pathlib.Path) -> Any:
+def _load_with_metrics(
+    path: pathlib.Path, *, directory_fd: int | None = None
+) -> tuple[Any, int, int]:
     flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NONBLOCK
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     try:
-        descriptor = os.open(path, flags)
+        descriptor = os.open(
+            path.name if directory_fd is not None else path,
+            flags,
+            dir_fd=directory_fd,
+        )
     except OSError as error:
         raise KernelCorpusError(f"{path}: cannot read JSON: {error}") from error
     try:
@@ -292,10 +300,14 @@ def _load(path: pathlib.Path) -> Any:
             object_pairs_hook=_reject_duplicate_keys,
             parse_constant=_reject_nonfinite_number,
         )
-    except (UnicodeError, json.JSONDecodeError) as error:
+    except (UnicodeError, json.JSONDecodeError, RecursionError) as error:
         raise KernelCorpusError(f"{path}: cannot parse JSON: {error}") from error
-    _check_json_complexity(value)
-    return value
+    nodes = _check_json_complexity(value)
+    return value, total, nodes
+
+
+def _load(path: pathlib.Path) -> Any:
+    return _load_with_metrics(path)[0]
 
 
 def _validate_schema(value: Any, kind: str) -> None:
@@ -592,11 +604,7 @@ def build_shard_plans(
     return plans
 
 
-def validate_plan(
-    value: Any,
-    series_value: Any,
-    inventory_value: Any,
-) -> dict[str, Any]:
+def _plan_shape(value: Any) -> tuple[dict[str, Any], int, int]:
     plan = _object(value, "plan")
     _fields(plan, PLAN_FIELDS, "plan")
     _match(SHARD_ID, plan["shard_id"], "plan.shard_id")
@@ -604,13 +612,27 @@ def validate_plan(
     shard_index = _integer(plan["shard_index"], "plan.shard_index")
     if shard_index >= shard_count:
         raise KernelCorpusError("plan.shard_index is outside shard_count")
-    expected = build_shard_plans(series_value, inventory_value, shard_count)[
-        shard_index
-    ]
+    return plan, shard_count, shard_index
+
+
+def _validate_plan_against(value: Any, expected: dict[str, Any]) -> dict[str, Any]:
+    plan, _, _ = _plan_shape(value)
     if plan != expected:
         raise KernelCorpusError("plan does not match the deterministic shard")
     _validate_schema(plan, "plan")
     return plan
+
+
+def validate_plan(
+    value: Any,
+    series_value: Any,
+    inventory_value: Any,
+) -> dict[str, Any]:
+    _, shard_count, shard_index = _plan_shape(value)
+    expected = build_shard_plans(series_value, inventory_value, shard_count)[
+        shard_index
+    ]
+    return _validate_plan_against(value, expected)
 
 
 def _validate_statistics(value: Any, label: str) -> dict[str, Any]:
@@ -619,7 +641,7 @@ def _validate_statistics(value: Any, label: str) -> dict[str, Any]:
     _integer(statistics["wall_time_ms"], f"{label}.wall_time_ms")
     _integer(statistics["peak_memory_bytes"], f"{label}.peak_memory_bytes")
     invocations = _integer(
-        statistics["checker_invocations"], f"{label}.checker_invocations", 1
+        statistics["checker_invocations"], f"{label}.checker_invocations"
     )
     if invocations > MAX_CHECKER_INVOCATIONS:
         raise KernelCorpusError(
@@ -676,6 +698,15 @@ def validate_execution_receipt(
         raise KernelCorpusError(f"{label}.statistics exceeds the series memory limit")
     disposition = receipt["resource_limit_disposition"]
     outcome = observation["outcome"]
+    if outcome in {"export_unavailable", "export_format_unsupported"}:
+        if statistics["checker_invocations"] != 0:
+            raise KernelCorpusError(
+                f"{label} export outcome must record zero checker invocations"
+            )
+    elif statistics["checker_invocations"] < 1:
+        raise KernelCorpusError(
+            f"{label} checker outcome must record at least one checker invocation"
+        )
     if disposition == "wall_timeout":
         if outcome != "timed_out" or statistics["wall_time_ms"] != timeout_ms:
             raise KernelCorpusError(
@@ -694,15 +725,12 @@ def validate_execution_receipt(
     return receipt
 
 
-def validate_observation_shard(
+def _validate_observation_shard_against(
     value: Any,
-    plan_value: Any,
-    series_value: Any,
-    inventory_value: Any,
+    plan: dict[str, Any],
+    series: dict[str, Any],
+    inventory: dict[str, Any],
 ) -> dict[str, Any]:
-    series = validate_series(series_value)
-    plan = validate_plan(plan_value, series_value, inventory_value)
-    inventory = validate_inventory(inventory_value)
     shard = _object(value, "observation shard")
     _fields(shard, OBSERVATION_SHARD_FIELDS, "observation shard")
     for field in PLAN_FIELDS - {"attempts", "kind"}:
@@ -811,12 +839,31 @@ def validate_observation_shard(
     return shard
 
 
+def validate_observation_shard(
+    value: Any,
+    plan_value: Any,
+    series_value: Any,
+    inventory_value: Any,
+) -> dict[str, Any]:
+    series = validate_series(series_value)
+    inventory = validate_inventory(inventory_value)
+    plan = validate_plan(plan_value, series, inventory)
+    return _validate_observation_shard_against(value, plan, series, inventory)
+
+
 def _quantile(values: list[int], numerator: int, denominator: int) -> int | None:
     if not values:
         return None
     ordered = sorted(values)
     rank = (len(ordered) * numerator + denominator - 1) // denominator
     return ordered[max(rank, 1) - 1]
+
+
+def _upper_median(values: list[int]) -> int | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    return ordered[len(ordered) // 2]
 
 
 def _safe_sum(values: list[int], label: str) -> int:
@@ -833,7 +880,7 @@ def _performance(observations: list[dict[str, Any]]) -> dict[str, Any]:
         "wall_time_ms": {
             "minimum": min(wall) if wall else None,
             "maximum": max(wall) if wall else None,
-            "median_upper": _quantile(wall, 1, 2),
+            "median_upper": _upper_median(wall),
             "p95_nearest_rank": _quantile(wall, 95, 100),
             "sum": _safe_sum(wall, "performance.wall_time_ms.sum"),
         },
@@ -856,20 +903,24 @@ def aggregate_report(
     inventory = validate_inventory(inventory_value)
     if not plan_values:
         raise KernelCorpusError("at least one shard plan is required")
-    plans = [validate_plan(value, series, inventory) for value in plan_values]
-    shard_count = plans[0]["shard_count"]
-    if len(plans) != shard_count:
+    _, shard_count, _ = _plan_shape(plan_values[0])
+    if len(plan_values) != shard_count:
         raise KernelCorpusError("plan set does not contain every shard")
-    if [plan["shard_index"] for plan in plans] != list(range(shard_count)):
-        raise KernelCorpusError(
-            "plans must be ordered and cover every shard exactly once"
-        )
-    if any(plan["shard_count"] != shard_count for plan in plans):
-        raise KernelCorpusError("plan set mixes shard counts")
+    expected_plans = build_shard_plans(series, inventory, shard_count)
+    plans = []
+    for index, value in enumerate(plan_values):
+        _, selected_count, selected_index = _plan_shape(value)
+        if selected_count != shard_count:
+            raise KernelCorpusError("plan set mixes shard counts")
+        if selected_index != index:
+            raise KernelCorpusError(
+                "plans must be ordered and cover every shard exactly once"
+            )
+        plans.append(_validate_plan_against(value, expected_plans[index]))
     if len(observation_values) != shard_count:
         raise KernelCorpusError("observation set does not contain every shard")
     shards = [
-        validate_observation_shard(value, plan, series, inventory)
+        _validate_observation_shard_against(value, plan, series, inventory)
         for value, plan in zip(observation_values, plans, strict=True)
     ]
     observations = [item for shard in shards for item in shard["observations"]]
@@ -984,8 +1035,12 @@ def _open_directory(path: pathlib.Path, create: bool = False) -> int:
     return descriptor
 
 
-def _directory_entries(path: pathlib.Path) -> list[str]:
-    descriptor = _open_directory(path)
+def _directory_entries(
+    path: pathlib.Path, *, descriptor: int | None = None
+) -> list[str]:
+    owned_descriptor = descriptor is None
+    if descriptor is None:
+        descriptor = _open_directory(path)
     try:
         with os.scandir(descriptor) as entries:
             names = []
@@ -1000,16 +1055,41 @@ def _directory_entries(path: pathlib.Path) -> list[str]:
                         "shard directory exceeds the file-count limit"
                     )
     finally:
-        os.close(descriptor)
+        if owned_descriptor:
+            os.close(descriptor)
     return sorted(names)
 
 
 def _load_shard_directory(path: pathlib.Path) -> dict[str, Any]:
-    names = _directory_entries(path)
-    pattern = re.compile(r"shard-[0-9]{4}\.json")
-    if any(pattern.fullmatch(name) is None for name in names):
-        raise KernelCorpusError(f"{path}: shard directory contains an unknown filename")
-    return {name: _load(path / name) for name in names}
+    descriptor = _open_directory(path)
+    try:
+        names = _directory_entries(path, descriptor=descriptor)
+        pattern = re.compile(r"shard-[0-9]{4}\.json")
+        if any(pattern.fullmatch(name) is None for name in names):
+            raise KernelCorpusError(
+                f"{path}: shard directory contains an unknown filename"
+            )
+        output: dict[str, Any] = {}
+        total_bytes = 0
+        total_nodes = 0
+        for name in names:
+            value, byte_count, node_count = _load_with_metrics(
+                path / name, directory_fd=descriptor
+            )
+            total_bytes += byte_count
+            total_nodes += node_count
+            if total_bytes > MAX_SHARD_DIRECTORY_BYTES:
+                raise KernelCorpusError(
+                    f"{path}: shard directory exceeds the total byte limit"
+                )
+            if total_nodes > MAX_SHARD_DIRECTORY_NODES:
+                raise KernelCorpusError(
+                    f"{path}: shard directory exceeds the total node-count limit"
+                )
+            output[name] = value
+        return output
+    finally:
+        os.close(descriptor)
 
 
 def _write_json(path: pathlib.Path, value: Any) -> None:
@@ -1022,6 +1102,7 @@ def _write_json(path: pathlib.Path, value: Any) -> None:
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     temporary_descriptor: int | None = None
+    published = False
     try:
         temporary_descriptor = os.open(
             temporary_name,
@@ -1042,15 +1123,27 @@ def _write_json(path: pathlib.Path, value: Any) -> None:
             dst_dir_fd=directory,
             follow_symlinks=False,
         )
-        os.unlink(temporary_name, dir_fd=directory)
-        os.fsync(directory)
+        published = True
+        try:
+            os.unlink(temporary_name, dir_fd=directory)
+        except OSError as error:
+            raise KernelCorpusError(
+                f"{path}: output was published but temporary cleanup failed: {error}"
+            ) from error
+        try:
+            os.fsync(directory)
+        except OSError as error:
+            raise KernelCorpusError(
+                f"{path}: output was published but directory fsync failed: {error}"
+            ) from error
     except OSError as error:
         if temporary_descriptor is not None:
             os.close(temporary_descriptor)
-        try:
-            os.unlink(temporary_name, dir_fd=directory)
-        except OSError:
-            pass
+        if not published:
+            try:
+                os.unlink(temporary_name, dir_fd=directory)
+            except OSError:
+                pass
         raise KernelCorpusError(
             f"{path}: refusing unsafe or existing output: {error}"
         ) from error
@@ -1090,9 +1183,11 @@ def main(argv: list[str] | None = None) -> int:
                 _load(args.series), _load(args.inventory), args.shard_count
             )
             output_descriptor = _open_directory(args.output_dir, create=True)
-            os.close(output_descriptor)
-            if _directory_entries(args.output_dir):
-                raise KernelCorpusError("output directory must be absent or empty")
+            try:
+                if _directory_entries(args.output_dir, descriptor=output_descriptor):
+                    raise KernelCorpusError("output directory must be absent or empty")
+            finally:
+                os.close(output_descriptor)
             for plan in plans:
                 _write_json(
                     args.output_dir / f"shard-{plan['shard_index']:04d}.json", plan

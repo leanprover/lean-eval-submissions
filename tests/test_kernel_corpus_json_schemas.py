@@ -8,13 +8,12 @@ import unittest
 
 from jsonschema import Draft202012Validator
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SCHEMAS = ROOT / "schemas"
 FIXTURES = ROOT / "tests" / "fixtures"
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from kernel_corpus_report import (  # noqa: E402
+from kernel_corpus_report import (
     KernelCorpusError,
     validate_inventory,
     validate_observation_shard,
@@ -22,7 +21,6 @@ from kernel_corpus_report import (  # noqa: E402
     validate_report,
     validate_series,
 )
-
 
 ARTIFACTS = {
     "kernel-checker-series-v1": "series",
@@ -99,6 +97,55 @@ class KernelCorpusJsonSchemaTests(unittest.TestCase):
         observations = [self.fixtures["kernel-corpus-observations-v1"]]
         with self.assertRaisesRegex(KernelCorpusError, "deterministic"):
             validate_report(changed, series, inventory, plans, observations)
+
+    def test_schema_requires_outcome_aware_checker_invocations(self) -> None:
+        schema = Draft202012Validator(self.schemas["kernel-corpus-observations-v1"])
+        terminal = copy.deepcopy(self.fixtures["kernel-corpus-observations-v1"])
+        accepted = next(
+            item for item in terminal["observations"] if item["outcome"] == "accepted"
+        )
+        accepted["statistics"]["checker_invocations"] = 0
+        accepted["execution_receipt"]["statistics"]["checker_invocations"] = 0
+        self.assertTrue(list(schema.iter_errors(terminal)))
+
+        exported = copy.deepcopy(self.fixtures["kernel-corpus-observations-v1"])
+        exported_observation = next(
+            item for item in exported["observations"] if item["outcome"] == "accepted"
+        )
+        exported_observation.update(
+            {
+                "status": "unavailable",
+                "outcome": "export_unavailable",
+                "evidence_sha256": "f" * 64,
+            }
+        )
+        exported_observation["execution_receipt"]["outcome"] = "export_unavailable"
+        exported_observation["statistics"]["checker_invocations"] = 1
+        exported_observation["execution_receipt"]["statistics"][
+            "checker_invocations"
+        ] = 1
+        self.assertTrue(list(schema.iter_errors(exported)))
+
+    def test_ci_installs_only_hash_pinned_binary_schema_dependencies(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("permissions:\n  contents: read\n", workflow)
+        self.assertIn(
+            "python -m pip install --disable-pip-version-check "
+            "--only-binary=:all:\n"
+            "          --require-hashes -r requirements-jsonschema-workflow.txt",
+            workflow,
+        )
+
+        requirements = (ROOT / "requirements-jsonschema-workflow.txt").read_text(
+            encoding="utf-8"
+        )
+        requirements_lines = [
+            line for line in requirements.splitlines() if line and not line.isspace()
+        ]
+        self.assertEqual(requirements.count("--hash=sha256:"), 6)
+        self.assertEqual(sum("==" in line for line in requirements_lines), 6)
 
 
 if __name__ == "__main__":

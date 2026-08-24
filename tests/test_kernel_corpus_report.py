@@ -9,16 +9,17 @@ import tempfile
 import unittest
 from unittest import mock
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from kernel_corpus_report import (  # noqa: E402
+from kernel_corpus_report import (
     MAX_CHECKER_INVOCATIONS,
     MAX_JSON_BYTES,
     KernelCorpusError,
-    _load,
     _directory_entries,
+    _load,
+    _load_shard_directory,
+    _performance,
     _safe_sum,
     _write_json,
     aggregate_report,
@@ -170,7 +171,12 @@ def observations(plans: list[dict]) -> list[dict]:
                 statistics = {
                     "wall_time_ms": 600_000 if outcome == "timed_out" else 100 + index,
                     "peak_memory_bytes": 1_000 + index,
-                    "checker_invocations": 1,
+                    "checker_invocations": (
+                        0
+                        if outcome
+                        in {"export_unavailable", "export_format_unsupported"}
+                        else 1
+                    ),
                 }
                 receipt = {
                     "schema_version": 1,
@@ -494,9 +500,66 @@ class KernelCorpusReportTests(unittest.TestCase):
         with self.assertRaisesRegex(KernelCorpusError, "must record wall_timeout"):
             validate_observation_shard(shard, plans[0], series(), inventory())
 
+    def test_checker_invocations_distinguish_export_from_checker_outcomes(self) -> None:
+        plans = build_shard_plans(series(), inventory(), 1)
+        shard = observations(plans)[0]
+        by_outcome = {item["outcome"]: item for item in shard["observations"]}
+        for outcome in ("export_unavailable", "export_format_unsupported"):
+            self.assertEqual(
+                by_outcome[outcome]["statistics"]["checker_invocations"], 0
+            )
+            changed = copy.deepcopy(shard)
+            target = next(
+                item for item in changed["observations"] if item["outcome"] == outcome
+            )
+            target["statistics"]["checker_invocations"] = 1
+            target["execution_receipt"]["statistics"]["checker_invocations"] = 1
+            target["execution_receipt"]["receipt_sha256"] = execution_receipt_sha256(
+                target["execution_receipt"]
+            )
+            with self.assertRaisesRegex(KernelCorpusError, "zero checker"):
+                validate_observation_shard(changed, plans[0], series(), inventory())
+
+        changed = copy.deepcopy(shard)
+        accepted = next(
+            item for item in changed["observations"] if item["outcome"] == "accepted"
+        )
+        accepted["statistics"]["checker_invocations"] = 0
+        accepted["execution_receipt"]["statistics"]["checker_invocations"] = 0
+        accepted["execution_receipt"]["receipt_sha256"] = execution_receipt_sha256(
+            accepted["execution_receipt"]
+        )
+        with self.assertRaisesRegex(KernelCorpusError, "at least one"):
+            validate_observation_shard(changed, plans[0], series(), inventory())
+
     def test_safe_sum_rejects_ieee754_overflow(self) -> None:
         with self.assertRaisesRegex(KernelCorpusError, "IEEE-754 safe"):
             _safe_sum([9_007_199_254_740_991, 1], "hostile sum")
+
+    def test_upper_median_uses_the_upper_rank_for_even_samples(self) -> None:
+        measured = _performance(
+            [
+                {
+                    "status": "completed",
+                    "statistics": {
+                        "wall_time_ms": wall_time,
+                        "peak_memory_bytes": 1,
+                        "checker_invocations": 1,
+                    },
+                }
+                for wall_time in (10, 20, 30, 40)
+            ]
+        )
+        self.assertEqual(measured["wall_time_ms"]["median_upper"], 30)
+
+    def test_aggregate_builds_expected_shard_set_once(self) -> None:
+        plans = build_shard_plans(series(), inventory(), 7)
+        shards = observations(plans)
+        with mock.patch(
+            "kernel_corpus_report.build_shard_plans", wraps=build_shard_plans
+        ) as build:
+            aggregate_report(series(), inventory(), plans, shards)
+        build.assert_called_once()
 
     def test_report_is_complete_blocking_and_performance_deterministic(self) -> None:
         plans = build_shard_plans(series(), inventory(), 3)
@@ -653,17 +716,41 @@ class KernelCorpusReportTests(unittest.TestCase):
 
             nodes = root / "nodes.json"
             nodes.write_text("[1, 2]", encoding="utf-8")
-            with mock.patch("kernel_corpus_report.MAX_JSON_NODES", 2):
-                with self.assertRaisesRegex(KernelCorpusError, "node-count"):
-                    _load(nodes)
+            with (
+                mock.patch("kernel_corpus_report.MAX_JSON_NODES", 2),
+                self.assertRaisesRegex(KernelCorpusError, "node-count"),
+            ):
+                _load(nodes)
+
+            with (
+                mock.patch(
+                    "kernel_corpus_report.json.loads",
+                    side_effect=RecursionError("hostile parser recursion"),
+                ),
+                self.assertRaisesRegex(KernelCorpusError, "cannot parse JSON"),
+            ):
+                _load(regular)
 
             shards = root / "shards"
             shards.mkdir()
             (shards / "shard-0000.json").write_text("{}", encoding="utf-8")
             (shards / "shard-0001.json").write_text("{}", encoding="utf-8")
-            with mock.patch("kernel_corpus_report.MAX_SHARDS", 1):
-                with self.assertRaisesRegex(KernelCorpusError, "file-count"):
-                    _directory_entries(shards)
+            with (
+                mock.patch("kernel_corpus_report.MAX_SHARDS", 1),
+                self.assertRaisesRegex(KernelCorpusError, "file-count"),
+            ):
+                _directory_entries(shards)
+
+            with (
+                mock.patch("kernel_corpus_report.MAX_SHARD_DIRECTORY_BYTES", 3),
+                self.assertRaisesRegex(KernelCorpusError, "total byte limit"),
+            ):
+                _load_shard_directory(shards)
+            with (
+                mock.patch("kernel_corpus_report.MAX_SHARD_DIRECTORY_NODES", 1),
+                self.assertRaisesRegex(KernelCorpusError, "total node-count"),
+            ):
+                _load_shard_directory(shards)
 
     def test_outputs_are_no_follow_exclusive_and_aggregate_membership_is_exact(
         self,
@@ -682,6 +769,22 @@ class KernelCorpusReportTests(unittest.TestCase):
             with self.assertRaisesRegex(KernelCorpusError, "existing output"):
                 _write_json(linked, {"changed": True})
             self.assertEqual(target.read_text(encoding="utf-8"), "unchanged")
+
+            published = root / "published.json"
+            with (
+                mock.patch(
+                    "kernel_corpus_report.os.fsync",
+                    side_effect=(None, OSError("directory sync failed")),
+                ),
+                self.assertRaisesRegex(
+                    KernelCorpusError, "published but directory fsync failed"
+                ),
+            ):
+                _write_json(published, {"durable": "unknown"})
+            self.assertEqual(
+                json.loads(published.read_text(encoding="utf-8")),
+                {"durable": "unknown"},
+            )
 
             selected_series = series()
             selected_inventory = inventory()
