@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://leanprover.github.io/lean-eval/schemas/public-replay-resolution-requests-v1.schema.json",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/public-replay-resolution-requests-v1.schema.json",
   "title": "Historical public replay resolution requests v1",
   "type": "object",
   "additionalProperties": false,
@@ -69,7 +69,7 @@
             "kind": { "enum": ["github_repo", "gist"] },
             "repository": {
               "type": "string",
-              "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+              "pattern": "^(?!\\.{1,2}/)(?![^/]+/\\.{1,2}$)[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
             },
             "commit": { "$ref": "#/$defs/commit" },
             "visibility": { "const": "public" }

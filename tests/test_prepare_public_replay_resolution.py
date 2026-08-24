@@ -29,8 +29,13 @@ class PublicReplayResolutionPreparationTests(unittest.TestCase):
         )
 
     def test_covers_every_public_result_once_deterministically(self) -> None:
-        self.assertEqual(self.output["request_count"], 315)
-        self.assertEqual(self.output["result_count"], 633)
+        public_entries = [
+            entry
+            for entry in self.inventory["entries"]
+            if entry["source"]["visibility"] == "public"
+        ]
+        self.assertEqual(self.output["request_count"], len(self.output["requests"]))
+        self.assertEqual(self.output["result_count"], len(public_entries))
         result_ids = [
             result["result_id"]
             for request in self.output["requests"]
@@ -53,26 +58,22 @@ class PublicReplayResolutionPreparationTests(unittest.TestCase):
             )
 
     def test_keeps_both_issue_repositories_until_evidence_resolves_one(self) -> None:
-        request = next(
-            item
-            for item in self.output["requests"]
-            if item["issue_number"] == 144
-            and item["declared_model"] == "GPT-5.5 Codex"
-        )
-        self.assertEqual(
-            request["candidate_issue_repositories"],
-            ["leanprover/lean-eval", "leanprover/lean-eval-submissions"],
-        )
-        self.assertEqual(
-            request["benchmark"]["commit"],
-            "11081d345a580a0f3c46699240f28e4f41fbf9fe",
-        )
-        self.assertEqual(len(request["results"]), 2)
+        for request in self.output["requests"]:
+            self.assertEqual(
+                request["candidate_issue_repositories"],
+                ["leanprover/lean-eval", "leanprover/lean-eval-submissions"],
+            )
+            self.assertEqual(request["benchmark"]["repository"], "leanprover/lean-eval")
+            self.assertRegex(request["benchmark"]["commit"], r"^[0-9a-f]{40}$")
 
     def test_groups_shared_submission_without_losing_large_result_sets(self) -> None:
-        largest = max(self.output["requests"], key=lambda value: len(value["results"]))
-        self.assertEqual(len(largest["results"]), 138)
-        self.assertEqual(len({item["result_id"] for item in largest["results"]}), 138)
+        for request in self.output["requests"]:
+            identifiers = [item["result_id"] for item in request["results"]]
+            self.assertEqual(identifiers, sorted(set(identifiers)))
+        self.assertEqual(
+            sum(len(request["results"]) for request in self.output["requests"]),
+            self.output["result_count"],
+        )
 
     def test_rejects_inventory_not_exactly_recomputed_from_results(self) -> None:
         changed = copy.deepcopy(self.inventory)

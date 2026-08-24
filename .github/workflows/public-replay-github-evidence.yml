@@ -129,8 +129,8 @@ jobs:
           [[ "$EXPECTED_RESULTS_STORE_SHA256" =~ ^[0-9a-f]{64}$ ]]
           [[ "$EXPECTED_SHARD_COUNT" =~ ^([1-9]|[1-5][0-9]|6[0-4])$ ]]
           [[ "$EXPECTED_SHARD_INDEX" =~ ^(0|[1-9][0-9]?)$ ]]
-          [[ "$EXPECTED_SHARD_REQUEST_COUNT" =~ ^[1-9][0-9]*$ ]]
-          [[ "$EXPECTED_SHARD_RESULT_COUNT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXPECTED_SHARD_REQUEST_COUNT" =~ ^(0|[1-9][0-9]*)$ ]]
+          [[ "$EXPECTED_SHARD_RESULT_COUNT" =~ ^(0|[1-9][0-9]*)$ ]]
           test "$EXPECTED_SHARD_INDEX" -lt "$EXPECTED_SHARD_COUNT"
           test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
@@ -252,6 +252,9 @@ jobs:
           pending_count=$(jq -er .pending_count "$evidence")
           source_unavailable_count=$(jq -er .source_unavailable_count "$evidence")
           source_indeterminate_count=$(jq -er .source_indeterminate_count "$evidence")
+          probe_indeterminate_count=$(jq -er .probe_indeterminate_count "$evidence")
+          timing_indeterminate_count=$(jq -er .timing_indeterminate_count "$evidence")
+          workflow_unreviewed_count=$(jq -er .workflow_contract_unreviewed_count "$evidence")
           {
             echo "evidence=$evidence"
             echo "evidence_sha256=$evidence_sha256"
@@ -259,6 +262,9 @@ jobs:
             echo "pending_count=$pending_count"
             echo "source_unavailable_count=$source_unavailable_count"
             echo "source_indeterminate_count=$source_indeterminate_count"
+            echo "probe_indeterminate_count=$probe_indeterminate_count"
+            echo "timing_indeterminate_count=$timing_indeterminate_count"
+            echo "workflow_unreviewed_count=$workflow_unreviewed_count"
           } >> "$GITHUB_OUTPUT"
 
       # actions/upload-artifact pinned to v7.0.1.
@@ -277,6 +283,9 @@ jobs:
           RESOLVED_COUNT: ${{ steps.evidence.outputs.resolved_count }}
           SOURCE_UNAVAILABLE_COUNT: ${{ steps.evidence.outputs.source_unavailable_count }}
           SOURCE_INDETERMINATE_COUNT: ${{ steps.evidence.outputs.source_indeterminate_count }}
+          PROBE_INDETERMINATE_COUNT: ${{ steps.evidence.outputs.probe_indeterminate_count }}
+          TIMING_INDETERMINATE_COUNT: ${{ steps.evidence.outputs.timing_indeterminate_count }}
+          WORKFLOW_UNREVIEWED_COUNT: ${{ steps.evidence.outputs.workflow_unreviewed_count }}
         run: |
           {
             echo '### Historical public replay GitHub evidence'
@@ -285,6 +294,9 @@ jobs:
             echo "- pending requests: \`$PENDING_COUNT\`"
             echo "- currently source-unavailable requests: \`$SOURCE_UNAVAILABLE_COUNT\`"
             echo "- indeterminate bounded source probes: \`$SOURCE_INDETERMINATE_COUNT\`"
+            echo "- indeterminate GitHub probes: \`$PROBE_INDETERMINATE_COUNT\`"
+            echo "- timing adjudications required: \`$TIMING_INDETERMINATE_COUNT\`"
+            echo "- unreviewed workflow contracts: \`$WORKFLOW_UNREVIEWED_COUNT\`"
             echo "- sanitized evidence SHA-256: \`$EVIDENCE_SHA256\`"
             echo '- missing evidence remains pending and is not an unavailability verdict'
           } >> "$GITHUB_STEP_SUMMARY"

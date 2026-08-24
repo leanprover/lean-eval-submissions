@@ -35,7 +35,8 @@ passes whose already-existing result identities were retained during result
 store deduplication. A full commit pinned in the issue URL must also
 equal the recorded source commit.
 
-Before the workflow split, the run head is the exact benchmark commit. After
+Before the workflow split, the run head is the exact benchmark commit and the
+resolver hashes the complete workflow definition at that commit. After
 the split, the run head instead names the evaluator revision in
 `lean-eval-submissions`; the resolver separately pins that commit and the exact
 workflow-definition digest. It accepts the split contract only when that exact
@@ -56,25 +57,33 @@ SHA-256. Add the sorted tuple through a reviewed PR and rerun the affected shard
 Never add a digest based only on a fragment search or the previous resolver's
 classification.
 
-Finally, the resolver verifies both exact commit/revision availability and
-public visibility. Repository probes use metadata-only Git commit endpoints.
+Finally, the resolver explicitly verifies that both historical issue
+repositories and the selected source repository are public and readable, then
+verifies exact commit/revision availability. Repository probes use metadata-only
+Git commit endpoints.
 GitHub has no content-free REST metadata endpoint for a gist revision, so a
 bounded public gist response is parsed transiently; no source field is
-persisted, logged, or uploaded. An oversized response becomes an indeterminate
-pending probe for that request rather than aborting the corpus.
+persisted, logged, uploaded, or cached. An oversized response, refused redirect,
+repository rename, HTTP 451, permission/rate boundary, or exhausted request
+retry becomes a reason-coded indeterminate pending probe for only that request;
+it neither aborts the shard nor proves source unavailability.
 
 The uploaded artifact is a closed, sanitized projection of URLs, commits,
 identifiers, classifications, and counts. It does not contain issue bodies,
 source files, workflow logs, or private locators. It retains bounded SHA-256
 identities for the issue title/body, normalized issue identity, selected run,
-and result-comment body, plus exact public timestamps, run attempt, canonical
-owner, and pass-ID projection needed to re-audit a match. The issue author must
+and result-comment body, plus a separate source-ref digest, exact public
+timestamps, run attempt, canonical owner, and pass-ID projection needed to
+re-audit a match. The issue author must
 case-insensitively equal the canonical result owner. Exactly one matching candidate
 with an available source becomes `resolved`. An exact match whose source has
 disappeared becomes `source_unavailable`, but remains pending rather than being
 turned into a permanent-unavailability verdict. Zero matches and multiple
-matches likewise remain pending. The workflow never guesses between the two
-historical issue repositories.
+matches likewise remain pending. A matching workflow run or bot comment just
+outside the conservative lag window is retained with public timestamps and
+digests as `timing_indeterminate` for adjudication. An exact but unreviewed
+split-workflow tuple is separately `workflow_contract_unreviewed`. The workflow
+never guesses between the two historical issue repositories.
 
 The resolver accepts only the fixed `api.github.com` origin and rejects
 redirects, preventing its token from being forwarded to an alternate host.
@@ -87,16 +96,19 @@ exclusive and does not follow a pre-existing final-path symlink.
 `pending_count` is exactly the number of non-`resolved` entries already present
 in `resolutions`; there is intentionally no second pending array. In particular,
 the count includes `source_unavailable`, `source_probe_indeterminate`,
-`ambiguous`, and `evidence_missing` entries.
+`probe_indeterminate`, `timing_indeterminate`,
+`workflow_contract_unreviewed`, `ambiguous`, and `evidence_missing` entries.
 
 Resolution is deterministically partitioned by the request-ID hash. One manual
 workflow run processes exactly one reviewed shard and uploads an artifact bound
 to its shard index, total shard count, request count, and result count. Shards
 must be scheduled across GitHub rate-limit windows; they are deliberately not a
 parallel matrix that would share and exhaust the repository's standard
-`GITHUB_TOKEN` budget. The resolver caches repeated workflow definitions and
-daily run lists, treats an HTTP 403 limit response as a failed shard, and never
-turns rate exhaustion into missing evidence.
+`GITHUB_TOKEN` budget. Empty hash partitions are producible zero-count shards
+and must still be supplied to aggregation. The resolver caches repeated
+workflow definitions and daily run lists, but never gist bodies. Its token has
+only repository contents, issues, and Actions read authority; source fetching,
+State/Results writes, deployments, and secrets are outside that boundary.
 
 After every shard for one reviewed `shard_count` has completed, download the
 sanitized artifacts and aggregate them offline from the same clean protected
@@ -112,13 +124,13 @@ python scripts/aggregate_public_replay_github_evidence.py \
 ```
 
 Supply every shard exactly once. The aggregator binds one source commit,
-inventory digest, request byte digest, registry byte digest, and shard count;
+inventory digest, request byte digest, exact registry-file byte digest, and shard count;
 requires every index and request ID exactly once; revalidates every candidate;
 recomputes result coverage and counters; and records every shard SHA-256. Its
 schema is `schemas/public-replay-github-evidence-aggregate-v1.schema.json`.
 Aggregation does not mutate State or promote a classification:
-`source_unavailable`, indeterminate, ambiguous, and missing evidence all remain
-pending.
+`source_unavailable`, all indeterminate classes, unreviewed workflow contracts,
+ambiguous matches, and missing evidence remain pending with separate counters.
 
 This evidence can recover the exact evaluator commit from the workflow run and
 bind the accepted public result to its issue. When an old unpinned source URL

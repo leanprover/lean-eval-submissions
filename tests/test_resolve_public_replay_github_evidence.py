@@ -6,6 +6,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -13,13 +14,14 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from resolve_public_replay_github_evidence import (  # noqa: E402
     EvidenceError,
     GitHubClient,
+    ProbeIndeterminate,
     _RejectRedirects,
     _read_bounded,
     _workflow_binding,
     _write_exclusive,
     canonical_bytes,
-    resolve,
-    validate_evidence,
+    resolve as _resolve,
+    validate_evidence as _validate_evidence,
     validate_requests,
     validate_workflow_registry,
 )
@@ -27,6 +29,37 @@ from resolve_public_replay_github_evidence import (  # noqa: E402
 
 BENCHMARK = "1" * 40
 SOURCE = "2" * 40
+
+
+def registry_bytes(value: dict | None = None) -> tuple[dict, str]:
+    if value is None:
+        path = ROOT / "configuration/public-replay-workflow-definitions-v1.json"
+        raw = path.read_bytes()
+        value = json.loads(raw)
+    else:
+        raw = (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
+    return value, hashlib.sha256(raw).hexdigest()
+
+
+def resolve(value, digest, client, workflow_registry=None, registry_digest=None, **kwargs):
+    workflow_registry, computed = registry_bytes(workflow_registry)
+    return _resolve(
+        value,
+        digest,
+        client,
+        workflow_registry,
+        registry_digest or computed,
+        **kwargs,
+    )
+
+
+def validate_evidence(value, requests, workflow_registry=None, registry_digest=None):
+    workflow_registry, computed = registry_bytes(workflow_registry)
+    return _validate_evidence(
+        value, requests, workflow_registry, registry_digest or computed
+    )
+
+
 def refresh_request_id(value: dict) -> None:
     request = value["requests"][0]
     identity = {
@@ -166,6 +199,15 @@ class FakeClient:
         self.source_available = source_available
 
     def get(self, path: str):
+        if path in {
+            "/repos/leanprover/lean-eval",
+            "/repos/leanprover/lean-eval-submissions",
+        }:
+            return {
+                "full_name": path.removeprefix("/repos/"),
+                "private": False,
+                "visibility": "public",
+            }, 200
         if path == "/repos/leanprover/lean-eval/issues/144":
             return issue(), 200
         if path == "/repos/leanprover/lean-eval-submissions/issues/144":
@@ -191,9 +233,8 @@ class FakeClient:
             "/repos/A-M-Berns/lean-eval-submissions/git/commits/" + SOURCE
         ):
             return ({"sha": SOURCE}, 200) if self.source_available else (None, 404)
-        if path.startswith(
-            "/repos/leanprover/lean-eval-submissions/contents/"
-            ".github/workflows/submission.yml?ref="
+        if path.startswith("/repos/leanprover/") and (
+            "/contents/.github/workflows/submission.yml?ref=" in path
         ):
             workflow = "\n".join(
                 (
@@ -267,6 +308,31 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
             candidate["reported_pass_problem_ids"],
             ["bvp_comparison", "sturm_separation"],
         )
+        self.assertRegex(candidate["workflow_definition_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(
+            candidate["issue_source_ref_sha256"],
+            hashlib.sha256(canonical_bytes(None)).hexdigest(),
+        )
+
+    def test_unpinned_issue_identity_is_always_recomputable(self) -> None:
+        value = request_value()
+        output = resolve(value, "8" * 64, FakeClient())
+        candidate = output["resolutions"][0]["candidates"][0]
+        expected = {
+            "declared_model": value["requests"][0]["declared_model"],
+            "source_kind": value["requests"][0]["source"]["kind"],
+            "source_repository": value["requests"][0]["source"][
+                "repository"
+            ].casefold(),
+        }
+        self.assertEqual(
+            candidate["issue_identity_sha256"],
+            hashlib.sha256(canonical_bytes(expected)).hexdigest(),
+        )
+        changed = copy.deepcopy(output)
+        changed["resolutions"][0]["candidates"][0]["issue_identity_sha256"] = "9" * 64
+        with self.assertRaisesRegex(EvidenceError, "issue identity"):
+            validate_evidence(changed, value)
 
     def test_issue_author_must_equal_canonical_owner(self) -> None:
         value = request_value()
@@ -373,6 +439,15 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(EvidenceError, "does not bind"):
             validate_requests(value)
 
+    def test_request_rejects_dot_repository_segments(self) -> None:
+        for repository in ("./source", "owner/.."):
+            with self.subTest(repository=repository):
+                value = request_value()
+                value["requests"][0]["source"]["repository"] = repository
+                refresh_request_id(value)
+                with self.assertRaisesRegex(EvidenceError, "repository"):
+                    validate_requests(value)
+
     def test_request_contract_rejects_unknown_fields(self) -> None:
         value = request_value()
         value["requests"][0]["source_bytes"] = "must never appear"
@@ -460,6 +535,28 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             GitHubClient("token", "https://attacker.example")
 
+    def test_gist_bodies_are_never_cached(self) -> None:
+        class Response:
+            status = 200
+            headers = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def read(self, _limit):
+                return b'{"id":"fixture"}'
+
+        client = GitHubClient("token")
+        client._opener.open = mock.Mock(side_effect=[Response(), Response()])
+        path = "/gists/fixture/" + "a" * 40
+        self.assertEqual(client.get(path)[1], 200)
+        self.assertEqual(client.get(path)[1], 200)
+        self.assertEqual(client._opener.open.call_count, 2)
+        self.assertNotIn(path, client._get_cache)
+
     def test_bounded_input_and_exclusive_output_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
@@ -490,6 +587,81 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
         refresh_request_id(value)
         output = resolve(value, "8" * 64, FakeClient())
         self.assertEqual(output["resolutions"][0]["status"], "resolved")
+
+    def test_just_outside_run_or_comment_window_requires_adjudication(self) -> None:
+        for target in ("run", "comment"):
+            with self.subTest(target=target):
+                client = FakeClient()
+                original_pages = client.pages
+
+                def pages(path, item_key=None, *, selected=target):
+                    values = original_pages(path, item_key)
+                    if selected == "run" and "/actions/runs?" in path:
+                        values[0]["updated_at"] = "2026-05-07T07:10:50Z"
+                    if selected == "comment" and path.endswith("/comments"):
+                        values[0]["created_at"] = "2026-05-07T07:06:00Z"
+                    return values
+
+                client.pages = pages
+                output = resolve(request_value(), "8" * 64, client)
+                self.assertEqual(
+                    output["resolutions"][0]["status"], "timing_indeterminate"
+                )
+                candidate = output["resolutions"][0]["candidates"][0]
+                self.assertEqual(candidate["status"], "timing_indeterminate")
+                self.assertRegex(candidate["evidence_identity_sha256"], r"^[0-9a-f]{64}$")
+                validate_evidence(output, request_value())
+
+    def test_per_candidate_probe_errors_and_repository_renames_stay_pending(self) -> None:
+        class ProbeClient(FakeClient):
+            def get(self, path):
+                if path == "/repos/leanprover/lean-eval/issues/144":
+                    raise ProbeIndeterminate("github_legal_restriction")
+                return super().get(path)
+
+        output = resolve(request_value(), "8" * 64, ProbeClient())
+        self.assertEqual(output["resolutions"][0]["status"], "probe_indeterminate")
+        self.assertEqual(output["probe_indeterminate_count"], 1)
+        validate_evidence(output, request_value())
+
+        class RenamedSourceClient(FakeClient):
+            def get(self, path):
+                value, status = super().get(path)
+                if path == "/repos/A-M-Berns/lean-eval-submissions":
+                    value = dict(value)
+                    value["full_name"] = "A-M-Berns/renamed"
+                return value, status
+
+        renamed = resolve(request_value(), "8" * 64, RenamedSourceClient())
+        self.assertEqual(
+            renamed["resolutions"][0]["status"], "source_probe_indeterminate"
+        )
+        self.assertEqual(
+            renamed["resolutions"][0]["candidates"][0]["source_probe_reason_code"],
+            "source_repository_identity_changed",
+        )
+
+    def test_evidence_repository_preflight_requires_public_exact_identity(self) -> None:
+        class PrivateClient(FakeClient):
+            def get(self, path):
+                value, status = super().get(path)
+                if path == "/repos/leanprover/lean-eval":
+                    value = dict(value)
+                    value["private"] = True
+                return value, status
+
+        output = resolve(request_value(), "8" * 64, PrivateClient())
+        candidate = output["resolutions"][0]["candidates"][0]
+        self.assertEqual(candidate["status"], "probe_indeterminate")
+        self.assertEqual(candidate["reason_code"], "evidence_repository_not_public")
+
+    def test_registry_value_and_exact_raw_digest_are_mandatory(self) -> None:
+        value = request_value()
+        with self.assertRaisesRegex(EvidenceError, "raw workflow registry"):
+            _resolve(value, "8" * 64, FakeClient())
+        registry, _ = registry_bytes()
+        with self.assertRaisesRegex(EvidenceError, "raw workflow registry"):
+            _resolve(value, "8" * 64, FakeClient(), registry)
 
     def test_split_workflow_binds_evaluator_separately_from_benchmark(self) -> None:
         class SplitClient(FakeClient):
@@ -571,7 +743,9 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
                 return values
 
         output = resolve(request_value(), "8" * 64, SplitClient())
-        self.assertEqual(output["resolutions"][0]["status"], "evidence_missing")
+        self.assertEqual(
+            output["resolutions"][0]["status"], "workflow_contract_unreviewed"
+        )
         candidate = output["resolutions"][0]["candidates"][1]
         self.assertEqual(candidate["status"], "workflow_contract_unreviewed")
         # The fixture bytes consist only of the old recognizer's fragments.
@@ -627,14 +801,17 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
         validate_evidence(output, value)
         self.assertEqual(output["shard_index"], expected_index)
         self.assertEqual(output["shard_count"], 16)
-        with self.assertRaisesRegex(EvidenceError, "no resolution requests"):
-            resolve(
-                value,
-                "8" * 64,
-                FakeClient(),
-                shard_index=(expected_index + 1) % 16,
-                shard_count=16,
-            )
+        empty = resolve(
+            value,
+            "8" * 64,
+            FakeClient(),
+            shard_index=(expected_index + 1) % 16,
+            shard_count=16,
+        )
+        validate_evidence(empty, value)
+        self.assertEqual(empty["shard_request_count"], 0)
+        self.assertEqual(empty["shard_result_count"], 0)
+        self.assertEqual(empty["resolutions"], [])
 
     def test_published_evidence_schema_is_strict(self) -> None:
         schema = json.loads(

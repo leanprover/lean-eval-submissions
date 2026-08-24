@@ -19,6 +19,7 @@ from results_schema import (
 
 COMMIT = re.compile(r"[0-9a-f]{40}")
 RESULT_PATH = re.compile(r"results/[A-Za-z0-9][A-Za-z0-9_.-]*\.json")
+REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
 
 
 class InventoryError(ValueError):
@@ -43,9 +44,16 @@ def _entry(
         ),
     }
     if public:
+        repository = submission["repo"]
+        if (
+            not isinstance(repository, str)
+            or REPOSITORY.fullmatch(repository) is None
+            or any(segment in {".", ".."} for segment in repository.split("/"))
+        ):
+            raise InventoryError("public source repository is not canonical")
         source.update(
             {
-                "repository": submission["repo"],
+                "repository": repository,
                 "commit": submission["ref"],
             }
         )
@@ -94,6 +102,10 @@ def inventory(results_root: pathlib.Path, source_commit: str) -> dict[str, Any]:
             raise InventoryError(str(error)) from error
         if version != 2:
             raise InventoryError(f"historical inventory requires schema version 2: {relative}")
+        if path.stem.casefold() != data["user"].casefold():
+            raise InventoryError(
+                f"results filename stem does not bind user: {relative}"
+            )
         canonical_files.append((relative, data))
         for record in data["results"]:
             result_id = record["result_id"]

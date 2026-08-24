@@ -107,6 +107,9 @@ def empty_shard(requests: dict, requests_digest: str, registry_digest: str, inde
         "resolved_count": 0,
         "source_unavailable_count": 0,
         "source_indeterminate_count": 0,
+        "probe_indeterminate_count": 0,
+        "timing_indeterminate_count": 0,
+        "workflow_contract_unreviewed_count": 0,
         "pending_count": len(selected),
         "resolutions": resolutions,
     }

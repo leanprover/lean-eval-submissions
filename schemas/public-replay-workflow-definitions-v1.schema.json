@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://leanprover.github.io/lean-eval/schemas/public-replay-workflow-definitions-v1.schema.json",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/public-replay-workflow-definitions-v1.schema.json",
   "title": "Reviewed historical public replay workflow definitions v1",
   "type": "object",
   "additionalProperties": false,

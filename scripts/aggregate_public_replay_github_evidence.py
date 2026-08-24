@@ -148,6 +148,11 @@ def aggregate(
         "resolved_count": counts["resolved"],
         "source_unavailable_count": counts["source_unavailable"],
         "source_indeterminate_count": counts["source_probe_indeterminate"],
+        "probe_indeterminate_count": counts["probe_indeterminate"],
+        "timing_indeterminate_count": counts["timing_indeterminate"],
+        "workflow_contract_unreviewed_count": counts[
+            "workflow_contract_unreviewed"
+        ],
         "ambiguous_count": counts["ambiguous"],
         "evidence_missing_count": counts["evidence_missing"],
         "pending_count": len(resolutions) - counts["resolved"],
@@ -185,6 +190,9 @@ def validate_aggregate(
         "resolved_count",
         "source_unavailable_count",
         "source_indeterminate_count",
+        "probe_indeterminate_count",
+        "timing_indeterminate_count",
+        "workflow_contract_unreviewed_count",
         "ambiguous_count",
         "evidence_missing_count",
         "pending_count",
@@ -280,6 +288,11 @@ def validate_aggregate(
             "resolved_count": counts["resolved"],
             "source_unavailable_count": counts["source_unavailable"],
             "source_indeterminate_count": counts["source_probe_indeterminate"],
+            "probe_indeterminate_count": counts["probe_indeterminate"],
+            "timing_indeterminate_count": counts["timing_indeterminate"],
+            "workflow_contract_unreviewed_count": counts[
+                "workflow_contract_unreviewed"
+            ],
             "pending_count": len(selected) - counts["resolved"],
             "resolutions": selected,
         }
@@ -305,6 +318,11 @@ def validate_aggregate(
         "resolved_count": counts["resolved"],
         "source_unavailable_count": counts["source_unavailable"],
         "source_indeterminate_count": counts["source_probe_indeterminate"],
+        "probe_indeterminate_count": counts["probe_indeterminate"],
+        "timing_indeterminate_count": counts["timing_indeterminate"],
+        "workflow_contract_unreviewed_count": counts[
+            "workflow_contract_unreviewed"
+        ],
         "ambiguous_count": counts["ambiguous"],
         "evidence_missing_count": counts["evidence_missing"],
         "pending_count": len(resolutions) - counts["resolved"],

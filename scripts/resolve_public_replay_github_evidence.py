@@ -56,6 +56,18 @@ class ResponseTooLarge(EvidenceError):
     """One public source probe cannot be processed within its byte cap."""
 
 
+class ProbeIndeterminate(EvidenceError):
+    """A GitHub probe failed without proving that evidence is absent."""
+
+    def __init__(self, reason_code: str) -> None:
+        super().__init__(reason_code)
+        self.reason_code = reason_code
+
+
+class IntegrityError(EvidenceError):
+    """Reviewed local authority conflicts with the fetched public bytes."""
+
+
 class _RejectRedirects(urllib.request.HTTPRedirectHandler):
     """Never forward the repository token across an HTTP redirect."""
 
@@ -150,7 +162,8 @@ class GitHubClient:
             or parsed.fragment
         ):
             raise EvidenceError("GitHub API path is not absolute")
-        if path in self._get_cache:
+        cacheable = not path.startswith("/gists/")
+        if cacheable and path in self._get_cache:
             return self._get_cache[path]
         url = API_ROOT + path
         for attempt in range(4):
@@ -187,14 +200,20 @@ class GitHubClient:
                             "GitHub API response exceeds the size limit"
                         )
                     result = (json.loads(raw), response.status)
-                    self._get_cache[path] = result
+                    if cacheable:
+                        self._get_cache[path] = result
                     return result
             except urllib.error.HTTPError as error:
                 try:
                     if error.code == 404:
                         result = (None, 404)
-                        self._get_cache[path] = result
+                        if cacheable:
+                            self._get_cache[path] = result
                         return result
+                    if error.code in {301, 302, 303, 307, 308}:
+                        raise ProbeIndeterminate("github_redirect_refused") from error
+                    if error.code == 451:
+                        raise ProbeIndeterminate("github_legal_restriction") from error
                     if error.code == 403:
                         retry_after = error.headers.get("Retry-After")
                         if retry_after is not None and retry_after.isdigit():
@@ -202,19 +221,16 @@ class GitHubClient:
                             if delay <= 30 and attempt < 3:
                                 time.sleep(delay)
                                 continue
-                        raise EvidenceError(
-                            "GitHub API rate limit or permission boundary returned "
-                            "HTTP 403"
+                        raise ProbeIndeterminate(
+                            "github_rate_or_permission_boundary"
                         ) from error
                     if error.code not in {429, 500, 502, 503, 504} or attempt == 3:
-                        raise EvidenceError(
-                            f"GitHub API returned HTTP {error.code}"
-                        ) from error
+                        raise ProbeIndeterminate("github_http_error") from error
                 finally:
                     error.close()
             except (OSError, TimeoutError, UnicodeError, json.JSONDecodeError) as error:
                 if attempt == 3:
-                    raise EvidenceError("GitHub API request failed") from error
+                    raise ProbeIndeterminate("github_request_failed") from error
             time.sleep(2**attempt)
         raise AssertionError("unreachable")
 
@@ -259,6 +275,31 @@ def _source_identity(body: str) -> tuple[str, str, str, str | None]:
     )
 
 
+def _canonical_repository(value: Any, label: str) -> str:
+    if (
+        not isinstance(value, str)
+        or REPOSITORY.fullmatch(value) is None
+        or any(segment in {".", ".."} for segment in value.split("/"))
+    ):
+        raise EvidenceError(f"{label} is not canonical")
+    return value
+
+
+def _preflight_evidence_repository(client: GitHubClient, repository: str) -> None:
+    owner, name = repository.split("/", 1)
+    path = "/repos/{}/{}".format(
+        urllib.parse.quote(owner, safe=""), urllib.parse.quote(name, safe="")
+    )
+    value, status = client.get(path)
+    if status != 200 or not isinstance(value, dict):
+        raise ProbeIndeterminate("evidence_repository_not_readable")
+    full_name = value.get("full_name")
+    if not isinstance(full_name, str) or full_name.casefold() != repository.casefold():
+        raise ProbeIndeterminate("evidence_repository_identity_changed")
+    if value.get("private") is not False or value.get("visibility", "public") != "public":
+        raise ProbeIndeterminate("evidence_repository_not_public")
+
+
 def _source_url(source: dict[str, Any]) -> str:
     repository = source["repository"]
     commit = source["commit"]
@@ -281,11 +322,17 @@ def _probe_source(client: GitHubClient, request: dict[str, Any]) -> dict[str, An
                 urllib.parse.quote(name, safe=""),
             )
             repository_value, repository_status = client.get(repository_path)
+            if repository_status == 200 and isinstance(repository_value, dict):
+                full_name = repository_value.get("full_name")
+                if not isinstance(full_name, str) or full_name.casefold() != repository.casefold():
+                    return {
+                        "status": "indeterminate",
+                        "reason_code": "source_repository_identity_changed",
+                        "commit_url": url,
+                    }
             publicly_visible = (
                 repository_status == 200
                 and isinstance(repository_value, dict)
-                and isinstance(repository_value.get("full_name"), str)
-                and repository_value["full_name"].casefold() == repository.casefold()
                 and repository_value.get("private") is False
                 and repository_value.get("visibility", "public") == "public"
             )
@@ -325,7 +372,41 @@ def _probe_source(client: GitHubClient, request: dict[str, Any]) -> dict[str, An
             "reason_code": "source_probe_response_too_large",
             "commit_url": url,
         }
+    except ProbeIndeterminate as error:
+        return {
+            "status": "indeterminate",
+            "reason_code": error.reason_code,
+            "commit_url": url,
+        }
     return {"status": "available" if available else "unavailable", "commit_url": url}
+
+
+def _workflow_definition(
+    client: GitHubClient, repository: str, workflow_path: str, commit: str
+) -> str | None:
+    api_path = "/repos/{}/contents/{}?ref={}".format(
+        repository,
+        urllib.parse.quote(workflow_path, safe="/"),
+        commit,
+    )
+    value, status = client.get(api_path)
+    if (
+        status != 200
+        or not isinstance(value, dict)
+        or value.get("encoding") != "base64"
+        or not isinstance(value.get("content"), str)
+        or type(value.get("size")) is not int
+        or not 0 < value["size"] <= MAX_WORKFLOW_BYTES
+    ):
+        return None
+    try:
+        encoded = "".join(value["content"].split())
+        raw = base64.b64decode(encoded, validate=True)
+    except (ValueError, TypeError):
+        return None
+    if len(raw) != value["size"] or len(raw) > MAX_WORKFLOW_BYTES:
+        return None
+    return hashlib.sha256(raw).hexdigest()
 
 
 def _workflow_binding(
@@ -345,44 +426,26 @@ def _workflow_binding(
     if issue_repository == "leanprover/lean-eval":
         if head_sha != request["benchmark"]["commit"]:
             return None
+        digest = _workflow_definition(client, issue_repository, run["path"], head_sha)
+        if digest is None:
+            return None
         return {
             "contract": "benchmark_repository_head",
             "repository_commit": head_sha,
-            "definition_sha256": None,
+            "definition_sha256": digest,
             "reviewed": True,
         }
     if issue_repository != "leanprover/lean-eval-submissions":
         return None
-    workflow_path = run["path"]
-    api_path = "/repos/{}/contents/{}?ref={}".format(
-        issue_repository,
-        urllib.parse.quote(workflow_path, safe="/"),
-        head_sha,
-    )
-    value, status = client.get(api_path)
-    if (
-        status != 200
-        or not isinstance(value, dict)
-        or value.get("encoding") != "base64"
-        or not isinstance(value.get("content"), str)
-        or type(value.get("size")) is not int
-        or not 0 < value["size"] <= MAX_WORKFLOW_BYTES
-    ):
+    digest = _workflow_definition(client, issue_repository, run["path"], head_sha)
+    if digest is None:
         return None
-    try:
-        encoded = "".join(value["content"].split())
-        raw = base64.b64decode(encoded, validate=True)
-    except (ValueError, TypeError):
-        return None
-    if len(raw) != value["size"] or len(raw) > MAX_WORKFLOW_BYTES:
-        return None
-    digest = hashlib.sha256(raw).hexdigest()
     reviewed = registry.get(head_sha)
     if reviewed is not None and (
         reviewed["definition_sha256"] != digest
         or reviewed["contract"] != SPLIT_WORKFLOW_CONTRACT
     ):
-        raise EvidenceError("reviewed workflow definition bytes do not match")
+        raise IntegrityError("reviewed workflow definition bytes do not match")
     return {
         "contract": SPLIT_WORKFLOW_CONTRACT,
         "repository_commit": head_sha,
@@ -397,6 +460,7 @@ def _candidate(
     repository: str,
     registry: dict[str, dict[str, str]],
 ) -> dict[str, Any]:
+    _preflight_evidence_repository(client, repository)
     issue_number = request["issue_number"]
     issue, status = client.get(f"/repos/{repository}/issues/{issue_number}")
     if status == 404:
@@ -428,7 +492,11 @@ def _candidate(
         or issue.get("state") != "closed"
         or issue.get("html_url") != expected_issue_url
     ):
-        return {"issue_repository": repository, "status": "github_identity_mismatch"}
+        return {
+            "issue_repository": repository,
+            "status": "probe_indeterminate",
+            "reason_code": "github_identity_changed",
+        }
     expected_source = request["source"]
     if model != request["declared_model"]:
         return {"issue_repository": repository, "status": "model_mismatch"}
@@ -459,6 +527,7 @@ def _candidate(
         "workflow_runs",
     )
     matching_runs: list[dict[str, Any]] = []
+    outside_window_runs: list[dict[str, Any]] = []
     for run in runs:
         if not isinstance(run, dict):
             continue
@@ -471,7 +540,7 @@ def _candidate(
         actor_value = run.get("actor")
         repository_value = run.get("repository")
         head_repository_value = run.get("head_repository")
-        if (
+        identity_matches = (
             type(run_id) is int
             and run_id > 0
             and run.get("name") == request["expected_workflow"]["name"]
@@ -491,11 +560,34 @@ def _candidate(
             and run.get("head_branch") == "main"
             and run.get("html_url")
             == f"https://github.com/{repository}/actions/runs/{run_id}"
-            and created <= run_created <= created + datetime.timedelta(seconds=30)
-            and accepted <= run_updated <= accepted + RUN_COMPLETION_LAG
-        ):
-            matching_runs.append(run)
+        )
+        if identity_matches:
+            if (
+                created <= run_created <= created + datetime.timedelta(seconds=30)
+                and accepted <= run_updated <= accepted + RUN_COMPLETION_LAG
+            ):
+                matching_runs.append(run)
+            else:
+                outside_window_runs.append(run)
     if len(matching_runs) != 1:
+        if not matching_runs and len(outside_window_runs) == 1:
+            observed = outside_window_runs[0]
+            return {
+                "issue_repository": repository,
+                "status": "timing_indeterminate",
+                "reason_code": "workflow_run_outside_window",
+                "issue_url": expected_issue_url,
+                "issue_created_at": issue["created_at"],
+                "issue_closed_at": issue["closed_at"],
+                "issue_title_sha256": text_digest(title),
+                "issue_body_sha256": text_digest(body),
+                "evidence_url": observed["html_url"],
+                "evidence_created_at": observed["created_at"],
+                "evidence_updated_at": observed["updated_at"],
+                "evidence_identity_sha256": hashlib.sha256(
+                    canonical_bytes(observed)
+                ).hexdigest(),
+            }
         return {
             "issue_repository": repository,
             "status": (
@@ -519,6 +611,7 @@ def _candidate(
     comments = client.pages(f"/repos/{repository}/issues/{issue_number}/comments")
     expected_problems = {item["problem_id"] for item in request["results"]}
     matching_comments: list[dict[str, Any]] = []
+    outside_window_comments: list[dict[str, Any]] = []
     projection_too_large = False
     for comment in comments:
         if not isinstance(comment, dict):
@@ -536,26 +629,46 @@ def _candidate(
         )
         comment_id = comment.get("id")
         comment_user = comment.get("user")
-        if (
+        identity_matches = (
             type(comment_id) is int
             and comment_id > 0
             and isinstance(comment_user, dict)
             and comment_user.get("login") == "github-actions[bot]"
-            and accepted <= comment_at <= accepted + COMMENT_ACCEPTANCE_LAG
             and all(pass_counts[problem] == 1 for problem in expected_problems)
             and comment.get("html_url")
             == f"{expected_issue_url}#issuecomment-{comment_id}"
-        ):
+        )
+        if identity_matches:
             projected = sorted(
                 problem for problem in pass_lines if PROBLEM_ID.fullmatch(problem)
             )
             if len(projected) > MAX_REPORTED_PASSES:
                 projection_too_large = True
+            elif not accepted <= comment_at <= accepted + COMMENT_ACCEPTANCE_LAG:
+                selected = dict(comment)
+                selected["_reported_pass_problem_ids"] = projected
+                outside_window_comments.append(selected)
             else:
                 comment = dict(comment)
                 comment["_reported_pass_problem_ids"] = projected
                 matching_comments.append(comment)
     if len(matching_comments) != 1:
+        if not matching_comments and len(outside_window_comments) == 1:
+            observed = outside_window_comments[0]
+            return {
+                "issue_repository": repository,
+                "status": "timing_indeterminate",
+                "reason_code": "result_comment_outside_window",
+                "issue_url": expected_issue_url,
+                "issue_created_at": issue["created_at"],
+                "issue_closed_at": issue["closed_at"],
+                "issue_title_sha256": text_digest(title),
+                "issue_body_sha256": text_digest(body),
+                "evidence_url": observed["html_url"],
+                "evidence_created_at": observed["created_at"],
+                "evidence_updated_at": None,
+                "evidence_identity_sha256": text_digest(observed["body"]),
+            }
         if projection_too_large and not matching_comments:
             return {
                 "issue_repository": repository,
@@ -596,7 +709,6 @@ def _candidate(
         "declared_model": model,
         "source_kind": source_kind,
         "source_repository": source_repository.casefold(),
-        "source_ref": source_ref,
     }
     return {
         "issue_repository": repository,
@@ -613,6 +725,9 @@ def _candidate(
         "issue_body_sha256": text_digest(body),
         "issue_identity_sha256": hashlib.sha256(
             canonical_bytes(issue_identity)
+        ).hexdigest(),
+        "issue_source_ref_sha256": hashlib.sha256(
+            canonical_bytes(source_ref)
         ).hexdigest(),
         "issue_source_reference_binding": (
             "exact_commit" if source_ref == expected_source["commit"] else "unpinned"
@@ -641,6 +756,29 @@ def _candidate(
             if source_status == "indeterminate"
             else {}
         ),
+    }
+
+
+def _safe_candidate(
+    client: GitHubClient,
+    request: dict[str, Any],
+    repository: str,
+    registry: dict[str, dict[str, str]],
+) -> dict[str, Any]:
+    try:
+        return _candidate(client, request, repository, registry)
+    except IntegrityError:
+        raise
+    except ResponseTooLarge:
+        reason = "github_response_too_large"
+    except ProbeIndeterminate as error:
+        reason = error.reason_code
+    except EvidenceError:
+        reason = "github_response_invalid"
+    return {
+        "issue_repository": repository,
+        "status": "probe_indeterminate",
+        "reason_code": reason,
     }
 
 
@@ -732,12 +870,12 @@ def validate_requests(value: Any) -> None:
             or set(source) != {"kind", "repository", "commit", "visibility"}
             or source.get("kind") not in {"github_repo", "gist"}
             or not isinstance(source.get("repository"), str)
-            or REPOSITORY.fullmatch(source["repository"]) is None
             or not isinstance(source.get("commit"), str)
             or COMMIT.fullmatch(source["commit"]) is None
             or source.get("visibility") != "public"
         ):
             raise EvidenceError("request source identity is invalid")
+        _canonical_repository(source["repository"], "request source repository")
         benchmark = request["benchmark"]
         if (
             not isinstance(benchmark, dict)
@@ -818,10 +956,25 @@ def _classify_candidates(candidates: list[dict[str, Any]]) -> tuple[str, str | N
         for item in candidates
         if item.get("status") == "workflow_contract_unreviewed"
     ]
+    probe_indeterminate = [
+        item for item in candidates if item.get("status") == "probe_indeterminate"
+    ]
+    timing_indeterminate = [
+        item for item in candidates if item.get("status") == "timing_indeterminate"
+    ]
+    matched = available + unavailable + indeterminate
     if unreviewed:
-        if available or unavailable or indeterminate:
+        if matched or probe_indeterminate or timing_indeterminate or len(unreviewed) != 1:
             return "ambiguous", None
-        return "evidence_missing", None
+        return "workflow_contract_unreviewed", unreviewed[0]["issue_repository"]
+    if probe_indeterminate:
+        if matched or timing_indeterminate or len(probe_indeterminate) != 1:
+            return "ambiguous", None
+        return "probe_indeterminate", probe_indeterminate[0]["issue_repository"]
+    if timing_indeterminate:
+        if matched or len(timing_indeterminate) != 1:
+            return "ambiguous", None
+        return "timing_indeterminate", timing_indeterminate[0]["issue_repository"]
     if len(available) == 1 and not unavailable and not indeterminate:
         return "resolved", available[0]["issue_repository"]
     if not available and len(unavailable) == 1 and not indeterminate:
@@ -843,19 +996,9 @@ def resolve(
     shard_count: int = 1,
 ) -> dict[str, Any]:
     validate_requests(value)
-    if workflow_registry is None:
-        workflow_registry = {
-            "schema_version": 1,
-            "kind": "historical_public_replay_workflow_definition_registry",
-            "repository": "leanprover/lean-eval-submissions",
-            "workflow_path": ".github/workflows/submission.yml",
-            "contracts": [],
-        }
+    if workflow_registry is None or workflow_registry_sha256 is None:
+        raise EvidenceError("exact raw workflow registry and digest are required")
     registry = validate_workflow_registry(workflow_registry)
-    if workflow_registry_sha256 is None:
-        workflow_registry_sha256 = hashlib.sha256(
-            canonical_bytes(workflow_registry)
-        ).hexdigest()
     if DIGEST.fullmatch(workflow_registry_sha256) is None:
         raise EvidenceError("workflow definition registry digest is invalid")
     if not isinstance(raw_sha256, str) or DIGEST.fullmatch(raw_sha256) is None:
@@ -873,13 +1016,11 @@ def resolve(
         if int(request["request_id"].removeprefix("prr_"), 16) % shard_count
         == shard_index
     ]
-    if not selected_requests:
-        raise EvidenceError("selected shard has no resolution requests")
     resolutions: list[dict[str, Any]] = []
     counts: collections.Counter[str] = collections.Counter()
     for request in selected_requests:
         candidates = [
-            _candidate(client, request, repository, registry)
+            _safe_candidate(client, request, repository, registry)
             for repository in request["candidate_issue_repositories"]
         ]
         status, selected_repository = _classify_candidates(candidates)
@@ -911,6 +1052,11 @@ def resolve(
         "resolved_count": counts["resolved"],
         "source_unavailable_count": counts["source_unavailable"],
         "source_indeterminate_count": counts["source_probe_indeterminate"],
+        "probe_indeterminate_count": counts["probe_indeterminate"],
+        "timing_indeterminate_count": counts["timing_indeterminate"],
+        "workflow_contract_unreviewed_count": counts[
+            "workflow_contract_unreviewed"
+        ],
         "pending_count": len(selected_requests) - counts["resolved"],
         "resolutions": resolutions,
     }
@@ -957,6 +1103,9 @@ def validate_evidence(
         "resolved_count",
         "source_unavailable_count",
         "source_indeterminate_count",
+        "probe_indeterminate_count",
+        "timing_indeterminate_count",
+        "workflow_contract_unreviewed_count",
         "pending_count",
         "resolutions",
     }
@@ -981,13 +1130,16 @@ def validate_evidence(
         "request_count",
         "result_count",
         "shard_count",
-        "shard_request_count",
-        "shard_result_count",
     }
     count_fields = positive_fields | {
+        "shard_request_count",
+        "shard_result_count",
         "resolved_count",
         "source_unavailable_count",
         "source_indeterminate_count",
+        "probe_indeterminate_count",
+        "timing_indeterminate_count",
+        "workflow_contract_unreviewed_count",
         "pending_count",
     }
     for field in count_fields:
@@ -1019,19 +1171,13 @@ def validate_evidence(
         raise EvidenceError("GitHub evidence resolutions are not unique and sorted")
 
     validate_requests(requests_value)
-    if workflow_registry is None:
-        workflow_registry = {
-            "schema_version": 1,
-            "kind": "historical_public_replay_workflow_definition_registry",
-            "repository": "leanprover/lean-eval-submissions",
-            "workflow_path": ".github/workflows/submission.yml",
-            "contracts": [],
-        }
+    if workflow_registry is None or workflow_registry_sha256 is None:
+        raise EvidenceError("exact raw workflow registry and digest are required")
     registry = validate_workflow_registry(workflow_registry)
-    if workflow_registry_sha256 is None:
-        workflow_registry_sha256 = hashlib.sha256(
-            canonical_bytes(workflow_registry)
-        ).hexdigest()
+    if not isinstance(workflow_registry_sha256, str) or DIGEST.fullmatch(
+        workflow_registry_sha256
+    ) is None:
+        raise EvidenceError("workflow registry raw digest is invalid")
     if value["workflow_definition_registry_sha256"] != workflow_registry_sha256:
         raise EvidenceError("GitHub evidence does not bind its workflow registry")
     request_by_id = {
@@ -1080,6 +1226,9 @@ def validate_evidence(
         "resolved",
         "source_unavailable",
         "source_probe_indeterminate",
+        "probe_indeterminate",
+        "timing_indeterminate",
+        "workflow_contract_unreviewed",
         "ambiguous",
         "evidence_missing",
     }
@@ -1124,6 +1273,115 @@ def validate_evidence(
                 ) not in {"candidate_not_issue", "issue_body_invalid"}:
                     raise EvidenceError(f"{candidate_label} issue reason is invalid")
                 continue
+            if status == "probe_indeterminate":
+                allowed = {
+                    "github_redirect_refused",
+                    "github_legal_restriction",
+                    "github_rate_or_permission_boundary",
+                    "github_http_error",
+                    "github_request_failed",
+                    "github_response_too_large",
+                    "github_response_invalid",
+                    "github_identity_changed",
+                    "evidence_repository_not_readable",
+                    "evidence_repository_identity_changed",
+                    "evidence_repository_not_public",
+                }
+                if set(candidate) != base | {"reason_code"} or candidate.get(
+                    "reason_code"
+                ) not in allowed:
+                    raise EvidenceError(f"{candidate_label} probe reason is invalid")
+                continue
+            if status == "timing_indeterminate":
+                timing_fields = base | {
+                    "reason_code",
+                    "issue_url",
+                    "issue_created_at",
+                    "issue_closed_at",
+                    "issue_title_sha256",
+                    "issue_body_sha256",
+                    "evidence_url",
+                    "evidence_created_at",
+                    "evidence_updated_at",
+                    "evidence_identity_sha256",
+                }
+                if set(candidate) != timing_fields or candidate.get(
+                    "reason_code"
+                ) not in {
+                    "workflow_run_outside_window",
+                    "result_comment_outside_window",
+                }:
+                    raise EvidenceError(f"{candidate_label} timing evidence is invalid")
+                for field in ("issue_url", "evidence_url"):
+                    _https_url(candidate[field], f"{candidate_label}.{field}")
+                for field in (
+                    "issue_created_at",
+                    "issue_closed_at",
+                    "evidence_created_at",
+                ):
+                    timestamp(candidate[field], f"{candidate_label}.{field}")
+                updated = candidate["evidence_updated_at"]
+                if updated is not None:
+                    timestamp(updated, f"{candidate_label}.evidence_updated_at")
+                for field in (
+                    "issue_title_sha256",
+                    "issue_body_sha256",
+                    "evidence_identity_sha256",
+                ):
+                    if not isinstance(candidate[field], str) or DIGEST.fullmatch(
+                        candidate[field]
+                    ) is None:
+                        raise EvidenceError(f"{candidate_label} digest is invalid")
+                expected_issue_url = (
+                    f"https://github.com/{candidate['issue_repository']}/issues/"
+                    f"{request['issue_number']}"
+                )
+                issue_created = timestamp(candidate["issue_created_at"], "issue.created_at")
+                issue_closed = timestamp(candidate["issue_closed_at"], "issue.closed_at")
+                observed_created = timestamp(
+                    candidate["evidence_created_at"], "evidence.created_at"
+                )
+                accepted = timestamp(request["accepted_at"], "request.accepted_at")
+                if candidate["issue_url"] != expected_issue_url or issue_closed < issue_created:
+                    raise EvidenceError(f"{candidate_label} timing issue is not cross-bound")
+                if candidate["reason_code"] == "workflow_run_outside_window":
+                    if updated is None:
+                        raise EvidenceError(f"{candidate_label} run update is missing")
+                    observed_updated = timestamp(updated, "evidence.updated_at")
+                    run_prefix = (
+                        f"https://github.com/{candidate['issue_repository']}/actions/runs/"
+                    )
+                    if (
+                        not candidate["evidence_url"].startswith(run_prefix)
+                        or not candidate["evidence_url"].removeprefix(run_prefix).isdigit()
+                        or (
+                            issue_created
+                            <= observed_created
+                            <= issue_created + datetime.timedelta(seconds=30)
+                            and accepted
+                            <= observed_updated
+                            <= accepted + RUN_COMPLETION_LAG
+                        )
+                    ):
+                        raise EvidenceError(
+                            f"{candidate_label} run timing is not adjudicable"
+                        )
+                elif (
+                    updated is not None
+                    or not candidate["evidence_url"].startswith(
+                        expected_issue_url + "#issuecomment-"
+                    )
+                    or not candidate["evidence_url"].removeprefix(
+                        expected_issue_url + "#issuecomment-"
+                    ).isdigit()
+                    or accepted
+                    <= observed_created
+                    <= accepted + COMMENT_ACCEPTANCE_LAG
+                ):
+                    raise EvidenceError(
+                        f"{candidate_label} comment timing is not adjudicable"
+                    )
+                continue
             if status == "workflow_contract_unreviewed":
                 if set(candidate) != base | {
                     "workflow_repository_commit",
@@ -1155,6 +1413,7 @@ def validate_evidence(
                 "issue_title_sha256",
                 "issue_body_sha256",
                 "issue_identity_sha256",
+                "issue_source_ref_sha256",
                 "issue_source_reference_binding",
                 "workflow_run_id",
                 "workflow_run_url",
@@ -1239,6 +1498,7 @@ def validate_evidence(
                 "issue_title_sha256",
                 "issue_body_sha256",
                 "issue_identity_sha256",
+                "issue_source_ref_sha256",
                 "workflow_run_identity_sha256",
                 "workflow_run_display_title_sha256",
                 "result_comment_body_sha256",
@@ -1254,19 +1514,21 @@ def validate_evidence(
                 raise EvidenceError(
                     f"{candidate_label} source reference binding is invalid"
                 )
-            if reference_binding == "exact_commit":
-                expected_issue_identity = {
-                    "declared_model": request["declared_model"],
-                    "source_kind": request["source"]["kind"],
-                    "source_repository": request["source"]["repository"].casefold(),
-                    "source_ref": request["source"]["commit"],
-                }
-                if candidate["issue_identity_sha256"] != hashlib.sha256(
-                    canonical_bytes(expected_issue_identity)
-                ).hexdigest():
-                    raise EvidenceError(
-                        f"{candidate_label} exact issue identity is not cross-bound"
-                    )
+            expected_issue_identity = {
+                "declared_model": request["declared_model"],
+                "source_kind": request["source"]["kind"],
+                "source_repository": request["source"]["repository"].casefold(),
+            }
+            if candidate["issue_identity_sha256"] != hashlib.sha256(
+                canonical_bytes(expected_issue_identity)
+            ).hexdigest():
+                raise EvidenceError(f"{candidate_label} issue identity is not cross-bound")
+            if reference_binding == "exact_commit" and candidate[
+                "issue_source_ref_sha256"
+            ] != hashlib.sha256(
+                canonical_bytes(request["source"]["commit"])
+            ).hexdigest():
+                raise EvidenceError(f"{candidate_label} source ref is not cross-bound")
             passes = candidate["reported_pass_problem_ids"]
             if (
                 not isinstance(passes, list)
@@ -1292,7 +1554,7 @@ def validate_evidence(
             contract = candidate["workflow_contract"]
             definition = candidate["workflow_definition_sha256"]
             if contract == "benchmark_repository_head":
-                if definition is not None:
+                if not isinstance(definition, str) or DIGEST.fullmatch(definition) is None:
                     raise EvidenceError(f"{candidate_label} workflow digest is invalid")
             elif contract == "split_repository_recorded_benchmark_v1":
                 if (
@@ -1313,7 +1575,15 @@ def validate_evidence(
                 raise EvidenceError(f"{candidate_label} workflow contract is invalid")
             if status == "matched_source_indeterminate" and candidate.get(
                 "source_probe_reason_code"
-            ) != "source_probe_response_too_large":
+            ) not in {
+                "source_probe_response_too_large",
+                "source_repository_identity_changed",
+                "github_redirect_refused",
+                "github_legal_restriction",
+                "github_rate_or_permission_boundary",
+                "github_http_error",
+                "github_request_failed",
+            }:
                 raise EvidenceError(f"{candidate_label} source probe reason is invalid")
 
             repository = candidate["issue_repository"]
@@ -1360,6 +1630,11 @@ def validate_evidence(
         or value["source_unavailable_count"] != status_counts["source_unavailable"]
         or value["source_indeterminate_count"]
         != status_counts["source_probe_indeterminate"]
+        or value["probe_indeterminate_count"] != status_counts["probe_indeterminate"]
+        or value["timing_indeterminate_count"]
+        != status_counts["timing_indeterminate"]
+        or value["workflow_contract_unreviewed_count"]
+        != status_counts["workflow_contract_unreviewed"]
         or value["pending_count"]
         != value["shard_request_count"] - status_counts["resolved"]
     ):

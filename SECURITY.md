@@ -255,6 +255,9 @@ Submission-pipeline soft spots. Comparator/sandbox soft spots are in
 
 ## References
 
+- [`docs/public-replay-resolution.md`](docs/public-replay-resolution.md) — the
+  historical issue/run/comment resolver and its contents/issues/Actions
+  read-only token boundary.
 - [`leanprover/lean-eval` SECURITY.md](https://github.com/leanprover/lean-eval/blob/main/SECURITY.md)
   — the comparator/sandbox security model this pipeline depends on.
 - [`leanprover/comparator`](https://github.com/leanprover/comparator) — the verifier.

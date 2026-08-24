@@ -46,8 +46,8 @@ class HistoricalReplayInventoryTests(unittest.TestCase):
             root = pathlib.Path(temporary)
             private = document("PrivateOwner", public=False, suffix="private")
             public = document("PublicOwner", public=True, suffix="public")
-            self.write(root, "private-owner.json", private)
-            self.write(root, "public-owner.json", public)
+            self.write(root, "privateowner.json", private)
+            self.write(root, "publicowner.json", public)
 
             first = inventory(root, SOURCE_COMMIT)
             second = inventory(root, SOURCE_COMMIT)
@@ -82,12 +82,28 @@ class HistoricalReplayInventoryTests(unittest.TestCase):
             root = pathlib.Path(temporary)
             original = document("Owner", public=True, suffix="same")
             duplicate = copy.deepcopy(original)
-            self.write(root, "first.json", original)
-            self.write(root, "second.json", duplicate)
+            self.write(root, "owner.json", original)
+            self.write(root, "Owner.json", duplicate)
             with self.assertRaisesRegex(InventoryError, "duplicate result_id"):
                 inventory(root, SOURCE_COMMIT)
             with self.assertRaisesRegex(InventoryError, "full lowercase Git SHA"):
                 inventory(root, "A" * 40)
+
+    def test_filename_stem_and_repository_segments_are_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            self.write(root, "different.json", document("Owner", public=True, suffix="one"))
+            with self.assertRaisesRegex(InventoryError, "filename stem"):
+                inventory(root, SOURCE_COMMIT)
+
+        for repository in ("./source", "owner/.."):
+            with self.subTest(repository=repository), tempfile.TemporaryDirectory() as temporary:
+                root = pathlib.Path(temporary)
+                value = document("Owner", public=True, suffix="one")
+                value["results"][0]["submission"]["repo"] = repository
+                (root / "owner.json").write_text(json.dumps(value), encoding="utf-8")
+                with self.assertRaisesRegex(InventoryError, "repo"):
+                    inventory(root, SOURCE_COMMIT)
 
     def test_non_json_or_nested_results_entry_fails_closed(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
