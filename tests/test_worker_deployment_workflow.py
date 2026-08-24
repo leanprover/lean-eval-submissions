@@ -105,13 +105,37 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
     def test_dispatch_dependency_changes_promote_and_deploy_exact_ref(self) -> None:
         pull_request = DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0]
         push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
+        workflow_directory = ROOT / ".github/workflows"
+        directly_tag_gated = {
+            path.name
+            for path in workflow_directory.glob("*.yml")
+            if 'refs/tags/lean-eval-dispatch/' in path.read_text(encoding="utf-8")
+            and 'test "$GITHUB_REF"' in path.read_text(encoding="utf-8")
+        }
+        self.assertEqual(
+            directly_tag_gated,
+            {
+                "accepted-archive-replay-staging.yml",
+                "authoritative-replay-staging.yml",
+                "aws-key-adapter-staging-smoke.yml",
+                "historical-public-authority-preparation.yml",
+                "historical-public-image-qualification.yml",
+                "historical-public-replay-plan.yml",
+                "historical-public-runner-contract.yml",
+                "historical-replay-inventory.yml",
+                "public-replay-github-evidence.yml",
+                "server-archive.yml",
+            },
+        )
+        dispatch_dependencies = directly_tag_gated | {
+            "promotion-canary.yml",
+            "set-staging-intake.yml",
+            "submission.yml",
+        }
         for trigger in (pull_request, push):
-            self.assertIn("'.github/workflows/submission.yml'", trigger)
-            self.assertIn("'.github/workflows/promotion-canary.yml'", trigger)
-            self.assertIn(
-                "'.github/workflows/historical-public-image-qualification.yml'",
-                trigger,
-            )
+            for workflow in dispatch_dependencies:
+                with self.subTest(workflow=workflow):
+                    self.assertIn(f"'.github/workflows/{workflow}'", trigger)
             self.assertIn("'.audit/**'", trigger)
             self.assertIn("'scripts/**'", trigger)
 
