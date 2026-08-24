@@ -1,0 +1,197 @@
+name: Monitor lifecycle Cloudflare readiness
+
+on:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: lifecycle-cloudflare-readiness-monitor
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      status: ${{ steps.classify.outputs.status }}
+      reason: ${{ steps.classify.outputs.reason }}
+      deployed_commit: ${{ steps.classify.outputs.deployed_commit }}
+    steps:
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # actions/setup-python pinned to v7.0.0.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Verify config-bound public Worker health without a GitHub token
+        id: endpoints
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/lifecycle-health.json"
+          python scripts/monitor_cloudflare_health.py \
+            --intake-config server/wrangler.jsonc \
+            --replay-config server/wrangler.replay.jsonc \
+            --output "$report"
+          deployed_commit=$(REPORT="$report" python - <<'PY'
+          import json
+          import os
+          import re
+
+          with open(os.environ["REPORT"], encoding="utf-8") as source:
+              report = json.load(source)
+          commit = report.get("deployed_commit")
+          if report.get("status") != "ready" or not isinstance(commit, str):
+              raise SystemExit("monitor report is not ready")
+          if re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+              raise SystemExit("monitor commit is invalid")
+          print(commit)
+          PY
+          )
+          echo "deployed_commit=$deployed_commit" >> "$GITHUB_OUTPUT"
+
+      - name: Bind health to protected deployment evidence
+        id: deployment
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          ENDPOINT_OUTCOME: ${{ steps.endpoints.outcome }}
+          DEPLOYED_COMMIT: ${{ steps.endpoints.outputs.deployed_commit }}
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/lifecycle-deployment.json"
+          if [ "$ENDPOINT_OUTCOME" = "success" ]; then
+            commit="$DEPLOYED_COMMIT"
+          else
+            # The classifier uses active protected deployment evidence, not
+            # this placeholder, when endpoint health is temporarily mixed.
+            commit=0000000000000000000000000000000000000000
+          fi
+          python scripts/monitor_github_readiness.py verify-deployment \
+            --repository "$REPOSITORY" \
+            --deployed-commit "$commit" \
+            --max-active-age-seconds 2700 \
+            --output "$report"
+          REPORT="$report" python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+
+          with open(os.environ["REPORT"], encoding="utf-8") as source:
+              report = json.load(source)
+          status = report.get("status")
+          reason = report.get("reason")
+          if status not in {"ready", "suppressed", "failed"}:
+              raise SystemExit("deployment classification is invalid")
+          if reason is not None and (
+              not isinstance(reason, str)
+              or not reason.replace("_", "a").isalnum()
+          ):
+              raise SystemExit("deployment reason is invalid")
+          print(f"status={status}")
+          print(f"reason={reason or 'none'}")
+          active = report.get("active_deployment")
+          if active is not None:
+              print(
+                  "notice=Fresh protected deployment "
+                  f"{active['run_url']} is {active['age_seconds']} seconds old; "
+                  f"suppression expires at {active['maximum_age_seconds']} seconds."
+              )
+          PY
+
+      - name: Classify readiness without losing failure output
+        id: classify
+        if: always()
+        env:
+          ENDPOINT_OUTCOME: ${{ steps.endpoints.outcome }}
+          DEPLOYMENT_OUTCOME: ${{ steps.deployment.outcome }}
+          DEPLOYMENT_STATUS: ${{ steps.deployment.outputs.status }}
+          DEPLOYMENT_REASON: ${{ steps.deployment.outputs.reason }}
+          DEPLOYED_COMMIT: ${{ steps.endpoints.outputs.deployed_commit }}
+          DEPLOYMENT_NOTICE: ${{ steps.deployment.outputs.notice }}
+        run: |
+          set -euo pipefail
+          status=failed
+          reason=verification_step_failed
+          if [ "$DEPLOYMENT_OUTCOME" = "success" ]; then
+            if [ "$ENDPOINT_OUTCOME" = "success" ] && [ "$DEPLOYMENT_STATUS" = "ready" ]; then
+              status=ready
+              reason=none
+            elif [ "$DEPLOYMENT_STATUS" = "suppressed" ]; then
+              status=suppressed
+              reason="$DEPLOYMENT_REASON"
+            elif [ "$DEPLOYMENT_REASON" = "deployment_rollout_stuck" ]; then
+              reason="$DEPLOYMENT_REASON"
+            elif [ "$ENDPOINT_OUTCOME" != "success" ]; then
+              reason=endpoint_health_failed
+            else
+              reason="$DEPLOYMENT_REASON"
+            fi
+          fi
+          {
+            echo "status=$status"
+            echo "reason=$reason"
+            echo "deployed_commit=$DEPLOYED_COMMIT"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Lifecycle readiness: $status"
+            echo
+            echo "Reason: \`$reason\`"
+            if [ -n "$DEPLOYMENT_NOTICE" ]; then
+              echo
+              echo "$DEPLOYMENT_NOTICE"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  alert:
+    if: always() && github.ref == 'refs/heads/main'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Preserve an existing incident during bounded rollout suppression
+        if: needs.verify.outputs.status == 'suppressed'
+        env:
+          REASON: ${{ needs.verify.outputs.reason }}
+        run: echo "Fresh protected deployment suppresses this transition only; reason=$REASON"
+
+      - name: Check out issue reconciler for a terminal monitor state
+        if: needs.verify.outputs.status != 'suppressed'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Open, recover, or deduplicate the incident alert
+        if: needs.verify.outputs.status != 'suppressed'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MONITOR_STATUS: ${{ needs.verify.outputs.status }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          status="$MONITOR_STATUS"
+          if [ "$status" != "ready" ]; then status=failed; fi
+          python scripts/monitor_github_readiness.py reconcile-issue \
+            --repository "$REPOSITORY" \
+            --status "$status" \
+            --run-id "$RUN_ID" \
+            --run-url "$RUN_URL" \
+            --owner @kim-em
+          if [ "$status" = "failed" ]; then exit 1; fi
