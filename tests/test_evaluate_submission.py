@@ -112,6 +112,39 @@ def _fake_runner_factory(pass_ids: list[str]):
     return runner
 
 
+class ManifestRevisionTests(unittest.TestCase):
+    def test_reads_current_per_problem_manifest_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifests = pathlib.Path(tmp) / "problems"
+            _write_manifest(manifests, ["two_plus_two"], statement_revision=3)
+            self.assertEqual(
+                ev._load_manifest_revisions(manifests),
+                {"two_plus_two": 3},
+            )
+
+    def test_reads_legacy_monolith_with_implicit_revision_one(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = pathlib.Path(tmp) / "problems.toml"
+            manifest.write_text(
+                'version = 1\n\n[[problem]]\nid = "two_plus_two"\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                ev._load_manifest_revisions(manifest),
+                {"two_plus_two": 1},
+            )
+
+    def test_rejects_duplicate_legacy_problem(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = pathlib.Path(tmp) / "problems.toml"
+            manifest.write_text(
+                '[[problem]]\nid = "same"\n\n[[problem]]\nid = "same"\n',
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ev.EvaluateError, "duplicates problem"):
+                ev._load_manifest_revisions(manifest)
+
+
 class DetectMatchesTests(unittest.TestCase):
     def test_single_workspace_match(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

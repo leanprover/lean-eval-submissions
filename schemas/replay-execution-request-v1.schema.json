@@ -65,7 +65,7 @@
         "commit": { "$ref": "#/$defs/commit" },
         "toolchain": {
           "type": "string",
-          "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+$"
+          "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+(?:-(?:rc|beta)[0-9]+)?$"
         }
       }
     },

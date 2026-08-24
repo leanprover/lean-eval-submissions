@@ -20,6 +20,7 @@ from replay_orchestrator import (  # noqa: E402
     run_with_disposable_vm,
     terminal_transition,
     unavailable_transition,
+    validate_execution_profile,
     validate_execution_request,
     validate_queue,
 )
@@ -134,6 +135,14 @@ class ReplayOrchestratorTests(unittest.TestCase):
         measurement["wall_time_limit_ms"] = 1
         with self.assertRaisesRegex(ReplayError, "measurement configuration digest"):
             plan_next(queue, profile, measurement)
+
+    def test_exact_prerelease_toolchain_is_a_registered_profile(self) -> None:
+        _, profile, _ = self.inputs()
+        profile["toolchain"] = "leanprover/lean4:v4.30.0-rc2"
+        self.assertIs(validate_execution_profile(profile), profile)
+        profile["toolchain"] = "leanprover/lean4:v4.30.0-rc"
+        with self.assertRaisesRegex(ReplayError, "toolchain"):
+            validate_execution_profile(profile)
 
     def test_retry_consumes_failed_queue_state_with_next_attempt(self) -> None:
         queue, profile, measurement = self.inputs()
