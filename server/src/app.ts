@@ -5,6 +5,8 @@ import {
   decodeArchiveFailure,
   decodeEvaluationCompletion,
   decodeLegacyResultClaim,
+  decodeProblemRepairRequest,
+  decodeResultRetractionRequest,
   decodeResultCompletion,
   decodeAgentChallengeInput,
   decodeBrowserSubmission,
@@ -37,6 +39,8 @@ import { browserPage, browserScript } from "./browser-ui";
 import {
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
+  type ResultProblemRepairRequest,
+  type ResultRetractionRequest,
   type GitHubFetch,
   GitHubStateError,
   GitHubStateRepository,
@@ -103,6 +107,7 @@ export type RuntimeEnv = Omit<
   | "INTAKE_LEASE_TARGET_COMMIT"
   | "LIFECYCLE_CALLBACK_TOKEN"
   | "LEGACY_RESULT_OWNER_API_ENABLED"
+  | "RESULT_AMENDMENT_OWNER_API_ENABLED"
   | "OAUTH_CALLBACK_URL"
   | "PROMOTION_CANARY_ENABLED"
   | "READINESS_TOKEN"
@@ -137,6 +142,7 @@ export type RuntimeEnv = Omit<
     INTAKE_LEASE_TARGET_COMMIT?: string;
     LIFECYCLE_CALLBACK_TOKEN?: string;
     LEGACY_RESULT_OWNER_API_ENABLED?: string;
+    RESULT_AMENDMENT_OWNER_API_ENABLED?: string;
     OAUTH_CALLBACK_URL?: string;
     PROMOTION_CANARY_ENABLED?: string;
     READINESS_TOKEN?: string;
@@ -194,6 +200,18 @@ export type StateAccess = Readonly<{
     resultId: string;
     mutationEventId: string;
   }>;
+  requestResultRetraction(request: ResultRetractionRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    retractionRevision: number;
+  }>;
+  requestResultProblemRepair(request: ResultProblemRepairRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    repairRevision: number;
+  }>;
 }>;
 export type ApiDependencies = Readonly<{
   now?: () => number;
@@ -235,6 +253,17 @@ function currentIntake(env: RuntimeEnv, dependencies: ApiDependencies = {}): Int
 function resultOwnerApiEnabled(env: RuntimeEnv): boolean {
   return env.LEGACY_RESULT_OWNER_API_ENABLED === "true" &&
     env.RESULT_OWNER_STATE_CONTRACT_COMMIT === RESULT_OWNER_STATE_CONTRACT_COMMIT;
+}
+
+function resultAmendmentOwnerApiEnabled(env: RuntimeEnv): boolean {
+  return env.RESULT_AMENDMENT_OWNER_API_ENABLED === "true" &&
+    env.RESULT_OWNER_STATE_CONTRACT_COMMIT === RESULT_OWNER_STATE_CONTRACT_COMMIT;
+}
+
+function requireResultAmendmentOwnerApi(env: RuntimeEnv): void {
+  if (!resultAmendmentOwnerApiEnabled(env)) {
+    throw new GitHubProviderError(503, "result amendment owner API is not configured");
+  }
 }
 
 function requireResultOwnerApi(env: RuntimeEnv): void {
@@ -1567,15 +1596,20 @@ function statusFor(view: SubmissionView): Record<string, unknown> {
   };
 }
 
-function idempotencyEventId(request: Request): string {
+function idempotencyEventId(request: Request, nowMilliseconds: number): string {
   const value = request.headers.get("idempotency-key") ?? "";
   if (!isUuidV7(value)) throw new ApiDecodeError("Idempotency-Key must be a canonical lowercase UUIDv7");
+  const timestamp = Number.parseInt(`${value.slice(0, 8)}${value.slice(9, 13)}`, 16);
+  if (timestamp > nowMilliseconds) {
+    throw new ApiDecodeError("Idempotency-Key timestamp must not be in the future");
+  }
   return value;
 }
 
 async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDependencies): Promise<Response> {
   const url = new URL(request.url);
-  const now = nowSeconds(dependencies);
+  const nowMilliseconds = dependencies.now?.() ?? Date.now();
+  const now = Math.floor(nowMilliseconds / 1000);
   if (request.method === "GET" && url.pathname === "/api/v1/oauth/start") {
     if (!env.GITHUB_OAUTH_CLIENT_ID || !env.OAUTH_CALLBACK_URL) throw new AuthError("OAuth is not configured");
     const callback = new URL(env.OAUTH_CALLBACK_URL);
@@ -1672,7 +1706,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
   if (request.method === "POST" && url.pathname === "/api/v1/results/claims") {
     requireResultOwnerApi(env);
     const authenticated = await session(request, env, dependencies);
-    const eventId = idempotencyEventId(request);
+    const eventId = idempotencyEventId(request, nowMilliseconds);
     const input = decodeLegacyResultClaim(await readJson(request));
     const ledger = state(env, dependencies);
     const verified = await submissionStage(
@@ -1685,7 +1719,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     );
     const outcome = await ledger.claimLegacyResult({
       eventId,
-      occurredAt: canonicalTimestamp(now),
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
       verified,
     });
     return json({
@@ -1697,7 +1731,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
   if (request.method === "PATCH" && resultMetadataMatch?.[1]) {
     requireResultOwnerApi(env);
     const authenticated = await session(request, env, dependencies);
-    const eventId = idempotencyEventId(request);
+    const eventId = idempotencyEventId(request, nowMilliseconds);
     const metadata = decodeMetadataAmendment(await readJson(request));
     if (Object.keys(metadata).length === 0) {
       throw new ApiDecodeError("production_metadata must contain at least one backfill field");
@@ -1705,7 +1739,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const ledger = state(env, dependencies);
     const outcome = await ledger.backfillLegacyResultMetadata({
       eventId,
-      occurredAt: canonicalTimestamp(now),
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
       resultId: resultMetadataMatch[1],
       ownerLogin: authenticated.login,
       productionMetadata: metadata,
@@ -1715,6 +1749,46 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
       status: outcome.created ? "backfilled" : "unchanged",
     }, outcome.created ? 201 : 200);
   }
+  const problemRepairMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/problem-repairs$/.exec(url.pathname);
+  if (request.method === "POST" && problemRepairMatch?.[1]) {
+    requireResultAmendmentOwnerApi(env);
+    const authenticated = await session(request, env, dependencies);
+    const eventId = idempotencyEventId(request, nowMilliseconds);
+    const input = decodeProblemRepairRequest(await readJson(request));
+    const outcome = await state(env, dependencies).requestResultProblemRepair({
+      eventId,
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
+      resultId: problemRepairMatch[1],
+      ownerLogin: authenticated.login,
+      correctedProblemId: input.corrected_problem_id,
+      correctedStatementRevision: input.corrected_statement_revision,
+      reasonCode: input.reason_code,
+    });
+    return json({
+      result_id: outcome.resultId,
+      repair_revision: outcome.repairRevision,
+      status: outcome.created ? "problem_repair_requested" : "problem_repair_already_requested",
+    }, outcome.created ? 201 : 200);
+  }
+  const retractionMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/retractions$/.exec(url.pathname);
+  if (request.method === "POST" && retractionMatch?.[1]) {
+    requireResultAmendmentOwnerApi(env);
+    const authenticated = await session(request, env, dependencies);
+    const eventId = idempotencyEventId(request, nowMilliseconds);
+    const input = decodeResultRetractionRequest(await readJson(request));
+    const outcome = await state(env, dependencies).requestResultRetraction({
+      eventId,
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
+      resultId: retractionMatch[1],
+      ownerLogin: authenticated.login,
+      reasonCode: input.reason_code,
+    });
+    return json({
+      result_id: outcome.resultId,
+      retraction_revision: outcome.retractionRevision,
+      status: outcome.created ? "retraction_requested" : "retraction_already_requested",
+    }, outcome.created ? 201 : 200);
+  }
   const match = /^\/api\/v1\/submissions\/([^/]+)(?:\/(metadata|publication))?$/.exec(url.pathname);
   if (match?.[1] && isUuidV7(match[1])) {
     const authenticated = await session(request, env, dependencies);
@@ -1722,12 +1796,12 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const current = await ledger.readSubmission(match[1]);
     if (current?.owner_login !== authenticated.login) return json({ error: "not_found" }, 404);
     if (request.method === "GET" && !match[2]) return json(statusFor(current));
-    const eventId = idempotencyEventId(request);
+    const eventId = idempotencyEventId(request, nowMilliseconds);
     if (request.method === "PATCH" && match[2] === "metadata") {
       const metadata = decodeMetadataAmendment(await readJson(request));
       const event: WritableStateEvent = {
         schema_version: 1, event_id: eventId, event_type: "submission.metadata_amended",
-        occurred_at: canonicalTimestamp(now), subject_id: match[1], causation_event_id: current.mutation_event_id,
+        occurred_at: canonicalMilliseconds(nowMilliseconds), subject_id: match[1], causation_event_id: current.mutation_event_id,
         actor: { kind: "github", login: authenticated.login },
         payload: { production_metadata: metadata },
       };
@@ -1745,7 +1819,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
       const choice: PublicationChoice = decodePublicationChoice(await readJson(request));
       const event: WritableStateEvent = {
         schema_version: 1, event_id: eventId, event_type: "submission.publication_changed",
-        occurred_at: canonicalTimestamp(now), subject_id: match[1], causation_event_id: current.mutation_event_id,
+        occurred_at: canonicalMilliseconds(nowMilliseconds), subject_id: match[1], causation_event_id: current.mutation_event_id,
         actor: { kind: "github", login: authenticated.login }, payload: { publication_choice: choice },
       };
       const nextView: SubmissionView = {
@@ -1814,6 +1888,7 @@ export async function handleRequest(
       intake_enablement_mode: intake.mode,
       intake_lease_expires_at: intake.leaseExpiresAt,
       legacy_result_owner_api_enabled: resultOwnerApiEnabled(env),
+      result_amendment_owner_api_enabled: resultAmendmentOwnerApiEnabled(env),
       promotion_canary_configured_enabled: env.PROMOTION_CANARY_ENABLED === "true",
       promotion_canary_enabled: promotionCanaryEnabled(env),
     });
@@ -1871,14 +1946,17 @@ export async function handleRequest(
       return errorResponse(error);
     }
   }
-  const resultOwnerRoute = url.pathname === "/api/v1/results/claims" ||
+  const legacyResultOwnerRoute = url.pathname === "/api/v1/results/claims" ||
     /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/metadata$/.test(url.pathname);
-  if (resultOwnerRoute && !resultOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
+  const amendmentOwnerRoute = /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/(?:problem-repairs|retractions)$/.test(url.pathname);
+  if (legacyResultOwnerRoute && !resultOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
+  if (amendmentOwnerRoute && !resultAmendmentOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   const oauthRoute = url.pathname === "/api/v1/oauth/start" || url.pathname === "/api/v1/oauth/callback";
+  const anyOwnerApiEnabled = resultOwnerApiEnabled(env) || resultAmendmentOwnerApiEnabled(env);
   if (
     url.pathname.startsWith("/api/") &&
     !intake.effective &&
-    !(resultOwnerApiEnabled(env) && (resultOwnerRoute || oauthRoute))
+    !((legacyResultOwnerRoute || amendmentOwnerRoute || oauthRoute) && anyOwnerApiEnabled)
   ) {
     return json({ error: "intake_disabled" }, 503);
   }

@@ -11,7 +11,6 @@ import {
 } from "../src/api-contract";
 import {
   lifecycleEventId,
-  makeAgentChallenge,
   makeSubmissionGrant,
   nonceDigest,
   signToken,
@@ -33,6 +32,8 @@ import {
   StateUpdateOutcomeUnknownError,
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
+  type ResultProblemRepairRequest,
+  type ResultRetractionRequest,
 } from "../src/github-state";
 import {
   validateStateEvent,
@@ -107,6 +108,8 @@ class MemoryState implements StateAccess {
   head = "d".repeat(40);
   readonly legacyClaims: LegacyResultClaimRequest[] = [];
   readonly legacyBackfills: LegacyResultBackfillRequest[] = [];
+  readonly problemRepairRequests: ResultProblemRepairRequest[] = [];
+  readonly retractionRequests: ResultRetractionRequest[] = [];
   contractAssertions = 0;
 
   assertResultOwnerContract(): Promise<string> {
@@ -261,6 +264,36 @@ class MemoryState implements StateAccess {
       mutationEventId: request.eventId,
     });
   }
+
+  requestResultRetraction(request: ResultRetractionRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    retractionRevision: number;
+  }> {
+    this.retractionRequests.push(request);
+    return Promise.resolve({
+      created: this.created,
+      resultId: request.resultId,
+      mutationEventId: request.eventId,
+      retractionRevision: 1,
+    });
+  }
+
+  requestResultProblemRepair(request: ResultProblemRepairRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    repairRevision: number;
+  }> {
+    this.problemRepairRequests.push(request);
+    return Promise.resolve({
+      created: this.created,
+      resultId: request.resultId,
+      mutationEventId: request.eventId,
+      repairRevision: 1,
+    });
+  }
 }
 
 function jsonRequest(path: string, body: unknown): Request {
@@ -277,7 +310,7 @@ function pendingView(
   attempts = 0,
   status: "failed" | "pending" | "succeeded" = "pending",
 ): SubmissionView {
-  const metadataEventId = "0198abcd-1111-7000-8000-000000000002";
+  const metadataEventId = "019debcf-cb48-7000-8000-000000000002";
   return {
     schema_version: 1,
     submission_id: submissionId,
@@ -383,30 +416,12 @@ describe("strict API contract", () => {
     ).rejects.toThrow(/login|identity/);
   });
 
-  it("preallocates causally ordered intake UUIDv7 identities", () => {
-    const now = Math.floor(NOW_MS / 1000);
-    const grant = makeSubmissionGrant("alice", now);
-    const challenge = makeAgentChallenge({
-      login: "alice",
-      source_repository: "alice/example",
-      source_commit: "a".repeat(40),
-      gist_id: "abcde",
-    }, now);
-    for (const material of [grant, challenge]) {
-      expect(material.nonce_event_id < material.submission_id).toBe(true);
-      expect(material.submission_id < material.metadata_event_id).toBe(true);
-      expect(material.nonce_event_id.slice(0, 13)).not.toBe(material.submission_id.slice(0, 13));
-      expect(material.submission_id.slice(0, 13)).not.toBe(material.metadata_event_id.slice(0, 13));
-    }
-    expect(() => makeSubmissionGrant("alice", -1)).toThrow(/ordered UUIDv7 sequence/);
-  });
-
   it("builds an exact-ref dispatch carrying the UUID archive contract", async () => {
     const request = buildDispatchRequest(
       "leanprover/lean-eval-submissions",
       "submission.yml",
       `lean-eval-dispatch/${"b".repeat(40)}`,
-      "0198abcd-1111-7000-8000-000000000001",
+      "019debcf-cb48-7000-8000-000000000001",
       "alice",
       "staging",
       SUBMISSION,
@@ -414,7 +429,7 @@ describe("strict API contract", () => {
     const body = await request.json<{ ref: string; inputs: Record<string, string> }>();
     expect(body.ref).toBe(`lean-eval-dispatch/${"b".repeat(40)}`);
     expect(body.inputs).toMatchObject({
-      submission_id: "0198abcd-1111-7000-8000-000000000001",
+      submission_id: "019debcf-cb48-7000-8000-000000000001",
       source_commit: "a".repeat(40),
       archive_locator_required: "true",
       archive_sidecar_schema: "3",
@@ -426,7 +441,7 @@ describe("strict API contract", () => {
   });
 
   it("strictly decodes the verified archive completion contract", () => {
-    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    const submissionId = "019debcf-cb48-7000-8000-000000000001";
     const completion = {
       schema_version: 1,
       occurred_at: "2026-05-02T03:04:05.000Z",
@@ -451,7 +466,7 @@ describe("strict API contract", () => {
   it("strictly decodes a result receipt", () => {
     const completion = {
       schema_version: 1,
-      submission_id: "0198abcd-1111-7000-8000-000000000001",
+      submission_id: "019debcf-cb48-7000-8000-000000000001",
       occurred_at: "2026-02-01T00:00:00.000Z",
       result_id: `r2_${"a".repeat(64)}`,
       problem_id: "two_plus_two",
@@ -512,7 +527,7 @@ describe("strict API contract", () => {
 
   it("records authenticated archive completion while public intake is disabled", async () => {
     const state = new MemoryState();
-    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    const submissionId = "019debcf-cb48-7000-8000-000000000001";
     state.views.set(submissionId, pendingView(
       submissionId,
       "2026-05-01T00:00:00.000Z",
@@ -622,7 +637,7 @@ describe("strict API contract", () => {
 
   it("keeps lifecycle callback CAS exhaustion retryable", async () => {
     const state = new MemoryState();
-    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    const submissionId = "019debcf-cb48-7000-8000-000000000001";
     state.views.set(submissionId, pendingView(
       submissionId,
       "2026-05-01T00:00:00.000Z",
@@ -658,7 +673,7 @@ describe("strict API contract", () => {
 
   it("records an authenticated archive failure without leaving status pending", async () => {
     const state = new MemoryState();
-    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    const submissionId = "019debcf-cb48-7000-8000-000000000001";
     state.views.set(submissionId, pendingView(
       submissionId,
       "2026-05-01T00:00:00.000Z",
@@ -695,7 +710,7 @@ describe("strict API contract", () => {
 
   it("verifies an exact staging Results blob and atomically records result and release", async () => {
     const state = new MemoryState();
-    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    const submissionId = "019debcf-cb48-7000-8000-000000000001";
     const accepted = acceptedView(submissionId);
     state.views.set(submissionId, accepted);
     const resultId = `r2_${await digest(`lean-eval-result-v2\0${JSON.stringify([
@@ -854,7 +869,7 @@ describe("production intake lease smoke", () => {
   const issuedAt = Math.floor(NOW_MS / 1000);
   const expiresAt = issuedAt + 900;
   const nonce = "lease-smoke-secret-with-at-least-thirty-two-bytes";
-  const eventId = "0198abcd-2222-7000-8000-000000000001";
+  const eventId = "019debcf-f258-7000-8000-000000000001";
   const stateCommit = "d".repeat(40);
   const targetCommit = "a".repeat(40);
   const body = {
@@ -1206,7 +1221,7 @@ describe("scheduled dispatch reconciliation in workerd", () => {
         INTAKE_LEASE_CONTROLLER_COMMIT: targetCommit,
         INTAKE_LEASE_CONTROLLER_RUN_ATTEMPT: "1",
         INTAKE_LEASE_CONTROLLER_RUN_ID: "123456",
-        INTAKE_LEASE_EVENT_ID: "0198abcd-2222-7000-8000-000000000001",
+        INTAKE_LEASE_EVENT_ID: "019debcf-f258-7000-8000-000000000001",
         INTAKE_LEASE_EXPIRES_AT: String(expiresAt),
         INTAKE_LEASE_ISSUED_AT: String(issuedAt),
         INTAKE_LEASE_NONCE_DIGEST: "b".repeat(64),
@@ -1223,7 +1238,7 @@ describe("scheduled dispatch reconciliation in workerd", () => {
   it("reads one bounded shard and clears a due outbox after successful dispatch", async () => {
     const state = new MemoryState();
     const scheduledTime = (Math.floor(NOW_MS / (256 * 60_000)) * 256 + 1) * 60_000;
-    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    const submissionId = "019debcf-cb48-7000-8000-000000000001";
     const view = pendingView(submissionId, new Date(scheduledTime - 60_000).toISOString(), 1, "failed");
     state.views.set(submissionId, view);
     state.outbox.set(submissionId, {
@@ -1245,7 +1260,7 @@ describe("scheduled dispatch reconciliation in workerd", () => {
   it("does not let a canary-looking model label bypass production reconciliation", async () => {
     const state = new MemoryState();
     const scheduledTime = (Math.floor(NOW_MS / (256 * 60_000)) * 256 + 1) * 60_000;
-    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    const submissionId = "019debcf-cb48-7000-8000-000000000001";
     const submission = {
       ...SUBMISSION,
       declared_model: "lean-eval automatic staging promotion canary v3",
@@ -1349,7 +1364,7 @@ describe("automatic staging promotion canary in workerd", () => {
     expect(canaryMilliseconds).toBeGreaterThan(
       Date.parse("2026-08-20T06:47:06.000Z"),
     );
-    const unrelatedId = `0198abcd-2222-7000-8000-0000000000${canaryId.slice(-2)}`;
+    const unrelatedId = `019debcf-f258-7000-8000-0000000000${canaryId.slice(-2)}`;
     const canaryOutbox = [...state.outbox.values()][0];
     if (canaryOutbox === undefined) throw new Error("canary outbox was not persisted");
     state.outbox.set(unrelatedId, {
@@ -1545,10 +1560,10 @@ describe("automatic staging promotion canary in workerd", () => {
     const exactCanary = [...state.outbox.values()][0];
     if (exactCanary === undefined) throw new Error("canary outbox was not persisted");
     state.outbox.clear();
-    const corruptCanaryId = "0198abcd-1111-7000-8000-0000000000ca";
+    const corruptCanaryId = "019debcf-cb48-7000-8000-0000000000ca";
     state.outbox.set(corruptCanaryId, { ...exactCanary, submission_id: corruptCanaryId });
 
-    const ordinaryId = "0198abcd-2222-7000-8000-0000000000ca";
+    const ordinaryId = "019debcf-f258-7000-8000-0000000000ca";
     const ordinary = pendingView(ordinaryId, "2026-08-20T00:00:00.000Z");
     const workflowRef = `lean-eval-dispatch/${commit}`;
     const ordinaryView = {
@@ -1585,7 +1600,7 @@ describe("automatic staging promotion canary in workerd", () => {
     const request = buildPromotionCanaryDispatchRequest(
       "leanprover/lean-eval-submissions",
       `lean-eval-dispatch/${commit}`,
-      "0198abcd-1111-7000-8000-0000000000ca",
+      "019debcf-cb48-7000-8000-0000000000ca",
       "32712345678",
       "3",
     );
@@ -1595,7 +1610,7 @@ describe("automatic staging promotion canary in workerd", () => {
     expect(() => buildPromotionCanaryDispatchRequest(
       "leanprover/lean-eval-submissions",
       `lean-eval-dispatch/${commit}`,
-      "0198abcd-1111-7000-8000-000000000001",
+      "019debcf-cb48-7000-8000-000000000001",
       "32712345678",
       "3",
     )).toThrow(/identity/iu);
@@ -1744,7 +1759,7 @@ describe("browser OAuth and owner routes in workerd", () => {
 
   it("returns owner status and appends linear idempotent metadata/publication events", async () => {
     const state = new MemoryState();
-    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    const submissionId = "019debcf-cb48-7000-8000-000000000001";
     state.events.push(
       {
         schema_version: 1,
@@ -1766,7 +1781,7 @@ describe("browser OAuth and owner routes in workerd", () => {
       },
       {
         schema_version: 1,
-        event_id: "0198abcd-1111-7000-8000-000000000002",
+        event_id: "019debcf-cb48-7000-8000-000000000002",
         event_type: "submission.metadata_amended",
         occurred_at: "2026-01-01T00:00:01.000Z",
         subject_id: submissionId,
@@ -1780,8 +1795,8 @@ describe("browser OAuth and owner routes in workerd", () => {
       submission_id: submissionId,
       owner_login: "alice",
       received_event_id: submissionId,
-      mutation_event_id: "0198abcd-1111-7000-8000-000000000002",
-      metadata_event_id: "0198abcd-1111-7000-8000-000000000002",
+      mutation_event_id: "019debcf-cb48-7000-8000-000000000002",
+      metadata_event_id: "019debcf-cb48-7000-8000-000000000002",
       publication_event_id: null,
       accepted_at: "2026-01-01T00:00:00.000Z",
       submission: { ...SUBMISSION, production_metadata: { web_access: false } },
@@ -1813,7 +1828,7 @@ describe("browser OAuth and owner routes in workerd", () => {
         headers: {
           authorization,
           "content-type": "application/json",
-          "idempotency-key": "0198abcd-1111-7000-8000-000000000003",
+          "idempotency-key": "019debcf-cb48-7000-8000-000000000003",
         },
         body: JSON.stringify({ production_metadata: { notes: "amended" } }),
       }),
@@ -1824,7 +1839,7 @@ describe("browser OAuth and owner routes in workerd", () => {
     expect(patch.status).toBe(200);
     expect(state.events.at(-1)).toMatchObject({
       event_type: "submission.metadata_amended",
-      causation_event_id: "0198abcd-1111-7000-8000-000000000002",
+      causation_event_id: "019debcf-cb48-7000-8000-000000000002",
     });
 
     const publication = await handleRequest(
@@ -1833,7 +1848,7 @@ describe("browser OAuth and owner routes in workerd", () => {
         headers: {
           authorization,
           "content-type": "application/json",
-          "idempotency-key": "0198abcd-1111-7000-8000-000000000004",
+          "idempotency-key": "019debcf-cb48-7000-8000-000000000004",
         },
         body: JSON.stringify({ publication_choice: "withheld" }),
       }),
@@ -1844,7 +1859,7 @@ describe("browser OAuth and owner routes in workerd", () => {
     expect(publication.status).toBe(200);
     expect(state.events.at(-1)).toMatchObject({
       event_type: "submission.publication_changed",
-      causation_event_id: "0198abcd-1111-7000-8000-000000000003",
+      causation_event_id: "019debcf-cb48-7000-8000-000000000003",
     });
 
     const status = await handleRequest(
@@ -1940,7 +1955,7 @@ describe("authenticated legacy result owner routes", () => {
       headers: {
         authorization: await ownerAuthorization(),
         "content-type": "application/json",
-        "idempotency-key": "0198abcd-3333-7000-8000-000000000001",
+        "idempotency-key": "019debd0-1968-7000-8000-000000000001",
       },
       body: JSON.stringify({ result_id: identifier, results_commit: "e".repeat(40) }),
     }), enabledEnv, LIFECYCLE, {
@@ -1961,7 +1976,7 @@ describe("authenticated legacy result owner routes", () => {
     expect(state.legacyClaims).toHaveLength(1);
     expect(state.contractAssertions).toBe(0);
     expect(state.legacyClaims[0]).toMatchObject({
-      eventId: "0198abcd-3333-7000-8000-000000000001",
+      eventId: "019debd0-1968-7000-8000-000000000001",
       occurredAt: new Date(NOW_MS).toISOString(),
       verified: {
         resultId: identifier,
@@ -1988,7 +2003,7 @@ describe("authenticated legacy result owner routes", () => {
         headers: {
           authorization: await ownerAuthorization(),
           "content-type": "application/json",
-          "idempotency-key": "0198abcd-3333-7000-8000-000000000002",
+          "idempotency-key": "019debd0-1968-7000-8000-000000000002",
         },
         body: JSON.stringify({ production_metadata: { notes: "historical note", web_access: false } }),
       },
@@ -1996,13 +2011,69 @@ describe("authenticated legacy result owner routes", () => {
     expect(response.status).toBe(201);
     expect(await response.json()).toEqual({ result_id: identifier, status: "backfilled" });
     expect(state.legacyBackfills).toEqual([{
-      eventId: "0198abcd-3333-7000-8000-000000000002",
+      eventId: "019debd0-1968-7000-8000-000000000002",
       occurredAt: new Date(NOW_MS).toISOString(),
       resultId: identifier,
       ownerLogin: "alice",
       productionMetadata: { notes: "historical note", web_access: false },
     }]);
     expect(state.contractAssertions).toBe(0);
+  });
+
+  it("rejects a far-future idempotency event before invoking State", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const response = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/metadata`,
+      {
+        method: "PATCH",
+        headers: {
+          authorization: await ownerAuthorization(),
+          "content-type": "application/json",
+          "idempotency-key": "ffffffff-ffff-7fff-bfff-ffffffffffff",
+        },
+        body: JSON.stringify({ production_metadata: { web_access: false } }),
+      },
+    ), enabledEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "invalid_request",
+      detail: "Idempotency-Key timestamp must not be in the future",
+    });
+    expect(state.legacyBackfills).toHaveLength(0);
+  });
+
+  it("preserves millisecond ordering for owner mutations in the same second", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const request = (eventId: string) => new Request(
+      `https://submit.test/api/v1/results/${identifier}/metadata`,
+      {
+        method: "PATCH",
+        headers: {
+          authorization: "placeholder",
+          "content-type": "application/json",
+          "idempotency-key": eventId,
+        },
+        body: JSON.stringify({ production_metadata: { web_access: false } }),
+      },
+    );
+    const first = request("019debd0-1968-7000-8000-000000000008");
+    first.headers.set("authorization", await ownerAuthorization());
+    const second = request("019debd0-1968-7000-8000-000000000009");
+    second.headers.set("authorization", await ownerAuthorization());
+    expect((await handleRequest(first, enabledEnv, LIFECYCLE, {
+      now: () => NOW_MS + 123,
+      state,
+    })).status).toBe(201);
+    expect((await handleRequest(second, enabledEnv, LIFECYCLE, {
+      now: () => NOW_MS + 456,
+      state,
+    })).status).toBe(201);
+    expect(state.legacyBackfills.map((entry) => entry.occurredAt)).toEqual([
+      new Date(NOW_MS + 123).toISOString(),
+      new Date(NOW_MS + 456).toISOString(),
+    ]);
   });
 
   it("rejects missing authentication and empty metadata without invoking State", async () => {
@@ -2020,7 +2091,7 @@ describe("authenticated legacy result owner routes", () => {
         headers: {
           authorization: await ownerAuthorization(),
           "content-type": "application/json",
-          "idempotency-key": "0198abcd-3333-7000-8000-000000000003",
+          "idempotency-key": "019debd0-1968-7000-8000-000000000003",
         },
         body: JSON.stringify({ production_metadata: {} }),
       },
@@ -2042,7 +2113,7 @@ describe("authenticated legacy result owner routes", () => {
         headers: {
           authorization: await ownerAuthorization(),
           "content-type": "application/json",
-          "idempotency-key": "0198abcd-3333-7000-8000-000000000004",
+          "idempotency-key": "019debd0-1968-7000-8000-000000000004",
         },
         body: JSON.stringify({ production_metadata: { web_access: false } }),
       },
@@ -2064,7 +2135,7 @@ describe("authenticated legacy result owner routes", () => {
         headers: {
           authorization: await ownerAuthorization(),
           "content-type": "application/json",
-          "idempotency-key": "0198abcd-3333-7000-8000-000000000006",
+          "idempotency-key": "019debd0-1968-7000-8000-000000000006",
         },
         body: JSON.stringify({ production_metadata: { web_access: false } }),
       },
@@ -2086,7 +2157,7 @@ describe("authenticated legacy result owner routes", () => {
         headers: {
           authorization: await ownerAuthorization(),
           "content-type": "application/json",
-          "idempotency-key": "0198abcd-3333-7000-8000-000000000007",
+          "idempotency-key": "019debd0-1968-7000-8000-000000000007",
         },
         body: JSON.stringify({ production_metadata: { web_access: false } }),
       },
@@ -2108,7 +2179,7 @@ describe("authenticated legacy result owner routes", () => {
         headers: {
           authorization: await ownerAuthorization(),
           "content-type": "application/json",
-          "idempotency-key": "0198abcd-3333-7000-8000-000000000005",
+          "idempotency-key": "019debd0-1968-7000-8000-000000000005",
         },
         body: JSON.stringify({ result_id: `r2_${"1".repeat(64)}`, results_commit: "e".repeat(40) }),
       }), enabledEnv, LIFECYCLE, {
@@ -2128,5 +2199,204 @@ describe("authenticated legacy result owner routes", () => {
     } finally {
       errorLog.mockRestore();
     }
+  });
+
+  it("keeps result amendment routes dark unless their independent reviewed gate is exact", async () => {
+    const identifier = `r2_${"1".repeat(64)}`;
+    const request = new Request(
+      `https://submit.test/api/v1/results/${identifier}/retractions`,
+      { method: "POST" },
+    );
+    const disabled = await handleRequest(request.clone(), enabledEnv, LIFECYCLE);
+    expect(disabled.status).toBe(404);
+    const wrongContract = await handleRequest(request, {
+      ...enabledEnv,
+      RESULT_AMENDMENT_OWNER_API_ENABLED: "true",
+      RESULT_OWNER_STATE_CONTRACT_COMMIT: "b".repeat(40),
+    }, LIFECYCLE);
+    expect(wrongContract.status).toBe(404);
+  });
+
+  it("records a redacted owner retraction request while intake stays disabled", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const response = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/retractions`,
+      {
+        method: "POST",
+        headers: {
+          authorization: await ownerAuthorization(),
+          "content-type": "application/json",
+          "idempotency-key": "019debd0-1968-7000-8000-000000000011",
+        },
+        body: JSON.stringify({ reason_code: "owner_requested_withdrawal" }),
+      },
+    ), {
+      ...enabledEnv,
+      RESULT_AMENDMENT_OWNER_API_ENABLED: "true",
+    }, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    expect(body).toEqual({
+      result_id: identifier,
+      retraction_revision: 1,
+      status: "retraction_requested",
+    });
+    expect(JSON.stringify(body)).not.toContain("owner_requested_withdrawal");
+    expect(JSON.stringify(body)).not.toContain("alice");
+    expect(state.retractionRequests).toEqual([{
+      eventId: "019debd0-1968-7000-8000-000000000011",
+      occurredAt: new Date(NOW_MS).toISOString(),
+      resultId: identifier,
+      ownerLogin: "alice",
+      reasonCode: "owner_requested_withdrawal",
+    }]);
+    expect(enabledEnv.INTAKE_ENABLED).toBe("false");
+  });
+
+  it("authenticates amendment requests and enforces same-origin cookie mutations", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const token = (await ownerAuthorization()).slice("Bearer ".length);
+    const request = (headers: HeadersInit) => new Request(
+      `https://submit.test/api/v1/results/${identifier}/retractions`,
+      {
+        method: "POST",
+        headers: {
+          ...Object.fromEntries(new Headers(headers)),
+          "content-type": "application/json",
+          "idempotency-key": "019debd0-1968-7000-8000-000000000012",
+        },
+        body: JSON.stringify({ reason_code: "owner_requested_withdrawal" }),
+      },
+    );
+    const env = { ...enabledEnv, RESULT_AMENDMENT_OWNER_API_ENABLED: "true" };
+    const unauthenticated = await handleRequest(request({}), env, LIFECYCLE, { state });
+    expect(unauthenticated.status).toBe(401);
+    const crossSiteCookie = await handleRequest(
+      request({ cookie: `lean_eval_session=${token}`, origin: "https://attacker.test" }),
+      env,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(crossSiteCookie.status).toBe(401);
+    expect(state.retractionRequests).toHaveLength(0);
+  });
+
+  it("records a redacted owner problem-repair request while intake stays disabled", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const request = (authorization?: string) => new Request(
+      `https://submit.test/api/v1/results/${identifier}/problem-repairs`,
+      {
+        method: "POST",
+        headers: {
+          ...(authorization === undefined ? {} : { authorization }),
+          "content-type": "application/json",
+          "idempotency-key": "019debd0-1968-7000-8000-000000000013",
+        },
+        body: JSON.stringify({
+          corrected_problem_id: "corrected_problem",
+          corrected_statement_revision: 2,
+          reason_code: "wrong_problem_revision",
+        }),
+      },
+    );
+    const env = { ...enabledEnv, RESULT_AMENDMENT_OWNER_API_ENABLED: "true" };
+    const unauthenticated = await handleRequest(request(), env, LIFECYCLE, { state });
+    expect(unauthenticated.status).toBe(401);
+    const response = await handleRequest(
+      request(await ownerAuthorization()),
+      env,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    expect(body).toEqual({
+      result_id: identifier,
+      repair_revision: 1,
+      status: "problem_repair_requested",
+    });
+    expect(JSON.stringify(body)).not.toContain("wrong_problem_revision");
+    expect(JSON.stringify(body)).not.toContain("alice");
+    expect(state.problemRepairRequests).toEqual([{
+      eventId: "019debd0-1968-7000-8000-000000000013",
+      occurredAt: new Date(NOW_MS).toISOString(),
+      resultId: identifier,
+      ownerLogin: "alice",
+      correctedProblemId: "corrected_problem",
+      correctedStatementRevision: 2,
+      reasonCode: "wrong_problem_revision",
+    }]);
+    expect(state.retractionRequests).toHaveLength(0);
+    expect(enabledEnv.INTAKE_ENABLED).toBe("false");
+  });
+
+  it("does not treat the lifecycle machine token as maintainer authority", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    for (const suffix of ["problem-repairs/decisions", "retractions/decisions", "retractions/override"]) {
+      const response = await handleRequest(new Request(
+        `https://submit.test/internal/v1/results/${identifier}/${suffix}`,
+        {
+          method: "POST",
+          headers: {
+            authorization: "Bearer machine-callback-token",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ reviewer_login: "forged-maintainer" }),
+        },
+      ), {
+        ...enabledEnv,
+        LIFECYCLE_CALLBACK_TOKEN: "machine-callback-token",
+        RESULT_AMENDMENT_OWNER_API_ENABLED: "true",
+      }, LIFECYCLE, { now: () => NOW_MS, state });
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "not_found" });
+    }
+    expect(state.retractionRequests).toHaveLength(0);
+  });
+
+  it("conceals wrong-owner retraction authority and preserves conflicts", async () => {
+    const identifier = `r2_${"1".repeat(64)}`;
+    const request = () => new Request(
+      `https://submit.test/api/v1/results/${identifier}/retractions`,
+      {
+        method: "POST",
+        headers: {
+          authorization: "placeholder",
+          "content-type": "application/json",
+          "idempotency-key": "019debd0-1968-7000-8000-000000000014",
+        },
+        body: JSON.stringify({ reason_code: "owner_requested_withdrawal" }),
+      },
+    );
+    const env = { ...enabledEnv, RESULT_AMENDMENT_OWNER_API_ENABLED: "true" };
+    const hiddenState = new MemoryState();
+    vi.spyOn(hiddenState, "requestResultRetraction").mockRejectedValue(
+      new ResultOwnerStateError(404, "not found"),
+    );
+    const hiddenRequest = request();
+    hiddenRequest.headers.set("authorization", await ownerAuthorization("mallory"));
+    const hidden = await handleRequest(hiddenRequest, env, LIFECYCLE, {
+      now: () => NOW_MS,
+      state: hiddenState,
+    });
+    expect(hidden.status).toBe(404);
+    expect(await hidden.json()).toEqual({ error: "not_found" });
+
+    const conflictState = new MemoryState();
+    vi.spyOn(conflictState, "requestResultRetraction").mockRejectedValue(
+      new StateEventConflictError("event"),
+    );
+    const conflictRequest = request();
+    conflictRequest.headers.set("authorization", await ownerAuthorization());
+    const conflict = await handleRequest(conflictRequest, env, LIFECYCLE, {
+      now: () => NOW_MS,
+      state: conflictState,
+    });
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toEqual({ error: "idempotency_conflict" });
   });
 });

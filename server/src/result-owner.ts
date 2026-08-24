@@ -69,6 +69,21 @@ export type SourceRecordIndex = Readonly<{
   canonical_record_sha256: string;
 }>;
 
+export type ResultReleaseStatusView = Readonly<{
+  schema_version: 1;
+  result_id: string;
+  authority_event_id: string;
+  status:
+    | "not_scheduled"
+    | "scheduled"
+    | "running"
+    | "published"
+    | "failed"
+    | "cancelled"
+    | "removed";
+  release_event_id: string | null;
+}>;
+
 function object(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError(`${label} must be an object`);
@@ -179,6 +194,11 @@ export function resultIdentityPath(identifier: string): string {
 export function resultOverlayPath(identifier: string): string {
   if (!RESULT_ID.test(identifier)) throw new TypeError("result identity is invalid");
   return `views/result-overlays/${identifier.slice(3, 5)}/${identifier}.json`;
+}
+
+export function resultReleaseStatusPath(identifier: string): string {
+  if (!RESULT_ID.test(identifier)) throw new TypeError("result identity is invalid");
+  return `views/result-release-status/${identifier.slice(3, 5)}/${identifier}.json`;
 }
 
 export function sourceRecordPath(identifier: string): string {
@@ -336,6 +356,56 @@ export function decodeSourceRecordIndex(value: unknown): SourceRecordIndex {
     results_path: data.results_path as string,
     canonical_record_sha256: data.canonical_record_sha256 as string,
   };
+}
+
+export function decodeResultReleaseStatusView(
+  value: unknown,
+): ResultReleaseStatusView {
+  const data = object(value, "result release-status view");
+  exactFields(data, [
+    "authority_event_id",
+    "release_event_id",
+    "result_id",
+    "schema_version",
+    "status",
+  ], "result release-status view");
+  if (
+    data.schema_version !== 1 ||
+    typeof data.result_id !== "string" ||
+    !RESULT_ID.test(data.result_id) ||
+    typeof data.authority_event_id !== "string" ||
+    !EVENT_ID.test(data.authority_event_id) ||
+    typeof data.status !== "string" ||
+    !new Set<string>([
+      "not_scheduled",
+      "scheduled",
+      "running",
+      "published",
+      "failed",
+      "cancelled",
+      "removed",
+    ]).has(data.status) ||
+    (data.status === "not_scheduled" && data.release_event_id !== null) ||
+    (data.status !== "not_scheduled" &&
+      (typeof data.release_event_id !== "string" || !EVENT_ID.test(data.release_event_id)))
+  ) {
+    throw new TypeError("result release-status view values are invalid");
+  }
+  return data as ResultReleaseStatusView;
+}
+
+export function initialResultReleaseStatusView(
+  resultIdentifier: string,
+  authorityEventId: string,
+  releaseEventId: string | null = null,
+): ResultReleaseStatusView {
+  return decodeResultReleaseStatusView({
+    schema_version: 1,
+    result_id: resultIdentifier,
+    authority_event_id: authorityEventId,
+    status: releaseEventId === null ? "not_scheduled" : "scheduled",
+    release_event_id: releaseEventId,
+  });
 }
 
 export function claimedGuard(resultIdentifier: string, eventId: string): ResultIdentityGuard {

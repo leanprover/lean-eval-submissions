@@ -33,13 +33,27 @@ production `INTAKE_ENABLED` remains independently false. OAuth start/callback
 may operate while intake is disabled only when the owner API gate is enabled;
 submission routes remain disabled.
 
+The protected binding commit above contains the reviewed owner/amendment
+contract plus later append-authority and targeted release-status validation.
+Runtime checks all fifteen exact documentation, schema, materializer, index,
+and validator blobs before using the protected-main head as a compare-and-swap
+base. The rollback qualification binds the same protected commit and callback
+implementation.
+
 ## Authentication and requests
 
 The routes use the existing one-hour GitHub browser session. Bearer sessions
 bind non-browser clients; cookie-authenticated mutations additionally require
 the exact same-origin `Origin` check. Every mutation requires a canonical
 lowercase UUIDv7 `Idempotency-Key`, which is the proposed immutable State event
-ID.
+ID. Keys ahead of the Worker clock are rejected before State access. Older keys
+remain eligible for exact long-lived replay; the State writer acknowledges an
+occupied exact event before applying its monotone clock check to any new write.
+For a new legacy claim, which has no prior per-result mutation head, State also
+requires the key timestamp to fall within the five minutes ending at the
+recorded request time.
+Owner mutation timestamps preserve the Worker's millisecond clock rather than
+rounding every request in one second to the same instant.
 
 Claim one historical record:
 
@@ -82,13 +96,20 @@ per string, and 256 bytes per object key. The known historical publication
 fields retain their stricter semantic limits.
 
 It then atomically creates `result.claimed`, the shared result-identity guard,
-the owner overlay, and the immutable source-record index. A modern
-`result.recorded` write reserves the same identity-guard path, so a claim can
-never collide silently with a server result. The global policy is one immutable
-result authority per deterministic result identity: whichever valid `claimed`
-or `recorded` guard lands first wins. A later claim, a modern result after a
-claim, or a second modern submission with the same owner/model/problem/revision
-tuple cannot adopt or replace that authority.
+the owner overlay, the immutable source-record index, the initial targeted
+amendment view, and the initial targeted release-status view. The release
+status is exactly `not_scheduled` with a null release-event marker. A modern
+`result.recorded` write reserves the same identity-guard path and creates the
+same two lifecycle views in its result transaction. When that transaction also
+contains `release.scheduled`, its release-status view is exactly `scheduled`
+and names the schedule event; otherwise it is `not_scheduled` with a null
+marker. A claim can therefore never collide silently with a server result, and
+every result authority begins with the complete targeted lifecycle indexes
+required by State validation. The global policy is one immutable result
+authority per deterministic result identity: whichever valid `claimed` or
+`recorded` guard lands first wins. A later claim, a modern result after a claim,
+or a second modern submission with the same owner/model/problem/revision tuple
+cannot adopt or replace that authority.
 
 Backfill one or more current metadata fields:
 
@@ -102,9 +123,19 @@ Content-Type: application/json
 
 The partial object must be nonempty and uses the same closed, bounded metadata
 contract as server submissions. The owner must equal the claim overlay owner.
-The new event is caused by the overlay's exact current mutation event and is
-committed atomically with a complete replacement overlay. The identity and
-source-record guards remain byte-for-byte immutable.
+The new event is caused by the targeted amendment view's exact current mutation
+event. The validated claim overlay and amendment view must agree with the same
+immutable authority; the event is committed atomically with complete
+replacement overlay and amendment views. The identity and source-record guards
+remain byte-for-byte immutable. A new backfill write is forbidden once the
+targeted release status is `running`, `published`, or `removed`; the status must
+name an exact immutable system release event of the corresponding type.
+
+Every targeted amendment sub-state is independently rebound to each immutable
+request, decision, override, and terminal event it names at the same State
+commit. Proving only the latest mutation marker is insufficient because it
+would allow unrelated forged historical fields to ride along in a valid-looking
+targeted view.
 
 ## Retry and conflict behavior
 
@@ -121,11 +152,13 @@ causal mutation. No branch is rewound.
   200 idempotent success. The first claim remains canonical; its immutable base
   event, commit binding, and source-record index are never rewritten or
   duplicated.
-- A backfill whose requested values are already current is a 200 no-op.
-- Replaying the same backfill event ID succeeds after later mutations when its
-  immutable event, body, actor, and each field it wrote still agree with the
-  field-level overlay provenance; it need not remain the overlay's latest
-  mutation.
+- A backfill whose requested values are already current is a read-only 200
+  no-op, including when a later release barrier forbids any new write.
+- Replaying the same backfill event ID succeeds after later compatible
+  mutations only when its immutable event, body, actor, and every field it
+  wrote still agree with current field-level overlay provenance. This is a
+  read-only acknowledgement; a later write to any requested field makes the
+  old request conflict.
 - A changed same-key body, partial/forged indexes, stale causal head, recorded
   result collision, or occupied event path returns 409.
 - A missing claim or different owner returns the same 404 response.
@@ -150,11 +183,11 @@ logs contain stage and error class only.
 
 ## Enable and rollback gate
 
-The first enablement has a zero-event migration precondition. At exact private
-State `main` commit `163e9314c881493e08d23baf35ff40456f9c2331`, inspected on
-2026-08-24, the repository contained zero `result.recorded` events, zero
-`result.claimed` events, and zero files under `views/result-identities/` (the
-only event was `system.initialized`). Consequently no historical result guard
+The first enablement has a zero-event migration precondition. At the protected
+binding commit `163e9314c881493e08d23baf35ff40456f9c2331`, inspected on
+2026-08-24, production State contained zero `result.recorded` events, zero
+`result.claimed` events, and zero files under `views/result-identities/`; its
+only event was `system.initialized`. Consequently no historical result guard
 backfill is required. Missing guards are not repaired at runtime: an apparent
 replay whose result event/view exists without its recorded guard fails closed
 as State inconsistency. The live result-completion callback always enters this

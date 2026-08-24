@@ -4,10 +4,23 @@ import {
   type WritableResultLifecycleEvent,
   type ResultClaimedEvent,
   type ResultMetadataBackfilledEvent,
+  type ResultProblemRepairRequestedEvent,
+  type ResultRecordedEvent,
+  type ResultRetractionRequestedEvent,
   type WritableSubmissionLifecycleEvent,
   type WritableStateEvent,
   validateStateEvent,
 } from "./state-event";
+import {
+  decodeResultAmendmentView,
+  initialResultAmendmentView,
+  requestedProblemRepairView,
+  requestedRetractionView,
+  resultAmendmentPath,
+  type ProblemRepairState,
+  type ResultAmendmentView,
+  type RetractionState,
+} from "./result-amendment";
 import {
   backfilledOverlay,
   canonicalJson as canonicalResultJson,
@@ -15,18 +28,22 @@ import {
   claimedOverlay,
   claimedSourceIndex,
   decodeResultIdentityGuard,
+  decodeResultReleaseStatusView,
   decodeResultOverlay,
   decodeSourceRecordIndex,
+  initialResultReleaseStatusView,
   metadataAlreadyEqual,
   recordedGuard,
   resultIdentityPath,
   resultOverlayPath,
+  resultReleaseStatusPath,
   sourceRecordId,
   sourceRecordPath,
   RESULT_OWNER_STATE_CONTRACT_COMMIT,
   type LegacyResultBase,
   type MetadataProvenance,
   type ResultOverlay,
+  type ResultReleaseStatusView,
   type VerifiedLegacyResult,
 } from "./result-owner";
 import type { ProductionMetadata } from "./api-contract";
@@ -44,17 +61,24 @@ const API = "https://api.github.com";
 const STATE_BRANCH = "main";
 const PRODUCTION_STATE_REPOSITORY = "leanprover/lean-eval-state";
 const MAX_WRITE_ATTEMPTS = 8;
+const NEW_EVENT_CLOCK_WINDOW_MS = 5 * 60 * 1000;
 const SHA = /^[0-9a-f]{40}$/i;
 const GITHUB_TIMEOUT_MS = 5000;
 const RESULT_OWNER_CONTRACT_BLOBS = {
+  "docs/result-amendment-lifecycle.md": "6ef59628f12820a4af64ff9bff4fb174d1749684",
   "docs/result-owner-operational-indexes.md": "2f784609f9117caf74cb7042e9ea45732925d77b",
+  "schema/result-amendment-view-v1.schema.json": "20282df2b419466f32998b93b49c55b107ed6f35",
+  "schema/result-amendments-v1.schema.json": "440d5039d1cef4bb055579b94cca928d36f66c96",
   "schema/result-identity-guard-v1.schema.json": "1620b6d8aed37f652958ac86e311c00578edc8b4",
   "schema/result-overlay-view-v1.schema.json": "1b50a92a76891bd21e0b67f7f40ab9c86d50beed",
   "schema/result-overlays-v1.schema.json": "41d4078133d6854bf8de839873a3f58e9ba1afd1",
+  "schema/result-release-status-view-v1.schema.json": "7f115230736e5d45074e8172f6fe4e5ee1992021",
   "schema/result-source-record-index-v1.schema.json": "4543225e0833af00913e436185532a769debebc1",
   "schema/state-event-v1.schema.json": "5b670204c86c440b56afd81f62bd097e3b399be7",
   "scripts/materialize_state.py": "f7985b70b6409616ac2020a2be2337eca13c640d",
+  "scripts/result_amendments.py": "61b44743c73d152fa92c489ac9228d16f0b694fd",
   "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
+  "scripts/result_release_status.py": "27bae3e6faa9275463a1440483512e23bfda2f6e",
   "scripts/validate_state.py": "0b4c876475fcc9c9d5cf6269c800509530673bb4",
 } as const;
 const RESULT_OWNER_CONTRACT_PROOF_CACHE_LIMIT = 64;
@@ -99,6 +123,24 @@ export type LegacyResultBackfillRequest = Readonly<{
   resultId: string;
   ownerLogin: string;
   productionMetadata: ProductionMetadata;
+}>;
+
+export type ResultRetractionRequest = Readonly<{
+  eventId: string;
+  occurredAt: string;
+  resultId: string;
+  ownerLogin: string;
+  reasonCode: string;
+}>;
+
+export type ResultProblemRepairRequest = Readonly<{
+  eventId: string;
+  occurredAt: string;
+  resultId: string;
+  ownerLogin: string;
+  correctedProblemId: string;
+  correctedStatementRevision: number;
+  reasonCode: string;
 }>;
 
 export class GitHubStateError extends Error {
@@ -359,6 +401,261 @@ function sameLogicalLegacyResult(left: LegacyResultBase, right: LegacyResultBase
   return canonicalResultJson(identity(left)) === canonicalResultJson(identity(right));
 }
 
+function amendmentMarkerMatches(view: ResultAmendmentView, event: StateEvent): boolean {
+  if (event.subject_id !== view.result_id || event.event_id !== view.mutation_event_id) return false;
+  const payload = event.payload as Readonly<Record<string, unknown>>;
+  if (event.event_id === view.authority_event_id) {
+    const pristine =
+      view.problem_repair === null &&
+      view.applied_problem_repair === null &&
+      view.retraction === null &&
+      view.leaderboard_eligible &&
+      view.effective_problem_id === view.base_problem_id &&
+      view.effective_statement_revision === view.base_statement_revision;
+    if (!pristine) return false;
+    if (event.event_type === "result.recorded") {
+      return payload.problem_id === view.base_problem_id &&
+        payload.statement_revision === view.base_statement_revision;
+    }
+    if (event.event_type === "result.claimed") {
+      return event.actor.login === view.owner_login &&
+        payload.declared_model === view.declared_model &&
+        payload.problem_id === view.base_problem_id &&
+        payload.statement_revision === view.base_statement_revision;
+    }
+    return false;
+  }
+  if (event.event_type === "result.problem_repair_requested") {
+    return event.actor.login === view.owner_login &&
+      view.problem_repair?.status === "pending" &&
+      view.problem_repair.request_event_id === event.event_id &&
+      view.problem_repair.requested_at === event.occurred_at &&
+      view.problem_repair.revision === payload.repair_revision &&
+      view.problem_repair.corrected_problem_id === payload.corrected_problem_id &&
+      view.problem_repair.corrected_statement_revision === payload.corrected_statement_revision &&
+      view.problem_repair.reason_code === payload.reason_code;
+  }
+  if (event.event_type === "result.problem_repaired") {
+    const evidence = view.problem_repair?.comparator_evidence;
+    return view.problem_repair?.decision_event_id === event.event_id &&
+      view.problem_repair.request_event_id === event.causation_event_id &&
+      view.problem_repair.decided_at === event.occurred_at &&
+      view.problem_repair.revision === payload.repair_revision &&
+      view.problem_repair.status === "applied" &&
+      view.problem_repair.corrected_problem_id === payload.corrected_problem_id &&
+      view.problem_repair.corrected_statement_revision === payload.corrected_statement_revision &&
+      view.problem_repair.reviewer_login === payload.reviewer_login &&
+      evidence !== null && evidence !== undefined &&
+      evidence.repository === payload.comparator_repository &&
+      evidence.commit === payload.comparator_commit &&
+      evidence.path === payload.comparator_path &&
+      evidence.blob_oid === payload.comparator_blob_oid &&
+      evidence.blob_sha256 === payload.comparator_blob_sha256 &&
+      evidence.record_sha256 === payload.comparator_record_sha256 &&
+      evidence.binding_sha256 === payload.comparator_binding_sha256 &&
+      evidence.verification_method === payload.comparator_verification_method &&
+      evidence.evidence_result_id === payload.evidence_result_id &&
+      evidence.evidence_owner_login === payload.evidence_owner_login &&
+      evidence.evidence_declared_model === payload.evidence_declared_model &&
+      evidence.evidence_base_problem_group === payload.evidence_base_problem_group &&
+      evidence.evidence_base_problem_id === payload.evidence_base_problem_id &&
+      evidence.evidence_base_statement_revision === payload.evidence_base_statement_revision &&
+      evidence.evidence_base_challenge_id === payload.evidence_base_challenge_id &&
+      evidence.evidence_corrected_problem_group === payload.evidence_corrected_problem_group &&
+      evidence.evidence_corrected_problem_id === payload.evidence_corrected_problem_id &&
+      evidence.evidence_corrected_statement_revision === payload.evidence_corrected_statement_revision &&
+      evidence.evidence_corrected_challenge_id === payload.evidence_corrected_challenge_id;
+  }
+  if (event.event_type === "result.problem_repair_rejected") {
+    return view.problem_repair?.decision_event_id === event.event_id &&
+      view.problem_repair.request_event_id === event.causation_event_id &&
+      view.problem_repair.decided_at === event.occurred_at &&
+      view.problem_repair.revision === payload.repair_revision &&
+      view.problem_repair.status === "rejected" &&
+      view.problem_repair.reviewer_login === payload.reviewer_login &&
+      view.problem_repair.reason_code === payload.reason_code;
+  }
+  if (event.event_type === "result.retraction_requested") {
+    return event.actor.login === view.owner_login &&
+      view.retraction?.status === "pending" &&
+      view.retraction.request_event_id === event.event_id &&
+      view.retraction.requested_at === event.occurred_at &&
+      view.retraction.revision === payload.retraction_revision &&
+      view.retraction.reason_code === payload.reason_code;
+  }
+  if (event.event_type === "result.retraction_decided") {
+    return view.retraction?.decision_event_id === event.event_id &&
+      view.retraction.request_event_id === event.causation_event_id &&
+      view.retraction.decided_at === event.occurred_at &&
+      view.retraction.revision === payload.retraction_revision &&
+      view.retraction.status === (payload.decision === "approve" ? "approved" : "rejected") &&
+      view.retraction.reviewer_login === payload.reviewer_login &&
+      view.retraction.reason_code === payload.reason_code &&
+      !view.retraction.overridden;
+  }
+  if (event.event_type === "result.retraction_overridden") {
+    return view.retraction?.status === "approved" &&
+      view.retraction.overridden &&
+      view.retraction.decision_event_id === event.event_id &&
+      view.retraction.decided_at === event.occurred_at &&
+      view.retraction.revision === payload.retraction_revision &&
+      view.retraction.reviewer_login === payload.reviewer_login &&
+      view.retraction.reason_code === payload.reason_code;
+  }
+  if (event.event_type === "result.retracted") {
+    return view.retraction?.status === "retracted" &&
+      view.retraction.retraction_event_id === event.event_id &&
+      view.retraction.retracted_at === event.occurred_at &&
+      view.retraction.decision_event_id === event.causation_event_id &&
+      view.retraction.revision === payload.retraction_revision &&
+      view.retraction.reviewer_login === payload.reviewer_login &&
+      view.retraction.reason_code === payload.reason_code &&
+      view.retraction.release_disposition === payload.release_disposition;
+  }
+  if (event.event_type === "result.metadata_backfilled") {
+    return true;
+  }
+  return false;
+}
+
+function problemRepairRequestMatches(
+  ownerLogin: string,
+  repair: ProblemRepairState,
+  event: StateEvent,
+): boolean {
+  const payload = event.payload as Readonly<Record<string, unknown>>;
+  return event.event_type === "result.problem_repair_requested" &&
+    event.event_id === repair.request_event_id &&
+    event.actor.login === ownerLogin &&
+    event.occurred_at === repair.requested_at &&
+    payload.repair_revision === repair.revision &&
+    payload.corrected_problem_id === repair.corrected_problem_id &&
+    payload.corrected_statement_revision === repair.corrected_statement_revision &&
+    (repair.status !== "pending" || payload.reason_code === repair.reason_code);
+}
+
+function retractionRequestMatches(
+  ownerLogin: string,
+  retraction: RetractionState,
+  event: StateEvent,
+): boolean {
+  const payload = event.payload as Readonly<Record<string, unknown>>;
+  return retraction.request_event_id !== null &&
+    retraction.requested_at !== null &&
+    event.event_type === "result.retraction_requested" &&
+    event.event_id === retraction.request_event_id &&
+    event.actor.login === ownerLogin &&
+    event.occurred_at === retraction.requested_at &&
+    payload.retraction_revision === retraction.revision &&
+    (retraction.status !== "pending" || payload.reason_code === retraction.reason_code);
+}
+
+async function assertAmendmentHistoryAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  view: ResultAmendmentView,
+  authority: StateEvent,
+  mutation: StateEvent,
+  commit: string,
+): Promise<void> {
+  const path = resultAmendmentPath(view.result_id);
+  const referencedIds = new Set<string>([view.authority_event_id, view.mutation_event_id]);
+  for (const repair of [view.problem_repair, view.applied_problem_repair]) {
+    if (repair === null) continue;
+    referencedIds.add(repair.request_event_id);
+    if (repair.decision_event_id !== null) referencedIds.add(repair.decision_event_id);
+  }
+  if (view.retraction?.request_event_id !== null && view.retraction?.request_event_id !== undefined) {
+    referencedIds.add(view.retraction.request_event_id);
+  }
+  if (view.retraction?.decision_event_id !== null && view.retraction?.decision_event_id !== undefined) {
+    referencedIds.add(view.retraction.decision_event_id);
+  }
+  if (view.retraction?.retraction_event_id !== null && view.retraction?.retraction_event_id !== undefined) {
+    referencedIds.add(view.retraction.retraction_event_id);
+  }
+  const events = new Map<string, StateEvent>([
+    [authority.event_id, authority],
+    [mutation.event_id, mutation],
+  ]);
+  await Promise.all([...referencedIds].filter((eventId) => !events.has(eventId)).map(async (eventId) => {
+    events.set(eventId, await readEventAt(config, fetcher, eventId, commit));
+  }));
+  const referencedEvent = (eventId: string): StateEvent => {
+    const event = events.get(eventId);
+    if (event?.subject_id !== view.result_id) {
+      throw new StateEventConflictError(path);
+    }
+    return event;
+  };
+  try {
+    for (const repair of [view.problem_repair, view.applied_problem_repair]) {
+      if (repair === null) continue;
+      if (!problemRepairRequestMatches(
+        view.owner_login,
+        repair,
+        referencedEvent(repair.request_event_id),
+      )) {
+        throw new TypeError("problem repair request disagreed with targeted view");
+      }
+      if (repair.decision_event_id !== null) {
+        const decision = referencedEvent(repair.decision_event_id);
+        const decisionView = { ...view, mutation_event_id: decision.event_id, problem_repair: repair };
+        const expectedDecisionType = repair.status === "applied"
+          ? "result.problem_repaired"
+          : "result.problem_repair_rejected";
+        if (repair.status === "pending" || decision.event_type !== expectedDecisionType ||
+          !amendmentMarkerMatches(decisionView, decision)) {
+          throw new TypeError("problem repair decision disagreed with targeted view");
+        }
+      }
+    }
+    const retraction = view.retraction;
+    if (retraction !== null) {
+      if (retraction.request_event_id !== null && !retractionRequestMatches(
+        view.owner_login,
+        retraction,
+        referencedEvent(retraction.request_event_id),
+      )) {
+        throw new TypeError("retraction request disagreed with targeted view");
+      }
+      if (retraction.decision_event_id !== null) {
+        const decision = referencedEvent(retraction.decision_event_id);
+        const decisionView = { ...view, mutation_event_id: decision.event_id, retraction };
+        const expectedDecisionType = retraction.overridden
+          ? "result.retraction_overridden"
+          : "result.retraction_decided";
+        if (decision.event_type !== expectedDecisionType ||
+          !amendmentMarkerMatches(decisionView, decision)) {
+          throw new TypeError("retraction decision disagreed with targeted view");
+        }
+        if (decision.event_type === "result.retraction_overridden") {
+          const prior = await readEventAt(config, fetcher, decision.causation_event_id, commit);
+          const payload = prior.payload as Readonly<Record<string, unknown>>;
+          if (
+            prior.subject_id !== view.result_id ||
+            prior.event_type !== "result.retraction_decided" ||
+            payload.retraction_revision !== retraction.revision
+          ) {
+            throw new TypeError("retraction override cause disagreed with targeted view");
+          }
+        }
+      }
+      if (retraction.retraction_event_id !== null) {
+        const terminal = referencedEvent(retraction.retraction_event_id);
+        const terminalView = { ...view, mutation_event_id: terminal.event_id, retraction };
+        if (terminal.event_type !== "result.retracted" ||
+          !amendmentMarkerMatches(terminalView, terminal)) {
+          throw new TypeError("terminal retraction disagreed with targeted view");
+        }
+      }
+    }
+  } catch (error) {
+    if (error instanceof StateEventConflictError || error instanceof GitHubStateError) throw error;
+    throw new StateEventConflictError(path);
+  }
+}
+
 async function createCommit(
   config: GitHubStateConfig,
   fetcher: GitHubFetch,
@@ -487,6 +784,63 @@ async function readEventAt(
   }
   if (stateEventPath(entry.value) !== path) throw new GitHubStateError(502, `${path} event identity disagrees with its path`);
   return entry.value;
+}
+
+async function assertReleaseStatusMarkerAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  status: ResultReleaseStatusView,
+  commit: string,
+): Promise<void> {
+  if (status.status === "not_scheduled") return;
+  const eventId = status.release_event_id;
+  if (eventId === null) throw new StateEventConflictError(resultReleaseStatusPath(status.result_id));
+  const path = `events/${eventId.replaceAll("-", "").slice(0, 2)}/${eventId}.json`;
+  const entry = await readPathAt(config, fetcher, path, commit);
+  if (!entry.found) throw new StateEventConflictError(resultReleaseStatusPath(status.result_id));
+  const expectedType = {
+    scheduled: "release.scheduled",
+    running: "release.started",
+    published: "release.published",
+    failed: "release.failed",
+    cancelled: "release.cancelled",
+    removed: "release.removed",
+  }[status.status];
+  try {
+    // release.removed is part of the pinned private State contract but is
+    // deliberately not registered as a Worker-writable event. All other
+    // release markers can therefore use the Worker's complete event decoder.
+    if (status.status !== "removed") validateStateEvent(entry.value);
+    const event = object(entry.value, "result release-status marker");
+    const actor = event.actor === null || typeof event.actor !== "object" || Array.isArray(event.actor)
+      ? null
+      : event.actor as Record<string, unknown>;
+    if (
+      Object.keys(event).sort().join(",") !==
+        "actor,causation_event_id,event_id,event_type,occurred_at,payload,schema_version,subject_id" ||
+      event.schema_version !== 1 ||
+      event.event_id !== eventId ||
+      event.event_type !== expectedType ||
+      event.subject_id !== status.result_id ||
+      typeof event.occurred_at !== "string" ||
+      Number.isNaN(Date.parse(event.occurred_at)) ||
+      new Date(event.occurred_at).toISOString() !== event.occurred_at ||
+      typeof event.causation_event_id !== "string" ||
+      actor?.kind !== "system" ||
+      Object.keys(actor).length !== 1 ||
+      event.payload === null ||
+      typeof event.payload !== "object" ||
+      Array.isArray(event.payload)
+    ) {
+      throw new TypeError("release marker disagreed with targeted status");
+    }
+  } catch {
+    throw new StateEventConflictError(resultReleaseStatusPath(status.result_id));
+  }
+}
+
+function uuidV7Timestamp(eventId: string): number {
+  return Number.parseInt(`${eventId.slice(0, 8)}${eventId.slice(9, 13)}`, 16);
 }
 
 async function readSubmissionAt(
@@ -863,6 +1217,7 @@ export class GitHubStateRepository {
         return { commit: snapshot.headSha, created: false, view: current };
       }
       if (current.mutation_event_id !== expectedMutationEventId) throw new StateEventConflictError(path);
+      if (event.event_id <= current.mutation_event_id) throw new StateEventConflictError(path);
       const existing = await readPathAt(this.#config, this.#fetcher, path, snapshot.headSha);
       if (existing.found) throw new StateEventConflictError(path);
       const commit = await createCommit(
@@ -1071,8 +1426,24 @@ export class GitHubStateRepository {
     const viewPath = submissionViewPath(decodedView.submission_id);
     const identityPath = resultIdentityPath(result.subject_id);
     const identityGuard = recordedGuard(result.subject_id, result.event_id);
+    const amendmentPath = resultAmendmentPath(result.subject_id);
+    const amendmentView = initialResultAmendmentView({
+      resultId: result.subject_id,
+      ownerLogin: decodedView.owner_login,
+      declaredModel: decodedView.submission.declared_model,
+      problemId: result.payload.problem_id,
+      statementRevision: result.payload.statement_revision,
+      authorityEventId: result.event_id,
+      mutationEventId: result.event_id,
+    });
+    const releaseStatusPath = resultReleaseStatusPath(result.subject_id);
+    const releaseStatusView = initialResultReleaseStatusView(
+      result.subject_id,
+      result.event_id,
+      release?.event_id ?? null,
+    );
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
-      const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+      const snapshot = await this.#resultOwnerSnapshot();
       const current = await readSubmissionAt(
         this.#config,
         this.#fetcher,
@@ -1084,13 +1455,37 @@ export class GitHubStateRepository {
         const existing = await Promise.all([
           ...paths.map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)),
           readPathAt(this.#config, this.#fetcher, identityPath, snapshot.headSha),
+          readPathAt(this.#config, this.#fetcher, amendmentPath, snapshot.headSha),
+          readPathAt(this.#config, this.#fetcher, releaseStatusPath, snapshot.headSha),
         ]);
-        const currentGuardEntry = existing.at(-1);
+        const currentGuardEntry = existing.at(paths.length);
+        const currentAmendmentEntry = existing.at(paths.length + 1);
+        const currentReleaseStatusEntry = existing.at(paths.length + 2);
+        let currentAmendment;
+        let currentReleaseStatus;
+        try {
+          currentAmendment = decodeResultAmendmentView(
+            currentAmendmentEntry?.found ? currentAmendmentEntry.value : null,
+          );
+          currentReleaseStatus = decodeResultReleaseStatusView(
+            currentReleaseStatusEntry?.found ? currentReleaseStatusEntry.value : null,
+          );
+        } catch {
+          throw new StateEventConflictError(viewPath);
+        }
         if (
           existing.slice(0, paths.length).some((entry, index) =>
             !entry.found || canonicalJson(entry.value) !== canonicalJson(events[index])) ||
           !currentGuardEntry?.found ||
           canonicalJson(currentGuardEntry.value) !== canonicalJson(identityGuard) ||
+          currentAmendment.result_id !== result.subject_id ||
+          currentAmendment.owner_login !== decodedView.owner_login ||
+          currentAmendment.declared_model !== decodedView.submission.declared_model ||
+          currentAmendment.authority_event_id !== result.event_id ||
+          currentAmendment.base_problem_id !== result.payload.problem_id ||
+          currentAmendment.base_statement_revision !== result.payload.statement_revision ||
+          currentReleaseStatus.result_id !== result.subject_id ||
+          currentReleaseStatus.authority_event_id !== result.event_id ||
           canonicalJson(current) !== canonicalJson(decodedView)
         ) {
           throw new StateEventConflictError(viewPath);
@@ -1104,10 +1499,12 @@ export class GitHubStateRepository {
       ) {
         throw new StateEventConflictError(viewPath);
       }
-      const [eventEntries, guardEntry] = await Promise.all([
+      const [eventEntries, guardEntry, amendmentEntry, releaseStatusEntry] = await Promise.all([
         Promise.all(paths.map((path) =>
           readPathAt(this.#config, this.#fetcher, path, snapshot.headSha))),
         readPathAt(this.#config, this.#fetcher, identityPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, amendmentPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, releaseStatusPath, snapshot.headSha),
       ]);
       if (guardEntry.found) {
         let guard;
@@ -1130,6 +1527,8 @@ export class GitHubStateRepository {
         // second result that this callback may safely adopt.
         throw new StateEventConflictError(viewPath);
       }
+      if (amendmentEntry.found) throw new StateEventConflictError(amendmentPath);
+      if (releaseStatusEntry.found) throw new StateEventConflictError(releaseStatusPath);
       const eventConflict = eventEntries.findIndex((entry) => entry.found);
       if (eventConflict >= 0) {
         throw new StateEventConflictError(paths[eventConflict] ?? viewPath);
@@ -1142,6 +1541,8 @@ export class GitHubStateRepository {
         [
           { path: viewPath, value: decodedView },
           { path: identityPath, value: identityGuard },
+          { path: amendmentPath, value: amendmentView },
+          { path: releaseStatusPath, value: releaseStatusView },
         ],
         `Record accepted result ${result.subject_id} for ${decodedView.submission_id}`,
       );
@@ -1154,6 +1555,389 @@ export class GitHubStateRepository {
       await pause(attempt);
     }
     throw new Error("unreachable result recording attempt");
+  }
+
+  async #resultAmendmentAt(
+    resultId: string,
+    snapshot: BranchSnapshot,
+  ): Promise<{
+    view: ResultAmendmentView;
+    mutationEvent: StateEvent;
+    overlay: ResultOverlay | null;
+    releaseStatus: ResultReleaseStatusView;
+  }> {
+    const identityPath = resultIdentityPath(resultId);
+    const amendmentPath = resultAmendmentPath(resultId);
+    const overlayPath = resultOverlayPath(resultId);
+    const releaseStatusPath = resultReleaseStatusPath(resultId);
+    const [guard, trackedView, overlay, releaseStatus] = await Promise.all([
+      readResultOwnerDocumentAt(
+        this.#config,
+        this.#fetcher,
+        identityPath,
+        snapshot.headSha,
+        decodeResultIdentityGuard,
+      ),
+      readResultOwnerDocumentAt(
+        this.#config,
+        this.#fetcher,
+        amendmentPath,
+        snapshot.headSha,
+        decodeResultAmendmentView,
+      ),
+      readResultOwnerDocumentAt(
+        this.#config,
+        this.#fetcher,
+        overlayPath,
+        snapshot.headSha,
+        decodeResultOverlay,
+      ),
+      readResultOwnerDocumentAt(
+        this.#config,
+        this.#fetcher,
+        releaseStatusPath,
+        snapshot.headSha,
+        decodeResultReleaseStatusView,
+      ),
+    ]);
+    if (guard?.result_id !== resultId) {
+      throw new ResultOwnerStateError(404, "result authority was not found");
+    }
+    const authority = await readEventAt(
+      this.#config,
+      this.#fetcher,
+      guard.authority_event_id,
+      snapshot.headSha,
+    );
+    if (authority.subject_id !== resultId) {
+      throw new StateEventConflictError(identityPath);
+    }
+
+    let initial: ResultAmendmentView;
+    if (guard.record_kind === "claimed") {
+      if (
+        authority.event_type !== "result.claimed" ||
+        overlay?.result_id !== resultId ||
+        overlay.claim_event_id !== authority.event_id ||
+        overlay.owner_login !== authority.actor.login ||
+        canonicalResultJson(overlay.base_result) !== canonicalResultJson(authority.payload)
+      ) {
+        throw new StateEventConflictError(identityPath);
+      }
+      initial = initialResultAmendmentView({
+        resultId,
+        ownerLogin: overlay.owner_login,
+        declaredModel: overlay.base_result.declared_model,
+        authorityEventId: authority.event_id,
+        mutationEventId: authority.event_id,
+        problemId: overlay.base_result.problem_id,
+        statementRevision: overlay.base_result.statement_revision,
+      });
+    } else {
+      if (authority.event_type !== "result.recorded" || overlay !== null) {
+        throw new StateEventConflictError(identityPath);
+      }
+      const resultAuthority = authority as ResultRecordedEvent;
+      const submission = await readSubmissionAt(
+        this.#config,
+        this.#fetcher,
+        resultAuthority.payload.submission_id,
+        snapshot.headSha,
+      );
+      if (
+        submission?.schema_version !== 2 ||
+        submission.result_id !== resultId ||
+        submission.result_event_id !== authority.event_id ||
+        submission.submission.problem_id !== resultAuthority.payload.problem_id ||
+        submission.submission.statement_revision !== resultAuthority.payload.statement_revision
+      ) {
+        throw new StateEventConflictError(identityPath);
+      }
+      initial = initialResultAmendmentView({
+        resultId,
+        ownerLogin: submission.owner_login,
+        declaredModel: submission.submission.declared_model,
+        authorityEventId: authority.event_id,
+        mutationEventId: authority.event_id,
+        problemId: resultAuthority.payload.problem_id,
+        statementRevision: resultAuthority.payload.statement_revision,
+      });
+    }
+
+    if (trackedView === null) {
+      throw new StateEventConflictError(amendmentPath);
+    }
+    if (
+      releaseStatus?.result_id !== resultId ||
+      releaseStatus.authority_event_id !== initial.authority_event_id
+    ) {
+      throw new StateEventConflictError(releaseStatusPath);
+    }
+    await assertReleaseStatusMarkerAt(
+      this.#config,
+      this.#fetcher,
+      releaseStatus,
+      snapshot.headSha,
+    );
+    const view = trackedView;
+    if (
+      view.result_id !== initial.result_id ||
+      view.owner_login !== initial.owner_login ||
+      view.declared_model !== initial.declared_model ||
+      view.authority_event_id !== initial.authority_event_id ||
+      view.base_problem_id !== initial.base_problem_id ||
+      view.base_statement_revision !== initial.base_statement_revision
+    ) {
+      throw new StateEventConflictError(amendmentPath);
+    }
+    const mutationEvent = await readEventAt(
+      this.#config,
+      this.#fetcher,
+      view.mutation_event_id,
+      snapshot.headSha,
+    );
+    if (mutationEvent.subject_id !== resultId) {
+      throw new StateEventConflictError(amendmentPath);
+    }
+    if (!amendmentMarkerMatches(view, mutationEvent)) {
+      throw new StateEventConflictError(amendmentPath);
+    }
+    await assertAmendmentHistoryAt(
+      this.#config,
+      this.#fetcher,
+      view,
+      authority,
+      mutationEvent,
+      snapshot.headSha,
+    );
+    if (
+      mutationEvent.event_type === "result.metadata_backfilled" &&
+      (overlay?.mutation_event_id !== mutationEvent.event_id ||
+        mutationEvent.actor.login !== view.owner_login)
+    ) {
+      throw new StateEventConflictError(amendmentPath);
+    }
+    return { view, mutationEvent, overlay, releaseStatus };
+  }
+
+  async requestResultProblemRepair(request: ResultProblemRepairRequest): Promise<{
+    commit: string;
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    repairRevision: number;
+  }> {
+    const requestedEventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
+    const amendmentPath = resultAmendmentPath(request.resultId);
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await this.#resultOwnerSnapshot();
+      const [{ view, mutationEvent, releaseStatus }, requestedEventEntry] = await Promise.all([
+        this.#resultAmendmentAt(request.resultId, snapshot),
+        readPathAt(this.#config, this.#fetcher, requestedEventPath, snapshot.headSha),
+      ]);
+      if (view.owner_login !== request.ownerLogin) {
+        throw new ResultOwnerStateError(404, "result authority was not found");
+      }
+      if (requestedEventEntry.found) {
+        let existing: StateEvent;
+        try {
+          validateStateEvent(requestedEventEntry.value);
+          existing = requestedEventEntry.value;
+        } catch {
+          throw new StateEventConflictError(requestedEventPath);
+        }
+        if (
+          existing.event_type !== "result.problem_repair_requested" ||
+          existing.event_id !== request.eventId ||
+          existing.subject_id !== request.resultId ||
+          existing.actor.login !== request.ownerLogin ||
+          existing.payload.corrected_problem_id !== request.correctedProblemId ||
+          existing.payload.corrected_statement_revision !== request.correctedStatementRevision ||
+          existing.payload.reason_code !== request.reasonCode
+        ) {
+          throw new StateEventConflictError(requestedEventPath);
+        }
+        return {
+          commit: snapshot.headSha,
+          created: false,
+          resultId: request.resultId,
+          mutationEventId: request.eventId,
+          repairRevision: existing.payload.repair_revision,
+        };
+      }
+      if (
+        view.problem_repair?.status === "pending" ||
+        view.retraction?.status === "pending" ||
+        view.retraction?.status === "approved" ||
+        view.retraction?.status === "retracted" ||
+        !view.leaderboard_eligible
+      ) {
+        throw new ResultOwnerStateError(409, "result has a conflicting amendment state");
+      }
+      if (new Set(["running", "published", "removed"]).has(releaseStatus.status)) {
+        throw new ResultOwnerStateError(409, "result release state forbids problem repair");
+      }
+      if (
+        request.correctedProblemId === view.effective_problem_id &&
+        request.correctedStatementRevision === view.effective_statement_revision
+      ) {
+        throw new ResultOwnerStateError(409, "result problem repair must change the effective problem");
+      }
+      if (
+        request.eventId <= view.mutation_event_id ||
+        Date.parse(request.occurredAt) <= Date.parse(mutationEvent.occurred_at)
+      ) {
+        throw new ResultOwnerStateError(409, "result problem repair request does not follow the current mutation");
+      }
+      const revision = (view.problem_repair?.revision ?? 0) + 1;
+      const event: ResultProblemRepairRequestedEvent = {
+        schema_version: 1,
+        event_id: request.eventId,
+        event_type: "result.problem_repair_requested",
+        occurred_at: request.occurredAt,
+        subject_id: request.resultId,
+        causation_event_id: view.mutation_event_id,
+        actor: { kind: "github", login: request.ownerLogin },
+        payload: {
+          repair_revision: revision,
+          corrected_problem_id: request.correctedProblemId,
+          corrected_statement_revision: request.correctedStatementRevision,
+          reason_code: request.reasonCode,
+        },
+      };
+      validateStateEvent(event);
+      const nextView = requestedProblemRepairView(
+        view,
+        request.eventId,
+        request.occurredAt,
+        request.correctedProblemId,
+        request.correctedStatementRevision,
+        request.reasonCode,
+      );
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        [event],
+        [{ path: amendmentPath, value: nextView }],
+        `Request owner problem repair for ${request.resultId}`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return {
+          commit,
+          created: true,
+          resultId: request.resultId,
+          mutationEventId: request.eventId,
+          repairRevision: revision,
+        };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) {
+        throw new ResultOwnerStateError(409, "State branch kept changing during problem repair request");
+      }
+      await pause(attempt);
+    }
+    throw new Error("unreachable result problem repair request attempt");
+  }
+
+  async requestResultRetraction(request: ResultRetractionRequest): Promise<{
+    commit: string;
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    retractionRevision: number;
+  }> {
+    const requestedEventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
+    const amendmentPath = resultAmendmentPath(request.resultId);
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await this.#resultOwnerSnapshot();
+      const [{ view, mutationEvent }, requestedEventEntry] = await Promise.all([
+        this.#resultAmendmentAt(request.resultId, snapshot),
+        readPathAt(this.#config, this.#fetcher, requestedEventPath, snapshot.headSha),
+      ]);
+      if (view.owner_login !== request.ownerLogin) {
+        throw new ResultOwnerStateError(404, "result authority was not found");
+      }
+      if (requestedEventEntry.found) {
+        let existing: StateEvent;
+        try {
+          validateStateEvent(requestedEventEntry.value);
+          existing = requestedEventEntry.value;
+        } catch {
+          throw new StateEventConflictError(requestedEventPath);
+        }
+        if (
+          existing.event_type !== "result.retraction_requested" ||
+          existing.event_id !== request.eventId ||
+          existing.subject_id !== request.resultId ||
+          existing.actor.login !== request.ownerLogin ||
+          existing.payload.reason_code !== request.reasonCode
+        ) {
+          throw new StateEventConflictError(requestedEventPath);
+        }
+        return {
+          commit: snapshot.headSha,
+          created: false,
+          resultId: request.resultId,
+          mutationEventId: request.eventId,
+          retractionRevision: existing.payload.retraction_revision,
+        };
+      }
+      if (
+        view.problem_repair?.status === "pending" ||
+        view.retraction?.status === "pending" ||
+        view.retraction?.status === "approved" ||
+        view.retraction?.status === "retracted" ||
+        !view.leaderboard_eligible
+      ) {
+        throw new ResultOwnerStateError(409, "result has a conflicting amendment state");
+      }
+      if (
+        request.eventId <= view.mutation_event_id ||
+        Date.parse(request.occurredAt) <= Date.parse(mutationEvent.occurred_at)
+      ) {
+        throw new ResultOwnerStateError(409, "result retraction request does not follow the current mutation");
+      }
+      const revision = (view.retraction?.revision ?? 0) + 1;
+      const event: ResultRetractionRequestedEvent = {
+        schema_version: 1,
+        event_id: request.eventId,
+        event_type: "result.retraction_requested",
+        occurred_at: request.occurredAt,
+        subject_id: request.resultId,
+        causation_event_id: view.mutation_event_id,
+        actor: { kind: "github", login: request.ownerLogin },
+        payload: { retraction_revision: revision, reason_code: request.reasonCode },
+      };
+      validateStateEvent(event);
+      const nextView = requestedRetractionView(
+        view,
+        request.eventId,
+        request.occurredAt,
+        request.reasonCode,
+      );
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        [event],
+        [{ path: amendmentPath, value: nextView }],
+        `Request owner retraction for ${request.resultId}`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return {
+          commit,
+          created: true,
+          resultId: request.resultId,
+          mutationEventId: request.eventId,
+          retractionRevision: revision,
+        };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) {
+        throw new ResultOwnerStateError(409, "State branch kept changing during result retraction request");
+      }
+      await pause(attempt);
+    }
+    throw new Error("unreachable result retraction request attempt");
   }
 
   async claimLegacyResult(request: LegacyResultClaimRequest): Promise<{
@@ -1176,18 +1960,34 @@ export class GitHubStateRepository {
     validateStateEvent(event);
     const identityPath = resultIdentityPath(verified.resultId);
     const overlayPath = resultOverlayPath(verified.resultId);
+    const amendmentPath = resultAmendmentPath(verified.resultId);
+    const releaseStatusPath = resultReleaseStatusPath(verified.resultId);
     const sourceId = await sourceRecordId(verified.baseResult);
     const sourcePath = sourceRecordPath(sourceId);
     const eventPath = stateEventPath(event);
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
       const snapshot = await this.#resultOwnerSnapshot();
-      const [guardEntry, overlayEntry, incomingSourceEntry, requestedEventEntry] = await Promise.all([
+      const [
+        guardEntry,
+        overlayEntry,
+        amendmentEntry,
+        releaseStatusEntry,
+        incomingSourceEntry,
+        requestedEventEntry,
+      ] = await Promise.all([
         readPathAt(this.#config, this.#fetcher, identityPath, snapshot.headSha),
         readPathAt(this.#config, this.#fetcher, overlayPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, amendmentPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, releaseStatusPath, snapshot.headSha),
         readPathAt(this.#config, this.#fetcher, sourcePath, snapshot.headSha),
         readPathAt(this.#config, this.#fetcher, eventPath, snapshot.headSha),
       ]);
-      if (guardEntry.found || overlayEntry.found) {
+      if (
+        guardEntry.found ||
+        overlayEntry.found ||
+        amendmentEntry.found ||
+        releaseStatusEntry.found
+      ) {
         let guard;
         try {
           guard = decodeResultIdentityGuard(guardEntry.found ? guardEntry.value : null);
@@ -1203,11 +2003,31 @@ export class GitHubStateRepository {
         } catch {
           throw new StateEventConflictError(identityPath);
         }
+        let amendment;
+        let releaseStatus;
+        try {
+          amendment = decodeResultAmendmentView(
+            amendmentEntry.found ? amendmentEntry.value : null,
+          );
+          releaseStatus = decodeResultReleaseStatusView(
+            releaseStatusEntry.found ? releaseStatusEntry.value : null,
+          );
+        } catch {
+          throw new StateEventConflictError(identityPath);
+        }
         if (
           guard.result_id !== verified.resultId ||
           overlay.result_id !== verified.resultId ||
           overlay.owner_login !== verified.ownerLogin ||
-          overlay.claim_event_id !== guard.authority_event_id
+          overlay.claim_event_id !== guard.authority_event_id ||
+          amendment.result_id !== verified.resultId ||
+          amendment.owner_login !== verified.ownerLogin ||
+          amendment.declared_model !== overlay.base_result.declared_model ||
+          amendment.authority_event_id !== guard.authority_event_id ||
+          amendment.base_problem_id !== overlay.base_result.problem_id ||
+          amendment.base_statement_revision !== overlay.base_result.statement_revision ||
+          releaseStatus.result_id !== verified.resultId ||
+          releaseStatus.authority_event_id !== guard.authority_event_id
         ) {
           throw new StateEventConflictError(identityPath);
         }
@@ -1279,9 +2099,30 @@ export class GitHubStateRepository {
       }
       if (incomingSourceEntry.found) throw new StateEventConflictError(sourcePath);
       if (requestedEventEntry.found) throw new StateEventConflictError(eventPath);
+      const occurredAt = Date.parse(request.occurredAt);
+      const eventTimestamp = uuidV7Timestamp(request.eventId);
+      if (
+        eventTimestamp > occurredAt ||
+        eventTimestamp < occurredAt - NEW_EVENT_CLOCK_WINDOW_MS
+      ) {
+        throw new ResultOwnerStateError(409, "Idempotency-Key does not match the current request clock");
+      }
       const guard = claimedGuard(verified.resultId, request.eventId);
       const overlay = claimedOverlay(verified, request.eventId, request.occurredAt);
       const source = await claimedSourceIndex(verified, request.eventId);
+      const amendment = initialResultAmendmentView({
+        resultId: verified.resultId,
+        ownerLogin: verified.ownerLogin,
+        declaredModel: verified.baseResult.declared_model,
+        problemId: verified.baseResult.problem_id,
+        statementRevision: verified.baseResult.statement_revision,
+        authorityEventId: request.eventId,
+        mutationEventId: request.eventId,
+      });
+      const releaseStatus = initialResultReleaseStatusView(
+        verified.resultId,
+        request.eventId,
+      );
       const commit = await createCommit(
         this.#config,
         this.#fetcher,
@@ -1291,6 +2132,8 @@ export class GitHubStateRepository {
           { path: identityPath, value: guard },
           { path: overlayPath, value: overlay },
           { path: sourcePath, value: source },
+          { path: amendmentPath, value: amendment },
+          { path: releaseStatusPath, value: releaseStatus },
         ],
         `Claim legacy result ${verified.resultId}`,
       );
@@ -1316,36 +2159,20 @@ export class GitHubStateRepository {
     resultId: string;
     mutationEventId: string;
   }> {
-    const identityPath = resultIdentityPath(request.resultId);
     const overlayPath = resultOverlayPath(request.resultId);
+    const amendmentPath = resultAmendmentPath(request.resultId);
     const requestedEventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
       const snapshot = await this.#resultOwnerSnapshot();
-      const [guard, overlay, requestedEventEntry] = await Promise.all([
-        readResultOwnerDocumentAt(
-          this.#config,
-          this.#fetcher,
-          identityPath,
-          snapshot.headSha,
-          decodeResultIdentityGuard,
-        ),
-        readResultOwnerDocumentAt(
-          this.#config,
-          this.#fetcher,
-          overlayPath,
-          snapshot.headSha,
-          decodeResultOverlay,
-        ),
+      const [context, requestedEventEntry] = await Promise.all([
+        this.#resultAmendmentAt(request.resultId, snapshot),
         readPathAt(this.#config, this.#fetcher, requestedEventPath, snapshot.headSha),
       ]);
+      const { overlay, releaseStatus, view } = context;
       if (
-        guard === null ||
-        overlay === null ||
-        guard.record_kind !== "claimed" ||
-        guard.result_id !== request.resultId ||
-        overlay.result_id !== request.resultId ||
-        guard.authority_event_id !== overlay.claim_event_id ||
-        overlay.owner_login !== request.ownerLogin
+        overlay?.result_id !== request.resultId ||
+        overlay.owner_login !== request.ownerLogin ||
+        view.owner_login !== request.ownerLogin
       ) {
         throw new ResultOwnerStateError(404, "legacy result claim was not found");
       }
@@ -1386,8 +2213,26 @@ export class GitHubStateRepository {
           commit: snapshot.headSha,
           created: false,
           resultId: request.resultId,
-          mutationEventId: overlay.mutation_event_id,
+          mutationEventId: view.mutation_event_id,
         };
+      }
+      if (new Set(["running", "published", "removed"]).has(releaseStatus.status)) {
+        throw new ResultOwnerStateError(409, "result release state forbids metadata backfill");
+      }
+      if (
+        view.problem_repair?.status === "pending" ||
+        view.retraction?.status === "pending" ||
+        view.retraction?.status === "approved" ||
+        view.retraction?.status === "retracted" ||
+        !view.leaderboard_eligible
+      ) {
+        throw new ResultOwnerStateError(409, "result has a conflicting amendment state");
+      }
+      if (
+        request.eventId <= view.mutation_event_id ||
+        Date.parse(request.occurredAt) <= Date.parse(context.mutationEvent.occurred_at)
+      ) {
+        throw new ResultOwnerStateError(409, "result metadata backfill does not follow the current mutation");
       }
       const event: ResultMetadataBackfilledEvent = {
         schema_version: 1,
@@ -1395,7 +2240,7 @@ export class GitHubStateRepository {
         event_type: "result.metadata_backfilled",
         occurred_at: request.occurredAt,
         subject_id: request.resultId,
-        causation_event_id: overlay.mutation_event_id,
+        causation_event_id: view.mutation_event_id,
         actor: { kind: "github", login: request.ownerLogin },
         payload: { production_metadata: request.productionMetadata },
       };
@@ -1406,12 +2251,19 @@ export class GitHubStateRepository {
         request.occurredAt,
         request.productionMetadata,
       );
+      const nextAmendment = decodeResultAmendmentView({
+        ...view,
+        mutation_event_id: request.eventId,
+      });
       const commit = await createCommit(
         this.#config,
         this.#fetcher,
         snapshot,
         [event],
-        [{ path: overlayPath, value: nextOverlay }],
+        [
+          { path: overlayPath, value: nextOverlay },
+          { path: amendmentPath, value: nextAmendment },
+        ],
         `Backfill legacy result metadata ${request.resultId}`,
       );
       if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {

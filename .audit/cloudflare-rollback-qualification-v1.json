@@ -7,11 +7,12 @@
     "server/src/github-broker.ts",
     "server/src/github-provider.ts",
     "server/src/github-state.ts",
+    "server/src/result-amendment.ts",
     "server/src/result-owner.ts",
     "server/src/state-event.ts",
     "server/src/submission-view.ts"
   ],
-  "lifecycle_callback_contract_sha256": "fc11fa19a778103caebdb8c323e2a4e9568a802b39a5285a16d7dcc40b1aeef1",
+  "lifecycle_callback_contract_sha256": "6c52a4cccf5848ae679cbacdfb17c7a75d73d45882139201d1899bd3dc780995",
   "replay_durable_object_migration_tags": [
     "v1",
     "v2"
