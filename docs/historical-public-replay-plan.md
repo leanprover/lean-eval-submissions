@@ -105,7 +105,9 @@ the aggregate's historical Results commit, resolves toolchains from public
 `leanprover/lean-eval` Git objects, builds the plan twice, compares the bytes,
 and uploads only the blocked plan and toolchain registry.
 
-The workflow has contents-read permission only. It does not enable intake or
+The workflow has explicit contents-read plus GitHub's implicit metadata-read
+permission and no write permission. Its default token is used to fetch the
+public benchmark checkout but is not persisted. It does not enable intake or
 replay, append State, fetch submission source, assume AWS authority, or invoke
 the replay controller. Publishing a plan therefore does not satisfy the corpus
 execution gate.
@@ -114,7 +116,8 @@ Protected run `32722572097` at immutable tag
 `lean-eval-dispatch/d08070843cb6241e2bbeece7da191f435f397db1`
 reconstructed the reviewed aggregate generated from submissions commit
 `5746f90`, producing 69 resolved submission groups, 135 accepted results, 25
-benchmark toolchains, and 246 still-pending groups. The exact source-free plan
+benchmark-commit/toolchain bindings spanning five exact Lean toolchain
+versions, and 246 still-pending groups. The exact source-free plan
 is permanently retained at
 `evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json`;
 its filename is its SHA-256. Its exact toolchain-registry input is retained at

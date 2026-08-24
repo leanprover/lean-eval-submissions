@@ -111,7 +111,7 @@ jobs:
 
       # actions/checkout pinned to v7.0.1. This checkout supplies public benchmark
       # Git objects only; the generated registry contains just commit/toolchain hashes.
-      - name: Fetch public benchmark history without credentials
+      - name: Fetch public benchmark history with a non-persisted read-only token
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval
