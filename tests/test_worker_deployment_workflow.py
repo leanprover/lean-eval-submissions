@@ -267,9 +267,18 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             self.assertIn("'.audit/**'", trigger)
             self.assertIn("'scripts/**'", trigger)
 
-        resolver = "'scripts/resolve_public_replay_github_evidence.py'"
+        offline_evidence_scripts = {
+            "aggregate_public_replay_github_evidence.py",
+            "build_public_replay_toolchain_registry.py",
+            "prepare_public_replay_plan.py",
+            "resolve_public_replay_github_evidence.py",
+        }
         for trigger in (pull_request, push):
-            self.assertIn(f"'!{resolver[1:]}", trigger)
+            self.assertEqual(
+                set(re.findall(r"'!scripts/([^']+)'", trigger)),
+                offline_evidence_scripts,
+            )
+        resolver = "'scripts/resolve_public_replay_github_evidence.py'"
         self.assertIn(resolver, promotion_push)
 
     def test_exact_main_ci_trigger_cannot_be_path_filtered(self) -> None:

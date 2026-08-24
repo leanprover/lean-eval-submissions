@@ -63,6 +63,8 @@ def adjudication_bytes(value: dict | None = None) -> tuple[dict, str]:
 
 def resolve(value, digest, client, workflow_registry=None, registry_digest=None, **kwargs):
     workflow_registry, computed = registry_bytes(workflow_registry)
+    if digest == "8" * 64:
+        digest = hashlib.sha256(canonical_document_bytes(value)).hexdigest()
     return _resolve(
         value,
         digest,
@@ -1252,13 +1254,81 @@ GPT-5.5 Codex
 
     def test_registry_value_and_exact_raw_digest_are_mandatory(self) -> None:
         value = request_value()
+        requests_digest = hashlib.sha256(
+            canonical_document_bytes(value)
+        ).hexdigest()
         with self.assertRaisesRegex(EvidenceError, "raw workflow registry"):
-            _resolve(value, "8" * 64, FakeClient())
+            _resolve(value, requests_digest, FakeClient())
         registry, _ = registry_bytes()
         with self.assertRaisesRegex(EvidenceError, "raw workflow registry"):
-            _resolve(value, "8" * 64, FakeClient(), registry)
-        with self.assertRaisesRegex(EvidenceError, "digest is invalid"):
-            _resolve(value, "8" * 64, FakeClient(), registry, 7)
+            _resolve(value, requests_digest, FakeClient(), registry)
+        with self.assertRaisesRegex(EvidenceError, "canonical or digest-bound"):
+            _resolve(value, requests_digest, FakeClient(), registry, 7)
+
+    def test_resolver_recomputes_both_canonical_input_digests(self) -> None:
+        value = request_value()
+        requests_digest = hashlib.sha256(
+            canonical_document_bytes(value)
+        ).hexdigest()
+        workflow_registry, workflow_digest = registry_bytes()
+        with self.assertRaisesRegex(
+            EvidenceError, "resolution requests are not canonical or digest-bound"
+        ):
+            _resolve(
+                value,
+                "f" * 64,
+                FakeClient(),
+                workflow_registry,
+                workflow_digest,
+            )
+        with self.assertRaisesRegex(
+            EvidenceError, "workflow definition registry is not canonical or digest-bound"
+        ):
+            _resolve(
+                value,
+                requests_digest,
+                FakeClient(),
+                workflow_registry,
+                "f" * 64,
+            )
+
+    def test_evidence_validator_recomputes_both_canonical_input_digests(self) -> None:
+        requests = request_value()
+        requests_digest = hashlib.sha256(
+            canonical_document_bytes(requests)
+        ).hexdigest()
+        workflow_registry, workflow_digest = registry_bytes()
+        evidence = _resolve(
+            requests,
+            requests_digest,
+            FakeClient(),
+            workflow_registry,
+            workflow_digest,
+        )
+
+        stale_requests = copy.deepcopy(evidence)
+        stale_requests["resolution_requests_sha256"] = "f" * 64
+        with self.assertRaisesRegex(
+            EvidenceError, "canonical resolution requests"
+        ):
+            _validate_evidence(
+                stale_requests,
+                requests,
+                workflow_registry,
+                workflow_digest,
+            )
+
+        stale_workflow = copy.deepcopy(evidence)
+        stale_workflow["workflow_definition_registry_sha256"] = "f" * 64
+        with self.assertRaisesRegex(
+            EvidenceError, "workflow registry is not canonical or digest-bound"
+        ):
+            _validate_evidence(
+                stale_workflow,
+                requests,
+                workflow_registry,
+                "f" * 64,
+            )
 
     def test_split_workflow_binds_evaluator_separately_from_benchmark(self) -> None:
         class SplitClient(FakeClient):
@@ -1725,7 +1795,9 @@ GPT-5.5 Codex
                 "source_repository": requests["source_repository"],
                 "source_commit": requests["source_commit"],
                 "inventory_sha256": requests["inventory_sha256"],
-                "resolution_requests_sha256": "c" * 64,
+                "resolution_requests_sha256": hashlib.sha256(
+                    canonical_document_bytes(requests)
+                ).hexdigest(),
                 "workflow_definition_registry_sha256": workflow_digest,
                 "legacy_adjudication_registry_sha256": adjudication_digest,
                 "request_count": 1,
@@ -1758,6 +1830,26 @@ GPT-5.5 Codex
             }
             _validate_evidence(
                 evidence,
+                requests,
+                workflow_registry,
+                workflow_digest,
+                adjudication_value,
+                adjudication_digest,
+            )
+            probe_indeterminate = copy.deepcopy(evidence)
+            probe_indeterminate["resolved_count"] = 0
+            probe_indeterminate["probe_indeterminate_count"] = 1
+            probe_indeterminate["pending_count"] = 1
+            resolution = probe_indeterminate["resolutions"][0]
+            resolution["status"] = "probe_indeterminate"
+            resolution["selected_issue_repository"] = repository
+            resolution["candidates"][0] = {
+                "issue_repository": repository,
+                "status": "probe_indeterminate",
+                "reason_code": "github_request_failed",
+            }
+            _validate_evidence(
+                probe_indeterminate,
                 requests,
                 workflow_registry,
                 workflow_digest,

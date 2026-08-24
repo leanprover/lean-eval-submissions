@@ -2041,14 +2041,29 @@ def resolve(
     shard_count: int = 1,
 ) -> dict[str, Any]:
     validate_requests(value)
+    canonical_requests_sha256 = hashlib.sha256(
+        canonical_document_bytes(value)
+    ).hexdigest()
+    if (
+        not isinstance(raw_sha256, str)
+        or DIGEST.fullmatch(raw_sha256) is None
+        or raw_sha256 != canonical_requests_sha256
+    ):
+        raise EvidenceError(
+            "resolution requests are not canonical or digest-bound"
+        )
     if workflow_registry is None or workflow_registry_sha256 is None:
         raise EvidenceError("exact raw workflow registry and digest are required")
     registry = validate_workflow_registry(workflow_registry)
     if (
         not isinstance(workflow_registry_sha256, str)
         or DIGEST.fullmatch(workflow_registry_sha256) is None
+        or workflow_registry_sha256
+        != hashlib.sha256(canonical_document_bytes(workflow_registry)).hexdigest()
     ):
-        raise EvidenceError("workflow definition registry digest is invalid")
+        raise EvidenceError(
+            "workflow definition registry is not canonical or digest-bound"
+        )
     if legacy_adjudication_registry is None and legacy_adjudication_registry_sha256 is None:
         adjudications: dict[str, dict[str, Any]] = {}
     elif (
@@ -2070,8 +2085,6 @@ def resolve(
             raise EvidenceError(
                 "legacy adjudication registry is not canonical or digest-bound"
             )
-    if not isinstance(raw_sha256, str) or DIGEST.fullmatch(raw_sha256) is None:
-        raise EvidenceError("resolution request digest is invalid")
     if (
         type(shard_index) is not int
         or type(shard_count) is not int
@@ -2262,13 +2275,23 @@ def validate_evidence(
         raise EvidenceError("GitHub evidence resolutions are not unique and sorted")
 
     validate_requests(requests_value)
+    canonical_requests_sha256 = hashlib.sha256(
+        canonical_document_bytes(requests_value)
+    ).hexdigest()
+    if value["resolution_requests_sha256"] != canonical_requests_sha256:
+        raise EvidenceError(
+            "GitHub evidence does not bind the canonical resolution requests"
+        )
     if workflow_registry is None or workflow_registry_sha256 is None:
         raise EvidenceError("exact raw workflow registry and digest are required")
     registry = validate_workflow_registry(workflow_registry)
-    if not isinstance(workflow_registry_sha256, str) or DIGEST.fullmatch(
-        workflow_registry_sha256
-    ) is None:
-        raise EvidenceError("workflow registry raw digest is invalid")
+    if (
+        not isinstance(workflow_registry_sha256, str)
+        or DIGEST.fullmatch(workflow_registry_sha256) is None
+        or workflow_registry_sha256
+        != hashlib.sha256(canonical_document_bytes(workflow_registry)).hexdigest()
+    ):
+        raise EvidenceError("workflow registry is not canonical or digest-bound")
     if value["workflow_definition_registry_sha256"] != workflow_registry_sha256:
         raise EvidenceError("GitHub evidence does not bind its workflow registry")
     registry_supplied = (
@@ -2375,10 +2398,22 @@ def validate_evidence(
             != CANDIDATE_REPOSITORIES
         ):
             raise EvidenceError(f"{label}.candidates are not canonical")
+        legacy_entry = adjudications.get(request_id)
         for candidate_index, candidate in enumerate(candidates):
             candidate_label = f"{label}.candidates[{candidate_index}]"
             status = candidate.get("status")
             base = {"issue_repository", "status"}
+            registered_legacy_repository = (
+                legacy_entry is not None
+                and candidate["issue_repository"]
+                == legacy_entry["issue"]["repository"]
+            )
+            if registered_legacy_repository and status not in (
+                matched_statuses | {"probe_indeterminate"}
+            ):
+                raise EvidenceError(
+                    f"{candidate_label} registered legacy candidate mode is invalid"
+                )
             if status in simple_statuses:
                 if set(candidate) != base:
                     raise EvidenceError(f"{candidate_label} fields are not closed")
@@ -2572,7 +2607,6 @@ def validate_evidence(
                 matched_fields.add("source_probe_reason_code")
             if set(candidate) != matched_fields:
                 raise EvidenceError(f"{candidate_label} fields are not closed")
-            legacy_entry = adjudications.get(request_id)
             is_legacy = legacy_digest is not None
             legacy_repository = (
                 legacy_entry is not None

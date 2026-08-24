@@ -164,7 +164,9 @@ class AggregatePublicReplayEvidenceTests(unittest.TestCase):
             )
         mixed = copy.deepcopy(self.shards[1])
         mixed["resolution_requests_sha256"] = "9" * 64
-        with self.assertRaisesRegex(AggregationError, "identity differs"):
+        with self.assertRaisesRegex(
+            AggregationError, "canonical resolution requests|identity differs"
+        ):
             aggregate(
                 self.requests,
                 self.requests_digest,
@@ -278,6 +280,86 @@ class AggregatePublicReplayEvidenceTests(unittest.TestCase):
                 digest,
                 self.registry,
                 self.registry_digest,
+            )
+
+    def test_old_ordinary_aggregate_cannot_be_laundered_with_registry_digest(self) -> None:
+        fixture = json.loads(
+            (ROOT / "tests/fixtures/legacy-gist-result-records-v1.json").read_text()
+        )[0]
+        request = fixture["request"]
+        requests = {
+            "schema_version": 1,
+            "kind": "historical_public_replay_resolution_requests",
+            "source_repository": "leanprover/lean-eval-submissions",
+            "source_commit": "a" * 40,
+            "inventory_sha256": "b" * 64,
+            "request_count": 1,
+            "result_count": len(request["results"]),
+            "requests": [request],
+        }
+        requests_digest = hashlib.sha256(
+            canonical_document_bytes(requests)
+        ).hexdigest()
+        resolution = {
+            "request_id": request["request_id"],
+            "status": "evidence_missing",
+            "selected_issue_repository": None,
+            "candidates": [
+                {"issue_repository": repository, "status": "issue_not_found"}
+                for repository in request["candidate_issue_repositories"]
+            ],
+        }
+        old_shard = {
+            "schema_version": 1,
+            "kind": "historical_public_replay_github_evidence",
+            "source_repository": requests["source_repository"],
+            "source_commit": requests["source_commit"],
+            "inventory_sha256": requests["inventory_sha256"],
+            "resolution_requests_sha256": requests_digest,
+            "workflow_definition_registry_sha256": self.registry_digest,
+            "request_count": 1,
+            "result_count": len(request["results"]),
+            "shard_index": 0,
+            "shard_count": 1,
+            "shard_request_count": 1,
+            "shard_result_count": len(request["results"]),
+            "resolved_count": 0,
+            "source_unavailable_count": 0,
+            "source_indeterminate_count": 0,
+            "probe_indeterminate_count": 0,
+            "timing_indeterminate_count": 0,
+            "workflow_contract_unreviewed_count": 0,
+            "pending_count": 1,
+            "resolutions": [resolution],
+        }
+        old_aggregate = aggregate(
+            requests,
+            requests_digest,
+            self.registry,
+            self.registry_digest,
+            [
+                (
+                    hashlib.sha256(
+                        canonical_document_bytes(old_shard)
+                    ).hexdigest(),
+                    old_shard,
+                )
+            ],
+        )
+        adjudications, adjudication_digest = adjudication_bytes()
+        laundered = copy.deepcopy(old_aggregate)
+        laundered["legacy_adjudication_registry_sha256"] = adjudication_digest
+        with self.assertRaisesRegex(
+            AggregationError, "registered legacy candidate mode is invalid"
+        ):
+            validate_aggregate(
+                laundered,
+                requests,
+                requests_digest,
+                self.registry,
+                self.registry_digest,
+                adjudications,
+                adjudication_digest,
             )
 
     def test_published_aggregate_schema_is_closed(self) -> None:
