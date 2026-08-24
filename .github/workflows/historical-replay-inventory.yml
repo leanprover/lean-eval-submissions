@@ -1,0 +1,166 @@
+name: Build historical replay inventory
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Full protected-main commit selected through its immutable dispatch tag
+        required: true
+        type: string
+      expected_results_store_sha256:
+        description: Reviewed canonical results-store digest
+        required: true
+        type: string
+      expected_result_count:
+        description: Reviewed accepted-result count
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: historical-replay-inventory
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Require the exact immutable protected dispatch tag
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_COMMIT"
+          test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
+          remote_commit=$(git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT" | cut -f1)
+          test "$remote_commit" = "$EXPECTED_COMMIT"
+
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_commit }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      # actions/setup-python pinned to v7.0.0.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Verify the exact clean source checkout
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          test -d results
+          test ! -L results
+
+      - name: Build and independently recompute the source-free inventory
+        id: inventory
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          EXPECTED_COUNT: ${{ inputs.expected_result_count }}
+          EXPECTED_DIGEST: ${{ inputs.expected_results_store_sha256 }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_COUNT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXPECTED_DIGEST" =~ ^[0-9a-f]{64}$ ]]
+          artifact="$RUNNER_TEMP/historical-replay-inventory.json"
+          recomputed="$RUNNER_TEMP/historical-replay-inventory.recomputed.json"
+          python scripts/inventory_historical_replay.py \
+            --results-root results \
+            --source-commit "$EXPECTED_COMMIT" \
+            --output "$artifact"
+          python scripts/inventory_historical_replay.py \
+            --results-root results \
+            --source-commit "$EXPECTED_COMMIT" \
+            --output "$recomputed"
+          cmp "$artifact" "$recomputed"
+          ARTIFACT="$artifact" python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+
+          path = pathlib.Path(os.environ["ARTIFACT"])
+          raw = path.read_bytes()
+          value = json.loads(raw)
+          assert set(value) == {
+              "schema_version",
+              "source_repository",
+              "source_commit",
+              "results_store_sha256",
+              "result_count",
+              "classification_counts",
+              "entries",
+          }
+          assert value["schema_version"] == 1
+          assert value["source_repository"] == "leanprover/lean-eval-submissions"
+          assert value["source_commit"] == os.environ["EXPECTED_COMMIT"]
+          assert value["results_store_sha256"] == os.environ["EXPECTED_DIGEST"]
+          assert str(value["result_count"]) == os.environ["EXPECTED_COUNT"]
+          counts = value["classification_counts"]
+          assert set(counts) == {
+              "public_source_probe_pending",
+              "private_archive_migration_pending",
+          }
+          assert sum(counts.values()) == value["result_count"]
+          entries = value["entries"]
+          identities = [entry["result_id"] for entry in entries]
+          assert len(entries) == value["result_count"]
+          assert identities == sorted(set(identities))
+          for entry in entries:
+              source = entry["source"]
+              if source["visibility"] == "private":
+                  assert set(source) == {"kind", "visibility", "readiness"}
+                  assert source["readiness"] == "private_archive_migration_pending"
+              else:
+                  assert source["visibility"] == "public"
+                  assert set(source) == {
+                      "kind", "visibility", "readiness", "repository", "commit"
+                  }
+                  assert source["readiness"] == "public_source_probe_pending"
+          canonical = (
+              json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+          ).encode("utf-8")
+          assert raw == canonical
+          print(hashlib.sha256(raw).hexdigest())
+          PY
+          artifact_sha256=$(sha256sum "$artifact" | cut -d' ' -f1)
+          echo "artifact_sha256=$artifact_sha256" >> "$GITHUB_OUTPUT"
+          rm -f "$recomputed"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      # actions/upload-artifact pinned to v7.0.1.
+      - name: Upload only the source-free inventory
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-replay-inventory-${{ inputs.expected_commit }}
+          path: ${{ runner.temp }}/historical-replay-inventory.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record reviewed inventory identities
+        env:
+          ARTIFACT_SHA256: ${{ steps.inventory.outputs.artifact_sha256 }}
+          RESULT_COUNT: ${{ inputs.expected_result_count }}
+          RESULTS_STORE_SHA256: ${{ inputs.expected_results_store_sha256 }}
+          SOURCE_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          {
+            echo '### Historical replay inventory'
+            echo
+            echo "- source commit: \`$SOURCE_COMMIT\`"
+            echo "- canonical store digest: \`$RESULTS_STORE_SHA256\`"
+            echo "- accepted result count: \`$RESULT_COUNT\`"
+            echo "- artifact SHA-256: \`$ARTIFACT_SHA256\`"
+            echo '- artifact contains no private source repository or commit locator'
+          } >> "$GITHUB_STEP_SUMMARY"
