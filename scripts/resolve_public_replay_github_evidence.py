@@ -19,7 +19,7 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
-from fetch_submission import FetchError, parse_issue_body, parse_source_url
+from fetch_submission import GIST_ID_RE, FetchError, parse_issue_body, parse_source_url
 
 
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
@@ -41,6 +41,20 @@ MAX_WORKFLOW_BYTES = 512 * 1024
 MAX_REPORTED_PASSES = 4096
 MAX_GET_CACHE_ENTRIES = 512
 MAX_PAGE_CACHE_ENTRIES = 64
+MAX_PUBLIC_GIST_API_REQUESTS_PER_SHARD = 40
+SOURCE_PROBE_REASON_CODES = frozenset(
+    {
+        "source_probe_response_too_large",
+        "source_probe_response_invalid",
+        "source_repository_identity_changed",
+        "public_gist_budget_exhausted",
+        "github_redirect_refused",
+        "github_legal_restriction",
+        "github_rate_or_permission_boundary",
+        "github_http_error",
+        "github_request_failed",
+    }
+)
 COMMENT_ACCEPTANCE_LAG = datetime.timedelta(seconds=10)
 RUN_COMPLETION_LAG = datetime.timedelta(minutes=5)
 CANDIDATE_REPOSITORIES = [
@@ -157,11 +171,12 @@ class GitHubClient:
             urllib.request.ProxyHandler({}), _RejectRedirects()
         )
         self._get_cache: collections.OrderedDict[
-            str, tuple[Any | None, int]
+            tuple[str, bool], tuple[Any | None, int]
         ] = collections.OrderedDict()
         self._page_cache: collections.OrderedDict[
             tuple[str, str | None], list[Any]
         ] = collections.OrderedDict()
+        self._public_gist_api_requests = 0
 
     @staticmethod
     def _cache_put(
@@ -172,7 +187,7 @@ class GitHubClient:
         while len(cache) > limit:
             cache.popitem(last=False)
 
-    def get(self, path: str) -> tuple[Any | None, int]:
+    def _get(self, path: str, *, authenticated: bool) -> tuple[Any | None, int]:
         parsed = urllib.parse.urlsplit(path)
         if (
             not path.startswith("/")
@@ -188,20 +203,28 @@ class GitHubClient:
             not path.startswith("/gists/")
             and "per_page=100&page=" not in path
         )
-        if cacheable and path in self._get_cache:
-            self._get_cache.move_to_end(path)
-            return self._get_cache[path]
+        cache_key = (path, authenticated)
+        if cacheable and cache_key in self._get_cache:
+            self._get_cache.move_to_end(cache_key)
+            return self._get_cache[cache_key]
         url = API_ROOT + path
-        for attempt in range(4):
-            request = urllib.request.Request(
-                url,
-                headers={
-                    "Accept": "application/vnd.github+json",
-                    "Authorization": f"Bearer {self.token}",
-                    "User-Agent": "lean-eval-historical-public-replay",
-                    "X-GitHub-Api-Version": "2022-11-28",
-                },
-            )
+        attempt_count = 4 if authenticated else 1
+        for attempt in range(attempt_count):
+            if not authenticated:
+                if (
+                    self._public_gist_api_requests
+                    >= MAX_PUBLIC_GIST_API_REQUESTS_PER_SHARD
+                ):
+                    raise ProbeIndeterminate("public_gist_budget_exhausted")
+                self._public_gist_api_requests += 1
+            headers = {
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "lean-eval-historical-public-replay",
+                "X-GitHub-Api-Version": "2022-11-28",
+            }
+            if authenticated:
+                headers["Authorization"] = f"Bearer {self.token}"
+            request = urllib.request.Request(url, headers=headers)
             try:
                 with self._opener.open(request, timeout=30) as response:
                     if response.status != 200:
@@ -228,7 +251,7 @@ class GitHubClient:
                     result = (json.loads(raw), response.status)
                     if cacheable:
                         self._cache_put(
-                            self._get_cache, path, result, MAX_GET_CACHE_ENTRIES
+                            self._get_cache, cache_key, result, MAX_GET_CACHE_ENTRIES
                         )
                     return result
             except urllib.error.HTTPError as error:
@@ -237,7 +260,10 @@ class GitHubClient:
                         result = (None, 404)
                         if cacheable:
                             self._cache_put(
-                                self._get_cache, path, result, MAX_GET_CACHE_ENTRIES
+                                self._get_cache,
+                                cache_key,
+                                result,
+                                MAX_GET_CACHE_ENTRIES,
                             )
                         return result
                     if error.code in {301, 302, 303, 307, 308}:
@@ -248,21 +274,41 @@ class GitHubClient:
                         retry_after = error.headers.get("Retry-After")
                         if retry_after is not None and retry_after.isdigit():
                             delay = int(retry_after)
-                            if delay <= 30 and attempt < 3:
+                            if delay <= 30 and attempt < attempt_count - 1:
                                 time.sleep(delay)
                                 continue
                         raise ProbeIndeterminate(
                             "github_rate_or_permission_boundary"
                         ) from error
-                    if error.code not in {429, 500, 502, 503, 504} or attempt == 3:
+                    if (
+                        error.code not in {429, 500, 502, 503, 504}
+                        or attempt == attempt_count - 1
+                    ):
                         raise ProbeIndeterminate("github_http_error") from error
                 finally:
                     error.close()
             except (OSError, TimeoutError, UnicodeError, json.JSONDecodeError) as error:
-                if attempt == 3:
+                if attempt == attempt_count - 1:
                     raise ProbeIndeterminate("github_request_failed") from error
             time.sleep(2**attempt)
         raise AssertionError("unreachable")
+
+    def get(self, path: str) -> tuple[Any | None, int]:
+        return self._get(path, authenticated=True)
+
+    def get_public_gist(self, gist_id: str, commit: str) -> tuple[Any | None, int]:
+        if (
+            not isinstance(gist_id, str)
+            or re.fullmatch(GIST_ID_RE, gist_id) is None
+            or not isinstance(commit, str)
+            or COMMIT.fullmatch(commit) is None
+        ):
+            raise EvidenceError("public Gist probe identity is invalid")
+        # GitHub's repository-scoped Actions installation token cannot read the
+        # Gist API. Public Gist metadata needs no credential, so omit the token
+        # entirely rather than broadening workflow authority or leaking the
+        # repository credential to an API surface outside its repository.
+        return self._get(f"/gists/{gist_id}/{commit}", authenticated=False)
 
     def pages(self, path: str, item_key: str | None = None) -> list[Any]:
         cache_key = (path, item_key)
@@ -379,26 +425,48 @@ def _probe_source(client: GitHubClient, request: dict[str, Any]) -> dict[str, An
         else:
             # No content-free REST metadata endpoint exists for a gist revision.
             # Parse a bounded public response transiently and project no content.
-            value, status = client.get(
-                "/gists/{}/{}".format(urllib.parse.quote(name, safe=""), commit)
-            )
+            value, status = client.get_public_gist(name, commit)
+            if status == 404:
+                return {"status": "unavailable", "commit_url": url}
+            if status != 200 or not isinstance(value, dict):
+                return {
+                    "status": "indeterminate",
+                    "reason_code": "source_probe_response_invalid",
+                    "commit_url": url,
+                }
             history = value.get("history", []) if isinstance(value, dict) else []
             owner_value = value.get("owner") if isinstance(value, dict) else None
             actual_owner = (
                 owner_value.get("login") if isinstance(owner_value, dict) else None
             )
-            available = (
-                status == 200
-                and isinstance(value, dict)
-                and value.get("id") == name
-                and value.get("public") is True
-                and isinstance(actual_owner, str)
-                and actual_owner.casefold() == owner.casefold()
-                and any(
-                    isinstance(item, dict) and item.get("version") == commit
-                    for item in history
-                )
-            )
+            if (
+                value.get("id") != name
+                or not isinstance(actual_owner, str)
+                or actual_owner.casefold() != owner.casefold()
+            ):
+                return {
+                    "status": "indeterminate",
+                    "reason_code": "source_repository_identity_changed",
+                    "commit_url": url,
+                }
+            if value.get("public") is False:
+                return {"status": "unavailable", "commit_url": url}
+            if value.get("public") is not True:
+                return {
+                    "status": "indeterminate",
+                    "reason_code": "source_probe_response_invalid",
+                    "commit_url": url,
+                }
+            if not isinstance(history, list) or not any(
+                isinstance(item, dict) and item.get("version") == commit
+                for item in history
+            ):
+                return {
+                    "status": "indeterminate",
+                    "reason_code": "source_probe_response_invalid",
+                    "commit_url": url,
+                }
+            available = True
     except ResponseTooLarge:
         return {
             "status": "indeterminate",
@@ -912,7 +980,12 @@ def validate_requests(value: Any) -> None:
             or source.get("visibility") != "public"
         ):
             raise EvidenceError("request source identity is invalid")
-        _canonical_repository(source["repository"], "request source repository")
+        source_repository = _canonical_repository(
+            source["repository"], "request source repository"
+        )
+        _, source_name = source_repository.split("/", 1)
+        if source["kind"] == "gist" and re.fullmatch(GIST_ID_RE, source_name) is None:
+            raise EvidenceError("request source identity is invalid")
         benchmark = request["benchmark"]
         if (
             not isinstance(benchmark, dict)
@@ -1050,6 +1123,14 @@ def shard_requests(
     return ordered[start:end]
 
 
+def _require_public_gist_probe_budget(requests: list[dict[str, Any]]) -> None:
+    public_gist_api_requests = len(CANDIDATE_REPOSITORIES) * sum(
+        request["source"]["kind"] == "gist" for request in requests
+    )
+    if public_gist_api_requests > MAX_PUBLIC_GIST_API_REQUESTS_PER_SHARD:
+        raise EvidenceError("public Gist probe shard exceeds the anonymous API budget")
+
+
 def resolve(
     value: dict[str, Any],
     raw_sha256: str,
@@ -1078,6 +1159,7 @@ def resolve(
     ):
         raise EvidenceError("shard index/count are invalid")
     selected_requests = shard_requests(value["requests"], shard_index, shard_count)
+    _require_public_gist_probe_budget(selected_requests)
     resolutions: list[dict[str, Any]] = []
     counts: collections.Counter[str] = collections.Counter()
     for request in selected_requests:
@@ -1639,15 +1721,7 @@ def validate_evidence(
                 raise EvidenceError(f"{candidate_label} workflow contract is invalid")
             if status == "matched_source_indeterminate" and candidate.get(
                 "source_probe_reason_code"
-            ) not in {
-                "source_probe_response_too_large",
-                "source_repository_identity_changed",
-                "github_redirect_refused",
-                "github_legal_restriction",
-                "github_rate_or_permission_boundary",
-                "github_http_error",
-                "github_request_failed",
-            }:
+            ) not in SOURCE_PROBE_REASON_CODES:
                 raise EvidenceError(f"{candidate_label} source probe reason is invalid")
 
             repository = candidate["issue_repository"]

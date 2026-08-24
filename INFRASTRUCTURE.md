@@ -180,8 +180,8 @@ submission IDs, State events, archive locators, or the public API.
 ## Deployment automation
 
 [`deploy-worker.yml`](.github/workflows/deploy-worker.yml) is the only normal
-deployment path. A change to the Worker, submission workflow, trusted workflow
-scripts, or archive recipient set merged to protected `main` runs:
+deployment path. A change to the Worker, submission workflow, trusted runtime
+workflow scripts, or archive recipient set merged to protected `main` runs:
 
 1. locked dependency install, generated binding types, typecheck, lint, tests,
    dependency audit, and Wrangler dry run;
@@ -427,9 +427,10 @@ After its Worker checks and exact protected-main CI, `deploy-worker.yml`
 promotes commits that change the running Worker, its directly dispatched
 workflows, or the staging-only intake and replay workflows whose preconditions
 are bound to the live staging commit. The deployment-free
-`promote-workflow-dispatch-ref.yml` path covers only tag-consuming operational
-workflows; it waits for exact protected-main CI and cannot invoke Wrangler or a
-deployment. Both minters enter the reviewer-gated
+`promote-workflow-dispatch-ref.yml` path covers tag-consuming operational
+workflows and the source-only public-evidence resolver they run; it waits for
+exact protected-main CI and cannot invoke Wrangler or a deployment. Both
+minters enter the reviewer-gated
 `submission-dispatch-promotion` environment and use only a job-scoped
 `GITHUB_TOKEN` with `contents: write` plus read-only Actions access for the
 exact-main CI proof. A 32-byte lowercase-hex

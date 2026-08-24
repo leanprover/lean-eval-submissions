@@ -15,7 +15,9 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from resolve_public_replay_github_evidence import (  # noqa: E402
     EvidenceError,
     GitHubClient,
+    MAX_PUBLIC_GIST_API_REQUESTS_PER_SHARD,
     ProbeIndeterminate,
+    _require_public_gist_probe_budget,
     _RejectRedirects,
     _read_bounded,
     _workflow_binding,
@@ -614,9 +616,11 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
     def test_response_caches_are_lru_bounded(self) -> None:
         client = GitHubClient("token")
         for index in range(600):
-            client._cache_put(client._get_cache, str(index), (index, 200), 512)
+            client._cache_put(
+                client._get_cache, (str(index), True), (index, 200), 512
+            )
         self.assertEqual(len(client._get_cache), 512)
-        self.assertNotIn("0", client._get_cache)
+        self.assertNotIn(("0", True), client._get_cache)
         for index in range(80):
             client._cache_put(client._page_cache, (str(index), None), [], 64)
         self.assertEqual(len(client._page_cache), 64)
@@ -637,12 +641,186 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
                 return b'{"id":"fixture"}'
 
         client = GitHubClient("token")
-        client._opener.open = mock.Mock(side_effect=[Response(), Response()])
-        path = "/gists/fixture/" + "a" * 40
-        self.assertEqual(client.get(path)[1], 200)
-        self.assertEqual(client.get(path)[1], 200)
+        client._opener.open = mock.Mock(
+            side_effect=[Response(), Response(), Response()]
+        )
+        gist_id = "a" * 32
+        commit = "b" * 40
+        path = f"/gists/{gist_id}/{commit}"
+        self.assertEqual(client.get_public_gist(gist_id, commit)[1], 200)
+        self.assertEqual(client.get_public_gist(gist_id, commit)[1], 200)
         self.assertEqual(client._opener.open.call_count, 2)
         self.assertNotIn(path, client._get_cache)
+
+        for call in client._opener.open.call_args_list:
+            request = call.args[0]
+            self.assertIsNone(request.get_header("Authorization"))
+
+        self.assertEqual(client.get("/repos/leanprover/lean-eval")[1], 200)
+        authenticated = client._opener.open.call_args_list[-1].args[0]
+        self.assertEqual(authenticated.get_header("Authorization"), "Bearer token")
+
+        client._public_gist_api_requests = MAX_PUBLIC_GIST_API_REQUESTS_PER_SHARD
+        with self.assertRaisesRegex(
+            ProbeIndeterminate, "public_gist_budget_exhausted"
+        ):
+            client.get_public_gist(gist_id, commit)
+        self.assertEqual(client._opener.open.call_count, 3)
+
+        transient = GitHubClient("token")
+        transient._opener.open = mock.Mock(side_effect=TimeoutError())
+        with self.assertRaisesRegex(ProbeIndeterminate, "github_request_failed"):
+            transient.get_public_gist(gist_id, commit)
+        self.assertEqual(transient._opener.open.call_count, 1)
+        self.assertEqual(transient._public_gist_api_requests, 1)
+
+    def test_public_gist_probe_rejects_noncanonical_identity(self) -> None:
+        client = GitHubClient("token")
+        for gist_id, commit in (
+            ("", "b" * 40),
+            ("g" * 20, "b" * 40),
+            ("A" * 32, "b" * 40),
+            ("a" * 32, "b" * 39),
+            ("a" * 32, "B" * 40),
+        ):
+            with self.subTest(gist_id=gist_id, commit=commit):
+                with self.assertRaisesRegex(EvidenceError, "Gist probe identity"):
+                    client.get_public_gist(gist_id, commit)
+
+        client._opener.open = mock.MagicMock()
+        client._opener.open.return_value.__enter__.return_value = mock.Mock(
+            status=200,
+            headers={},
+            read=mock.Mock(return_value=b'{"id":"fixture"}'),
+        )
+        self.assertEqual(client.get_public_gist("a" * 20, "b" * 40)[1], 200)
+
+    def test_gist_resolution_uses_the_public_token_free_probe(self) -> None:
+        gist_id = "a" * 32
+        value = request_value()
+        value["requests"][0]["source"] = {
+            "kind": "gist",
+            "repository": f"A-M-Berns/{gist_id}",
+            "commit": SOURCE,
+            "visibility": "public",
+        }
+        refresh_request_id(value)
+
+        class GistClient(FakeClient):
+            public_probe = None
+
+            def __init__(self, response, status=200):
+                super().__init__()
+                self.response = response
+                self.status = status
+
+            def get(self, path):
+                if path == "/repos/leanprover/lean-eval/issues/144":
+                    value = issue()
+                    value["body"] = """### Submission URL
+
+https://gist.github.com/A-M-Berns/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/2222222222222222222222222222222222222222
+
+### Model
+
+GPT-5.5 Codex
+"""
+                    return value, 200
+                return super().get(path)
+
+            def get_public_gist(self, selected_gist_id, commit):
+                self.public_probe = (selected_gist_id, commit)
+                return self.response, self.status
+
+        available = {
+            "id": gist_id,
+            "public": True,
+            "owner": {"login": "A-M-Berns"},
+            "history": [{"version": SOURCE}],
+        }
+        client = GistClient(available)
+        output = resolve(value, "8" * 64, client)
+        self.assertEqual(output["resolutions"][0]["status"], "resolved")
+        self.assertEqual(client.public_probe, (gist_id, SOURCE))
+
+        cases = (
+            (
+                {**available, "id": "b" * 32},
+                200,
+                "source_probe_indeterminate",
+                "source_repository_identity_changed",
+            ),
+            (
+                {**available, "id": "b" * 32, "public": False},
+                200,
+                "source_probe_indeterminate",
+                "source_repository_identity_changed",
+            ),
+            (
+                {**available, "owner": {"login": "renamed"}},
+                200,
+                "source_probe_indeterminate",
+                "source_repository_identity_changed",
+            ),
+            (
+                {**available, "history": []},
+                200,
+                "source_probe_indeterminate",
+                "source_probe_response_invalid",
+            ),
+            (
+                {key: item for key, item in available.items() if key != "public"},
+                200,
+                "source_probe_indeterminate",
+                "source_probe_response_invalid",
+            ),
+            (
+                {**available, "public": False},
+                200,
+                "source_unavailable",
+                None,
+            ),
+            (None, 404, "source_unavailable", None),
+        )
+        for response, status, expected, reason in cases:
+            with self.subTest(expected=expected, reason=reason):
+                output = resolve(value, "8" * 64, GistClient(response, status))
+                resolution = output["resolutions"][0]
+                self.assertEqual(resolution["status"], expected)
+                candidate = resolution["candidates"][0]
+                if reason is not None:
+                    self.assertEqual(candidate["source_probe_reason_code"], reason)
+                validate_evidence(output, value)
+
+    def test_public_gist_probe_shard_has_an_anonymous_api_budget(self) -> None:
+        template = request_value()
+        requests = []
+        for index in range(21):
+            item_value = copy.deepcopy(template)
+            item = item_value["requests"][0]
+            item["issue_number"] = 1000 + index
+            item["source"] = {
+                "kind": "gist",
+                "repository": f"A-M-Berns/{index + 1:032x}",
+                "commit": SOURCE,
+                "visibility": "public",
+            }
+            item["results"] = [
+                {
+                    "owner": "A-M-Berns",
+                    "problem_id": f"problem_{index}",
+                    "result_id": "r2_" + f"{index:064x}",
+                    "statement_revision": 1,
+                }
+            ]
+            refresh_request_id(item_value)
+            requests.append(item)
+        template["requests"] = sorted(requests, key=lambda item: item["request_id"])
+        template["request_count"] = len(requests)
+        template["result_count"] = len(requests)
+        _require_public_gist_probe_budget(template["requests"][:20])
+        with self.assertRaisesRegex(EvidenceError, "anonymous API budget"):
+            resolve(template, "8" * 64, FakeClient())
 
     def test_bounded_input_and_exclusive_output_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

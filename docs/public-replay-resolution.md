@@ -116,6 +116,13 @@ for repeated workflow definitions and daily run lists, but never gist bodies. It
 only repository contents, issues, and Actions read authority; source fetching,
 State/Results writes, deployments, and secrets are outside that boundary.
 
+Public Gist probes omit that repository token and make one anonymous attempt.
+Each shard is rejected before probing unless it contains at most 20 Gist
+requests, bounding the two historical issue candidates to at most 40 anonymous
+API calls and retaining headroom below GitHub's anonymous hourly limit. Choose a
+larger shard count if this preflight fails; do not run a partial over-budget
+shard.
+
 After every shard for one reviewed `shard_count` has completed, download the
 sanitized artifacts and aggregate them offline from the same clean protected
 commit:

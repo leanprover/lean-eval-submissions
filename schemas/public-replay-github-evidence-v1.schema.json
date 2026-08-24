@@ -312,7 +312,9 @@
             "source_probe_reason_code": {
               "enum": [
                 "source_probe_response_too_large",
-                "source_repository_identity_changed", "github_redirect_refused",
+                "source_probe_response_invalid",
+                "source_repository_identity_changed", "public_gist_budget_exhausted",
+                "github_redirect_refused",
                 "github_legal_restriction", "github_rate_or_permission_boundary",
                 "github_http_error", "github_request_failed"
               ]
