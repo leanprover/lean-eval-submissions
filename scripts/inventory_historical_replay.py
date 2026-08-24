@@ -16,10 +16,15 @@ from results_schema import (
     read_results_file,
 )
 
-
 COMMIT = re.compile(r"[0-9a-f]{40}")
 RESULT_PATH = re.compile(r"results/[A-Za-z0-9][A-Za-z0-9_.-]*\.json")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
+MAX_ROOT_ENTRIES = 4096
+MAX_RESULTS_FILE_BYTES = 1024 * 1024
+MAX_RESULTS_STORE_BYTES = 32 * 1024 * 1024
+MAX_RECORDS_PER_FILE = 4096
+MAX_TOTAL_RECORDS = 10_000
+MAX_INVENTORY_BYTES = 16 * 1024 * 1024
 
 
 class InventoryError(ValueError):
@@ -32,6 +37,10 @@ def _entry(
     relative_path: str,
     record: dict[str, Any],
 ) -> dict[str, Any]:
+    if len(user) > 100 or len(relative_path) > 255:
+        raise InventoryError("result owner or path exceeds the inventory limit")
+    if len(record["problem_id"]) > 256:
+        raise InventoryError("problem ID exceeds the inventory limit")
     submission = record["submission"]
     public = submission["public"]
     source = {
@@ -47,6 +56,7 @@ def _entry(
         repository = submission["repo"]
         if (
             not isinstance(repository, str)
+            or len(repository) > 201
             or REPOSITORY.fullmatch(repository) is None
             or any(segment in {".", ".."} for segment in repository.split("/"))
         ):
@@ -78,21 +88,37 @@ def inventory(results_root: pathlib.Path, source_commit: str) -> dict[str, Any]:
     canonical_files: list[tuple[str, dict[str, Any]]] = []
     entries: list[dict[str, Any]] = []
     seen: dict[str, str] = {}
-    paths = sorted(results_root.iterdir(), key=lambda path: path.name)
+    paths: list[pathlib.Path] = []
+    for path in results_root.iterdir():
+        if len(paths) >= MAX_ROOT_ENTRIES:
+            raise InventoryError("results root exceeds the entry-count limit")
+        paths.append(path)
+    paths.sort(key=lambda path: path.name)
     if not paths:
         raise InventoryError("results root contains no JSON files")
+    total_bytes = 0
     for path in paths:
-        if (
-            path.name == ".gitkeep"
-            and path.is_file()
-            and not path.is_symlink()
-            and path.read_bytes() in {b"", b"\n"}
-        ):
+        if path.name == ".gitkeep":
+            if (
+                path.is_symlink()
+                or not path.is_file()
+                or path.stat().st_size > 1
+                or path.read_bytes() not in {b"", b"\n"}
+            ):
+                raise InventoryError("results .gitkeep is not canonical")
             continue
         if path.is_symlink() or not path.is_file() or path.suffix != ".json":
             raise InventoryError(
                 f"results root entry is not one canonical JSON file: {path.name}"
             )
+        size = path.stat().st_size
+        if not 0 < size <= MAX_RESULTS_FILE_BYTES:
+            raise InventoryError(
+                f"results file exceeds the size limit: {path.name}"
+            )
+        total_bytes += size
+        if total_bytes > MAX_RESULTS_STORE_BYTES:
+            raise InventoryError("results store exceeds the total size limit")
         relative = f"results/{path.name}"
         if RESULT_PATH.fullmatch(relative) is None:
             raise InventoryError(f"results path is not canonical: {relative}")
@@ -106,6 +132,10 @@ def inventory(results_root: pathlib.Path, source_commit: str) -> dict[str, Any]:
             raise InventoryError(
                 f"results filename stem does not bind user: {relative}"
             )
+        if len(data["results"]) > MAX_RECORDS_PER_FILE:
+            raise InventoryError(f"results file exceeds the record limit: {relative}")
+        if len(entries) + len(data["results"]) > MAX_TOTAL_RECORDS:
+            raise InventoryError("results store exceeds the total record limit")
         canonical_files.append((relative, data))
         for record in data["results"]:
             result_id = record["result_id"]
@@ -142,11 +172,24 @@ def inventory(results_root: pathlib.Path, source_commit: str) -> dict[str, Any]:
     }
 
 
+def canonical_inventory_bytes(value: Any) -> bytes:
+    try:
+        encoded = (
+            json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+    except (TypeError, ValueError, UnicodeEncodeError) as error:
+        raise InventoryError(f"inventory is not canonicalizable: {error}") from error
+    if len(encoded) > MAX_INVENTORY_BYTES:
+        raise InventoryError("inventory exceeds the output size limit")
+    return encoded
+
+
 def write_exclusive(path: pathlib.Path, value: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("x", encoding="utf-8") as stream:
-        json.dump(value, stream, ensure_ascii=False, indent=2, sort_keys=True)
-        stream.write("\n")
+    if not path.parent.is_dir() or path.parent.is_symlink():
+        raise InventoryError("output parent must be one existing real directory")
+    encoded = canonical_inventory_bytes(value)
+    with path.open("xb") as stream:
+        stream.write(encoded)
 
 
 def main() -> int:

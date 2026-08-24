@@ -4,11 +4,13 @@ import pathlib
 import re
 import unittest
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = (
     ROOT / ".github" / "workflows" / "historical-replay-inventory.yml"
 ).read_text(encoding="utf-8")
+DOCUMENTATION = (ROOT / "docs" / "historical-replay-inventory.md").read_text(
+    encoding="utf-8"
+)
 
 
 class HistoricalReplayInventoryWorkflowTests(unittest.TestCase):
@@ -21,6 +23,7 @@ class HistoricalReplayInventoryWorkflowTests(unittest.TestCase):
         self.assertNotIn("id-token: write", WORKFLOW)
         self.assertNotIn("contents: write", WORKFLOW)
         self.assertIn("persist-credentials: false", WORKFLOW)
+        self.assertIn("if: inputs.confirm_contract_only == true", WORKFLOW)
 
     def test_requires_the_exact_protected_dispatch_tag_and_clean_checkout(self) -> None:
         self.assertIn(
@@ -40,9 +43,20 @@ class HistoricalReplayInventoryWorkflowTests(unittest.TestCase):
             WORKFLOW,
         )
         self.assertIn('"$tag_ref^{}"', WORKFLOW)
-        self.assertIn('if [ -z "$remote_commit" ]; then remote_commit="$tag_object"; fi', WORKFLOW)
+        self.assertIn(
+            'if [ -z "$remote_commit" ]; then remote_commit="$tag_object"; fi',
+            WORKFLOW,
+        )
+        self.assertIn('"$tag_ref" "$tag_ref^{}"', WORKFLOW)
+        self.assertIn('test "${#tag_lines[@]}" -le 2', WORKFLOW)
         self.assertIn("ref: ${{ inputs.expected_commit }}", WORKFLOW)
+        self.assertIn("fetch-depth: 0", WORKFLOW)
         self.assertIn('test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"', WORKFLOW)
+        self.assertIn('"repos/$GITHUB_REPOSITORY/branches/main"', WORKFLOW)
+        self.assertIn(
+            'git merge-base --is-ancestor "$EXPECTED_COMMIT" origin/main',
+            WORKFLOW,
+        )
         self.assertEqual(
             WORKFLOW.count(
                 'test -z "$(git status --porcelain=v1 --untracked-files=all)"'
@@ -70,14 +84,28 @@ class HistoricalReplayInventoryWorkflowTests(unittest.TestCase):
             WORKFLOW,
         )
         self.assertIn("assert raw == canonical", WORKFLOW)
+        self.assertIn("Draft202012Validator.check_schema(schema)", WORKFLOW)
+        self.assertIn("FormatChecker()", WORKFLOW)
+        self.assertIn(
+            'path.stat().st_size <= int(os.environ["MAX_INVENTORY_BYTES"])',
+            WORKFLOW,
+        )
 
     def test_uploads_only_the_source_free_json_with_pinned_actions(self) -> None:
         upload = WORKFLOW.split("name: Upload only the source-free inventory", 1)[1]
         self.assertIn("historical-replay-inventory.json", upload)
         self.assertNotIn("results/", upload)
+        self.assertIn("retention-days: 90", upload)
         actions = re.findall(r"uses:\s*[^\s@]+@([^\s#]+)", WORKFLOW)
         self.assertTrue(actions)
         self.assertTrue(all(re.fullmatch(r"[0-9a-f]{40}", pin) for pin in actions))
+
+    def test_transient_run_requires_followup_durable_evidence(self) -> None:
+        self.assertIn("transient transport, not durable", DOCUMENTATION)
+        self.assertIn("run ID and attempt", DOCUMENTATION)
+        self.assertIn("inventory SHA-256", DOCUMENTATION)
+        self.assertIn("inventory workflow deliberately has no", DOCUMENTATION)
+        self.assertIn("write credential", DOCUMENTATION)
 
 
 if __name__ == "__main__":

@@ -6,13 +6,18 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from inventory_historical_replay import InventoryError, inventory  # noqa: E402
-from results_schema import canonical_file_bytes, result_id  # noqa: E402
-
+import inventory_historical_replay as inventory_module
+from inventory_historical_replay import (
+    InventoryError,
+    inventory,
+    write_exclusive,
+)
+from results_schema import canonical_file_bytes, result_id
 
 SOURCE_COMMIT = "a" * 40
 
@@ -116,6 +121,13 @@ class HistoricalReplayInventoryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
             self.write(root, "owner.json", document("Owner", public=True, suffix="one"))
+            (root / ".gitkeep").write_bytes(b"not empty")
+            with self.assertRaisesRegex(InventoryError, "gitkeep is not canonical"):
+                inventory(root, SOURCE_COMMIT)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            self.write(root, "owner.json", document("Owner", public=True, suffix="one"))
             (root / "nested").mkdir()
             with self.assertRaisesRegex(InventoryError, "canonical JSON file"):
                 inventory(root, SOURCE_COMMIT)
@@ -129,6 +141,57 @@ class HistoricalReplayInventoryTests(unittest.TestCase):
                 {"schema_version": 2, "user": "Owner", "results": []},
             )
             with self.assertRaisesRegex(InventoryError, "no accepted results"):
+                inventory(root, SOURCE_COMMIT)
+
+    def test_file_entry_and_record_bounds_fail_before_unbounded_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            self.write(
+                root, "owner.json", document("Owner", public=True, suffix="one")
+            )
+            with (
+                mock.patch.object(inventory_module, "MAX_RESULTS_FILE_BYTES", 1),
+                self.assertRaisesRegex(InventoryError, "file exceeds the size limit"),
+            ):
+                inventory(root, SOURCE_COMMIT)
+
+            self.write(
+                root, "second.json", document("Second", public=True, suffix="two")
+            )
+            with (
+                mock.patch.object(inventory_module, "MAX_ROOT_ENTRIES", 1),
+                self.assertRaisesRegex(InventoryError, "entry-count limit"),
+            ):
+                inventory(root, SOURCE_COMMIT)
+
+            with (
+                mock.patch.object(inventory_module, "MAX_TOTAL_RECORDS", 1),
+                self.assertRaisesRegex(InventoryError, "total record limit"),
+            ):
+                inventory(root, SOURCE_COMMIT)
+
+    def test_output_bound_and_parent_contract_leave_no_partial_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            output = root / "inventory.json"
+            with (
+                mock.patch.object(inventory_module, "MAX_INVENTORY_BYTES", 1),
+                self.assertRaisesRegex(InventoryError, "output size limit"),
+            ):
+                write_exclusive(output, {"large": "value"})
+            self.assertFalse(output.exists())
+
+            missing = root / "missing" / "inventory.json"
+            with self.assertRaisesRegex(InventoryError, "existing real directory"):
+                write_exclusive(missing, {})
+
+    def test_public_dot_segment_repository_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            value = document("Owner", public=True, suffix="one")
+            value["results"][0]["submission"]["repo"] = "Owner/.."
+            self.write(root, "owner.json", value)
+            with self.assertRaisesRegex(InventoryError, "not canonical"):
                 inventory(root, SOURCE_COMMIT)
 
     def test_real_store_is_fully_accounted_without_private_locators(self) -> None:

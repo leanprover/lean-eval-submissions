@@ -9,7 +9,9 @@ corpus gate.
 to that work. It validates the complete schema-version-2 results store,
 recomputes every stable result identity through the shared validator, rejects
 duplicates, binds an exact source commit and canonical store digest, and sorts
-all entries by `result_id`.
+all entries by `result_id`. It also fails closed before parsing or rendering if
+the results directory, an individual file, the aggregate store, a per-file or
+aggregate record count, or the canonical inventory exceeds its explicit bound.
 
 The public inventory deliberately does not copy a private repository or commit
 into each private entry. It classifies records only as:
@@ -39,12 +41,26 @@ python scripts/inventory_historical_replay.py \
 The output path must not already exist. The schema is
 `schemas/historical-replay-inventory-v1.schema.json`.
 
-The protected `Build historical replay inventory` workflow is the publication
-path. Dispatch it from the exact `lean-eval-dispatch/<full-commit>` tag and
+The protected `Build historical replay inventory` workflow is the contract-only
+generation path. Dispatch it from the exact `lean-eval-dispatch/<full-commit>` tag and
 provide that same commit, the independently reviewed canonical store digest,
-and the exact accepted-result count. It verifies the remote immutable tag,
-checks out that commit without credentials, requires a clean `results/` tree,
-generates the inventory twice, checks byte identity and all count, digest,
-ordering, classification, and private-source-minimization invariants, then
-uploads only the source-free JSON artifact. A local invocation is useful for
-reviewing the expected inputs but is not publication evidence by itself.
+the exact accepted-result count, and the explicit contract-only confirmation.
+It resolves lightweight and annotated tags without accepting ambiguous remote
+output, checks that the selected commit remains an ancestor of API-verified
+protected `main`, checks out that commit without credentials, and requires a
+clean `results/` tree. It then generates the inventory twice, checks byte
+identity, validates the JSON against the checked-in Draft 2020-12 schema with a
+pinned validator, checks every count, digest, ordering, classification, size,
+and private-source-minimization invariant, and uploads only the source-free JSON
+artifact.
+
+The uploaded artifact and workflow summary are transient transport, not durable
+qualification evidence. Before any corpus replay gate can cite an inventory, a
+follow-up protected-main PR must commit the reviewed canonical inventory (or a
+content-addressed immutable equivalent) and an evidence record binding the
+workflow repository, run ID and attempt, selected source commit, canonical
+store digest, result count, and inventory SHA-256. Review must verify the run
+conclusion and exact artifact bytes. The inventory workflow deliberately has no
+write credential and cannot satisfy this durable-evidence gate by itself. A
+local invocation is useful for reviewing expected inputs but is not publication
+or qualification evidence.

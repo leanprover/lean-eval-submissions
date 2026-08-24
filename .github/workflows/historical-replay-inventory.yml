@@ -15,6 +15,11 @@ on:
         description: Reviewed accepted-result count
         required: true
         type: string
+      confirm_contract_only:
+        description: Build a source-minimized inventory without replay, State writes, or publication
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -23,8 +28,13 @@ concurrency:
   group: historical-replay-inventory
   cancel-in-progress: false
 
+env:
+  INVENTORY_SCHEMA: schemas/historical-replay-inventory-v1.schema.json
+  MAX_INVENTORY_BYTES: '16777216'
+
 jobs:
   inventory:
+    if: inputs.confirm_contract_only == true
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -70,7 +80,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Require the selected commit to be reachable from protected main
+      - name: Require protected main and the exact clean source checkout
         env:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           GH_TOKEN: ${{ github.token }}
@@ -86,21 +96,20 @@ jobs:
           test "$branch" = $'main\t'"$remote_main"$'\ttrue'
           test "$(git rev-parse origin/main)" = "$remote_main"
           git merge-base --is-ancestor "$EXPECTED_COMMIT" origin/main
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          test -d results
+          test ! -L results
 
       # actions/setup-python pinned to v7.0.0.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.11.10'
 
-      - name: Verify the exact clean source checkout
-        env:
-          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
-          test -z "$(git status --porcelain=v1 --untracked-files=all)"
-          test -d results
-          test ! -L results
+      - name: Install pinned inventory schema validator
+        run: >-
+          python -m pip install --disable-pip-version-check --only-binary=:all:
+          --require-hashes -r requirements-jsonschema-workflow.txt
 
       - name: Build and independently recompute the source-free inventory
         id: inventory
@@ -111,6 +120,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$EXPECTED_COUNT" =~ ^[1-9][0-9]*$ ]]
+          test "$EXPECTED_COUNT" -le 10000
           [[ "$EXPECTED_DIGEST" =~ ^[0-9a-f]{64}$ ]]
           artifact="$RUNNER_TEMP/historical-replay-inventory.json"
           recomputed="$RUNNER_TEMP/historical-replay-inventory.recomputed.json"
@@ -129,9 +139,17 @@ jobs:
           import os
           import pathlib
 
+          from jsonschema import Draft202012Validator, FormatChecker
+
           path = pathlib.Path(os.environ["ARTIFACT"])
+          assert 0 < path.stat().st_size <= int(os.environ["MAX_INVENTORY_BYTES"])
           raw = path.read_bytes()
           value = json.loads(raw)
+          schema = json.loads(pathlib.Path(os.environ["INVENTORY_SCHEMA"]).read_text(encoding="utf-8"))
+          Draft202012Validator.check_schema(schema)
+          validator = Draft202012Validator(schema, format_checker=FormatChecker())
+          errors = sorted(validator.iter_errors(value), key=lambda error: list(error.path))
+          assert not errors, errors
           assert set(value) == {
               "schema_version",
               "source_repository",
@@ -185,7 +203,7 @@ jobs:
           name: historical-replay-inventory-${{ inputs.expected_commit }}
           path: ${{ runner.temp }}/historical-replay-inventory.json
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
 
       - name: Record reviewed inventory identities
         env:
@@ -202,4 +220,5 @@ jobs:
             echo "- accepted result count: \`$RESULT_COUNT\`"
             echo "- artifact SHA-256: \`$ARTIFACT_SHA256\`"
             echo '- artifact contains no private source repository or commit locator'
+            echo '- transient artifact is not durable qualification evidence until reviewed and committed'
           } >> "$GITHUB_STEP_SUMMARY"
