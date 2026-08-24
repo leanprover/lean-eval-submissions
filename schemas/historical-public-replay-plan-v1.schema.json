@@ -76,7 +76,10 @@
       ],
       "properties": {
         "result_id": {"$ref": "#/$defs/resultId"},
-        "owner": {"type": "string", "minLength": 1, "maxLength": 39},
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
+        },
         "problem_id": {"$ref": "#/$defs/problem"},
         "statement_revision": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
         "results_repository": {"const": "leanprover/lean-eval-submissions"},
@@ -100,8 +103,16 @@
       "properties": {
         "request_id": {"$ref": "#/$defs/requestId"},
         "accepted_at": {"type": "string", "format": "date-time"},
-        "owner": {"type": "string", "minLength": 1, "maxLength": 39},
-        "declared_model": {"type": "string", "minLength": 1, "maxLength": 256},
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
+        },
+        "declared_model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[^\\u0000-\\u001f]+$"
+        },
         "issue": {
           "type": "object",
           "additionalProperties": false,

@@ -191,6 +191,8 @@ class PublicReplayPlanTests(unittest.TestCase):
             )
 
     def test_toolchain_registry_rejects_ambiguous_content(self) -> None:
+        with self.assertRaisesRegex(ToolchainRegistryError, "nonempty"):
+            build_registry([], lambda _commit: b"leanprover/lean4:v4.30.0\n")
         with self.assertRaisesRegex(ToolchainRegistryError, "LF-only"):
             build_registry(
                 [BENCHMARK], lambda _commit: b"leanprover/lean4:v4.30.0\nother\n"

@@ -238,7 +238,11 @@ the already implemented owner status, metadata, and publication routes.
       current State replay materialization admits only modern
       `result.recorded` submission lifecycles, not historical
       `result.claimed` records; no synthetic submission/archive authority was
-      created.
+      created. Production State has no historical claim anchors, so the
+      required follow-up is a system-owned
+      `historical_result.replay_authorized` event over one exact seed
+      result/evidence tuple, followed by the ordinary replay lifecycle without
+      changing acceptance, publication, credit, or owner metadata.
 - [ ] Expand independent-kernel validation from the one-result shadow smoke to
       a checker-series/corpus report with separately recorded
       accept/reject/decline/crash/timeout outcomes and an explicit promotion

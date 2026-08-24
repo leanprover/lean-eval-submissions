@@ -72,11 +72,13 @@ def resolved_benchmark_commits(
 def build_registry(
     commits: list[str], read_toolchain: Callable[[str], bytes]
 ) -> dict[str, Any]:
-    if commits != sorted(set(commits)) or not all(
-        COMMIT.fullmatch(item) for item in commits
+    if (
+        not commits
+        or commits != sorted(set(commits))
+        or not all(COMMIT.fullmatch(item) for item in commits)
     ):
         raise ToolchainRegistryError(
-            "benchmark commits must be unique, sorted full SHAs"
+            "benchmark commits must be a nonempty set of unique, sorted full SHAs"
         )
     entries = []
     for commit in commits:

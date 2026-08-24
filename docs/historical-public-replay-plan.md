@@ -23,11 +23,21 @@ Every plan is therefore locked to:
 }
 ```
 
-Removing that blocker requires a separately reviewed State/replay contract.
-That contract must either make an exact `result.claimed` record eligible for a
-public-only replay task or define a system-owned historical import event. It
-must not mint a fake submission lifecycle, require an owner to alter the base
-result, or attach an encrypted-archive locator to a public source.
+Removing that blocker requires the separately reviewed, system-owned
+`historical_result.replay_authorized` State contract. Production State has no
+historical `result.claimed` anchors, so making an owner claim a prerequisite
+would block corpus completion on every historical owner. One authorization
+event instead binds one exact seed-plan request/result/evidence tuple,
+recomputes the stable result ID from owner, verbatim model, problem, and
+statement revision, and carries only the public source, benchmark/toolchain,
+and immutable Results snapshot bindings. It creates no acceptance,
+publication, credit, or owner-metadata authority. An ordinary
+`replay.enqueued` event may causally follow it and retain the existing replay
+task ID and verdict lifecycle.
+
+The authorization contract must not mint a fake submission lifecycle, require
+an owner action, expose a private record, or attach an encrypted-archive
+locator to a public source.
 
 ## Deterministic inputs
 
