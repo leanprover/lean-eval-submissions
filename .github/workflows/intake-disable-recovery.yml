@@ -19,14 +19,34 @@ defaults:
     working-directory: server
 
 jobs:
+  authorize-manual:
+    if: github.event_name == 'workflow_dispatch'
+    permissions: {}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Require an upstream protected-main dispatch
+        working-directory: .
+        env:
+          EVENT_REF: ${{ github.ref }}
+          EVENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$EVENT_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$EVENT_REF" = refs/heads/main
+
   disable-production-intake:
+    needs: authorize-manual
     if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
-      (github.event.workflow_run.conclusion != 'success' &&
+      always() &&
+      ((github.event_name == 'workflow_dispatch' &&
+      needs.authorize-manual.result == 'success') ||
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion != 'success' &&
       github.event.workflow_run.head_branch == 'main' &&
       (github.event.workflow_run.event == 'push' ||
       github.event.workflow_run.event == 'workflow_dispatch') &&
-      github.event.workflow_run.head_repository.full_name == github.repository)
+      github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: cloudflare-production
