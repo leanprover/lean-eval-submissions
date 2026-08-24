@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/historical-public-runner-verdict-v1.schema.json",
+  "title": "Historical public replay runner verdict version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "request_id", "result_id", "execution_outcome",
+    "checker_outcome", "failure_reason", "statistics"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "request_id": {"type": "string", "pattern": "^prr_[0-9a-f]{64}$"},
+    "result_id": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
+    "execution_outcome": {"enum": ["completed", "crashed", "timed_out"]},
+    "checker_outcome": {"enum": ["accepted", "rejected", "declined", null]},
+    "failure_reason": {"const": null},
+    "statistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checker_wall_time_ms", "checker_retired_instructions",
+        "build_wall_time_ms", "build_retired_instructions", "lines_of_code", "file_count"
+      ],
+      "properties": {
+        "checker_wall_time_ms": {"type": "integer", "minimum": 0},
+        "checker_retired_instructions": {"$ref": "#/$defs/counter"},
+        "build_wall_time_ms": {"type": "integer", "minimum": 0},
+        "build_retired_instructions": {"$ref": "#/$defs/counter"},
+        "lines_of_code": {"type": "integer", "minimum": 0},
+        "file_count": {"type": "integer", "minimum": 0}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"execution_outcome": {"const": "completed"}},
+        "required": ["execution_outcome"]
+      },
+      "then": {
+        "properties": {
+          "checker_outcome": {"enum": ["accepted", "rejected", "declined"]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"execution_outcome": {"enum": ["crashed", "timed_out"]}},
+        "required": ["execution_outcome"]
+      },
+      "then": {
+        "properties": {"checker_outcome": {"const": null}}
+      }
+    }
+  ],
+  "$defs": {
+    "counter": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "value"],
+          "properties": {
+            "status": {"const": "measured"},
+            "value": {"type": "integer", "minimum": 0}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason"],
+          "properties": {
+            "status": {"const": "unavailable"},
+            "reason": {
+              "enum": [
+                "counter_not_reported", "counter_not_supported", "counter_permission_denied"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

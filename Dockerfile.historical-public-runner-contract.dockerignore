@@ -1,0 +1,7 @@
+**
+!Dockerfile.historical-public-runner-contract
+!scripts/
+!scripts/historical_public_runner.py
+!configuration/
+!configuration/historical-public-replay-profile-matrix-v1.json
+!configuration/historical-public-runner-v1.json

@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+"""Fixed entrypoint for one network-disabled historical public replay."""
+
+from __future__ import annotations
+
+import json
+import pathlib
+import sys
+
+INSTALL = pathlib.Path("/opt/lean-eval")
+WORKSPACE = pathlib.Path("/workspace")
+sys.path.insert(0, str(INSTALL))
+
+from historical_public_runner import (
+    HistoricalPublicRunnerError,
+    execute_fixed_runner,
+)
+
+
+def main() -> int:
+    try:
+        verdict = execute_fixed_runner(INSTALL, WORKSPACE)
+    except (HistoricalPublicRunnerError, OSError, ValueError) as error:
+        print(f"historical-public-runner: {error}", file=sys.stderr)
+        return 1
+    print(json.dumps(verdict, separators=(",", ":"), sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

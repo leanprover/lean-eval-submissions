@@ -1,0 +1,255 @@
+name: Validate one historical public runner handoff
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Full protected-main controller commit selected through its immutable dispatch tag
+        required: true
+        type: string
+      request_id:
+        description: Exact reviewed historical public request ID
+        required: true
+        type: string
+      result_id:
+        description: Exact reviewed result ID within that request
+        required: true
+        type: string
+      confirm_contract_only:
+        description: Fetch exact public Git objects and validate one handoff without replay or publication
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: historical-public-runner-contract
+  cancel-in-progress: false
+
+env:
+  PLAN: evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json
+  PLAN_SHA256: 2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942
+  PROFILE_MATRIX: configuration/historical-public-replay-profile-matrix-v1.json
+  PROFILE_MATRIX_SHA256: aad9132f729ef9f429532900d1e50b665330721fa9360699328c47bdfb2aedfc
+  RUNNER_CONTRACT: configuration/historical-public-runner-v1.json
+  RUNNER_CONTRACT_SHA256: 6d341a642dfd6aa9092228269da6761000bf0818128ce3f35cb259bd8fb2303f
+
+jobs:
+  controller-prepare:
+    if: inputs.confirm_contract_only == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      benchmark_commit: ${{ steps.selection.outputs.benchmark_commit }}
+      benchmark_tree: ${{ steps.handoff.outputs.benchmark_tree }}
+    steps:
+      - name: Require the exact immutable protected dispatch tag
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "leanprover/lean-eval-submissions"
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_COMMIT"
+          test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
+          tag_ref="refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
+          mapfile -t tag_lines < <(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            "$tag_ref" "$tag_ref^{}")
+          test "${#tag_lines[@]}" -ge 1
+          test "${#tag_lines[@]}" -le 2
+          tag_object=""
+          remote_commit=""
+          for line in "${tag_lines[@]}"; do
+            read -r object ref extra <<< "$line"
+            test -z "${extra:-}"
+            [[ "$object" =~ ^[0-9a-f]{40}$ ]]
+            if [ "$ref" = "$tag_ref" ]; then
+              test -z "$tag_object"
+              tag_object="$object"
+            elif [ "$ref" = "$tag_ref^{}" ]; then
+              test -z "$remote_commit"
+              remote_commit="$object"
+            else
+              exit 1
+            fi
+          done
+          test -n "$tag_object"
+          if [ -z "$remote_commit" ]; then remote_commit="$tag_object"; fi
+          test "$remote_commit" = "$EXPECTED_COMMIT"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Require protected main and exact reviewed controller inputs
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(sha256sum "$PLAN" | cut -d' ' -f1)" = "$PLAN_SHA256"
+          test "$(sha256sum "$PROFILE_MATRIX" | cut -d' ' -f1)" = "$PROFILE_MATRIX_SHA256"
+          test "$(sha256sum "$RUNNER_CONTRACT" | cut -d' ' -f1)" = "$RUNNER_CONTRACT_SHA256"
+          remote_main=$(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            refs/heads/main | cut -f1)
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.name, .commit.sha, .protected] | @tsv')
+          test "$branch" = $'main\t'"$remote_main"$'\ttrue'
+          git merge-base --is-ancestor "$EXPECTED_COMMIT" "$remote_main"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Install pinned controller schema validator
+        run: >-
+          python -m pip install --disable-pip-version-check --only-binary=:all:
+          --require-hashes -r requirements-jsonschema-workflow.txt
+
+      - name: Select only the exact reviewed public commits
+        id: selection
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          RESULT_ID: ${{ inputs.result_id }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import pathlib
+          import re
+
+          plan = json.loads(pathlib.Path(os.environ["PLAN"]).read_text(encoding="utf-8"))
+          requests = [item for item in plan["requests"] if item["request_id"] == os.environ["REQUEST_ID"]]
+          assert len(requests) == 1
+          request = requests[0]
+          assert len([item for item in request["results"] if item["result_id"] == os.environ["RESULT_ID"]]) == 1
+          source = request["source"]
+          benchmark = request["benchmark"]
+          assert source["kind"] == "github_repo" and source["visibility"] == "public"
+          assert re.fullmatch(
+              r"(?!\.{1,2}/)(?![^/]+/\.{1,2}$)[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+",
+              source["repository"],
+          )
+          for commit in (source["commit"], benchmark["commit"]):
+              assert re.fullmatch(r"[0-9a-f]{40}", commit)
+          output = pathlib.Path(os.environ["GITHUB_OUTPUT"])
+          with output.open("a", encoding="utf-8") as stream:
+              print(f"source_repository={source['repository']}", file=stream)
+              print(f"source_commit={source['commit']}", file=stream)
+              print(f"benchmark_commit={benchmark['commit']}", file=stream)
+          PY
+
+      - name: Fetch exactly one source commit and one benchmark commit
+        env:
+          SOURCE_REPOSITORY: ${{ steps.selection.outputs.source_repository }}
+          SOURCE_COMMIT: ${{ steps.selection.outputs.source_commit }}
+          BENCHMARK_COMMIT: ${{ steps.selection.outputs.benchmark_commit }}
+        run: |
+          set -euo pipefail
+          for directory in source benchmark; do
+            git init "$RUNNER_TEMP/$directory"
+          done
+          git -C "$RUNNER_TEMP/source" remote add origin "https://github.com/$SOURCE_REPOSITORY.git"
+          git -C "$RUNNER_TEMP/source" fetch --depth=1 origin "$SOURCE_COMMIT"
+          git -C "$RUNNER_TEMP/source" checkout --detach "$SOURCE_COMMIT"
+          git -C "$RUNNER_TEMP/benchmark" remote add origin https://github.com/leanprover/lean-eval.git
+          git -C "$RUNNER_TEMP/benchmark" fetch --depth=1 origin "$BENCHMARK_COMMIT"
+          git -C "$RUNNER_TEMP/benchmark" checkout --detach "$BENCHMARK_COMMIT"
+
+      - name: Build the closed source-free runner handoff
+        id: handoff
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          RESULT_ID: ${{ inputs.result_id }}
+          BENCHMARK_COMMIT: ${{ steps.selection.outputs.benchmark_commit }}
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/handoff"
+          python scripts/historical_public_runner.py prepare \
+            --plan "$PLAN" \
+            --profile-matrix "$PROFILE_MATRIX" \
+            --contract "$RUNNER_CONTRACT" \
+            --expected-plan-sha256 "$PLAN_SHA256" \
+            --expected-profile-matrix-sha256 "$PROFILE_MATRIX_SHA256" \
+            --expected-contract-sha256 "$RUNNER_CONTRACT_SHA256" \
+            --request-id "$REQUEST_ID" \
+            --result-id "$RESULT_ID" \
+            --source-repository "$RUNNER_TEMP/source" \
+            --benchmark-repository "$RUNNER_TEMP/benchmark" \
+            --source-archive "$RUNNER_TEMP/handoff/historical-public-source.tar.gz" \
+            --output "$RUNNER_TEMP/handoff/historical-public-request.json"
+          tree=$(git -C "$RUNNER_TEMP/benchmark" rev-parse "$BENCHMARK_COMMIT^{tree}")
+          echo "benchmark_tree=$tree" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-public-runner-handoff-${{ inputs.result_id }}
+          path: |
+            ${{ runner.temp }}/handoff/historical-public-request.json
+            ${{ runner.temp }}/handoff/historical-public-source.tar.gz
+          if-no-files-found: error
+          retention-days: 1
+
+  network-disabled-contract-check:
+    needs: controller-prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_commit }}
+          persist-credentials: false
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: historical-public-runner-handoff-${{ inputs.result_id }}
+          path: ${{ runner.temp }}/handoff
+
+      - name: Fetch and mark the exact baked benchmark candidate
+        env:
+          BENCHMARK_COMMIT: ${{ needs.controller-prepare.outputs.benchmark_commit }}
+          BENCHMARK_TREE: ${{ needs.controller-prepare.outputs.benchmark_tree }}
+        run: |
+          set -euo pipefail
+          git init "$RUNNER_TEMP/benchmark"
+          git -C "$RUNNER_TEMP/benchmark" remote add origin https://github.com/leanprover/lean-eval.git
+          git -C "$RUNNER_TEMP/benchmark" fetch --depth=1 origin "$BENCHMARK_COMMIT"
+          git -C "$RUNNER_TEMP/benchmark" checkout --detach "$BENCHMARK_COMMIT"
+          test "$(git -C "$RUNNER_TEMP/benchmark" rev-parse "$BENCHMARK_COMMIT^{tree}")" = "$BENCHMARK_TREE"
+          printf '%s\n' "$BENCHMARK_COMMIT" > "$RUNNER_TEMP/benchmark/.lean-eval-commit"
+          printf '%s\n' "$BENCHMARK_TREE" > "$RUNNER_TEMP/benchmark/.lean-eval-tree"
+
+      - name: Validate the runner boundary with networking disabled
+        run: |
+          set -euo pipefail
+          docker build \
+            --file Dockerfile.historical-public-runner-contract \
+            --tag historical-public-runner-contract:"$GITHUB_SHA" .
+          docker run --rm --network none --read-only \
+            --memory 2g --pids-limit 256 --cpus 2 \
+            --mount "type=bind,src=$RUNNER_TEMP/handoff,dst=/workspace" \
+            --mount "type=bind,src=$RUNNER_TEMP/benchmark,dst=/opt/lean-eval/benchmark,readonly" \
+            historical-public-runner-contract:"$GITHUB_SHA" \
+            --handoff /workspace/historical-public-request.json \
+            --source-archive /workspace/historical-public-source.tar.gz \
+            --contract /opt/lean-eval/historical-public-runner-v1.json \
+            --profile-matrix /opt/lean-eval/historical-public-replay-profile-matrix-v1.json \
+            --benchmark-root /opt/lean-eval/benchmark \
+            --scratch /workspace/contract-scratch
+          {
+            echo '### Historical public runner contract only'
+            echo
+            echo '- exact public source and benchmark commits fetched before the isolated phase'
+            echo '- exact source tree, benchmark tree, profile matrix, and profile entry bound'
+            echo '- separate runner validated the closed handoff under --network none'
+            echo '- no replay, State event, image publication, deployment, or release occurred'
+          } >> "$GITHUB_STEP_SUMMARY"
