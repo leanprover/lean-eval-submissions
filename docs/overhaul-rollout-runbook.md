@@ -26,15 +26,19 @@ primary checkout is not the integration workspace.
 | --- | --- |
 | `lean-eval-generator` | `77373a539b31f8f304c852f288d7d8469cceebff` on `main`; fixes `#1` / `#2` and synchronization `#3` are merged and green; merged LeanEval consumer `#553` pins this exact commit and removes the embedded core |
 | production State | `501d237d46c7b3466a37554c1c2ceb310245a619` on private `main`; release-status v2 and permanent effective-result reservation contracts are merged over the earlier reviewed lifecycle contracts, and the graph still contains only `system.initialized`, with no accepted submission, reservation, or due release work |
-| staging State | `6a386bb4362b10dd8d7743e826c82f1a0011c0c3` on private `main`; the two existing result authorities have exact release-status v2 views and permanent base-tuple reservations; exact-main validator run `32747670842` passed |
-| `lean-eval-releases` | `57ab36341ccf653b45366c32d4472b9ee670890b` on `main`; source-free recovery `#8`, State-bound removal planning `#9`, and the deterministic automatic controller `#10` are merged; exact-main validation `32719159678` and publication-disabled Git credential preflight `32723471497` passed; credentialed staging unwrap and publication remain disabled |
+| staging State | reviewed contract pin `6a386bb4362b10dd8d7743e826c82f1a0011c0c3`; the two existing result authorities have exact release-status v2 views and permanent base-tuple reservations; exact-main validator run `32747670842` passed; later promotion-canary head movement does not change this runtime contract pin |
+| `lean-eval-releases` | `9278e771216cf55f345c0088823a97653b1ef507` on `main`; PR `#12` binds the automatic controller to production State v2 `501d237`, PR `#13` hardens the credentialed staging checkout, and PR `#14` isolates a read-only production audit-key preflight; exact-main validation `32762170467`, isolated audit proof `32762314683`, publication-disabled synthetic reconstruction `32756570115`, and production Git-write credential preflight `32756572085` passed; credentialed staging unwrap/publication remain disabled/pending |
 | catalog, generator consumer, software verification | v1 freeze merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; terminology rule merged in `#554`; standalone-generator consumer merged in `#553`; current main `b91d4757aa0d7776c02540c9089df54fa0d0658a` |
-| results schema version 2, intake server, replay contracts | schema-version-3 per-submission archive lane `#1250`, accepted result lifecycle `#1251`, guarded historical migration `#1252`, private replay planning/schema alignment `#1253` / `#1254`, accepted-archive staging boundary `#1255`, and immutable release OIDC trust `#1256` are merged; exact runtime `71650c9d579e269d6a48a6563d3cd0110e41e9c6` is deployed intake- and replay-disabled after protected State-pin recovery run `32728324814` |
+| results schema version 2, intake server, replay contracts | the archive/replay foundations above are merged; dark maintainer decisions `#1331`, offline kernel adapter `#1332`, read-only historical authority preparation `#1333`, qualifier repair `#1334`, kernel wire contracts `#1336`, scheduled-dispatch budget `#1337`, authority checkout-proof fix `#1338`, immutable workflow-tag split `#1339`, profile evidence `#1341`, manual recovery-ref guard `#1342`, complete offline-test discovery `#1344`, remaining manual wrong-ref guards `#1345`, and immutable-promotion hardening `#1343` are merged through source main `c71fc80`; exact-main CI `32767617157`, standalone promoter `32767617218`, canary `32767852651`, and protected dark rollout `32767617219` passed; exact runtime `c71fc80` is live with intake, replay, owner, maintainer, and publication paths disabled |
 | AWS archive-key custody | dedicated account `lean-eval` (`161072922960`) and isolated stacks are provisioned; accepted-archive staging run `32618166048` passed. Release OIDC template correction is merged but the live stacks still require an authenticated operator update: release staging runs `32617539355` and `32624640050` failed at STS before Lambda or decrypt. Production intake archive/replay roles remain disconnected |
 | lifecycle-aware leaderboard | preview foundation merged as `lean-eval-leaderboard#69`; UI terminology merged in `#73`; deeper schema terminology merged in `#74`; cutover `#72` is merged and live at `https://lean-lang.org/eval/`, with `/legacy/` retained and read-only State deploy key `160968617` provisioned; owner-scoped State v4 model-identity consumption merged as `#75` (`89be802f`) after exact-head run `32741897578`, and production Pages run `32747172862` deployed it successfully |
 
-The private broker and intake Workers are deployed in staging and production
-from exact commit `71650c9d579e269d6a48a6563d3cd0110e41e9c6`.
+The private broker, intake Worker, and replay Worker are deployed in staging
+and production from current source main
+`c71fc809838d4073aeda539e095997ca1d8b5d8d` by protected run
+`32767617219`. Exact canary run `32767852651` passed. Live health reports intake,
+replay, and owner/maintainer APIs disabled in both environments; staging alone
+has acceptance and the promotion canary enabled as designed.
 Deployment, OAuth,
 readiness, authentication, State-writer, and broker App secrets are installed.
 Both State-writer tokens are organization-approved and preflighted, and both
@@ -73,12 +77,16 @@ accepted-archive workflow itself attests only recovery and destruction.
 
 The FC-owned importer in `formal-conjectures#4951` now imports, verifies,
 classifies, and generates all FC100 declarations through the frozen generator
-contract. Its current baseline audit builds 97/100 Challenges at LeanEval pins
+contract. At current draft head
+`bd282283515efaeeb7eaa0903379f8fb2a2e4357`, the whole-set audit and Comparator
+pilot are green while the project build is still in progress. Its baseline
+audit builds 97/100 Challenges at LeanEval pins
 with three exact registered failures. Generator fixes `#1` / `#2` retire the
 Erdos125 failure, and the separately verified FC toolchain bump retires the
 remaining two. Launch still waits for those exact pins, FC maintainer review,
-and the production gates; the compatible output contract itself is no longer
-missing.
+and the production gates; the draft is still open, blocked, and review-required,
+but no current merge-conflict claim is recorded. The compatible output contract
+itself is no longer missing.
 
 ## Decisions required from maintainers
 
@@ -292,20 +300,32 @@ queue consumption and the remaining isolation evidence are separate launch
 gates.
 
 The release controller is merged through exact `lean-eval-releases` commit
-`57ab36341ccf653b45366c32d4472b9ee670890b`; protected main validation run
-`32719159678` passed. Protected production credential preflight `32723471497`
-bound that exact controller to production State
-`0c8759946df0da1338a0c73bf5bd75d182038286`, validated its sole immutable
-initialization event, materialized all six deterministic views, and passed
-exact-ref no-op dry-run pushes with both production write keys while the
-publication variable remained absent. This establishes current Git credential
-authentication only. It made no actual ref update and did not exercise the
-audit key, OIDC, AWS, Lambda, a one-use capability, archive decryption or
-reconstruction, State callback/recovery, artifact upload, or publication.
+`9278e771216cf55f345c0088823a97653b1ef507`; PR `#12` binds it to production
+State v2 `501d237d46c7b3466a37554c1c2ceb310245a619`, and PR `#13` hardens the
+credentialed staging audit checkout. PR `#14` adds a standalone production
+audit-key preflight whose credentialed job has no State/release write key and
+cannot send a ref update. Exact-main validation `32762170467` passed the
+validation and publication-disabled jobs. Fresh publication-disabled
+synthetic reconstruction run `32756570115` passed. Protected production
+credential preflight `32756572085`
+validated and materialized the exact State contract and passed exact-ref no-op
+receive-pack checks with both production write keys while the publication
+variable remained absent. Live production ruleset `21094005` now exposes the
+intended always-allowed `DeployKey` plus `kim-em` bypasses, with all append-only
+protections unchanged, and controller key `161040898` is verified and
+write-capable. This establishes current configuration and no-op Git credential
+authentication only. Those earlier runs made no actual ref update and did not
+exercise
+the audit key, AWS, Lambda, a one-use capability, a live archive unwrap, State
+callback/recovery, or publication. Isolated audit-key proof `32762314683` then
+passed at exact `9278e771` with the publication latch off, blobless private-audit
+upload-pack reads working, and receive-pack denied. It made no write, used no
+AWS authority, and uploaded no artifact.
 
 Before publication can be enabled, apply and verify the reviewed live release
-OIDC trust correction, then pass `Prove one credentialed staging release
-unwrap` against one accepted staging release. Both existing attempts,
+OIDC trust correction, then pass
+`Prove one credentialed staging release unwrap` against one accepted staging
+release. Both existing attempts,
 `32617539355` and `32624640050`, stopped at STS role assumption before Lambda
 or decrypt. Record that successful staging evidence and complete the explicit
 launch review before deliberately creating repository variable
@@ -395,11 +415,13 @@ and reachability check. Before any owner or maintainer gate is enabled, confirm
 the deployed Workers plan allows at least 369 external subrequests per request;
 the 50-subrequest free allowance is insufficient.
 
-One gate remains: run an authorized staging apply/reject canary against the
-exact disabled-qualified Worker and preserve the resulting State evidence.
-Until that happens, `RESULT_AMENDMENT_MAINTAINER_API_ENABLED` stays false and
-the tracked maintainer list stays empty. No full repository scan or aggregate
-may return to online collision admission.
+PR `#1331` merged the complete dark routes as `045f986a`; protected deployment
+`32755550105` passed staging, promotion, and disabled production finalization
+against these exact State pins. One gate remains: run an authorized staging
+apply/reject canary and preserve the result-specific State evidence. Until that
+happens, `RESULT_AMENDMENT_MAINTAINER_API_ENABLED` stays false and the tracked
+maintainer list stays empty. No full repository scan or aggregate may return to
+online collision admission.
 
 ### D9: GitHub App and token-broker boundary
 
@@ -783,6 +805,56 @@ The first complete post-registry pass followed this procedure at source
 and permanent aggregate are recorded in
 [`historical-public-evidence-rerun.md`](historical-public-evidence-rerun.md).
 
+The deterministic seed plan and schema-v2 qualification contracts are now
+followed by the read-only preparation lane merged in
+`lean-eval-submissions#1333` as `a7214278`. Its workflow downloads the exact
+successful qualification artifact ZIPs by run attempt and artifact ID, proves
+their bytes and source commits, and emits only a digest-bound qualified profile
+plus explicitly blocked authority preparation. Its offline finalizer can prove
+a later committed profile and validate proposed authority/profile/enqueue
+events against pinned production State `501d237`, but it is not invoked by the
+workflow and cannot append State or enqueue replay.
+
+Qualification run `32756105389` failed closed at probe
+2 after probe 1 succeeded: same-nonce post-destroy recreation returned HTTP 500
+`input_transfer_failed` at the second input-write boundary. Its 2,085-byte
+candidate artifact `9531319399` remains explicitly unqualified; its 588-byte
+diagnostic artifact `9531347000` is schema-v1 failure evidence and cannot enter
+the authority-preparation success seam. No profile, State append, enqueue, or
+authority was created. PR `#1334` merged the recreation stabilization as
+`7dab1b31`. Immutable-tag run `32759973060` then passed both source-free probes
+against exact controller `7dab1b31`, historical image source `f358e34e`,
+benchmark `11081d34`, and OCI manifest
+`sha256:c4b1a4f7c7ad3339d7491a06000078a4669490c2f324836ef4b26cf0bafd8b30`.
+Candidate ZIP `9532314439` is 2,089 bytes with package SHA-256
+`cc03d52dfb11ba72fc483411af862ff0da7dfc0fa1715a624e4fc7190df16d77`;
+staging ZIP `9532372346` is 1,233 bytes with package SHA-256
+`30652b5dad0b3c43aef29845c59d65e00883aede0054cb2fb8d0120f7fceba03`.
+The candidate and staging JSON both remain explicitly `unqualified`: these
+bytes prove the isolated runtime boundary and are preparation inputs, not State
+authority. Preparation run `32760508212` verified the protected source, exact
+run attempt, exact artifact ZIPs, and clean image-source checkout, then failed
+closed before output because the exact Git checkout identity or cleanliness
+changed. It uploaded no preparation artifact. PR `#1338` fixed the primary
+checkout's canonical-origin proof and merged as `99ca401c`; exact-main CI
+`32762060075` passed. A local replay of the exact artifacts emitted only
+`activation_status: blocked` and profile digest
+`0886d3624de67d0ba1cb00657f66c5f7304743773a024509fceda6ae8f4ff660`.
+Immutable-tag retry `32762356637` then succeeded against the same exact
+qualification artifacts. Its sole source-free review artifact `9533151284` is
+4,753 bytes with package SHA-256
+`53dc720b53939c1131bb7b3d7a38ae7652df20fca5c6c3dad0566d3e524302d2`.
+The exact profile digest is
+`0886d3624de67d0ba1cb00657f66c5f7304743773a024509fceda6ae8f4ff660`,
+and `activation_status` remains `blocked`. Evidence-only PR `#1341` committed
+the byte-identical profile as source main `9a256695`; exact-main CI
+`32763727316` passed. That file records the isolated runtime-boundary evidence;
+it does not establish that the historical image actually ran Lean, comparator,
+and `replay-measure`, and it is not authority. No State append, enqueue,
+deployment, or enablement action followed. The proposed first historical State
+append remains blocked pending real accepted execution qualification and the
+separate historical State-contract hardening review.
+
 ## Results migration walkthrough
 
 After the results schema version 2 tooling PR is merged:
@@ -801,28 +873,51 @@ After the results schema version 2 tooling PR is merged:
    run and use `resume_locked_migration` only with a new report; never delete the
    lock merely to unblock writers.
 
-## Immediate rollout order
+## Immediate remaining rollout order
 
-1. Resolve D1, D2, D4, D5, D8, D9, and D10.
-2. Authorize repository creation, initial pushes, and tracker creation.
-3. Publish the generator first; replace the local consumer pin with its exact
-   SHA and reverify parity.
-4. Publish State, staging State, and disabled releases tooling; configure State
-   rulesets.
-5. Publish draft PRs for catalog, results schema version 2/Worker,
-   lifecycle-aware leaderboard preview, and
-   software-verification statements.
-6. Create Cloudflare GitHub environments and credentials.
-7. Merge/deploy the intake-disabled Worker, verify staging/production health,
-   and update the infrastructure ledger.
-8. Approve and execute the fresh results schema version 2 migration.
-9. Freeze the maintainer-approved v1 set.
-10. Continue OAuth/agent intake, wire it to the implemented UUIDv7 archive
-    writer/State locator, and complete replay implementation in staging;
-    do not enable production intake or releases until D6 and the documented
-    implementation gates are complete.
+1. Finish and merge the fail-closed historical State-contract hardening, then
+   run a fresh qualification that actually executes Lean, comparator, and
+   `replay-measure` in the affected image lane. Regenerate and separately review
+   any proposed State authority/profile append and ordinary replay enqueue;
+   committed profile evidence `9a256695` is not sufficient authority.
+2. Finish public-evidence resolver PR `#1340`, promote its immutable workflow
+   tag only after exact protected-main CI, run all 16 read-only shards, and
+   retain a new source-free aggregate before advancing any newly resolved item.
+3. Finish kernel adapter PR `#1346`, then produce real independent-kernel runner
+   records under the approved exact image, aggregate the complete reviewed
+   series, adjudicate disagreements, and record the explicit human promotion
+   decision.
+4. Run the exact dark owner/maintainer reservation apply/reject canary and
+   confirm the deployed 369-external-subrequest allowance before enabling any
+   owner or maintainer gate.
+5. Apply and verify the dedicated release AWS trust with an authorized AWS
+   operator, pass one credentialed staging unwrap, and complete the release
+   launch review. The isolated production audit-key preflight already passed as
+   run `32762314683`. Keep
+   `PUBLICATION_ENABLED` absent until then.
+6. Resolve the locked production hostname/OAuth ownership requirement or land
+   an explicit reviewed amendment, then complete the finite-lease production
+   intake launch review. PR `#1337` merged the separate application-level
+   400-subrequest Cron budget as `a534c23`; exact-main CI `32761440535` and
+   protected deployment `32761440511` passed with exact disabled live health,
+   so this scheduled bound is qualified. The maintainer route's 369 bound
+   remains separate. Keep production
+   archive/replay AWS roles disconnected and all intake/replay flags false until
+   their respective gates pass.
+7. Launch FC100 only after `formal-conjectures#4951` receives maintainer review
+   and merges, the compatible pins land, and the production gates above pass.
 
 ## Production intake toggle
+
+PR `#1337` derives and tests the scheduled ordinary-dispatch bound without a
+Worker-global cap. Each Cron invocation has an application-level budget of 400
+external subrequests: a 35-request rotating 32-entry scan plus two complete
+155-request worst-case items totals 345, leaving 55 requests. A next item runs
+only while its complete reserve remains; exhaustion records a budget-deferred
+event and leaves the outbox. This is deliberately separate from the 369-request
+maintainer-mutation route. Exact-main CI `32761440535` and protected deployment
+`32761440511` passed, including the staging promotion canary, production
+finalization, and exact disabled health on all four public endpoints.
 
 Production intake has no out-of-band or manual toggle. After all launch gates
 are complete and their exact evidence is recorded, prepare one reviewed PR that
