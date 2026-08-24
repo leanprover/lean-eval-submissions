@@ -1584,6 +1584,116 @@ GPT-5.5 Codex
                 adjudication_digest,
             )
 
+    def test_unpinned_legacy_source_commit_cannot_be_laundered(self) -> None:
+        fixture = json.loads(
+            (ROOT / "tests/fixtures/legacy-gist-result-records-v1.json").read_text()
+        )[0]
+        request = fixture["request"]
+        requests = {
+            "schema_version": 1,
+            "kind": "historical_public_replay_resolution_requests",
+            "source_repository": "leanprover/lean-eval-submissions",
+            "source_commit": "a" * 40,
+            "inventory_sha256": "b" * 64,
+            "request_count": 1,
+            "result_count": len(request["results"]),
+            "requests": [request],
+        }
+        requests_digest = hashlib.sha256(
+            canonical_document_bytes(requests)
+        ).hexdigest()
+        workflow_registry, workflow_digest = registry_bytes()
+        adjudications, adjudication_digest = adjudication_bytes()
+        entry = next(
+            item
+            for item in adjudications["adjudications"]
+            if item["request_id"] == request["request_id"]
+        )
+        self.assertEqual(
+            entry["issue"]["body_binding"]["source_reference_binding"],
+            "unpinned",
+        )
+        legacy_candidate = {
+            "issue_repository": entry["issue"]["repository"],
+            "status": "matched_source_available",
+            **_legacy_candidate_projection(entry, request),
+        }
+        candidates = [
+            legacy_candidate
+            if repository == entry["issue"]["repository"]
+            else {"issue_repository": repository, "status": "issue_not_found"}
+            for repository in request["candidate_issue_repositories"]
+        ]
+        evidence = {
+            "schema_version": 1,
+            "kind": "historical_public_replay_github_evidence",
+            "source_repository": requests["source_repository"],
+            "source_commit": requests["source_commit"],
+            "inventory_sha256": requests["inventory_sha256"],
+            "resolution_requests_sha256": requests_digest,
+            "workflow_definition_registry_sha256": workflow_digest,
+            "legacy_adjudication_registry_sha256": adjudication_digest,
+            "request_count": 1,
+            "result_count": len(request["results"]),
+            "shard_index": 0,
+            "shard_count": 1,
+            "shard_request_count": 1,
+            "shard_result_count": len(request["results"]),
+            "resolved_count": 1,
+            "source_unavailable_count": 0,
+            "source_indeterminate_count": 0,
+            "probe_indeterminate_count": 0,
+            "timing_indeterminate_count": 0,
+            "workflow_contract_unreviewed_count": 0,
+            "pending_count": 0,
+            "resolutions": [
+                {
+                    "request_id": request["request_id"],
+                    "status": "resolved",
+                    "selected_issue_repository": entry["issue"]["repository"],
+                    "candidates": candidates,
+                }
+            ],
+        }
+        _validate_evidence(
+            evidence,
+            requests,
+            workflow_registry,
+            workflow_digest,
+            adjudications,
+            adjudication_digest,
+        )
+
+        changed_registry = copy.deepcopy(adjudications)
+        changed_entry = next(
+            item
+            for item in changed_registry["adjudications"]
+            if item["request_id"] == request["request_id"]
+        )
+        changed_entry["source"]["commit"] = "f" * 40
+        changed_digest = hashlib.sha256(
+            canonical_document_bytes(changed_registry)
+        ).hexdigest()
+        laundered = copy.deepcopy(evidence)
+        laundered["legacy_adjudication_registry_sha256"] = changed_digest
+        laundered_candidate = next(
+            item
+            for item in laundered["resolutions"][0]["candidates"]
+            if item["issue_repository"] == changed_entry["issue"]["repository"]
+        )
+        laundered_candidate.update(
+            _legacy_candidate_projection(changed_entry, request)
+        )
+        with self.assertRaisesRegex(EvidenceError, "not cross-bound to its request"):
+            _validate_evidence(
+                laundered,
+                requests,
+                workflow_registry,
+                workflow_digest,
+                changed_registry,
+                changed_digest,
+            )
+
     def test_historical_result_binding_rejects_extra_or_changed_records(self) -> None:
         request = request_value()["requests"][0]
         record = {

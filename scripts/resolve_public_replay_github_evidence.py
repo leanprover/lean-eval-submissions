@@ -2399,6 +2399,18 @@ def validate_evidence(
         ):
             raise EvidenceError(f"{label}.candidates are not canonical")
         legacy_entry = adjudications.get(request_id)
+        if legacy_entry is not None and (
+            legacy_entry["request_id"] != request_id
+            or legacy_entry["source"]
+            != {
+                field: request["source"][field]
+                for field in ("kind", "repository", "commit")
+            }
+            or legacy_entry["issue"]["number"] != request["issue_number"]
+        ):
+            raise EvidenceError(
+                f"{label} legacy adjudication is not cross-bound to its request"
+            )
         for candidate_index, candidate in enumerate(candidates):
             candidate_label = f"{label}.candidates[{candidate_index}]"
             status = candidate.get("status")

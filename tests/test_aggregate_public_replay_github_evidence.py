@@ -205,6 +205,53 @@ class AggregatePublicReplayEvidenceTests(unittest.TestCase):
         self.assertEqual(output["resolved_count"], 0)
         self.assertEqual(output["pending_count"], 1)
 
+    def test_aggregate_resolutions_remain_bound_to_shard_digests(self) -> None:
+        requests = request_value()
+        requests_digest = hashlib.sha256(
+            canonical_document_bytes(requests)
+        ).hexdigest()
+        evidence = resolve(
+            requests,
+            requests_digest,
+            FakeClient(source_available=False),
+            self.registry,
+            self.registry_digest,
+        )
+        output = aggregate(
+            requests,
+            requests_digest,
+            self.registry,
+            self.registry_digest,
+            [
+                (
+                    hashlib.sha256(
+                        canonical_document_bytes(evidence)
+                    ).hexdigest(),
+                    evidence,
+                )
+            ],
+        )
+        laundered = copy.deepcopy(output)
+        resolution = laundered["resolutions"][0]
+        resolution["status"] = "resolved"
+        resolution["selected_issue_repository"] = "leanprover/lean-eval"
+        resolution["candidates"][0]["status"] = "matched_source_available"
+        laundered["resolved_count"] = 1
+        laundered["source_unavailable_count"] = 0
+        laundered["pending_count"] = 0
+        laundered["shards"][0]["resolved_count"] = 1
+        laundered["shards"][0]["pending_count"] = 0
+        with self.assertRaisesRegex(
+            AggregationError, "shard digest does not bind"
+        ):
+            validate_aggregate(
+                laundered,
+                requests,
+                requests_digest,
+                self.registry,
+                self.registry_digest,
+            )
+
     def test_aggregate_binds_the_exact_legacy_registry(self) -> None:
         requests = request_value()
         raw = (json.dumps(requests, indent=2, sort_keys=True) + "\n").encode()

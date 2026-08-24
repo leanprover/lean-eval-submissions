@@ -389,6 +389,13 @@ def validate_aggregate(
         except EvidenceError as error:
             raise AggregationError(str(error)) from error
         if (
+            hashlib.sha256(canonical_document_bytes(reconstructed)).hexdigest()
+            != shard["evidence_sha256"]
+        ):
+            raise AggregationError(
+                "aggregate shard digest does not bind reconstructed evidence"
+            )
+        if (
             shard["request_count"] != reconstructed["shard_request_count"]
             or shard["result_count"] != reconstructed["shard_result_count"]
             or shard["resolved_count"] != reconstructed["resolved_count"]
