@@ -47,7 +47,7 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
             {"comparator", "landrun", "lean4export", "nanoda"},
         )
 
-    def test_image_is_build_gated_and_pinned_but_replay_is_disabled(self) -> None:
+    def test_image_is_build_gated_pinned_and_enabled_only_in_staging(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
         replay_config = (ROOT / "server" / "wrangler.replay.jsonc").read_text(
             encoding="utf-8"
@@ -70,7 +70,8 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
             ),
             2,
         )
-        self.assertEqual(replay_config.count('"REPLAY_ENABLED": "false"'), 2)
+        self.assertEqual(replay_config.count('"REPLAY_ENABLED": "true"'), 1)
+        self.assertEqual(replay_config.count('"REPLAY_ENABLED": "false"'), 1)
 
     def test_runner_uses_the_baked_elan_home(self) -> None:
         runner = RUNNER.read_text(encoding="utf-8")
