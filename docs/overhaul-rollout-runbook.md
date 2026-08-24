@@ -668,6 +668,43 @@ tokens. Custom domains can be added later without changing the API contracts.
     without enabling intake or changing State. Record the result, account, and
     deployment version IDs in `INFRASTRUCTURE.md`.
 
+## Historical public GitHub evidence walkthrough
+
+Treat GitHub evidence resolution as a source-free, immutable input to corpus
+planning, not as replay execution or a permanent-unavailability decision.
+
+1. Check out the reviewed protected-main commit and create its immutable
+   `lean-eval-dispatch/<commit>` tag through the protected promotion workflow.
+2. Generate the historical inventory and public resolution requests twice.
+   Require byte-identical output, then record both SHA-256 digests, the
+   workflow-definition registry digest, request/result counts, and canonical
+   results-store digest.
+3. Dispatch every shard for one exact shard count from that immutable tag.
+   Schedule shards across rate-limit windows rather than using a parallel
+   matrix. Confirm each run's head commit, attempt, success conclusion, artifact
+   name, artifact ID, and package digest with the Actions API.
+4. Download every sanitized shard artifact before retention expires and run
+   `scripts/aggregate_public_replay_github_evidence.py` offline from the same
+   clean source commit. Supply every shard exactly once and validate the output
+   against both the runtime validator and the published aggregate schema.
+5. Commit the sub-1-MiB source-free aggregate as a new immutable evidence
+   object. Record its exact byte digest, all shard JSON digests, run and artifact
+   IDs, input digests, classification counts, and artifact expiry date in a
+   linked evidence note and `INFRASTRUCTURE.md`. Do not rely on the 30-day
+   Actions artifacts as the durable record, and do not overwrite an older
+   aggregate when a probe or adjudication is rerun.
+6. Join classifications to the exact request artifact to report both request
+   and accepted-result counts. Only `resolved` groups may advance to exact-pin
+   replay. Keep `source_unavailable`, indeterminate, ambiguous, unreviewed, and
+   missing-evidence groups pending until their separately reviewed next action.
+
+The first complete post-registry pass followed this procedure at source
+`5746f90e72e863d96d992938aea0609978d1560c`. Runs `32718053904` through
+`32719340876` covered 315 requests / 633 results; 69 / 135 resolved and 246 /
+498 remain pending. The exact digests, classifications, artifact IDs, expiry,
+and permanent aggregate are recorded in
+[`historical-public-evidence-rerun.md`](historical-public-evidence-rerun.md).
+
 ## Results migration walkthrough
 
 After the results schema version 2 tooling PR is merged:
