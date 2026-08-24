@@ -580,8 +580,59 @@ tokens. Custom domains can be added later without changing the API contracts.
    ```
 
 6. Merge the reviewed Worker PR with `INTAKE_ENABLED=false`. The workflow
-   automatically deploys staging, validates its commit/environment/health body,
-   and then deploys production from the same commit.
+   automatically deploys staging and validates its exact
+   commit/environment/health body. It then uses the staging environment's
+   existing `READINESS_TOKEN` to run the promotion canary; no new canary secret
+   or production authority exists. The request must bind the exact deployed
+   commit and its immutable `lean-eval-dispatch/<commit>` tag.
+
+   The canary source is the private synthetic fixture repository at immutable
+   commit `ae38f4d3e4ad2991212135435f54e6640bcc89e7`, whose proof is deliberately
+   rejected. The Worker verifies the repository through the real source-reader
+   broker and atomically accepts one deterministic withheld staging submission
+   and outbox for the exact deployment `GITHUB_RUN_ID` plus
+   `GITHUB_RUN_ATTEMPT`. The first call records a fresh collision/retry proof;
+   polls within that attempt report the exact already-recorded proof and are idempotent; a workflow
+   rerun gets fresh State and contention material. Its fixed synthetic
+   2026-08-20 timestamp window is only a deterministic identity input.
+
+   From one current State snapshot, the adapter creates two source-free sibling
+   commits, applies an empty-tree barrier commit by forward-only CAS, observes GitHub reject the other
+   with 409/422, then rebuilds/retries the evidence atop the new head and
+   verifies application. The barrier changes the commit object but not the
+   validated State tree, so State's full-tree validation and append-only diff
+   both accept it; adapter tests pin the unchanged base tree and non-forced ref
+   update. The HTTP request does **not** dispatch. Every canary
+   UUID ends in the fixed `ca` shard, and its synthetic identity and outbox ref
+   retain the originating deployment commit, so the real one-minute Cron Trigger can
+   discover and safely reconcile pending prior workflow attempts even after a
+   Worker deployment changes. It strictly classifies and
+   re-derives each identity, processes at most 20 due entries, contains each
+   source-free error, terminally removes exact failed entries at the 32-attempt
+   bound, and still runs ordinary staging reconciliation.
+
+   Reconciliation uses the normal State-success path and actual dispatch broker
+   but targets only the immutable-ref, permissionless
+   `promotion-canary.yml` no-op. Under that exact dedicated target it never dispatches `submission.yml`, writes the
+   shared audit archive, starts evaluation, writes Results, or schedules a
+   release. The workflow polls the authenticated source-free response until the
+   scheduled path records GitHub's acceptance of the exact workflow dispatch
+   and removes the outbox. That `dispatch.status=succeeded` state is not evidence
+   that the asynchronous no-op Actions job has completed.
+
+   Missing authentication, a moved source identity/visibility, a non-exact
+   deployment/tag binding, absent State authority, a CAS update that does not
+   collide, broker failure, a malformed view/outbox, or a scheduler timeout
+   fails closed. Retries reuse the same UUIDv7 and immutable evidence for the
+   exact protected-main commit/run/attempt tuple. The production config explicitly sets
+   `PROMOTION_CANARY_ENABLED=false`; `/healthz` separately exposes the
+   source-free configured and effective false values so the production
+   route-disable state is observable, while the route is hidden and its scheduled
+   handler has no synthetic authority. Emergency rollback qualification also
+   rejects any production target with this flag enabled, before mutation. Only after the staging job passes does
+   the workflow deploy production from the same commit. Logs contain only the
+   source-free status fields and never the readiness token, source fields, or
+   upstream response bodies.
 
 7. Set distinct runtime secrets interactively after the Workers exist:
 

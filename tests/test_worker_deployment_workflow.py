@@ -9,6 +9,9 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEPLOY = (ROOT / ".github/workflows/deploy-worker.yml").read_text(encoding="utf-8")
+PROMOTION_CANARY = (ROOT / ".github/workflows/promotion-canary.yml").read_text(
+    encoding="utf-8"
+)
 
 ROLLBACK = (ROOT / ".github/workflows/rollback-worker.yml").read_text(encoding="utf-8")
 STATE_WRITER_PREFLIGHT = (
@@ -30,6 +33,9 @@ REPLAY_RECEIPT = (ROOT / "server/src/replay-terminal-receipt.ts").read_text(
     encoding="utf-8"
 )
 REPLAY_DOCKERFILE = (ROOT / "server/Dockerfile.replay").read_text(encoding="utf-8")
+ROLLBACK_VALIDATOR = (ROOT / "scripts/validate_cloudflare_rollback.py").read_text(
+    encoding="utf-8"
+)
 
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
@@ -63,6 +69,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
         for trigger in (pull_request, push):
             self.assertIn("'.github/workflows/submission.yml'", trigger)
+            self.assertIn("'.github/workflows/promotion-canary.yml'", trigger)
             self.assertIn("'.audit/**'", trigger)
             self.assertIn("'scripts/**'", trigger)
 
@@ -176,6 +183,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('tag="lean-eval-dispatch/$WORKFLOW_COMMIT"', block)
         self.assertIn("compare/$WORKFLOW_COMMIT...main", block)
         self.assertIn("contents/.github/workflows/submission.yml?ref=$WORKFLOW_COMMIT", block)
+        self.assertIn("contents/.github/workflows/promotion-canary.yml?ref=$WORKFLOW_COMMIT", block)
 
     def test_promotion_is_idempotent_and_collision_safe(self) -> None:
         self.assertIn('if [ "$existing" != "$WORKFLOW_COMMIT" ]; then', DEPLOY)
@@ -187,14 +195,60 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
     def test_both_deployments_receive_promoted_ref(self) -> None:
         self.assertEqual(
             DEPLOY.count("DISPATCH_WORKFLOW_REF: ${{ needs.promote-dispatch-ref.outputs.ref }}"),
-            2,
+            3,
         )
         self.assertEqual(
             DEPLOY.count('--var "DISPATCH_WORKFLOW_REF:$DISPATCH_WORKFLOW_REF"'),
             2,
         )
         self.assertIn("needs: promote-dispatch-ref", DEPLOY)
-        self.assertIn("needs: [deploy-staging, promote-dispatch-ref]", DEPLOY)
+        self.assertIn("needs: [staging-promotion-canary, promote-dispatch-ref]", DEPLOY)
+
+    def test_production_is_blocked_on_the_exact_staging_promotion_canary(self) -> None:
+        canary = DEPLOY.split("\n  staging-promotion-canary:", 1)[1].split(
+            "\n  deploy-production:", 1
+        )[0]
+        self.assertIn("needs: [deploy-staging, promote-dispatch-ref]", canary)
+        self.assertIn("environment: cloudflare-staging", canary)
+        self.assertIn("runs-on: ubuntu-24.04", canary)
+        self.assertIn("READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}", canary)
+        self.assertIn("run_staging_promotion_canary.py", canary)
+        self.assertIn('--commit "$GITHUB_SHA"', canary)
+        self.assertIn('--dispatch-ref "$DISPATCH_WORKFLOW_REF"', canary)
+        self.assertIn('--run-id "$GITHUB_RUN_ID"', canary)
+        self.assertIn('--run-attempt "$GITHUB_RUN_ATTEMPT"', canary)
+        self.assertIn("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97", canary)
+        self.assertIn("python-version: '3.11.10'", canary)
+        self.assertIn("timeout-minutes: 12", canary)
+        self.assertIn("--timeout-seconds 480", canary)
+        self.assertNotIn("GITHUB_STATE_TOKEN", canary)
+        self.assertNotIn("GITHUB_DISPATCH_TOKEN", canary)
+        self.assertNotIn("upload-artifact", canary)
+        production = DEPLOY.split("\n  deploy-production:", 1)[1]
+        self.assertIn(
+            "needs: [staging-promotion-canary, promote-dispatch-ref]",
+            production,
+        )
+
+    def test_promotion_dispatch_target_is_dedicated_source_free_and_no_op(self) -> None:
+        self.assertIn("permissions: {}", PROMOTION_CANARY)
+        self.assertIn("workflow_dispatch:", PROMOTION_CANARY)
+        self.assertIn("source-free-no-op:", PROMOTION_CANARY)
+        self.assertIn("runs-on: ubuntu-24.04", PROMOTION_CANARY)
+        self.assertIn('echo \'{"status":"source_free_no_op_verified"}\'', PROMOTION_CANARY)
+        self.assertIn("$GITHUB_SHA", PROMOTION_CANARY)
+        self.assertIn("$GITHUB_REF", PROMOTION_CANARY)
+        for forbidden in (
+            "actions/checkout",
+            "secrets.",
+            "submission.yml",
+            "archive",
+            "evaluation",
+            "lean-eval-audit",
+            "results/",
+            "upload-artifact",
+        ):
+            self.assertNotIn(forbidden, PROMOTION_CANARY)
 
     def test_rollback_validates_all_targets_before_mutation(self) -> None:
         self.assertIn('dispatch_ref="lean-eval-dispatch/$EXPECTED_COMMIT"', ROLLBACK)
@@ -210,6 +264,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             ROLLBACK.index("Pause intake by deploying exact target code with current secrets"),
         )
         self.assertIn("--require-disabled", ROLLBACK)
+        self.assertIn('"promotion_canary_enabled"', ROLLBACK_VALIDATOR)
+        self.assertIn('"PROMOTION_CANARY_ENABLED"', ROLLBACK_VALIDATOR)
         self.assertIn("cloudflare-rollback-qualification-v1.json", ROLLBACK)
         self.assertEqual(ROLLBACK.count("compatible-capabilities"), 1)
         self.assertIn("Preserve source-free pre-mutation recovery state", ROLLBACK)
@@ -259,9 +315,14 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertEqual(production_limit["simple"], {"limit": 30, "period": 60})
         self.assertEqual(staging["triggers"]["crons"], ["* * * * *"])
         self.assertEqual(production["triggers"]["crons"], ["* * * * *"])
+        self.assertEqual(staging["vars"]["PROMOTION_CANARY_ENABLED"], "true")
+        self.assertEqual(production["vars"]["PROMOTION_CANARY_ENABLED"], "false")
         self.assertIn("env.API_RATE_LIMITER.limit({ key })", WORKER_APP)
         self.assertIn("handleScheduled(env, controller.scheduledTime)", WORKER_ENTRYPOINT)
         self.assertIn("if (!intakeEnabled(env)) return;", WORKER_APP)
+        self.assertIn("reconcilePromotionCanariesScheduled", WORKER_APP)
+        self.assertIn('env.DEPLOYMENT_ENVIRONMENT === "staging"', WORKER_APP)
+        self.assertEqual(production["vars"]["PROMOTION_CANARY_ENABLED"], "false")
 
     def test_private_brokers_are_bound_and_deployed_before_intake_workers(self) -> None:
         for environment in ("staging", "production"):

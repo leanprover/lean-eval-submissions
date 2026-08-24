@@ -149,6 +149,9 @@ def expected_health(
     except (KeyError, TypeError, ValueError) as error:
         raise MonitorError(f"tracked {environment} health contract is invalid") from error
     intake_enabled = _boolean_variable(intake_vars, "INTAKE_ENABLED", environment)
+    promotion_canary_enabled = _boolean_variable(
+        intake_vars, "PROMOTION_CANARY_ENABLED", environment
+    )
     replay_enabled = _boolean_variable(replay_vars, "REPLAY_ENABLED", environment)
     staging_enabled = _boolean_variable(
         replay_vars, "STAGING_ACCEPTANCE_ENABLED", environment
@@ -164,6 +167,10 @@ def expected_health(
         "service": intake_service,
         "environment": environment,
         "intake_enabled": intake_enabled,
+        "promotion_canary_configured_enabled": promotion_canary_enabled,
+        "promotion_canary_enabled": (
+            environment == "staging" and promotion_canary_enabled
+        ),
     }
     replay = {
         "status": "ok",

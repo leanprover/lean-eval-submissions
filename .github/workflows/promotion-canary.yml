@@ -1,0 +1,49 @@
+name: Staging promotion dispatch canary
+run-name: Staging promotion canary ${{ inputs.controller_run_id }}.${{ inputs.controller_run_attempt }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      workflow_commit:
+        description: Immutable commit containing this no-op workflow
+        required: true
+        type: string
+      submission_id:
+        description: Source-free run-scoped synthetic State identity
+        required: true
+        type: string
+      controller_run_id:
+        description: Deployment workflow run proving fresh canary material
+        required: true
+        type: string
+      controller_run_attempt:
+        description: Deployment workflow attempt proving fresh canary material
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  source-free-no-op:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - name: Verify exact source-free dispatch identity
+        env:
+          CONTROLLER_RUN_ATTEMPT: ${{ inputs.controller_run_attempt }}
+          CONTROLLER_RUN_ID: ${{ inputs.controller_run_id }}
+          SUBMISSION_ID: ${{ inputs.submission_id }}
+          WORKFLOW_COMMIT: ${{ inputs.workflow_commit }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]] ||
+             [ "$WORKFLOW_COMMIT" != "$GITHUB_SHA" ] ||
+             [[ ! "$GITHUB_REF" =~ ^refs/tags/lean-eval-dispatch/[0-9a-f]{40}$ ]] ||
+             [ "$GITHUB_REF" != "refs/tags/lean-eval-dispatch/$WORKFLOW_COMMIT" ] ||
+             [[ ! "$SUBMISSION_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{10}ca$ ]] ||
+             [[ ! "$CONTROLLER_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]] ||
+             [[ ! "$CONTROLLER_RUN_ATTEMPT" =~ ^[1-9][0-9]{0,5}$ ]]; then
+            echo "promotion canary dispatch identity was not exact" >&2
+            exit 1
+          fi
+          echo '{"status":"source_free_no_op_verified"}'

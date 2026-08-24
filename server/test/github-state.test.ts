@@ -28,6 +28,20 @@ const EVENT: StateEvent = {
   actor: { kind: "system" },
   payload: { environment: "staging" },
 };
+const CANARY_EVIDENCE: StateEvent = {
+  schema_version: 1,
+  event_id: "0198abcd-0000-7000-8000-000000000002",
+  event_type: "authentication.nonce_consumed",
+  occurred_at: "2026-08-20T06:07:08.001Z",
+  subject_id: "0198abcd-0000-7000-8000-000000000002",
+  causation_event_id: null,
+  actor: { kind: "system" },
+  payload: {
+    nonce_digest: "a".repeat(64),
+    purpose: "submission",
+    expires_at: "2026-08-20T06:17:08.000Z",
+  },
+};
 
 const SUBMISSION_ID = "0198abcd-1111-7000-8000-000000000001";
 const METADATA_ID = "0198abcd-1111-7000-8000-000000000002";
@@ -226,6 +240,108 @@ describe("atomic Git State append", () => {
     expect(init?.method).toBe("PATCH");
     if (typeof init?.body !== "string") throw new TypeError("write probe body must be JSON");
     expect(JSON.parse(init.body)).toEqual({ force: false, sha: HEAD });
+  });
+
+  it("proves real CAS contention before appending durable canary evidence through the retrying writer", async () => {
+    const winnerCommit = "a".repeat(40);
+    const contenderTree = "9".repeat(40);
+    const contenderCommit = "b".repeat(40);
+    const evidenceTree = "c".repeat(40);
+    const evidenceCommit = "d".repeat(40);
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      new Response(null, { status: 404 }),
+      json({ sha: winnerCommit }, 201),
+      json({ sha: contenderTree }, 201),
+      json({ sha: contenderCommit }, 201),
+      json({ ref: "refs/heads/main", object: { sha: winnerCommit } }),
+      json({ message: "not a fast forward" }, 422),
+      json({ object: { sha: winnerCommit } }),
+      json({ tree: { sha: TREE } }),
+      new Response(null, { status: 404 }),
+      json({ sha: evidenceTree }, 201),
+      json({ sha: evidenceCommit }, 201),
+      json({ object: { sha: evidenceCommit } }),
+    ]);
+    await expect(repository(fetcher).provePromotionCanaryContention(CANARY_EVIDENCE))
+      .resolves.toEqual({
+        proofRecorded: true,
+        idempotent: false,
+        commit: evidenceCommit,
+        created: true,
+      });
+    const winnerUpdate = fetcher.mock.calls[6]?.[1];
+    const contenderUpdate = fetcher.mock.calls[7]?.[1];
+    const retryUpdate = fetcher.mock.calls[13]?.[1];
+    expect(winnerUpdate?.method).toBe("PATCH");
+    expect(contenderUpdate?.method).toBe("PATCH");
+    expect(retryUpdate?.method).toBe("PATCH");
+    if (
+      typeof winnerUpdate?.body !== "string" ||
+      typeof contenderUpdate?.body !== "string" ||
+      typeof retryUpdate?.body !== "string"
+    ) {
+      throw new TypeError("canary ref update bodies must be JSON text");
+    }
+    expect(JSON.parse(winnerUpdate.body)).toEqual({ force: false, sha: winnerCommit });
+    expect(JSON.parse(contenderUpdate.body)).toEqual({
+      force: false,
+      sha: contenderCommit,
+    });
+    expect(JSON.parse(retryUpdate.body)).toEqual({
+      force: false,
+      sha: evidenceCommit,
+    });
+    const winnerRequestBody = fetcher.mock.calls[3]?.[1]?.body;
+    const contenderRequestBody = fetcher.mock.calls[5]?.[1]?.body;
+    if (typeof winnerRequestBody !== "string") {
+      throw new TypeError("canary winner commit body must be JSON text");
+    }
+    expect(JSON.parse(winnerRequestBody)).toEqual({
+      message: `Promotion canary CAS winner ${CANARY_EVIDENCE.event_id}`,
+      parents: [HEAD],
+      tree: TREE,
+    });
+    const callUrls = fetcher.mock.calls.map((call) => {
+      const input = call[0];
+      return typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.toString()
+          : input.url;
+    });
+    expect(callUrls[3]).toMatch(/\/git\/commits$/u);
+    expect(callUrls.filter((url) => url.endsWith("/git/trees"))).toHaveLength(2);
+    if (typeof contenderRequestBody !== "string") {
+      throw new TypeError("canary contender commit body must be JSON text");
+    }
+    const contenderCommitBody = JSON.parse(contenderRequestBody) as {
+      message: string;
+      parents: string[];
+      tree: string;
+    };
+    expect(contenderCommitBody).toEqual({
+      message: `Promotion canary CAS contender ${CANARY_EVIDENCE.event_id}`,
+      parents: [HEAD],
+      tree: contenderTree,
+    });
+  });
+
+  it("reuses exact immutable contention evidence without creating another contender", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      contents(CANARY_EVIDENCE),
+    ]);
+    await expect(repository(fetcher).provePromotionCanaryContention(CANARY_EVIDENCE))
+      .resolves.toEqual({
+        proofRecorded: true,
+        idempotent: true,
+        commit: HEAD,
+        created: false,
+      });
+    expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
   it("target-reads one submission view and only its referenced immutable events", async () => {

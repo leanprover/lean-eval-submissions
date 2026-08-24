@@ -57,6 +57,7 @@ jobs:
           python -m unittest
           tests.test_submission_workflow
           tests.test_server_archive_workflow
+          tests.test_staging_promotion_canary
           tests.test_worker_deployment_workflow
           tests.test_validate_cloudflare_rollback
           tests.test_monitor_cloudflare_health

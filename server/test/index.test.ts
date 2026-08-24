@@ -22,6 +22,8 @@ describe("Worker routing", () => {
       deployed_commit: "development",
       environment: "staging",
       intake_enabled: false,
+      promotion_canary_configured_enabled: true,
+      promotion_canary_enabled: true,
     });
   });
 
@@ -38,6 +40,8 @@ describe("Worker routing", () => {
       deployed_commit: "test-commit",
       environment: "staging",
       intake_enabled: false,
+      promotion_canary_configured_enabled: false,
+      promotion_canary_enabled: false,
     });
     expect(response.headers.get("cache-control")).toBe("no-store");
   });

@@ -18,7 +18,11 @@ import {
   type SubmissionGrant,
 } from "../src/auth";
 import { handleRequest, handleScheduled, type RuntimeEnv, type StateAccess } from "../src/app";
-import { buildDispatchRequest, GitHubProvider } from "../src/github-provider";
+import {
+  buildDispatchRequest,
+  buildPromotionCanaryDispatchRequest,
+  GitHubProvider,
+} from "../src/github-provider";
 import {
   validateStateEvent,
   type WritableResultLifecycleEvent,
@@ -153,6 +157,21 @@ class MemoryState implements StateAccess {
 
   listDispatchOutbox(shard: string): Promise<readonly DispatchOutbox[]> {
     return Promise.resolve([...this.outbox.values()].filter((entry) => entry.submission_id.replaceAll("-", "").endsWith(shard)));
+  }
+
+  provePromotionCanaryContention(event: WritableStateEvent): Promise<{
+    proofRecorded: boolean;
+    idempotent: boolean;
+    created: boolean;
+  }> {
+    validateStateEvent(event);
+    const existing = this.events.find((candidate) => candidate.event_id === event.event_id);
+    if (existing === undefined) this.events.push(event);
+    return Promise.resolve({
+      proofRecorded: true,
+      idempotent: existing !== undefined,
+      created: existing === undefined,
+    });
   }
 }
 
@@ -871,6 +890,425 @@ describe("scheduled dispatch reconciliation in workerd", () => {
     expect(dispatch).toHaveBeenCalledOnce();
     expect(state.views.get(submissionId)?.dispatch).toMatchObject({ status: "succeeded", attempts: 2 });
     expect(state.outbox).toHaveLength(0);
+  });
+
+  it("does not let a canary-looking model label bypass production reconciliation", async () => {
+    const state = new MemoryState();
+    const scheduledTime = (Math.floor(NOW_MS / (256 * 60_000)) * 256 + 1) * 60_000;
+    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    const submission = {
+      ...SUBMISSION,
+      declared_model: "lean-eval automatic staging promotion canary v3",
+    };
+    const view = {
+      ...pendingView(submissionId, new Date(scheduledTime - 60_000).toISOString(), 1, "failed"),
+      submission,
+    } satisfies SubmissionView;
+    state.views.set(submissionId, view);
+    state.outbox.set(submissionId, {
+      schema_version: 1,
+      submission_id: submissionId,
+      owner_login: "alice",
+      submission,
+      attempts: 1,
+      next_attempt_at: new Date(scheduledTime - 1).toISOString(),
+      workflow_ref: view.dispatch.workflow_ref,
+    });
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    await handleScheduled({
+      ...ENV,
+      DEPLOYMENT_ENVIRONMENT: "production",
+      STATE_REPOSITORY: "leanprover/lean-eval-state",
+    }, scheduledTime, { state, dispatch });
+    expect(dispatch).toHaveBeenCalledOnce();
+    expect(state.outbox).toHaveLength(0);
+  });
+});
+
+describe("automatic staging promotion canary in workerd", () => {
+  const commit = "c".repeat(40);
+  const canaryEnv = {
+    ...ENV,
+    DEPLOYED_COMMIT: commit,
+    DISPATCH_WORKFLOW_REF: `lean-eval-dispatch/${commit}`,
+    INTAKE_ENABLED: "false",
+    PROMOTION_CANARY_ENABLED: "true",
+    READINESS_TOKEN: SECRET,
+    STATE_REPOSITORY: "leanprover/lean-eval-state-staging",
+  } satisfies RuntimeEnv;
+  const canaryBody = {
+    schema_version: 2,
+    deployed_commit: commit,
+    dispatch_ref: `lean-eval-dispatch/${commit}`,
+    controller_run_id: "32712345678",
+    controller_run_attempt: "1",
+  };
+
+  function canaryRequest(): Request {
+    return new Request("https://submit.test/internal/v1/promotion-canary", {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${SECRET}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(canaryBody),
+    });
+  }
+
+  it("defers exact synthetic intake to the actual scheduled handler and is idempotent", async () => {
+    const state = new MemoryState();
+    const source = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
+      full_name: "kim-em/lean-eval-intake-fixture",
+      private: true,
+    })));
+    const github = new GitHubProvider(undefined, undefined, source);
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    const first = await handleRequest(canaryRequest(), canaryEnv, LIFECYCLE, {
+      provider: github,
+      state,
+      dispatch,
+    });
+    expect(first.status).toBe(202);
+    const firstBody = await first.json<Record<string, unknown>>();
+    expect(firstBody).toMatchObject({
+      status: "awaiting_scheduled_reconciliation",
+      environment: "staging",
+      deployed_commit: commit,
+      dispatch_ref: `lean-eval-dispatch/${commit}`,
+      controller_run_id: "32712345678",
+      controller_run_attempt: "1",
+      github_connectivity: "verified",
+      synthetic_intake: "created",
+      cas_contention: "collision_observed_and_retry_applied",
+      dispatch_state: "pending",
+      workflow_dispatch: "pending",
+      scheduled_reconciliation: "pending",
+    });
+    expect(JSON.stringify(firstBody)).not.toContain("source_repository");
+    expect(JSON.stringify(firstBody)).not.toContain("ae38f4d3");
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(state.outbox).toHaveLength(1);
+
+    const canaryId = String(firstBody.submission_id);
+    const unrelatedId = `0198abcd-2222-7000-8000-0000000000${canaryId.slice(-2)}`;
+    const canaryOutbox = [...state.outbox.values()][0];
+    if (canaryOutbox === undefined) throw new Error("canary outbox was not persisted");
+    state.outbox.set(unrelatedId, {
+      ...canaryOutbox,
+      submission_id: unrelatedId,
+    });
+
+    const laterCommit = "d".repeat(40);
+    await handleScheduled({
+      ...canaryEnv,
+      DEPLOYED_COMMIT: laterCommit,
+      DISPATCH_WORKFLOW_REF: `lean-eval-dispatch/${laterCommit}`,
+    }, Date.UTC(2026, 7, 25), { state, dispatch });
+    expect(dispatch).toHaveBeenCalledOnce();
+    const dispatched = dispatch.mock.calls[0]?.[0];
+    expect(dispatched?.url).toContain("/actions/workflows/promotion-canary.yml/dispatches");
+    expect(await dispatched?.clone().json()).toEqual({
+      ref: `lean-eval-dispatch/${commit}`,
+      inputs: {
+        workflow_commit: commit,
+        submission_id: canaryId,
+        controller_run_id: "32712345678",
+        controller_run_attempt: "1",
+      },
+    });
+    expect(state.outbox).toHaveLength(1);
+    expect(state.outbox.has(unrelatedId)).toBe(true);
+
+    const second = await handleRequest(canaryRequest(), canaryEnv, LIFECYCLE, {
+      provider: github,
+      state,
+      dispatch,
+    });
+    expect(second.status).toBe(200);
+    expect(await second.json()).toMatchObject({
+      status: "passed",
+      submission_id: firstBody.submission_id,
+      synthetic_intake: "idempotent",
+      cas_contention: "idempotent_prior_collision_and_retry_proof",
+      dispatch_state: "succeeded",
+      workflow_dispatch: "accepted_by_github",
+      scheduled_reconciliation: "completed",
+    });
+    expect(state.views).toHaveLength(1);
+    expect(dispatch).toHaveBeenCalledOnce();
+  });
+
+  it("creates fresh material per workflow attempt and reconciles every prior run", async () => {
+    const state = new MemoryState();
+    const source = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
+      full_name: "kim-em/lean-eval-intake-fixture",
+      private: true,
+    })));
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    const ids: string[] = [];
+    for (const runAttempt of ["1", "2"]) {
+      const request = new Request("https://submit.test/internal/v1/promotion-canary", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${SECRET}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ ...canaryBody, controller_run_attempt: runAttempt }),
+      });
+      const response = await handleRequest(request, canaryEnv, LIFECYCLE, {
+        provider: new GitHubProvider(undefined, undefined, source),
+        state,
+        dispatch,
+      });
+      expect(response.status).toBe(202);
+      const body = await response.json<Record<string, unknown>>();
+      expect(body.synthetic_intake).toBe("created");
+      expect(body.cas_contention).toBe("collision_observed_and_retry_applied");
+      ids.push(String(body.submission_id));
+    }
+    expect(new Set(ids).size).toBe(2);
+    expect(state.outbox).toHaveLength(2);
+    await handleScheduled(canaryEnv, Date.UTC(2026, 7, 25), { state, dispatch });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(state.outbox).toHaveLength(0);
+  });
+
+  it("bounds each fixed-shard scheduled canary pass to twenty dispatches", async () => {
+    const state = new MemoryState();
+    const source = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
+      full_name: "kim-em/lean-eval-intake-fixture",
+      private: true,
+    })));
+    const github = new GitHubProvider(undefined, undefined, source);
+    for (let index = 0; index < 21; index += 1) {
+      const request = new Request("https://submit.test/internal/v1/promotion-canary", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${SECRET}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ ...canaryBody, controller_run_id: String(1000 + index) }),
+      });
+      const response = await handleRequest(request, canaryEnv, LIFECYCLE, {
+        provider: github,
+        state,
+        dispatch: () => Promise.resolve(),
+      });
+      expect(response.status).toBe(202);
+    }
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    await handleScheduled(canaryEnv, Date.UTC(2026, 7, 25), { state, dispatch });
+    expect(dispatch).toHaveBeenCalledTimes(20);
+    expect(state.outbox).toHaveLength(1);
+  });
+
+  it("records a failed no-op dispatch and reports it without claiming success", async () => {
+    const state = new MemoryState();
+    const source = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
+      full_name: "kim-em/lean-eval-intake-fixture",
+      private: true,
+    })));
+    const github = new GitHubProvider(undefined, undefined, source);
+    const failedDispatch = vi.fn<(request: Request) => Promise<void>>(() =>
+      Promise.reject(new Error("source-free test failure")));
+    await handleRequest(canaryRequest(), canaryEnv, LIFECYCLE, {
+      provider: github,
+      state,
+      dispatch: failedDispatch,
+    });
+    await handleScheduled(canaryEnv, Date.UTC(2026, 7, 25), {
+      state,
+      dispatch: failedDispatch,
+    });
+    const response = await handleRequest(canaryRequest(), canaryEnv, LIFECYCLE, {
+      provider: github,
+      state,
+      dispatch: failedDispatch,
+    });
+    expect(response.status).toBe(202);
+    expect(await response.json()).toMatchObject({
+      status: "dispatch_failed",
+      dispatch_state: "failed",
+      workflow_dispatch: "retry_pending",
+      scheduled_reconciliation: "retry_pending",
+    });
+  });
+
+  it("terminally removes an exact canary outbox after the bounded retry limit", async () => {
+    const state = new MemoryState();
+    const source = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
+      full_name: "kim-em/lean-eval-intake-fixture",
+      private: true,
+    })));
+    const response = await handleRequest(canaryRequest(), canaryEnv, LIFECYCLE, {
+      provider: new GitHubProvider(undefined, undefined, source),
+      state,
+      dispatch: () => Promise.resolve(),
+    });
+    const submissionId = String((await response.json<Record<string, unknown>>()).submission_id);
+    const view = state.views.get(submissionId);
+    const outbox = state.outbox.get(submissionId);
+    if (!view || !outbox) throw new Error("canary material was not persisted");
+    state.views.set(submissionId, {
+      ...view,
+      dispatch: {
+        ...view.dispatch,
+        status: "failed",
+        attempts: 32,
+        last_error_code: "dispatch_provider_unavailable",
+      },
+    });
+    state.outbox.set(submissionId, {
+      ...outbox,
+      attempts: 32,
+      next_attempt_at: "2026-08-20T00:00:00.000Z",
+    });
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await handleScheduled(canaryEnv, Date.UTC(2026, 7, 25), { state, dispatch });
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(state.outbox.has(submissionId)).toBe(false);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("promotion_canary_terminal_retry_exhausted"));
+    log.mockRestore();
+  });
+
+  it("contains canary scheduler errors and still reconciles ordinary staging intake", async () => {
+    const state = new MemoryState();
+    const source = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
+      full_name: "kim-em/lean-eval-intake-fixture",
+      private: true,
+    })));
+    await handleRequest(canaryRequest(), canaryEnv, LIFECYCLE, {
+      provider: new GitHubProvider(undefined, undefined, source),
+      state,
+      dispatch: () => Promise.resolve(),
+    });
+    const exactCanary = [...state.outbox.values()][0];
+    if (exactCanary === undefined) throw new Error("canary outbox was not persisted");
+    state.outbox.clear();
+    const corruptCanaryId = "0198abcd-1111-7000-8000-0000000000ca";
+    state.outbox.set(corruptCanaryId, { ...exactCanary, submission_id: corruptCanaryId });
+
+    const ordinaryId = "0198abcd-2222-7000-8000-0000000000ca";
+    const ordinary = pendingView(ordinaryId, "2026-08-20T00:00:00.000Z");
+    const workflowRef = `lean-eval-dispatch/${commit}`;
+    const ordinaryView = {
+      ...ordinary,
+      owner_login: "kim-em",
+      dispatch: { ...ordinary.dispatch, workflow_ref: workflowRef },
+    } satisfies SubmissionView;
+    state.views.set(ordinaryId, ordinaryView);
+    state.outbox.set(ordinaryId, {
+      schema_version: 1,
+      submission_id: ordinaryId,
+      owner_login: ordinaryView.owner_login,
+      submission: ordinaryView.submission,
+      attempts: 0,
+      next_attempt_at: ordinaryView.accepted_at,
+      workflow_ref: workflowRef,
+    });
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await handleScheduled(
+      { ...canaryEnv, INTAKE_ENABLED: "true" },
+      1_787_624_280_000,
+      { state, dispatch },
+    );
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("promotion_canary_scheduled_scan_failed"));
+    expect(dispatch).toHaveBeenCalledOnce();
+    expect(dispatch.mock.calls[0]?.[0].url).toContain("/submission.yml/dispatches");
+    expect(state.outbox.has(ordinaryId)).toBe(false);
+    expect(state.outbox.has(corruptCanaryId)).toBe(true);
+    log.mockRestore();
+  });
+
+  it("builds only the dedicated source-free canary dispatch contract", async () => {
+    const request = buildPromotionCanaryDispatchRequest(
+      "leanprover/lean-eval-submissions",
+      `lean-eval-dispatch/${commit}`,
+      "0198abcd-1111-7000-8000-0000000000ca",
+      "32712345678",
+      "3",
+    );
+    expect(request.url).toContain("/promotion-canary.yml/dispatches");
+    const body = await request.json<Record<string, unknown>>();
+    expect(JSON.stringify(body)).not.toMatch(/source|archive|audit|evaluation|result/iu);
+    expect(() => buildPromotionCanaryDispatchRequest(
+      "leanprover/lean-eval-submissions",
+      `lean-eval-dispatch/${commit}`,
+      "0198abcd-1111-7000-8000-000000000001",
+      "32712345678",
+      "3",
+    )).toThrow(/identity/iu);
+  });
+
+  it("hides the route from production even with the staging flag and readiness token", async () => {
+    const state = new MemoryState();
+    const list = vi.spyOn(state, "listDispatchOutbox");
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    const productionEnv = { ...canaryEnv, DEPLOYMENT_ENVIRONMENT: "production" } as const;
+    const response = await handleRequest(
+      canaryRequest(),
+      productionEnv,
+      LIFECYCLE,
+      { state },
+    );
+    expect(response.status).toBe(404);
+    expect(state.views).toHaveLength(0);
+    await handleScheduled(productionEnv, Date.UTC(2026, 7, 25), { state, dispatch });
+    expect(list).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the request is unauthenticated or the immutable ref is not exact", async () => {
+    const state = new MemoryState();
+    const unauthenticated = await handleRequest(
+      new Request("https://submit.test/internal/v1/promotion-canary", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(canaryBody),
+      }),
+      canaryEnv,
+      LIFECYCLE,
+      { state, dispatch: () => Promise.resolve() },
+    );
+    expect(unauthenticated.status).toBe(404);
+    const noncanonical = await handleRequest(
+      new Request("https://submit.test/internal/v1/promotion-canary", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${SECRET}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ ...canaryBody, source_repository: "attacker/repository" }),
+      }),
+      canaryEnv,
+      LIFECYCLE,
+      { state, dispatch: () => Promise.resolve() },
+    );
+    expect(noncanonical.status).toBe(400);
+    const invalidRun = await handleRequest(
+      new Request("https://submit.test/internal/v1/promotion-canary", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${SECRET}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ ...canaryBody, controller_run_attempt: "000001" }),
+      }),
+      canaryEnv,
+      LIFECYCLE,
+      { state, dispatch: () => Promise.resolve() },
+    );
+    expect(invalidRun.status).toBe(400);
+    const misbound = await handleRequest(
+      canaryRequest(),
+      { ...canaryEnv, DISPATCH_WORKFLOW_REF: `lean-eval-dispatch/${"d".repeat(40)}` },
+      LIFECYCLE,
+      { state, dispatch: () => Promise.resolve() },
+    );
+    expect(misbound.status).toBe(503);
+    expect(state.views).toHaveLength(0);
   });
 });
 

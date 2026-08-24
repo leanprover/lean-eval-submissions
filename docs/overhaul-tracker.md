@@ -243,9 +243,17 @@ the already implemented owner status, metadata, and publication routes.
       `f5f830d0`; main deploy run `32700644989` passed staging and production
       with intake and replay disabled. State stays append-only and
       forward-corrected.
-- [ ] Add the exact staging promotion canary required by the program: GitHub
-      connectivity, synthetic intake, CAS contention, and scheduled
-      reconciliation before a production candidate is promoted.
+- [ ] Merge and qualify the exact staging promotion canary required by the
+      program. The tracked implementation binds one deterministic, withheld,
+      deliberately rejected synthetic intake to each protected-main
+      commit/controller-run/attempt tuple; proves source-App connectivity, a
+      real forward-only State sibling collision plus rebuilt retry, and a
+      dedicated source-free no-op dispatch through the actual broker and Cron
+      reconciliation while ordinary intake stays disabled; and blocks
+      production deployment unless it succeeds. Fixed-shard discovery also
+      reconciles pending prior workflow attempts across Worker deployments.
+      This remains unchecked until the first
+      protected run is recorded in the ledger.
 - [x] Validate the release controller's State and release-repository write
       credentials without AWS decrypt or publication. Protected run
       `32694754911` at release commit `2a4cdff2` passed both exact-ref dry-run

@@ -414,3 +414,41 @@ export function buildDispatchRequest(
     }),
   });
 }
+
+export function buildPromotionCanaryDispatchRequest(
+  repository: string,
+  workflowRef: string,
+  submissionId: string,
+  runId: string,
+  runAttempt: string,
+): Request {
+  const workflowCommit = DISPATCH_REF.exec(workflowRef)?.[1];
+  if (!workflowCommit) {
+    throw new TypeError("promotion canary workflow ref must be an immutable commit-named tag");
+  }
+  if (repository !== "leanprover/lean-eval-submissions") {
+    throw new TypeError("promotion canary dispatch repository is invalid");
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{10}ca$/.test(submissionId)) {
+    throw new TypeError("promotion canary submission identity is invalid");
+  }
+  if (!/^[1-9][0-9]{0,19}$/.test(runId) || !/^[1-9][0-9]{0,5}$/.test(runAttempt)) {
+    throw new TypeError("promotion canary run identity is invalid");
+  }
+  return new Request(
+    `${API}/repos/${repository}/actions/workflows/promotion-canary.yml/dispatches`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ref: workflowRef,
+        inputs: {
+          workflow_commit: workflowCommit,
+          submission_id: submissionId,
+          controller_run_id: runId,
+          controller_run_attempt: runAttempt,
+        },
+      }),
+    },
+  );
+}
