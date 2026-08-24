@@ -179,6 +179,9 @@ etc.).
   boundary: [`docs/public-replay-resolution.md`](docs/public-replay-resolution.md).
 - Source-free independent-kernel corpus preparation and report contract:
   [`docs/kernel-corpus-report.md`](docs/kernel-corpus-report.md).
+  Its offline record adapter verifies possession of the planned replay/export
+  bytes and binds attested runner records into observation receipts; it does
+  not prove which bytes the runner consumed or execute the corpus.
 - Provider-neutral archive-key envelope and single-use capability claims:
   [`docs/key-capability-contract.md`](docs/key-capability-contract.md).
 - Trusted provider-neutral archive writer (not yet wired into production):

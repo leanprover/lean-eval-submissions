@@ -297,7 +297,14 @@ the already implemented owner status, metadata, and publication routes.
       The source-free version-1 preparation/report contract now specifies exact
       series, inventory, attempt, and shard bindings; unavailable and pending
       states; deterministic full-coverage aggregation; hostile validation; and
-      human-only promotion. This item stays open until an approved series runs
+      human-only promotion. Its offline runner-record adapter now verifies
+      operator possession of exact raw replay/export inputs, validates attested
+      source-free records, and emits
+      schema-valid observation receipts without executing a process or gaining
+      a credential interface. The `source_free` value remains the reviewed
+      runner's attested assertion, not a fact independently established by the
+      adapter. This item stays open until the real historical input artifacts
+      exist, an approved exact-image runner produces those records, and the series runs
       over the complete reviewed historical corpus and disagreements are
       adjudicated; the fixture and one-result smoke are non-authoritative.
 - [ ] Enable production intake and begin the four-week issue-intake adoption

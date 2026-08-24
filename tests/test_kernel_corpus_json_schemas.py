@@ -21,11 +21,13 @@ from kernel_corpus_report import (
     validate_report,
     validate_series,
 )
+from kernel_corpus_runner_adapter import validate_record_bundle
 
 ARTIFACTS = {
     "kernel-checker-series-v1": "series",
     "kernel-corpus-inventory-v1": "inventory",
     "kernel-corpus-shard-plan-v1": "plan",
+    "kernel-corpus-runner-records-v1": "runner_records",
     "kernel-corpus-observations-v1": "observations",
     "kernel-corpus-report-v1": "report",
 }
@@ -52,6 +54,12 @@ class KernelCorpusJsonSchemaTests(unittest.TestCase):
         inventory = validate_inventory(self.fixtures["kernel-corpus-inventory-v1"])
         plan = validate_plan(
             self.fixtures["kernel-corpus-shard-plan-v1"], series, inventory
+        )
+        validate_record_bundle(
+            self.fixtures["kernel-corpus-runner-records-v1"],
+            plan,
+            series,
+            inventory,
         )
         observations = validate_observation_shard(
             self.fixtures["kernel-corpus-observations-v1"],
