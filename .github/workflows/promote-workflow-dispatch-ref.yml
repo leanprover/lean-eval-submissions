@@ -5,8 +5,6 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/promote-workflow-dispatch-ref.yml'
-      - '.github/workflows/accepted-archive-replay-staging.yml'
-      - '.github/workflows/authoritative-replay-staging.yml'
       - '.github/workflows/aws-key-adapter-staging-smoke.yml'
       - '.github/workflows/historical-public-authority-preparation.yml'
       - '.github/workflows/historical-public-image-qualification.yml'
@@ -14,7 +12,7 @@ on:
       - '.github/workflows/historical-public-runner-contract.yml'
       - '.github/workflows/historical-replay-inventory.yml'
       - '.github/workflows/public-replay-github-evidence.yml'
-      - '.github/workflows/set-staging-intake.yml'
+      - 'scripts/resolve_public_replay_github_evidence.py'
 
 permissions:
   contents: read
@@ -26,7 +24,7 @@ concurrency:
 jobs:
   promote-dispatch-ref:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 15
     environment: submission-dispatch-promotion
     permissions:
       actions: read
@@ -55,18 +53,24 @@ jobs:
           fi
 
           ci_conclusion=""
-          for attempt in $(seq 1 25); do
-            ci_conclusion=$(timeout 20s gh api \
-              "repos/$REPOSITORY/actions/workflows/ci.yml/runs?branch=main&event=push&per_page=20" \
-              --jq ".workflow_runs | map(select(.head_sha == \"$WORKFLOW_COMMIT\")) | .[0].conclusion // \"\"")
+          ci_deadline=$((SECONDS + 600))
+          while [ "$SECONDS" -lt "$ci_deadline" ]; do
+            if ! ci_conclusion=$(timeout 20s gh api \
+              "repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$WORKFLOW_COMMIT&branch=main&event=push&per_page=1" \
+              --jq '.workflow_runs[0].conclusion // ""'); then
+              ci_conclusion=""
+            fi
             case "$ci_conclusion" in
               success) break ;;
-              failure|cancelled|timed_out|action_required|startup_failure|stale)
+              failure|cancelled|timed_out|action_required|startup_failure|stale|neutral|skipped)
                 echo "exact protected-main CI concluded $ci_conclusion" >&2
                 exit 1
                 ;;
             esac
-            if [ "$attempt" -lt 25 ]; then sleep 5; fi
+            remaining=$((ci_deadline - SECONDS))
+            if [ "$remaining" -gt 0 ]; then
+              if [ "$remaining" -lt 5 ]; then sleep "$remaining"; else sleep 5; fi
+            fi
           done
           if [ "$ci_conclusion" != success ]; then
             echo "exact protected-main CI did not succeed before promotion" >&2

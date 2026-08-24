@@ -9,6 +9,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEPLOY = (ROOT / ".github/workflows/deploy-worker.yml").read_text(encoding="utf-8")
+CI = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
 WORKFLOW_PROMOTION = (
     ROOT / ".github/workflows/promote-workflow-dispatch-ref.yml"
 ).read_text(encoding="utf-8")
@@ -174,6 +175,14 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             deployed_dependencies,
             {"promotion-canary.yml", "server-archive.yml", "submission.yml"},
         )
+        # These manual workflows are not dispatched by the Worker, but their
+        # deployed_commit preconditions bind them to the live staging runtime.
+        # Changing them therefore requires the ordinary runtime deployment lane.
+        runtime_bound_dependencies = deployed_dependencies | {
+            "accepted-archive-replay-staging.yml",
+            "authoritative-replay-staging.yml",
+            "set-staging-intake.yml",
+        }
         promotion_push = WORKFLOW_PROMOTION.split("  push:", 1)[1].split(
             "permissions:", 1
         )[0]
@@ -182,13 +191,13 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(
             promotion_paths,
-            (dispatch_dependencies - deployed_dependencies)
+            (dispatch_dependencies - runtime_bound_dependencies)
             | {"promote-workflow-dispatch-ref.yml"},
         )
         for workflow in dispatch_dependencies:
             path = f"'.github/workflows/{workflow}'"
             with self.subTest(workflow=workflow):
-                if workflow in deployed_dependencies:
+                if workflow in runtime_bound_dependencies:
                     self.assertIn(path, pull_request)
                     self.assertIn(path, push)
                     self.assertNotIn(path, promotion_push)
@@ -203,6 +212,17 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         for trigger in (pull_request, push):
             self.assertIn("'.audit/**'", trigger)
             self.assertIn("'scripts/**'", trigger)
+
+        resolver = "'scripts/resolve_public_replay_github_evidence.py'"
+        for trigger in (pull_request, push):
+            self.assertIn(f"'!{resolver[1:]}", trigger)
+        self.assertIn(resolver, promotion_push)
+
+    def test_exact_main_ci_trigger_cannot_be_path_filtered(self) -> None:
+        ci_push = CI.split("  push:", 1)[1].split("  pull_request:", 1)[0]
+        self.assertIn("branches: [main]", ci_push)
+        self.assertNotIn("paths:", ci_push)
+        self.assertNotIn("paths-ignore:", ci_push)
 
     def test_workflow_only_promotion_is_protected_and_deployment_free(self) -> None:
         self.assertIn("environment: submission-dispatch-promotion", WORKFLOW_PROMOTION)
@@ -221,6 +241,21 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             WORKFLOW_PROMOTION,
         )
         self.assertIn("actions/workflows/ci.yml/runs", WORKFLOW_PROMOTION)
+        self.assertIn("timeout-minutes: 15", WORKFLOW_PROMOTION)
+        self.assertIn("ci_deadline=$((SECONDS + 600))", WORKFLOW_PROMOTION)
+        self.assertIn("head_sha=$WORKFLOW_COMMIT", WORKFLOW_PROMOTION)
+        self.assertIn('if ! ci_conclusion=$(timeout 20s gh api', WORKFLOW_PROMOTION)
+        self.assertIn("startup_failure|stale|neutral|skipped)", WORKFLOW_PROMOTION)
+        self.assertEqual(
+            WORKFLOW_PROMOTION.count("gh api"),
+            WORKFLOW_PROMOTION.count("timeout 20s gh api"),
+        )
+        self.assertLess(
+            WORKFLOW_PROMOTION.index(
+                "exact protected-main CI did not succeed before promotion"
+            ),
+            WORKFLOW_PROMOTION.index('tag="lean-eval-dispatch/$WORKFLOW_COMMIT"'),
+        )
         self.assertIn("read-back below distinguishes", WORKFLOW_PROMOTION)
         self.assertIn("read-back below distinguishes", DEPLOY)
         self.assertNotIn("wrangler", WORKFLOW_PROMOTION)
@@ -327,12 +362,12 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             self.assertLess(deployment, wait)
             self.assertLess(wait, smoke)
 
-    def test_reviewed_promotion_uses_only_contents_write(self) -> None:
+    def test_reviewed_runtime_promotion_is_exact_ci_gated_and_least_privilege(self) -> None:
         block = DEPLOY.split("\n  promote-dispatch-ref:", 1)[1].split(
             "\n  deploy-staging:", 1
         )[0]
         self.assertIn("environment: submission-dispatch-promotion", block)
-        self.assertIn("permissions:\n      contents: write", block)
+        self.assertIn("permissions:\n      actions: read\n      contents: write", block)
         self.assertIn("defaults:\n      run:\n        working-directory: .", block)
         self.assertEqual(block.count("secrets."), 1)
         self.assertIn(
@@ -342,6 +377,21 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("reviewed dispatch-promotion environment is not configured", block)
         self.assertIn('tag="lean-eval-dispatch/$WORKFLOW_COMMIT"', block)
         self.assertIn("compare/$WORKFLOW_COMMIT...main", block)
+        self.assertIn("actions/workflows/ci.yml/runs", block)
+        self.assertIn("timeout-minutes: 15", block)
+        self.assertIn("ci_deadline=$((SECONDS + 600))", block)
+        self.assertIn("head_sha=$WORKFLOW_COMMIT", block)
+        self.assertIn('if ! ci_conclusion=$(timeout 20s gh api', block)
+        self.assertIn("startup_failure|stale|neutral|skipped)", block)
+        self.assertIn(
+            "exact protected-main CI did not succeed before promotion",
+            block,
+        )
+        self.assertLess(
+            block.index("exact protected-main CI did not succeed before promotion"),
+            block.index('tag="lean-eval-dispatch/$WORKFLOW_COMMIT"'),
+        )
+        self.assertEqual(block.count("gh api"), block.count("timeout 20s gh api"))
         self.assertIn("contents/.github/workflows/submission.yml?ref=$WORKFLOW_COMMIT", block)
         self.assertIn("contents/.github/workflows/promotion-canary.yml?ref=$WORKFLOW_COMMIT", block)
 

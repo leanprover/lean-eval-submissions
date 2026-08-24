@@ -194,8 +194,12 @@ Workflow-only operations that require an immutable dispatch tag but do not
 change deployed runtime are promoted separately by
 [`promote-workflow-dispatch-ref.yml`](.github/workflows/promote-workflow-dispatch-ref.yml).
 That path uses the same protected promotion environment and collision-safe tag
-contract, but it cannot deploy a Worker or container. This separation prevents
-maintenance-workflow edits from interrupting production intake after launch.
+contract, but it cannot deploy a Worker or container. The live-commit-bound
+`set-staging-intake.yml`, `accepted-archive-replay-staging.yml`, and
+`authoritative-replay-staging.yml` workflows instead use the ordinary
+staging/canary/production rollout. After launch, changing one of those three
+may provisionally disable intake during that rollout and restores the tracked
+intake state only after every production verification succeeds.
 
 GitHub environment `cloudflare-staging` must contain:
 
@@ -266,9 +270,12 @@ Staging intake state is changed only through the protected, manual
 `Set staging intake` workflow. The operator must select an exact immutable
 `lean-eval-dispatch/<commit>` tag for the commit reported by the live staging
 health endpoint, provide the same full commit, and choose `enabled` or
-`disabled`. A branch selection or a stale tag fails the run; it cannot report a
-successful no-op or roll staging back. The workflow requires that tag to resolve
-to the selected commit,
+`disabled`. On the current workflow copy, a branch selection or a stale tag
+fails the run; it cannot report a successful no-op or roll staging back.
+Immutable tags created before commit `c07e002b631520784e8538a205b596e8b9bc714f`
+retain their historical workflow copy and can still report a non-failing skipped
+job, so operators must never select them. The workflow requires the selected
+tag to resolve to the selected commit,
 deploys only the staging intake Worker, and verifies the resulting structured
 health response. It cannot target production. Any later ordinary main
 deployment returns staging to the tracked safe default `INTAKE_ENABLED=false`;
@@ -416,20 +423,28 @@ dispatching or evaluating a submission. Production rejects this preflight.
 `DISPATCH_WORKFLOW_REF` must stay absent until an operator creates an immutable
 tag named `lean-eval-dispatch/<40-character-commit>` at the reviewed workflow
 commit. Runtime deployment and workflow-only promotion jointly own creation.
-After its Worker checks, `deploy-worker.yml` promotes commits that change the
-running Worker or its directly dispatched workflows. The deployment-free
+After its Worker checks and exact protected-main CI, `deploy-worker.yml`
+promotes commits that change the running Worker, its directly dispatched
+workflows, or the staging-only intake and replay workflows whose preconditions
+are bound to the live staging commit. The deployment-free
 `promote-workflow-dispatch-ref.yml` path covers only tag-consuming operational
 workflows; it waits for exact protected-main CI and cannot invoke Wrangler or a
 deployment. Both minters enter the reviewer-gated
 `submission-dispatch-promotion` environment and use only a job-scoped
-`GITHUB_TOKEN` with `contents: write` (plus read-only Actions access for the
-workflow-only CI proof). A 32-byte lowercase-hex
+`GITHUB_TOKEN` with `contents: write` plus read-only Actions access for the
+exact-main CI proof. A 32-byte lowercase-hex
 `DISPATCH_PROMOTION_APPROVAL_GUARD` secret must exist only in that environment;
 it has no external authority and makes missing/unprotected auto-created
 environment configuration fail before tag creation. Existing tags are accepted
 only when they resolve to the same SHA. Concurrent creation of the same exact
 tag is harmless, while collisions and failed read-back stop promotion or
 deployment.
+A change to any live-commit-bound staging workflow deliberately performs the
+ordinary staging/canary/production rollout: this is what makes its new
+immutable tag usable. While production intake is tracked disabled, that rollout
+resets staging intake to its disabled default and leaves every production gate
+disabled. After launch, it may provisionally disable production intake and
+restores the tracked enabled state only after the rollout succeeds.
 A repository ruleset must target `lean-eval-dispatch/*`, allow creation, and
 reject updates and deletion, without a bypass for the Worker, deployment
 token, dispatch broker, or ordinary maintainers. The promotion output is
