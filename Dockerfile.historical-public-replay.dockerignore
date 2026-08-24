@@ -1,0 +1,11 @@
+**
+!Dockerfile.historical-public-replay
+!configuration/historical-public-runner-v1.json
+!configuration/historical-public-replay-profile-matrix-v1.json
+!scripts/evaluate_submission.py
+!scripts/historical_public_runner.py
+!server/replay-image/comparator-71b52-phase-metrics.patch
+!server/replay-image/historical-public-runner
+!server/replay-image/replay-authoritative
+!server/replay-image/replay-measure
+!server/replay-image/replay-staging-acceptance

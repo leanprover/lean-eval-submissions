@@ -1,0 +1,461 @@
+name: Qualify one historical public replay image
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark_commit:
+        description: Exact benchmark commit from the reviewed 25-image matrix
+        required: true
+        type: string
+      confirm_registry_publication:
+        description: Publish a new create-only immutable image tag
+        required: true
+        type: boolean
+        default: false
+      confirm_isolated_staging_probe:
+        description: Deploy only the replay-disabled qualification Worker and run two probes
+        required: true
+        type: boolean
+        default: false
+      resume_registry_manifest_digest:
+        description: Existing exact sha256 digest to resume after a post-publication failure; empty means create-only publication
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: historical-public-image-qualification
+  cancel-in-progress: false
+
+jobs:
+  publish-and-deploy-isolated-qualifier:
+    if: inputs.confirm_registry_publication == true && inputs.confirm_isolated_staging_probe == true
+    environment: cloudflare-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    outputs:
+      manifest_digest: ${{ steps.publish_registry.outputs.digest || steps.resume_registry.outputs.digest }}
+    env:
+      MATRIX: configuration/historical-public-replay-profile-matrix-v1.json
+      CONTRACT: historical-public-qualification/contract-v1.json
+      CONTROLLER: historical-public-qualification/qualification.py
+      BENCHMARK_COMMIT: ${{ inputs.benchmark_commit }}
+      IMAGE_REPOSITORY: lean-eval-historical-public-v1
+      IMAGE_LIMIT_BYTES: '18000000000'
+      QUALIFIER_CONFIG: historical-public-qualification/generated-wrangler.json
+    steps:
+      - name: Require an immutable protected source tag
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_TYPE" = tag
+          test "${#GITHUB_SHA}" = 40
+          test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$GITHUB_SHA"
+          mapfile -t tag_lines < <(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git "$GITHUB_REF" "$GITHUB_REF^{}")
+          test "${#tag_lines[@]}" -ge 1
+          test "${#tag_lines[@]}" -le 2
+          tag_object=""
+          remote_commit=""
+          for line in "${tag_lines[@]}"; do
+            read -r object ref extra <<< "$line"
+            test -z "${extra:-}"
+            [[ "$object" =~ ^[0-9a-f]{40}$ ]]
+            if [ "$ref" = "$GITHUB_REF" ]; then
+              test -z "$tag_object"
+              tag_object="$object"
+            elif [ "$ref" = "$GITHUB_REF^{}" ]; then
+              test -z "$remote_commit"
+              remote_commit="$object"
+            else
+              exit 1
+            fi
+          done
+          test -n "$tag_object"
+          if [ -z "$remote_commit" ]; then remote_commit="$tag_object"; fi
+          test "$remote_commit" = "$GITHUB_SHA"
+
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # actions/setup-node pinned to v6.5.0.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.6.0'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      # jlumbroso/free-disk-space pinned to v1.3.1.
+      - uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - run: npm ci
+        working-directory: server
+
+      - name: Select one locked, still-unqualified matrix entry
+        env:
+          RESUME_DIGEST: ${{ inputs.resume_registry_manifest_digest }}
+        run: |
+          set -euo pipefail
+          test -z "$(git status --short)"
+          remote_main=$(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git refs/heads/main | cut -f1)
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --no-tags origin "$remote_main"
+          git merge-base --is-ancestor "$GITHUB_SHA" "$remote_main"
+          if [ -n "$RESUME_DIGEST" ]; then
+            [[ "$RESUME_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          fi
+          python "$CONTROLLER" select \
+            --matrix "$MATRIX" \
+            --contract "$CONTRACT" \
+            --benchmark-commit "$BENCHMARK_COMMIT" \
+            --output "$RUNNER_TEMP/candidate.json"
+          test "$(jq -r .qualification_status "$RUNNER_TEMP/candidate.json")" = unqualified
+          test "$(jq -r .registry_repository "$RUNNER_TEMP/candidate.json")" = "$IMAGE_REPOSITORY"
+          test "$(jq -r .registry_tag_prefix "$RUNNER_TEMP/candidate.json")" = "$BENCHMARK_COMMIT"
+          echo "IMAGE_TAG=$BENCHMARK_COMMIT-$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "IMAGE=$IMAGE_REPOSITORY:$BENCHMARK_COMMIT-$GITHUB_SHA" >> "$GITHUB_ENV"
+
+      - name: Dry-run the dedicated replay-disabled qualifier before publication
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          trap 'rm -f "$QUALIFIER_CONFIG"' EXIT
+          python "$CONTROLLER" render-config --matrix "$MATRIX" --contract "$CONTRACT" \
+            --benchmark-commit "$BENCHMARK_COMMIT" --source-commit "$GITHUB_SHA" \
+            --account-id "$CLOUDFLARE_ACCOUNT_ID" \
+            --manifest-digest "sha256:$(printf '0%.0s' {1..64})" \
+            --output "$QUALIFIER_CONFIG"
+          (cd server && npx wrangler deploy --dry-run --config "../$QUALIFIER_CONFIG" \
+            --env staging --outdir "$RUNNER_TEMP/qualifier-dry-run")
+          rm -f "$QUALIFIER_CONFIG"
+          trap - EXIT
+
+      - name: Refuse a pre-existing immutable registry tag before the long build
+        if: inputs.resume_registry_manifest_digest == ''
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --prefix server wrangler containers images list \
+            --filter "^$IMAGE_REPOSITORY$" --json > "$RUNNER_TEMP/registry-images.json"
+          set +e
+          jq -e --arg repository "$IMAGE_REPOSITORY" --arg tag "$IMAGE_TAG" \
+            'any(.[]; .name == $repository and ((.tags // []) | any(. == $tag)))' \
+            "$RUNNER_TEMP/registry-images.json" >/dev/null
+          exists=$?
+          set -e
+          test "$exists" -le 1
+          if [ "$exists" -eq 0 ]; then
+            echo "immutable registry tag already exists; refusing overwrite" >&2
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/registry-images.json"
+
+      - name: Build and locally verify the exact matrix-selected image
+        if: inputs.resume_registry_manifest_digest == ''
+        run: |
+          set -euo pipefail
+          docker build --progress=plain \
+            --build-arg "BENCHMARK_COMMIT=$BENCHMARK_COMMIT" \
+            --tag "$IMAGE" \
+            --file Dockerfile.historical-public-replay .
+          image_size=$(docker image inspect "$IMAGE" --format '{{.Size}}')
+          test "$image_size" -le "$IMAGE_LIMIT_BYTES"
+          docker run --rm --network none --read-only --cpus 4 --memory 12g \
+            --tmpfs /workspace:rw,noexec,nosuid,nodev,size=256m \
+            --tmpfs /run/lean-eval:rw,noexec,nosuid,nodev,size=16m \
+            --entrypoint /bin/sh "$IMAGE" -c '
+              set -eu
+              test "$(cat /opt/lean-eval/benchmark/.lean-eval-commit)" = "'"$BENCHMARK_COMMIT"'"
+              test "$(cat /opt/lean-eval/benchmark/.lean-eval-tree)" = "'"$(jq -r .benchmark_tree "$RUNNER_TEMP/candidate.json")"'"
+              test "$(cat /opt/lean-eval/benchmark/lean-toolchain)" = "'"$(jq -r .toolchain "$RUNNER_TEMP/candidate.json")"'"
+              test "$(find /opt/lean-eval/benchmark/generated -mindepth 2 -maxdepth 2 -name lake-manifest.json | wc -l)" = "'"$(jq -r .workspace_count "$RUNNER_TEMP/candidate.json")"'"
+              test -x /opt/lean-eval/historical-public-runner
+              test -x /opt/lean-eval/replay-staging-acceptance
+              test -x /opt/lean-eval/replay-measure
+              test -x /usr/local/bin/landrun
+              test -x /opt/lean-eval/bin/comparator
+              test -x /opt/lean-eval/bin/lean4export
+              test -x /opt/lean-eval/bin/nanoda_bin
+              test -x /opt/lean-eval/replay-authoritative
+              test "$(find /opt/lean-eval -type d -name .git -print -quit)" = ""
+              python3 -c '"'"'import sys; sys.path.insert(0, "/opt/lean-eval"); from historical_public_runner import execute_fixed_runner; assert callable(execute_fixed_runner)'"'"'
+              toolchain=$(cat /opt/lean-eval/benchmark/lean-toolchain)
+              elan run "$toolchain" lean --version | grep -F "Lean (version ${toolchain##*:v}"
+            '
+          docker run --rm --network none --cpus 4 --memory 12g \
+            --entrypoint /bin/sh "$IMAGE" -c '
+              set -eu
+              cd /opt/lean-eval/benchmark
+              lake --dir "generated/'"$(jq -r .first_problem_id "$RUNNER_TEMP/candidate.json")"'" build
+            '
+          echo "IMAGE_SIZE_BYTES=$image_size" >> "$GITHUB_ENV"
+
+      - name: Recheck source and tag, push once, and resolve the OCI digest
+        if: inputs.resume_registry_manifest_digest == ''
+        id: publish_registry
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          umask 077
+          tag_ref="refs/tags/lean-eval-dispatch/$GITHUB_SHA"
+          remote_commit=$(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            "$tag_ref" "$tag_ref^{}" | awk -v peeled="$tag_ref^{}" '$2 == peeled { print $1 }')
+          if [ -z "$remote_commit" ]; then
+            remote_commit=$(timeout 30s git ls-remote \
+              https://github.com/leanprover/lean-eval-submissions.git "$tag_ref" | cut -f1)
+          fi
+          test "$remote_commit" = "$GITHUB_SHA"
+          npx --prefix server wrangler containers images list \
+            --filter "^$IMAGE_REPOSITORY$" --json > "$RUNNER_TEMP/registry-images.json"
+          set +e
+          jq -e --arg repository "$IMAGE_REPOSITORY" --arg tag "$IMAGE_TAG" \
+            'any(.[]; .name == $repository and ((.tags // []) | any(. == $tag)))' \
+            "$RUNNER_TEMP/registry-images.json" >/dev/null
+          exists=$?
+          set -e
+          test "$exists" -le 1
+          if [ "$exists" -eq 0 ]; then
+            echo "immutable registry tag appeared during build; refusing overwrite" >&2
+            exit 1
+          fi
+          npx --prefix server wrangler containers push "$IMAGE"
+          timeout 60s npx --prefix server wrangler containers registries credentials \
+            registry.cloudflare.com --pull --expiration-minutes 5 --json \
+            > "$RUNNER_TEMP/registry-credentials.json"
+          registry_username=$(jq -er .username "$RUNNER_TEMP/registry-credentials.json")
+          registry_password=$(jq -er .password "$RUNNER_TEMP/registry-credentials.json")
+          echo "::add-mask::$registry_username"
+          echo "::add-mask::$registry_password"
+          printf 'machine registry.cloudflare.com login %s password %s\n' \
+            "$registry_username" "$registry_password" > "$RUNNER_TEMP/registry-netrc"
+          trap 'unset registry_username registry_password; rm -f "$RUNNER_TEMP/registry-credentials.json" "$RUNNER_TEMP/registry-headers" "$RUNNER_TEMP/registry-images.json" "$RUNNER_TEMP/registry-netrc"' EXIT
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 30 \
+            --netrc-file "$RUNNER_TEMP/registry-netrc" \
+            --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+            --head "https://registry.cloudflare.com/v2/$CLOUDFLARE_ACCOUNT_ID/$IMAGE_REPOSITORY/manifests/$IMAGE_TAG" \
+            --dump-header "$RUNNER_TEMP/registry-headers" --output /dev/null
+          image_digest=$(sed -n 's/^[Dd]ocker-[Cc]ontent-[Dd]igest:[[:space:]]*\(sha256:[0-9a-f]\{64\}\)[[:space:]\r]*$/\1/p' "$RUNNER_TEMP/registry-headers")
+          test "${#image_digest}" = 71
+          test "$(printf '%s' "$image_digest" | wc -l)" = 0
+          echo "digest=$image_digest" >> "$GITHUB_OUTPUT"
+          unset registry_username registry_password
+          rm -f "$RUNNER_TEMP/registry-credentials.json" "$RUNNER_TEMP/registry-headers" "$RUNNER_TEMP/registry-images.json" "$RUNNER_TEMP/registry-netrc"
+          trap - EXIT
+
+      - name: Resume only the exact immutable digest after a post-publication failure
+        if: inputs.resume_registry_manifest_digest != ''
+        id: resume_registry
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RESUME_DIGEST: ${{ inputs.resume_registry_manifest_digest }}
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ "$RESUME_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          timeout 60s npx --prefix server wrangler containers registries credentials \
+            registry.cloudflare.com --pull --expiration-minutes 5 --json \
+            > "$RUNNER_TEMP/registry-credentials.json"
+          registry_username=$(jq -er .username "$RUNNER_TEMP/registry-credentials.json")
+          registry_password=$(jq -er .password "$RUNNER_TEMP/registry-credentials.json")
+          echo "::add-mask::$registry_username"
+          echo "::add-mask::$registry_password"
+          printf 'machine registry.cloudflare.com login %s password %s\n' \
+            "$registry_username" "$registry_password" > "$RUNNER_TEMP/registry-netrc"
+          trap 'unset registry_username registry_password; rm -f "$RUNNER_TEMP/registry-credentials.json" "$RUNNER_TEMP/registry-headers" "$RUNNER_TEMP/registry-netrc"' EXIT
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 30 \
+            --netrc-file "$RUNNER_TEMP/registry-netrc" \
+            --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+            --head "https://registry.cloudflare.com/v2/$CLOUDFLARE_ACCOUNT_ID/$IMAGE_REPOSITORY/manifests/$IMAGE_TAG" \
+            --dump-header "$RUNNER_TEMP/registry-headers" --output /dev/null
+          image_digest=$(sed -n 's/^[Dd]ocker-[Cc]ontent-[Dd]igest:[[:space:]]*\(sha256:[0-9a-f]\{64\}\)[[:space:]\r]*$/\1/p' "$RUNNER_TEMP/registry-headers")
+          test "$image_digest" = "$RESUME_DIGEST"
+          echo "digest=$image_digest" >> "$GITHUB_OUTPUT"
+          unset registry_username registry_password
+          rm -f "$RUNNER_TEMP/registry-credentials.json" "$RUNNER_TEMP/registry-headers" "$RUNNER_TEMP/registry-netrc"
+          trap - EXIT
+
+      - name: Render and deploy only the replay-disabled qualification Worker
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          MANIFEST_DIGEST: ${{ steps.publish_registry.outputs.digest || steps.resume_registry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          trap 'rm -f "$QUALIFIER_CONFIG"' EXIT
+          python "$CONTROLLER" render-config --matrix "$MATRIX" --contract "$CONTRACT" \
+            --benchmark-commit "$BENCHMARK_COMMIT" --source-commit "$GITHUB_SHA" \
+            --account-id "$CLOUDFLARE_ACCOUNT_ID" --manifest-digest "$MANIFEST_DIGEST" \
+            --output "$QUALIFIER_CONFIG"
+          (cd server && npx wrangler deploy --config "../$QUALIFIER_CONFIG" --env staging)
+          (cd server && python ../historical-public-qualification/wait_rollout.py \
+            --config "../$QUALIFIER_CONFIG" \
+            --application lean-eval-historical-qualifier-staging-replaysandbox-staging \
+            --output "$RUNNER_TEMP/rollout.json")
+          rm -f "$QUALIFIER_CONFIG"
+          trap - EXIT
+          test -z "$(git status --short)"
+
+      - name: Write account-free unqualified candidate binding and publication evidence
+        env:
+          MANIFEST_DIGEST: ${{ steps.publish_registry.outputs.digest || steps.resume_registry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          python "$CONTROLLER" render-binding --matrix "$MATRIX" --contract "$CONTRACT" \
+            --benchmark-commit "$BENCHMARK_COMMIT" --source-commit "$GITHUB_SHA" \
+            --manifest-digest "$MANIFEST_DIGEST" --output candidate-binding.json
+          python - <<'PY'
+          import hashlib, json, os, pathlib
+          candidate = json.loads(pathlib.Path(os.environ["RUNNER_TEMP"] + "/candidate.json").read_text())
+          evidence = {
+              "schema_version": 1,
+              "kind": "historical_public_image_publication_evidence",
+              "qualification_status": "unqualified",
+              "source_commit": os.environ["GITHUB_SHA"],
+              "benchmark_commit": candidate["benchmark_commit"],
+              "benchmark_tree": candidate["benchmark_tree"],
+              "registry_repository": candidate["registry_repository"],
+              "registry_tag": os.environ["IMAGE_TAG"],
+              "registry_manifest_digest": os.environ["MANIFEST_DIGEST"],
+              "publication_mode": "resumed" if os.environ.get("IMAGE_SIZE_BYTES") is None else "created",
+              "image_size_bytes": int(os.environ["IMAGE_SIZE_BYTES"]) if os.environ.get("IMAGE_SIZE_BYTES") is not None else None,
+              "dockerfile_sha256": hashlib.sha256(pathlib.Path("Dockerfile.historical-public-replay").read_bytes()).hexdigest(),
+              "matrix_sha256": hashlib.sha256(pathlib.Path(os.environ["MATRIX"]).read_bytes()).hexdigest(),
+              "matrix_entry_sha256": candidate["entry_sha256"],
+              "profile_lock_sha256": candidate["profile_lock_sha256"],
+              "workspace_manifest_count": candidate["workspace_count"],
+              "workflow_image_limit_bytes": int(os.environ["IMAGE_LIMIT_BYTES"]),
+          }
+          pathlib.Path("historical-image-publication.json").write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+          PY
+          cp "$RUNNER_TEMP/rollout.json" historical-qualification-rollout.json
+
+      # actions/upload-artifact pinned to v7.0.1.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-public-image-candidate
+          path: |
+            candidate-binding.json
+            historical-image-publication.json
+            historical-qualification-rollout.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove credential and generated-configuration scratch
+        if: always()
+        run: |
+          rm -f "$QUALIFIER_CONFIG" "$RUNNER_TEMP/registry-credentials.json" \
+            "$RUNNER_TEMP/registry-headers" "$RUNNER_TEMP/registry-images.json" \
+            "$RUNNER_TEMP/registry-netrc"
+
+  probe-isolated-qualifier:
+    needs: publish-and-deploy-isolated-qualifier
+    environment: replay-staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      MATRIX: configuration/historical-public-replay-profile-matrix-v1.json
+      CONTRACT: historical-public-qualification/contract-v1.json
+      CONTROLLER: historical-public-qualification/qualification.py
+      BENCHMARK_COMMIT: ${{ inputs.benchmark_commit }}
+      QUALIFIER_URL: https://lean-eval-historical-qualifier-staging.lean-eval.workers.dev
+    steps:
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # actions/download-artifact pinned to v8.0.1.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: historical-public-image-candidate
+          path: candidate
+
+      - name: Install the pinned age client
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz \
+            --output "$RUNNER_TEMP/age.tar.gz"
+          echo "bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377  $RUNNER_TEMP/age.tar.gz" | sha256sum --check --strict
+          tar --extract --gzip --file "$RUNNER_TEMP/age.tar.gz" --directory "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/age" >> "$GITHUB_PATH"
+
+      - name: Prove health, isolation, runtime resources, and destroy/recreate
+        env:
+          MANIFEST_DIGEST: ${{ needs.publish-and-deploy-isolated-qualifier.outputs.manifest_digest }}
+        run: |
+          set -euo pipefail
+          cleanup() {
+            unset oidc_token
+            rm -f "$RUNNER_TEMP"/probe-{1,2}-{request,response}.json \
+              "$RUNNER_TEMP/oidc.json" "$RUNNER_TEMP/age.tar.gz"
+            rm -rf "$RUNNER_TEMP/age"
+          }
+          trap cleanup EXIT
+          test "$(jq -r .qualification_status candidate/candidate-binding.json)" = unqualified
+          test "$(jq -r .vars.REVIEWED_VM_IMAGE_DIGEST candidate/candidate-binding.json)" = "$MANIFEST_DIGEST"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 30 \
+            --retry 2 --retry-all-errors \
+            "$QUALIFIER_URL/healthz" --output "$RUNNER_TEMP/health.json"
+          runner_nonce=$(openssl rand -hex 32)
+          for number in 1 2; do
+            python "$CONTROLLER" build-probe --matrix "$MATRIX" --contract "$CONTRACT" \
+              --benchmark-commit "$BENCHMARK_COMMIT" --runner-nonce "$runner_nonce" \
+              --output "$RUNNER_TEMP/probe-$number-request.json"
+          done
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-public-qualification-staging" \
+            --output "$RUNNER_TEMP/oidc.json"
+          oidc_token=$(jq -er .value "$RUNNER_TEMP/oidc.json")
+          test -n "$oidc_token"
+          rm -f "$RUNNER_TEMP/oidc.json"
+          for number in 1 2; do
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 480 \
+              --header "Authorization: Bearer $oidc_token" --header 'Content-Type: application/json' \
+              --request POST --data-binary "@$RUNNER_TEMP/probe-$number-request.json" \
+              "$QUALIFIER_URL/api/v1/staging-acceptance" \
+              --output "$RUNNER_TEMP/probe-$number-response.json"
+          done
+          unset oidc_token
+          python "$CONTROLLER" validate-evidence --matrix "$MATRIX" --contract "$CONTRACT" \
+            --benchmark-commit "$BENCHMARK_COMMIT" --source-commit "$GITHUB_SHA" \
+            --binding candidate/candidate-binding.json --health "$RUNNER_TEMP/health.json" \
+            --rollout candidate/historical-qualification-rollout.json \
+            --requests "$RUNNER_TEMP/probe-1-request.json" "$RUNNER_TEMP/probe-2-request.json" \
+            --responses "$RUNNER_TEMP/probe-1-response.json" "$RUNNER_TEMP/probe-2-response.json" \
+            --output historical-public-staging-qualification.json
+          cleanup
+          trap - EXIT
+
+      # actions/upload-artifact pinned to v7.0.1.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-public-staging-qualification
+          path: historical-public-staging-qualification.json
+          if-no-files-found: error
+          retention-days: 30
