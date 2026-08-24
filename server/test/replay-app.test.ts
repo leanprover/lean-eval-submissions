@@ -1104,13 +1104,54 @@ describe("Cloudflare replay executor", () => {
         }),
       });
       expect(response.status).toBe(500);
-      expect(await response.json()).toEqual({ error: "executor_failed" });
+      expect(await response.json()).toEqual({
+        error: "executor_failed",
+        reason: "command_failed",
+        detail: "archive_decryption_failed",
+      });
       expect(logged).toHaveBeenCalledExactlyOnceWith(JSON.stringify({
         event: "lean_eval_replay_executor_failure",
         route: "archive_acceptance",
         reason: "command_failed",
         detail: "archive_decryption_failed",
       }));
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  it("does not expose unclassified archive command output", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sensitive = "private identity fixture";
+    try {
+      const response = await handleReplayRequest(new Request(
+        "https://example.test/api/v1/staging-archive-acceptance",
+        { method: "POST", body: JSON.stringify(await archiveInput()) },
+      ), ENV, {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => ({
+          writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+          exec: (command) => Promise.resolve({
+            success: false,
+            exitCode: 1,
+            stdout: "",
+            stderr: sensitive,
+            command,
+            duration: 1,
+            timestamp: "fixture",
+          }),
+          destroy: () => Promise.resolve(),
+        }),
+      });
+      const responseBody = await response.json();
+      expect(response.status).toBe(500);
+      expect(responseBody).toEqual({
+        error: "executor_failed",
+        reason: "command_failed",
+        detail: "unclassified_archive_failure",
+      });
+      expect(JSON.stringify(responseBody)).not.toContain(sensitive);
+      expect(logged.mock.calls.flat().join(" ")).not.toContain(sensitive);
     } finally {
       logged.mockRestore();
     }
@@ -1133,7 +1174,12 @@ describe("Cloudflare replay executor", () => {
       }),
     });
     expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ error: "executor_failed" });
+    const responseBody = await response.json();
+    expect(responseBody).toEqual({
+      error: "executor_failed",
+      reason: "command_rpc_failed",
+    });
+    expect(JSON.stringify(responseBody)).not.toContain("private identity fixture");
     expect(destroyed).toBe(true);
   });
 });

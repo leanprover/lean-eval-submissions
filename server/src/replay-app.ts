@@ -953,6 +953,6 @@ export async function handleReplayRequest(
       return json({ error: "invalid_request" }, 400);
     }
     recordExecutorFailure(archiveAcceptance ? "archive_acceptance" : "synthetic_acceptance", error);
-    return json({ error: "executor_failed" }, 500);
+    return json(failureBody(error), 500);
   }
 }

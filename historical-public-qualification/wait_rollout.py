@@ -32,7 +32,8 @@ def load_expected(config_path: pathlib.Path, environment: str) -> dict[str, obje
     value = container[0]
     image = value.get("image")
     if not isinstance(image, str) or re.fullmatch(
-        r"registry\.cloudflare\.com/[0-9a-f]{32}/lean-eval-historical-public-v1:[0-9a-f]{40}-[0-9a-f]{40}",
+        r"registry\.cloudflare\.com/[0-9a-f]{32}/lean-eval-historical-public-v1:"
+        r"[0-9a-f]{40}-[0-9a-f]{40}@sha256:[0-9a-f]{64}",
         image,
     ) is None:
         raise rollout.RolloutError("qualification image reference is invalid")
@@ -68,9 +69,10 @@ def main() -> int:
     )
     configuration = value["configuration"]
     image = configuration["image"].split("/")[-1]
-    repository, tag = image.split(":", 1)
+    tagged_image, manifest_digest = image.split("@", 1)
+    repository, tag = tagged_image.split(":", 1)
     evidence = {
-        "schema_version": 1,
+        "schema_version": 2,
         "kind": "historical_public_qualification_rollout",
         "qualification_status": "unqualified",
         "name": value["name"],
@@ -78,6 +80,7 @@ def main() -> int:
         "max_instances": value["max_instances"],
         "image_repository": repository,
         "image_tag": tag,
+        "image_manifest_digest": manifest_digest,
         "runtime_boundary": {
             "vcpu": configuration["vcpu"],
             "memory_mib": configuration["memory_mib"],
