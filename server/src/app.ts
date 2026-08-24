@@ -4,6 +4,7 @@ import {
   decodeArchiveCompletion,
   decodeArchiveFailure,
   decodeEvaluationCompletion,
+  decodeLegacyResultClaim,
   decodeResultCompletion,
   decodeAgentChallengeInput,
   decodeBrowserSubmission,
@@ -34,6 +35,8 @@ import {
 } from "./auth";
 import { browserPage, browserScript } from "./browser-ui";
 import {
+  type LegacyResultBackfillRequest,
+  type LegacyResultClaimRequest,
   type GitHubFetch,
   GitHubStateError,
   GitHubStateRepository,
@@ -66,6 +69,7 @@ import {
   type DispatchOutbox,
   type SubmissionView,
 } from "./submission-view";
+import { RESULT_OWNER_STATE_CONTRACT_COMMIT } from "./result-owner";
 
 export type RuntimeEnv = Omit<
   CloudflareEnv,
@@ -95,9 +99,11 @@ export type RuntimeEnv = Omit<
   | "INTAKE_LEASE_STATE_COMMIT"
   | "INTAKE_LEASE_TARGET_COMMIT"
   | "LIFECYCLE_CALLBACK_TOKEN"
+  | "LEGACY_RESULT_OWNER_API_ENABLED"
   | "OAUTH_CALLBACK_URL"
   | "PROMOTION_CANARY_ENABLED"
   | "READINESS_TOKEN"
+  | "RESULT_OWNER_STATE_CONTRACT_COMMIT"
   | "STATE_REPOSITORY"
 > &
   Readonly<{
@@ -127,14 +133,17 @@ export type RuntimeEnv = Omit<
     INTAKE_LEASE_STATE_COMMIT?: string;
     INTAKE_LEASE_TARGET_COMMIT?: string;
     LIFECYCLE_CALLBACK_TOKEN?: string;
+    LEGACY_RESULT_OWNER_API_ENABLED?: string;
     OAUTH_CALLBACK_URL?: string;
     PROMOTION_CANARY_ENABLED?: string;
     READINESS_TOKEN?: string;
+    RESULT_OWNER_STATE_CONTRACT_COMMIT?: string;
     STATE_REPOSITORY: string;
   }>;
 
 type Lifecycle = Pick<ExecutionContext, "waitUntil">;
 export type StateAccess = Readonly<{
+  assertResultOwnerContract(): Promise<string>;
   appendEvent(event: WritableStateEvent): Promise<{ commit?: string; created: boolean }>;
   appendEventAtHead?(
     event: WritableStateEvent,
@@ -172,6 +181,16 @@ export type StateAccess = Readonly<{
     idempotent: boolean;
     created: boolean;
   }>;
+  claimLegacyResult(request: LegacyResultClaimRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    authorityEventId: string;
+  }>;
+  backfillLegacyResultMetadata(request: LegacyResultBackfillRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+  }>;
 }>;
 export type ApiDependencies = Readonly<{
   now?: () => number;
@@ -206,6 +225,17 @@ function json(body: unknown, status = 200, additionalHeaders?: HeadersInit): Res
 
 function currentIntake(env: RuntimeEnv, dependencies: ApiDependencies = {}): IntakeEnablement {
   return intakeEnablement(env, dependencies.now?.() ?? Date.now());
+}
+
+function resultOwnerApiEnabled(env: RuntimeEnv): boolean {
+  return env.LEGACY_RESULT_OWNER_API_ENABLED === "true" &&
+    env.RESULT_OWNER_STATE_CONTRACT_COMMIT === RESULT_OWNER_STATE_CONTRACT_COMMIT;
+}
+
+function requireResultOwnerApi(env: RuntimeEnv): void {
+  if (!resultOwnerApiEnabled(env)) {
+    throw new GitHubProviderError(503, "legacy result owner API is not configured");
+  }
 }
 
 async function equalSecret(actual: string, expected: string): Promise<boolean> {
@@ -1629,6 +1659,54 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
       location: response.headers.get("location") ?? "",
     });
   }
+  if (request.method === "POST" && url.pathname === "/api/v1/results/claims") {
+    requireResultOwnerApi(env);
+    const authenticated = await session(request, env, dependencies);
+    const eventId = idempotencyEventId(request);
+    const input = decodeLegacyResultClaim(await readJson(request));
+    const ledger = state(env, dependencies);
+    await ledger.assertResultOwnerContract();
+    const verified = await submissionStage(
+      "legacy_result_verification",
+      () => provider(env, dependencies).verifyLegacyResult(
+        authenticated.login,
+        input.results_commit,
+        input.result_id,
+      ),
+    );
+    const outcome = await ledger.claimLegacyResult({
+      eventId,
+      occurredAt: canonicalTimestamp(now),
+      verified,
+    });
+    return json({
+      result_id: outcome.resultId,
+      status: outcome.created ? "claimed" : "already_claimed",
+    }, outcome.created ? 201 : 200);
+  }
+  const resultMetadataMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/metadata$/.exec(url.pathname);
+  if (request.method === "PATCH" && resultMetadataMatch?.[1]) {
+    requireResultOwnerApi(env);
+    const authenticated = await session(request, env, dependencies);
+    const eventId = idempotencyEventId(request);
+    const metadata = decodeMetadataAmendment(await readJson(request));
+    if (Object.keys(metadata).length === 0) {
+      throw new ApiDecodeError("production_metadata must contain at least one backfill field");
+    }
+    const ledger = state(env, dependencies);
+    await ledger.assertResultOwnerContract();
+    const outcome = await ledger.backfillLegacyResultMetadata({
+      eventId,
+      occurredAt: canonicalTimestamp(now),
+      resultId: resultMetadataMatch[1],
+      ownerLogin: authenticated.login,
+      productionMetadata: metadata,
+    });
+    return json({
+      result_id: outcome.resultId,
+      status: outcome.created ? "backfilled" : "unchanged",
+    }, outcome.created ? 201 : 200);
+  }
   const match = /^\/api\/v1\/submissions\/([^/]+)(?:\/(metadata|publication))?$/.exec(url.pathname);
   if (match?.[1] && isUuidV7(match[1])) {
     const authenticated = await session(request, env, dependencies);
@@ -1684,7 +1762,11 @@ function errorResponse(error: unknown): Response {
     const status = error.status === 409 ? 409 : error.status === 404 ? 422 : 503;
     return json({ error: status === 409 ? "proof_failed" : status === 422 ? "source_not_found" : "provider_unavailable" }, status);
   }
-  if (error instanceof GitHubStateError) return json({ error: "state_unavailable" }, 503);
+  if (error instanceof GitHubStateError) {
+    if (error.status === 404) return json({ error: "not_found" }, 404);
+    if (error.status === 409) return json({ error: "idempotency_conflict" }, 409);
+    return json({ error: "state_unavailable" }, 503);
+  }
   console.error(JSON.stringify({ event: "api_request_failed", error_name: error instanceof Error ? error.name : "unknown" }));
   return json({ error: "internal_error" }, 500);
 }
@@ -1771,7 +1853,17 @@ export async function handleRequest(
       return errorResponse(error);
     }
   }
-  if (url.pathname.startsWith("/api/") && !intake.effective) return json({ error: "intake_disabled" }, 503);
+  const resultOwnerRoute = url.pathname === "/api/v1/results/claims" ||
+    /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/metadata$/.test(url.pathname);
+  if (resultOwnerRoute && !resultOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
+  const oauthRoute = url.pathname === "/api/v1/oauth/start" || url.pathname === "/api/v1/oauth/callback";
+  if (
+    url.pathname.startsWith("/api/") &&
+    !intake.effective &&
+    !(resultOwnerApiEnabled(env) && (resultOwnerRoute || oauthRoute))
+  ) {
+    return json({ error: "intake_disabled" }, 503);
+  }
   if (url.pathname.startsWith("/api/v1/")) {
     if (!(await rateLimit(request, env, dependencies))) {
       return json({ error: "rate_limited" }, 429, { "retry-after": "60" });

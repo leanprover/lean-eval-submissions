@@ -568,6 +568,14 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 self.assertNotIn("routes", configuration)
                 self.assertEqual(configuration["vars"]["INTAKE_ENABLED"], "false")
                 self.assertEqual(
+                    configuration["vars"]["LEGACY_RESULT_OWNER_API_ENABLED"],
+                    "false",
+                )
+                self.assertEqual(
+                    configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],
+                    "a3081798468f8c364a5c7d619aee2fd83e2028e3",
+                )
+                self.assertEqual(
                     configuration["vars"]["OAUTH_CALLBACK_URL"],
                     base_url + "/api/v1/oauth/callback",
                 )

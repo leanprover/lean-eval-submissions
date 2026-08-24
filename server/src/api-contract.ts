@@ -102,6 +102,10 @@ export type ResultCompletion = Readonly<{
   result_path: string;
   result_tree_digest: string;
 }>;
+export type LegacyResultClaimInput = Readonly<{
+  result_id: string;
+  results_commit: string;
+}>;
 
 export class ApiDecodeError extends Error {
   constructor(message: string) {
@@ -360,6 +364,18 @@ export function decodeMetadataAmendment(value: unknown): ProductionMetadata {
     throw new ApiDecodeError("metadata amendment must not be empty");
   }
   return metadata;
+}
+
+export function decodeLegacyResultClaim(value: unknown): LegacyResultClaimInput {
+  const data = object(value, "legacy result claim");
+  exactFields(data, ["result_id", "results_commit"], [], "legacy result claim");
+  if (typeof data.result_id !== "string" || !RESULT_ID.test(data.result_id)) {
+    throw new ApiDecodeError("result_id is not a schema-version-2 result identity");
+  }
+  if (typeof data.results_commit !== "string" || !COMMIT.test(data.results_commit)) {
+    throw new ApiDecodeError("results_commit must be a lowercase 40-character commit");
+  }
+  return { result_id: data.result_id, results_commit: data.results_commit };
 }
 
 export function decodePublicationChoice(value: unknown): PublicationChoice {

@@ -175,6 +175,30 @@ export type ReleaseScheduledEvent = SubmissionLifecycleEvent<"release.scheduled"
   result_id: string;
 }>;
 export type WritableResultLifecycleEvent = ResultRecordedEvent | ReleaseScheduledEvent;
+export type ResultClaimedEvent = EventEnvelope &
+  Readonly<{
+    event_type: "result.claimed";
+    subject_id: string;
+    actor: Readonly<{ kind: "github"; login: string }>;
+    payload: Readonly<{
+      declared_model: string;
+      problem_id: string;
+      statement_revision: number;
+      results_repository: "leanprover/lean-eval-submissions";
+      results_commit: string;
+      results_path: string;
+      canonical_record_sha256: string;
+    }>;
+  }>;
+export type ResultMetadataBackfilledEvent = Omit<EventEnvelope, "causation_event_id"> &
+  Readonly<{
+    event_type: "result.metadata_backfilled";
+    subject_id: string;
+    causation_event_id: string;
+    actor: Readonly<{ kind: "github"; login: string }>;
+    payload: Readonly<{ production_metadata: Readonly<Record<string, unknown>> }>;
+  }>;
+export type WritableResultOwnerEvent = ResultClaimedEvent | ResultMetadataBackfilledEvent;
 
 /** State events the public submission Worker is authorized to append. */
 export type WritableStateEvent =
@@ -184,7 +208,8 @@ export type WritableStateEvent =
   | SubmissionMetadataAmendedEvent
   | SubmissionPublicationChangedEvent
   | WritableSubmissionLifecycleEvent
-  | WritableResultLifecycleEvent;
+  | WritableResultLifecycleEvent
+  | WritableResultOwnerEvent;
 
 type LifecycleEventType =
   | "archive.completed"
@@ -396,6 +421,65 @@ function validateSubmissionChild(event: Record<string, unknown>): void {
   }
 }
 
+function validateResultOwnerEvent(event: Record<string, unknown>): void {
+  if (typeof event.subject_id !== "string" || !RESULT_ID.test(event.subject_id)) {
+    throw new TypeError("result owner event subject must be a schema-version-2 result identity");
+  }
+  validateCanonicalActor(event);
+  const actor = object(event.actor, "State event actor");
+  const payload = object(event.payload, "State event payload");
+  if (event.event_type === "result.metadata_backfilled") {
+    if (typeof event.causation_event_id !== "string" || !UUID_V7.test(event.causation_event_id)) {
+      throw new TypeError("result metadata backfill must have a lowercase UUIDv7 cause");
+    }
+    exactFields(payload, ["production_metadata"], "State event payload");
+    const metadata = decodeProductionMetadata(payload.production_metadata);
+    if (Object.keys(metadata).length === 0) {
+      throw new TypeError("result metadata backfill must change at least one field");
+    }
+    return;
+  }
+  if (event.causation_event_id !== null) {
+    throw new TypeError("result claim must be a root event");
+  }
+  exactFields(payload, [
+    "canonical_record_sha256",
+    "declared_model",
+    "problem_id",
+    "results_commit",
+    "results_path",
+    "results_repository",
+    "statement_revision",
+  ], "State event payload");
+  nonemptyString(payload.declared_model, "result claim declared_model");
+  if (
+    new TextEncoder().encode(payload.declared_model).byteLength > 256 ||
+    containsControlCharacter(payload.declared_model)
+  ) {
+    throw new TypeError("result claim declared_model must be control-free UTF-8 of at most 256 bytes");
+  }
+  if (typeof payload.problem_id !== "string" || !PROBLEM_ID.test(payload.problem_id)) {
+    throw new TypeError("result claim problem_id is invalid");
+  }
+  if (
+    typeof payload.statement_revision !== "number" ||
+    !Number.isSafeInteger(payload.statement_revision) ||
+    payload.statement_revision < 1
+  ) {
+    throw new TypeError("result claim statement_revision is invalid");
+  }
+  if (
+    payload.results_repository !== "leanprover/lean-eval-submissions" ||
+    typeof payload.results_commit !== "string" ||
+    !COMMIT.test(payload.results_commit) ||
+    payload.results_path !== `results/${String(actor.login)}.json` ||
+    typeof payload.canonical_record_sha256 !== "string" ||
+    !DIGEST.test(payload.canonical_record_sha256)
+  ) {
+    throw new TypeError("result claim source binding is invalid");
+  }
+}
+
 const LIFECYCLE_FIELDS: Readonly<Record<LifecycleEventType, readonly string[]>> = {
   "archive.completed": ["archive_ciphertext_sha256", "archive_commit", "archive_path", "archive_repository", "encrypted"],
   "archive.failed": ["reason_code", "retryable"],
@@ -524,6 +608,11 @@ export function validateStateEvent(value: unknown): asserts value is StateEvent 
     event.event_type === "submission.publication_changed"
   ) {
     validateSubmissionChild(event);
+  } else if (
+    event.event_type === "result.claimed" ||
+    event.event_type === "result.metadata_backfilled"
+  ) {
+    validateResultOwnerEvent(event);
   } else if (typeof event.event_type === "string" && event.event_type in LIFECYCLE_FIELDS) {
     validateLifecycleEvent(event, event.event_type as LifecycleEventType);
   } else {

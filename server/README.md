@@ -126,6 +126,12 @@ contract testing:
   `PUT /api/v1/submissions/<uuid>/publication` require the base record's
   owning identity. Mutations also require a canonical UUIDv7
   `Idempotency-Key`; cookie-authenticated mutations are same-origin.
+- `POST /api/v1/results/claims` and
+  `PATCH /api/v1/results/<result-id>/metadata` implement the separately gated
+  legacy-result owner flow documented in
+  [`../docs/legacy-result-owner-api.md`](../docs/legacy-result-owner-api.md).
+  They remain disabled in both tracked environments and do not depend on or
+  enable submission intake.
 
 All JSON objects use exact-field decoders, request bodies are limited to 16
 KiB, and submitter-controlled text has explicit Unicode/control-character and

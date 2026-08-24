@@ -13,11 +13,30 @@ import type {
   WritableSubmissionLifecycleEvent,
 } from "../src/state-event";
 import type { SubmissionView } from "../src/submission-view";
+import {
+  claimedGuard,
+  claimedOverlay,
+  claimedSourceIndex,
+  recordedGuard,
+  type VerifiedLegacyResult,
+} from "../src/result-owner";
 
 const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
 const NEW_TREE = "3".repeat(40);
 const NEW_COMMIT = "4".repeat(40);
+const RESULT_OWNER_CONTRACT_COMMIT = "a3081798468f8c364a5c7d619aee2fd83e2028e3";
+const RESULT_OWNER_CONTRACT_BLOBS = {
+  "docs/result-owner-operational-indexes.md": "2f784609f9117caf74cb7042e9ea45732925d77b",
+  "schema/result-identity-guard-v1.schema.json": "1620b6d8aed37f652958ac86e311c00578edc8b4",
+  "schema/result-overlay-view-v1.schema.json": "1b50a92a76891bd21e0b67f7f40ab9c86d50beed",
+  "schema/result-overlays-v1.schema.json": "41d4078133d6854bf8de839873a3f58e9ba1afd1",
+  "schema/result-source-record-index-v1.schema.json": "4543225e0833af00913e436185532a769debebc1",
+  "schema/state-event-v1.schema.json": "c2b4e85ddd18b7a3d41c705cfa1454ff8f879da1",
+  "scripts/materialize_state.py": "55fe11c8df3ecb809467214efdb10b2b114af2d6",
+  "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
+  "scripts/validate_state.py": "2805ec815bad62f3886f63718f296cc4bde9e54f",
+} as const;
 
 const EVENT: StateEvent = {
   schema_version: 1,
@@ -202,6 +221,21 @@ const RESULT_VIEW: SubmissionView = {
   result_id: RESULT_ID,
   result_event_id: RESULT_EVENT.event_id,
 };
+const CLAIM_EVENT_ID = "0198abcd-2222-7000-8000-000000000001";
+const BACKFILL_EVENT_ID = "0198abcd-2222-7000-8000-000000000002";
+const LEGACY_RESULT: VerifiedLegacyResult = {
+  resultId: `r2_${"1".repeat(64)}`,
+  ownerLogin: "alice",
+  baseResult: {
+    declared_model: "Example Model",
+    problem_id: "two_plus_two",
+    statement_revision: 1,
+    results_repository: "leanprover/lean-eval-submissions",
+    results_commit: "a".repeat(40),
+    results_path: "results/alice.json",
+    canonical_record_sha256: "b".repeat(64),
+  },
+};
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status });
@@ -209,6 +243,19 @@ function json(value: unknown, status = 200): Response {
 
 function contents(value: unknown): Response {
   return json({ encoding: "base64", content: btoa(`${JSON.stringify(value)}\n`) });
+}
+
+function resultOwnerContractProofResponses(
+  changedPath?: keyof typeof RESULT_OWNER_CONTRACT_BLOBS,
+): Response[] {
+  return [
+    json({
+      status: "ahead",
+      merge_base_commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
+    }),
+    ...Object.entries(RESULT_OWNER_CONTRACT_BLOBS).map(([path, sha]) =>
+      json({ type: "file", path, sha: path === changedPath ? "0".repeat(40) : sha })),
+  ];
 }
 
 function sequence(responses: readonly (Response | Error)[]) {
@@ -229,6 +276,29 @@ function repository(fetcher: GitHubFetch): GitHubStateRepository {
 }
 
 describe("atomic Git State append", () => {
+  it("gates result-owner writes on protected-main ancestry and exact reviewed blobs", async () => {
+    const valid = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+    ]);
+    await expect(repository(valid).assertResultOwnerContract()).resolves.toBe(HEAD);
+
+    const diverged = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      json({ status: "diverged", merge_base_commit: { sha: "0".repeat(40) } }),
+    ]);
+    await expect(repository(diverged).assertResultOwnerContract()).rejects.toMatchObject({ status: 503 });
+
+    const changed = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses("schema/result-identity-guard-v1.schema.json"),
+    ]);
+    await expect(repository(changed).assertResultOwnerContract()).rejects.toMatchObject({ status: 503 });
+  });
+
   it("proves write authority with a non-forced same-commit ref update", async () => {
     const fetcher = sequence([
       json({ permissions: { push: true } }),
@@ -503,12 +573,14 @@ describe("atomic Git State append", () => {
     const fetcher = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
       contents(ACCEPTED_VIEW),
       contents(RECEIVED),
       contents(METADATA),
       contents(ARCHIVE_EVENT),
       contents(EVALUATION_ACCEPTED),
       contents(EVALUATION_STARTED),
+      new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       json({ sha: NEW_TREE }, 201),
@@ -520,14 +592,311 @@ describe("atomic Git State append", () => {
       EVALUATION_ACCEPTED.event_id,
       RESULT_VIEW,
     )).resolves.toEqual({ commit: NEW_COMMIT, created: true, view: RESULT_VIEW });
-    const treeRequest = fetcher.mock.calls[10]?.[1]?.body;
+    const treeRequest = fetcher.mock.calls[21]?.[1]?.body;
     if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
     const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
     expect(tree.tree.map((entry) => entry.path)).toEqual([
       `events/01/${RESULT_EVENT.event_id}.json`,
       `events/01/${RELEASE_EVENT.event_id}.json`,
       `views/submissions/01/${SUBMISSION_ID}.json`,
+      `views/result-identities/aa/${RESULT_ID}.json`,
     ]);
+  });
+
+  it("atomically claims a verified legacy record and all three private indexes", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    await expect(repository(fetcher).claimLegacyResult({
+      eventId: CLAIM_EVENT_ID,
+      occurredAt: "2026-08-24T08:00:00.000Z",
+      verified: LEGACY_RESULT,
+    })).resolves.toEqual({
+      commit: NEW_COMMIT,
+      created: true,
+      resultId: LEGACY_RESULT.resultId,
+      authorityEventId: CLAIM_EVENT_ID,
+    });
+    const treeRequest = fetcher.mock.calls[16]?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
+    expect(tree.tree.map((entry) => entry.path)).toEqual([
+      `events/01/${CLAIM_EVENT_ID}.json`,
+      `views/result-identities/11/${LEGACY_RESULT.resultId}.json`,
+      `views/result-overlays/11/${LEGACY_RESULT.resultId}.json`,
+      "views/result-source-records/34/src1_34ef08a904550548d360cc62407a77a7e5e8dfe9184c8d472e4f4266ffc3f826.json",
+    ]);
+    expect(tree.tree.every((entry) => entry.content.endsWith("\n"))).toBe(true);
+    expect(tree.tree[1]?.content).toContain('"authority_event_id"');
+  });
+
+  it("restarts the complete claim preflight after a stale-base CAS collision", async () => {
+    const nextHead = "5".repeat(40);
+    const nextTree = "6".repeat(40);
+    const finalTree = "7".repeat(40);
+    const finalCommit = "8".repeat(40);
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ message: "not a fast-forward" }, 409),
+      json({ object: { sha: nextHead } }),
+      json({ tree: { sha: nextTree } }),
+      ...resultOwnerContractProofResponses(),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      json({ sha: finalTree }, 201),
+      json({ sha: finalCommit }, 201),
+      json({ object: { sha: finalCommit } }),
+    ]);
+    await expect(repository(fetcher).claimLegacyResult({
+      eventId: CLAIM_EVENT_ID,
+      occurredAt: "2026-08-24T08:00:00.000Z",
+      verified: LEGACY_RESULT,
+    })).resolves.toMatchObject({ commit: finalCommit, created: true });
+    const updates = fetcher.mock.calls.filter((call) => call[1]?.method === "PATCH");
+    expect(updates).toHaveLength(2);
+  });
+
+  it("rejects a claim colliding with a recorded identity guard", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(recordedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID)),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+    ]);
+    await expect(repository(fetcher).claimLegacyResult({
+      eventId: CLAIM_EVENT_ID,
+      occurredAt: "2026-08-24T08:00:00.000Z",
+      verified: LEGACY_RESULT,
+    })).rejects.toBeInstanceOf(StateEventConflictError);
+    expect(fetcher).toHaveBeenCalledTimes(16);
+  });
+
+  it("accepts an exact existing claim but rejects a forged source binding", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const overlay = claimedOverlay(LEGACY_RESULT, CLAIM_EVENT_ID, "2026-08-24T08:00:00.000Z");
+    const source = await claimedSourceIndex(LEGACY_RESULT, CLAIM_EVENT_ID);
+    const claimEvent = {
+      schema_version: 1,
+      event_id: CLAIM_EVENT_ID,
+      event_type: "result.claimed",
+      occurred_at: "2026-08-24T08:00:00.000Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: null,
+      actor: { kind: "github", login: "alice" },
+      payload: LEGACY_RESULT.baseResult,
+    } as const;
+    const exact = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(overlay),
+      contents(source),
+      contents(claimEvent),
+      contents(claimEvent),
+    ]);
+    await expect(repository(exact).claimLegacyResult({
+      eventId: CLAIM_EVENT_ID,
+      occurredAt: "2026-08-24T08:00:00.000Z",
+      verified: LEGACY_RESULT,
+    })).resolves.toMatchObject({ created: false, authorityEventId: CLAIM_EVENT_ID });
+
+    const otherEventId = "0198abcd-0000-7000-8000-000000000009";
+    const occupied = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(overlay),
+      contents(source),
+      contents({ ...claimEvent, event_id: otherEventId }),
+    ]);
+    await expect(repository(occupied).claimLegacyResult({
+      eventId: otherEventId,
+      occurredAt: "2026-08-24T08:00:00.000Z",
+      verified: LEGACY_RESULT,
+    })).rejects.toBeInstanceOf(StateEventConflictError);
+
+    const forged = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(overlay),
+      contents({ ...source, result_id: `r2_${"2".repeat(64)}` }),
+      contents(claimEvent),
+      contents(claimEvent),
+    ]);
+    await expect(repository(forged).claimLegacyResult({
+      eventId: CLAIM_EVENT_ID,
+      occurredAt: "2026-08-24T08:00:00.000Z",
+      verified: LEGACY_RESULT,
+    })).rejects.toBeInstanceOf(StateEventConflictError);
+  });
+
+  it("serializes metadata backfills through the current overlay mutation head", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const overlay = claimedOverlay(LEGACY_RESULT, CLAIM_EVENT_ID, "2026-08-24T08:00:00.000Z");
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(overlay),
+      new Response(null, { status: 404 }),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    await expect(repository(fetcher).backfillLegacyResultMetadata({
+      eventId: BACKFILL_EVENT_ID,
+      occurredAt: "2026-08-24T08:01:00.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      ownerLogin: "alice",
+      productionMetadata: { web_access: false },
+    })).resolves.toEqual({
+      commit: NEW_COMMIT,
+      created: true,
+      resultId: LEGACY_RESULT.resultId,
+      mutationEventId: BACKFILL_EVENT_ID,
+    });
+    const treeRequest = fetcher.mock.calls[15]?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
+    expect(tree.tree.map((entry) => entry.path)).toEqual([
+      `events/01/${BACKFILL_EVENT_ID}.json`,
+      `views/result-overlays/11/${LEGACY_RESULT.resultId}.json`,
+    ]);
+    expect(JSON.parse(tree.tree[0]?.content ?? "null")).toMatchObject({
+      causation_event_id: CLAIM_EVENT_ID,
+      payload: { production_metadata: { web_access: false } },
+    });
+    expect(JSON.parse(tree.tree[1]?.content ?? "null")).toMatchObject({
+      mutation_event_id: BACKFILL_EVENT_ID,
+      metadata: { web_access: { event_id: BACKFILL_EVENT_ID, provenance: "backfilled", value: false } },
+    });
+  });
+
+  it("makes a same-key backfill replay idempotent and a changed body conflicting", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const claimed = claimedOverlay(LEGACY_RESULT, CLAIM_EVENT_ID, "2026-08-24T08:00:00.000Z");
+    const overlay = {
+      ...claimed,
+      mutation_event_id: BACKFILL_EVENT_ID,
+      metadata: {
+        web_access: {
+          value: false,
+          provenance: "backfilled",
+          event_id: BACKFILL_EVENT_ID,
+          recorded_at: "2026-08-24T08:01:00.000Z",
+        },
+      },
+    } as const;
+    const event = {
+      schema_version: 1,
+      event_id: BACKFILL_EVENT_ID,
+      event_type: "result.metadata_backfilled",
+      occurred_at: "2026-08-24T08:01:00.000Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: CLAIM_EVENT_ID,
+      actor: { kind: "github", login: "alice" },
+      payload: { production_metadata: { web_access: false } },
+    } as const;
+    const exact = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(overlay),
+      contents(event),
+    ]);
+    await expect(repository(exact).backfillLegacyResultMetadata({
+      eventId: BACKFILL_EVENT_ID,
+      occurredAt: "2026-08-24T08:01:00.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      ownerLogin: "alice",
+      productionMetadata: { web_access: false },
+    })).resolves.toMatchObject({ created: false, mutationEventId: BACKFILL_EVENT_ID });
+
+    const changed = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(overlay),
+      contents(event),
+    ]);
+    await expect(repository(changed).backfillLegacyResultMetadata({
+      eventId: BACKFILL_EVENT_ID,
+      occurredAt: "2026-08-24T08:01:00.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      ownerLogin: "alice",
+      productionMetadata: { web_access: true },
+    })).rejects.toBeInstanceOf(StateEventConflictError);
+
+    const forgedProvenance = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents({
+        ...overlay,
+        metadata: {
+          web_access: {
+            ...overlay.metadata.web_access,
+            recorded_at: "2026-08-24T08:02:00.000Z",
+          },
+        },
+      }),
+      contents(event),
+    ]);
+    await expect(repository(forgedProvenance).backfillLegacyResultMetadata({
+      eventId: BACKFILL_EVENT_ID,
+      occurredAt: "2026-08-24T08:01:00.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      ownerLogin: "alice",
+      productionMetadata: { web_access: false },
+    })).rejects.toBeInstanceOf(StateEventConflictError);
+  });
+
+  it("hides a legacy claim from a different authenticated owner", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID)),
+      contents(claimedOverlay(LEGACY_RESULT, CLAIM_EVENT_ID, "2026-08-24T08:00:00.000Z")),
+      new Response(null, { status: 404 }),
+    ]);
+    await expect(repository(fetcher).backfillLegacyResultMetadata({
+      eventId: BACKFILL_EVENT_ID,
+      occurredAt: "2026-08-24T08:01:00.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      ownerLogin: "mallory",
+      productionMetadata: { web_access: false },
+    })).rejects.toMatchObject({ status: 404 });
   });
 
   it("refuses to overwrite an existing event", async () => {
