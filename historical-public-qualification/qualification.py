@@ -26,6 +26,60 @@ MAX_JSON_BYTES = 1024 * 1024
 MATRIX_SHA256 = "aad9132f729ef9f429532900d1e50b665330721fa9360699328c47bdfb2aedfc"
 CONTRACT_SHA256 = "afac0306192c63c7a6d1e2fc83f179180b695e009f869d14cc6a1eb5028afb85"
 UNREVIEWED_DIGEST = "0" * 64
+EXECUTOR_FAILURE_REASONS = {
+    "input_transfer_failed",
+    "command_rpc_failed",
+    "command_failed",
+    "command_output_invalid",
+    "sandbox_destroy_failed",
+    "unexpected_failure",
+}
+EXECUTOR_FAILURE_DETAILS = {
+    "archive_decryption_failed",
+    "archive_expansion_too_large",
+    "archive_input_invalid",
+    "archive_invalid",
+    "archive_member_count_invalid",
+    "archive_member_unsafe",
+    "archive_plaintext_identity_mismatch",
+    "benchmark_identity_mismatch",
+    "benchmark_identity_unavailable",
+    "ciphertext_digest_mismatch",
+    "decoded_input_too_large",
+    "encoded_input_invalid",
+    "evaluator_did_not_terminate",
+    "evaluator_preflight_failed",
+    "evaluator_results_invalid",
+    "evaluator_results_unavailable",
+    "evaluator_unavailable",
+    "expectation_fields_invalid",
+    "expectation_invalid",
+    "expectation_schema_invalid",
+    "execution_request_invalid",
+    "measurement_evidence_invalid",
+    "measurement_evidence_unavailable",
+    "measurement_limits_mismatch",
+    "network_isolation_failed",
+    "profile_lock_mismatch",
+    "plaintext_digest_mismatch",
+    "plaintext_size_mismatch",
+    "runtime_profile_mismatch",
+    "unclassified_archive_failure",
+    "unclassified_authoritative_failure",
+    "verdict_invalid",
+    "workspace_not_found",
+}
+DIAGNOSTIC_OUTCOMES = {
+    "initialized",
+    "transport_failed",
+    "response_too_large",
+    "invalid_http_status",
+    "executor_failed",
+    "invalid_failure_response",
+    "probe_succeeded",
+    "evidence_invalid",
+    "evidence_validated",
+}
 
 
 class QualificationError(ValueError):
@@ -153,14 +207,22 @@ def render_config(
     account_id: str,
     manifest_digest: str,
     source_commit: str,
+    image_source_commit: str,
 ) -> dict[str, Any]:
     item = candidate(matrix_path, contract_path, benchmark_commit)
     contract = qualification_contract(contract_path)
     if re.fullmatch(r"[0-9a-f]{32}", account_id) is None:
         raise QualificationError("Cloudflare account id is invalid")
-    if OCI_DIGEST.fullmatch(manifest_digest) is None or COMMIT.fullmatch(source_commit) is None:
+    if (
+        OCI_DIGEST.fullmatch(manifest_digest) is None
+        or COMMIT.fullmatch(source_commit) is None
+        or COMMIT.fullmatch(image_source_commit) is None
+    ):
         raise QualificationError("deployment binding is invalid")
-    image = f"registry.cloudflare.com/{account_id}/{item['registry_repository']}:{benchmark_commit}-{source_commit}"
+    image = (
+        f"registry.cloudflare.com/{account_id}/{item['registry_repository']}:"
+        f"{benchmark_commit}-{image_source_commit}@{manifest_digest}"
+    )
     return {
         "$schema": "../server/node_modules/wrangler/config-schema.json",
         "name": "lean-eval-historical-public-qualification",
@@ -256,14 +318,19 @@ def validate_probe(value: Any, request: dict[str, Any], contract: dict[str, Any]
 
 
 def validate_rollout(
-    value: Any, contract: dict[str, Any], benchmark_commit: str, source_commit: str
+    value: Any,
+    contract: dict[str, Any],
+    benchmark_commit: str,
+    image_source_commit: str,
+    manifest_digest: str,
 ) -> dict[str, Any]:
     rollout = exact(value, {
         "schema_version", "kind", "qualification_status", "name", "version",
-        "max_instances", "image_repository", "image_tag", "runtime_boundary", "health",
+        "max_instances", "image_repository", "image_tag", "image_manifest_digest",
+        "runtime_boundary", "health",
     }, "rollout evidence")
     if (
-        rollout["schema_version"] != 1
+        rollout["schema_version"] != 2
         or rollout["kind"] != "historical_public_qualification_rollout"
         or rollout["qualification_status"] != "unqualified"
         or rollout["name"] != contract["container_application"]
@@ -271,7 +338,8 @@ def validate_rollout(
         or rollout["version"] < 1
         or rollout["max_instances"] != contract["max_instances"]
         or rollout["image_repository"] != contract["registry_repository"]
-        or rollout["image_tag"] != f"{benchmark_commit}-{source_commit}"
+        or rollout["image_tag"] != f"{benchmark_commit}-{image_source_commit}"
+        or rollout["image_manifest_digest"] != manifest_digest
     ):
         raise QualificationError("rollout identity changed")
     boundary = exact(rollout["runtime_boundary"], {
@@ -296,6 +364,106 @@ def validate_rollout(
     ):
         raise QualificationError("rollout is not healthy")
     return rollout
+
+
+def validated_executor_failure(value: Any) -> dict[str, str]:
+    """Accept only the source-free executor failure vocabulary."""
+
+    if not isinstance(value, dict) or set(value) not in (
+        {"error", "reason"},
+        {"error", "reason", "detail"},
+    ):
+        raise QualificationError("executor failure fields changed")
+    reason = value.get("reason")
+    if (
+        value.get("error") != "executor_failed"
+        or not isinstance(reason, str)
+        or reason not in EXECUTOR_FAILURE_REASONS
+    ):
+        raise QualificationError("executor failure reason changed")
+    detail = value.get("detail")
+    if detail is not None and (
+        not isinstance(detail, str) or detail not in EXECUTOR_FAILURE_DETAILS
+    ):
+        raise QualificationError("executor failure detail changed")
+    return {
+        "error": "executor_failed",
+        "reason": str(reason),
+        **({} if detail is None else {"detail": str(detail)}),
+    }
+
+
+def staging_diagnostic(
+    benchmark_commit: str,
+    controller_source_commit: str,
+    image_source_commit: str,
+    manifest_digest: str,
+    outcome: str,
+    probe_number: int,
+    http_status: int | None,
+    failure: Any | None,
+) -> dict[str, Any]:
+    """Return one bounded, source-free staging probe diagnostic."""
+
+    if (
+        COMMIT.fullmatch(benchmark_commit) is None
+        or COMMIT.fullmatch(controller_source_commit) is None
+        or COMMIT.fullmatch(image_source_commit) is None
+        or OCI_DIGEST.fullmatch(manifest_digest) is None
+        or outcome not in DIAGNOSTIC_OUTCOMES
+        or probe_number not in (0, 1, 2)
+    ):
+        raise QualificationError("diagnostic binding is invalid")
+    if http_status is not None and not 100 <= http_status <= 599:
+        raise QualificationError("diagnostic HTTP status is invalid")
+    safe_failure = None if failure is None else validated_executor_failure(failure)
+    valid_shape = (
+        outcome == "initialized"
+        and probe_number == 0
+        and http_status is None
+        and safe_failure is None
+    ) or (
+        outcome in {"transport_failed", "response_too_large", "invalid_http_status"}
+        and probe_number in (1, 2)
+        and http_status is None
+        and safe_failure is None
+    ) or (
+        outcome == "executor_failed"
+        and probe_number in (1, 2)
+        and http_status == 500
+        and safe_failure is not None
+    ) or (
+        outcome == "invalid_failure_response"
+        and probe_number in (1, 2)
+        and http_status is not None
+        and http_status != 200
+        and safe_failure is None
+    ) or (
+        outcome == "probe_succeeded"
+        and probe_number in (1, 2)
+        and http_status == 200
+        and safe_failure is None
+    ) or (
+        outcome in {"evidence_invalid", "evidence_validated"}
+        and probe_number == 2
+        and http_status == 200
+        and safe_failure is None
+    )
+    if not valid_shape:
+        raise QualificationError("diagnostic outcome is inconsistent")
+    return {
+        "schema_version": 1,
+        "kind": "historical_public_staging_qualification_diagnostic",
+        "qualification_status": "unqualified",
+        "benchmark_commit": benchmark_commit,
+        "controller_source_commit": controller_source_commit,
+        "image_source_commit": image_source_commit,
+        "registry_manifest_digest": manifest_digest,
+        "probe_number": probe_number,
+        "outcome": outcome,
+        "http_status": http_status,
+        "executor_failure": safe_failure,
+    }
 
 
 def uuid7() -> str:
@@ -350,12 +518,30 @@ def command(args: argparse.Namespace) -> None:
     elif args.action == "build-probe":
         value = build_probe(args.runner_nonce)
     elif args.action == "render-config":
-        value = render_config(matrix, contract_path, args.benchmark_commit, args.account_id, args.manifest_digest, args.source_commit)
+        value = render_config(
+            matrix,
+            contract_path,
+            args.benchmark_commit,
+            args.account_id,
+            args.manifest_digest,
+            args.source_commit,
+            args.image_source_commit,
+        )
     elif args.action == "render-binding":
-        config = render_config(matrix, contract_path, args.benchmark_commit, "0" * 32, args.manifest_digest, args.source_commit)
+        config = render_config(
+            matrix,
+            contract_path,
+            args.benchmark_commit,
+            "0" * 32,
+            args.manifest_digest,
+            args.source_commit,
+            args.image_source_commit,
+        )
         value = {
-            "schema_version": 1,
+            "schema_version": 2,
             "benchmark_commit": args.benchmark_commit,
+            "controller_source_commit": args.source_commit,
+            "image_source_commit": args.image_source_commit,
             "qualification_status": "unqualified",
             "vars": config["env"]["staging"]["vars"],
         }
@@ -369,10 +555,13 @@ def command(args: argparse.Namespace) -> None:
             "0" * 32,
             binding["vars"]["REVIEWED_VM_IMAGE_DIGEST"],
             args.source_commit,
+            args.image_source_commit,
         )
         expected_binding = {
-            "schema_version": 1,
+            "schema_version": 2,
             "benchmark_commit": args.benchmark_commit,
+            "controller_source_commit": args.source_commit,
+            "image_source_commit": args.image_source_commit,
             "qualification_status": "unqualified",
             "vars": expected_config["env"]["staging"]["vars"],
         }
@@ -380,7 +569,11 @@ def command(args: argparse.Namespace) -> None:
             raise QualificationError("candidate binding does not re-derive from the matrix")
         health = validate_health(load_external(pathlib.Path(args.health)), binding)
         rollout = validate_rollout(
-            load(pathlib.Path(args.rollout)), contract, args.benchmark_commit, args.source_commit
+            load(pathlib.Path(args.rollout)),
+            contract,
+            args.benchmark_commit,
+            args.image_source_commit,
+            binding["vars"]["REVIEWED_VM_IMAGE_DIGEST"],
         )
         requests = [load(pathlib.Path(path)) for path in args.requests]
         responses = [validate_probe(load_external(pathlib.Path(path)), request, contract) for path, request in zip(args.responses, requests, strict=True)]
@@ -389,16 +582,34 @@ def command(args: argparse.Namespace) -> None:
         if len({r["runner_nonce"] for r in responses}) != 1:
             raise QualificationError("destruction probes must reuse one runner nonce")
         value = {
-            "schema_version": 1,
+            "schema_version": 2,
             "kind": "historical_public_staging_qualification_evidence",
             "qualification_status": "unqualified",
             "benchmark_commit": args.benchmark_commit,
-            "source_commit": args.source_commit,
+            "controller_source_commit": args.source_commit,
+            "image_source_commit": args.image_source_commit,
             "registry_manifest_digest": binding["vars"]["REVIEWED_VM_IMAGE_DIGEST"],
             "health": health,
             "runtime_boundary": rollout["runtime_boundary"],
             "probes": responses,
         }
+    elif args.action == "render-diagnostic":
+        candidate(matrix, contract_path, args.benchmark_commit)
+        failure = (
+            None
+            if args.failure is None
+            else load_external(pathlib.Path(args.failure))
+        )
+        value = staging_diagnostic(
+            args.benchmark_commit,
+            args.source_commit,
+            args.image_source_commit,
+            args.manifest_digest,
+            args.outcome,
+            args.probe_number,
+            args.http_status,
+            failure,
+        )
     else:
         raise AssertionError(args.action)
     output = canonical(value)
@@ -413,11 +624,22 @@ def command(args: argparse.Namespace) -> None:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
-    result.add_argument("action", choices=("select", "build-probe", "render-binding", "render-config", "validate-evidence"))
+    result.add_argument(
+        "action",
+        choices=(
+            "select",
+            "build-probe",
+            "render-binding",
+            "render-config",
+            "render-diagnostic",
+            "validate-evidence",
+        ),
+    )
     result.add_argument("--matrix", required=True)
     result.add_argument("--contract", required=True)
     result.add_argument("--benchmark-commit", required=True)
     result.add_argument("--source-commit")
+    result.add_argument("--image-source-commit")
     result.add_argument("--account-id")
     result.add_argument("--manifest-digest")
     result.add_argument("--binding")
@@ -426,6 +648,10 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--requests", nargs="*")
     result.add_argument("--responses", nargs="*")
     result.add_argument("--runner-nonce")
+    result.add_argument("--outcome", choices=sorted(DIAGNOSTIC_OUTCOMES))
+    result.add_argument("--probe-number", type=int)
+    result.add_argument("--http-status", type=int)
+    result.add_argument("--failure")
     result.add_argument("--output", default="-")
     return result
 

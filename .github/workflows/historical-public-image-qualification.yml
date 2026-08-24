@@ -22,6 +22,11 @@ on:
         required: false
         type: string
         default: ''
+      resume_image_source_commit:
+        description: Exact protected source commit that created the resumed immutable image tag; required only with a resume digest
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -38,6 +43,7 @@ jobs:
     timeout-minutes: 300
     outputs:
       manifest_digest: ${{ steps.publish_registry.outputs.digest || steps.resume_registry.outputs.digest }}
+      image_source_commit: ${{ steps.select.outputs.image_source_commit }}
     env:
       MATRIX: configuration/historical-public-replay-profile-matrix-v1.json
       CONTRACT: historical-public-qualification/contract-v1.json
@@ -105,8 +111,10 @@ jobs:
         working-directory: server
 
       - name: Select one locked, still-unqualified matrix entry
+        id: select
         env:
           RESUME_DIGEST: ${{ inputs.resume_registry_manifest_digest }}
+          RESUME_IMAGE_SOURCE_COMMIT: ${{ inputs.resume_image_source_commit }}
         run: |
           set -euo pipefail
           test -z "$(git status --short)"
@@ -117,6 +125,45 @@ jobs:
           git merge-base --is-ancestor "$GITHUB_SHA" "$remote_main"
           if [ -n "$RESUME_DIGEST" ]; then
             [[ "$RESUME_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+            [[ "$RESUME_IMAGE_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+            image_source_commit="$RESUME_IMAGE_SOURCE_COMMIT"
+            image_source_ref="refs/tags/lean-eval-dispatch/$image_source_commit"
+            mapfile -t image_source_tag_lines < <(timeout 30s git ls-remote \
+              https://github.com/leanprover/lean-eval-submissions.git \
+              "$image_source_ref" "$image_source_ref^{}")
+            test "${#image_source_tag_lines[@]}" -ge 1
+            test "${#image_source_tag_lines[@]}" -le 2
+            image_source_tag_object=""
+            image_source_remote_commit=""
+            for line in "${image_source_tag_lines[@]}"; do
+              read -r object ref extra <<< "$line"
+              test -z "${extra:-}"
+              [[ "$object" =~ ^[0-9a-f]{40}$ ]]
+              if [ "$ref" = "$image_source_ref" ]; then
+                test -z "$image_source_tag_object"
+                image_source_tag_object="$object"
+              elif [ "$ref" = "$image_source_ref^{}" ]; then
+                test -z "$image_source_remote_commit"
+                image_source_remote_commit="$object"
+              else
+                exit 1
+              fi
+            done
+            test -n "$image_source_tag_object"
+            if [ -z "$image_source_remote_commit" ]; then
+              image_source_remote_commit="$image_source_tag_object"
+            fi
+            test "$image_source_remote_commit" = "$image_source_commit"
+            git merge-base --is-ancestor "$image_source_commit" "$GITHUB_SHA"
+            test "$(git show "$image_source_commit:$MATRIX" | sha256sum | cut -d' ' -f1)" \
+              = "$(sha256sum "$MATRIX" | cut -d' ' -f1)"
+            test "$(git show "$image_source_commit:$CONTRACT" | sha256sum | cut -d' ' -f1)" \
+              = "$(sha256sum "$CONTRACT" | cut -d' ' -f1)"
+            test "$(git show "$image_source_commit:server/replay-image/replay-staging-acceptance" | sha256sum | cut -d' ' -f1)" \
+              = "$(sha256sum server/replay-image/replay-staging-acceptance | cut -d' ' -f1)"
+          else
+            test -z "$RESUME_IMAGE_SOURCE_COMMIT"
+            image_source_commit="$GITHUB_SHA"
           fi
           python "$CONTROLLER" select \
             --matrix "$MATRIX" \
@@ -126,8 +173,12 @@ jobs:
           test "$(jq -r .qualification_status "$RUNNER_TEMP/candidate.json")" = unqualified
           test "$(jq -r .registry_repository "$RUNNER_TEMP/candidate.json")" = "$IMAGE_REPOSITORY"
           test "$(jq -r .registry_tag_prefix "$RUNNER_TEMP/candidate.json")" = "$BENCHMARK_COMMIT"
-          echo "IMAGE_TAG=$BENCHMARK_COMMIT-$GITHUB_SHA" >> "$GITHUB_ENV"
-          echo "IMAGE=$IMAGE_REPOSITORY:$BENCHMARK_COMMIT-$GITHUB_SHA" >> "$GITHUB_ENV"
+          {
+            echo "IMAGE_SOURCE_COMMIT=$image_source_commit"
+            echo "IMAGE_TAG=$BENCHMARK_COMMIT-$image_source_commit"
+            echo "IMAGE=$IMAGE_REPOSITORY:$BENCHMARK_COMMIT-$image_source_commit"
+          } >> "$GITHUB_ENV"
+          echo "image_source_commit=$image_source_commit" >> "$GITHUB_OUTPUT"
 
       - name: Dry-run the dedicated replay-disabled qualifier before publication
         env:
@@ -137,6 +188,7 @@ jobs:
           trap 'rm -f "$QUALIFIER_CONFIG"' EXIT
           python "$CONTROLLER" render-config --matrix "$MATRIX" --contract "$CONTRACT" \
             --benchmark-commit "$BENCHMARK_COMMIT" --source-commit "$GITHUB_SHA" \
+            --image-source-commit "$IMAGE_SOURCE_COMMIT" \
             --account-id "$CLOUDFLARE_ACCOUNT_ID" \
             --manifest-digest "sha256:$(printf '0%.0s' {1..64})" \
             --output "$QUALIFIER_CONFIG"
@@ -313,6 +365,7 @@ jobs:
           trap 'rm -f "$QUALIFIER_CONFIG"' EXIT
           python "$CONTROLLER" render-config --matrix "$MATRIX" --contract "$CONTRACT" \
             --benchmark-commit "$BENCHMARK_COMMIT" --source-commit "$GITHUB_SHA" \
+            --image-source-commit "$IMAGE_SOURCE_COMMIT" \
             --account-id "$CLOUDFLARE_ACCOUNT_ID" --manifest-digest "$MANIFEST_DIGEST" \
             --output "$QUALIFIER_CONFIG"
           (cd server && npx wrangler deploy --config "../$QUALIFIER_CONFIG" --env staging)
@@ -331,15 +384,34 @@ jobs:
           set -euo pipefail
           python "$CONTROLLER" render-binding --matrix "$MATRIX" --contract "$CONTRACT" \
             --benchmark-commit "$BENCHMARK_COMMIT" --source-commit "$GITHUB_SHA" \
+            --image-source-commit "$IMAGE_SOURCE_COMMIT" \
             --manifest-digest "$MANIFEST_DIGEST" --output candidate-binding.json
           python - <<'PY'
-          import hashlib, json, os, pathlib
+          import hashlib, json, os, pathlib, subprocess
           candidate = json.loads(pathlib.Path(os.environ["RUNNER_TEMP"] + "/candidate.json").read_text())
+          image_source_commit = os.environ["IMAGE_SOURCE_COMMIT"]
+          dockerfile = subprocess.run(
+              ["git", "show", f"{image_source_commit}:Dockerfile.historical-public-replay"],
+              check=True,
+              stdout=subprocess.PIPE,
+          ).stdout
+          layer_preparation_result = subprocess.run(
+              ["git", "show", f"{image_source_commit}:scripts/prepare_historical_image_layers.py"],
+              check=False,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.DEVNULL,
+          )
+          layer_preparation = (
+              layer_preparation_result.stdout
+              if layer_preparation_result.returncode == 0
+              else None
+          )
           evidence = {
-              "schema_version": 1,
+              "schema_version": 2,
               "kind": "historical_public_image_publication_evidence",
               "qualification_status": "unqualified",
-              "source_commit": os.environ["GITHUB_SHA"],
+              "controller_source_commit": os.environ["GITHUB_SHA"],
+              "image_source_commit": image_source_commit,
               "benchmark_commit": candidate["benchmark_commit"],
               "benchmark_tree": candidate["benchmark_tree"],
               "registry_repository": candidate["registry_repository"],
@@ -347,8 +419,8 @@ jobs:
               "registry_manifest_digest": os.environ["MANIFEST_DIGEST"],
               "publication_mode": "resumed" if os.environ.get("IMAGE_SIZE_BYTES") is None else "created",
               "image_size_bytes": int(os.environ["IMAGE_SIZE_BYTES"]) if os.environ.get("IMAGE_SIZE_BYTES") is not None else None,
-              "dockerfile_sha256": hashlib.sha256(pathlib.Path("Dockerfile.historical-public-replay").read_bytes()).hexdigest(),
-              "layer_preparation_sha256": hashlib.sha256(pathlib.Path("scripts/prepare_historical_image_layers.py").read_bytes()).hexdigest(),
+              "dockerfile_sha256": hashlib.sha256(dockerfile).hexdigest(),
+              "layer_preparation_sha256": hashlib.sha256(layer_preparation).hexdigest() if layer_preparation is not None else None,
               "layer_diff_ids": json.loads(pathlib.Path(os.environ["RUNNER_TEMP"] + "/image-layer-diff-ids.json").read_text()) if os.environ.get("IMAGE_SIZE_BYTES") is not None else None,
               "matrix_sha256": hashlib.sha256(pathlib.Path(os.environ["MATRIX"]).read_bytes()).hexdigest(),
               "matrix_entry_sha256": candidate["entry_sha256"],
@@ -390,13 +462,26 @@ jobs:
       MATRIX: configuration/historical-public-replay-profile-matrix-v1.json
       CONTRACT: historical-public-qualification/contract-v1.json
       CONTROLLER: historical-public-qualification/qualification.py
+      FAILURE_SANITIZER: scripts/sanitize_executor_failure.py
       BENCHMARK_COMMIT: ${{ inputs.benchmark_commit }}
+      IMAGE_SOURCE_COMMIT: ${{ needs.publish-and-deploy-isolated-qualifier.outputs.image_source_commit }}
+      DIAGNOSTIC: historical-public-staging-qualification-diagnostic.json
       QUALIFIER_URL: https://lean-eval-historical-qualifier-staging.lean-eval.workers.dev
     steps:
       # actions/checkout pinned to v7.0.1.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+
+      - name: Initialize bounded source-free probe diagnostics
+        env:
+          MANIFEST_DIGEST: ${{ needs.publish-and-deploy-isolated-qualifier.outputs.manifest_digest }}
+        run: |
+          set -euo pipefail
+          python "$CONTROLLER" render-diagnostic --matrix "$MATRIX" --contract "$CONTRACT" \
+            --benchmark-commit "$BENCHMARK_COMMIT" --source-commit "$GITHUB_SHA" \
+            --image-source-commit "$IMAGE_SOURCE_COMMIT" --manifest-digest "$MANIFEST_DIGEST" \
+            --outcome initialized --probe-number 0 --output "$DIAGNOSTIC"
 
       # actions/download-artifact pinned to v8.0.1.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
@@ -422,8 +507,27 @@ jobs:
           cleanup() {
             unset oidc_token
             rm -f "$RUNNER_TEMP"/probe-{1,2}-{request,response}.json \
-              "$RUNNER_TEMP/oidc.json" "$RUNNER_TEMP/age.tar.gz"
+              "$RUNNER_TEMP/oidc.json" "$RUNNER_TEMP/age.tar.gz" \
+              "$RUNNER_TEMP/probe-response.json" "$RUNNER_TEMP/sanitized-failure.json" \
+              "$RUNNER_TEMP/diagnostic-next.json"
             rm -rf "$RUNNER_TEMP/age"
+          }
+          write_diagnostic() {
+            local outcome="$1"
+            local probe_number="$2"
+            local http_status="${3:-}"
+            local failure="${4:-}"
+            local -a arguments=(
+              render-diagnostic --matrix "$MATRIX" --contract "$CONTRACT"
+              --benchmark-commit "$BENCHMARK_COMMIT" --source-commit "$GITHUB_SHA"
+              --image-source-commit "$IMAGE_SOURCE_COMMIT"
+              --manifest-digest "$MANIFEST_DIGEST" --outcome "$outcome"
+              --probe-number "$probe_number" --output "$RUNNER_TEMP/diagnostic-next.json"
+            )
+            if [ -n "$http_status" ]; then arguments+=(--http-status "$http_status"); fi
+            if [ -n "$failure" ]; then arguments+=(--failure "$failure"); fi
+            python "$CONTROLLER" "${arguments[@]}"
+            mv "$RUNNER_TEMP/diagnostic-next.json" "$DIAGNOSTIC"
           }
           trap cleanup EXIT
           test "$(jq -r .qualification_status candidate/candidate-binding.json)" = unqualified
@@ -445,20 +549,71 @@ jobs:
           test -n "$oidc_token"
           rm -f "$RUNNER_TEMP/oidc.json"
           for number in 1 2; do
-            curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 480 \
+            set +e
+            probe_http_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+              --max-time 480 --max-filesize 16384 --write-out '%{http_code}' \
               --header "Authorization: Bearer $oidc_token" --header 'Content-Type: application/json' \
               --request POST --data-binary "@$RUNNER_TEMP/probe-$number-request.json" \
               "$QUALIFIER_URL/api/v1/staging-acceptance" \
-              --output "$RUNNER_TEMP/probe-$number-response.json"
+              --output "$RUNNER_TEMP/probe-response.json")
+            curl_status=$?
+            set -e
+            if [ "$curl_status" -eq 63 ]; then
+              rm -f "$RUNNER_TEMP/probe-response.json"
+              write_diagnostic response_too_large "$number"
+              echo "staging qualification probe response exceeded its size limit" >&2
+              exit 1
+            fi
+            if [ "$curl_status" -ne 0 ]; then
+              rm -f "$RUNNER_TEMP/probe-response.json"
+              write_diagnostic transport_failed "$number"
+              echo "staging qualification probe transport failed" >&2
+              exit 1
+            fi
+            if [[ ! "$probe_http_status" =~ ^[1-5][0-9]{2}$ ]]; then
+              rm -f "$RUNNER_TEMP/probe-response.json"
+              write_diagnostic invalid_http_status "$number"
+              echo "staging qualification probe returned an invalid HTTP status" >&2
+              exit 1
+            fi
+            if [ "$probe_http_status" != 200 ]; then
+              set +e
+              python "$FAILURE_SANITIZER" "$RUNNER_TEMP/probe-response.json" \
+                > "$RUNNER_TEMP/sanitized-failure.json"
+              sanitizer_status=$?
+              set -e
+              rm -f "$RUNNER_TEMP/probe-response.json"
+              if [ "$probe_http_status" = 500 ] && [ "$sanitizer_status" -eq 0 ]; then
+                write_diagnostic executor_failed "$number" "$probe_http_status" \
+                  "$RUNNER_TEMP/sanitized-failure.json"
+              else
+                write_diagnostic invalid_failure_response "$number" "$probe_http_status"
+              fi
+              rm -f "$RUNNER_TEMP/sanitized-failure.json"
+              echo "staging qualification probe returned HTTP $probe_http_status" >&2
+              exit 1
+            fi
+            mv "$RUNNER_TEMP/probe-response.json" \
+              "$RUNNER_TEMP/probe-$number-response.json"
+            write_diagnostic probe_succeeded "$number" "$probe_http_status"
           done
           unset oidc_token
+          set +e
           python "$CONTROLLER" validate-evidence --matrix "$MATRIX" --contract "$CONTRACT" \
             --benchmark-commit "$BENCHMARK_COMMIT" --source-commit "$GITHUB_SHA" \
+            --image-source-commit "$IMAGE_SOURCE_COMMIT" \
             --binding candidate/candidate-binding.json --health "$RUNNER_TEMP/health.json" \
             --rollout candidate/historical-qualification-rollout.json \
             --requests "$RUNNER_TEMP/probe-1-request.json" "$RUNNER_TEMP/probe-2-request.json" \
             --responses "$RUNNER_TEMP/probe-1-response.json" "$RUNNER_TEMP/probe-2-response.json" \
             --output historical-public-staging-qualification.json
+          validation_status=$?
+          set -e
+          if [ "$validation_status" -ne 0 ]; then
+            write_diagnostic evidence_invalid 2 200
+            exit "$validation_status"
+          fi
+          write_diagnostic evidence_validated 2 200
           cleanup
           trap - EXIT
 
@@ -467,5 +622,15 @@ jobs:
         with:
           name: historical-public-staging-qualification
           path: historical-public-staging-qualification.json
+          if-no-files-found: error
+          retention-days: 30
+
+      # actions/upload-artifact pinned to v7.0.1.
+      - name: Upload bounded source-free probe diagnostics
+        if: always() && hashFiles('historical-public-staging-qualification-diagnostic.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-public-staging-qualification-diagnostic-${{ github.run_attempt }}
+          path: historical-public-staging-qualification-diagnostic.json
           if-no-files-found: error
           retention-days: 30

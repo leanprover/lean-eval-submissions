@@ -8,7 +8,6 @@ import pathlib
 import sys
 from typing import Any
 
-
 MAXIMUM_RESPONSE_BYTES = 4096
 ALLOWED_REASONS = {
     "input_transfer_failed",
@@ -20,22 +19,35 @@ ALLOWED_REASONS = {
 }
 ALLOWED_DETAILS = {
     "archive_decryption_failed",
+    "archive_expansion_too_large",
     "archive_input_invalid",
+    "archive_invalid",
+    "archive_member_count_invalid",
+    "archive_member_unsafe",
     "archive_plaintext_identity_mismatch",
     "benchmark_identity_mismatch",
     "benchmark_identity_unavailable",
     "ciphertext_digest_mismatch",
+    "decoded_input_too_large",
+    "encoded_input_invalid",
     "evaluator_did_not_terminate",
+    "evaluator_preflight_failed",
     "evaluator_results_invalid",
     "evaluator_results_unavailable",
     "evaluator_unavailable",
+    "expectation_fields_invalid",
+    "expectation_invalid",
+    "expectation_schema_invalid",
     "execution_request_invalid",
     "measurement_evidence_invalid",
     "measurement_evidence_unavailable",
     "measurement_limits_mismatch",
     "network_isolation_failed",
     "profile_lock_mismatch",
+    "plaintext_digest_mismatch",
+    "plaintext_size_mismatch",
     "runtime_profile_mismatch",
+    "unclassified_archive_failure",
     "unclassified_authoritative_failure",
     "verdict_invalid",
     "workspace_not_found",

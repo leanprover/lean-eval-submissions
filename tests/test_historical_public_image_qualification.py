@@ -4,9 +4,11 @@ import importlib.util
 import json
 import os
 import pathlib
+import re
 import tempfile
 import unittest
 
+from scripts import sanitize_executor_failure
 
 ROOT = pathlib.Path(__file__).parents[1]
 MATRIX = ROOT / "configuration/historical-public-replay-profile-matrix-v1.json"
@@ -16,6 +18,13 @@ SPEC = importlib.util.spec_from_file_location("historical_qualification", MODULE
 assert SPEC is not None and SPEC.loader is not None
 qualification = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(qualification)
+WAIT_MODULE_PATH = ROOT / "historical-public-qualification/wait_rollout.py"
+WAIT_SPEC = importlib.util.spec_from_file_location(
+    "historical_qualification_wait_rollout", WAIT_MODULE_PATH
+)
+assert WAIT_SPEC is not None and WAIT_SPEC.loader is not None
+wait_rollout = importlib.util.module_from_spec(WAIT_SPEC)
+WAIT_SPEC.loader.exec_module(wait_rollout)
 
 LAYER_MODULE_PATH = ROOT / "scripts/prepare_historical_image_layers.py"
 LAYER_SPEC = importlib.util.spec_from_file_location(
@@ -64,7 +73,13 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
 
     def test_rendered_worker_is_dedicated_replay_disabled_and_exactly_bound(self) -> None:
         config = qualification.render_config(
-            MATRIX, CONTRACT, self.commit, "1" * 32, "sha256:" + "2" * 64, "3" * 40,
+            MATRIX,
+            CONTRACT,
+            self.commit,
+            "1" * 32,
+            "sha256:" + "2" * 64,
+            "3" * 40,
+            "4" * 40,
         )
         staging = config["env"]["staging"]
         self.assertEqual(staging["name"], "lean-eval-historical-qualifier-staging")
@@ -76,11 +91,27 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
         self.assertEqual(staging["containers"][0]["instance_type"], "standard-4")
         self.assertEqual(staging["containers"][0]["max_instances"], 1)
         self.assertEqual(staging["containers"][0]["ssh"], {"enabled": False})
-        self.assertTrue(staging["containers"][0]["image"].endswith("/lean-eval-historical-public-v1:" + self.commit + "-" + "3" * 40))
+        self.assertEqual(staging["vars"]["DEPLOYED_COMMIT"], "3" * 40)
+        self.assertTrue(
+            staging["containers"][0]["image"].endswith(
+                "/lean-eval-historical-public-v1:"
+                + self.commit
+                + "-"
+                + "4" * 40
+                + "@sha256:"
+                + "2" * 64
+            )
+        )
 
     def test_health_and_two_same_nonce_probe_responses_validate_but_stay_unqualified(self) -> None:
         config = qualification.render_config(
-            MATRIX, CONTRACT, self.commit, "1" * 32, "sha256:" + "2" * 64, "3" * 40,
+            MATRIX,
+            CONTRACT,
+            self.commit,
+            "1" * 32,
+            "sha256:" + "2" * 64,
+            "3" * 40,
+            "4" * 40,
         )
         binding = {"vars": config["env"]["staging"]["vars"]}
         variables = binding["vars"]
@@ -125,7 +156,7 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
                 qualification.load(path)
         contract = qualification.load(CONTRACT, qualification.CONTRACT_SHA256)
         rollout = {
-            "schema_version": 1,
+            "schema_version": 2,
             "kind": "historical_public_qualification_rollout",
             "qualification_status": "unqualified",
             "name": contract["container_application"],
@@ -133,6 +164,7 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
             "max_instances": 1,
             "image_repository": contract["registry_repository"],
             "image_tag": self.commit + "-" + "3" * 40,
+            "image_manifest_digest": "sha256:" + "2" * 64,
             "runtime_boundary": {
                 "vcpu": 4,
                 "memory_mib": 12 * 1024,
@@ -142,8 +174,129 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
             },
             "health": {"errors": [], "instances": {"healthy": 1, "failed": 0, "starting": 0, "scheduling": 0}},
         }
-        self.assertEqual(qualification.validate_rollout(rollout, contract, self.commit, "3" * 40), rollout)
+        self.assertEqual(
+            qualification.validate_rollout(
+                rollout,
+                contract,
+                self.commit,
+                "3" * 40,
+                "sha256:" + "2" * 64,
+            ),
+            rollout,
+        )
+        wrong_digest = {**rollout, "image_manifest_digest": "sha256:" + "9" * 64}
+        with self.assertRaisesRegex(qualification.QualificationError, "identity changed"):
+            qualification.validate_rollout(
+                wrong_digest,
+                contract,
+                self.commit,
+                "3" * 40,
+                "sha256:" + "2" * 64,
+            )
         self.assertNotIn("account", json.dumps(rollout))
+
+    def test_rollout_loader_requires_the_digest_pinned_tag(self) -> None:
+        config = qualification.render_config(
+            MATRIX,
+            CONTRACT,
+            self.commit,
+            "1" * 32,
+            "sha256:" + "2" * 64,
+            "3" * 40,
+            "4" * 40,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "config.json"
+            path.write_text(json.dumps(config), encoding="utf-8")
+            expected = wait_rollout.load_expected(path, "staging")
+            self.assertIn("@sha256:" + "2" * 64, expected["image"])
+            config["env"]["staging"]["containers"][0]["image"] = expected[
+                "image"
+            ].split("@", 1)[0]
+            path.write_text(json.dumps(config), encoding="utf-8")
+            with self.assertRaisesRegex(
+                wait_rollout.rollout.RolloutError, "image reference is invalid"
+            ):
+                wait_rollout.load_expected(path, "staging")
+
+    def test_source_free_diagnostic_contract_fails_closed(self) -> None:
+        self.assertEqual(
+            qualification.EXECUTOR_FAILURE_REASONS,
+            sanitize_executor_failure.ALLOWED_REASONS,
+        )
+        self.assertEqual(
+            qualification.EXECUTOR_FAILURE_DETAILS,
+            sanitize_executor_failure.ALLOWED_DETAILS,
+        )
+        replay_app = (ROOT / "server/src/replay-app.ts").read_text()
+        map_region = replay_app.split("const ARCHIVE_COMMAND_FAILURES", 1)[1].split(
+            "type AuthoritativeFailureBody", 1
+        )[0]
+        emitted_details = set(
+            re.findall(r'\[\s*"[^"]+"\s*,\s*"([a-z0-9_]+)"\s*\]', map_region)
+        )
+        classifier = replay_app.split(
+            "function authoritativeCommandFailureDetail", 1
+        )[1].split("function safeCommandFailureDetail", 1)[0]
+        emitted_details.update(re.findall(r'return "([a-z0-9_]+)"', classifier))
+        emitted_details.add("unclassified_archive_failure")
+        self.assertTrue(
+            emitted_details <= sanitize_executor_failure.ALLOWED_DETAILS,
+            emitted_details - sanitize_executor_failure.ALLOWED_DETAILS,
+        )
+        binding = {
+            "benchmark_commit": self.commit,
+            "controller_source_commit": "1" * 40,
+            "image_source_commit": "2" * 40,
+            "manifest_digest": "sha256:" + "3" * 64,
+        }
+        initialized = qualification.staging_diagnostic(
+            **binding,
+            outcome="initialized",
+            probe_number=0,
+            http_status=None,
+            failure=None,
+        )
+        self.assertEqual(initialized["qualification_status"], "unqualified")
+        self.assertIsNone(initialized["executor_failure"])
+        failure = {"error": "executor_failed", "reason": "command_rpc_failed"}
+        diagnostic = qualification.staging_diagnostic(
+            **binding,
+            outcome="executor_failed",
+            probe_number=1,
+            http_status=500,
+            failure=failure,
+        )
+        self.assertEqual(diagnostic["executor_failure"], failure)
+        evidence_invalid = qualification.staging_diagnostic(
+            **binding,
+            outcome="evidence_invalid",
+            probe_number=2,
+            http_status=200,
+            failure=None,
+        )
+        self.assertEqual(evidence_invalid["outcome"], "evidence_invalid")
+        for hostile in (
+            {**failure, "stderr": "private source"},
+            {"error": "executor_failed", "reason": "private_source"},
+            {"error": "executor_failed", "reason": ["command_rpc_failed"]},
+        ):
+            with self.assertRaises(qualification.QualificationError):
+                qualification.staging_diagnostic(
+                    **binding,
+                    outcome="executor_failed",
+                    probe_number=1,
+                    http_status=500,
+                    failure=hostile,
+                )
+        with self.assertRaisesRegex(qualification.QualificationError, "inconsistent"):
+            qualification.staging_diagnostic(
+                **binding,
+                outcome="executor_failed",
+                probe_number=1,
+                http_status=200,
+                failure=failure,
+            )
 
     def test_uuid7_shape(self) -> None:
         self.assertRegex(qualification.uuid7(), r"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
@@ -154,6 +307,20 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
         self.assertIn("workflow_dispatch:", workflow)
         self.assertNotIn("schedule:", workflow)
         self.assertIn("immutable registry tag already exists; refusing overwrite", workflow)
+        self.assertIn('test -z "$RESUME_IMAGE_SOURCE_COMMIT"', workflow)
+        self.assertIn('git merge-base --is-ancestor "$image_source_commit" "$GITHUB_SHA"', workflow)
+        self.assertIn('test "$image_source_remote_commit" = "$image_source_commit"', workflow)
+        self.assertIn('test "$image_digest" = "$RESUME_DIGEST"', workflow)
+        self.assertIn(
+            'git show "$image_source_commit:server/replay-image/replay-staging-acceptance"',
+            workflow,
+        )
+        self.assertIn('python "$FAILURE_SANITIZER" "$RUNNER_TEMP/probe-response.json"', workflow)
+        self.assertIn("if: always()", workflow)
+        self.assertIn("write_diagnostic evidence_invalid 2 200", workflow)
+        self.assertIn('local -a arguments=(', workflow)
+        self.assertIn("historical-public-staging-qualification-diagnostic", workflow)
+        self.assertNotIn("--fail --silent --show-error --max-time 480", workflow)
         self.assertIn("REPLAY_ENABLED\": \"false", MODULE_PATH.read_text())
         self.assertIn("qualification_status\": \"unqualified", MODULE_PATH.read_text())
         self.assertIn(qualification.MATRIX_SHA256, dockerfile)
