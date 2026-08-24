@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       evidence_path:
-        description: Reviewed source-free aggregate under evidence/public-replay
+        description: Reviewed source-free historical public aggregate under evidence
         required: true
         type: string
       expected_evidence_sha256:
@@ -90,7 +90,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          [[ "$EVIDENCE_PATH" =~ ^evidence/public-replay/[a-z0-9][a-z0-9._-]*\.json$ ]]
+          [[ "$EVIDENCE_PATH" =~ ^evidence/historical-public-replay-github-evidence-[0-9a-f]{7,40}\.json$ ]]
           [[ "$EXPECTED_EVIDENCE_SHA256" =~ ^[0-9a-f]{64}$ ]]
           test -f "$EVIDENCE_PATH"
           test ! -L "$EVIDENCE_PATH"

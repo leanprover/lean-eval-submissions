@@ -11,7 +11,7 @@ class HistoricalPublicReplayPlanWorkflowTests(unittest.TestCase):
     def test_dispatch_is_immutable_and_source_free(self) -> None:
         self.assertIn("refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT", WORKFLOW)
         self.assertIn("git merge-base --is-ancestor", WORKFLOW)
-        self.assertIn("^evidence/public-replay/", WORKFLOW)
+        self.assertIn("^evidence/historical-public-replay-github-evidence-", WORKFLOW)
         self.assertIn("persist-credentials: false", WORKFLOW)
         self.assertNotIn("AWS_", WORKFLOW)
         self.assertNotIn("INTAKE_ENABLED", WORKFLOW)

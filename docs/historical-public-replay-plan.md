@@ -95,8 +95,9 @@ or cross-field equality.
 
 ## Protected publication workflow
 
-Once a reviewed source-free aggregate is committed below
-`evidence/public-replay/`, dispatch `historical-public-replay-plan.yml` from the
+Once a reviewed source-free aggregate is committed at the constrained
+`evidence/historical-public-replay-github-evidence-<source-commit-prefix>.json` path,
+dispatch `historical-public-replay-plan.yml` from the
 exact `lean-eval-dispatch/<full-commit>` tag. Supply the aggregate's reviewed
 SHA-256 and exact resolved/pending counts. The workflow proves the tag and
 protected-main ancestry, recomputes the inventory and resolution requests from
