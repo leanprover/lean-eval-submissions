@@ -120,6 +120,12 @@ the already implemented owner status, metadata, and publication routes.
       release-status reads, release barriers, and redacted responses. The local
       integration is bound to protected State contract `163e931`; see
       `docs/result-amendment-owner-api.md` for the exact closed blob proof.
+- [ ] Before enabling either owner mutation gate, version the targeted release
+      status with a monotone revision/supersedes proof (or land an equivalently
+      strong reviewed State invariant), rebind the Worker contract, and add an
+      explicit owner-operation subrequest ceiling. The current dark runtime
+      proves the named immutable release marker and all amendment history but
+      does not global-scan for a later unindexed release event.
 - [ ] Add model-alias, rename, consolidation, and new-canonical-identity
       request events, authorization, materialization, collision tests, and
       lifecycle-aware public projection behavior.

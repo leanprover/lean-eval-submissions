@@ -632,6 +632,9 @@ function validateLifecycleEvent(event: Record<string, unknown>, kind: LifecycleE
     positive("statement_revision");
   }
   if ("result_id" in payload && (typeof payload.result_id !== "string" || !RESULT_ID.test(payload.result_id))) throw new TypeError("result_id is invalid");
+  if (kind === "release.scheduled" && payload.result_id !== event.subject_id) {
+    throw new TypeError("release result identity disagrees with its subject");
+  }
   if ("release_at" in payload && (typeof payload.release_at !== "string" || !isCanonicalUtcTimestamp(payload.release_at))) throw new TypeError("release_at is invalid");
   if (kind === "replay.failed") {
     if (!REPLAY_FAILURES.has(String(payload.reason_code))) throw new TypeError("replay failure reason is not registered");

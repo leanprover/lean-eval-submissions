@@ -1596,15 +1596,20 @@ function statusFor(view: SubmissionView): Record<string, unknown> {
   };
 }
 
-function idempotencyEventId(request: Request): string {
+function idempotencyEventId(request: Request, nowMilliseconds: number): string {
   const value = request.headers.get("idempotency-key") ?? "";
   if (!isUuidV7(value)) throw new ApiDecodeError("Idempotency-Key must be a canonical lowercase UUIDv7");
+  const timestamp = Number.parseInt(`${value.slice(0, 8)}${value.slice(9, 13)}`, 16);
+  if (timestamp > nowMilliseconds) {
+    throw new ApiDecodeError("Idempotency-Key timestamp must not be in the future");
+  }
   return value;
 }
 
 async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDependencies): Promise<Response> {
   const url = new URL(request.url);
-  const now = nowSeconds(dependencies);
+  const nowMilliseconds = dependencies.now?.() ?? Date.now();
+  const now = Math.floor(nowMilliseconds / 1000);
   if (request.method === "GET" && url.pathname === "/api/v1/oauth/start") {
     if (!env.GITHUB_OAUTH_CLIENT_ID || !env.OAUTH_CALLBACK_URL) throw new AuthError("OAuth is not configured");
     const callback = new URL(env.OAUTH_CALLBACK_URL);
@@ -1701,7 +1706,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
   if (request.method === "POST" && url.pathname === "/api/v1/results/claims") {
     requireResultOwnerApi(env);
     const authenticated = await session(request, env, dependencies);
-    const eventId = idempotencyEventId(request);
+    const eventId = idempotencyEventId(request, nowMilliseconds);
     const input = decodeLegacyResultClaim(await readJson(request));
     const ledger = state(env, dependencies);
     const verified = await submissionStage(
@@ -1714,7 +1719,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     );
     const outcome = await ledger.claimLegacyResult({
       eventId,
-      occurredAt: canonicalTimestamp(now),
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
       verified,
     });
     return json({
@@ -1726,7 +1731,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
   if (request.method === "PATCH" && resultMetadataMatch?.[1]) {
     requireResultOwnerApi(env);
     const authenticated = await session(request, env, dependencies);
-    const eventId = idempotencyEventId(request);
+    const eventId = idempotencyEventId(request, nowMilliseconds);
     const metadata = decodeMetadataAmendment(await readJson(request));
     if (Object.keys(metadata).length === 0) {
       throw new ApiDecodeError("production_metadata must contain at least one backfill field");
@@ -1734,7 +1739,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const ledger = state(env, dependencies);
     const outcome = await ledger.backfillLegacyResultMetadata({
       eventId,
-      occurredAt: canonicalTimestamp(now),
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
       resultId: resultMetadataMatch[1],
       ownerLogin: authenticated.login,
       productionMetadata: metadata,
@@ -1748,11 +1753,11 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
   if (request.method === "POST" && problemRepairMatch?.[1]) {
     requireResultAmendmentOwnerApi(env);
     const authenticated = await session(request, env, dependencies);
-    const eventId = idempotencyEventId(request);
+    const eventId = idempotencyEventId(request, nowMilliseconds);
     const input = decodeProblemRepairRequest(await readJson(request));
     const outcome = await state(env, dependencies).requestResultProblemRepair({
       eventId,
-      occurredAt: canonicalTimestamp(now),
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
       resultId: problemRepairMatch[1],
       ownerLogin: authenticated.login,
       correctedProblemId: input.corrected_problem_id,
@@ -1769,11 +1774,11 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
   if (request.method === "POST" && retractionMatch?.[1]) {
     requireResultAmendmentOwnerApi(env);
     const authenticated = await session(request, env, dependencies);
-    const eventId = idempotencyEventId(request);
+    const eventId = idempotencyEventId(request, nowMilliseconds);
     const input = decodeResultRetractionRequest(await readJson(request));
     const outcome = await state(env, dependencies).requestResultRetraction({
       eventId,
-      occurredAt: canonicalTimestamp(now),
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
       resultId: retractionMatch[1],
       ownerLogin: authenticated.login,
       reasonCode: input.reason_code,
@@ -1791,12 +1796,12 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const current = await ledger.readSubmission(match[1]);
     if (current?.owner_login !== authenticated.login) return json({ error: "not_found" }, 404);
     if (request.method === "GET" && !match[2]) return json(statusFor(current));
-    const eventId = idempotencyEventId(request);
+    const eventId = idempotencyEventId(request, nowMilliseconds);
     if (request.method === "PATCH" && match[2] === "metadata") {
       const metadata = decodeMetadataAmendment(await readJson(request));
       const event: WritableStateEvent = {
         schema_version: 1, event_id: eventId, event_type: "submission.metadata_amended",
-        occurred_at: canonicalTimestamp(now), subject_id: match[1], causation_event_id: current.mutation_event_id,
+        occurred_at: canonicalMilliseconds(nowMilliseconds), subject_id: match[1], causation_event_id: current.mutation_event_id,
         actor: { kind: "github", login: authenticated.login },
         payload: { production_metadata: metadata },
       };
@@ -1814,7 +1819,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
       const choice: PublicationChoice = decodePublicationChoice(await readJson(request));
       const event: WritableStateEvent = {
         schema_version: 1, event_id: eventId, event_type: "submission.publication_changed",
-        occurred_at: canonicalTimestamp(now), subject_id: match[1], causation_event_id: current.mutation_event_id,
+        occurred_at: canonicalMilliseconds(nowMilliseconds), subject_id: match[1], causation_event_id: current.mutation_event_id,
         actor: { kind: "github", login: authenticated.login }, payload: { publication_choice: choice },
       };
       const nextView: SubmissionView = {

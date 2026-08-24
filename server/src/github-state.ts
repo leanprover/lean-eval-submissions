@@ -17,7 +17,9 @@ import {
   requestedProblemRepairView,
   requestedRetractionView,
   resultAmendmentPath,
+  type ProblemRepairState,
   type ResultAmendmentView,
+  type RetractionState,
 } from "./result-amendment";
 import {
   backfilledOverlay,
@@ -59,6 +61,7 @@ const API = "https://api.github.com";
 const STATE_BRANCH = "main";
 const PRODUCTION_STATE_REPOSITORY = "leanprover/lean-eval-state";
 const MAX_WRITE_ATTEMPTS = 8;
+const NEW_EVENT_CLOCK_WINDOW_MS = 5 * 60 * 1000;
 const SHA = /^[0-9a-f]{40}$/i;
 const GITHUB_TIMEOUT_MS = 5000;
 const RESULT_OWNER_CONTRACT_BLOBS = {
@@ -515,6 +518,144 @@ function amendmentMarkerMatches(view: ResultAmendmentView, event: StateEvent): b
   return false;
 }
 
+function problemRepairRequestMatches(
+  ownerLogin: string,
+  repair: ProblemRepairState,
+  event: StateEvent,
+): boolean {
+  const payload = event.payload as Readonly<Record<string, unknown>>;
+  return event.event_type === "result.problem_repair_requested" &&
+    event.event_id === repair.request_event_id &&
+    event.actor.login === ownerLogin &&
+    event.occurred_at === repair.requested_at &&
+    payload.repair_revision === repair.revision &&
+    payload.corrected_problem_id === repair.corrected_problem_id &&
+    payload.corrected_statement_revision === repair.corrected_statement_revision &&
+    (repair.status !== "pending" || payload.reason_code === repair.reason_code);
+}
+
+function retractionRequestMatches(
+  ownerLogin: string,
+  retraction: RetractionState,
+  event: StateEvent,
+): boolean {
+  const payload = event.payload as Readonly<Record<string, unknown>>;
+  return retraction.request_event_id !== null &&
+    retraction.requested_at !== null &&
+    event.event_type === "result.retraction_requested" &&
+    event.event_id === retraction.request_event_id &&
+    event.actor.login === ownerLogin &&
+    event.occurred_at === retraction.requested_at &&
+    payload.retraction_revision === retraction.revision &&
+    (retraction.status !== "pending" || payload.reason_code === retraction.reason_code);
+}
+
+async function assertAmendmentHistoryAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  view: ResultAmendmentView,
+  authority: StateEvent,
+  mutation: StateEvent,
+  commit: string,
+): Promise<void> {
+  const path = resultAmendmentPath(view.result_id);
+  const referencedIds = new Set<string>([view.authority_event_id, view.mutation_event_id]);
+  for (const repair of [view.problem_repair, view.applied_problem_repair]) {
+    if (repair === null) continue;
+    referencedIds.add(repair.request_event_id);
+    if (repair.decision_event_id !== null) referencedIds.add(repair.decision_event_id);
+  }
+  if (view.retraction?.request_event_id !== null && view.retraction?.request_event_id !== undefined) {
+    referencedIds.add(view.retraction.request_event_id);
+  }
+  if (view.retraction?.decision_event_id !== null && view.retraction?.decision_event_id !== undefined) {
+    referencedIds.add(view.retraction.decision_event_id);
+  }
+  if (view.retraction?.retraction_event_id !== null && view.retraction?.retraction_event_id !== undefined) {
+    referencedIds.add(view.retraction.retraction_event_id);
+  }
+  const events = new Map<string, StateEvent>([
+    [authority.event_id, authority],
+    [mutation.event_id, mutation],
+  ]);
+  await Promise.all([...referencedIds].filter((eventId) => !events.has(eventId)).map(async (eventId) => {
+    events.set(eventId, await readEventAt(config, fetcher, eventId, commit));
+  }));
+  const referencedEvent = (eventId: string): StateEvent => {
+    const event = events.get(eventId);
+    if (event?.subject_id !== view.result_id) {
+      throw new StateEventConflictError(path);
+    }
+    return event;
+  };
+  try {
+    for (const repair of [view.problem_repair, view.applied_problem_repair]) {
+      if (repair === null) continue;
+      if (!problemRepairRequestMatches(
+        view.owner_login,
+        repair,
+        referencedEvent(repair.request_event_id),
+      )) {
+        throw new TypeError("problem repair request disagreed with targeted view");
+      }
+      if (repair.decision_event_id !== null) {
+        const decision = referencedEvent(repair.decision_event_id);
+        const decisionView = { ...view, mutation_event_id: decision.event_id, problem_repair: repair };
+        const expectedDecisionType = repair.status === "applied"
+          ? "result.problem_repaired"
+          : "result.problem_repair_rejected";
+        if (repair.status === "pending" || decision.event_type !== expectedDecisionType ||
+          !amendmentMarkerMatches(decisionView, decision)) {
+          throw new TypeError("problem repair decision disagreed with targeted view");
+        }
+      }
+    }
+    const retraction = view.retraction;
+    if (retraction !== null) {
+      if (retraction.request_event_id !== null && !retractionRequestMatches(
+        view.owner_login,
+        retraction,
+        referencedEvent(retraction.request_event_id),
+      )) {
+        throw new TypeError("retraction request disagreed with targeted view");
+      }
+      if (retraction.decision_event_id !== null) {
+        const decision = referencedEvent(retraction.decision_event_id);
+        const decisionView = { ...view, mutation_event_id: decision.event_id, retraction };
+        const expectedDecisionType = retraction.overridden
+          ? "result.retraction_overridden"
+          : "result.retraction_decided";
+        if (decision.event_type !== expectedDecisionType ||
+          !amendmentMarkerMatches(decisionView, decision)) {
+          throw new TypeError("retraction decision disagreed with targeted view");
+        }
+        if (decision.event_type === "result.retraction_overridden") {
+          const prior = await readEventAt(config, fetcher, decision.causation_event_id, commit);
+          const payload = prior.payload as Readonly<Record<string, unknown>>;
+          if (
+            prior.subject_id !== view.result_id ||
+            prior.event_type !== "result.retraction_decided" ||
+            payload.retraction_revision !== retraction.revision
+          ) {
+            throw new TypeError("retraction override cause disagreed with targeted view");
+          }
+        }
+      }
+      if (retraction.retraction_event_id !== null) {
+        const terminal = referencedEvent(retraction.retraction_event_id);
+        const terminalView = { ...view, mutation_event_id: terminal.event_id, retraction };
+        if (terminal.event_type !== "result.retracted" ||
+          !amendmentMarkerMatches(terminalView, terminal)) {
+          throw new TypeError("terminal retraction disagreed with targeted view");
+        }
+      }
+    }
+  } catch (error) {
+    if (error instanceof StateEventConflictError || error instanceof GitHubStateError) throw error;
+    throw new StateEventConflictError(path);
+  }
+}
+
 async function createCommit(
   config: GitHubStateConfig,
   fetcher: GitHubFetch,
@@ -643,6 +784,63 @@ async function readEventAt(
   }
   if (stateEventPath(entry.value) !== path) throw new GitHubStateError(502, `${path} event identity disagrees with its path`);
   return entry.value;
+}
+
+async function assertReleaseStatusMarkerAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  status: ResultReleaseStatusView,
+  commit: string,
+): Promise<void> {
+  if (status.status === "not_scheduled") return;
+  const eventId = status.release_event_id;
+  if (eventId === null) throw new StateEventConflictError(resultReleaseStatusPath(status.result_id));
+  const path = `events/${eventId.replaceAll("-", "").slice(0, 2)}/${eventId}.json`;
+  const entry = await readPathAt(config, fetcher, path, commit);
+  if (!entry.found) throw new StateEventConflictError(resultReleaseStatusPath(status.result_id));
+  const expectedType = {
+    scheduled: "release.scheduled",
+    running: "release.started",
+    published: "release.published",
+    failed: "release.failed",
+    cancelled: "release.cancelled",
+    removed: "release.removed",
+  }[status.status];
+  try {
+    // release.removed is part of the pinned private State contract but is
+    // deliberately not registered as a Worker-writable event. All other
+    // release markers can therefore use the Worker's complete event decoder.
+    if (status.status !== "removed") validateStateEvent(entry.value);
+    const event = object(entry.value, "result release-status marker");
+    const actor = event.actor === null || typeof event.actor !== "object" || Array.isArray(event.actor)
+      ? null
+      : event.actor as Record<string, unknown>;
+    if (
+      Object.keys(event).sort().join(",") !==
+        "actor,causation_event_id,event_id,event_type,occurred_at,payload,schema_version,subject_id" ||
+      event.schema_version !== 1 ||
+      event.event_id !== eventId ||
+      event.event_type !== expectedType ||
+      event.subject_id !== status.result_id ||
+      typeof event.occurred_at !== "string" ||
+      Number.isNaN(Date.parse(event.occurred_at)) ||
+      new Date(event.occurred_at).toISOString() !== event.occurred_at ||
+      typeof event.causation_event_id !== "string" ||
+      actor?.kind !== "system" ||
+      Object.keys(actor).length !== 1 ||
+      event.payload === null ||
+      typeof event.payload !== "object" ||
+      Array.isArray(event.payload)
+    ) {
+      throw new TypeError("release marker disagreed with targeted status");
+    }
+  } catch {
+    throw new StateEventConflictError(resultReleaseStatusPath(status.result_id));
+  }
+}
+
+function uuidV7Timestamp(eventId: string): number {
+  return Number.parseInt(`${eventId.slice(0, 8)}${eventId.slice(9, 13)}`, 16);
 }
 
 async function readSubmissionAt(
@@ -1019,6 +1217,7 @@ export class GitHubStateRepository {
         return { commit: snapshot.headSha, created: false, view: current };
       }
       if (current.mutation_event_id !== expectedMutationEventId) throw new StateEventConflictError(path);
+      if (event.event_id <= current.mutation_event_id) throw new StateEventConflictError(path);
       const existing = await readPathAt(this.#config, this.#fetcher, path, snapshot.headSha);
       if (existing.found) throw new StateEventConflictError(path);
       const commit = await createCommit(
@@ -1474,6 +1673,12 @@ export class GitHubStateRepository {
     ) {
       throw new StateEventConflictError(releaseStatusPath);
     }
+    await assertReleaseStatusMarkerAt(
+      this.#config,
+      this.#fetcher,
+      releaseStatus,
+      snapshot.headSha,
+    );
     const view = trackedView;
     if (
       view.result_id !== initial.result_id ||
@@ -1497,6 +1702,14 @@ export class GitHubStateRepository {
     if (!amendmentMarkerMatches(view, mutationEvent)) {
       throw new StateEventConflictError(amendmentPath);
     }
+    await assertAmendmentHistoryAt(
+      this.#config,
+      this.#fetcher,
+      view,
+      authority,
+      mutationEvent,
+      snapshot.headSha,
+    );
     if (
       mutationEvent.event_type === "result.metadata_backfilled" &&
       (overlay?.mutation_event_id !== mutationEvent.event_id ||
@@ -1540,11 +1753,7 @@ export class GitHubStateRepository {
           existing.actor.login !== request.ownerLogin ||
           existing.payload.corrected_problem_id !== request.correctedProblemId ||
           existing.payload.corrected_statement_revision !== request.correctedStatementRevision ||
-          existing.payload.reason_code !== request.reasonCode ||
-          view.problem_repair?.status !== "pending" ||
-          view.problem_repair.request_event_id !== request.eventId ||
-          view.problem_repair.revision !== existing.payload.repair_revision ||
-          view.mutation_event_id !== request.eventId
+          existing.payload.reason_code !== request.reasonCode
         ) {
           throw new StateEventConflictError(requestedEventPath);
         }
@@ -1661,11 +1870,7 @@ export class GitHubStateRepository {
           existing.event_id !== request.eventId ||
           existing.subject_id !== request.resultId ||
           existing.actor.login !== request.ownerLogin ||
-          existing.payload.reason_code !== request.reasonCode ||
-          view.retraction?.status !== "pending" ||
-          view.retraction.request_event_id !== request.eventId ||
-          view.retraction.revision !== existing.payload.retraction_revision ||
-          view.mutation_event_id !== request.eventId
+          existing.payload.reason_code !== request.reasonCode
         ) {
           throw new StateEventConflictError(requestedEventPath);
         }
@@ -1894,6 +2099,14 @@ export class GitHubStateRepository {
       }
       if (incomingSourceEntry.found) throw new StateEventConflictError(sourcePath);
       if (requestedEventEntry.found) throw new StateEventConflictError(eventPath);
+      const occurredAt = Date.parse(request.occurredAt);
+      const eventTimestamp = uuidV7Timestamp(request.eventId);
+      if (
+        eventTimestamp > occurredAt ||
+        eventTimestamp < occurredAt - NEW_EVENT_CLOCK_WINDOW_MS
+      ) {
+        throw new ResultOwnerStateError(409, "Idempotency-Key does not match the current request clock");
+      }
       const guard = claimedGuard(verified.resultId, request.eventId);
       const overlay = claimedOverlay(verified, request.eventId, request.occurredAt);
       const source = await claimedSourceIndex(verified, request.eventId);
@@ -1955,7 +2168,7 @@ export class GitHubStateRepository {
         this.#resultAmendmentAt(request.resultId, snapshot),
         readPathAt(this.#config, this.#fetcher, requestedEventPath, snapshot.headSha),
       ]);
-      const { overlay, view } = context;
+      const { overlay, releaseStatus, view } = context;
       if (
         overlay?.result_id !== request.resultId ||
         overlay.owner_login !== request.ownerLogin ||
@@ -2002,6 +2215,9 @@ export class GitHubStateRepository {
           resultId: request.resultId,
           mutationEventId: view.mutation_event_id,
         };
+      }
+      if (new Set(["running", "published", "removed"]).has(releaseStatus.status)) {
+        throw new ResultOwnerStateError(409, "result release state forbids metadata backfill");
       }
       if (
         view.problem_repair?.status === "pending" ||

@@ -162,4 +162,26 @@ describe("State event contract", () => {
       actor: { kind: "github", login: "maintainer" },
     })).toThrow(/actor/u);
   });
+
+  it("binds a scheduled release payload to its result subject", () => {
+    const resultId = `r2_${"a".repeat(64)}`;
+    const scheduled = {
+      schema_version: 1,
+      event_id: "0198abcd-3333-7000-8000-000000000004",
+      event_type: "release.scheduled",
+      occurred_at: "2026-08-20T06:07:11.000Z",
+      subject_id: resultId,
+      causation_event_id: "0198abcd-3333-7000-8000-000000000003",
+      actor: { kind: "system" },
+      payload: {
+        result_id: resultId,
+        release_at: "2026-10-20T06:07:11.000Z",
+      },
+    } as const;
+    expect(() => validateStateEvent(scheduled)).not.toThrow();
+    expect(() => validateStateEvent({
+      ...scheduled,
+      payload: { ...scheduled.payload, result_id: `r2_${"b".repeat(64)}` },
+    })).toThrow(/disagrees/u);
+  });
 });
