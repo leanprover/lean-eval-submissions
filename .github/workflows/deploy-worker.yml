@@ -139,6 +139,17 @@ jobs:
         with:
           python-version: '3.11.10'
       - run: npm ci
+      - name: Verify the staging Results branch protection gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          commit=$(gh api "repos/$GITHUB_REPOSITORY/branches/staging-results" \
+            --jq 'select(.name == "staging-results" and .protected == true) | .commit.sha')
+          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "staging-results is missing, unprotected, or not commit-exact" >&2
+            exit 1
+          fi
       - name: Verify reviewed staging replay image manifest
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -468,7 +479,7 @@ jobs:
             exit 1
           fi
           ancestry=$(timeout 30s gh api \
-            "repos/leanprover/lean-eval-state/compare/34ec7aa43496027b9ea3faa268a53410d773706d...$commit" \
+            "repos/leanprover/lean-eval-state/compare/889e07e3b8cf38ad147d8a23b7d1b35826de740f...$commit" \
             --jq .status)
           if [ "$ancestry" != ahead ] && [ "$ancestry" != identical ]; then
             echo "production State does not descend from the reviewed intake lease contract" >&2
@@ -478,7 +489,7 @@ jobs:
           timeout 30s gh api -H 'Accept: application/vnd.github.v3.raw' \
             "repos/leanprover/lean-eval-state/contents/schema/state-event-v1.schema.json?ref=$commit" \
             > "$schema"
-          if [ "$(sha256sum "$schema" | cut -d' ' -f1)" != "445510b038bacd36cbf974bfa72dedf1b8bdc345234539d0c6e9964ceccd7eee" ]; then
+          if [ "$(sha256sum "$schema" | cut -d' ' -f1)" != "891d6da2d80fa68d67bc44f08b6cc4b42639917b5bf420af9bcd9654eb153fdf" ]; then
             echo "live protected State schema does not match the reviewed intake lease contract" >&2
             exit 1
           fi

@@ -53,6 +53,15 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("application/vnd.github.v3.raw", DEPLOY)
         self.assertIn("application/vnd.github.v3.raw", ROLLBACK)
 
+    def test_staging_deploy_proves_the_results_branch_is_protected(self) -> None:
+        staging = DEPLOY.split("  deploy-staging:", 1)[1].split(
+            "  deploy-production:", 1
+        )[0]
+        self.assertIn("branches/staging-results", staging)
+        self.assertIn('.protected == true', staging)
+        self.assertIn('[[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]', staging)
+        self.assertIn("GH_TOKEN: ${{ github.token }}", staging)
+
     def test_smoke_checks_use_approved_memory_limit_for_both_environments(self) -> None:
         self.assertEqual(DEPLOY.count('"staging_memory_limit_bytes": 12 * 1024**3'), 2)
         self.assertEqual(DEPLOY.count('"production_memory_gate_bytes": 12 * 1024**3'), 2)
@@ -301,6 +310,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('"PROMOTION_CANARY_ENABLED"', ROLLBACK_VALIDATOR)
         self.assertIn("--require-replay-disabled", ROLLBACK)
         self.assertIn("--require-intake-disabled", ROLLBACK)
+        self.assertIn('"LEGACY_RESULT_OWNER_API_ENABLED"', ROLLBACK_VALIDATOR)
+        self.assertIn('"RESULT_OWNER_STATE_CONTRACT_COMMIT"', ROLLBACK_VALIDATOR)
         self.assertIn("cloudflare-rollback-qualification-v1.json", ROLLBACK)
         self.assertEqual(ROLLBACK.count("compatible-capabilities"), 1)
         self.assertIn("Preserve source-free pre-mutation recovery state", ROLLBACK)
@@ -416,8 +427,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('arguments+=(--var "$name:$value")', production)
         self.assertIn("intake-lease-smoke.json", production)
         self.assertIn("intake_lease", production)
-        self.assertIn("34ec7aa43496027b9ea3faa268a53410d773706d", production)
-        self.assertIn("445510b038bacd36cbf974bfa72dedf1b8bdc345234539d0c6e9964ceccd7eee", production)
+        self.assertIn("889e07e3b8cf38ad147d8a23b7d1b35826de740f", production)
+        self.assertIn("891d6da2d80fa68d67bc44f08b6cc4b42639917b5bf420af9bcd9654eb153fdf", production)
         self.assertIn("does not descend from the reviewed intake lease contract", production)
         self.assertIn("timeout --signal=TERM --kill-after=10s 150s", production)
         self.assertNotIn("\n      - name:", production[final:].split("run: |", 1)[1])
@@ -567,6 +578,14 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 self.assertIs(configuration["preview_urls"], False)
                 self.assertNotIn("routes", configuration)
                 self.assertEqual(configuration["vars"]["INTAKE_ENABLED"], "false")
+                self.assertEqual(
+                    configuration["vars"]["LEGACY_RESULT_OWNER_API_ENABLED"],
+                    "false",
+                )
+                self.assertEqual(
+                    configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],
+                    "889e07e3b8cf38ad147d8a23b7d1b35826de740f",
+                )
                 self.assertEqual(
                     configuration["vars"]["OAUTH_CALLBACK_URL"],
                     base_url + "/api/v1/oauth/callback",

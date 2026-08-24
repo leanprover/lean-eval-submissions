@@ -1,11 +1,17 @@
 {
   "lifecycle_callback_contract_files": [
+    "server/src/api-contract.ts",
     "server/src/app.ts",
+    "server/src/auth.ts",
+    "server/src/github-broker-client.ts",
+    "server/src/github-broker.ts",
+    "server/src/github-provider.ts",
     "server/src/github-state.ts",
+    "server/src/result-owner.ts",
     "server/src/state-event.ts",
     "server/src/submission-view.ts"
   ],
-  "lifecycle_callback_contract_sha256": "05c12afc3a14463b96c55d0d0b69d44e2d0e60fc5f859547759eafe65ab40841",
+  "lifecycle_callback_contract_sha256": "a9bb9510b50be99858484635f4f049a6233bc2243f66b4f9e8f52cd91891a2a3",
   "replay_durable_object_migration_tags": [
     "v1",
     "v2"
@@ -13,9 +19,9 @@
   "scheduled_reconciliation_when_intake_disabled": "no_op",
   "schema_version": 1,
   "state_event_schema_path": "schema/state-event-v1.schema.json",
-  "state_event_schema_sha256": "445510b038bacd36cbf974bfa72dedf1b8bdc345234539d0c6e9964ceccd7eee",
+  "state_event_schema_sha256": "891d6da2d80fa68d67bc44f08b6cc4b42639917b5bf420af9bcd9654eb153fdf",
   "state_event_schema_version": 1,
-  "state_main_commit": "34ec7aa43496027b9ea3faa268a53410d773706d",
+  "state_main_commit": "889e07e3b8cf38ad147d8a23b7d1b35826de740f",
   "state_repository": "leanprover/lean-eval-state",
   "wrangler_version": "4.124.0"
 }

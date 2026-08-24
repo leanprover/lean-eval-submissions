@@ -2,10 +2,34 @@ import {
   stateEventPath,
   type StateEvent,
   type WritableResultLifecycleEvent,
+  type ResultClaimedEvent,
+  type ResultMetadataBackfilledEvent,
   type WritableSubmissionLifecycleEvent,
   type WritableStateEvent,
   validateStateEvent,
 } from "./state-event";
+import {
+  backfilledOverlay,
+  canonicalJson as canonicalResultJson,
+  claimedGuard,
+  claimedOverlay,
+  claimedSourceIndex,
+  decodeResultIdentityGuard,
+  decodeResultOverlay,
+  decodeSourceRecordIndex,
+  metadataAlreadyEqual,
+  recordedGuard,
+  resultIdentityPath,
+  resultOverlayPath,
+  sourceRecordId,
+  sourceRecordPath,
+  RESULT_OWNER_STATE_CONTRACT_COMMIT,
+  type LegacyResultBase,
+  type MetadataProvenance,
+  type ResultOverlay,
+  type VerifiedLegacyResult,
+} from "./result-owner";
+import type { ProductionMetadata } from "./api-contract";
 import {
   decodeDispatchOutbox,
   decodeSubmissionView,
@@ -21,6 +45,22 @@ const STATE_BRANCH = "main";
 const MAX_WRITE_ATTEMPTS = 8;
 const SHA = /^[0-9a-f]{40}$/i;
 const GITHUB_TIMEOUT_MS = 5000;
+const RESULT_OWNER_CONTRACT_BLOBS = {
+  "docs/result-owner-operational-indexes.md": "2f784609f9117caf74cb7042e9ea45732925d77b",
+  "schema/result-identity-guard-v1.schema.json": "1620b6d8aed37f652958ac86e311c00578edc8b4",
+  "schema/result-overlay-view-v1.schema.json": "1b50a92a76891bd21e0b67f7f40ab9c86d50beed",
+  "schema/result-overlays-v1.schema.json": "41d4078133d6854bf8de839873a3f58e9ba1afd1",
+  "schema/result-source-record-index-v1.schema.json": "4543225e0833af00913e436185532a769debebc1",
+  "schema/state-event-v1.schema.json": "609f186c386867254dc0dc1e58b77ebcf74ef15c",
+  "scripts/materialize_state.py": "68b88d24d501751d18108bdb26494fa172dc4ec7",
+  "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
+  "scripts/validate_state.py": "bc77bc9c75f0985bb38aa5487cf4c1a48089f0ce",
+} as const;
+const RESULT_OWNER_CONTRACT_PROOF_CACHE_LIMIT = 64;
+const RESULT_OWNER_CONTRACT_PROOF_ID = Object.entries(RESULT_OWNER_CONTRACT_BLOBS)
+  .map(([path, sha]) => `${path}:${sha}`)
+  .join("|");
+const resultOwnerContractProofCache = new Map<string, true>();
 
 export type GitHubFetch = (
   input: RequestInfo | URL,
@@ -46,6 +86,20 @@ type BranchSnapshot = Readonly<{
 
 type TreeWrite = Readonly<{ path: string; value: unknown }>;
 
+export type LegacyResultClaimRequest = Readonly<{
+  eventId: string;
+  occurredAt: string;
+  verified: VerifiedLegacyResult;
+}>;
+
+export type LegacyResultBackfillRequest = Readonly<{
+  eventId: string;
+  occurredAt: string;
+  resultId: string;
+  ownerLogin: string;
+  productionMetadata: ProductionMetadata;
+}>;
+
 export class GitHubStateError extends Error {
   readonly status: number;
 
@@ -53,6 +107,27 @@ export class GitHubStateError extends Error {
     super(`GitHub State ${String(status)}: ${message}`);
     this.name = "GitHubStateError";
     this.status = status;
+  }
+}
+
+/** Expected owner-API absence or contention; other State failures remain retryable. */
+export class ResultOwnerStateError extends Error {
+  readonly status: 404 | 409;
+
+  constructor(status: 404 | 409, message: string) {
+    super(message);
+    this.name = "ResultOwnerStateError";
+    this.status = status;
+  }
+}
+
+export class ResultIdentityCollisionError extends Error {
+  readonly existingKind: "claimed" | "recorded";
+
+  constructor(existingKind: "claimed" | "recorded") {
+    super(`result identity is already reserved by ${existingKind} authority`);
+    this.name = "ResultIdentityCollisionError";
+    this.existingKind = existingKind;
   }
 }
 
@@ -68,6 +143,22 @@ export class StateEventConflictError extends Error {
     super(`immutable State event already exists at ${path}`);
     this.name = "StateEventConflictError";
   }
+}
+
+export function clearResultOwnerContractProofCacheForTest(): void {
+  resultOwnerContractProofCache.clear();
+}
+
+function resultOwnerContractProofCacheKey(repository: string, head: string): string {
+  return `${repository.toLowerCase()}\0${head}\0${RESULT_OWNER_STATE_CONTRACT_COMMIT}\0${RESULT_OWNER_CONTRACT_PROOF_ID}`;
+}
+
+function rememberResultOwnerContractProof(key: string): void {
+  resultOwnerContractProofCache.delete(key);
+  if (resultOwnerContractProofCache.size >= RESULT_OWNER_CONTRACT_PROOF_CACHE_LIMIT) {
+    resultOwnerContractProofCache.delete(resultOwnerContractProofCache.keys().next().value ?? "");
+  }
+  resultOwnerContractProofCache.set(key, true);
 }
 
 function headers(config: GitHubStateConfig): Headers {
@@ -98,6 +189,7 @@ async function jsonCall(
   const response = await fetcher(repoPath(config, path), {
     ...init,
     headers: requestHeaders,
+    redirect: "manual",
   });
   if (response.status === 404) return null;
   if (!response.ok) throw await responseError(response);
@@ -134,6 +226,37 @@ async function branchSnapshot(
   const commit = await jsonCall(config, fetcher, `/git/commits/${headSha}`);
   const treeSha = requiredSha(nested(commit, ["tree", "sha"]), "State commit tree");
   return { headSha, treeSha };
+}
+
+async function assertResultOwnerContractAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  commit: string,
+): Promise<void> {
+  if (commit !== RESULT_OWNER_STATE_CONTRACT_COMMIT) {
+    const comparison = object(
+      await jsonCall(
+        config,
+        fetcher,
+        `/compare/${RESULT_OWNER_STATE_CONTRACT_COMMIT}...${commit}`,
+      ),
+      "State result-owner contract comparison",
+    );
+    if (
+      comparison.status !== "ahead" ||
+      nested(comparison, ["merge_base_commit", "sha"]) !== RESULT_OWNER_STATE_CONTRACT_COMMIT
+    ) {
+      throw new GitHubStateError(503, "protected State main does not descend from the reviewed result-owner contract");
+    }
+  }
+  await Promise.all(Object.entries(RESULT_OWNER_CONTRACT_BLOBS).map(async ([path, expectedSha]) => {
+    const query = new URLSearchParams({ ref: commit });
+    const raw = await jsonCall(config, fetcher, `/contents/${encodeURI(path)}?${query.toString()}`);
+    const entry = object(raw, `${path} contract blob`);
+    if (entry.type !== "file" || entry.path !== path || entry.sha !== expectedSha) {
+      throw new GitHubStateError(503, "protected State main result-owner contract blobs changed");
+    }
+  }));
 }
 
 function decodeInlineJson(value: unknown, path: string): unknown {
@@ -187,6 +310,33 @@ function canonicalJson(value: unknown): string {
   throw new TypeError("State event is not JSON serializable");
 }
 
+function sortJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortJson);
+  if (value !== null && typeof value === "object") {
+    const source = value as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(source).sort().map((key) => [key, sortJson(source[key])]));
+  }
+  return value;
+}
+
+export function canonicalStateDocument(value: unknown): string {
+  return `${JSON.stringify(sortJson(value), null, 2)
+    .replace(/[\u0080-\uffff]/g, (character) =>
+      `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`)}\n`;
+}
+
+function sameLogicalLegacyResult(left: LegacyResultBase, right: LegacyResultBase): boolean {
+  const identity = (base: LegacyResultBase) => ({
+    declared_model: base.declared_model,
+    problem_id: base.problem_id,
+    statement_revision: base.statement_revision,
+    results_repository: base.results_repository,
+    results_path: base.results_path,
+    canonical_record_sha256: base.canonical_record_sha256,
+  });
+  return canonicalResultJson(identity(left)) === canonicalResultJson(identity(right));
+}
+
 async function createCommit(
   config: GitHubStateConfig,
   fetcher: GitHubFetch,
@@ -207,11 +357,11 @@ async function createCommit(
             path: stateEventPath(event),
             mode: "100644",
             type: "blob",
-            content: `${JSON.stringify(event, null, 2)}\n`,
+            content: canonicalStateDocument(event),
           })),
           ...writes.map((write) => write.value === null
             ? { path: write.path, mode: "100644", type: "blob", sha: null }
-            : { path: write.path, mode: "100644", type: "blob", content: `${JSON.stringify(write.value, null, 2)}\n` }),
+            : { path: write.path, mode: "100644", type: "blob", content: canonicalStateDocument(write.value) }),
         ],
       }),
     });
@@ -258,6 +408,7 @@ async function updateReference(
     method: "PATCH",
     headers: requestHeaders,
     body: JSON.stringify({ sha: commit, force: false }),
+    redirect: "manual",
   };
   let response: Response | null = null;
   let uncertain = false;
@@ -459,6 +610,22 @@ async function readSubmissionAt(
   return view;
 }
 
+async function readResultOwnerDocumentAt<T>(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  path: string,
+  commit: string,
+  decode: (value: unknown) => T,
+): Promise<T | null> {
+  const entry = await readPathAt(config, fetcher, path, commit);
+  if (!entry.found) return null;
+  try {
+    return decode(entry.value);
+  } catch (error) {
+    throw new GitHubStateError(502, `${path} is invalid: ${String(error)}`);
+  }
+}
+
 export class GitHubStateRepository {
   readonly #config: GitHubStateConfig;
   readonly #fetcher: GitHubFetch;
@@ -481,6 +648,25 @@ export class GitHubStateRepository {
       throw new GitHubStateError(403, "State credential does not have push permission");
     }
     return branchSnapshot(this.#config, this.#fetcher);
+  }
+
+  async #resultOwnerSnapshot(): Promise<BranchSnapshot> {
+    const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+    const proofKey = resultOwnerContractProofCacheKey(
+      this.#config.repository,
+      snapshot.headSha,
+    );
+    if (!resultOwnerContractProofCache.has(proofKey)) {
+      await assertResultOwnerContractAt(this.#config, this.#fetcher, snapshot.headSha);
+      rememberResultOwnerContractProof(proofKey);
+    } else {
+      rememberResultOwnerContractProof(proofKey);
+    }
+    return snapshot;
+  }
+
+  async assertResultOwnerContract(): Promise<string> {
+    return (await this.#resultOwnerSnapshot()).headSha;
   }
 
   async assertAvailable(): Promise<void> {
@@ -845,6 +1031,8 @@ export class GitHubStateRepository {
     }
     const paths = events.map(stateEventPath);
     const viewPath = submissionViewPath(decodedView.submission_id);
+    const identityPath = resultIdentityPath(result.subject_id);
+    const identityGuard = recordedGuard(result.subject_id, result.event_id);
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
       const snapshot = await branchSnapshot(this.#config, this.#fetcher);
       const current = await readSubmissionAt(
@@ -855,12 +1043,16 @@ export class GitHubStateRepository {
       );
       if (current === null) throw new GitHubStateError(404, "submission view does not exist");
       if (current.schema_version === 2 && current.result_event_id === result.event_id) {
-        const existing = await Promise.all(
-          paths.map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)),
-        );
+        const existing = await Promise.all([
+          ...paths.map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)),
+          readPathAt(this.#config, this.#fetcher, identityPath, snapshot.headSha),
+        ]);
+        const currentGuardEntry = existing.at(-1);
         if (
-          existing.some((entry, index) =>
+          existing.slice(0, paths.length).some((entry, index) =>
             !entry.found || canonicalJson(entry.value) !== canonicalJson(events[index])) ||
+          !currentGuardEntry?.found ||
+          canonicalJson(currentGuardEntry.value) !== canonicalJson(identityGuard) ||
           canonicalJson(current) !== canonicalJson(decodedView)
         ) {
           throw new StateEventConflictError(viewPath);
@@ -874,18 +1066,45 @@ export class GitHubStateRepository {
       ) {
         throw new StateEventConflictError(viewPath);
       }
-      const existing = await Promise.all(
-        paths.map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)),
-      );
-      if (existing.some((entry) => entry.found)) {
-        throw new StateEventConflictError(paths[existing.findIndex((entry) => entry.found)] ?? viewPath);
+      const [eventEntries, guardEntry] = await Promise.all([
+        Promise.all(paths.map((path) =>
+          readPathAt(this.#config, this.#fetcher, path, snapshot.headSha))),
+        readPathAt(this.#config, this.#fetcher, identityPath, snapshot.headSha),
+      ]);
+      if (guardEntry.found) {
+        let guard;
+        try {
+          guard = decodeResultIdentityGuard(guardEntry.value);
+        } catch {
+          throw new StateEventConflictError(identityPath);
+        }
+        if (guard.result_id !== result.subject_id) {
+          throw new StateEventConflictError(identityPath);
+        }
+        if (guard.record_kind === "claimed") {
+          throw new ResultIdentityCollisionError("claimed");
+        }
+        if (guard.authority_event_id !== result.event_id) {
+          throw new ResultIdentityCollisionError("recorded");
+        }
+        // A same-authority recorded guard and event are created atomically with
+        // the matching submission view. Missing that view is corruption, not a
+        // second result that this callback may safely adopt.
+        throw new StateEventConflictError(viewPath);
+      }
+      const eventConflict = eventEntries.findIndex((entry) => entry.found);
+      if (eventConflict >= 0) {
+        throw new StateEventConflictError(paths[eventConflict] ?? viewPath);
       }
       const commit = await createCommit(
         this.#config,
         this.#fetcher,
         snapshot,
         events,
-        [{ path: viewPath, value: decodedView }],
+        [
+          { path: viewPath, value: decodedView },
+          { path: identityPath, value: identityGuard },
+        ],
         `Record accepted result ${result.subject_id} for ${decodedView.submission_id}`,
       );
       if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
@@ -897,6 +1116,280 @@ export class GitHubStateRepository {
       await pause(attempt);
     }
     throw new Error("unreachable result recording attempt");
+  }
+
+  async claimLegacyResult(request: LegacyResultClaimRequest): Promise<{
+    commit: string;
+    created: boolean;
+    resultId: string;
+    authorityEventId: string;
+  }> {
+    const { verified } = request;
+    const event: ResultClaimedEvent = {
+      schema_version: 1,
+      event_id: request.eventId,
+      event_type: "result.claimed",
+      occurred_at: request.occurredAt,
+      subject_id: verified.resultId,
+      causation_event_id: null,
+      actor: { kind: "github", login: verified.ownerLogin },
+      payload: verified.baseResult,
+    };
+    validateStateEvent(event);
+    const identityPath = resultIdentityPath(verified.resultId);
+    const overlayPath = resultOverlayPath(verified.resultId);
+    const sourceId = await sourceRecordId(verified.baseResult);
+    const sourcePath = sourceRecordPath(sourceId);
+    const eventPath = stateEventPath(event);
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await this.#resultOwnerSnapshot();
+      const [guardEntry, overlayEntry, incomingSourceEntry, requestedEventEntry] = await Promise.all([
+        readPathAt(this.#config, this.#fetcher, identityPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, overlayPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, sourcePath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, eventPath, snapshot.headSha),
+      ]);
+      if (guardEntry.found || overlayEntry.found) {
+        let guard;
+        try {
+          guard = decodeResultIdentityGuard(guardEntry.found ? guardEntry.value : null);
+        } catch {
+          throw new StateEventConflictError(identityPath);
+        }
+        if (guard.record_kind === "recorded") {
+          throw new ResultIdentityCollisionError("recorded");
+        }
+        let overlay;
+        try {
+          overlay = decodeResultOverlay(overlayEntry.found ? overlayEntry.value : null);
+        } catch {
+          throw new StateEventConflictError(identityPath);
+        }
+        if (
+          guard.result_id !== verified.resultId ||
+          overlay.result_id !== verified.resultId ||
+          overlay.owner_login !== verified.ownerLogin ||
+          overlay.claim_event_id !== guard.authority_event_id
+        ) {
+          throw new StateEventConflictError(identityPath);
+        }
+        if (requestedEventEntry.found && request.eventId !== guard.authority_event_id) {
+          throw new StateEventConflictError(eventPath);
+        }
+        const authoritySourceId = await sourceRecordId(overlay.base_result);
+        const authoritySourcePath = sourceRecordPath(authoritySourceId);
+        const authoritySourceEntry = authoritySourcePath === sourcePath
+          ? incomingSourceEntry
+          : await readPathAt(this.#config, this.#fetcher, authoritySourcePath, snapshot.headSha);
+        let source;
+        try {
+          source = decodeSourceRecordIndex(authoritySourceEntry.found ? authoritySourceEntry.value : null);
+        } catch {
+          throw new StateEventConflictError(authoritySourcePath);
+        }
+        const authority = await readEventAt(
+          this.#config,
+          this.#fetcher,
+          guard.authority_event_id,
+          snapshot.headSha,
+        );
+        if (
+          !sameLogicalLegacyResult(overlay.base_result, verified.baseResult) ||
+          source.source_record_id !== authoritySourceId ||
+          source.result_id !== verified.resultId ||
+          source.owner_login !== verified.ownerLogin ||
+          source.claim_event_id !== guard.authority_event_id ||
+          canonicalResultJson({
+            results_repository: source.results_repository,
+            results_commit: source.results_commit,
+            results_path: source.results_path,
+            canonical_record_sha256: source.canonical_record_sha256,
+          }) !== canonicalResultJson({
+            results_repository: verified.baseResult.results_repository,
+            results_commit: overlay.base_result.results_commit,
+            results_path: overlay.base_result.results_path,
+            canonical_record_sha256: overlay.base_result.canonical_record_sha256,
+          }) ||
+          authority.event_type !== "result.claimed" ||
+          authority.event_id !== guard.authority_event_id ||
+          authority.subject_id !== verified.resultId ||
+          authority.actor.login !== verified.ownerLogin ||
+          authority.occurred_at !== overlay.claimed_at ||
+          canonicalResultJson(authority.payload) !== canonicalResultJson(overlay.base_result)
+        ) {
+          throw new StateEventConflictError(identityPath);
+        }
+        if (authoritySourcePath !== sourcePath && incomingSourceEntry.found) {
+          throw new StateEventConflictError(sourcePath);
+        }
+        if (requestedEventEntry.found) {
+          const expectedReplay = { ...event, occurred_at: authority.occurred_at };
+          if (
+            request.eventId !== guard.authority_event_id ||
+            canonicalResultJson(requestedEventEntry.value) !==
+              canonicalResultJson(expectedReplay)
+          ) {
+            throw new StateEventConflictError(eventPath);
+          }
+        }
+        return {
+          commit: snapshot.headSha,
+          created: false,
+          resultId: verified.resultId,
+          authorityEventId: guard.authority_event_id,
+        };
+      }
+      if (incomingSourceEntry.found) throw new StateEventConflictError(sourcePath);
+      if (requestedEventEntry.found) throw new StateEventConflictError(eventPath);
+      const guard = claimedGuard(verified.resultId, request.eventId);
+      const overlay = claimedOverlay(verified, request.eventId, request.occurredAt);
+      const source = await claimedSourceIndex(verified, request.eventId);
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        [event],
+        [
+          { path: identityPath, value: guard },
+          { path: overlayPath, value: overlay },
+          { path: sourcePath, value: source },
+        ],
+        `Claim legacy result ${verified.resultId}`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return {
+          commit,
+          created: true,
+          resultId: verified.resultId,
+          authorityEventId: request.eventId,
+        };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) {
+        throw new ResultOwnerStateError(409, "State branch kept changing during legacy result claim");
+      }
+      await pause(attempt);
+    }
+    throw new Error("unreachable legacy result claim attempt");
+  }
+
+  async backfillLegacyResultMetadata(request: LegacyResultBackfillRequest): Promise<{
+    commit: string;
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+  }> {
+    const identityPath = resultIdentityPath(request.resultId);
+    const overlayPath = resultOverlayPath(request.resultId);
+    const requestedEventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await this.#resultOwnerSnapshot();
+      const [guard, overlay, requestedEventEntry] = await Promise.all([
+        readResultOwnerDocumentAt(
+          this.#config,
+          this.#fetcher,
+          identityPath,
+          snapshot.headSha,
+          decodeResultIdentityGuard,
+        ),
+        readResultOwnerDocumentAt(
+          this.#config,
+          this.#fetcher,
+          overlayPath,
+          snapshot.headSha,
+          decodeResultOverlay,
+        ),
+        readPathAt(this.#config, this.#fetcher, requestedEventPath, snapshot.headSha),
+      ]);
+      if (
+        guard === null ||
+        overlay === null ||
+        guard.record_kind !== "claimed" ||
+        guard.result_id !== request.resultId ||
+        overlay.result_id !== request.resultId ||
+        guard.authority_event_id !== overlay.claim_event_id ||
+        overlay.owner_login !== request.ownerLogin
+      ) {
+        throw new ResultOwnerStateError(404, "legacy result claim was not found");
+      }
+      if (requestedEventEntry.found) {
+        let existing: StateEvent;
+        try {
+          validateStateEvent(requestedEventEntry.value);
+          existing = requestedEventEntry.value;
+        } catch {
+          throw new StateEventConflictError(requestedEventPath);
+        }
+        if (
+          existing.event_type !== "result.metadata_backfilled" ||
+          existing.event_id !== request.eventId ||
+          existing.subject_id !== request.resultId ||
+          existing.actor.login !== request.ownerLogin ||
+          canonicalResultJson(existing.payload.production_metadata) !==
+            canonicalResultJson(request.productionMetadata) ||
+          Object.keys(request.productionMetadata).some((field) => {
+            const provenance = (overlay.metadata as Record<string, MetadataProvenance | undefined>)[field];
+            if (provenance?.event_id !== request.eventId) return true;
+            return provenance.recorded_at !== existing.occurred_at ||
+              canonicalResultJson(provenance.value) !==
+                canonicalResultJson(request.productionMetadata[field as keyof ProductionMetadata]);
+          })
+        ) {
+          throw new StateEventConflictError(requestedEventPath);
+        }
+        return {
+          commit: snapshot.headSha,
+          created: false,
+          resultId: request.resultId,
+          mutationEventId: request.eventId,
+        };
+      }
+      if (metadataAlreadyEqual(overlay, request.productionMetadata)) {
+        return {
+          commit: snapshot.headSha,
+          created: false,
+          resultId: request.resultId,
+          mutationEventId: overlay.mutation_event_id,
+        };
+      }
+      const event: ResultMetadataBackfilledEvent = {
+        schema_version: 1,
+        event_id: request.eventId,
+        event_type: "result.metadata_backfilled",
+        occurred_at: request.occurredAt,
+        subject_id: request.resultId,
+        causation_event_id: overlay.mutation_event_id,
+        actor: { kind: "github", login: request.ownerLogin },
+        payload: { production_metadata: request.productionMetadata },
+      };
+      validateStateEvent(event);
+      const nextOverlay: ResultOverlay = backfilledOverlay(
+        overlay,
+        request.eventId,
+        request.occurredAt,
+        request.productionMetadata,
+      );
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        [event],
+        [{ path: overlayPath, value: nextOverlay }],
+        `Backfill legacy result metadata ${request.resultId}`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return {
+          commit,
+          created: true,
+          resultId: request.resultId,
+          mutationEventId: request.eventId,
+        };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) {
+        throw new ResultOwnerStateError(409, "State branch kept changing during legacy result backfill");
+      }
+      await pause(attempt);
+    }
+    throw new Error("unreachable legacy result metadata backfill attempt");
   }
 
   async appendEvents(events: readonly WritableStateEvent[]): Promise<{

@@ -1,3 +1,11 @@
+import {
+  canonicalJson,
+  RESULTS_REPOSITORY,
+  resultId,
+  sha256Hex as canonicalSha256Hex,
+  type VerifiedLegacyResult,
+} from "./result-owner";
+
 const API = "https://api.github.com";
 const OAUTH_TOKEN_URL = "https://github.com/login/oauth/access_token";
 const LOGIN = /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/;
@@ -5,8 +13,15 @@ const COMMIT = /^[0-9a-f]{40}$/;
 const DISPATCH_REF = /^lean-eval-dispatch\/([0-9a-f]{40})$/;
 const RESULT_ID = /^r2_[0-9a-f]{64}$/;
 const MAX_RESULT_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_LEGACY_METADATA_BYTES = 32 * 1024;
+const MAX_LEGACY_METADATA_DEPTH = 16;
+const MAX_LEGACY_METADATA_NODES = 256;
+const MAX_LEGACY_METADATA_CONTAINER_ITEMS = 128;
+const MAX_LEGACY_METADATA_STRING_BYTES = 16 * 1024;
+const MAX_LEGACY_METADATA_KEY_BYTES = 256;
 const RESULT_ID_DOMAIN = "lean-eval-result-v2\0";
 const RESULT_TREE_DOMAIN = "lean-eval-result-tree-v1\0";
+export type ResultsProtectedBranch = "main" | "staging-results";
 
 export type ProviderFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -19,6 +34,84 @@ export type VerifiedResult = Readonly<{
   resultId: string;
   treeDigest: string;
 }>;
+
+function exactKeys(value: Record<string, unknown>, fields: readonly string[], label: string): void {
+  const actual = Object.keys(value).sort();
+  const expected = [...fields].sort();
+  if (actual.length !== expected.length || actual.some((field, index) => field !== expected[index])) {
+    throw new GitHubProviderError(409, `${label} fields were invalid`);
+  }
+}
+
+function containsControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const point = character.codePointAt(0) ?? 0;
+    if (point <= 0x1f || point === 0x7f) return true;
+  }
+  return false;
+}
+
+function isSecondPrecisionUtcTimestamp(value: string): boolean {
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$/.test(value)) return false;
+  const parsed = new Date(value);
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString() === value.replace("Z", ".000Z");
+}
+
+function isIsoCalendarDate(value: string): boolean {
+  if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function assertBoundedLegacyMetadata(value: Record<string, unknown>): void {
+  const stack: { value: unknown; depth: number }[] = [{ value, depth: 0 }];
+  let nodes = 0;
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === undefined) break;
+    nodes += 1;
+    if (nodes > MAX_LEGACY_METADATA_NODES || current.depth > MAX_LEGACY_METADATA_DEPTH) {
+      throw new GitHubProviderError(409, "legacy result production metadata exceeded its structural bound");
+    }
+    if (typeof current.value === "string") {
+      if (new TextEncoder().encode(current.value).byteLength > MAX_LEGACY_METADATA_STRING_BYTES) {
+        throw new GitHubProviderError(409, "legacy result production metadata string exceeded its byte bound");
+      }
+      continue;
+    }
+    if (Array.isArray(current.value)) {
+      if (current.value.length > MAX_LEGACY_METADATA_CONTAINER_ITEMS) {
+        throw new GitHubProviderError(409, "legacy result production metadata array exceeded its item bound");
+      }
+      for (const item of current.value) stack.push({ value: item, depth: current.depth + 1 });
+      continue;
+    }
+    if (current.value !== null && typeof current.value === "object") {
+      const entries = Object.entries(current.value as Record<string, unknown>);
+      if (entries.length > MAX_LEGACY_METADATA_CONTAINER_ITEMS) {
+        throw new GitHubProviderError(409, "legacy result production metadata object exceeded its field bound");
+      }
+      for (const [key, item] of entries) {
+        if (new TextEncoder().encode(key).byteLength > MAX_LEGACY_METADATA_KEY_BYTES) {
+          throw new GitHubProviderError(409, "legacy result production metadata key exceeded its byte bound");
+        }
+        stack.push({ value: item, depth: current.depth + 1 });
+      }
+    }
+  }
+  let canonical: string;
+  try {
+    canonical = canonicalJson(value);
+  } catch (caught) {
+    if (caught instanceof TypeError) {
+      throw new GitHubProviderError(409, "legacy result production metadata was not canonicalizable JSON");
+    }
+    throw caught;
+  }
+  if (new TextEncoder().encode(canonical).byteLength > MAX_LEGACY_METADATA_BYTES) {
+    throw new GitHubProviderError(409, "legacy result production metadata exceeded its canonical byte bound");
+  }
+}
 
 export class GitHubProviderError extends Error {
   readonly status: number;
@@ -88,6 +181,7 @@ export class GitHubProvider {
   readonly #verificationFetcher: ProviderFetch | undefined;
   readonly #dispatchFetcher: ProviderFetch | undefined;
   readonly #resultFetcher: ProviderFetch | undefined;
+  readonly #resultsProtectedBranch: ResultsProtectedBranch | undefined;
 
   constructor(
     fetcher: ProviderFetch = fetch,
@@ -95,6 +189,7 @@ export class GitHubProvider {
     verificationFetcher?: ProviderFetch,
     dispatchFetcher?: ProviderFetch,
     resultFetcher?: ProviderFetch,
+    resultsProtectedBranch?: ResultsProtectedBranch,
   ) {
     // A Worker runtime fetch function must be invoked without rebinding its
     // receiver. Calling a function-valued private field as `this.#fetcher()`
@@ -111,6 +206,7 @@ export class GitHubProvider {
     this.#resultFetcher = resultFetcher === undefined
       ? undefined
       : (input, init) => resultFetcher(input, init);
+    this.#resultsProtectedBranch = resultsProtectedBranch;
   }
 
   async exchangeOAuth(
@@ -127,6 +223,7 @@ export class GitHubProvider {
         "user-agent": "lean-eval-submission-worker",
       },
       body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, code, redirect_uri: redirectUri }),
+      redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
     const tokenData = await jsonResponse(response, "OAuth token response");
@@ -141,6 +238,7 @@ export class GitHubProvider {
     // neither returned nor placed into an event, cache, log, or exception.
     const identityResponse = await this.#fetcher(`${API}/user`, {
       headers: providerHeaders(tokenData.access_token),
+      redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
     const identity = await jsonResponse(identityResponse, "authenticated user");
@@ -162,6 +260,7 @@ export class GitHubProvider {
     }
     const response = await (this.#verificationFetcher ?? this.#fetcher)(`${API}/repos/${repository}`, {
       headers: providerHeaders(this.#verificationToken),
+      redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
     const data = await jsonResponse(response, "repository response");
@@ -186,6 +285,7 @@ export class GitHubProvider {
     const verifiedFetch = this.#verificationFetcher ?? this.#fetcher;
     const refResponse = await verifiedFetch(`${API}/repos/${repository}/git/ref/tags/${encodeURIComponent(tag)}`, {
       headers,
+      redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
     const ref = await jsonResponse(refResponse, "tag reference");
@@ -197,6 +297,7 @@ export class GitHubProvider {
       }
       const tagResponse = await verifiedFetch(`${API}/repos/${repository}/git/tags/${target.sha}`, {
         headers,
+        redirect: "manual",
         signal: AbortSignal.timeout(5000),
       });
       const annotated = await jsonResponse(tagResponse, "annotated tag");
@@ -217,6 +318,7 @@ export class GitHubProvider {
     // reader (or the browser OAuth flow) unrelated user-level gist authority.
     const response = await this.#fetcher(`${API}/gists/${gistId}`, {
       headers: providerHeaders(),
+      redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
     const gist = await jsonResponse(response, "gist response");
@@ -248,6 +350,7 @@ export class GitHubProvider {
       method: request.method,
       headers,
       body: await request.text(),
+      redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
     if (response.status !== 204) throw await error(response);
@@ -284,7 +387,7 @@ export class GitHubProvider {
     headers.set("x-lean-eval-expected-commit", completion.result_commit);
     const response = await this.#resultFetcher(
       `${API}/repos/${completion.result_repository}/contents/${completion.result_path}?${query.toString()}`,
-      { headers, signal: AbortSignal.timeout(5000) },
+      { headers, redirect: "manual", signal: AbortSignal.timeout(5000) },
     );
     const data = await jsonResponse(response, "result contents response");
     if (
@@ -358,6 +461,261 @@ export class GitHubProvider {
       throw new GitHubProviderError(409, "result record disagreed with the accepted identity");
     }
     return { resultId: identifier, treeDigest };
+  }
+
+  async verifyLegacyResult(
+    ownerLogin: string,
+    resultsCommit: string,
+    requestedResultId: string,
+  ): Promise<VerifiedLegacyResult> {
+    if (!this.#resultFetcher || !this.#resultsProtectedBranch) {
+      throw new GitHubProviderError(503, "result verification authority is not configured");
+    }
+    if (!LOGIN.test(ownerLogin) || !COMMIT.test(resultsCommit) || !RESULT_ID.test(requestedResultId)) {
+      throw new GitHubProviderError(409, "legacy result request was invalid");
+    }
+    const resultsPath = `results/${ownerLogin}.json`;
+    const headers = providerHeaders();
+    headers.set("x-lean-eval-expected-commit", resultsCommit);
+    const branchResponse = await this.#resultFetcher(
+      `${API}/repos/${RESULTS_REPOSITORY}/branches/${this.#resultsProtectedBranch}`,
+      { headers, redirect: "manual", signal: AbortSignal.timeout(5000) },
+    );
+    const branch = await jsonResponse(branchResponse, "protected Results branch response");
+    const branchCommit = object(branch.commit, "protected Results branch commit");
+    if (
+      branch.name !== this.#resultsProtectedBranch ||
+      branch.protected !== true ||
+      typeof branchCommit.sha !== "string" ||
+      !COMMIT.test(branchCommit.sha)
+    ) {
+      throw new GitHubProviderError(502, "protected Results branch response fields were invalid");
+    }
+    const compareResponse = await this.#resultFetcher(
+      `${API}/repos/${RESULTS_REPOSITORY}/compare/${resultsCommit}...${this.#resultsProtectedBranch}`,
+      { headers, redirect: "manual", signal: AbortSignal.timeout(5000) },
+    );
+    const comparison = await jsonResponse(compareResponse, "Results ancestry response");
+    const baseCommit = object(comparison.base_commit, "Results ancestry base commit");
+    const mergeBase = object(comparison.merge_base_commit, "Results ancestry merge base");
+    const headCommit = object(comparison.head_commit, "Results ancestry head commit");
+    if (typeof headCommit.sha !== "string" || !COMMIT.test(headCommit.sha)) {
+      throw new GitHubProviderError(502, "Results ancestry head commit was invalid");
+    }
+    if (headCommit.sha !== branchCommit.sha) {
+      throw new GitHubProviderError(503, "protected Results branch moved during ancestry verification");
+    }
+    if (
+      (comparison.status !== "ahead" && comparison.status !== "identical") ||
+      baseCommit.sha !== resultsCommit ||
+      mergeBase.sha !== resultsCommit
+    ) {
+      throw new GitHubProviderError(409, "Results commit is not an ancestor of the protected environment branch");
+    }
+    const query = new URLSearchParams({ ref: resultsCommit });
+    const response = await this.#resultFetcher(
+      `${API}/repos/${RESULTS_REPOSITORY}/contents/${resultsPath}?${query.toString()}`,
+      { headers, redirect: "manual", signal: AbortSignal.timeout(5000) },
+    );
+    const data = await jsonResponse(response, "legacy result contents response");
+    if (
+      data.type !== "file" ||
+      data.path !== resultsPath ||
+      data.encoding !== "base64" ||
+      typeof data.content !== "string" ||
+      typeof data.size !== "number" ||
+      !Number.isSafeInteger(data.size) ||
+      data.size < 1 ||
+      data.size > MAX_RESULT_FILE_BYTES
+    ) {
+      throw new GitHubProviderError(502, "legacy result contents response fields were invalid");
+    }
+    let bytes: Uint8Array;
+    try {
+      const binary = atob(data.content.replaceAll(/\s/g, ""));
+      bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    } catch {
+      throw new GitHubProviderError(502, "legacy result contents were not valid base64");
+    }
+    if (bytes.byteLength !== data.size) {
+      throw new GitHubProviderError(502, "legacy result contents size disagreed with GitHub");
+    }
+    let document: Record<string, unknown>;
+    try {
+      document = object(
+        JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes)) as unknown,
+        "legacy result file",
+      );
+    } catch (caught) {
+      if (caught instanceof GitHubProviderError) throw caught;
+      throw new GitHubProviderError(502, "legacy result file was not valid UTF-8 JSON");
+    }
+    exactKeys(document, ["results", "schema_version", "user"], "legacy result file");
+    if (
+      document.schema_version !== 2 ||
+      typeof document.user !== "string" ||
+      document.user.toLowerCase() !== ownerLogin ||
+      !Array.isArray(document.results) ||
+      document.results.length > 4096
+    ) {
+      throw new GitHubProviderError(409, "legacy result file did not belong to the authenticated owner");
+    }
+    const matches = document.results.filter((value) => {
+      if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+      return (value as Record<string, unknown>).result_id === requestedResultId;
+    });
+    if (matches.length !== 1) {
+      throw new GitHubProviderError(409, "legacy result file did not contain exactly one requested identity");
+    }
+    const record = object(matches[0], "legacy result record");
+    exactKeys(record, [
+      "accepted_at",
+      "benchmark_commit",
+      "declared_model",
+      "intake",
+      "problem_id",
+      "production_metadata",
+      "result_id",
+      "statement_revision",
+      "submission",
+    ], "legacy result record");
+    if (
+      typeof record.declared_model !== "string" ||
+      record.declared_model.length === 0 ||
+      new TextEncoder().encode(record.declared_model).byteLength > 256 ||
+      containsControlCharacter(record.declared_model) ||
+      typeof record.problem_id !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(record.problem_id) ||
+      typeof record.statement_revision !== "number" ||
+      !Number.isSafeInteger(record.statement_revision) ||
+      record.statement_revision < 1
+    ) {
+      throw new GitHubProviderError(409, "legacy result identity fields were invalid");
+    }
+    const tupleMatches = document.results.filter((value) => {
+      if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+      const candidate = value as Record<string, unknown>;
+      return candidate.declared_model === record.declared_model &&
+        candidate.problem_id === record.problem_id &&
+        candidate.statement_revision === record.statement_revision;
+    });
+    if (tupleMatches.length !== 1) {
+      throw new GitHubProviderError(409, "legacy result file did not contain one unique immutable identity tuple");
+    }
+    let recomputedResultId: string;
+    try {
+      recomputedResultId = await resultId(
+        ownerLogin,
+        record.declared_model,
+        record.problem_id,
+        record.statement_revision,
+      );
+    } catch (caught) {
+      if (caught instanceof TypeError) {
+        throw new GitHubProviderError(409, "legacy result identity was not canonicalizable Unicode");
+      }
+      throw caught;
+    }
+    if (record.result_id !== recomputedResultId || requestedResultId !== recomputedResultId) {
+      throw new GitHubProviderError(409, "legacy result identity did not match its schema-version-2 tuple");
+    }
+    if (
+      typeof record.accepted_at !== "string" ||
+      !isSecondPrecisionUtcTimestamp(record.accepted_at) ||
+      typeof record.benchmark_commit !== "string" ||
+      !COMMIT.test(record.benchmark_commit)
+    ) {
+      throw new GitHubProviderError(409, "legacy result acceptance fields were invalid");
+    }
+    const intake = object(record.intake, "legacy result intake");
+    if (intake.kind === "issue") {
+      exactKeys(intake, ["issue_number", "kind"], "legacy result issue intake");
+      if (typeof intake.issue_number !== "number" || !Number.isSafeInteger(intake.issue_number) || intake.issue_number < 1) {
+        throw new GitHubProviderError(409, "legacy result issue intake was invalid");
+      }
+    } else if (intake.kind === "server") {
+      exactKeys(intake, ["kind", "submission_id"], "legacy result server intake");
+      if (
+        typeof intake.submission_id !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(intake.submission_id)
+      ) {
+        throw new GitHubProviderError(409, "legacy result server intake was invalid");
+      }
+    } else {
+      throw new GitHubProviderError(409, "legacy result intake kind was invalid");
+    }
+    const submission = object(record.submission, "legacy result submission");
+    exactKeys(submission, ["kind", "public", "ref", "repo"], "legacy result submission");
+    if (
+      (submission.kind !== "github_repo" && submission.kind !== "gist") ||
+      typeof submission.repo !== "string" ||
+      !/^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9._-]+$/.test(submission.repo) ||
+      typeof submission.ref !== "string" ||
+      !COMMIT.test(submission.ref) ||
+      typeof submission.public !== "boolean"
+    ) {
+      throw new GitHubProviderError(409, "legacy result submission was invalid");
+    }
+    const production = object(record.production_metadata, "legacy result production metadata");
+    assertBoundedLegacyMetadata(production);
+    const description = production.production_description;
+    if (
+      description !== undefined &&
+      (typeof description !== "string" ||
+        description.trim().length === 0 ||
+        description.includes("\0") ||
+        Array.from(description).length > 4000)
+    ) {
+      throw new GitHubProviderError(409, "legacy result production description was invalid");
+    }
+    const publicationStatus = production.solution_publication_status;
+    const publicationDate = production.solution_publication_date;
+    if (
+      publicationStatus !== undefined &&
+      publicationStatus !== "private" &&
+      publicationStatus !== "planned" &&
+      publicationStatus !== "published"
+    ) {
+      throw new GitHubProviderError(409, "legacy result publication status was invalid");
+    }
+    if (
+      (publicationStatus === "published" && !submission.public) ||
+      ((publicationStatus === "private" || publicationStatus === "planned") && submission.public)
+    ) {
+      throw new GitHubProviderError(409, "legacy result publication status disagreed with source visibility");
+    }
+    if (publicationStatus === "planned" || publicationStatus === "published") {
+      if (
+        typeof publicationDate !== "string" ||
+        !isIsoCalendarDate(publicationDate)
+      ) {
+        throw new GitHubProviderError(409, "legacy result publication date was invalid");
+      }
+    } else if (publicationDate !== undefined) {
+      throw new GitHubProviderError(409, "legacy result publication date was not allowed");
+    }
+    let canonicalRecordSha256: string;
+    try {
+      canonicalRecordSha256 = await canonicalSha256Hex(canonicalJson(record));
+    } catch (caught) {
+      if (caught instanceof TypeError) {
+        throw new GitHubProviderError(409, "legacy result record was not canonicalizable Unicode");
+      }
+      throw caught;
+    }
+    return {
+      resultId: recomputedResultId,
+      ownerLogin,
+      baseResult: {
+        declared_model: record.declared_model,
+        problem_id: record.problem_id,
+        statement_revision: record.statement_revision,
+        results_repository: RESULTS_REPOSITORY,
+        results_commit: resultsCommit,
+        results_path: resultsPath,
+        canonical_record_sha256: canonicalRecordSha256,
+      },
+    };
   }
 }
 

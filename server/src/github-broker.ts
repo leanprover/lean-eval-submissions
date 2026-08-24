@@ -240,14 +240,20 @@ function assertDispatchRequest(request: BrokerRequest, url: URL, env: BrokerRunt
 
 function assertResultsRequest(request: BrokerRequest, url: URL, env: BrokerRuntimeEnv): string {
   const { repository, suffix } = repositoryFromPath(url.pathname);
+  const protectedBranch = env.DEPLOYMENT_ENVIRONMENT === "production" ? "main" : "staging-results";
+  const contentRead =
+    /^\/contents\/results\/[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?\.json$/.test(suffix) &&
+    url.searchParams.size === 1 &&
+    url.searchParams.get("ref") === request.expected_commit;
+  const branchRead = suffix === `/branches/${protectedBranch}` && url.searchParams.size === 0;
+  const compareRead = suffix === `/compare/${request.expected_commit ?? ""}...${protectedBranch}` &&
+    url.searchParams.size === 0;
   if (
     request.method !== "GET" ||
     request.body !== null ||
     request.expected_commit === null ||
     repository.toLowerCase() !== env.DISPATCH_REPOSITORY.toLowerCase() ||
-    !/^\/contents\/results\/[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?\.json$/.test(suffix) ||
-    url.searchParams.size !== 1 ||
-    url.searchParams.get("ref") !== request.expected_commit
+    (!contentRead && !branchRead && !compareRead)
   ) {
     throw new BrokerError(403, "result verification operation was not allowlisted");
   }
@@ -370,6 +376,7 @@ async function installationToken(
   const jwt = await appJwt(app, nowMs);
   const installationResponse = await fetcher(`${GITHUB_API}/repos/${repository}/installation`, {
     headers: githubHeaders(jwt),
+    redirect: "manual",
     signal: AbortSignal.timeout(5000),
   });
   if (!installationResponse.ok) {
@@ -386,6 +393,7 @@ async function installationToken(
     method: "POST",
     headers: new Headers({ ...Object.fromEntries(githubHeaders(jwt)), "content-type": "application/json" }),
     body: JSON.stringify({ repositories: [repository.split("/")[1]], permissions }),
+    redirect: "manual",
     signal: AbortSignal.timeout(5000),
   });
   if (!tokenResponse.ok) {
@@ -448,7 +456,12 @@ async function validateSourceResponse(response: Response, request: BrokerRequest
   }
 }
 
-async function validateResultsResponse(response: Response, url: URL): Promise<void> {
+async function validateResultsResponse(
+  response: Response,
+  request: BrokerRequest,
+  url: URL,
+  env: BrokerRuntimeEnv,
+): Promise<void> {
   if (!response.ok) return;
   let data: Record<string, unknown>;
   try {
@@ -457,7 +470,31 @@ async function validateResultsResponse(response: Response, url: URL): Promise<vo
     if (error instanceof BrokerError) throw error;
     throw new BrokerError(502, "GitHub result response was not valid JSON");
   }
-  const expectedPath = repositoryFromPath(url.pathname).suffix.slice("/contents/".length);
+  const suffix = repositoryFromPath(url.pathname).suffix;
+  const protectedBranch = env.DEPLOYMENT_ENVIRONMENT === "production" ? "main" : "staging-results";
+  if (suffix === `/branches/${protectedBranch}`) {
+    const commit = object(data.commit, "protected Results branch commit");
+    if (data.name !== protectedBranch || data.protected !== true || typeof commit.sha !== "string" || !COMMIT.test(commit.sha)) {
+      throw new BrokerError(502, "protected Results branch response fields were invalid");
+    }
+    return;
+  }
+  if (suffix === `/compare/${request.expected_commit ?? ""}...${protectedBranch}`) {
+    const base = object(data.base_commit, "Results comparison base commit");
+    const mergeBase = object(data.merge_base_commit, "Results comparison merge base");
+    const head = object(data.head_commit, "Results comparison head commit");
+    if (
+      (data.status !== "ahead" && data.status !== "identical") ||
+      base.sha !== request.expected_commit ||
+      mergeBase.sha !== request.expected_commit ||
+      typeof head.sha !== "string" ||
+      !COMMIT.test(head.sha)
+    ) {
+      throw new BrokerError(409, "Results commit did not descend to the protected environment branch");
+    }
+    return;
+  }
+  const expectedPath = suffix.slice("/contents/".length);
   if (
     data.type !== "file" ||
     data.path !== expectedPath ||
@@ -500,12 +537,13 @@ async function proxy(
     method: brokerRequest.method,
     headers,
     body: brokerRequest.body,
+    redirect: "manual",
     signal: AbortSignal.timeout(5000),
   });
   if (brokerRequest.authority === "source") {
     await validateSourceResponse(response, brokerRequest, url, repository);
   } else if (brokerRequest.authority === "results") {
-    await validateResultsResponse(response, url);
+    await validateResultsResponse(response, brokerRequest, url, env);
   }
   return safeResponse(response);
 }

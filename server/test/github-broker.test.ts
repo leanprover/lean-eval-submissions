@@ -326,8 +326,24 @@ describe("GitHub App broker", () => {
   it("allows only exact-commit Results reads through the dispatch installation", async () => {
     const upstream = vi.fn<typeof fetch>((input, init) => {
       const url = inputUrl(input);
+      expect(init?.redirect).toBe("manual");
       if (url.endsWith("/repos/leanprover/lean-eval-submissions/installation")) {
         return Promise.resolve(Response.json({ id: 789 }));
+      }
+      if (url.endsWith("/branches/staging-results")) {
+        return Promise.resolve(Response.json({
+          name: "staging-results",
+          protected: true,
+          commit: { sha: "f".repeat(40) },
+        }));
+      }
+      if (url.endsWith(`/compare/${COMMIT}...staging-results`)) {
+        return Promise.resolve(Response.json({
+          status: "ahead",
+          base_commit: { sha: COMMIT },
+          merge_base_commit: { sha: COMMIT },
+          head_commit: { sha: "f".repeat(40) },
+        }));
       }
       if (url.endsWith("/app/installations/789/access_tokens")) {
         expect(JSON.parse(bodyText(init?.body))).toEqual({
@@ -352,6 +368,30 @@ describe("GitHub App broker", () => {
         size: 2,
       }));
     });
+    const branchResponse = await handleBrokerRequest(
+      brokerRequest(
+        "results",
+        "https://api.github.com/repos/leanprover/lean-eval-submissions/branches/staging-results",
+        { expectedCommit: COMMIT },
+      ),
+      environment(),
+      upstream,
+      NOW,
+    );
+    expect(branchResponse.status).toBe(200);
+
+    const compareResponse = await handleBrokerRequest(
+      brokerRequest(
+        "results",
+        `https://api.github.com/repos/leanprover/lean-eval-submissions/compare/${COMMIT}...staging-results`,
+        { expectedCommit: COMMIT },
+      ),
+      environment(),
+      upstream,
+      NOW,
+    );
+    expect(compareResponse.status).toBe(200);
+
     const response = await handleBrokerRequest(
       brokerRequest(
         "results",
@@ -375,6 +415,98 @@ describe("GitHub App broker", () => {
       NOW,
     );
     expect(rejected.status).toBe(403);
+  });
+
+  it("pins the Results branch allowlist to the deployment environment", async () => {
+    const upstream = vi.fn<typeof fetch>();
+    const stagingOnProduction = await handleBrokerRequest(
+      brokerRequest(
+        "results",
+        "https://api.github.com/repos/leanprover/lean-eval-submissions/branches/staging-results",
+        { expectedCommit: COMMIT },
+      ),
+      { ...environment(), DEPLOYMENT_ENVIRONMENT: "production" },
+      upstream,
+      NOW,
+    );
+    expect(stagingOnProduction.status).toBe(403);
+    const mainOnStaging = await handleBrokerRequest(
+      brokerRequest(
+        "results",
+        "https://api.github.com/repos/leanprover/lean-eval-submissions/branches/main",
+        { expectedCommit: COMMIT },
+      ),
+      environment(),
+      upstream,
+      NOW,
+    );
+    expect(mainOnStaging.status).toBe(403);
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it("rejects a hostile Results comparison and never follows credentialed redirects", async () => {
+    const calls: string[] = [];
+    const upstream = vi.fn<typeof fetch>((input, init) => {
+      const url = inputUrl(input);
+      calls.push(url);
+      expect(init?.redirect).toBe("manual");
+      if (url.endsWith("/installation")) return Promise.resolve(Response.json({ id: 790 }));
+      if (url.endsWith("/access_tokens")) {
+        return Promise.resolve(Response.json({
+          token: "ghs_redirect-safe-token",
+          expires_at: new Date(NOW + 3_600_000).toISOString(),
+        }));
+      }
+      return Promise.resolve(new Response(null, {
+        status: 302,
+        headers: { location: "https://attacker.invalid/steal" },
+      }));
+    });
+    const response = await handleBrokerRequest(
+      brokerRequest(
+        "results",
+        "https://api.github.com/repos/leanprover/lean-eval-submissions/branches/staging-results",
+        { expectedCommit: "b".repeat(40) },
+      ),
+      environment(),
+      upstream,
+      NOW + 1,
+    );
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBeNull();
+    expect(calls).not.toContain("https://attacker.invalid/steal");
+  });
+
+  it("rejects a Results comparison whose merge base is not the client commit", async () => {
+    const expected = "c".repeat(40);
+    const upstream = vi.fn<typeof fetch>((input, init) => {
+      const url = inputUrl(input);
+      expect(init?.redirect).toBe("manual");
+      if (url.endsWith("/installation")) return Promise.resolve(Response.json({ id: 791 }));
+      if (url.endsWith("/access_tokens")) {
+        return Promise.resolve(Response.json({
+          token: "ghs_comparison-token",
+          expires_at: new Date(NOW + 3_600_000).toISOString(),
+        }));
+      }
+      return Promise.resolve(Response.json({
+        status: "diverged",
+        base_commit: { sha: expected },
+        merge_base_commit: { sha: "d".repeat(40) },
+        head_commit: { sha: "f".repeat(40) },
+      }));
+    });
+    const response = await handleBrokerRequest(
+      brokerRequest(
+        "results",
+        `https://api.github.com/repos/leanprover/lean-eval-submissions/compare/${expected}...staging-results`,
+        { expectedCommit: expected },
+      ),
+      environment(),
+      upstream,
+      NOW + 2,
+    );
+    expect(response.status).toBe(409);
   });
 
   it("serializes an explicit audience, authority, and tag commit for the service binding", async () => {

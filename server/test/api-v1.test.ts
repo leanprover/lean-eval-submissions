@@ -19,12 +19,20 @@ import {
   type SubmissionGrant,
 } from "../src/auth";
 import { handleRequest, handleScheduled, type RuntimeEnv, type StateAccess } from "../src/app";
-import { GitHubStateError, StateEventConflictError } from "../src/github-state";
 import {
   buildDispatchRequest,
   buildPromotionCanaryDispatchRequest,
   GitHubProvider,
 } from "../src/github-provider";
+import {
+  GitHubStateError,
+  ResultIdentityCollisionError,
+  ResultOwnerStateError,
+  StateEventConflictError,
+  StateUpdateOutcomeUnknownError,
+  type LegacyResultBackfillRequest,
+  type LegacyResultClaimRequest,
+} from "../src/github-state";
 import {
   validateStateEvent,
   type WritableResultLifecycleEvent,
@@ -67,12 +75,43 @@ const SUBMISSION = {
   production_metadata: { web_access: false, input_tokens: 123 },
 } as const;
 
+function reachableLegacyResultFetch(contents: typeof fetch): typeof fetch {
+  return (input, init) => {
+    const url = input instanceof Request ? input.url : input.toString();
+    const expected = new Headers(init?.headers).get("x-lean-eval-expected-commit");
+    if (url.endsWith("/branches/staging-results")) {
+      return Promise.resolve(Response.json({
+        name: "staging-results",
+        protected: true,
+        commit: { sha: "f".repeat(40) },
+      }));
+    }
+    if (url.endsWith(`/compare/${expected ?? ""}...staging-results`)) {
+      return Promise.resolve(Response.json({
+        status: "ahead",
+        base_commit: { sha: expected },
+        merge_base_commit: { sha: expected },
+        head_commit: { sha: "f".repeat(40) },
+      }));
+    }
+    return contents(input, init);
+  };
+}
+
 class MemoryState implements StateAccess {
   readonly events: WritableStateEvent[] = [];
   readonly views = new Map<string, SubmissionView>();
   readonly outbox = new Map<string, DispatchOutbox>();
   created = true;
   head = "d".repeat(40);
+  readonly legacyClaims: LegacyResultClaimRequest[] = [];
+  readonly legacyBackfills: LegacyResultBackfillRequest[] = [];
+  contractAssertions = 0;
+
+  assertResultOwnerContract(): Promise<string> {
+    this.contractAssertions += 1;
+    return Promise.resolve("f".repeat(40));
+  }
 
   appendEvent(event: WritableStateEvent): Promise<{ created: boolean }> {
     this.events.push(event);
@@ -193,6 +232,32 @@ class MemoryState implements StateAccess {
       proofRecorded: true,
       idempotent: existing !== undefined,
       created: existing === undefined,
+    });
+  }
+
+  claimLegacyResult(request: LegacyResultClaimRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    authorityEventId: string;
+  }> {
+    this.legacyClaims.push(request);
+    return Promise.resolve({
+      created: this.created,
+      resultId: request.verified.resultId,
+      authorityEventId: request.eventId,
+    });
+  }
+
+  backfillLegacyResultMetadata(request: LegacyResultBackfillRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+  }> {
+    this.legacyBackfills.push(request);
+    return Promise.resolve({
+      created: this.created,
+      resultId: request.resultId,
+      mutationEventId: request.eventId,
     });
   }
 }
@@ -536,6 +601,42 @@ describe("strict API contract", () => {
     expect(unauthorized.status).toBe(401);
   });
 
+  it("keeps lifecycle callback CAS exhaustion retryable", async () => {
+    const state = new MemoryState();
+    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    state.views.set(submissionId, pendingView(
+      submissionId,
+      "2026-05-01T00:00:00.000Z",
+      1,
+      "succeeded",
+    ));
+    vi.spyOn(state, "appendSubmissionLifecycle").mockRejectedValue(
+      new GitHubStateError(409, "State branch kept changing during lifecycle update"),
+    );
+    const request = jsonRequest("/internal/v1/archive-completed", {
+      schema_version: 1,
+      occurred_at: "2026-05-02T03:04:05.000Z",
+      locator: {
+        schema_version: 1,
+        submission_id: submissionId,
+        archive_repository: "leanprover/lean-eval-audit",
+        archive_commit: "a".repeat(40),
+        archive_path: `archives/01/${submissionId}.tar.age`,
+        archive_ciphertext_sha256: "b".repeat(64),
+        encrypted: true,
+      },
+    });
+    request.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+    const response = await handleRequest(
+      request,
+      { ...ENV, INTAKE_ENABLED: "false" },
+      LIFECYCLE,
+      { state },
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "state_unavailable" });
+  });
+
   it("records an authenticated archive failure without leaving status pending", async () => {
     const state = new MemoryState();
     const submissionId = "0198abcd-1111-7000-8000-000000000001";
@@ -669,6 +770,26 @@ describe("strict API contract", () => {
       result_event_id: state.events.at(-2)?.event_id,
     });
     expect(resultFetch).toHaveBeenCalledOnce();
+
+    const eventCount = state.events.length;
+    const guardCheck = vi.spyOn(state, "recordAcceptedResult").mockRejectedValue(
+      new StateEventConflictError(`views/result-identities/${resultId}.json`),
+    );
+    const retryRequest = jsonRequest("/internal/v1/result-completed", completion);
+    retryRequest.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+    const retry = await handleRequest(
+      retryRequest,
+      { ...ENV, INTAKE_ENABLED: "false" },
+      LIFECYCLE,
+      {
+        state,
+        provider: new GitHubProvider(undefined, undefined, undefined, undefined, resultFetch),
+      },
+    );
+    expect(retry.status).toBe(409);
+    await expect(retry.json()).resolves.toEqual({ error: "idempotency_conflict" });
+    expect(guardCheck).toHaveBeenCalledOnce();
+    expect(state.events).toHaveLength(eventCount);
   });
 
   it("fails closed with 429 when the Cloudflare limiter denies or errors", async () => {
@@ -1721,5 +1842,263 @@ describe("browser OAuth and owner routes in workerd", () => {
       { now: () => NOW_MS, state },
     );
     expect(hidden.status).toBe(404);
+  });
+});
+
+describe("authenticated legacy result owner routes", () => {
+  const enabledEnv: RuntimeEnv = {
+    ...ENV,
+    INTAKE_ENABLED: "false",
+    LEGACY_RESULT_OWNER_API_ENABLED: "true",
+    RESULT_OWNER_STATE_CONTRACT_COMMIT: "889e07e3b8cf38ad147d8a23b7d1b35826de740f",
+  };
+
+  async function ownerAuthorization(login = "alice"): Promise<string> {
+    const browser: BrowserSession = {
+      kind: "browser_session",
+      login,
+      github_id: login === "alice" ? 42 : 43,
+      issued_at: Math.floor(NOW_MS / 1000),
+      expires_at: Math.floor(NOW_MS / 1000) + 3600,
+    };
+    return `Bearer ${await signToken(SECRET, browser)}`;
+  }
+
+  it("keeps the route dark unless both reviewed configuration values are exact", async () => {
+    const request = new Request("https://submit.test/api/v1/results/claims", { method: "POST" });
+    const disabled = await handleRequest(request.clone(), { ...ENV, INTAKE_ENABLED: "false" }, LIFECYCLE);
+    expect(disabled.status).toBe(404);
+    const wrongContract = await handleRequest(request, {
+      ...ENV,
+      INTAKE_ENABLED: "false",
+      LEGACY_RESULT_OWNER_API_ENABLED: "true",
+      RESULT_OWNER_STATE_CONTRACT_COMMIT: "b".repeat(40),
+    }, LIFECYCLE);
+    expect(wrongContract.status).toBe(404);
+  });
+
+  it("claims an exact owner record while production intake stays disabled and redacts source bindings", async () => {
+    const identifier = `r2_${await digest(
+      `lean-eval-result-v2\0${JSON.stringify(["alice", "Example Model", "two_plus_two", 1])}`,
+    )}`;
+    const record = {
+      result_id: identifier,
+      problem_id: "two_plus_two",
+      statement_revision: 1,
+      declared_model: "Example Model",
+      accepted_at: "2024-01-02T03:04:05Z",
+      benchmark_commit: "c".repeat(40),
+      intake: { kind: "issue", issue_number: 42 },
+      submission: { kind: "gist", repo: "alice/abcdef", ref: "d".repeat(40), public: false },
+      production_metadata: { solution_publication_status: "private" },
+    };
+    const documentBytes = new TextEncoder().encode(JSON.stringify({
+      schema_version: 2,
+      user: "alice",
+      results: [record],
+    }));
+    let binary = "";
+    for (const byte of documentBytes) binary += String.fromCharCode(byte);
+    const resultFetch = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
+      type: "file",
+      path: "results/alice.json",
+      encoding: "base64",
+      content: btoa(binary),
+      size: documentBytes.byteLength,
+    })));
+    const state = new MemoryState();
+    const response = await handleRequest(new Request("https://submit.test/api/v1/results/claims", {
+      method: "POST",
+      headers: {
+        authorization: await ownerAuthorization(),
+        "content-type": "application/json",
+        "idempotency-key": "0198abcd-3333-7000-8000-000000000001",
+      },
+      body: JSON.stringify({ result_id: identifier, results_commit: "e".repeat(40) }),
+    }), enabledEnv, LIFECYCLE, {
+      now: () => NOW_MS,
+      provider: new GitHubProvider(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        reachableLegacyResultFetch(resultFetch),
+        "staging-results",
+      ),
+      state,
+    });
+    expect(response.status).toBe(201);
+    const responseBody = await response.json();
+    expect(responseBody).toEqual({ result_id: identifier, status: "claimed" });
+    expect(state.legacyClaims).toHaveLength(1);
+    expect(state.contractAssertions).toBe(0);
+    expect(state.legacyClaims[0]).toMatchObject({
+      eventId: "0198abcd-3333-7000-8000-000000000001",
+      occurredAt: new Date(NOW_MS).toISOString(),
+      verified: {
+        resultId: identifier,
+        ownerLogin: "alice",
+        baseResult: {
+          results_commit: "e".repeat(40),
+          results_path: "results/alice.json",
+        },
+      },
+    });
+    const publicResponse = JSON.stringify(responseBody);
+    expect(publicResponse).not.toContain("results/alice.json");
+    expect(publicResponse).not.toContain("e".repeat(40));
+    expect(enabledEnv.INTAKE_ENABLED).toBe("false");
+  });
+
+  it("binds metadata backfill to the session, request body, and idempotency event", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const response = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/metadata`,
+      {
+        method: "PATCH",
+        headers: {
+          authorization: await ownerAuthorization(),
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000002",
+        },
+        body: JSON.stringify({ production_metadata: { notes: "historical note", web_access: false } }),
+      },
+    ), enabledEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ result_id: identifier, status: "backfilled" });
+    expect(state.legacyBackfills).toEqual([{
+      eventId: "0198abcd-3333-7000-8000-000000000002",
+      occurredAt: new Date(NOW_MS).toISOString(),
+      resultId: identifier,
+      ownerLogin: "alice",
+      productionMetadata: { notes: "historical note", web_access: false },
+    }]);
+    expect(state.contractAssertions).toBe(0);
+  });
+
+  it("rejects missing authentication and empty metadata without invoking State", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const unauthorized = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/metadata`,
+      { method: "PATCH" },
+    ), enabledEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(unauthorized.status).toBe(401);
+    const empty = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/metadata`,
+      {
+        method: "PATCH",
+        headers: {
+          authorization: await ownerAuthorization(),
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000003",
+        },
+        body: JSON.stringify({ production_metadata: {} }),
+      },
+    ), enabledEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(empty.status).toBe(400);
+    expect(state.legacyBackfills).toHaveLength(0);
+  });
+
+  it("preserves owner-operation CAS exhaustion as an explicit 409 conflict", async () => {
+    const state = new MemoryState();
+    vi.spyOn(state, "backfillLegacyResultMetadata").mockRejectedValue(
+      new ResultOwnerStateError(409, "State branch kept changing"),
+    );
+    const identifier = `r2_${"1".repeat(64)}`;
+    const response = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/metadata`,
+      {
+        method: "PATCH",
+        headers: {
+          authorization: await ownerAuthorization(),
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000004",
+        },
+        body: JSON.stringify({ production_metadata: { web_access: false } }),
+      },
+    ), enabledEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "idempotency_conflict" });
+  });
+
+  it("maps an unknown State update outcome to a retryable 503", async () => {
+    const state = new MemoryState();
+    vi.spyOn(state, "backfillLegacyResultMetadata").mockRejectedValue(
+      new StateUpdateOutcomeUnknownError(),
+    );
+    const identifier = `r2_${"1".repeat(64)}`;
+    const response = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/metadata`,
+      {
+        method: "PATCH",
+        headers: {
+          authorization: await ownerAuthorization(),
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000006",
+        },
+        body: JSON.stringify({ production_metadata: { web_access: false } }),
+      },
+    ), enabledEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "state_unavailable" });
+  });
+
+  it("maps a first-authority identity collision to a terminal 409", async () => {
+    const state = new MemoryState();
+    vi.spyOn(state, "backfillLegacyResultMetadata").mockRejectedValue(
+      new ResultIdentityCollisionError("recorded"),
+    );
+    const identifier = `r2_${"1".repeat(64)}`;
+    const response = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/metadata`,
+      {
+        method: "PATCH",
+        headers: {
+          authorization: await ownerAuthorization(),
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000007",
+        },
+        body: JSON.stringify({ production_metadata: { web_access: false } }),
+      },
+    ), enabledEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "result_identity_conflict" });
+  });
+
+  it("does not expose private provider details in a response or structured log", async () => {
+    const sensitive = "private-owner/repository oauth-secret-value";
+    const resultFetch = vi.fn<typeof fetch>(() => Promise.resolve(new Response(sensitive, { status: 503 })));
+    const logged: string[] = [];
+    const errorLog = vi.spyOn(console, "error").mockImplementation((value: unknown) => {
+      logged.push(String(value));
+    });
+    try {
+      const response = await handleRequest(new Request("https://submit.test/api/v1/results/claims", {
+        method: "POST",
+        headers: {
+          authorization: await ownerAuthorization(),
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000005",
+        },
+        body: JSON.stringify({ result_id: `r2_${"1".repeat(64)}`, results_commit: "e".repeat(40) }),
+      }), enabledEnv, LIFECYCLE, {
+        now: () => NOW_MS,
+        provider: new GitHubProvider(undefined, undefined, undefined, undefined, resultFetch, "staging-results"),
+        state: new MemoryState(),
+      });
+      const publicBody = await response.text();
+      expect(response.status).toBe(503);
+      expect(publicBody).not.toContain(sensitive);
+      expect(logged.join("\n")).not.toContain(sensitive);
+      expect(logged).toEqual([JSON.stringify({
+        event: "submission_stage_failed",
+        stage: "legacy_result_verification",
+        error_name: "GitHubProviderError",
+      })]);
+    } finally {
+      errorLog.mockRestore();
+    }
   });
 });
