@@ -74,6 +74,19 @@ class PublicReplayResolutionPreparationTests(unittest.TestCase):
             sum(len(request["results"]) for request in self.output["requests"]),
             self.output["result_count"],
         )
+        grouped = [
+            request for request in self.output["requests"] if len(request["results"]) > 1
+        ]
+        self.assertTrue(grouped, "the live store must exercise shared-submission grouping")
+        for request in grouped:
+            self.assertEqual(
+                len({item["problem_id"] for item in request["results"]}),
+                len(request["results"]),
+            )
+            self.assertEqual(
+                {item["owner"] for item in request["results"]},
+                {request["owner"]},
+            )
 
     def test_rejects_inventory_not_exactly_recomputed_from_results(self) -> None:
         changed = copy.deepcopy(self.inventory)

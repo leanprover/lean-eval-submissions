@@ -17,6 +17,7 @@ from resolve_public_replay_github_evidence import (
     EvidenceError,
     _read_bounded,
     _write_exclusive,
+    shard_requests,
     validate_evidence,
     validate_requests,
     validate_workflow_registry,
@@ -246,27 +247,24 @@ def validate_aggregate(
                 raise AggregationError("aggregate shard count is invalid")
 
     resolutions = value["resolutions"]
-    if not isinstance(resolutions, list):
+    if not isinstance(resolutions, list) or not all(
+        isinstance(item, dict) for item in resolutions
+    ):
         raise AggregationError("aggregate resolutions are invalid")
     expected_ids = [request["request_id"] for request in requests["requests"]]
-    if [item.get("request_id") for item in resolutions if isinstance(item, dict)] != expected_ids:
+    if [item.get("request_id") for item in resolutions] != expected_ids:
         raise AggregationError("aggregate does not cover every request exactly once")
 
     # Reconstruct every shard and reuse the authoritative evidence validator.
     for shard in shards:
+        selected_requests = shard_requests(
+            requests["requests"], shard["shard_index"], value["shard_count"]
+        )
+        selected_ids = {request["request_id"] for request in selected_requests}
         selected = [
             resolution
             for resolution in resolutions
-            if int(resolution["request_id"].removeprefix("prr_"), 16)
-            % value["shard_count"]
-            == shard["shard_index"]
-        ]
-        selected_requests = [
-            request
-            for request in requests["requests"]
-            if int(request["request_id"].removeprefix("prr_"), 16)
-            % value["shard_count"]
-            == shard["shard_index"]
+            if resolution["request_id"] in selected_ids
         ]
         counts = _status_counts(selected)
         reconstructed = {

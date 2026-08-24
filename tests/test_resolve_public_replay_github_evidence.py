@@ -6,6 +6,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+import urllib.request
 from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -21,6 +22,7 @@ from resolve_public_replay_github_evidence import (  # noqa: E402
     _write_exclusive,
     canonical_bytes,
     resolve as _resolve,
+    shard_requests,
     validate_evidence as _validate_evidence,
     validate_requests,
     validate_workflow_registry,
@@ -532,8 +534,24 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
                 None, None, 302, "moved", {}, "https://evil"
             )
         )
-        with self.assertRaises(TypeError):
-            GitHubClient("token", "https://attacker.example")
+        client = GitHubClient("token")
+        proxy_handlers = [
+            handler
+            for handler in client._opener.handlers
+            if isinstance(handler, urllib.request.ProxyHandler)
+        ]
+        self.assertEqual(proxy_handlers, [])
+
+    def test_response_caches_are_lru_bounded(self) -> None:
+        client = GitHubClient("token")
+        for index in range(600):
+            client._cache_put(client._get_cache, str(index), (index, 200), 512)
+        self.assertEqual(len(client._get_cache), 512)
+        self.assertNotIn("0", client._get_cache)
+        for index in range(80):
+            client._cache_put(client._page_cache, (str(index), None), [], 64)
+        self.assertEqual(len(client._page_cache), 64)
+        self.assertNotIn(("0", None), client._page_cache)
 
     def test_gist_bodies_are_never_cached(self) -> None:
         class Response:
@@ -612,6 +630,30 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
                 self.assertRegex(candidate["evidence_identity_sha256"], r"^[0-9a-f]{64}$")
                 validate_evidence(output, request_value())
 
+    def test_strong_issue_identity_with_ambiguous_run_blocks_other_match(self) -> None:
+        client = FakeClient(second_match=True)
+        original_pages = client.pages
+
+        def pages(path, item_key=None):
+            values = original_pages(path, item_key)
+            if path.startswith("/repos/leanprover/lean-eval/actions/runs?"):
+                values.append(copy.deepcopy(values[0]))
+                values[-1]["id"] += 1
+                values[-1]["html_url"] = (
+                    "https://github.com/leanprover/lean-eval/actions/runs/"
+                    + str(values[-1]["id"])
+                )
+            return values
+
+        client.pages = pages
+        output = resolve(request_value(), "8" * 64, client)
+        self.assertEqual(output["resolutions"][0]["status"], "ambiguous")
+        self.assertEqual(
+            output["resolutions"][0]["candidates"][0]["status"],
+            "workflow_run_ambiguous",
+        )
+        validate_evidence(output, request_value())
+
     def test_per_candidate_probe_errors_and_repository_renames_stay_pending(self) -> None:
         class ProbeClient(FakeClient):
             def get(self, path):
@@ -662,6 +704,8 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
         registry, _ = registry_bytes()
         with self.assertRaisesRegex(EvidenceError, "raw workflow registry"):
             _resolve(value, "8" * 64, FakeClient(), registry)
+        with self.assertRaisesRegex(EvidenceError, "digest is invalid"):
+            _resolve(value, "8" * 64, FakeClient(), registry, 7)
 
     def test_split_workflow_binds_evaluator_separately_from_benchmark(self) -> None:
         class SplitClient(FakeClient):
@@ -791,10 +835,17 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
                 registry,
             )
 
-    def test_deterministic_shard_contains_only_its_request_hash_partition(self) -> None:
+    def test_deterministic_date_local_shard_contains_exact_request(self) -> None:
         value = request_value()
         request_id = value["requests"][0]["request_id"]
-        expected_index = int(request_id.removeprefix("prr_"), 16) % 16
+        expected_index = next(
+            index
+            for index in range(16)
+            if any(
+                request["request_id"] == request_id
+                for request in shard_requests(value["requests"], index, 16)
+            )
+        )
         output = resolve(
             value, "8" * 64, FakeClient(), shard_index=expected_index, shard_count=16
         )

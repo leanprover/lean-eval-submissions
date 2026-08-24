@@ -40,11 +40,18 @@ class PublicReplayGitHubEvidenceWorkflowTests(unittest.TestCase):
         self.assertNotIn("CLOUDFLARE_", WORKFLOW)
         self.assertNotIn("--api-root", WORKFLOW)
 
-    def test_token_is_scoped_to_bounded_resolver_step(self) -> None:
+    def test_tokens_are_scoped_to_their_bounded_consumer_steps(self) -> None:
         self.assertEqual(WORKFLOW.count("GITHUB_TOKEN:"), 1)
+        self.assertEqual(WORKFLOW.count("GH_TOKEN:"), 1)
+        reachability_step = WORKFLOW.split(
+            "      - name: Require the selected commit to be reachable", 1
+        )[1].split("\n      - ", 1)[0]
+        self.assertIn("GH_TOKEN:", reachability_step)
+        self.assertIn("gh api", reachability_step)
         token_step = WORKFLOW.split(
             "      - name: Resolve only bounded public GitHub evidence", 1
         )[1].split("\n      - name:", 1)[0]
+        self.assertIn("GITHUB_TOKEN:", token_step)
         self.assertIn("resolve_public_replay_github_evidence.py", token_step)
         self.assertNotIn("curl ", token_step)
         self.assertNotIn("gh ", token_step)
@@ -85,6 +92,7 @@ class PublicReplayGitHubEvidenceWorkflowTests(unittest.TestCase):
         self.assertIn("[.name, .commit.sha, .protected]", WORKFLOW)
         self.assertIn("$'\\ttrue'", WORKFLOW)
         self.assertIn("timeout 30s git ls-remote", WORKFLOW)
+        self.assertIn('"$tag_ref^{}"', WORKFLOW)
 
     def test_uploads_only_the_sanitized_projection(self) -> None:
         upload = WORKFLOW.split(

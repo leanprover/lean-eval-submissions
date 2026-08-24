@@ -23,7 +23,8 @@ per result.
 
 The manual `public-replay-github-evidence.yml` workflow is that
 external-credential-free stage. It can run only from an immutable dispatch tag
-whose commit is also reachable from live `main`; the branch API must report
+whose lightweight target or annotated-tag peeled target is the exact reviewed
+commit, which must also be reachable from live `main`; the branch API must report
 that `main` is protected and at the same commit seen through Git. It recomputes
 both the inventory and request set before using its read-only GitHub token. For
 each candidate it requires the issue model and normalized source identity,
@@ -99,14 +100,17 @@ the count includes `source_unavailable`, `source_probe_indeterminate`,
 `probe_indeterminate`, `timing_indeterminate`,
 `workflow_contract_unreviewed`, `ambiguous`, and `evidence_missing` entries.
 
-Resolution is deterministically partitioned by the request-ID hash. One manual
+Resolution is deterministically partitioned into balanced contiguous ranges of
+the requests sorted by acceptance time and request ID. This keeps daily Actions
+run-list probes local to one shard instead of repeating most dates in every
+hash partition. One manual
 workflow run processes exactly one reviewed shard and uploads an artifact bound
 to its shard index, total shard count, request count, and result count. Shards
 must be scheduled across GitHub rate-limit windows; they are deliberately not a
 parallel matrix that would share and exhaust the repository's standard
-`GITHUB_TOKEN` budget. Empty hash partitions are producible zero-count shards
-and must still be supplied to aggregation. The resolver caches repeated
-workflow definitions and daily run lists, but never gist bodies. Its token has
+`GITHUB_TOKEN` budget. Empty date-local partitions are producible zero-count shards
+and must still be supplied to aggregation. The resolver uses bounded LRU caches
+for repeated workflow definitions and daily run lists, but never gist bodies. Its token has
 only repository contents, issues, and Actions read authority; source fetching,
 State/Results writes, deployments, and secrets are outside that boundary.
 

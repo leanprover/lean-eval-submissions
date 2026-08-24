@@ -39,6 +39,8 @@ MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 MAX_PAGES = 10
 MAX_WORKFLOW_BYTES = 512 * 1024
 MAX_REPORTED_PASSES = 4096
+MAX_GET_CACHE_ENTRIES = 512
+MAX_PAGE_CACHE_ENTRIES = 64
 COMMENT_ACCEPTANCE_LAG = datetime.timedelta(seconds=10)
 RUN_COMPLETION_LAG = datetime.timedelta(minutes=5)
 CANDIDATE_REPOSITORIES = [
@@ -148,9 +150,26 @@ class GitHubClient:
         if not token or token != token.strip() or any(ord(char) < 32 for char in token):
             raise EvidenceError("GITHUB_TOKEN is required")
         self.token = token
-        self._opener = urllib.request.build_opener(_RejectRedirects())
-        self._get_cache: dict[str, tuple[Any | None, int]] = {}
-        self._page_cache: dict[tuple[str, str | None], list[Any]] = {}
+        # Do not inherit proxy environment variables: the bearer token is
+        # scoped to the fixed GitHub API origin, not to an operator's proxy.
+        self._opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler({}), _RejectRedirects()
+        )
+        self._get_cache: collections.OrderedDict[
+            str, tuple[Any | None, int]
+        ] = collections.OrderedDict()
+        self._page_cache: collections.OrderedDict[
+            tuple[str, str | None], list[Any]
+        ] = collections.OrderedDict()
+
+    @staticmethod
+    def _cache_put(
+        cache: collections.OrderedDict, key: Any, value: Any, limit: int
+    ) -> None:
+        cache[key] = value
+        cache.move_to_end(key)
+        while len(cache) > limit:
+            cache.popitem(last=False)
 
     def get(self, path: str) -> tuple[Any | None, int]:
         parsed = urllib.parse.urlsplit(path)
@@ -162,8 +181,14 @@ class GitHubClient:
             or parsed.fragment
         ):
             raise EvidenceError("GitHub API path is not absolute")
-        cacheable = not path.startswith("/gists/")
+        # Paginated responses are cached only as their assembled collection;
+        # retaining each page as well would duplicate the largest responses.
+        cacheable = (
+            not path.startswith("/gists/")
+            and "per_page=100&page=" not in path
+        )
         if cacheable and path in self._get_cache:
+            self._get_cache.move_to_end(path)
             return self._get_cache[path]
         url = API_ROOT + path
         for attempt in range(4):
@@ -201,14 +226,18 @@ class GitHubClient:
                         )
                     result = (json.loads(raw), response.status)
                     if cacheable:
-                        self._get_cache[path] = result
+                        self._cache_put(
+                            self._get_cache, path, result, MAX_GET_CACHE_ENTRIES
+                        )
                     return result
             except urllib.error.HTTPError as error:
                 try:
                     if error.code == 404:
                         result = (None, 404)
                         if cacheable:
-                            self._get_cache[path] = result
+                            self._cache_put(
+                                self._get_cache, path, result, MAX_GET_CACHE_ENTRIES
+                            )
                         return result
                     if error.code in {301, 302, 303, 307, 308}:
                         raise ProbeIndeterminate("github_redirect_refused") from error
@@ -237,6 +266,7 @@ class GitHubClient:
     def pages(self, path: str, item_key: str | None = None) -> list[Any]:
         cache_key = (path, item_key)
         if cache_key in self._page_cache:
+            self._page_cache.move_to_end(cache_key)
             return self._page_cache[cache_key]
         separator = "&" if "?" in path else "?"
         output: list[Any] = []
@@ -256,7 +286,9 @@ class GitHubClient:
                 items = value
             output.extend(items)
             if len(items) < 100:
-                self._page_cache[cache_key] = output
+                self._cache_put(
+                    self._page_cache, cache_key, output, MAX_PAGE_CACHE_ENTRIES
+                )
                 return output
         raise EvidenceError("GitHub evidence exceeds the pagination limit")
 
@@ -471,6 +503,17 @@ def _candidate(
             "status": "issue_invalid",
             "reason_code": "candidate_not_issue",
         }
+    expected_issue_url = f"https://github.com/{repository}/issues/{issue_number}"
+    if (
+        issue.get("number") != issue_number
+        or issue.get("state") != "closed"
+        or issue.get("html_url") != expected_issue_url
+    ):
+        return {
+            "issue_repository": repository,
+            "status": "probe_indeterminate",
+            "reason_code": "github_identity_changed",
+        }
     try:
         title = issue["title"]
         body = issue["body"]
@@ -485,17 +528,6 @@ def _candidate(
             "issue_repository": repository,
             "status": "issue_invalid",
             "reason_code": "issue_body_invalid",
-        }
-    expected_issue_url = f"https://github.com/{repository}/issues/{issue_number}"
-    if (
-        issue.get("number") != issue_number
-        or issue.get("state") != "closed"
-        or issue.get("html_url") != expected_issue_url
-    ):
-        return {
-            "issue_repository": repository,
-            "status": "probe_indeterminate",
-            "reason_code": "github_identity_changed",
         }
     expected_source = request["source"]
     if model != request["declared_model"]:
@@ -646,13 +678,17 @@ def _candidate(
                 projection_too_large = True
             elif not accepted <= comment_at <= accepted + COMMENT_ACCEPTANCE_LAG:
                 selected = dict(comment)
-                selected["_reported_pass_problem_ids"] = projected
                 outside_window_comments.append(selected)
             else:
                 comment = dict(comment)
                 comment["_reported_pass_problem_ids"] = projected
                 matching_comments.append(comment)
     if len(matching_comments) != 1:
+        if projection_too_large and not matching_comments:
+            return {
+                "issue_repository": repository,
+                "status": "result_comment_projection_too_large",
+            }
         if not matching_comments and len(outside_window_comments) == 1:
             observed = outside_window_comments[0]
             return {
@@ -668,11 +704,6 @@ def _candidate(
                 "evidence_created_at": observed["created_at"],
                 "evidence_updated_at": None,
                 "evidence_identity_sha256": text_digest(observed["body"]),
-            }
-        if projection_too_large and not matching_comments:
-            return {
-                "issue_repository": repository,
-                "status": "result_comment_projection_too_large",
             }
         return {
             "issue_repository": repository,
@@ -938,6 +969,17 @@ def validate_requests(value: Any) -> None:
 
 
 def _classify_candidates(candidates: list[dict[str, Any]]) -> tuple[str, str | None]:
+    identity_ambiguous = [
+        item
+        for item in candidates
+        if item.get("status")
+        in {
+            "acceptance_time_mismatch",
+            "workflow_run_ambiguous",
+            "result_comment_ambiguous",
+            "result_comment_projection_too_large",
+        }
+    ]
     available = [
         item for item in candidates if item.get("status") == "matched_source_available"
     ]
@@ -963,6 +1005,8 @@ def _classify_candidates(candidates: list[dict[str, Any]]) -> tuple[str, str | N
         item for item in candidates if item.get("status") == "timing_indeterminate"
     ]
     matched = available + unavailable + indeterminate
+    if identity_ambiguous:
+        return "ambiguous", None
     if unreviewed:
         if matched or probe_indeterminate or timing_indeterminate or len(unreviewed) != 1:
             return "ambiguous", None
@@ -986,6 +1030,20 @@ def _classify_candidates(candidates: list[dict[str, Any]]) -> tuple[str, str | N
     return "evidence_missing", None
 
 
+def shard_requests(
+    requests: list[dict[str, Any]], shard_index: int, shard_count: int
+) -> list[dict[str, Any]]:
+    """Return one balanced, date-local deterministic request partition."""
+
+    ordered = sorted(
+        requests,
+        key=lambda request: (request["accepted_at"], request["request_id"]),
+    )
+    start = len(ordered) * shard_index // shard_count
+    end = len(ordered) * (shard_index + 1) // shard_count
+    return ordered[start:end]
+
+
 def resolve(
     value: dict[str, Any],
     raw_sha256: str,
@@ -999,7 +1057,10 @@ def resolve(
     if workflow_registry is None or workflow_registry_sha256 is None:
         raise EvidenceError("exact raw workflow registry and digest are required")
     registry = validate_workflow_registry(workflow_registry)
-    if DIGEST.fullmatch(workflow_registry_sha256) is None:
+    if (
+        not isinstance(workflow_registry_sha256, str)
+        or DIGEST.fullmatch(workflow_registry_sha256) is None
+    ):
         raise EvidenceError("workflow definition registry digest is invalid")
     if not isinstance(raw_sha256, str) or DIGEST.fullmatch(raw_sha256) is None:
         raise EvidenceError("resolution request digest is invalid")
@@ -1010,12 +1071,7 @@ def resolve(
         or not 0 <= shard_index < shard_count
     ):
         raise EvidenceError("shard index/count are invalid")
-    selected_requests = [
-        request
-        for request in value["requests"]
-        if int(request["request_id"].removeprefix("prr_"), 16) % shard_count
-        == shard_index
-    ]
+    selected_requests = shard_requests(value["requests"], shard_index, shard_count)
     resolutions: list[dict[str, Any]] = []
     counts: collections.Counter[str] = collections.Counter()
     for request in selected_requests:
@@ -1033,6 +1089,7 @@ def resolve(
                 "candidates": candidates,
             }
         )
+    resolutions.sort(key=lambda resolution: resolution["request_id"])
     return {
         "schema_version": 1,
         "kind": "historical_public_replay_github_evidence",
@@ -1183,13 +1240,13 @@ def validate_evidence(
     request_by_id = {
         request["request_id"]: request for request in requests_value["requests"]
     }
-    selected_requests = [
-        request
-        for request in requests_value["requests"]
-        if int(request["request_id"].removeprefix("prr_"), 16)
-        % value["shard_count"]
-        == value["shard_index"]
-    ]
+    selected_requests = shard_requests(
+        requests_value["requests"], value["shard_index"], value["shard_count"]
+    )
+    selected_request_ids = sorted(
+        request["request_id"] for request in selected_requests
+    )
+    selected_request_id_set = set(selected_request_ids)
     if (
         value["source_repository"] != requests_value["source_repository"]
         or value["source_commit"] != requests_value["source_commit"]
@@ -1199,13 +1256,12 @@ def validate_evidence(
         or value["shard_request_count"] != len(selected_requests)
         or value["shard_result_count"]
         != sum(len(request["results"]) for request in selected_requests)
-        or resolution_ids != [request["request_id"] for request in selected_requests]
+        or resolution_ids != selected_request_ids
     ):
         raise EvidenceError("GitHub evidence does not bind its resolution requests")
 
     simple_statuses = {
         "issue_not_found",
-        "github_identity_mismatch",
         "model_mismatch",
         "owner_mismatch",
         "source_mismatch",
@@ -1244,10 +1300,7 @@ def validate_evidence(
         request_id = resolution["request_id"]
         if not isinstance(request_id, str) or REQUEST_ID.fullmatch(request_id) is None:
             raise EvidenceError(f"{label}.request_id is invalid")
-        if (
-            int(request_id.removeprefix("prr_"), 16) % value["shard_count"]
-            != value["shard_index"]
-        ):
+        if request_id not in selected_request_id_set:
             raise EvidenceError(f"{label} belongs to another shard")
         request = request_by_id.get(request_id)
         candidates = resolution["candidates"]

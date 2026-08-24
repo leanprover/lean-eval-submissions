@@ -12,9 +12,11 @@ from aggregate_public_replay_github_evidence import (  # noqa: E402
     AggregationError,
     aggregate,
     canonical_document_bytes,
+    validate_aggregate,
 )
 from resolve_public_replay_github_evidence import (  # noqa: E402
     resolve,
+    shard_requests,
 )
 from tests.test_resolve_public_replay_github_evidence import (  # noqa: E402
     FakeClient,
@@ -35,24 +37,20 @@ def registry() -> tuple[dict, str]:
 
 def two_partition_requests() -> dict:
     first = request_value()["requests"][0]
-    requests = [first]
-    wanted_parity = 1 - int(first["request_id"].removeprefix("prr_"), 16) % 2
-    for issue_number in range(145, 1000):
-        candidate = copy.deepcopy(first)
-        candidate["issue_number"] = issue_number
-        candidate["results"] = [
-            {
-                "result_id": "r2_" + format(issue_number, "064x"),
-                "owner": candidate["owner"],
-                "problem_id": f"problem_{issue_number}",
-                "statement_revision": 1,
-            }
-        ]
-        wrapper = {"requests": [candidate]}
-        refresh_request_id(wrapper)
-        if int(candidate["request_id"].removeprefix("prr_"), 16) % 2 == wanted_parity:
-            requests.append(candidate)
-            break
+    candidate = copy.deepcopy(first)
+    candidate["issue_number"] = 145
+    candidate["accepted_at"] = "2026-05-08T07:05:48Z"
+    candidate["results"] = [
+        {
+            "result_id": "r2_" + format(145, "064x"),
+            "owner": candidate["owner"],
+            "problem_id": "problem_145",
+            "statement_revision": 1,
+        }
+    ]
+    wrapper = {"requests": [candidate]}
+    refresh_request_id(wrapper)
+    requests = [first, candidate]
     requests.sort(key=lambda item: item["request_id"])
     return {
         "schema_version": 1,
@@ -67,11 +65,7 @@ def two_partition_requests() -> dict:
 
 
 def empty_shard(requests: dict, requests_digest: str, registry_digest: str, index: int) -> dict:
-    selected = [
-        request
-        for request in requests["requests"]
-        if int(request["request_id"].removeprefix("prr_"), 16) % 2 == index
-    ]
+    selected = shard_requests(requests["requests"], index, 2)
     resolutions = [
         {
             "request_id": request["request_id"],
@@ -217,6 +211,24 @@ class AggregatePublicReplayEvidenceTests(unittest.TestCase):
         self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
         self.assertIs(schema["additionalProperties"], False)
         self.assertIs(schema["$defs"]["shard"]["additionalProperties"], False)
+
+    def test_validator_rejects_nonobject_resolution_cleanly(self) -> None:
+        output = aggregate(
+            self.requests,
+            self.requests_digest,
+            self.registry,
+            self.registry_digest,
+            self.evidence,
+        )
+        output["resolutions"][0] = "not-an-object"
+        with self.assertRaisesRegex(AggregationError, "resolutions are invalid"):
+            validate_aggregate(
+                output,
+                self.requests,
+                self.requests_digest,
+                self.registry,
+                self.registry_digest,
+            )
 
 
 if __name__ == "__main__":

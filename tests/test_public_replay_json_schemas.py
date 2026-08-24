@@ -7,11 +7,8 @@ import pathlib
 import sys
 import unittest
 
-try:
-    import jsonschema
-    from referencing import Registry, Resource
-except ImportError:  # The pinned CI dependency makes this branch unreachable there.
-    jsonschema = None
+import jsonschema
+from referencing import Registry, Resource
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -21,7 +18,11 @@ from aggregate_public_replay_github_evidence import (
     canonical_document_bytes,
     validate_aggregate,
 )
-from resolve_public_replay_github_evidence import validate_requests, validate_evidence
+from resolve_public_replay_github_evidence import (
+    shard_requests,
+    validate_evidence,
+    validate_requests,
+)
 from tests.test_resolve_public_replay_github_evidence import (
     FakeClient,
     registry_bytes,
@@ -38,7 +39,6 @@ SCHEMA_NAMES = {
 }
 
 
-@unittest.skipIf(jsonschema is None, "jsonschema is installed by the pinned CI step")
 class PublicReplayJsonSchemaParityTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -100,7 +100,11 @@ class PublicReplayJsonSchemaParityTests(unittest.TestCase):
         requests_digest = hashlib.sha256(
             (json.dumps(requests, indent=2, sort_keys=True) + "\n").encode()
         ).hexdigest()
-        occupied = int(request["request_id"].removeprefix("prr_"), 16) % 2
+        occupied = next(
+            index
+            for index in range(2)
+            if shard_requests(requests["requests"], index, 2)
+        )
         workflow_registry, registry_digest = registry_bytes()
         empty = resolve(
             requests,

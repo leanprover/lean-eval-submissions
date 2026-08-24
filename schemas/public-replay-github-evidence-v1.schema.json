@@ -122,7 +122,6 @@
             "status": {
               "enum": [
                 "issue_not_found",
-                "github_identity_mismatch",
                 "model_mismatch",
                 "owner_mismatch",
                 "source_mismatch",
