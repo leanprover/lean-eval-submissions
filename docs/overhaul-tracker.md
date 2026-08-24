@@ -269,16 +269,23 @@ the already implemented owner status, metadata, and publication routes.
 
 ## Production and operational readiness
 
-- [ ] Make production intake enablement, normal deploy smoke, credential
+- [x] Make production intake enablement, normal deploy smoke, credential
       preflight, and rollback agree on one explicit expected intake state;
-      keep the tracked production value disabled until the launch review.
+      keep the tracked production value disabled until the launch review. The
+      finite-lease controller merged in `#1305`; protected deployment
+      `32724294780` at `685265e6` proved the protected production State and
+      final disabled state while all lease/enablement steps were skipped.
+      State-pin recovery `#1320` then deployed exact commit `71650c9d` in
+      protected run `32728324814`, proved production contract `82a036df`
+      before and after finalization, and again skipped every lease and durable
+      enablement step.
 - [x] Provide a commit-coherent rollback procedure for the intake Worker,
       private broker, and replay Worker/container deployment unit. The
       qualified protected workflow merged as `lean-eval-submissions#1300` at
       `f5f830d0`; main deploy run `32700644989` passed staging and production
       with intake and replay disabled. State stays append-only and
       forward-corrected.
-- [ ] Merge and qualify the exact staging promotion canary required by the
+- [x] Merge and qualify the exact staging promotion canary required by the
       program. The tracked implementation binds one deterministic, withheld,
       deliberately rejected synthetic intake to each protected-main
       commit/controller-run/attempt tuple; proves source-App connectivity, a
@@ -287,8 +294,12 @@ the already implemented owner status, metadata, and publication routes.
       reconciliation while ordinary intake stays disabled; and blocks
       production deployment unless it succeeds. Fixed-shard discovery also
       reconciles pending prior workflow attempts across Worker deployments.
-      This remains unchecked until the first
-      protected run is recorded in the ledger.
+      The stale-binding retry repair merged in `#1314`; the presentation-time
+      contract and append merged as production State `#15` and staging State
+      `#14`; the future time-order repair merged in `#1318`. Protected run
+      `32728324814` passed the exact canary before production deployment and
+      advanced staging State to `64eb3f9f`; post-push validator `32728600770`
+      passed.
 - [x] Validate the release controller's State and release-repository write
       credentials without AWS decrypt or publication. The final controller
       merged as `lean-eval-releases#10` at `57ab3634`, and exact-main validation

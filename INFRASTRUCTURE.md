@@ -7,11 +7,15 @@ until this ledger changes in the same pull request or an immediately linked
 operations pull request. Secret **names, owners, scopes, and rotation dates**
 belong here; secret values do not.
 
-Last reconciled: 2026-08-24 (Worker commit `12da2fa5` is deployed and
+Last reconciled: 2026-08-24 (Worker commit `71650c9d` is deployed and
 intake-disabled in both environments; deployment tokens exercise Workers and
 Containers; accepted-archive staging replay run `32618166048` passed;
-State-writer tokens, browser OAuth Apps, and both broker GitHub Apps remain
-provisioned and preflighted; the dedicated AWS key-custody account and isolated
+the exact production State contract `82a036df052b4bd66f358b50925e939c862ee6f3`
+passed the State-writer readiness and final disabled-state proofs in protected
+recovery deployment `32728324814`; staging State
+`64eb3f9f76aedccb8a4e888ff53717dc3d33b743` passed post-push validation run
+`32728600770`; State-writer tokens, browser OAuth Apps, and both broker GitHub
+Apps remain provisioned and preflighted; the dedicated AWS key-custody account and isolated
 staging and production stacks are provisioned; archive/replay staging and both
 release role variables are connected; the historical migration environment's
 current ordinary production Wrap role is incompatible with its exact OIDC
@@ -59,9 +63,9 @@ administrators. Service code:
 | AWS account | `lean-eval` (`161072922960`) | dedicated key custody | **CREATED; ROOT MFA ENABLED; NO ACCESS KEYS** |
 | AWS CloudFormation stack | `lean-eval-key-adapter-staging` | staging | **PROVISIONED; RELEASE OIDC TRUST UPDATE PENDING** |
 | AWS CloudFormation stack | `lean-eval-key-adapter-production` | production | **PROVISIONED; RELEASE OIDC TRUST UPDATE PENDING; INTAKE/REPLAY/PUBLICATION DISABLED** |
-| Cloudflare replay Worker | `lean-eval-replay-executor-staging` | staging | **CORRECTED IMAGE ACCEPTANCE PASSED 2026-08-23; REPLAY DISABLED; STATE RECONFIGURATION PENDING** |
+| Cloudflare replay Worker | `lean-eval-replay-executor-staging` | staging | **CORRECTED IMAGE ACCEPTANCE PASSED 2026-08-23; BACKGROUND-PROTOCOL IMAGE/PROFILE FROZEN; REVIEWED STATE RECONFIGURATION RECORDED; REPLAY DISABLED** |
 | Cloudflare replay Worker | `lean-eval-replay-executor` | production | **PROVISIONED 2026-08-22; REPLAY AND ACCEPTANCE DISABLED** |
-| Replay execution backend | Cloudflare Sandbox, provider-neutral adapter | staging / production | **CORRECTED IMAGE AND RUNTIME PROFILE FROZEN; STAGING/PRODUCTION REPLAY DISABLED PENDING STATE RECONFIGURATION** |
+| Replay execution backend | Cloudflare Sandbox, provider-neutral adapter | staging / production | **BACKGROUND-PROTOCOL IMAGE/RUNTIME PROFILE FROZEN; STAGING/PRODUCTION REPLAY DISABLED** |
 
 Do not change a status to provisioned without replacing every applicable
 placeholder in the inventory below and recording a verification date.
@@ -139,12 +143,12 @@ Wrangler must be copied here immediately.
 The intake-disabled bootstrap was performed manually with Wrangler OAuth. The
 dedicated deployment tokens are installed and exercised by every normal
 deployment. Current versions use exact commit
-`12da2fa504ea4b9408d9fb24773886df02e20d66`:
+`71650c9d579e269d6a48a6563d3cd0110e41e9c6`:
 
 | Environment | Private broker version | Replay Worker version / container application / digest | Intake Worker version | Health verification |
 | --- | --- | --- | --- | --- |
-| staging | `d4c25df8-c51e-436f-9bf8-1026521f111e` | `ea923507-01cc-4d05-bcc2-19a00e37bc47` / `a0361b52-feb3-4ee7-a68e-1ce63d78f2ec` / `sha256:a067a3ded4ea70c9063e78ebb4c6c8da2cfa7d11c5883d550f86dbf08d639b76` | `8fd16847-e491-44f8-9b3e-137b6512cb95` | environment `staging`, intake `false`, replay `false`, acceptance `true`, both memory fields `12884901888`, exact commit |
-| production | `dd5d24df-9cb7-40ec-9958-0b66454bbf94` | `a22bfd7f-a162-4bbe-8ee7-eafe897dcad6` / `a03ed768-89ad-4a0d-ad8d-cccdabc7775d` / `sha256:bc4a4c5405cef246eb29666f9ed8baf37d65377cfa65cc72cc5870c50cd386fa` | `b689fed9-444f-440e-923e-3f829162e307` | environment `production`, intake `false`, replay `false`, acceptance `false`, both memory fields `12884901888`, exact commit |
+| staging | `7c5c0f12-b9dd-46a7-a6a2-e7b4edc98165` | `e4b02b5b-bccb-45ff-9683-fc668182f0cf` / `lean-eval-replay-executor-staging-replaysandbox-staging@22` / `sha256:f61b6be446c3bc355c2eefddc3b376226acee89ca562e66f3b283576a32bb20b` | `47b7fd4e-e8ab-4e84-b3f3-25619459b66e` | environment `staging`, intake `false`, replay `false`, acceptance `true`, owner API `false`, canary `true`, both memory fields `12884901888`, exact commit |
+| production | `f539f03f-8186-4ac3-916d-64718dc22835` | `64bde697-b682-49a6-850b-8a0d46b8cc14` / `lean-eval-replay-executor-replaysandbox-production@25` / `sha256:f61b6be446c3bc355c2eefddc3b376226acee89ca562e66f3b283576a32bb20b` | `be53f383-06ad-4cf4-81f5-1c5c0678a591` | environment `production`, intake `false`, replay `false`, acceptance `false`, owner API `false`, canary `false`, both memory fields `12884901888`, exact commit |
 
 This manual bootstrap does not replace deployment automation.
 `CLOUDFLARE_ACCOUNT_ID` and a distinct, narrowly scoped
@@ -1032,6 +1036,8 @@ new replay version produced by the full target deploy below.
 | Replay decrypt and destruction | 2026-08-23 | synthetic run `32574078784` and real accepted-archive run `32618166048` passed fixed-command decrypt, reuse refusal, egress denial, source-free evidence, and confirmed unconditional destruction; authoritative queue consumption and production replay remain disabled |
 | Release reconstruction | 2026-08-22 | protected `lean-eval-releases` run `32574614106` at exact main commit `f1f83344017333650b4066a533e5ff4eefda5b54` passed all tooling tests, planned one due synthetic release, reconstructed and validated its manifest, proved the exact public-file allowlist excludes `private-note.txt`, and left the checkout clean. The run used only a harmless local plaintext fixture: it wrote neither State nor the release repository, exercised no AWS authority, and did not enable publication. |
 | Automatic release controller and production Git preflight | 2026-08-24 | `lean-eval-releases#8` merged the source-free confidentiality-incident planner as `d66c8dd43bb8e168cb67740214a9e2084ae44496`; `#9` bound it to the immutable `release.removed` State contract as `ded94636bc7e2f0971d0005ad076c8ce74bcb99f`; and `#10` completed the deterministic automatic controller as `57ab36341ccf653b45366c32d4472b9ee670890b`. Exact-main validation run `32719159678` passed. Protected preflight `32723471497` then validated and materialized production State `0c8759946df0da1338a0c73bf5bd75d182038286`, found only its initialization event and no due work, and proved both production write keys reached receive-pack through no-op exact-ref dry-run pushes while `PUBLICATION_ENABLED` remained absent. The preflight made no real Git update and exercised no audit key, AWS, Lambda, capability, archive, decrypt, reconstruction, State callback, recovery, artifact, or publication path. Credentialed staging unwrap, live AWS trust, protected cleanup qualification, and the deliberate publication launch gate remain open. |
+| Production State readiness and disabled finalization | 2026-08-24 | PR `#1315` merged the closed production `POST /readyz` proof as `685265e6f6659c3774b655ab38bfccf02a3f2551`; exact CI `32724294694` passed. Protected deployment `32724294780` promoted the immutable dispatch tag, passed the staging deployment and exact promotion canary, deployed both production Workers provisionally disabled, and authenticated the State-only Writer credential against protected production State `4b8dcdf0a3d03749f51bef23807eeb1d00c43b72`. The proof bound the reviewed contract commit and canonical event-schema SHA-256 `06d2798d4d584be3137af53d08d99e45e81a7e23e99b087e976acfef2989282e`, then the final proof required the identical State response after finalization. Because tracked production intake remained false, every lease, intake smoke, and durable-enablement step was skipped. Direct post-run health reads found exact commit `685265e6` on all four Workers, intake and replay disabled in both environments, the owner API disabled, the promotion canary enabled only in staging, and staging acceptance enabled only in staging. The canary advanced staging State to `42055878ea2b7023f9e01159b10d312823b88bb6`; post-push run `32724596325` exposed a pre-existing contract gap because the fixed legacy canary time window predates `system.initialized`. This staging-only append-order reconciliation is open. No production State event, intake, replay, AWS, release, or publication authority was exercised. |
+| Staging presentation-time reconciliation and production State-pin recovery | 2026-08-24 | Production State PR `#15` merged the staging-only, exact-eight-event presentation-time reconciliation contract as `82a036df052b4bd66f358b50925e939c862ee6f3`; PR validation `32726717159` and post-merge validation `32726889327` passed. Staging State PR `#14` appended the bound `system.presentation_time_reconciled` event as `ec7e1660c8822a33d0e13f94c820862d420eedd7` while retaining `replay.reconfigured`; PR run `32726928500` and post-merge run `32726986917` passed. Submissions PR `#1318` merged the future canary time-order repair as `bcb560a66599f7a0ba39421d406b636252bde2c7`. Deployment `32726794156` passed promotion, staging deploy, and its canary, then failed closed at the production exact-State check before enablement because the runtime still pinned `4b8dcdf0`; resulting staging State `56e55c1a6f939f7e07029781a3af718bd90efcab` passed validator `32727181969`. Submissions PR `#1320` merged the reviewed `82a036df` pin as `71650c9d579e269d6a48a6563d3cd0110e41e9c6`, with schema blob `5b670204c86c440b56afd81f62bd097e3b399be7`, validator blob `10e48b06aebc410145c1c8da8ff13ad297cf344d`, schema SHA-256 `af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb`, and callback qualification digest `ed8fac441683648766a019fb5ff7ed8051a3a2d5d33fce584c57a804b7b3afe9`; PR CI `32728126804`, deploy check `32728126783`, and post-merge CI `32728324824` passed. Protected deployment `32728324814` passed immutable promotion, both disabled deployments, the fresh staging canary, the exact `82a036df` production State proof before and after finalization, and skipped every lease and durable-enablement step. Its canary advanced staging State to `64eb3f9f76aedccb8a4e888ff53717dc3d33b743`, whose validator run `32728600770` passed. Live health then bound all four Workers to `71650c9d`, with intake, replay, and the owner API disabled in both environments; only staging acceptance and the staging promotion canary remained enabled. No AWS, release, or publication authority was exercised. |
 
 ## Reconciliation checklist
 

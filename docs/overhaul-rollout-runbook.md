@@ -26,15 +26,15 @@ primary checkout is not the integration workspace.
 | --- | --- |
 | `lean-eval-generator` | `77373a539b31f8f304c852f288d7d8469cceebff` on `main`; fixes `#1` / `#2` and synchronization `#3` are merged and green; merged LeanEval consumer `#553` pins this exact commit and removes the embedded core |
 | production State | `82a036df052b4bd66f358b50925e939c862ee6f3` on private `main`; it descends from the reviewed `release.removed` and source-free historical-public replay contracts, adds the exact staging presentation-time reconciliation contract, and currently contains only `system.initialized`, with no accepted submission or due release work |
-| staging State | `583778969da009368e347e30eb357702d5440015` on private `main`; accepted archive/result lifecycle and ordered release opt-out cutoff recorded |
+| staging State | `64eb3f9f76aedccb8a4e888ff53717dc3d33b743` on private `main`; accepted archive/result lifecycle, ordered release opt-out cutoff, the exact presentation-time reconciliation, and the latest post-initialization promotion canary are recorded; post-push validator run `32728600770` passed |
 | `lean-eval-releases` | `57ab36341ccf653b45366c32d4472b9ee670890b` on `main`; source-free recovery `#8`, State-bound removal planning `#9`, and the deterministic automatic controller `#10` are merged; exact-main validation `32719159678` and publication-disabled Git credential preflight `32723471497` passed; credentialed staging unwrap and publication remain disabled |
 | catalog, generator consumer, software verification | v1 freeze merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; terminology rule merged in `#554`; standalone-generator consumer merged in `#553`; current main `b91d4757aa0d7776c02540c9089df54fa0d0658a` |
-| results schema version 2, intake server, replay contracts | schema-version-3 per-submission archive lane `#1250`, accepted result lifecycle `#1251`, guarded historical migration `#1252`, private replay planning/schema alignment `#1253` / `#1254`, accepted-archive staging boundary `#1255`, and immutable release OIDC trust `#1256` are merged; exact runtime `12da2fa504ea4b9408d9fb24773886df02e20d66` is deployed intake- and replay-disabled |
+| results schema version 2, intake server, replay contracts | schema-version-3 per-submission archive lane `#1250`, accepted result lifecycle `#1251`, guarded historical migration `#1252`, private replay planning/schema alignment `#1253` / `#1254`, accepted-archive staging boundary `#1255`, and immutable release OIDC trust `#1256` are merged; exact runtime `71650c9d579e269d6a48a6563d3cd0110e41e9c6` is deployed intake- and replay-disabled after protected State-pin recovery run `32728324814` |
 | AWS archive-key custody | dedicated account `lean-eval` (`161072922960`) and isolated stacks are provisioned; accepted-archive staging run `32618166048` passed. Release OIDC template correction is merged but the live stacks still require an authenticated operator update: release staging runs `32617539355` and `32624640050` failed at STS before Lambda or decrypt. Production intake archive/replay roles remain disconnected |
 | lifecycle-aware leaderboard | preview foundation merged as `lean-eval-leaderboard#69`; UI terminology merged in `#73`; deeper schema terminology merged in `#74`; cutover `#72` is merged and live at `https://lean-lang.org/eval/`, with `/legacy/` retained and read-only State deploy key `160968617` provisioned |
 
 The private broker and intake Workers are deployed in staging and production
-from exact commit `d487c9d5b1a22a7a7dd27d729f3eb642c6474b1a`.
+from exact commit `71650c9d579e269d6a48a6563d3cd0110e41e9c6`.
 Deployment, OAuth,
 readiness, authentication, State-writer, and broker App secrets are installed.
 Both State-writer tokens are organization-approved and preflighted, and both
@@ -67,9 +67,9 @@ for every submission before evaluation. Two accepted staging submissions have
 completed this lane. Deployment run `32617911271` published exact commit
 `12da2fa504ea4b9408d9fb24773886df02e20d66` with the approved 12 GiB ceiling,
 and immutable-tag run `32618166048` passed the real accepted-archive boundary.
-The authoritative Lean/checker execution image and queue-consuming State writer
-remain launch gates; the accepted-archive workflow only attests recovery and
-destruction.
+The authoritative background-protocol image and State queue path have since
+been qualified separately; general and production replay remain disabled. The
+accepted-archive workflow itself attests only recovery and destruction.
 
 The FC-owned importer in `formal-conjectures#4951` now imports, verifies,
 classifies, and generates all FC100 declarations through the frozen generator
