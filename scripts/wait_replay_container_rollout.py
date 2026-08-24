@@ -14,13 +14,18 @@ from typing import Any
 
 
 MAX_JSON_BYTES = 1024 * 1024
+INSTANCE_TYPES = {
+    "standard-4": {"vcpu": 4, "memory_mib": 12 * 1024, "disk_size_mb": 20_000}
+}
 
 
 class RolloutError(ValueError):
     """The reviewed container rollout cannot be established."""
 
 
-def load_expected_image(config_path: pathlib.Path, environment: str) -> str:
+def load_expected_container(
+    config_path: pathlib.Path, environment: str
+) -> dict[str, Any]:
     try:
         raw = config_path.read_bytes()
         if not raw or len(raw) > MAX_JSON_BYTES:
@@ -29,17 +34,34 @@ def load_expected_image(config_path: pathlib.Path, environment: str) -> str:
         containers = config["env"][environment]["containers"]
         if not isinstance(containers, list) or len(containers) != 1:
             raise RolloutError("replay environment must define one container")
-        image = containers[0]["image"]
+        container = containers[0]
     except RolloutError:
         raise
     except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as error:
         raise RolloutError("replay configuration is invalid") from error
+    if not isinstance(container, dict):
+        raise RolloutError("reviewed container configuration is invalid")
+    image = container.get("image")
     if not isinstance(image, str) or re.fullmatch(
         r"registry\.cloudflare\.com/[0-9a-f]{32}/lean-eval-authoritative:[0-9a-f]{40}",
         image,
     ) is None:
         raise RolloutError("reviewed container image is invalid")
-    return image
+    instance_type = container.get("instance_type")
+    max_instances = container.get("max_instances")
+    ssh = container.get("ssh")
+    if instance_type not in INSTANCE_TYPES:
+        raise RolloutError("reviewed container instance type is unsupported")
+    if type(max_instances) is not int or max_instances < 1:
+        raise RolloutError("reviewed container max_instances is invalid")
+    if ssh != {"enabled": False}:
+        raise RolloutError("reviewed container must explicitly disable SSH")
+    return {
+        "image": image,
+        "instance_type": instance_type,
+        "max_instances": max_instances,
+        "ssh": ssh,
+    }
 
 
 def listed_application(value: Any, application: str) -> dict[str, Any] | None:
@@ -59,19 +81,33 @@ def ready_application(
     value: Any,
     application_id: str,
     application: str,
-    expected_image: str,
+    expected_container: dict[str, Any],
 ) -> bool:
     if not isinstance(value, dict):
         return False
     configuration = value.get("configuration")
     health = value.get("health")
     instances = health.get("instances") if isinstance(health, dict) else None
+    instance = INSTANCE_TYPES[expected_container["instance_type"]]
+    disk = configuration.get("disk") if isinstance(configuration, dict) else None
+    network = configuration.get("network") if isinstance(configuration, dict) else None
     return (
         value.get("id") == application_id
         and value.get("name") == application
         and type(value.get("version")) is int
         and isinstance(configuration, dict)
-        and configuration.get("image") == expected_image
+        and configuration.get("image") == expected_container["image"]
+        and value.get("max_instances") == expected_container["max_instances"]
+        and configuration.get("wrangler_ssh") == expected_container["ssh"]
+        and configuration.get("vcpu") == instance["vcpu"]
+        and configuration.get("memory_mib") == instance["memory_mib"]
+        and isinstance(disk, dict)
+        and disk.get("size_mb") == instance["disk_size_mb"]
+        and network == {
+            "assign_ipv6": "none",
+            "assign_ipv4": "none",
+            "mode": "private",
+        }
         and isinstance(health, dict)
         and health.get("errors") == []
         and isinstance(instances, dict)
@@ -89,8 +125,12 @@ def wait_for_rollout(
     application: str,
     attempts: int,
     interval_seconds: float,
+    expected_image_config_path: pathlib.Path | None = None,
+    command_timeout_seconds: float = 60,
 ) -> dict[str, Any]:
-    expected_image = load_expected_image(config_path, environment)
+    expected_container = load_expected_container(
+        expected_image_config_path or config_path, environment
+    )
     last_application: dict[str, Any] | None = None
     for attempt in range(1, attempts + 1):
         try:
@@ -110,7 +150,7 @@ def wait_for_rollout(
                 stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=command_timeout_seconds,
             )
         except subprocess.SubprocessError:
             result = None
@@ -144,7 +184,7 @@ def wait_for_rollout(
                         stdin=subprocess.DEVNULL,
                         capture_output=True,
                         text=True,
-                        timeout=60,
+                        timeout=command_timeout_seconds,
                     )
                 except subprocess.SubprocessError:
                     info = None
@@ -163,7 +203,7 @@ def wait_for_rollout(
                             parsed_info,
                             application_id,
                             application,
-                            expected_image,
+                            expected_container,
                         ):
                             return parsed_info
         if attempt < attempts:
@@ -199,13 +239,23 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", required=True, type=pathlib.Path)
     parser.add_argument(
+        "--expected-image-config",
+        type=pathlib.Path,
+        help="Optional target-commit config used only to select the expected image",
+    )
+    parser.add_argument(
         "--environment", required=True, choices=("staging", "production")
     )
     parser.add_argument("--application", required=True)
     parser.add_argument("--attempts", type=int, default=80)
     parser.add_argument("--interval-seconds", type=float, default=15)
+    parser.add_argument("--command-timeout-seconds", type=float, default=60)
     args = parser.parse_args()
-    if not 1 <= args.attempts <= 120 or not 0 <= args.interval_seconds <= 60:
+    if (
+        not 1 <= args.attempts <= 120
+        or not 0 <= args.interval_seconds <= 60
+        or not 1 <= args.command_timeout_seconds <= 60
+    ):
         print("wait-replay-container-rollout: retry settings are invalid", file=sys.stderr)
         return 1
     try:
@@ -215,6 +265,8 @@ def main() -> int:
             args.application,
             args.attempts,
             args.interval_seconds,
+            args.expected_image_config,
+            args.command_timeout_seconds,
         )
     except (RolloutError, OSError, subprocess.SubprocessError) as error:
         print(f"wait-replay-container-rollout: {error}", file=sys.stderr)
@@ -225,6 +277,12 @@ def main() -> int:
             {
                 "name": application["name"],
                 "image": application["configuration"]["image"],
+                "max_instances": application["max_instances"],
+                "vcpu": application["configuration"]["vcpu"],
+                "memory_mib": application["configuration"]["memory_mib"],
+                "ssh_enabled": application["configuration"]["wrangler_ssh"][
+                    "enabled"
+                ],
                 "version": application["version"],
                 "healthy_instances": application["health"]["instances"]["healthy"],
             },

@@ -13,6 +13,16 @@
   "env": {
     "staging": {
       "name": "lean-eval-submission-server-staging",
+      "secrets": {
+        "required": [
+          "AUTH_TOKEN_SECRET",
+          "GITHUB_OAUTH_CLIENT_ID",
+          "GITHUB_OAUTH_CLIENT_SECRET",
+          "GITHUB_STATE_TOKEN",
+          "LIFECYCLE_CALLBACK_TOKEN",
+          "READINESS_TOKEN"
+        ]
+      },
       "workers_dev": true,
       "preview_urls": false,
       "ratelimits": [
@@ -42,6 +52,16 @@
     },
     "production": {
       "name": "lean-eval-submission-server",
+      "secrets": {
+        "required": [
+          "AUTH_TOKEN_SECRET",
+          "GITHUB_OAUTH_CLIENT_ID",
+          "GITHUB_OAUTH_CLIENT_SECRET",
+          "GITHUB_STATE_TOKEN",
+          "LIFECYCLE_CALLBACK_TOKEN",
+          "READINESS_TOKEN"
+        ]
+      },
       "workers_dev": true,
       "preview_urls": false,
       "ratelimits": [

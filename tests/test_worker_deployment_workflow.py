@@ -196,10 +196,56 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("needs: promote-dispatch-ref", DEPLOY)
         self.assertIn("needs: [deploy-staging, promote-dispatch-ref]", DEPLOY)
 
-    def test_rollback_requires_matching_commit_tag_binding(self) -> None:
+    def test_rollback_validates_all_targets_before_mutation(self) -> None:
         self.assertIn('dispatch_ref="lean-eval-dispatch/$EXPECTED_COMMIT"', ROLLBACK)
         self.assertIn("rollback dispatch tag does not resolve", ROLLBACK)
-        self.assertIn('"DISPATCH_WORKFLOW_REF": "lean-eval-dispatch/"', ROLLBACK)
+        self.assertIn("repository main is not protected", ROLLBACK)
+        self.assertIn("rollback commit is not reachable from protected main", ROLLBACK)
+        validation = ROLLBACK.index("validate_cloudflare_rollback.py plan")
+        for component in ("intake", "broker", "replay"):
+            self.assertIn(f"--{component}-version-id", ROLLBACK)
+            self.assertIn(f"--{component}-config", ROLLBACK)
+        self.assertLess(
+            validation,
+            ROLLBACK.index("Pause intake by deploying exact target code with current secrets"),
+        )
+        self.assertIn("--require-disabled", ROLLBACK)
+        self.assertIn("cloudflare-rollback-qualification-v1.json", ROLLBACK)
+        self.assertEqual(ROLLBACK.count("compatible-capabilities"), 1)
+        self.assertIn("Preserve source-free pre-mutation recovery state", ROLLBACK)
+        self.assertIn("--state-main", ROLLBACK)
+        self.assertIn("--state-schema", ROLLBACK)
+        self.assertIn("protected State main moved after rollback qualification", ROLLBACK)
+        self.assertIn("validate_cloudflare_rollback.py prestate", ROLLBACK)
+        artifact = ROLLBACK.split(
+            "- name: Preserve source-free pre-mutation recovery state", 1
+        )[1].split("- name: Pause intake", 1)[0]
+        self.assertIn("prestate.json", artifact)
+        self.assertNotIn("original-*-version.json", artifact)
+        self.assertNotIn("original-container-info.json", artifact)
+
+    def test_rollback_is_dependency_ordered_and_exactly_verified(self) -> None:
+        intake = ROLLBACK.index("Pause intake by deploying exact target code with current secrets")
+        broker = ROLLBACK.index("Deploy exact target broker code with current secrets")
+        replay = ROLLBACK.index("Deploy the exact target replay Worker and container")
+        wait = ROLLBACK.index("Wait for the exact production replay container")
+        self.assertLess(intake, broker)
+        self.assertLess(broker, replay)
+        self.assertLess(replay, wait)
+        self.assertEqual(ROLLBACK.count("deployments status"), 6)
+        self.assertEqual(ROLLBACK.count("validate_cloudflare_rollback.py status"), 0)
+        self.assertEqual(ROLLBACK.count("active-version"), 6)
+        self.assertEqual(ROLLBACK.count("validate_cloudflare_rollback.py health"), 2)
+        self.assertNotIn("wrangler rollback", ROLLBACK)
+        self.assertNotIn("--yes", ROLLBACK)
+        self.assertNotIn("--secrets-file", ROLLBACK)
+        self.assertGreaterEqual(ROLLBACK.count("--keep-vars"), 6)
+        self.assertIn("--containers-rollout=immediate", ROLLBACK)
+        self.assertIn("verify_authoritative_replay_image_reference", ROLLBACK)
+        self.assertIn("deploy --dry-run", ROLLBACK)
+        self.assertIn("--command-timeout-seconds 15", ROLLBACK)
+        self.assertEqual(ROLLBACK.count("--max-time 10"), 2)
+        self.assertIn("if: always()", ROLLBACK)
 
     def test_rate_limits_and_reconciliation_are_distinct_and_declarative(self) -> None:
         staging = WRANGLER["env"]["staging"]
@@ -215,6 +261,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertEqual(production["triggers"]["crons"], ["* * * * *"])
         self.assertIn("env.API_RATE_LIMITER.limit({ key })", WORKER_APP)
         self.assertIn("handleScheduled(env, controller.scheduledTime)", WORKER_ENTRYPOINT)
+        self.assertIn("if (!intakeEnabled(env)) return;", WORKER_APP)
 
     def test_private_brokers_are_bound_and_deployed_before_intake_workers(self) -> None:
         for environment in ("staging", "production"):
@@ -240,6 +287,31 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 )[1].split(f"- name: Deploy {environment} submission Worker", 1)[0]
                 self.assertIn("wrangler.broker.jsonc", deploy_block)
                 self.assertIn(f"--env {environment}", deploy_block)
+
+    def test_secret_contracts_are_explicit_in_each_deployment_environment(self) -> None:
+        intake_secrets = {
+            "AUTH_TOKEN_SECRET",
+            "GITHUB_OAUTH_CLIENT_ID",
+            "GITHUB_OAUTH_CLIENT_SECRET",
+            "GITHUB_STATE_TOKEN",
+            "LIFECYCLE_CALLBACK_TOKEN",
+            "READINESS_TOKEN",
+        }
+        broker_secrets = {
+            "DISPATCH_APP_ID",
+            "DISPATCH_APP_PRIVATE_KEY",
+            "SOURCE_APP_ID",
+            "SOURCE_APP_PRIVATE_KEY",
+        }
+        for environment in ("staging", "production"):
+            self.assertEqual(
+                set(WRANGLER["env"][environment]["secrets"]["required"]),
+                intake_secrets,
+            )
+            self.assertEqual(
+                set(BROKER_WRANGLER["env"][environment]["secrets"]["required"]),
+                broker_secrets,
+            )
 
     def test_temporary_workers_dev_routes_are_exact_and_intake_disabled(self) -> None:
         staging = WRANGLER["env"]["staging"]

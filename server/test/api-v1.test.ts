@@ -838,6 +838,19 @@ describe("agent intake in workerd", () => {
 });
 
 describe("scheduled dispatch reconciliation in workerd", () => {
+  it("does not read or mutate State while intake is disabled", async () => {
+    const state = new MemoryState();
+    const list = vi.spyOn(state, "listDispatchOutbox");
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    await handleScheduled(
+      { ...ENV, INTAKE_ENABLED: "false" },
+      NOW_MS,
+      { state, dispatch },
+    );
+    expect(list).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
   it("reads one bounded shard and clears a due outbox after successful dispatch", async () => {
     const state = new MemoryState();
     const scheduledTime = (Math.floor(NOW_MS / (256 * 60_000)) * 256 + 1) * 60_000;
