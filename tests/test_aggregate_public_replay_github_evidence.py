@@ -236,6 +236,24 @@ class AggregatePublicReplayEvidenceTests(unittest.TestCase):
             self.registry_digest,
             self.evidence,
         )
+        output = copy.deepcopy(output)
+        output["resolutions"][0]["status"] = []
+        with self.assertRaisesRegex(AggregationError, "resolutions are invalid"):
+            validate_aggregate(
+                output,
+                self.requests,
+                self.requests_digest,
+                self.registry,
+                self.registry_digest,
+            )
+        output = aggregate(
+            self.requests,
+            self.requests_digest,
+            self.registry,
+            self.registry_digest,
+            self.evidence,
+        )
+        output = copy.deepcopy(output)
         del output["resolutions"][0]["status"]
         with self.assertRaisesRegex(AggregationError, "resolutions are invalid"):
             validate_aggregate(

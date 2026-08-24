@@ -249,7 +249,8 @@ def validate_aggregate(
 
     resolutions = value["resolutions"]
     if not isinstance(resolutions, list) or not all(
-        isinstance(item, dict) and "status" in item for item in resolutions
+        isinstance(item, dict) and isinstance(item.get("status"), str)
+        for item in resolutions
     ):
         raise AggregationError("aggregate resolutions are invalid")
     expected_ids = [request["request_id"] for request in requests["requests"]]
