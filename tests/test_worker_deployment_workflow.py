@@ -206,18 +206,29 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
 
     def test_workflow_only_promotion_is_protected_and_deployment_free(self) -> None:
         self.assertIn("environment: submission-dispatch-promotion", WORKFLOW_PROMOTION)
+        self.assertIn(
+            "group: workflow-dispatch-ref-promotion-${{ github.sha }}",
+            WORKFLOW_PROMOTION,
+        )
+        self.assertIn("actions: read", WORKFLOW_PROMOTION)
         self.assertIn("contents: write", WORKFLOW_PROMOTION)
         self.assertIn("secrets.DISPATCH_PROMOTION_APPROVAL_GUARD", WORKFLOW_PROMOTION)
         self.assertIn("workflow commit is not reachable from protected main", WORKFLOW_PROMOTION)
         self.assertIn("dispatch tag collision", WORKFLOW_PROMOTION)
         self.assertIn("dispatch tag read-back did not resolve", WORKFLOW_PROMOTION)
+        self.assertIn(
+            "exact protected-main CI did not succeed before promotion",
+            WORKFLOW_PROMOTION,
+        )
+        self.assertIn("actions/workflows/ci.yml/runs", WORKFLOW_PROMOTION)
         self.assertIn("read-back below distinguishes", WORKFLOW_PROMOTION)
         self.assertIn("read-back below distinguishes", DEPLOY)
         self.assertNotIn("wrangler", WORKFLOW_PROMOTION)
         self.assertNotIn("deploy-staging", WORKFLOW_PROMOTION)
         self.assertNotIn("deploy-production", WORKFLOW_PROMOTION)
         self.assertNotIn("api.cloudflare.com", WORKFLOW_PROMOTION)
-        self.assertNotIn("actions/workflows/", WORKFLOW_PROMOTION)
+        self.assertNotIn("/dispatches", WORKFLOW_PROMOTION)
+        self.assertNotIn("gh workflow run", WORKFLOW_PROMOTION)
 
     def test_smoke_retries_structured_payload_propagation(self) -> None:
         self.assertEqual(DEPLOY.count("for attempt in $(seq 1 13); do"), 3)

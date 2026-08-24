@@ -415,14 +415,21 @@ dispatching or evaluating a submission. Production rejects this preflight.
 
 `DISPATCH_WORKFLOW_REF` must stay absent until an operator creates an immutable
 tag named `lean-eval-dispatch/<40-character-commit>` at the reviewed workflow
-commit. `deploy-worker.yml` owns creation: after checks, its
-`promote-dispatch-ref` job enters the reviewer-gated
-`submission-dispatch-promotion` environment and uses only the job-scoped
-`GITHUB_TOKEN` with `contents: write`. A 32-byte lowercase-hex
+commit. Runtime deployment and workflow-only promotion jointly own creation.
+After its Worker checks, `deploy-worker.yml` promotes commits that change the
+running Worker or its directly dispatched workflows. The deployment-free
+`promote-workflow-dispatch-ref.yml` path covers only tag-consuming operational
+workflows; it waits for exact protected-main CI and cannot invoke Wrangler or a
+deployment. Both minters enter the reviewer-gated
+`submission-dispatch-promotion` environment and use only a job-scoped
+`GITHUB_TOKEN` with `contents: write` (plus read-only Actions access for the
+workflow-only CI proof). A 32-byte lowercase-hex
 `DISPATCH_PROMOTION_APPROVAL_GUARD` secret must exist only in that environment;
 it has no external authority and makes missing/unprotected auto-created
-environment configuration fail before tag creation. Existing tags are accepted only when
-they resolve to the same SHA; collisions and failed read-back stop deployment.
+environment configuration fail before tag creation. Existing tags are accepted
+only when they resolve to the same SHA. Concurrent creation of the same exact
+tag is harmless, while collisions and failed read-back stop promotion or
+deployment.
 A repository ruleset must target `lean-eval-dispatch/*`, allow creation, and
 reject updates and deletion, without a bypass for the Worker, deployment
 token, dispatch broker, or ordinary maintainers. The promotion output is

@@ -66,9 +66,11 @@ jobs:
             exit 1
           fi
 
-          body=$(curl --fail --silent --show-error --max-time 10 \
-            https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz)
-          HEALTH_BODY="$body" python - <<'PY'
+          verified=false
+          for attempt in $(seq 1 5); do
+            body=$(curl --fail --silent --show-error --max-time 10 \
+              https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz) || body=""
+            if HEALTH_BODY="$body" python - <<'PY'
           import json, os
           body = json.loads(os.environ["HEALTH_BODY"])
           assert body["status"] == "ok"
@@ -76,6 +78,16 @@ jobs:
           assert body["environment"] == "staging"
           assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
           PY
+            then
+              verified=true
+              break
+            fi
+            if [ "$attempt" -lt 5 ]; then sleep 2; fi
+          done
+          if [ "$verified" != true ]; then
+            echo "selected dispatch tag is not the exact live staging deployment" >&2
+            exit 1
+          fi
 
       - run: npm ci
 

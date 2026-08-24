@@ -1,7 +1,6 @@
 import pathlib
+import re
 import unittest
-
-import yaml
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -12,14 +11,16 @@ class StagingIntakeWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.text = WORKFLOW.read_text(encoding="utf-8")
-        cls.workflow = yaml.safe_load(cls.text)
 
     def test_is_manual_and_staging_only(self) -> None:
         self.assertIn("workflow_dispatch", self.text)
-        self.assertEqual(set(self.workflow["jobs"]), {"set-staging-intake"})
-        job = self.workflow["jobs"]["set-staging-intake"]
-        self.assertEqual(job["environment"], "cloudflare-staging")
-        self.assertNotIn("if", job)
+        jobs = self.text.split("\njobs:\n", 1)[1]
+        self.assertEqual(
+            re.findall(r"^  ([A-Za-z0-9_-]+):$", jobs, re.MULTILINE),
+            ["set-staging-intake"],
+        )
+        self.assertIn("    environment: cloudflare-staging", jobs)
+        self.assertNotIn("\n    if:", jobs)
         self.assertNotIn("cloudflare-production", self.text)
 
     def test_requires_exact_dispatch_commit_and_immutable_tag(self) -> None:
@@ -31,8 +32,10 @@ class StagingIntakeWorkflowTests(unittest.TestCase):
         self.assertIn("refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT", self.text)
 
     def test_state_is_closed_and_health_checked(self) -> None:
-        inputs = self.workflow[True]["workflow_dispatch"]["inputs"]
-        self.assertEqual(inputs["state"]["options"], ["disabled", "enabled"])
+        self.assertIn(
+            "        options:\n          - disabled\n          - enabled",
+            self.text,
+        )
         self.assertIn('INTAKE_ENABLED:$intake_enabled', self.text)
         self.assertIn('INTAKE_ENABLEMENT_MODE:$intake_mode', self.text)
         self.assertIn('body["environment"] == "staging"', self.text)
@@ -45,13 +48,22 @@ class StagingIntakeWorkflowTests(unittest.TestCase):
     def test_ref_mistakes_fail_and_stale_tags_cannot_roll_staging_back(self) -> None:
         self.assertNotIn("github.ref_type == 'tag'", self.text)
         self.assertIn("workflow must run from the exact immutable dispatch tag", self.text)
+        predeploy = self.text.split(
+            "      - name: Verify exact reviewed deployment", 1
+        )[1].split("\n      - run: npm ci", 1)[0]
         self.assertIn(
             "https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz",
-            self.text,
+            predeploy,
         )
+        self.assertIn('body["service"] == "lean-eval-submission"', predeploy)
         self.assertIn(
             'body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]',
-            self.text,
+            predeploy,
+        )
+        self.assertIn("for attempt in $(seq 1 5); do", predeploy)
+        self.assertIn(
+            "selected dispatch tag is not the exact live staging deployment",
+            predeploy,
         )
 
 
