@@ -24,7 +24,6 @@ concurrency:
 
 jobs:
   set-staging-intake:
-    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: cloudflare-staging
@@ -54,12 +53,39 @@ jobs:
         run: |
           set -euo pipefail
           if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || [ "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]; then
-            echo "expected_commit must equal the selected protected-main commit" >&2
+            echo "expected_commit must equal the selected immutable dispatch commit" >&2
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT" ]; then
+            echo "workflow must run from the exact immutable dispatch tag" >&2
             exit 1
           fi
           resolved=$(git rev-parse "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT^{commit}")
           if [ "$resolved" != "$EXPECTED_COMMIT" ]; then
             echo "immutable dispatch tag does not match the selected commit" >&2
+            exit 1
+          fi
+
+          verified=false
+          for attempt in $(seq 1 5); do
+            body=$(curl --fail --silent --show-error --max-time 10 \
+              https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz) || body=""
+            if HEALTH_BODY="$body" python - <<'PY'
+          import json, os
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["status"] == "ok"
+          assert body["service"] == "lean-eval-submission"
+          assert body["environment"] == "staging"
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          PY
+            then
+              verified=true
+              break
+            fi
+            if [ "$attempt" -lt 5 ]; then sleep 2; fi
+          done
+          if [ "$verified" != true ]; then
+            echo "selected dispatch tag is not the exact live staging deployment" >&2
             exit 1
           fi
 

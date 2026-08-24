@@ -68,6 +68,7 @@ jobs:
           tests.test_submission_workflow
           tests.test_server_archive_workflow
           tests.test_staging_promotion_canary
+          tests.test_staging_intake_workflow
           tests.test_worker_deployment_workflow
           tests.test_prepare_intake_enablement_lease
           tests.test_validate_cloudflare_rollback

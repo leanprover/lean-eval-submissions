@@ -190,6 +190,13 @@ scripts, or archive recipient set merged to protected `main` runs:
 3. production broker, disabled replay Worker/container, and intake Worker
    deploys, followed by the same exact health gates.
 
+Workflow-only operations that require an immutable dispatch tag but do not
+change deployed runtime are promoted separately by
+[`promote-workflow-dispatch-ref.yml`](.github/workflows/promote-workflow-dispatch-ref.yml).
+That path uses the same protected promotion environment and collision-safe tag
+contract, but it cannot deploy a Worker or container. This separation prevents
+maintenance-workflow edits from interrupting production intake after launch.
+
 GitHub environment `cloudflare-staging` must contain:
 
 | Name | Kind | Required scope |
@@ -256,9 +263,12 @@ Deployment workflow concurrency is intentionally latest-main-wins: skipped
 intermediate commits are already ancestors of the latest tested commit.
 
 Staging intake state is changed only through the protected, manual
-`Set staging intake` workflow. The operator must select `main`, provide the
-exact current protected-main commit, and choose `enabled` or `disabled`. The
-workflow requires that commit's immutable `lean-eval-dispatch/<commit>` tag,
+`Set staging intake` workflow. The operator must select an exact immutable
+`lean-eval-dispatch/<commit>` tag for the commit reported by the live staging
+health endpoint, provide the same full commit, and choose `enabled` or
+`disabled`. A branch selection or a stale tag fails the run; it cannot report a
+successful no-op or roll staging back. The workflow requires that tag to resolve
+to the selected commit,
 deploys only the staging intake Worker, and verifies the resulting structured
 health response. It cannot target production. Any later ordinary main
 deployment returns staging to the tracked safe default `INTAKE_ENABLED=false`;
@@ -405,14 +415,21 @@ dispatching or evaluating a submission. Production rejects this preflight.
 
 `DISPATCH_WORKFLOW_REF` must stay absent until an operator creates an immutable
 tag named `lean-eval-dispatch/<40-character-commit>` at the reviewed workflow
-commit. `deploy-worker.yml` owns creation: after checks, its
-`promote-dispatch-ref` job enters the reviewer-gated
-`submission-dispatch-promotion` environment and uses only the job-scoped
-`GITHUB_TOKEN` with `contents: write`. A 32-byte lowercase-hex
+commit. Runtime deployment and workflow-only promotion jointly own creation.
+After its Worker checks, `deploy-worker.yml` promotes commits that change the
+running Worker or its directly dispatched workflows. The deployment-free
+`promote-workflow-dispatch-ref.yml` path covers only tag-consuming operational
+workflows; it waits for exact protected-main CI and cannot invoke Wrangler or a
+deployment. Both minters enter the reviewer-gated
+`submission-dispatch-promotion` environment and use only a job-scoped
+`GITHUB_TOKEN` with `contents: write` (plus read-only Actions access for the
+workflow-only CI proof). A 32-byte lowercase-hex
 `DISPATCH_PROMOTION_APPROVAL_GUARD` secret must exist only in that environment;
 it has no external authority and makes missing/unprotected auto-created
-environment configuration fail before tag creation. Existing tags are accepted only when
-they resolve to the same SHA; collisions and failed read-back stop deployment.
+environment configuration fail before tag creation. Existing tags are accepted
+only when they resolve to the same SHA. Concurrent creation of the same exact
+tag is harmless, while collisions and failed read-back stop promotion or
+deployment.
 A repository ruleset must target `lean-eval-dispatch/*`, allow creation, and
 reject updates and deletion, without a bypass for the Worker, deployment
 token, dispatch broker, or ordinary maintainers. The promotion output is

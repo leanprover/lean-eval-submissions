@@ -6,8 +6,7 @@ on:
       - '.github/workflows/deploy-worker.yml'
       - '.github/workflows/submission.yml'
       - '.github/workflows/promotion-canary.yml'
-      - '.github/workflows/aws-key-adapter-staging-smoke.yml'
-      - '.github/workflows/historical-public-image-qualification.yml'
+      - '.github/workflows/server-archive.yml'
       - '.audit/**'
       - 'INFRASTRUCTURE.md'
       - 'scripts/**'
@@ -18,8 +17,7 @@ on:
       - '.github/workflows/deploy-worker.yml'
       - '.github/workflows/submission.yml'
       - '.github/workflows/promotion-canary.yml'
-      - '.github/workflows/aws-key-adapter-staging-smoke.yml'
-      - '.github/workflows/historical-public-image-qualification.yml'
+      - '.github/workflows/server-archive.yml'
       - '.audit/**'
       - 'scripts/**'
       - 'server/**'
@@ -110,10 +108,12 @@ jobs:
               exit 1
             fi
           else
+            # The workflow-only protected minter may win this exact-tag race.
+            # The strict read-back below distinguishes it from every other error.
             gh api "repos/$REPOSITORY/git/refs" \
               -X POST \
               -f "ref=refs/tags/$tag" \
-              -f "sha=$WORKFLOW_COMMIT" >/dev/null
+              -f "sha=$WORKFLOW_COMMIT" >/dev/null || true
           fi
           resolved=$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq .object.sha)
           if [ "$resolved" != "$WORKFLOW_COMMIT" ]; then
