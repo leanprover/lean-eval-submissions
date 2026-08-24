@@ -131,7 +131,10 @@ class PublicReplayPlanTests(unittest.TestCase):
         self.assertEqual(output["resolved_result_count"], 2)
         self.assertEqual(output["pending_request_count"], 0)
         self.assertEqual(output["activation_status"], "blocked")
+        self.assertEqual(output["execution_profile_status"], "unresolved")
         request = output["requests"][0]
+        self.assertEqual(request["owner_login"], "a-m-berns")
+        self.assertEqual(request["historical_accepted_at"], "2026-05-07T07:05:49Z")
         self.assertEqual(request["source"]["commit"], SOURCE)
         self.assertEqual(request["benchmark"]["commit"], BENCHMARK)
         self.assertEqual(
@@ -150,6 +153,7 @@ class PublicReplayPlanTests(unittest.TestCase):
             },
         )
         for result in request["results"]:
+            self.assertEqual(result["owner_login"], "a-m-berns")
             self.assertEqual(result["results_commit"], SOURCE_COMMIT)
             self.assertRegex(result["result_tree_digest"], r"^[0-9a-f]{64}$")
 

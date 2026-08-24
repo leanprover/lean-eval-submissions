@@ -175,6 +175,8 @@ jobs:
           value = json.load(open(os.environ["PLAN"], encoding="utf-8"))
           assert value["activation_status"] == "blocked"
           assert value["activation_requirement"] == "legacy_public_result_replay_authority_v1"
+          assert value["execution_profile_status"] == "unresolved"
+          assert value["execution_profile_requirement"] == "historical_benchmark_toolchain_execution_profile_v1"
           assert value["resolved_request_count"] == int(os.environ["EXPECTED_REQUESTS"])
           assert value["resolved_result_count"] == int(os.environ["EXPECTED_RESULTS"])
           assert value["pending_request_count"] == int(os.environ["EXPECTED_PENDING"])

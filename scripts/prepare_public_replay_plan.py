@@ -25,7 +25,12 @@ from resolve_public_replay_github_evidence import (
     _write_exclusive,
     validate_workflow_registry,
 )
-from results_schema import ResultsSchemaError, canonical_file_bytes, read_results_file
+from results_schema import (
+    ResultsSchemaError,
+    canonical_file_bytes,
+    read_results_file,
+    result_id,
+)
 
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
@@ -224,6 +229,7 @@ def build_plan(
         resolution = resolved.get(request["request_id"])
         if resolution is None:
             continue
+        owner_login = request["owner"].lower()
         candidates = [
             candidate
             for candidate in resolution["candidates"]
@@ -248,7 +254,15 @@ def build_plan(
             selected = records[expected["result_id"]]
             record = selected["record"]
             if (
-                record["problem_id"] != expected["problem_id"]
+                expected["owner"].lower() != owner_login
+                or result_id(
+                    owner_login,
+                    request["declared_model"],
+                    expected["problem_id"],
+                    expected["statement_revision"],
+                )
+                != expected["result_id"]
+                or record["problem_id"] != expected["problem_id"]
                 or record["statement_revision"] != expected["statement_revision"]
                 or record["declared_model"] != request["declared_model"]
                 or record["benchmark_commit"] != benchmark_commit
@@ -265,7 +279,10 @@ def build_plan(
                 )
             output_results.append(
                 {
-                    **expected,
+                    "result_id": expected["result_id"],
+                    "owner_login": owner_login,
+                    "problem_id": expected["problem_id"],
+                    "statement_revision": expected["statement_revision"],
                     "results_repository": aggregate["source_repository"],
                     "results_commit": aggregate["source_commit"],
                     **selected["binding"],
@@ -275,8 +292,8 @@ def build_plan(
         planned.append(
             {
                 "request_id": request["request_id"],
-                "accepted_at": request["accepted_at"],
-                "owner": request["owner"],
+                "historical_accepted_at": request["accepted_at"],
+                "owner_login": owner_login,
                 "declared_model": request["declared_model"],
                 "issue": {
                     "repository": resolution["selected_issue_repository"],
@@ -338,6 +355,8 @@ def build_plan(
         "pending_request_count": aggregate["pending_count"],
         "activation_status": "blocked",
         "activation_requirement": "legacy_public_result_replay_authority_v1",
+        "execution_profile_status": "unresolved",
+        "execution_profile_requirement": "historical_benchmark_toolchain_execution_profile_v1",
         "requests": planned,
     }
 

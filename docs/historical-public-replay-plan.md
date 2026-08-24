@@ -28,7 +28,8 @@ Removing that blocker requires the separately reviewed, system-owned
 historical `result.claimed` anchors, so making an owner claim a prerequisite
 would block corpus completion on every historical owner. One authorization
 event instead binds one exact seed-plan request/result/evidence tuple,
-recomputes the stable result ID from owner, verbatim model, problem, and
+recomputes the stable result ID from canonical lowercase `owner_login`,
+verbatim model, problem, and
 statement revision, and carries only the public source, benchmark/toolchain,
 and immutable Results snapshot bindings. It creates no acceptance,
 publication, credit, or owner-metadata authority. An ordinary
@@ -62,9 +63,22 @@ It recomputes the inventory and request set from the Results checkout. For
 each resolved group it binds the public source commit, benchmark commit and
 toolchain blob, historical evaluator commit/workflow digest/run identity,
 issue identity, accepted result IDs, and an exact Results snapshot file/tree
-digest. Non-resolved requests never enter the plan. The entire aggregate digest
+digest. Historical owner casing is case-folded to the canonical lowercase
+`owner_login`, checked against every grouped result, and used to recompute each
+stable result ID. `historical_accepted_at` preserves the legacy Results
+second-precision timestamp exactly; it is not silently rewritten as a normal
+millisecond-precision State event time. Non-resolved requests never enter the
+plan. The entire aggregate digest
 remains a top-level dependency, so the compact projection cannot be detached
 from omitted candidate evidence or pending classifications.
+
+Authorization is also separate from execution-profile readiness. The seed
+plan remains `execution_profile_status: unresolved` under
+`historical_benchmark_toolchain_execution_profile_v1`; authorizing a result
+does not claim that the current v4.33 runner can execute its historical
+toolchain. In the reviewed local corpus, 101 of 135 results are not v4.33 and
+91 use prerelease toolchains. Each exact historical toolchain needs a reviewed
+compatible execution profile before its ordinary enqueue event.
 
 The machine-readable contracts are:
 
@@ -75,6 +89,9 @@ The plan is a replay seed, not `replay-execution-request-v1`. It contains no
 submission source bytes, issue bodies, workflow logs, credentials, State
 writer, archive locator, synthetic submission ID, replay task ID, attempt, or
 verdict.
+Consumers must run the producer validator and verify the exact plan digest;
+JSON Schema validation alone does not prove request/result identity uniqueness
+or cross-field equality.
 
 ## Protected publication workflow
 
