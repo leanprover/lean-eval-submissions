@@ -299,7 +299,8 @@ class HistoricalReplayProfileMatrixTests(unittest.TestCase):
 
     def test_required_ci_executes_historical_profile_matrix_tests(self) -> None:
         workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-        self.assertIn("tests.test_historical_replay_profile_matrix", workflow)
+        self.assertIn("python -m unittest discover", workflow)
+        self.assertIn("-p 'test_*.py'", workflow)
 
 
 if __name__ == "__main__":

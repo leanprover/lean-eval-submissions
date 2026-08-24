@@ -58,78 +58,10 @@ jobs:
       - name: Lint workflows
         run: actionlint
 
-      - name: Workflow-structure test
-        # Asserts the submission.yml invariants the cross-repo rewrite is
-        # most likely to break (two checkouts, persist-credentials, the
-        # benchmark-commit source, probe paths, the separate results-store
-        # checkout). See tests/test_submission_workflow.py.
-        run: >-
-          python -m unittest
-          tests.test_submission_workflow
-          tests.test_server_archive_workflow
-          tests.test_staging_promotion_canary
-          tests.test_staging_intake_workflow
-          tests.test_worker_deployment_workflow
-          tests.test_intake_disable_recovery_workflow
-          tests.test_prepare_intake_enablement_lease
-          tests.test_validate_cloudflare_rollback
-          tests.test_monitor_cloudflare_health
-          tests.test_historical_replay_inventory
-          tests.test_historical_replay_inventory_workflow
-          tests.test_prepare_public_replay_resolution
-          tests.test_resolve_public_replay_github_evidence
-          tests.test_public_replay_github_evidence_workflow
-          tests.test_aggregate_public_replay_github_evidence
-          tests.test_prepare_public_replay_plan
-          tests.test_historical_public_replay_plan_workflow
-          tests.test_worker_intake_configuration
-
-      - name: Submission intake tests
-        run: python -m unittest tests.test_validate_submission_intake
-
-      - name: Leaderboard update tests
-        run: >-
-          python -m unittest
-          tests.test_results_schema
-          tests.test_build_result_receipt
-          tests.test_migrate_results_v2
-          tests.test_update_leaderboard
-          tests.test_migration_workflow
-
-      - name: Fetch submission tests
-        run: python -m unittest tests.test_fetch_submission
-
-      - name: Evaluate submission tests
-        run: python -m unittest tests.test_evaluate_submission
-
-      - name: Archive key adapter tests
-        run: >-
-          python -m unittest
-          tests.test_archive_submission
-          tests.test_archive_envelope
-          tests.test_migrate_archive_envelopes
-          tests.test_key_capability_contract
-          tests.test_aws_key_adapter
-          tests.test_aws_key_infrastructure
-          tests.test_aws_key_adapter_staging_workflow
-
-      - name: Replay, public smoke, and kernel corpus contract tests
-        run: >-
-          python -m unittest
-          tests.test_replay_orchestrator
-          tests.test_authoritative_replay_image
-          tests.test_public_replay_smoke
-          tests.test_public_replay_workflow
-          tests.test_public_replay_json_schemas
-          tests.test_committed_public_replay_evidence
-          tests.test_historical_replay_profile_matrix
-          tests.test_historical_public_runner
-          tests.test_historical_public_image_qualification
-          tests.test_prepare_historical_public_authority
-          tests.test_kernel_corpus_report
-          tests.test_kernel_corpus_runner_adapter
-          tests.test_kernel_runner_wire_contract
-          tests.test_kernel_corpus_json_schemas
+      - name: Offline test suite
+        # Discovery keeps every ordinary tests/test_*.py module in CI without
+        # a second hand-maintained inventory that can silently become stale.
+        run: python -m unittest discover -v -s tests -p 'test_*.py'
 
   artifact-upload:
     runs-on: ubuntu-24.04
