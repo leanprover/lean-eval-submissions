@@ -18,7 +18,7 @@
       "containers": [
         {
           "class_name": "ReplaySandbox",
-          "image": "registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative:f1e398e6ce15eea09a5b9c5289c2cbd56003aef4",
+          "image": "registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative:b069186599b79a52f1282e8ddb3eb3c8f7d3fc64",
           "instance_type": "standard-4",
           "max_instances": 1,
           "ssh": { "enabled": false }
@@ -41,9 +41,9 @@
         "GITHUB_OIDC_ENVIRONMENT": "replay-staging",
         "STAGING_MEMORY_LIMIT_BYTES": "12884901888",
         "PRODUCTION_MEMORY_GATE_BYTES": "12884901888",
-        "REVIEWED_EXECUTION_PROFILE_DIGEST": "271b407bad361b969ffb0fab42d8bf3615377b08adbcedb825d6e6ac1d905c06",
-        "REVIEWED_MEASUREMENT_CONFIG_DIGEST": "2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945",
-        "REVIEWED_VM_IMAGE_DIGEST": "sha256:f09248ec7cf33887acfaf56430bd9e410189ce63e1f1b85b94804498de4e9ef2",
+        "REVIEWED_EXECUTION_PROFILE_DIGEST": "0000000000000000000000000000000000000000000000000000000000000000",
+        "REVIEWED_MEASUREMENT_CONFIG_DIGEST": "0000000000000000000000000000000000000000000000000000000000000000",
+        "REVIEWED_VM_IMAGE_DIGEST": "sha256:3b573d8ffdab712afba46a13f7f05e844b0365f00f7e7b7f734b5211f4ef9624",
         "SANDBOX_TRANSPORT": "rpc"
       }
     },
@@ -54,7 +54,7 @@
       "containers": [
         {
           "class_name": "ReplaySandbox",
-          "image": "registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative:f1e398e6ce15eea09a5b9c5289c2cbd56003aef4",
+          "image": "registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative:b069186599b79a52f1282e8ddb3eb3c8f7d3fc64",
           "instance_type": "standard-4",
           "max_instances": 1,
           "ssh": { "enabled": false }
@@ -77,9 +77,9 @@
         "GITHUB_OIDC_ENVIRONMENT": "replay-production",
         "STAGING_MEMORY_LIMIT_BYTES": "12884901888",
         "PRODUCTION_MEMORY_GATE_BYTES": "12884901888",
-        "REVIEWED_EXECUTION_PROFILE_DIGEST": "271b407bad361b969ffb0fab42d8bf3615377b08adbcedb825d6e6ac1d905c06",
-        "REVIEWED_MEASUREMENT_CONFIG_DIGEST": "2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945",
-        "REVIEWED_VM_IMAGE_DIGEST": "sha256:f09248ec7cf33887acfaf56430bd9e410189ce63e1f1b85b94804498de4e9ef2",
+        "REVIEWED_EXECUTION_PROFILE_DIGEST": "0000000000000000000000000000000000000000000000000000000000000000",
+        "REVIEWED_MEASUREMENT_CONFIG_DIGEST": "0000000000000000000000000000000000000000000000000000000000000000",
+        "REVIEWED_VM_IMAGE_DIGEST": "sha256:3b573d8ffdab712afba46a13f7f05e844b0365f00f7e7b7f734b5211f4ef9624",
         "SANDBOX_TRANSPORT": "rpc"
       }
     }

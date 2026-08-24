@@ -59,14 +59,14 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
             replay_config.count(
                 '"image": "registry.cloudflare.com/'
                 'a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative:'
-                'f1e398e6ce15eea09a5b9c5289c2cbd56003aef4"'
+                'b069186599b79a52f1282e8ddb3eb3c8f7d3fc64"'
             ),
             2,
         )
         self.assertEqual(
             replay_config.count(
                 '"REVIEWED_VM_IMAGE_DIGEST": '
-                '"sha256:f09248ec7cf33887acfaf56430bd9e410189ce63e1f1b85b94804498de4e9ef2"'
+                '"sha256:3b573d8ffdab712afba46a13f7f05e844b0365f00f7e7b7f734b5211f4ef9624"'
             ),
             2,
         )
