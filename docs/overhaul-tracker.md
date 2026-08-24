@@ -30,7 +30,10 @@ one issue per lane.
       never reuse or rename the Palomar subdomain. Kim Morrison is
       administrator and temporary cost owner. A later organization-account or
       provider migration is supported by the stable contracts, not required
-      for this bootstrap.
+      for this bootstrap. This decision authorizes only the intake-disabled
+      bootstrap; production intake still requires either the locked
+      organization-owned hostname/OAuth design or an explicit recorded
+      amendment to that launch requirement.
 - [x] D5: bootstrap with separate Kim-owned fine-grained PATs for staging and
       production State, each single-repository scoped and at most 90 days;
       rotate at least 14 days before expiry. The bootstrap is approved for
@@ -101,6 +104,28 @@ one issue per lane.
 - [x] Merge disabled release terminology `lean-eval-releases#3`, planner `#1`,
       and reconstruction smoke `#2`; final main is `f1f83344`, all hosted
       validation is green, and publication remains disabled.
+
+## Lifecycle product contracts
+
+These are required by the authoritative product plan and remain separate from
+the already implemented owner status, metadata, and publication routes.
+
+- [x] Add the production State representation for legacy result claims and
+      metadata backfill without rewriting historical facts
+      (`lean-eval-state#8`, merge `6ba71d2a`). The v1 public projection remains
+      byte-for-byte stable and the redacted lifecycle metadata is opt-in v2.
+- [ ] Add the authenticated owner writer/API for those State events, including
+      owner verification and exact results-Git tuple/digest recomputation;
+      preserve the stable result identifier and grandfathered release policy.
+- [ ] Add model-alias, rename, consolidation, and new-canonical-identity
+      request events, authorization, materialization, collision tests, and
+      lifecycle-aware public projection behavior.
+- [ ] Add problem-repair requests and maintainer repair events with explicit
+      revision/causation rules; do not rewrite prior accepted records.
+- [ ] Add owner retraction requests and public maintainer override/retraction
+      events, including release and leaderboard consequences.
+- [ ] Add hostile-input, owner/maintainer authorization, idempotence, causal
+      conflict, and public-redaction tests for every amendment flow.
 
 ## Cloudflare bootstrap
 
@@ -181,12 +206,71 @@ one issue per lane.
       main commit `f1f83344` planned one due synthetic release, reconstructed
       and validated its manifest, enforced the public-file allowlist, excluded
       a private fixture file, and left Git and State unchanged.
+- [x] Run the one authorized receipt-backed authoritative staging replay. Run
+      `32694194843` reached an explicit retryable `replay.failed` terminal at
+      staging State commit `c3c677cc` with reason `runner_lost`; no successful
+      replay evidence was fabricated. Replay was immediately disabled again in
+      both environments by `lean-eval-submissions#1299` at `ffd9a473`, deploy
+      run `32700136536` passed, both live health endpoints report disabled, and
+      Cloudflare reports zero active or assigned replay containers.
+- [ ] Inventory every historical accepted result at the migration cutoff and
+      deterministically classify it as public-source replayable,
+      private-archive replayable, or explicitly unavailable with a reviewed
+      reason.
+- [ ] Enqueue and execute the complete historical replay corpus under exact
+      original pins, recording terminal verdicts/statistics or explicit
+      unavailability; the isolated staging proofs above do not satisfy this
+      corpus gate.
+- [ ] Expand independent-kernel validation from the one-result shadow smoke to
+      a checker-series/corpus report with separately recorded
+      accept/reject/decline/crash/timeout outcomes and an explicit promotion
+      decision.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
       window.
 - [x] Complete leaderboard preview review and cut over with rollback retained
       (`lean-eval-leaderboard#72`; Pages run `32557778003`).
 - [ ] Close issue intake only after the time, incident, submitter, adoption, and
       announcement gates in the implementation program pass.
+
+## Production and operational readiness
+
+- [ ] Make production intake enablement, normal deploy smoke, credential
+      preflight, and rollback agree on one explicit expected intake state;
+      keep the tracked production value disabled until the launch review.
+- [x] Provide a commit-coherent rollback procedure for the intake Worker,
+      private broker, and replay Worker/container deployment unit. The
+      qualified protected workflow merged as `lean-eval-submissions#1300` at
+      `f5f830d0`; main deploy run `32700644989` passed staging and production
+      with intake and replay disabled. State stays append-only and
+      forward-corrected.
+- [ ] Add the exact staging promotion canary required by the program: GitHub
+      connectivity, synthetic intake, CAS contention, and scheduled
+      reconciliation before a production candidate is promoted.
+- [x] Validate the release controller's State and release-repository write
+      credentials without AWS decrypt or publication. Protected run
+      `32694754911` at release commit `2a4cdff2` passed both exact-ref dry-run
+      pushes while publication remained absent.
+- [ ] Pass the credentialed staging release smoke after the live AWS OIDC trust
+      update. Keep publication disabled until its separate launch gate.
+- [x] Add the publication-disabled confidentiality-incident recovery planner
+      (`lean-eval-releases#8`, merge `d66c8dd`), including strict original
+      publication bindings, canonical shared-path classification, and a
+      fail-closed remediation plan that performs no mutation.
+- [ ] Complete and merge the immutable `release.removed` State correction
+      contract, then bind the recovery planner to it and qualify the protected
+      repository-removal/history-cleanup procedure without rewriting results.
+- [x] Record and deploy the readiness monitor, alert destination, severity
+      owner, support contact, emergency intake-pause owner, and response
+      procedure (`lean-eval-submissions#1301`, merge `58d88268`). Main deploy
+      run `32701229915` passed in both environments with intake/replay disabled;
+      protected live monitor run `32701461244` then verified the exact deployed
+      commit and reconciled the bot-owned incident state.
+- [ ] Move the production hostname and OAuth Apps to organization ownership as
+      required by the locked program, or record an explicit reviewed amendment
+      authorizing the temporary `workers.dev`/owner arrangement for launch.
+- [ ] Reconcile the rollout runbook, infrastructure current-version table,
+      credential rotation/revocation data, and public implementation tracker
+      after each remaining protected rollout.
 
 ## External coordination
 
@@ -202,8 +286,16 @@ one issue per lane.
       resolved, 280 closure edges, no target-to-target dependency, and one
       fail-closed `Erdos324.erdos_324.match_1` orphan recorded upstream.
 - [x] Obtain a compatible FC-owned importer/output contract with strict,
-      deterministic provenance (`formal-conjectures#4951`, green at head
-      `2654e42de2026de6cdb248ad5ed0f1c7d659c8fa`).
+      deterministic provenance as a reference implementation
+      (`formal-conjectures#4951`, previously green at head
+      `2654e42de2026de6cdb248ad5ed0f1c7d659c8fa`). The draft must still be
+      reconciled with current FC `main`, current Lean pins, and maintainer
+      review before it is launch-ready.
 - [ ] Launch FC100/open-conjectures only after generator pins advance, the
       importer receives FC maintainer review, and the production launch gates
       are satisfied.
+- [ ] Complete the human-authored flavour-text/hint audit; tooling may inventory
+      missing or stale text, but agents do not author hints.
+- [ ] After FC100 proof-only launch, coordinate comparator disproof support and
+      add the generator/manifest disproof contract once the upstream comparator
+      integration lands.
