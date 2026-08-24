@@ -264,9 +264,11 @@ intermediate commits are already ancestors of the latest tested commit.
 
 Staging intake state is changed only through the protected, manual
 `Set staging intake` workflow. The operator must select an exact immutable
-`lean-eval-dispatch/<commit>` tag, provide the same full commit, and choose
-`enabled` or `disabled`. The
-workflow requires that tag to resolve to the selected commit,
+`lean-eval-dispatch/<commit>` tag for the commit reported by the live staging
+health endpoint, provide the same full commit, and choose `enabled` or
+`disabled`. A branch selection or a stale tag fails the run; it cannot report a
+successful no-op or roll staging back. The workflow requires that tag to resolve
+to the selected commit,
 deploys only the staging intake Worker, and verifies the resulting structured
 health response. It cannot target production. Any later ordinary main
 deployment returns staging to the tracked safe default `INTAKE_ENABLED=false`;

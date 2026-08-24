@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -36,6 +37,9 @@ QUALIFICATION = json.loads(
     )
 )
 WORKER_APP = (ROOT / "server/src/app.ts").read_text(encoding="utf-8")
+WORKER_PROVIDER = (ROOT / "server/src/github-provider.ts").read_text(
+    encoding="utf-8"
+)
 WORKER_ENTRYPOINT = (ROOT / "server/src/index.ts").read_text(encoding="utf-8")
 REPLAY_ENTRYPOINT = (ROOT / "server/src/replay-entry.ts").read_text(encoding="utf-8")
 REPLAY_APP = (ROOT / "server/src/replay-app.ts").read_text(encoding="utf-8")
@@ -143,14 +147,44 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "promotion-canary.yml",
             },
         )
-        deployed_dependencies = {
-            "promotion-canary.yml",
-            "server-archive.yml",
-            "submission.yml",
-        }
+        deployed_dependencies = set(
+            re.findall(
+                r"actions/workflows/([A-Za-z0-9_.-]+\.ya?ml)/dispatches",
+                WORKER_PROVIDER,
+            )
+        )
+        default_submission = re.search(
+            r'env\.DISPATCH_WORKFLOW \?\? "([A-Za-z0-9_.-]+\.ya?ml)"',
+            WORKER_APP,
+        )
+        self.assertIsNotNone(default_submission)
+        deployed_dependencies.add(default_submission.group(1))
+        pending = list(deployed_dependencies)
+        while pending:
+            workflow = pending.pop()
+            workflow_text = (workflow_directory / workflow).read_text(encoding="utf-8")
+            for callee in re.findall(
+                r"uses:\s+\./\.github/workflows/([A-Za-z0-9_.-]+\.ya?ml)",
+                workflow_text,
+            ):
+                if callee not in deployed_dependencies:
+                    deployed_dependencies.add(callee)
+                    pending.append(callee)
+        self.assertEqual(
+            deployed_dependencies,
+            {"promotion-canary.yml", "server-archive.yml", "submission.yml"},
+        )
         promotion_push = WORKFLOW_PROMOTION.split("  push:", 1)[1].split(
             "permissions:", 1
         )[0]
+        promotion_paths = set(
+            re.findall(r"'\.github/workflows/([^']+)'", promotion_push)
+        )
+        self.assertEqual(
+            promotion_paths,
+            (dispatch_dependencies - deployed_dependencies)
+            | {"promote-workflow-dispatch-ref.yml"},
+        )
         for workflow in dispatch_dependencies:
             path = f"'.github/workflows/{workflow}'"
             with self.subTest(workflow=workflow):
@@ -177,9 +211,13 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("workflow commit is not reachable from protected main", WORKFLOW_PROMOTION)
         self.assertIn("dispatch tag collision", WORKFLOW_PROMOTION)
         self.assertIn("dispatch tag read-back did not resolve", WORKFLOW_PROMOTION)
+        self.assertIn("read-back below distinguishes", WORKFLOW_PROMOTION)
+        self.assertIn("read-back below distinguishes", DEPLOY)
         self.assertNotIn("wrangler", WORKFLOW_PROMOTION)
         self.assertNotIn("deploy-staging", WORKFLOW_PROMOTION)
         self.assertNotIn("deploy-production", WORKFLOW_PROMOTION)
+        self.assertNotIn("api.cloudflare.com", WORKFLOW_PROMOTION)
+        self.assertNotIn("actions/workflows/", WORKFLOW_PROMOTION)
 
     def test_smoke_retries_structured_payload_propagation(self) -> None:
         self.assertEqual(DEPLOY.count("for attempt in $(seq 1 13); do"), 3)

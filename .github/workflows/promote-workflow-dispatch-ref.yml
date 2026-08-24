@@ -47,29 +47,31 @@ jobs:
             echo "workflow commit is not a full lowercase SHA" >&2
             exit 1
           fi
-          status=$(gh api "repos/$REPOSITORY/compare/$WORKFLOW_COMMIT...main" --jq .status)
+          status=$(timeout 20s gh api "repos/$REPOSITORY/compare/$WORKFLOW_COMMIT...main" --jq .status)
           if [ "$status" != "ahead" ] && [ "$status" != "identical" ]; then
             echo "workflow commit is not reachable from protected main" >&2
             exit 1
           fi
-          gh api "repos/$REPOSITORY/contents/.github/workflows/submission.yml?ref=$WORKFLOW_COMMIT" \
+          timeout 20s gh api "repos/$REPOSITORY/contents/.github/workflows/submission.yml?ref=$WORKFLOW_COMMIT" \
             --jq .sha >/dev/null
-          gh api "repos/$REPOSITORY/contents/.github/workflows/promotion-canary.yml?ref=$WORKFLOW_COMMIT" \
+          timeout 20s gh api "repos/$REPOSITORY/contents/.github/workflows/promotion-canary.yml?ref=$WORKFLOW_COMMIT" \
             --jq .sha >/dev/null
 
           tag="lean-eval-dispatch/$WORKFLOW_COMMIT"
-          if existing=$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq .object.sha 2>/dev/null); then
+          if existing=$(timeout 20s gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq .object.sha 2>/dev/null); then
             if [ "$existing" != "$WORKFLOW_COMMIT" ]; then
               echo "dispatch tag collision: $tag resolves to $existing" >&2
               exit 1
             fi
           else
-            gh api "repos/$REPOSITORY/git/refs" \
+            # Another protected minter may win this exact-tag race. The strict
+            # read-back below distinguishes that success from every other error.
+            timeout 20s gh api "repos/$REPOSITORY/git/refs" \
               -X POST \
               -f "ref=refs/tags/$tag" \
-              -f "sha=$WORKFLOW_COMMIT" >/dev/null
+              -f "sha=$WORKFLOW_COMMIT" >/dev/null || true
           fi
-          resolved=$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq .object.sha)
+          resolved=$(timeout 20s gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq .object.sha)
           if [ "$resolved" != "$WORKFLOW_COMMIT" ]; then
             echo "dispatch tag read-back did not resolve to the reviewed commit" >&2
             exit 1

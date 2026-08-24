@@ -24,9 +24,6 @@ concurrency:
 
 jobs:
   set-staging-intake:
-    if: >-
-      github.ref_type == 'tag' &&
-      startsWith(github.ref, 'refs/tags/lean-eval-dispatch/')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: cloudflare-staging
@@ -68,6 +65,17 @@ jobs:
             echo "immutable dispatch tag does not match the selected commit" >&2
             exit 1
           fi
+
+          body=$(curl --fail --silent --show-error --max-time 10 \
+            https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz)
+          HEALTH_BODY="$body" python - <<'PY'
+          import json, os
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["status"] == "ok"
+          assert body["service"] == "lean-eval-submission"
+          assert body["environment"] == "staging"
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          PY
 
       - run: npm ci
 

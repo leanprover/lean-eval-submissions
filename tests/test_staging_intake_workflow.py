@@ -19,14 +19,10 @@ class StagingIntakeWorkflowTests(unittest.TestCase):
         self.assertEqual(set(self.workflow["jobs"]), {"set-staging-intake"})
         job = self.workflow["jobs"]["set-staging-intake"]
         self.assertEqual(job["environment"], "cloudflare-staging")
+        self.assertNotIn("if", job)
         self.assertNotIn("cloudflare-production", self.text)
 
     def test_requires_exact_dispatch_commit_and_immutable_tag(self) -> None:
-        self.assertIn("github.ref_type == 'tag'", self.text)
-        self.assertIn(
-            "startsWith(github.ref, 'refs/tags/lean-eval-dispatch/')",
-            self.text,
-        )
         self.assertIn(
             'if [ "$GITHUB_REF" != "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT" ]',
             self.text,
@@ -45,6 +41,18 @@ class StagingIntakeWorkflowTests(unittest.TestCase):
         self.assertIn('body["intake_configured_enabled"]', self.text)
         self.assertIn('body["intake_effective_enabled"]', self.text)
         self.assertIn('body["intake_lease_expires_at"] is None', self.text)
+
+    def test_ref_mistakes_fail_and_stale_tags_cannot_roll_staging_back(self) -> None:
+        self.assertNotIn("github.ref_type == 'tag'", self.text)
+        self.assertIn("workflow must run from the exact immutable dispatch tag", self.text)
+        self.assertIn(
+            "https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz",
+            self.text,
+        )
+        self.assertIn(
+            'body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]',
+            self.text,
+        )
 
 
 if __name__ == "__main__":
