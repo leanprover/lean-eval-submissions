@@ -20,7 +20,8 @@
           "GITHUB_OAUTH_CLIENT_SECRET",
           "GITHUB_STATE_TOKEN",
           "LIFECYCLE_CALLBACK_TOKEN",
-          "READINESS_TOKEN"
+          "READINESS_TOKEN",
+          "STAGING_AMENDMENT_CANARY_TOKEN"
         ]
       },
       "workers_dev": true,
