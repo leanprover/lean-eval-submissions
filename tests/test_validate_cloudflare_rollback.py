@@ -287,7 +287,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 binding["text"] = "d" * 40
         self._write(self.paths["intake_version"], self.versions["intake"])
         with self.assertRaisesRegex(
-            rollback.RollbackValidationError, "must disable intake, legacy result owner API"
+            rollback.RollbackValidationError, "must disable legacy result owner API"
         ):
             rollback.build_plan(self._arguments())
 
@@ -320,6 +320,12 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "environment": "production",
                 "deployed_commit": COMMIT,
                 "intake_enabled": False,
+                "intake_configured_enabled": False,
+                "intake_effective_enabled": False,
+                "intake_enablement_mode": "disabled",
+                "intake_lease_expires_at": None,
+                "promotion_canary_configured_enabled": False,
+                "promotion_canary_enabled": False,
             },
         )
 
@@ -349,6 +355,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "intake_enabled": False,
                 "intake_enablement_mode": "disabled",
                 "intake_lease_expires_at": None,
+                "legacy_result_owner_api_enabled": False,
             },
             require_intake_disabled=True,
         )
@@ -379,6 +386,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "environment": "production",
                 "deployed_commit": COMMIT,
                 "intake_enabled": False,
+                "legacy_result_owner_api_enabled": False,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -688,9 +696,9 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "intake_enabled": False,
                 "intake_enablement_mode": "disabled",
                 "intake_lease_expires_at": None,
+                "legacy_result_owner_api_enabled": False,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
-                "legacy_result_owner_api_enabled": False,
             },
         )
         with self.assertRaisesRegex(rollback.RollbackValidationError, "health differs"):
@@ -725,6 +733,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "intake_enabled": False,
                 "intake_enablement_mode": "disabled",
                 "intake_lease_expires_at": None,
+                "legacy_result_owner_api_enabled": False,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -742,6 +751,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "intake_enabled": True,
                 "intake_enablement_mode": "durable",
                 "intake_lease_expires_at": None,
+                "legacy_result_owner_api_enabled": False,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -806,9 +816,12 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             prestate["rollback_feature_gates"],
             {
                 "intake_enabled": False,
+                "intake_enablement_contract_supported": True,
+                "intake_enablement_mode": "disabled",
                 "legacy_result_owner_api_contract_supported": True,
                 "legacy_result_owner_api_enabled": False,
                 "promotion_canary_enabled": False,
+                "promotion_canary_contract_supported": True,
                 "replay_enabled": False,
                 "staging_acceptance_enabled": False,
                 "result_owner_state_contract_commit": (

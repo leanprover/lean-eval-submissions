@@ -19,7 +19,6 @@ import {
   type SubmissionGrant,
 } from "../src/auth";
 import { handleRequest, handleScheduled, type RuntimeEnv, type StateAccess } from "../src/app";
-import { GitHubStateError, StateEventConflictError } from "../src/github-state";
 import {
   buildDispatchRequest,
   buildPromotionCanaryDispatchRequest,
