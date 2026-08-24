@@ -1299,6 +1299,7 @@ export async function handleScheduled(
   scheduledTime: number,
   dependencies: ApiDependencies = {},
 ): Promise<void> {
+  if (!intakeEnabled(env)) return;
   requireDispatchConfiguration(env, dependencies);
   const ledger = state(env, dependencies);
   const shardNumber = Math.floor(scheduledTime / 60_000) % 256;

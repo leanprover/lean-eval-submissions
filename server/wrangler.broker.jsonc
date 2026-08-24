@@ -12,6 +12,14 @@
   },
   "env": {
     "staging": {
+      "secrets": {
+        "required": [
+          "DISPATCH_APP_ID",
+          "DISPATCH_APP_PRIVATE_KEY",
+          "SOURCE_APP_ID",
+          "SOURCE_APP_PRIVATE_KEY"
+        ]
+      },
       "workers_dev": false,
       "preview_urls": false,
       "vars": {
@@ -22,6 +30,14 @@
       }
     },
     "production": {
+      "secrets": {
+        "required": [
+          "DISPATCH_APP_ID",
+          "DISPATCH_APP_PRIVATE_KEY",
+          "SOURCE_APP_ID",
+          "SOURCE_APP_PRIVATE_KEY"
+        ]
+      },
       "workers_dev": false,
       "preview_urls": false,
       "vars": {

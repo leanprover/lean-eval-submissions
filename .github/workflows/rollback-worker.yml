@@ -1,14 +1,22 @@
-name: Roll back submission Worker
+name: Emergency rollback production Cloudflare unit
 
 on:
   workflow_dispatch:
     inputs:
-      version_id:
-        description: Cloudflare Worker version ID to restore
+      intake_version_id:
+        description: Disabled intake version proving the target commit/config
+        required: true
+        type: string
+      broker_version_id:
+        description: Matching broker version proving the target commit/config
+        required: true
+        type: string
+      replay_version_id:
+        description: Matching disabled replay version used to verify the target
         required: true
         type: string
       expected_commit:
-        description: Full Git commit recorded by that Worker version
+        description: Full Git commit recorded by all three versions
         required: true
         type: string
 
@@ -26,12 +34,13 @@ defaults:
 jobs:
   rollback-production:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
     environment: cloudflare-production
     steps:
       # actions/checkout pinned to v7.0.1.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       # actions/setup-node pinned to v6.5.0.
@@ -42,21 +51,21 @@ jobs:
           cache-dependency-path: server/package-lock.json
 
       - run: npm ci
-      - name: Validate rollback inputs
+
+      - name: Validate and prepare the complete disabled rollback unit
         env:
+          BROKER_VERSION: ${{ inputs.broker_version_id }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           GH_TOKEN: ${{ github.token }}
+          INTAKE_VERSION: ${{ inputs.intake_version_id }}
+          REPLAY_VERSION: ${{ inputs.replay_version_id }}
           REPOSITORY: ${{ github.repository }}
-          TARGET_VERSION: ${{ inputs.version_id }}
         run: |
+          set -euo pipefail
           if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
             echo "expected_commit must be a full lowercase Git SHA" >&2
-            exit 1
-          fi
-          if [[ ! "$TARGET_VERSION" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
-            echo "version_id must be a canonical lowercase UUID" >&2
             exit 1
           fi
           dispatch_ref="lean-eval-dispatch/$EXPECTED_COMMIT"
@@ -65,56 +74,279 @@ jobs:
             echo "rollback dispatch tag does not resolve to expected_commit" >&2
             exit 1
           fi
+          main_protected=$(gh api "repos/$REPOSITORY/branches/main" --jq .protected)
+          if [ "$main_protected" != true ]; then
+            echo "repository main is not protected" >&2
+            exit 1
+          fi
+          status=$(gh api "repos/$REPOSITORY/compare/$EXPECTED_COMMIT...main" --jq .status)
+          if [ "$status" != "ahead" ] && [ "$status" != "identical" ]; then
+            echo "rollback commit is not reachable from protected main" >&2
+            exit 1
+          fi
 
-          version_json=$(mktemp)
-          trap 'rm -f "$version_json"' EXIT
-          npx wrangler versions view "$TARGET_VERSION" --env production --json \
-            > "$version_json"
-          python - "$version_json" <<'PY'
-          import json
-          import os
-          import sys
+          plan_dir="$RUNNER_TEMP/lean-eval-rollback"
+          if [ -e "$plan_dir" ]; then
+            echo "rollback scratch path already exists" >&2
+            exit 1
+          fi
+          mkdir -p "$plan_dir"
+          git worktree add --detach "$plan_dir/target" "$EXPECTED_COMMIT"
+          target="$plan_dir/target/server"
 
-          with open(sys.argv[1], encoding="utf-8") as source:
-              version = json.load(source)
-          bindings = version.get("resources", {}).get("bindings", [])
-          expected = {
-              "DEPLOYED_COMMIT": os.environ["EXPECTED_COMMIT"],
-              "DEPLOYMENT_ENVIRONMENT": "production",
-              "DISPATCH_WORKFLOW_REF": "lean-eval-dispatch/" + os.environ["EXPECTED_COMMIT"],
-          }
-          for name, wanted in expected.items():
-              matches = [binding for binding in bindings if binding.get("name") == name]
-              if len(matches) != 1:
-                  raise SystemExit(f"target version has no unique {name} binding")
-              actual = matches[0].get("text", matches[0].get("value"))
-              if actual != wanted:
-                  raise SystemExit(
-                      f"target version records {name}={actual!r}, not {wanted!r}"
-                  )
-          PY
+          npx wrangler deployments status --config wrangler.jsonc \
+            --env production --json > "$plan_dir/original-intake-status.json"
+          npx wrangler deployments status --config wrangler.broker.jsonc \
+            --env production --json > "$plan_dir/original-broker-status.json"
+          npx wrangler deployments status --config wrangler.replay.jsonc \
+            --env production --json > "$plan_dir/original-replay-status.json"
+          original_intake=$(python ../scripts/validate_cloudflare_rollback.py \
+            active-version --status "$plan_dir/original-intake-status.json")
+          original_broker=$(python ../scripts/validate_cloudflare_rollback.py \
+            active-version --status "$plan_dir/original-broker-status.json")
+          original_replay=$(python ../scripts/validate_cloudflare_rollback.py \
+            active-version --status "$plan_dir/original-replay-status.json")
+          npx wrangler versions view "$original_intake" \
+            --config wrangler.jsonc --env production --json \
+            > "$plan_dir/original-intake-version.json"
+          npx wrangler versions view "$original_broker" \
+            --config wrangler.broker.jsonc --env production --json \
+            > "$plan_dir/original-broker-version.json"
+          npx wrangler versions view "$original_replay" \
+            --config wrangler.replay.jsonc --env production --json \
+            > "$plan_dir/original-replay-version.json"
+          npx wrangler containers list --config wrangler.replay.jsonc \
+            --env production --json > "$plan_dir/original-container-list.json"
+          original_container=$(python ../scripts/validate_cloudflare_rollback.py \
+            container-id --list "$plan_dir/original-container-list.json" \
+            --application lean-eval-replay-executor-replaysandbox-production)
+          npx wrangler containers info "$original_container" \
+            --config wrangler.replay.jsonc --env production --json \
+            > "$plan_dir/original-container-info.json"
 
-      - name: Roll back production
+          npx wrangler versions view "$INTAKE_VERSION" \
+            --config wrangler.jsonc --env production --json > "$plan_dir/intake-version.json"
+          npx wrangler versions view "$BROKER_VERSION" \
+            --config wrangler.broker.jsonc --env production --json > "$plan_dir/broker-version.json"
+          npx wrangler versions view "$REPLAY_VERSION" \
+            --config wrangler.replay.jsonc --env production --json > "$plan_dir/replay-version.json"
+
+          gh api repos/leanprover/lean-eval-state/branches/main \
+            --jq '{commit: .commit.sha, protected: .protected}' \
+            > "$plan_dir/state-main.json"
+          state_commit=$(jq -er .commit "$plan_dir/state-main.json")
+          gh api -H 'Accept: application/vnd.github.raw+json' \
+            "repos/leanprover/lean-eval-state/contents/schema/state-event-v1.schema.json?ref=$state_commit" \
+            > "$plan_dir/state-event-schema.json"
+
+          python ../scripts/validate_cloudflare_rollback.py plan \
+            --expected-commit "$EXPECTED_COMMIT" \
+            --environment production \
+            --intake-config "$target/wrangler.jsonc" \
+            --intake-version "$plan_dir/intake-version.json" \
+            --intake-version-id "$INTAKE_VERSION" \
+            --broker-config "$target/wrangler.broker.jsonc" \
+            --broker-version "$plan_dir/broker-version.json" \
+            --broker-version-id "$BROKER_VERSION" \
+            --replay-config "$target/wrangler.replay.jsonc" \
+            --replay-version "$plan_dir/replay-version.json" \
+            --replay-version-id "$REPLAY_VERSION" \
+            --current-replay-config wrangler.replay.jsonc \
+            --qualification \
+            "$plan_dir/target/.audit/cloudflare-rollback-qualification-v1.json" \
+            --target-root "$plan_dir/target" \
+            --state-main "$plan_dir/state-main.json" \
+            --state-schema "$plan_dir/state-event-schema.json" \
+            --require-disabled \
+            --output "$plan_dir/plan.json"
+
+          for component in intake broker replay; do
+            python ../scripts/validate_cloudflare_rollback.py \
+              compatible-capabilities --component "$component" \
+              --target-version "$plan_dir/$component-version.json" \
+              --current-version "$plan_dir/original-$component-version.json"
+          done
+
+          npm ci --ignore-scripts --prefix "$target"
+          ../scripts/verify_authoritative_replay_image_reference \
+            --config "$target/wrangler.replay.jsonc" --environment production
+          "$target/node_modules/.bin/wrangler" deploy --dry-run \
+            --config "$target/wrangler.broker.jsonc" --env production \
+            --keep-vars --var "DEPLOYED_COMMIT:$EXPECTED_COMMIT"
+          "$target/node_modules/.bin/wrangler" deploy --dry-run \
+            --config "$target/wrangler.jsonc" --env production \
+            --keep-vars --var "DEPLOYED_COMMIT:$EXPECTED_COMMIT" \
+            --var "DISPATCH_WORKFLOW_REF:$dispatch_ref"
+          "$target/node_modules/.bin/wrangler" deploy --dry-run \
+            --containers-rollout=none \
+            --config "$target/wrangler.replay.jsonc" --env production \
+            --keep-vars --var "DEPLOYED_COMMIT:$EXPECTED_COMMIT"
+
+          python ../scripts/validate_cloudflare_rollback.py prestate \
+            --plan "$plan_dir/plan.json" \
+            --intake-status "$plan_dir/original-intake-status.json" \
+            --intake-version "$plan_dir/original-intake-version.json" \
+            --broker-status "$plan_dir/original-broker-status.json" \
+            --broker-version "$plan_dir/original-broker-version.json" \
+            --replay-status "$plan_dir/original-replay-status.json" \
+            --replay-version "$plan_dir/original-replay-version.json" \
+            --container-info "$plan_dir/original-container-info.json" \
+            --output "$plan_dir/prestate.json"
+
+      # actions/upload-artifact pinned to v7.0.1.
+      - name: Preserve source-free pre-mutation recovery state
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: production-cloudflare-rollback-prestate-${{ github.run_id }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            ${{ runner.temp }}/lean-eval-rollback/plan.json
+            ${{ runner.temp }}/lean-eval-rollback/prestate.json
+
+      - name: Pause intake by deploying exact target code with current secrets
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          TARGET_VERSION: ${{ inputs.version_id }}
-        run: >-
-          npx wrangler rollback "$TARGET_VERSION" --env production
-          --yes
-          --message "Manual rollback by $GITHUB_ACTOR from $GITHUB_SHA"
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          plan_dir="$RUNNER_TEMP/lean-eval-rollback"
+          qualified_state=$(jq -er .state_contract.commit "$plan_dir/plan.json")
+          live_state=$(gh api repos/leanprover/lean-eval-state/branches/main \
+            --jq '[.commit.sha, .protected] | @tsv')
+          if [ "$live_state" != "$qualified_state"$'\ttrue' ]; then
+            echo "protected State main moved after rollback qualification" >&2
+            exit 1
+          fi
+          target="$RUNNER_TEMP/lean-eval-rollback/target/server"
+          "$target/node_modules/.bin/wrangler" deploy \
+            --config "$target/wrangler.jsonc" --env production \
+            --keep-vars \
+            --var "DEPLOYED_COMMIT:$EXPECTED_COMMIT" \
+            --var "DISPATCH_WORKFLOW_REF:lean-eval-dispatch/$EXPECTED_COMMIT"
 
-      - name: Verify restored production version
+      - name: Verify disabled intake before dependency mutation
         env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
         run: |
-          body=$(curl --fail --retry 6 --retry-all-errors --retry-delay 5 \
-            https://lean-eval-submission-server.lean-eval.workers.dev/healthz)
-          HEALTH_BODY="$body" python - <<'PY'
-          import json, os
-          body = json.loads(os.environ["HEALTH_BODY"])
-          assert body["status"] == "ok"
-          assert body["environment"] == "production"
-          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
-          assert body["intake_enabled"] is False
-          PY
+          plan_dir="$RUNNER_TEMP/lean-eval-rollback"
+          npx wrangler deployments status --config wrangler.jsonc \
+            --env production --json > "$plan_dir/intake-status.json"
+          deployed_version=$(python ../scripts/validate_cloudflare_rollback.py \
+            active-version --status "$plan_dir/intake-status.json")
+          npx wrangler versions view "$deployed_version" \
+            --config wrangler.jsonc --env production --json \
+            > "$plan_dir/deployed-intake-version.json"
+          python ../scripts/validate_cloudflare_rollback.py component \
+            --component intake --expected-commit "$EXPECTED_COMMIT" \
+            --environment production \
+            --config "$plan_dir/target/server/wrangler.jsonc" \
+            --version "$plan_dir/deployed-intake-version.json" \
+            --version-id "$deployed_version"
+          curl --fail --silent --show-error --max-time 10 \
+            --retry 12 --retry-all-errors --retry-delay 5 \
+            https://lean-eval-submission-server.lean-eval.workers.dev/healthz \
+            > "$plan_dir/intake-health.json"
+          python ../scripts/validate_cloudflare_rollback.py health \
+            --plan "$plan_dir/plan.json" --component intake \
+            --health "$plan_dir/intake-health.json"
+
+      - name: Deploy exact target broker code with current secrets
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          target="$RUNNER_TEMP/lean-eval-rollback/target/server"
+          "$target/node_modules/.bin/wrangler" deploy \
+            --config "$target/wrangler.broker.jsonc" --env production \
+            --keep-vars --var "DEPLOYED_COMMIT:$EXPECTED_COMMIT"
+
+      - name: Verify the exact production broker version
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          plan_dir="$RUNNER_TEMP/lean-eval-rollback"
+          npx wrangler deployments status --config wrangler.broker.jsonc \
+            --env production --json > "$plan_dir/broker-status.json"
+          deployed_version=$(python ../scripts/validate_cloudflare_rollback.py \
+            active-version --status "$plan_dir/broker-status.json")
+          npx wrangler versions view "$deployed_version" \
+            --config wrangler.broker.jsonc --env production --json \
+            > "$plan_dir/deployed-broker-version.json"
+          python ../scripts/validate_cloudflare_rollback.py component \
+            --component broker --expected-commit "$EXPECTED_COMMIT" \
+            --environment production \
+            --config "$plan_dir/target/server/wrangler.broker.jsonc" \
+            --version "$plan_dir/deployed-broker-version.json" \
+            --version-id "$deployed_version"
+
+      - name: Deploy the exact target replay Worker and container configuration
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: >-
+          "$RUNNER_TEMP/lean-eval-rollback/target/server/node_modules/.bin/wrangler"
+          deploy
+          --config "$RUNNER_TEMP/lean-eval-rollback/target/server/wrangler.replay.jsonc"
+          --env production
+          --keep-vars
+          --var "DEPLOYED_COMMIT:$EXPECTED_COMMIT"
+          --containers-rollout=immediate
+
+      - name: Wait for the exact production replay container configuration
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          python ../scripts/wait_replay_container_rollout.py
+          --config wrangler.replay.jsonc
+          --expected-image-config
+          "$RUNNER_TEMP/lean-eval-rollback/target/server/wrangler.replay.jsonc"
+          --environment production
+          --application lean-eval-replay-executor-replaysandbox-production
+          --attempts 30 --interval-seconds 5 --command-timeout-seconds 15
+
+      - name: Verify the newly deployed replay version and health
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          plan_dir="$RUNNER_TEMP/lean-eval-rollback"
+          npx wrangler deployments status --config wrangler.replay.jsonc \
+            --env production --json > "$plan_dir/replay-status.json"
+          deployed_version=$(python ../scripts/validate_cloudflare_rollback.py \
+            active-version --status "$plan_dir/replay-status.json")
+          npx wrangler versions view "$deployed_version" \
+            --config wrangler.replay.jsonc --env production --json \
+            > "$plan_dir/deployed-replay-version.json"
+          python ../scripts/validate_cloudflare_rollback.py component \
+            --component replay --expected-commit "$EXPECTED_COMMIT" \
+            --environment production \
+            --config "$plan_dir/target/server/wrangler.replay.jsonc" \
+            --version "$plan_dir/deployed-replay-version.json" \
+            --version-id "$deployed_version"
+          curl --fail --silent --show-error --max-time 10 \
+            --retry 12 --retry-all-errors --retry-delay 5 \
+            https://lean-eval-replay-executor.lean-eval.workers.dev/healthz \
+            > "$plan_dir/replay-health.json"
+          python ../scripts/validate_cloudflare_rollback.py health \
+            --plan "$plan_dir/plan.json" --component replay \
+            --health "$plan_dir/replay-health.json"
+          echo "Restored replay version: $deployed_version" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove rollback scratch
+        if: always()
+        run: |
+          plan_dir="$RUNNER_TEMP/lean-eval-rollback"
+          if [ -d "$plan_dir/target" ]; then
+            git worktree remove --force "$plan_dir/target"
+          fi
+          rm -rf -- "$plan_dir"

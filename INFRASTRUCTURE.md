@@ -708,14 +708,56 @@ digests are rejected.
 
 ## Recovery
 
-Rollback changes only Worker code/configuration. It does not revert GitHub
-State or other resources. Use the manual
-[`rollback-worker.yml`](.github/workflows/rollback-worker.yml) workflow with a
-reviewed version ID and the commit marker expected from that version. It runs
-under the protected production environment, performs a noninteractive Wrangler
-rollback, and verifies the complete health payload. Record the incident and
-version IDs here. Never rewrite State to match an older Worker; deploy a
-compatibility fix or append a corrective event.
+Rollback changes only the Cloudflare deployment unit. It does not revert GitHub
+State, AWS resources, releases, or other resources. Use the manual
+[`rollback-worker.yml`](.github/workflows/rollback-worker.yml) workflow with
+the reviewed broker, replay Worker/container, and intake Worker version IDs,
+plus the one full commit recorded by all three versions. The historical version
+IDs prove the target unit, but they are never activated directly: Cloudflare
+rollback can force old secret values after a rotation. Instead, the workflow
+builds and fully deploys exact target code/configuration with `--keep-vars`,
+which preserves the current secret values. Before any mutation,
+the protected production job proves the immutable dispatch tag, protected-main
+reachability, every tracked plain-text binding from that exact commit, the
+exact allowed secret/resource capability names and types, unchanged live
+resource identifiers, the active live Durable Object migration tag, and the
+replay container application. The target commit must carry a reviewed rollback
+qualification bound to its exact lifecycle-callback implementation and the
+exact schema blob on the current protected production State `main`. Any State
+commit/schema movement invalidates an old qualification until it is reviewed
+again. This matters even with intake disabled because authenticated archive,
+evaluation, and result callbacks can still append State. The target must make
+scheduled reconciliation a no-op while intake is disabled, and must track both
+production intake and replay as disabled. The pre-mutation recovery artifact records the
+original three active version IDs, hashed capability contracts, live replay
+migration tag, and a closed allowlist of effective container recovery fields.
+Raw provider version/status/container responses are not uploaded; the artifact
+contains no secret values or Worker/submission source bytes.
+
+The workflow first deploys and verifies the disabled target intake code while
+retaining current secret values, so no new submission or scheduled
+reconciliation can cross the non-atomic window. It
+then deploys the matching private broker code with the same secret-preserving
+rule. A Worker-version rollback does not change a connected Cloudflare
+Container application, so replay is restored by
+a full deploy from the exact detached target commit with an immediate container
+rollout—not by `wrangler rollback`. Before mutation, the exact registry tag is
+resolved to the frozen manifest digest. Afterward, the workflow verifies the
+new replay Worker version plus the effective image, instance size, one-instance
+limit, SSH-off state, private network, health, and frozen review digests. Every
+Worker must report 100% of traffic on its selected version; public health must
+agree with the qualified target commit.
+
+Cloudflare cannot atomically change three Workers and a Container application,
+and a full Container deploy activates Worker code before its rollout completes.
+A failure after the first mutation is therefore an incident, but intake remains
+paused. Preserve the automatically uploaded pre-state artifact, record the
+exact completed and pending version IDs, and either finish the reviewed unit or
+forward-deploy the captured last known coherent commit and container target.
+Never mix target commits to complete a partial rollback. Never rewrite State to
+match an older Worker; deploy a compatibility fix or append a corrective event.
+Record the incident, workflow run, commit, three selected version IDs, and the
+new replay version produced by the full target deploy below.
 
 | Verification / incident | Date | Result / link |
 | --- | --- | --- |
