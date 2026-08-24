@@ -69,30 +69,6 @@ export type SourceRecordIndex = Readonly<{
   canonical_record_sha256: string;
 }>;
 
-export type ResultAmendmentView = Readonly<{
-  schema_version: 1;
-  result_id: string;
-  owner_login: string;
-  declared_model: string;
-  authority_event_id: string;
-  base_problem_id: string;
-  base_statement_revision: number;
-  effective_problem_id: string;
-  effective_statement_revision: number;
-  mutation_event_id: string;
-  problem_repair: unknown;
-  applied_problem_repair: unknown;
-  retraction: unknown;
-  leaderboard_eligible: boolean;
-}>;
-
-export type InitialResultAmendmentView = ResultAmendmentView & Readonly<{
-  problem_repair: null;
-  applied_problem_repair: null;
-  retraction: null;
-  leaderboard_eligible: true;
-}>;
-
 export type ResultReleaseStatusView = Readonly<{
   schema_version: 1;
   result_id: string;
@@ -106,15 +82,6 @@ export type ResultReleaseStatusView = Readonly<{
     | "cancelled"
     | "removed";
   release_event_id: string | null;
-}>;
-
-export type InitialResultAmendmentInput = Readonly<{
-  resultId: string;
-  ownerLogin: string;
-  declaredModel: string;
-  problemId: string;
-  statementRevision: number;
-  authorityEventId: string;
 }>;
 
 function object(value: unknown, label: string): Record<string, unknown> {
@@ -227,11 +194,6 @@ export function resultIdentityPath(identifier: string): string {
 export function resultOverlayPath(identifier: string): string {
   if (!RESULT_ID.test(identifier)) throw new TypeError("result identity is invalid");
   return `views/result-overlays/${identifier.slice(3, 5)}/${identifier}.json`;
-}
-
-export function resultAmendmentPath(identifier: string): string {
-  if (!RESULT_ID.test(identifier)) throw new TypeError("result identity is invalid");
-  return `views/result-amendments/${identifier.slice(3, 5)}/${identifier}.json`;
 }
 
 export function resultReleaseStatusPath(identifier: string): string {
@@ -396,75 +358,6 @@ export function decodeSourceRecordIndex(value: unknown): SourceRecordIndex {
   };
 }
 
-export function decodeResultAmendmentView(
-  value: unknown,
-): ResultAmendmentView {
-  const data = object(value, "result amendment view");
-  exactFields(data, [
-    "applied_problem_repair",
-    "authority_event_id",
-    "base_problem_id",
-    "base_statement_revision",
-    "declared_model",
-    "effective_problem_id",
-    "effective_statement_revision",
-    "leaderboard_eligible",
-    "mutation_event_id",
-    "owner_login",
-    "problem_repair",
-    "result_id",
-    "retraction",
-    "schema_version",
-  ], "result amendment view");
-  if (
-    data.schema_version !== 1 ||
-    typeof data.result_id !== "string" ||
-    !RESULT_ID.test(data.result_id) ||
-    typeof data.owner_login !== "string" ||
-    !LOGIN.test(data.owner_login) ||
-    typeof data.declared_model !== "string" ||
-    data.declared_model.length === 0 ||
-    new TextEncoder().encode(data.declared_model).byteLength > 256 ||
-    containsControlCharacter(data.declared_model) ||
-    typeof data.authority_event_id !== "string" ||
-    !EVENT_ID.test(data.authority_event_id) ||
-    typeof data.base_problem_id !== "string" ||
-    !PROBLEM.test(data.base_problem_id) ||
-    typeof data.base_statement_revision !== "number" ||
-    !Number.isSafeInteger(data.base_statement_revision) ||
-    data.base_statement_revision < 1 ||
-    typeof data.effective_problem_id !== "string" ||
-    !PROBLEM.test(data.effective_problem_id) ||
-    typeof data.effective_statement_revision !== "number" ||
-    !Number.isSafeInteger(data.effective_statement_revision) ||
-    data.effective_statement_revision < 1 ||
-    typeof data.mutation_event_id !== "string" ||
-    !EVENT_ID.test(data.mutation_event_id) ||
-    typeof data.leaderboard_eligible !== "boolean"
-  ) {
-    throw new TypeError("result amendment view values are invalid");
-  }
-  return data as ResultAmendmentView;
-}
-
-export function decodeInitialResultAmendmentView(
-  value: unknown,
-): InitialResultAmendmentView {
-  const data = decodeResultAmendmentView(value);
-  if (
-    data.effective_problem_id !== data.base_problem_id ||
-    data.effective_statement_revision !== data.base_statement_revision ||
-    data.mutation_event_id !== data.authority_event_id ||
-    data.problem_repair !== null ||
-    data.applied_problem_repair !== null ||
-    data.retraction !== null ||
-    !data.leaderboard_eligible
-  ) {
-    throw new TypeError("initial result amendment view values are invalid");
-  }
-  return data as InitialResultAmendmentView;
-}
-
 export function decodeResultReleaseStatusView(
   value: unknown,
 ): ResultReleaseStatusView {
@@ -499,27 +392,6 @@ export function decodeResultReleaseStatusView(
     throw new TypeError("result release-status view values are invalid");
   }
   return data as ResultReleaseStatusView;
-}
-
-export function initialResultAmendmentView(
-  input: InitialResultAmendmentInput,
-): InitialResultAmendmentView {
-  return decodeInitialResultAmendmentView({
-    schema_version: 1,
-    result_id: input.resultId,
-    owner_login: input.ownerLogin,
-    declared_model: input.declaredModel,
-    authority_event_id: input.authorityEventId,
-    base_problem_id: input.problemId,
-    base_statement_revision: input.statementRevision,
-    effective_problem_id: input.problemId,
-    effective_statement_revision: input.statementRevision,
-    mutation_event_id: input.authorityEventId,
-    problem_repair: null,
-    applied_problem_repair: null,
-    retraction: null,
-    leaderboard_eligible: true,
-  });
 }
 
 export function initialResultReleaseStatusView(

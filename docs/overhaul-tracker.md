@@ -114,23 +114,22 @@ the already implemented owner status, metadata, and publication routes.
       metadata backfill without rewriting historical facts
       (`lean-eval-state#8`, merge `6ba71d2a`). The v1 public projection remains
       byte-for-byte stable and the redacted lifecycle metadata is opt-in v2.
-- [x] Add the authenticated owner retraction-request writer/API behind a dark
-      independent feature flag, including authority-derived owner verification,
-      exact idempotence, causal CAS, and redacted responses. Problem repair is
-      deliberately fail-closed pending a targeted State release-status and
-      initial-amendment index; see `docs/result-amendment-owner-api.md`.
-- [ ] Add the remaining authenticated owner writer/API for repair requests, including
-      owner verification and exact results-Git tuple/digest recomputation;
-      preserve the stable result identifier and grandfathered release policy.
+- [x] Add authenticated owner retraction- and repair-request writers behind a
+      dark independent feature flag, including authority-derived owner
+      verification, exact idempotence, causal CAS, targeted amendment and
+      release-status reads, release barriers, and redacted responses. The local
+      integration remains bound to unmerged State contract `fa4fe8f`; see
+      `docs/result-amendment-owner-api.md` for the mandatory landing rebind.
 - [ ] Add model-alias, rename, consolidation, and new-canonical-identity
       request events, authorization, materialization, collision tests, and
       lifecycle-aware public projection behavior.
 - [x] Add State problem-repair request and maintainer decision events with
       explicit revision/causation rules without rewriting accepted records
-      (`lean-eval-state#13`, merge `0c875994`). The Worker repair writer remains
-      fail-closed on the targeted release-status gap above.
+      (`lean-eval-state#13`, merge `0c875994`) and the targeted private
+      release-status contract in draft State PR `#16`.
 - [ ] Add the authenticated maintainer repair decisions after a reviewed human
-      maintainer identity boundary exists.
+      maintainer identity boundary exists, including exact results-Git
+      comparator tuple/digest recomputation.
 - [x] Add State owner-retraction request, maintainer decision/override, and
       terminal retraction events, including release and leaderboard
       consequences (`lean-eval-state#13`, merge `0c875994`), plus the dark owner

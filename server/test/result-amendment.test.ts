@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   decodeResultAmendmentView,
   initialResultAmendmentView,
+  requestedProblemRepairView,
   requestedRetractionView,
   resultAmendmentPath,
 } from "../src/result-amendment";
@@ -12,7 +13,7 @@ const AUTHORITY = "0198abcd-2222-7000-8000-000000000001";
 const REQUEST = "0198abcd-2222-7000-8000-000000000002";
 
 describe("targeted result amendment contract", () => {
-  it("constructs the exact initial and pending owner-retraction views", () => {
+  it("constructs the exact initial and pending owner-request views", () => {
     const initial = initialResultAmendmentView({
       resultId: RESULT_ID,
       ownerLogin: "alice",
@@ -25,6 +26,30 @@ describe("targeted result amendment contract", () => {
     expect(resultAmendmentPath(RESULT_ID)).toBe(
       `views/result-amendments/11/${RESULT_ID}.json`,
     );
+    expect(requestedProblemRepairView(
+      initial,
+      REQUEST,
+      "2026-08-20T06:07:09.000Z",
+      "two_plus_three",
+      2,
+      "wrong_problem_revision",
+    )).toEqual({
+      ...initial,
+      mutation_event_id: REQUEST,
+      problem_repair: {
+        revision: 1,
+        status: "pending",
+        request_event_id: REQUEST,
+        requested_at: "2026-08-20T06:07:09.000Z",
+        corrected_problem_id: "two_plus_three",
+        corrected_statement_revision: 2,
+        decision_event_id: null,
+        decided_at: null,
+        reviewer_login: null,
+        reason_code: "wrong_problem_revision",
+        comparator_evidence: null,
+      },
+    });
     expect(requestedRetractionView(
       initial,
       REQUEST,

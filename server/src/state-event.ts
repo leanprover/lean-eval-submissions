@@ -222,6 +222,7 @@ export type ResultRetractionRequestedEvent = Omit<EventEnvelope, "causation_even
 export type WritableResultOwnerEvent =
   | ResultClaimedEvent
   | ResultMetadataBackfilledEvent
+  | ResultProblemRepairRequestedEvent
   | ResultRetractionRequestedEvent;
 
 /** State events the public submission Worker is authorized to append. */

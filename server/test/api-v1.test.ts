@@ -32,6 +32,7 @@ import {
   StateUpdateOutcomeUnknownError,
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
+  type ResultProblemRepairRequest,
   type ResultRetractionRequest,
 } from "../src/github-state";
 import {
@@ -107,6 +108,7 @@ class MemoryState implements StateAccess {
   head = "d".repeat(40);
   readonly legacyClaims: LegacyResultClaimRequest[] = [];
   readonly legacyBackfills: LegacyResultBackfillRequest[] = [];
+  readonly problemRepairRequests: ResultProblemRepairRequest[] = [];
   readonly retractionRequests: ResultRetractionRequest[] = [];
   contractAssertions = 0;
 
@@ -275,6 +277,21 @@ class MemoryState implements StateAccess {
       resultId: request.resultId,
       mutationEventId: request.eventId,
       retractionRevision: 1,
+    });
+  }
+
+  requestResultProblemRepair(request: ResultProblemRepairRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    repairRevision: number;
+  }> {
+    this.problemRepairRequests.push(request);
+    return Promise.resolve({
+      created: this.created,
+      resultId: request.resultId,
+      mutationEventId: request.eventId,
+      repairRevision: 1,
     });
   }
 }
@@ -2210,7 +2227,7 @@ describe("authenticated legacy result owner routes", () => {
     expect(state.retractionRequests).toHaveLength(0);
   });
 
-  it("keeps problem repair authenticated but fails closed before any State write", async () => {
+  it("records a redacted owner problem-repair request while intake stays disabled", async () => {
     const state = new MemoryState();
     const identifier = `r2_${"1".repeat(64)}`;
     const request = (authorization?: string) => new Request(
@@ -2238,9 +2255,26 @@ describe("authenticated legacy result owner routes", () => {
       LIFECYCLE,
       { now: () => NOW_MS, state },
     );
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: "repair_state_unavailable" });
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    expect(body).toEqual({
+      result_id: identifier,
+      repair_revision: 1,
+      status: "problem_repair_requested",
+    });
+    expect(JSON.stringify(body)).not.toContain("wrong_problem_revision");
+    expect(JSON.stringify(body)).not.toContain("alice");
+    expect(state.problemRepairRequests).toEqual([{
+      eventId: "0198abcd-3333-7000-8000-000000000013",
+      occurredAt: new Date(NOW_MS).toISOString(),
+      resultId: identifier,
+      ownerLogin: "alice",
+      correctedProblemId: "corrected_problem",
+      correctedStatementRevision: 2,
+      reasonCode: "wrong_problem_revision",
+    }]);
     expect(state.retractionRequests).toHaveLength(0);
+    expect(enabledEnv.INTAKE_ENABLED).toBe("false");
   });
 
   it("does not treat the lifecycle machine token as maintainer authority", async () => {

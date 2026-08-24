@@ -3,18 +3,20 @@ import { describe, expect, it } from "vitest";
 import canonicalizationVector from "./fixtures/result-owner-canonicalization-vectors-v1.json";
 import { GitHubProvider } from "../src/github-provider";
 import {
+  decodeInitialResultAmendmentView,
+  initialResultAmendmentView,
+  resultAmendmentPath,
+} from "../src/result-amendment";
+import {
   backfilledOverlay,
   canonicalJson,
   claimedOverlay,
-  decodeInitialResultAmendmentView,
   decodeResultReleaseStatusView,
   decodeResultIdentityGuard,
   decodeResultOverlay,
   decodeSourceRecordIndex,
-  initialResultAmendmentView,
   initialResultReleaseStatusView,
   metadataAlreadyEqual,
-  resultAmendmentPath,
   resultId,
   resultReleaseStatusPath,
   sha256Hex,
@@ -136,6 +138,7 @@ describe("legacy result owner contracts", () => {
       problemId: VERIFIED.baseResult.problem_id,
       statementRevision: VERIFIED.baseResult.statement_revision,
       authorityEventId: EVENT_ID,
+      mutationEventId: EVENT_ID,
     });
     expect(resultAmendmentPath(VERIFIED.resultId)).toBe(
       `views/result-amendments/11/${VERIFIED.resultId}.json`,
@@ -184,6 +187,7 @@ describe("legacy result owner contracts", () => {
       problemId: VERIFIED.baseResult.problem_id,
       statementRevision: VERIFIED.baseResult.statement_revision,
       authorityEventId: EVENT_ID,
+      mutationEventId: EVENT_ID,
     });
     expect(() => decodeInitialResultAmendmentView({
       ...amendment,

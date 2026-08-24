@@ -39,6 +39,7 @@ import { browserPage, browserScript } from "./browser-ui";
 import {
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
+  type ResultProblemRepairRequest,
   type ResultRetractionRequest,
   type GitHubFetch,
   GitHubStateError,
@@ -204,6 +205,12 @@ export type StateAccess = Readonly<{
     resultId: string;
     mutationEventId: string;
     retractionRevision: number;
+  }>;
+  requestResultProblemRepair(request: ResultProblemRepairRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    repairRevision: number;
   }>;
 }>;
 export type ApiDependencies = Readonly<{
@@ -1740,10 +1747,23 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
   const problemRepairMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/problem-repairs$/.exec(url.pathname);
   if (request.method === "POST" && problemRepairMatch?.[1]) {
     requireResultAmendmentOwnerApi(env);
-    await session(request, env, dependencies);
-    idempotencyEventId(request);
-    decodeProblemRepairRequest(await readJson(request));
-    return json({ error: "repair_state_unavailable" }, 503);
+    const authenticated = await session(request, env, dependencies);
+    const eventId = idempotencyEventId(request);
+    const input = decodeProblemRepairRequest(await readJson(request));
+    const outcome = await state(env, dependencies).requestResultProblemRepair({
+      eventId,
+      occurredAt: canonicalTimestamp(now),
+      resultId: problemRepairMatch[1],
+      ownerLogin: authenticated.login,
+      correctedProblemId: input.corrected_problem_id,
+      correctedStatementRevision: input.corrected_statement_revision,
+      reasonCode: input.reason_code,
+    });
+    return json({
+      result_id: outcome.resultId,
+      repair_revision: outcome.repairRevision,
+      status: outcome.created ? "problem_repair_requested" : "problem_repair_already_requested",
+    }, outcome.created ? 201 : 200);
   }
   const retractionMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/retractions$/.exec(url.pathname);
   if (request.method === "POST" && retractionMatch?.[1]) {

@@ -4,6 +4,7 @@ import {
   type WritableResultLifecycleEvent,
   type ResultClaimedEvent,
   type ResultMetadataBackfilledEvent,
+  type ResultProblemRepairRequestedEvent,
   type ResultRecordedEvent,
   type ResultRetractionRequestedEvent,
   type WritableSubmissionLifecycleEvent,
@@ -13,6 +14,7 @@ import {
 import {
   decodeResultAmendmentView,
   initialResultAmendmentView,
+  requestedProblemRepairView,
   requestedRetractionView,
   resultAmendmentPath,
   type ResultAmendmentView,
@@ -24,15 +26,12 @@ import {
   claimedOverlay,
   claimedSourceIndex,
   decodeResultIdentityGuard,
-  decodeResultAmendmentView,
   decodeResultReleaseStatusView,
   decodeResultOverlay,
   decodeSourceRecordIndex,
-  initialResultAmendmentView,
   initialResultReleaseStatusView,
   metadataAlreadyEqual,
   recordedGuard,
-  resultAmendmentPath,
   resultIdentityPath,
   resultOverlayPath,
   resultReleaseStatusPath,
@@ -42,6 +41,7 @@ import {
   type LegacyResultBase,
   type MetadataProvenance,
   type ResultOverlay,
+  type ResultReleaseStatusView,
   type VerifiedLegacyResult,
 } from "./result-owner";
 import type { ProductionMetadata } from "./api-contract";
@@ -127,6 +127,16 @@ export type ResultRetractionRequest = Readonly<{
   occurredAt: string;
   resultId: string;
   ownerLogin: string;
+  reasonCode: string;
+}>;
+
+export type ResultProblemRepairRequest = Readonly<{
+  eventId: string;
+  occurredAt: string;
+  resultId: string;
+  ownerLogin: string;
+  correctedProblemId: string;
+  correctedStatementRevision: number;
   reasonCode: string;
 }>;
 
@@ -391,6 +401,27 @@ function sameLogicalLegacyResult(left: LegacyResultBase, right: LegacyResultBase
 function amendmentMarkerMatches(view: ResultAmendmentView, event: StateEvent): boolean {
   if (event.subject_id !== view.result_id || event.event_id !== view.mutation_event_id) return false;
   const payload = event.payload as Readonly<Record<string, unknown>>;
+  if (event.event_id === view.authority_event_id) {
+    const pristine =
+      view.problem_repair === null &&
+      view.applied_problem_repair === null &&
+      view.retraction === null &&
+      view.leaderboard_eligible &&
+      view.effective_problem_id === view.base_problem_id &&
+      view.effective_statement_revision === view.base_statement_revision;
+    if (!pristine) return false;
+    if (event.event_type === "result.recorded") {
+      return payload.problem_id === view.base_problem_id &&
+        payload.statement_revision === view.base_statement_revision;
+    }
+    if (event.event_type === "result.claimed") {
+      return event.actor.login === view.owner_login &&
+        payload.declared_model === view.declared_model &&
+        payload.problem_id === view.base_problem_id &&
+        payload.statement_revision === view.base_statement_revision;
+    }
+    return false;
+  }
   if (event.event_type === "result.problem_repair_requested") {
     return event.actor.login === view.owner_login &&
       view.problem_repair?.status === "pending" &&
@@ -1204,6 +1235,7 @@ export class GitHubStateRepository {
       problemId: result.payload.problem_id,
       statementRevision: result.payload.statement_revision,
       authorityEventId: result.event_id,
+      mutationEventId: result.event_id,
     });
     const releaseStatusPath = resultReleaseStatusPath(result.subject_id);
     const releaseStatusView = initialResultReleaseStatusView(
@@ -1331,14 +1363,15 @@ export class GitHubStateRepository {
     snapshot: BranchSnapshot,
   ): Promise<{
     view: ResultAmendmentView;
-    tracked: boolean;
     mutationEvent: StateEvent;
     overlay: ResultOverlay | null;
+    releaseStatus: ResultReleaseStatusView;
   }> {
     const identityPath = resultIdentityPath(resultId);
     const amendmentPath = resultAmendmentPath(resultId);
     const overlayPath = resultOverlayPath(resultId);
-    const [guard, trackedView, overlay] = await Promise.all([
+    const releaseStatusPath = resultReleaseStatusPath(resultId);
+    const [guard, trackedView, overlay, releaseStatus] = await Promise.all([
       readResultOwnerDocumentAt(
         this.#config,
         this.#fetcher,
@@ -1359,6 +1392,13 @@ export class GitHubStateRepository {
         overlayPath,
         snapshot.headSha,
         decodeResultOverlay,
+      ),
+      readResultOwnerDocumentAt(
+        this.#config,
+        this.#fetcher,
+        releaseStatusPath,
+        snapshot.headSha,
+        decodeResultReleaseStatusView,
       ),
     ]);
     if (guard?.result_id !== resultId) {
@@ -1390,7 +1430,7 @@ export class GitHubStateRepository {
         ownerLogin: overlay.owner_login,
         declaredModel: overlay.base_result.declared_model,
         authorityEventId: authority.event_id,
-        mutationEventId: overlay.mutation_event_id,
+        mutationEventId: authority.event_id,
         problemId: overlay.base_result.problem_id,
         statementRevision: overlay.base_result.statement_revision,
       });
@@ -1425,7 +1465,16 @@ export class GitHubStateRepository {
       });
     }
 
-    const view = trackedView ?? initial;
+    if (trackedView === null) {
+      throw new StateEventConflictError(amendmentPath);
+    }
+    if (
+      releaseStatus?.result_id !== resultId ||
+      releaseStatus.authority_event_id !== initial.authority_event_id
+    ) {
+      throw new StateEventConflictError(releaseStatusPath);
+    }
+    const view = trackedView;
     if (
       view.result_id !== initial.result_id ||
       view.owner_login !== initial.owner_login ||
@@ -1445,21 +1494,140 @@ export class GitHubStateRepository {
     if (mutationEvent.subject_id !== resultId) {
       throw new StateEventConflictError(amendmentPath);
     }
-    if (trackedView === null && mutationEvent.event_id !== initial.mutation_event_id) {
-      throw new StateEventConflictError(amendmentPath);
-    }
-    if (trackedView !== null && !amendmentMarkerMatches(view, mutationEvent)) {
+    if (!amendmentMarkerMatches(view, mutationEvent)) {
       throw new StateEventConflictError(amendmentPath);
     }
     if (
-      trackedView !== null &&
       mutationEvent.event_type === "result.metadata_backfilled" &&
       (overlay?.mutation_event_id !== mutationEvent.event_id ||
         mutationEvent.actor.login !== view.owner_login)
     ) {
       throw new StateEventConflictError(amendmentPath);
     }
-    return { view, tracked: trackedView !== null, mutationEvent, overlay };
+    return { view, mutationEvent, overlay, releaseStatus };
+  }
+
+  async requestResultProblemRepair(request: ResultProblemRepairRequest): Promise<{
+    commit: string;
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    repairRevision: number;
+  }> {
+    const requestedEventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
+    const amendmentPath = resultAmendmentPath(request.resultId);
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await this.#resultOwnerSnapshot();
+      const [{ view, mutationEvent, releaseStatus }, requestedEventEntry] = await Promise.all([
+        this.#resultAmendmentAt(request.resultId, snapshot),
+        readPathAt(this.#config, this.#fetcher, requestedEventPath, snapshot.headSha),
+      ]);
+      if (view.owner_login !== request.ownerLogin) {
+        throw new ResultOwnerStateError(404, "result authority was not found");
+      }
+      if (requestedEventEntry.found) {
+        let existing: StateEvent;
+        try {
+          validateStateEvent(requestedEventEntry.value);
+          existing = requestedEventEntry.value;
+        } catch {
+          throw new StateEventConflictError(requestedEventPath);
+        }
+        if (
+          existing.event_type !== "result.problem_repair_requested" ||
+          existing.event_id !== request.eventId ||
+          existing.subject_id !== request.resultId ||
+          existing.actor.login !== request.ownerLogin ||
+          existing.payload.corrected_problem_id !== request.correctedProblemId ||
+          existing.payload.corrected_statement_revision !== request.correctedStatementRevision ||
+          existing.payload.reason_code !== request.reasonCode ||
+          view.problem_repair?.status !== "pending" ||
+          view.problem_repair.request_event_id !== request.eventId ||
+          view.problem_repair.revision !== existing.payload.repair_revision ||
+          view.mutation_event_id !== request.eventId
+        ) {
+          throw new StateEventConflictError(requestedEventPath);
+        }
+        return {
+          commit: snapshot.headSha,
+          created: false,
+          resultId: request.resultId,
+          mutationEventId: request.eventId,
+          repairRevision: existing.payload.repair_revision,
+        };
+      }
+      if (
+        view.problem_repair?.status === "pending" ||
+        view.retraction?.status === "pending" ||
+        view.retraction?.status === "approved" ||
+        view.retraction?.status === "retracted" ||
+        !view.leaderboard_eligible
+      ) {
+        throw new ResultOwnerStateError(409, "result has a conflicting amendment state");
+      }
+      if (new Set(["running", "published", "removed"]).has(releaseStatus.status)) {
+        throw new ResultOwnerStateError(409, "result release state forbids problem repair");
+      }
+      if (
+        request.correctedProblemId === view.effective_problem_id &&
+        request.correctedStatementRevision === view.effective_statement_revision
+      ) {
+        throw new ResultOwnerStateError(409, "result problem repair must change the effective problem");
+      }
+      if (
+        request.eventId <= view.mutation_event_id ||
+        Date.parse(request.occurredAt) <= Date.parse(mutationEvent.occurred_at)
+      ) {
+        throw new ResultOwnerStateError(409, "result problem repair request does not follow the current mutation");
+      }
+      const revision = (view.problem_repair?.revision ?? 0) + 1;
+      const event: ResultProblemRepairRequestedEvent = {
+        schema_version: 1,
+        event_id: request.eventId,
+        event_type: "result.problem_repair_requested",
+        occurred_at: request.occurredAt,
+        subject_id: request.resultId,
+        causation_event_id: view.mutation_event_id,
+        actor: { kind: "github", login: request.ownerLogin },
+        payload: {
+          repair_revision: revision,
+          corrected_problem_id: request.correctedProblemId,
+          corrected_statement_revision: request.correctedStatementRevision,
+          reason_code: request.reasonCode,
+        },
+      };
+      validateStateEvent(event);
+      const nextView = requestedProblemRepairView(
+        view,
+        request.eventId,
+        request.occurredAt,
+        request.correctedProblemId,
+        request.correctedStatementRevision,
+        request.reasonCode,
+      );
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        [event],
+        [{ path: amendmentPath, value: nextView }],
+        `Request owner problem repair for ${request.resultId}`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return {
+          commit,
+          created: true,
+          resultId: request.resultId,
+          mutationEventId: request.eventId,
+          repairRevision: revision,
+        };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) {
+        throw new ResultOwnerStateError(409, "State branch kept changing during problem repair request");
+      }
+      await pause(attempt);
+    }
+    throw new Error("unreachable result problem repair request attempt");
   }
 
   async requestResultRetraction(request: ResultRetractionRequest): Promise<{
@@ -1736,6 +1904,7 @@ export class GitHubStateRepository {
         problemId: verified.baseResult.problem_id,
         statementRevision: verified.baseResult.statement_revision,
         authorityEventId: request.eventId,
+        mutationEventId: request.eventId,
       });
       const releaseStatus = initialResultReleaseStatusView(
         verified.resultId,
@@ -1786,7 +1955,7 @@ export class GitHubStateRepository {
         this.#resultAmendmentAt(request.resultId, snapshot),
         readPathAt(this.#config, this.#fetcher, requestedEventPath, snapshot.headSha),
       ]);
-      const { overlay, tracked, view } = context;
+      const { overlay, view } = context;
       if (
         overlay?.result_id !== request.resultId ||
         overlay.owner_login !== request.ownerLogin ||
@@ -1866,9 +2035,10 @@ export class GitHubStateRepository {
         request.occurredAt,
         request.productionMetadata,
       );
-      const nextAmendment = tracked
-        ? decodeResultAmendmentView({ ...view, mutation_event_id: request.eventId })
-        : null;
+      const nextAmendment = decodeResultAmendmentView({
+        ...view,
+        mutation_event_id: request.eventId,
+      });
       const commit = await createCommit(
         this.#config,
         this.#fetcher,
@@ -1876,7 +2046,7 @@ export class GitHubStateRepository {
         [event],
         [
           { path: overlayPath, value: nextOverlay },
-          ...(nextAmendment === null ? [] : [{ path: amendmentPath, value: nextAmendment }]),
+          { path: amendmentPath, value: nextAmendment },
         ],
         `Backfill legacy result metadata ${request.resultId}`,
       );

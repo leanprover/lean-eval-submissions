@@ -2,13 +2,13 @@
 
 The submission Worker contains an authenticated, feature-disabled owner API for
 the append-only result amendment contract at State commit
-`4b8dcdf0a3d03749f51bef23807eeb1d00c43b72`.
+`fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f`.
 
 Both staging and production keep:
 
 ```text
 RESULT_AMENDMENT_OWNER_API_ENABLED=false
-RESULT_OWNER_STATE_CONTRACT_COMMIT=4b8dcdf0a3d03749f51bef23807eeb1d00c43b72
+RESULT_OWNER_STATE_CONTRACT_COMMIT=fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f
 ```
 
 The gate is independent of submission intake and the legacy claim/backfill
@@ -35,14 +35,18 @@ current mutation event at one protected State commit. The authenticated login
 must equal the authority-derived owner. Missing and wrong-owner results both
 return 404.
 
-The writer appends `result.retraction_requested` and refreshes only
-`views/result-amendments/<prefix>/<result-id>.json` in one non-forced
-compare-and-swap commit. A pending repair, pending/approved/terminal retraction,
-stale mutation marker, non-increasing UUIDv7, changed same-key request, forged
-view, or repeated causal conflict fails closed. An exact same-key replay returns
-the original revision without another write. Responses expose only result ID,
-revision, and status; owner login, reason, private comparator evidence, source
-locators, and State commit are not returned.
+The writer reads both targeted amendment and release-status documents at the
+same protected State commit. It appends `result.retraction_requested` and
+refreshes only `views/result-amendments/<prefix>/<result-id>.json` in one
+non-forced compare-and-swap commit. The release-status document is required,
+authority-bound, and deliberately left byte-for-byte unchanged: requesting a
+withdrawal does not itself schedule, cancel, publish, or remove a release. A
+pending repair, pending/approved/terminal retraction, stale mutation marker,
+non-increasing UUIDv7, changed same-key request, missing or forged targeted
+view, or repeated causal conflict fails closed. An exact same-key replay
+returns the original revision without another write. Responses expose only
+result ID, revision, and status; owner login, reason, private comparator
+evidence, source locators, release state, and State commit are not returned.
 
 Approval, rejection, maintainer override, and terminal retraction are not
 implemented here. The existing lifecycle callback bearer token identifies an
@@ -50,34 +54,72 @@ automation client, not a human maintainer, and cannot safely authenticate the
 public `reviewer_login` required by State. A future maintainer API needs a
 reviewed identity/role boundary and separate least-privilege feature gate.
 
-## Problem repair request: intentionally unavailable
+## Owner problem repair request
 
 The authenticated route and closed request decoder exist at:
 
 ```http
 POST /api/v1/results/<r2_id>/problem-repairs
+Authorization: Bearer <owner session>
+Idempotency-Key: <lowercase UUIDv7>
+Content-Type: application/json
+
+{
+  "corrected_problem_id":"two_plus_three",
+  "corrected_statement_revision":2,
+  "reason_code":"wrong_problem_revision"
+}
 ```
 
-When the dark feature gate is enabled in tests it returns
-`503 {"error":"repair_state_unavailable"}` without a State write. State forbids
-a repair request once release is running, published, or removed. Its current
-targeted amendment view does not carry release status and is absent before a
-result's first amendment; the submission view also does not track result
-release state. A full event-tree scan would be an expensive new trust boundary,
-so the Worker does not guess.
+The Worker derives owner authority and the next consecutive repair revision;
+the caller cannot choose a parent or revision. Both targeted documents must
+exist, decode under their closed schemas, name the requested result, and bind
+the same immutable `result.recorded` or `result.claimed` authority event. The
+request must change the current effective problem tuple. Pending amendment
+work, terminal retraction, a stale mutation marker, or a release status of
+`running`, `published`, or `removed` returns 409. `not_scheduled`, `scheduled`,
+`failed`, and `cancelled` states remain eligible for maintainer review before
+another release run.
 
-The next State contract must provide a protected-main-derived, targeted,
-immutable view for every result that binds at least:
+A successful transaction appends `result.problem_repair_requested` and
+replaces only the targeted amendment view. It does not edit the release-status
+view. Losing the compare-and-swap to a release transition or another amendment
+restarts the complete protected-head read; the retry cannot append against a
+stale release marker. Exact same-key replays are read-only successes, while a
+changed body at an occupied event path is an idempotency conflict.
 
-- result ID, authority event, owner, declared model, base/effective problem
-  tuple, and shared mutation marker;
-- current repair and retraction revisions/pending state;
-- current release status and the release event proving it; and
-- exact materializer/schema/validator parity suitable for a credentialed CAS
-  writer.
+This route only records the owner's proposal. Applied/rejected repair decisions
+still require a separately reviewed maintainer identity boundary and the exact
+comparator evidence described by State.
 
-Only after that contract is independently reviewed and pinned may the repair
-route construct `result.problem_repair_requested`.
+## Temporary State binding and final rebind
+
+`fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f` is a local, unmerged State
+contract anchor. Before any push or deployment, bind this branch to the landed
+protected State commit and re-run qualification. The complete rebind surface is:
+
+- `server/src/result-owner.ts`: `RESULT_OWNER_STATE_CONTRACT_COMMIT`;
+- `server/src/github-state.ts`: every path/blob pair in
+  `RESULT_OWNER_CONTRACT_BLOBS`, including the release-status schema and
+  materializer;
+- `server/wrangler.jsonc` for both environments and the generated
+  `server/worker-configuration.d.ts`;
+- both exact contract checks in `.github/workflows/deploy-worker.yml`;
+- `.audit/cloudflare-rollback-qualification-v1.json`, including
+  `state_main_commit` and the regenerated callback-contract digest;
+- `docs/legacy-result-owner-api.md`, this document, and every exact fixture in
+  `server/test/{api-v1,github-state,index}.test.ts`,
+  `tests/test_validate_cloudflare_rollback.py`, and
+  `tests/test_worker_deployment_workflow.py`.
+
+Use
+`rg --hidden --glob '!.git/**' -l 'fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f'`
+to prove that no temporary anchor remains, including the deployment workflow
+and audit qualification. Separately compare every contract blob in the Worker
+and its two proof tests against `git ls-tree` at the landed State commit. A
+merge commit may retain the `fa4fe8f...` ancestor only when every pinned blob
+is still exact; otherwise both the commit anchor and affected blob IDs must
+change together.
 
 ## Operational invariants
 

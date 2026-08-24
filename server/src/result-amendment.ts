@@ -79,6 +79,13 @@ export type ResultAmendmentView = Readonly<{
   leaderboard_eligible: boolean;
 }>;
 
+export type InitialResultAmendmentView = ResultAmendmentView & Readonly<{
+  problem_repair: null;
+  applied_problem_repair: null;
+  retraction: null;
+  leaderboard_eligible: true;
+}>;
+
 function object(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
     throw new TypeError(`${label} must be an object`);
@@ -344,6 +351,24 @@ export function decodeResultAmendmentView(value: unknown): ResultAmendmentView {
   return { ...data, problem_repair: problemRepair, applied_problem_repair: appliedRepair, retraction } as ResultAmendmentView;
 }
 
+export function decodeInitialResultAmendmentView(
+  value: unknown,
+): InitialResultAmendmentView {
+  const data = decodeResultAmendmentView(value);
+  if (
+    data.effective_problem_id !== data.base_problem_id ||
+    data.effective_statement_revision !== data.base_statement_revision ||
+    data.mutation_event_id !== data.authority_event_id ||
+    data.problem_repair !== null ||
+    data.applied_problem_repair !== null ||
+    data.retraction !== null ||
+    !data.leaderboard_eligible
+  ) {
+    throw new TypeError("initial result amendment view values are invalid");
+  }
+  return data as InitialResultAmendmentView;
+}
+
 export function initialResultAmendmentView(input: Readonly<{
   resultId: string;
   ownerLogin: string;
@@ -352,8 +377,8 @@ export function initialResultAmendmentView(input: Readonly<{
   mutationEventId: string;
   problemId: string;
   statementRevision: number;
-}>): ResultAmendmentView {
-  return decodeResultAmendmentView({
+}>): InitialResultAmendmentView {
+  return decodeInitialResultAmendmentView({
     schema_version: 1,
     result_id: input.resultId,
     owner_login: input.ownerLogin,
@@ -368,6 +393,34 @@ export function initialResultAmendmentView(input: Readonly<{
     applied_problem_repair: null,
     retraction: null,
     leaderboard_eligible: true,
+  });
+}
+
+export function requestedProblemRepairView(
+  current: ResultAmendmentView,
+  eventId: string,
+  occurredAt: string,
+  correctedProblemId: string,
+  correctedStatementRevision: number,
+  reasonCode: string,
+): ResultAmendmentView {
+  const revision = (current.problem_repair?.revision ?? 0) + 1;
+  return decodeResultAmendmentView({
+    ...current,
+    mutation_event_id: eventId,
+    problem_repair: {
+      revision,
+      status: "pending",
+      request_event_id: eventId,
+      requested_at: occurredAt,
+      corrected_problem_id: correctedProblemId,
+      corrected_statement_revision: correctedStatementRevision,
+      decision_event_id: null,
+      decided_at: null,
+      reviewer_login: null,
+      reason_code: reasonCode,
+      comparator_evidence: null,
+    },
   });
 }
 
