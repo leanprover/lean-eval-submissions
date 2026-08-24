@@ -549,6 +549,14 @@ jobs:
           test -n "$oidc_token"
           rm -f "$RUNNER_TEMP/oidc.json"
           for number in 1 2; do
+            if [ "$number" -eq 2 ]; then
+              # destroy() confirms container termination before probe one
+              # returns, but the same Durable Object ID can briefly remain on
+              # the terminating route. Preserve the same-nonce recreation
+              # proof while allowing that route to converge before the first
+              # write into the replacement container.
+              sleep 30
+            fi
             set +e
             probe_http_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
               --max-time 480 --max-filesize 16384 --write-out '%{http_code}' \

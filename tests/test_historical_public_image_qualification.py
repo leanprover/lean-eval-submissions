@@ -316,6 +316,9 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
             workflow,
         )
         self.assertIn('python "$FAILURE_SANITIZER" "$RUNNER_TEMP/probe-response.json"', workflow)
+        self.assertIn('if [ "$number" -eq 2 ]; then', workflow)
+        self.assertEqual(workflow.count("sleep 30"), 1)
+        self.assertIn("Preserve the same-nonce recreation", workflow)
         self.assertIn("if: always()", workflow)
         self.assertIn("write_diagnostic evidence_invalid 2 200", workflow)
         self.assertIn('local -a arguments=(', workflow)
