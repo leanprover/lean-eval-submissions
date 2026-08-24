@@ -306,7 +306,17 @@ the already implemented owner status, metadata, and publication routes.
       adapter. This item stays open until the real historical input artifacts
       exist, an approved exact-image runner produces those records, and the series runs
       over the complete reviewed historical corpus and disagreements are
-      adjudicated; the fixture and one-result smoke are non-authoritative.
+      adjudicated; the fixture and one-result smoke are non-authoritative. The
+      proposed closed runner wire contract now specifies raw lean4export 3.1.0
+      NDJSON, canonical Mathgraph config bytes/argv, and structured transcript
+      and attestation objects for a future runner. The current record adapter
+      does not consume it. Its semantic validator deliberately blocks candidate
+      exit `1`, which the pinned producer uses for both rejection-like errors
+      and internal failure; a structured producer change is still required
+      before a `rejected` corpus outcome can be recorded safely. Runner
+      integration must also supply the series and inventory identities needed
+      to derive the corpus attempt ID; version 1 marks that carried label
+      explicitly unbound.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
       window.
 - [x] Complete leaderboard preview review and cut over with rollback retained

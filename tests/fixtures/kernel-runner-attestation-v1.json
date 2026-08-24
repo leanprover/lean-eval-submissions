@@ -1,0 +1,24 @@
+{
+  "attempt_id": "kca1_6666666666666666666666666666666666666666666666666666666666666666",
+  "input_sha256": "7d1ca64c0b12707ed286aab6fefbd3fde2301baf72712e83bcc4981105ef1afd",
+  "invocation_sha256": "9b627b0624116d70afcf3feee8366c745815410a41f49d224a128dc4f95562a5",
+  "isolation": {
+    "credentials_absent": true,
+    "destroyed": true,
+    "fresh_instance": true,
+    "input_read_only": true,
+    "network_disabled": true
+  },
+  "kind": "kernel_runner_attestation",
+  "runner": {
+    "architecture": "x86_64",
+    "commit": "8888888888888888888888888888888888888888",
+    "image_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+    "image_qualification": "unqualified",
+    "operating_system": "ubuntu-24.04",
+    "repository": "leanprover/lean-eval-submissions"
+  },
+  "schema_version": 1,
+  "source_free": true,
+  "transcript_sha256": "2d700dd64a62396ce973e1b21f175ea7b936acccad623b72e771219fe6eb365e"
+}

@@ -1,0 +1,12 @@
+{
+  "challenge_module": "Challenge",
+  "enable_nanoda": false,
+  "permitted_axioms": [
+    "Classical.choice",
+    "propext"
+  ],
+  "solution_module": "Solution",
+  "theorem_names": [
+    "two_plus_two"
+  ]
+}

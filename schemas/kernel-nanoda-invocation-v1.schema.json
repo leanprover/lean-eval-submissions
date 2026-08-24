@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/kernel-nanoda-invocation-v1.schema.json",
+  "title": "Fixed Mathgraph nanoda-compatible invocation version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "attempt_id", "attempt_identity_qualification", "input_sha256", "export_metadata_sha256", "checker", "configuration", "configuration_sha256", "configuration_path", "input_path", "argv", "environment", "resource_limits", "outcome_protocol"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "kernel_nanoda_invocation"},
+    "attempt_id": {"type": "string", "pattern": "^kca1_[0-9a-f]{64}$"},
+    "attempt_identity_qualification": {"const": "unbound"},
+    "input_sha256": {"$ref": "#/$defs/digest"},
+    "export_metadata_sha256": {"$ref": "#/$defs/digest"},
+    "checker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "repository", "commit", "binary_sha256", "binary_qualification", "executable", "protocol"],
+      "properties": {
+        "name": {"const": "mathgraph"},
+        "repository": {"const": "metalogiclabs/mathgraph-lean-kernel"},
+        "commit": {"const": "3d7585c21242f29fdaa48ae9a16e16c6afe42238"},
+        "binary_sha256": {"$ref": "#/$defs/digest"},
+        "binary_qualification": {"const": "unqualified"},
+        "executable": {"const": "/opt/lean-eval/bin/sokonanoda"},
+        "protocol": {"const": "nanoda_config_file_v1"}
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["use_stdin", "export_file_path", "permitted_axioms", "unpermitted_axiom_hard_error", "nat_extension", "string_extension"],
+      "properties": {
+        "use_stdin": {"const": false},
+        "export_file_path": {"const": "/run/lean-eval/solution-export.ndjson"},
+        "permitted_axioms": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_']*(?:\\.[A-Za-z_][A-Za-z0-9_']*)*$"}},
+        "unpermitted_axiom_hard_error": {"const": true},
+        "nat_extension": {"const": true},
+        "string_extension": {"const": true}
+      }
+    },
+    "configuration_sha256": {"$ref": "#/$defs/digest"},
+    "configuration_path": {"const": "/run/lean-eval/nanoda-config.json"},
+    "input_path": {"const": "/run/lean-eval/solution-export.ndjson"},
+    "argv": {"const": ["/opt/lean-eval/bin/sokonanoda", "/run/lean-eval/nanoda-config.json"]},
+    "environment": {"const": {}},
+    "resource_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wall_timeout_ms", "max_memory_bytes"],
+      "properties": {
+        "wall_timeout_ms": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "max_memory_bytes": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+      }
+    },
+    "outcome_protocol": {
+      "const": {
+        "name": "mathgraph_nanoda_exit_v1",
+        "accepted_exit_code": 0,
+        "declined_exit_code": 2,
+        "ambiguous_exit_codes": [1],
+        "rejected_exit_codes": [],
+        "source_path": "src/main.rs",
+        "source_sha256": "c38ff157412ff9d494c282cf47d9e5059ab35b32c35dc6f74548f9e40c5be166",
+        "blocking_reason": "candidate_exit_1_conflates_rejection_and_internal_failure"
+      }
+    }
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/kernel-runner-attestation-v1.schema.json",
+  "title": "Independent-kernel source-free runner attestation version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "attempt_id", "input_sha256", "invocation_sha256", "transcript_sha256", "runner", "isolation", "source_free"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "kernel_runner_attestation"},
+    "attempt_id": {"type": "string", "pattern": "^kca1_[0-9a-f]{64}$"},
+    "input_sha256": {"$ref": "#/$defs/digest"},
+    "invocation_sha256": {"$ref": "#/$defs/digest"},
+    "transcript_sha256": {"$ref": "#/$defs/digest"},
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "image_digest", "image_qualification", "architecture", "operating_system"],
+      "properties": {
+        "repository": {"const": "leanprover/lean-eval-submissions"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "image_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "image_qualification": {"const": "unqualified"},
+        "architecture": {"const": "x86_64"},
+        "operating_system": {"const": "ubuntu-24.04"}
+      }
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fresh_instance", "network_disabled", "credentials_absent", "input_read_only", "destroyed"],
+      "properties": {
+        "fresh_instance": {"const": true},
+        "network_disabled": {"const": true},
+        "credentials_absent": {"const": true},
+        "input_read_only": {"const": true},
+        "destroyed": {"const": true}
+      }
+    },
+    "source_free": {"const": true}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

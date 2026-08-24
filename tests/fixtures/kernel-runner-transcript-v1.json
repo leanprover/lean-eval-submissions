@@ -1,0 +1,27 @@
+{
+  "attempt_id": "kca1_6666666666666666666666666666666666666666666666666666666666666666",
+  "classification": {
+    "outcome": "accepted",
+    "reason": null,
+    "status": "classified"
+  },
+  "input_sha256": "7d1ca64c0b12707ed286aab6fefbd3fde2301baf72712e83bcc4981105ef1afd",
+  "invocation_sha256": "9b627b0624116d70afcf3feee8366c745815410a41f49d224a128dc4f95562a5",
+  "kind": "kernel_runner_transcript",
+  "schema_version": 1,
+  "statistics": {
+    "checker_invocations": 1,
+    "peak_memory_bytes": 1048576,
+    "wall_time_ms": 25
+  },
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_size_bytes": 0,
+  "stderr_truncated": false,
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_size_bytes": 0,
+  "stdout_truncated": false,
+  "termination": {
+    "code": 0,
+    "kind": "exited"
+  }
+}
