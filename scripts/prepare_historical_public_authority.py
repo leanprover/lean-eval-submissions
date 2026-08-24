@@ -245,21 +245,33 @@ def _git_optional_blob(root: pathlib.Path, commit: str, relative: str) -> bytes 
     return result.stdout
 
 
-def verify_checkout(root: pathlib.Path, repository: str, commit: str, tree: str | None = None) -> None:
+def verify_checkout(
+    root: pathlib.Path,
+    repository: str,
+    commit: str,
+    tree: str | None = None,
+    *,
+    label: str,
+) -> None:
     expected_remote = f"https://github.com/{repository}.git"
-    if (
-        _git(root, "remote", "get-url", "origin", maximum=4096).decode().strip() != expected_remote
-        or _git(root, "rev-parse", "HEAD^{commit}", maximum=64).decode().strip() != commit
-        or (tree is not None and _git(root, "rev-parse", "HEAD^{tree}", maximum=64).decode().strip() != tree)
-        or _git(root, "status", "--porcelain", maximum=4096) != b""
-    ):
-        raise PreparationError("exact Git checkout identity or cleanliness changed")
+    remote = _git(root, "remote", "get-url", "origin", maximum=4096).decode().strip()
+    if remote != expected_remote:
+        raise PreparationError(f"exact {label} Git checkout remote changed")
+    head = _git(root, "rev-parse", "HEAD^{commit}", maximum=64).decode().strip()
+    if head != commit:
+        raise PreparationError(f"exact {label} Git checkout commit changed")
+    if tree is not None:
+        actual_tree = _git(root, "rev-parse", "HEAD^{tree}", maximum=64).decode().strip()
+        if actual_tree != tree:
+            raise PreparationError(f"exact {label} Git checkout tree changed")
+    if _git(root, "status", "--porcelain", maximum=4096) != b"":
+        raise PreparationError(f"exact {label} Git checkout cleanliness changed")
 
 
 def verify_qualification_blob(
     root: pathlib.Path, commit: str, relative: str, expected: bytes
 ) -> None:
-    verify_checkout(root, SUBMISSIONS_REPOSITORY, commit)
+    verify_checkout(root, SUBMISSIONS_REPOSITORY, commit, label="qualification source")
     blob = _git(root, "show", f"{commit}:{relative}", maximum=MAX_JSON_BYTES)
     if blob != expected:
         raise PreparationError("qualification commit does not contain the exact profile blob")
@@ -332,7 +344,13 @@ def load_and_validate_pinned_state(
         import jsonschema
     except ImportError as error:
         raise PreparationError("pinned JSON Schema dependencies are required") from error
-    verify_checkout(root, "leanprover/lean-eval-state", STATE_COMMIT, STATE_TREE)
+    verify_checkout(
+        root,
+        "leanprover/lean-eval-state",
+        STATE_COMMIT,
+        STATE_TREE,
+        label="State source",
+    )
     expected_files = {
         "schema/state-event-v1.schema.json": STATE_EVENT_SCHEMA_SHA256,
         "schema/historical-public-replay-queue-v1.schema.json": STATE_HISTORICAL_QUEUE_SCHEMA_SHA256,
@@ -822,7 +840,7 @@ def _validate_publication(
         or publication["workflow_image_limit_bytes"] != 18_000_000_000
     ):
         raise PreparationError("image publication evidence differs from its locked image")
-    verify_checkout(image_source_root, SUBMISSIONS_REPOSITORY, image)
+    verify_checkout(image_source_root, SUBMISSIONS_REPOSITORY, image, label="image source")
     dockerfile = _git_optional_blob(
         image_source_root, image, "Dockerfile.historical-public-replay"
     )
@@ -1008,7 +1026,12 @@ def replay_task_id(result_id: str, measurement_digest: str) -> str:
 def prepare(args: argparse.Namespace) -> None:
     plan_commit = match(COMMIT, args.plan_commit, "plan commit")
     preparation_source_root = pathlib.Path(args.preparation_source_root)
-    verify_checkout(preparation_source_root, SUBMISSIONS_REPOSITORY, plan_commit)
+    verify_checkout(
+        preparation_source_root,
+        SUBMISSIONS_REPOSITORY,
+        plan_commit,
+        label="preparation source",
+    )
     plan, _ = load_canonical(pathlib.Path(args.plan), "historical replay plan", expected_sha256=PLAN_SHA256)
     matrix, _ = load_canonical(pathlib.Path(args.matrix), "profile matrix", expected_sha256=MATRIX_SHA256)
     runner_contract, _ = load_canonical(

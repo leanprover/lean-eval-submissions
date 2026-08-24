@@ -139,6 +139,22 @@ jobs:
       - name: Prove protected-main ancestry and exact source objects
         run: |
           set -euo pipefail
+          # actions/checkout records the repository URL without the canonical
+          # .git suffix.  Normalize it before the offline controller applies
+          # its exact remote-identity proof.
+          observed_origin=$(git config --get-all remote.origin.url)
+          if [ "$observed_origin" != \
+              https://github.com/leanprover/lean-eval-submissions ] && \
+             [ "$observed_origin" != \
+              https://github.com/leanprover/lean-eval-submissions.git ]; then
+            exit 1
+          fi
+          git remote set-url origin \
+            https://github.com/leanprover/lean-eval-submissions.git
+          test "$(git config --get-all remote.origin.url)" = \
+            https://github.com/leanprover/lean-eval-submissions.git
+          test "$(git remote get-url origin)" = \
+            https://github.com/leanprover/lean-eval-submissions.git
           remote_main=$(timeout 30s git ls-remote \
             https://github.com/leanprover/lean-eval-submissions.git refs/heads/main | cut -f1)
           [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
