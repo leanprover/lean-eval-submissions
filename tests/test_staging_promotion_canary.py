@@ -19,6 +19,44 @@ CANARY = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(CANARY)
 
 
+class StagingPromotionCanaryReadinessTests(unittest.TestCase):
+    def readiness(self) -> dict[str, object]:
+        return {
+            "environment": "staging",
+            "intake_configured_enabled": False,
+            "intake_effective_enabled": False,
+            "intake_enabled": False,
+            "intake_enablement_mode": "disabled",
+            "intake_lease_expires_at": None,
+            "state_commit": "a" * 40,
+            "status": "state_writer_ready",
+        }
+
+    def test_accepts_exact_disabled_finite_lease_readiness_contract(self) -> None:
+        CANARY.validate_readiness(200, self.readiness())
+
+    def test_rejects_missing_extra_or_enabled_lease_fields(self) -> None:
+        missing = self.readiness()
+        del missing["intake_enablement_mode"]
+        extra = {**self.readiness(), "unexpected": False}
+        enabled = {
+            **self.readiness(),
+            "intake_configured_enabled": True,
+            "intake_effective_enabled": True,
+            "intake_enabled": True,
+            "intake_enablement_mode": "durable",
+        }
+        leased = {
+            **self.readiness(),
+            "intake_enablement_mode": "leased",
+            "intake_lease_expires_at": 1_777_778_000,
+        }
+        for body in (missing, extra, enabled, leased):
+            with self.subTest(body=body):
+                with self.assertRaises(CANARY.CanaryFailure):
+                    CANARY.validate_readiness(200, body)
+
+
 class StagingPromotionCanaryTests(unittest.TestCase):
     def test_accepts_only_the_source_free_exact_success_contract(self) -> None:
         commit = "c" * 40

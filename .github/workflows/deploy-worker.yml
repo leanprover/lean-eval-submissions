@@ -475,7 +475,7 @@ jobs:
             exit 1
           fi
           schema="$RUNNER_TEMP/lean-eval-production-finalization/state-event-schema.json"
-          timeout 30s gh api -H 'Accept: application/vnd.github.raw+json' \
+          timeout 30s gh api -H 'Accept: application/vnd.github.v3.raw' \
             "repos/leanprover/lean-eval-state/contents/schema/state-event-v1.schema.json?ref=$commit" \
             > "$schema"
           if [ "$(sha256sum "$schema" | cut -d' ' -f1)" != "445510b038bacd36cbf974bfa72dedf1b8bdc345234539d0c6e9964ceccd7eee" ]; then

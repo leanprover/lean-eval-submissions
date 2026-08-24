@@ -47,6 +47,12 @@ ROLLBACK_VALIDATOR = (ROOT / "scripts/validate_cloudflare_rollback.py").read_tex
 
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
+    def test_state_schema_fetch_preserves_canonical_blob_bytes(self) -> None:
+        self.assertNotIn("application/vnd.github.raw+json", DEPLOY)
+        self.assertNotIn("application/vnd.github.raw+json", ROLLBACK)
+        self.assertIn("application/vnd.github.v3.raw", DEPLOY)
+        self.assertIn("application/vnd.github.v3.raw", ROLLBACK)
+
     def test_smoke_checks_use_approved_memory_limit_for_both_environments(self) -> None:
         self.assertEqual(DEPLOY.count('"staging_memory_limit_bytes": 12 * 1024**3'), 2)
         self.assertEqual(DEPLOY.count('"production_memory_gate_bytes": 12 * 1024**3'), 2)
