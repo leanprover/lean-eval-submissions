@@ -182,6 +182,12 @@ etc.).
   Its offline record adapter verifies possession of the planned replay/export
   bytes and binds attested runner records into observation receipts; it does
   not prove which bytes the runner consumed or execute the corpus.
+- Proposed closed raw-export, fixed Mathgraph invocation, transcript, and
+  attestation schemas for a future runner:
+  [`docs/kernel-runner-wire-contract.md`](docs/kernel-runner-wire-contract.md).
+  The semantic validator refuses the candidate's ambiguous exit `1`; the
+  record-only corpus adapter does not yet consume these objects, and no runner
+  or real replay/export evidence is supplied.
 - Provider-neutral archive-key envelope and single-use capability claims:
   [`docs/key-capability-contract.md`](docs/key-capability-contract.md).
 - Trusted provider-neutral archive writer (not yet wired into production):

@@ -167,6 +167,15 @@ path. Every runtime input and generated artifact is checked against its Draft
 2020-12 schema as well as the cross-artifact semantic validator. The tool
 performs no network access and has no credential or repository-write interface.
 
+Proposed exact raw-export, canonical Mathgraph invocation, structured
+transcript, and runner-attestation shapes for a future runner are specified in
+[`kernel-runner-wire-contract.md`](kernel-runner-wire-contract.md). That
+contract's validator explicitly blocks Mathgraph exit `1` because the pinned
+producer conflates rejection and internal failure. The current adapter does
+not import or enforce the wire objects, so runner integration remains a
+separate reviewed change; the adapter must never receive a guessed `rejected`
+record from that status.
+
 ## Current rollout status
 
 This repository now provides the preparatory contract, a fail-closed offline
