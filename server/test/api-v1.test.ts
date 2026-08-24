@@ -134,6 +134,10 @@ class MemoryState implements StateAccess {
   readonly retractionOverrides: ResultRetractionOverrideRequest[] = [];
   readonly retractionFinalizations: ResultRetractionFinalizationRequest[] = [];
   maintainerAmendment: ResultAmendmentView | null = null;
+  effectiveResultReservations = new Map<
+    string,
+    import("../src/result-owner").EffectiveResultIdentityReservation
+  >();
   contractAssertions = 0;
 
   assertResultOwnerContract(): Promise<string> {
@@ -146,6 +150,16 @@ class MemoryState implements StateAccess {
       return Promise.reject(new ResultOwnerStateError(404, "result amendment was not found"));
     }
     return Promise.resolve(this.maintainerAmendment);
+  }
+
+  readEffectiveResultIdentity(identifier: string): Promise<Readonly<{
+    commit: string;
+    reservation: import("../src/result-owner").EffectiveResultIdentityReservation | null;
+  }>> {
+    return Promise.resolve({
+      commit: "f".repeat(40),
+      reservation: this.effectiveResultReservations.get(identifier) ?? null,
+    });
   }
 
   appendEvent(event: WritableStateEvent): Promise<{ created: boolean }> {
@@ -988,6 +1002,43 @@ describe("strict API contract", () => {
     expect(keys[0]).not.toBe(keys[1]);
     expect(keys.every((key) => key.startsWith("POST:/api/v1/agent/challenges:"))).toBe(true);
     expect(keys.join(" ")).not.toContain("192.0.2.1");
+  });
+});
+
+describe("staging amendment canary route boundary", () => {
+  const canaryEnv: RuntimeEnv = {
+    ...ENV,
+    DEPLOYED_COMMIT: "a".repeat(40),
+    DEPLOYMENT_ENVIRONMENT: "staging",
+    INTAKE_ENABLED: "false",
+    PROMOTION_CANARY_ENABLED: "true",
+    READINESS_TOKEN: SECRET,
+    RESULT_AMENDMENT_OWNER_API_ENABLED: "false",
+    RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "false",
+    RESULT_AMENDMENT_MAINTAINERS: "[]",
+    STATE_REPOSITORY: "leanprover/lean-eval-state-staging",
+  };
+
+  it("conceals the staging-only route without readiness authentication", async () => {
+    const response = await handleRequest(new Request(
+      "https://submit.test/internal/v1/staging-amendment-canary",
+      { method: "POST" },
+    ), canaryEnv, LIFECYCLE);
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "not_found" });
+  });
+
+  it("keeps production unreachable even with the matching readiness token", async () => {
+    const response = await handleRequest(new Request(
+      "https://submit.test/internal/v1/staging-amendment-canary",
+      { method: "POST", headers: { authorization: `Bearer ${SECRET}` } },
+    ), {
+      ...canaryEnv,
+      DEPLOYMENT_ENVIRONMENT: "production",
+      STATE_REPOSITORY: "leanprover/lean-eval-state",
+    }, LIFECYCLE);
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "not_found" });
   });
 });
 

@@ -60,6 +60,7 @@ CALLBACK_CONTRACT_FILES = [
     "server/src/result-amendment.ts",
     "server/src/result-owner.ts",
     "server/src/scheduled-subrequest-budget.ts",
+    "server/src/staging-amendment-canary.ts",
     "server/src/state-event.ts",
     "server/src/submission-view.ts",
 ]

@@ -53,6 +53,7 @@ import {
   PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT,
   STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT,
   type LegacyResultBase,
+  type EffectiveResultIdentityReservation,
   type MetadataProvenance,
   type ResultOverlay,
   type ResultReleaseStatusView,
@@ -1372,6 +1373,18 @@ export class GitHubStateRepository {
   async readResultAmendmentForMaintainer(resultId: string): Promise<ResultAmendmentView> {
     const snapshot = await this.#resultOwnerSnapshot();
     return (await this.#resultAmendmentAt(resultId, snapshot)).view;
+  }
+
+  async readEffectiveResultIdentity(
+    identifier: string,
+  ): Promise<Readonly<{ commit: string; reservation: EffectiveResultIdentityReservation | null }>> {
+    const snapshot = await this.#resultOwnerSnapshot();
+    const path = effectiveResultIdentityPath(identifier);
+    const entry = await readPathAt(this.#config, this.#fetcher, path, snapshot.headSha);
+    return {
+      commit: snapshot.headSha,
+      reservation: entry.found ? decodeEffectiveResultIdentityReservation(entry.value) : null,
+    };
   }
 
   async assertAvailable(): Promise<void> {

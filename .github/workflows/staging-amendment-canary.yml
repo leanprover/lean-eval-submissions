@@ -1,0 +1,202 @@
+name: Staging amendment apply and reject canary
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact deployed protected-main commit
+        required: true
+        type: string
+      expected_state_commit:
+        description: Exact staging State head before the first mutation
+        required: true
+        type: string
+      apply_request_event_id:
+        description: Stable UUIDv7 for the apply-lane owner request
+        required: true
+        type: string
+      apply_decision_event_id:
+        description: Later stable UUIDv7 for the apply-lane decision
+        required: true
+        type: string
+      reject_request_event_id:
+        description: Later stable UUIDv7 for the reject-lane owner request
+        required: true
+        type: string
+      reject_decision_event_id:
+        description: Later stable UUIDv7 for the reject-lane decision
+        required: true
+        type: string
+      confirm:
+        description: Type APPLY_AND_REJECT_STAGING_FIXTURES
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: submission-worker-main
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    outputs:
+      commit: ${{ steps.guard.outputs.commit }}
+    steps:
+      - id: guard
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "leanprover/lean-eval-submissions"
+          test "$GITHUB_ACTOR" = "kim-em"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$EXPECTED_COMMIT"
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$CONFIRM" = "APPLY_AND_REJECT_STAGING_FIXTURES"
+          echo "commit=$EXPECTED_COMMIT" >> "$GITHUB_OUTPUT"
+
+  canary:
+    needs: authorize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: cloudflare-staging
+    permissions: {}
+    env:
+      ENDPOINT: https://lean-eval-submission-server-staging.lean-eval.workers.dev
+      EXPECTED_COMMIT: ${{ needs.authorize.outputs.commit }}
+      EXPECTED_STATE_COMMIT: ${{ inputs.expected_state_commit }}
+      APPLY_REQUEST_EVENT_ID: ${{ inputs.apply_request_event_id }}
+      APPLY_DECISION_EVENT_ID: ${{ inputs.apply_decision_event_id }}
+      REJECT_REQUEST_EVENT_ID: ${{ inputs.reject_request_event_id }}
+      REJECT_DECISION_EVENT_ID: ${{ inputs.reject_decision_event_id }}
+      READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
+    steps:
+      - name: Validate the immutable operator intent
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import datetime
+          import os
+          import re
+
+          commit = re.compile(r"[0-9a-f]{40}\Z")
+          uuid7 = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z")
+          assert commit.fullmatch(os.environ["EXPECTED_COMMIT"])
+          assert commit.fullmatch(os.environ["EXPECTED_STATE_COMMIT"])
+          names = [
+              "APPLY_REQUEST_EVENT_ID", "APPLY_DECISION_EVENT_ID",
+              "REJECT_REQUEST_EVENT_ID", "REJECT_DECISION_EVENT_ID",
+          ]
+          values = [os.environ[name] for name in names]
+          assert all(uuid7.fullmatch(value) for value in values)
+          assert values == sorted(values) and len(set(values)) == 4
+          milliseconds = [int(value.replace("-", "")[:12], 16) for value in values]
+          assert milliseconds == sorted(milliseconds) and len(set(milliseconds)) == 4
+          assert milliseconds[-1] <= int(datetime.datetime.now(datetime.UTC).timestamp() * 1000)
+          PY
+
+      - name: Prove the exact disabled staging deployment
+        run: |
+          set -euo pipefail
+          health=$(curl --fail-with-body --silent --show-error --proto '=https' \
+            --max-redirs 0 --max-time 20 "$ENDPOINT/healthz")
+          HEALTH="$health" python3 - <<'PY'
+          import json, os
+          body = json.loads(os.environ["HEALTH"])
+          assert body["status"] == "ok"
+          assert body["environment"] == "staging"
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          assert body["intake_enabled"] is False
+          assert body["result_amendment_owner_api_enabled"] is False
+          assert body["result_amendment_maintainer_api_enabled"] is False
+          assert body["promotion_canary_enabled"] is True
+          PY
+
+      - name: Execute the exact idempotent apply and reject lanes
+        run: |
+          set -euo pipefail
+          state_commit=$EXPECTED_STATE_COMMIT
+          call_canary() {
+            operation=$1
+            event_id=$2
+            request_event_id=$3
+            occurred_at=$(EVENT_ID="$event_id" python3 - <<'PY'
+          import datetime, os
+          milliseconds = int(os.environ["EVENT_ID"].replace("-", "")[:12], 16)
+          print(datetime.datetime.fromtimestamp(milliseconds / 1000, datetime.UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z"))
+          PY
+            )
+            payload=$(OPERATION="$operation" EVENT_ID="$event_id" REQUEST_EVENT_ID="$request_event_id" \
+              OCCURRED_AT="$occurred_at" STATE_COMMIT="$state_commit" python3 - <<'PY'
+          import json, os
+          print(json.dumps({
+              "schema_version": 1,
+              "operation": os.environ["OPERATION"],
+              "deployed_commit": os.environ["EXPECTED_COMMIT"],
+              "expected_state_commit": os.environ["STATE_COMMIT"],
+              "event_id": os.environ["EVENT_ID"],
+              "occurred_at": os.environ["OCCURRED_AT"],
+              "expected_request_event_id": os.environ["REQUEST_EVENT_ID"] or None,
+          }, separators=(",", ":")))
+          PY
+            )
+            response=$(curl --fail-with-body --silent --show-error --proto '=https' \
+              --max-redirs 0 --max-time 90 --retry 2 --retry-all-errors --retry-max-time 210 \
+              --request POST --header "Authorization: Bearer ${READINESS_TOKEN}" \
+              --header 'Content-Type: application/json' --data "$payload" \
+              "$ENDPOINT/internal/v1/staging-amendment-canary")
+            state_commit=$(RESPONSE="$response" OPERATION="$operation" python3 - <<'PY'
+          import json, os
+          body = json.loads(os.environ["RESPONSE"])
+          assert set(body) == {
+              "candidate_effective_result_identity_id", "candidate_reserved",
+              "deployed_commit", "event_id", "maintainer_api_enabled", "operation",
+              "owner_api_enabled", "result_id", "state_commit", "status",
+          }
+          assert body["status"] == "staging_amendment_canary_verified"
+          assert body["operation"] == os.environ["OPERATION"]
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          assert body["owner_api_enabled"] is False
+          assert body["maintainer_api_enabled"] is False
+          if os.environ["OPERATION"] == "apply":
+              assert body["candidate_reserved"] is True
+          if os.environ["OPERATION"] in {"request_reject", "reject"}:
+              assert body["candidate_reserved"] is False
+          print(body["state_commit"])
+          PY
+            )
+          }
+          call_canary request_apply "$APPLY_REQUEST_EVENT_ID" ""
+          call_canary apply "$APPLY_DECISION_EVENT_ID" "$APPLY_REQUEST_EVENT_ID"
+          call_canary request_reject "$REJECT_REQUEST_EVENT_ID" ""
+          call_canary reject "$REJECT_DECISION_EVENT_ID" "$REJECT_REQUEST_EVENT_ID"
+          echo "FINAL_STATE_COMMIT=$state_commit" >> "$GITHUB_ENV"
+
+      - name: Prove both public amendment gates remained disabled
+        run: |
+          set -euo pipefail
+          health=$(curl --fail-with-body --silent --show-error --proto '=https' \
+            --max-redirs 0 --max-time 20 "$ENDPOINT/healthz")
+          HEALTH="$health" python3 - <<'PY'
+          import json, os, re
+          body = json.loads(os.environ["HEALTH"])
+          assert body["environment"] == "staging"
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          assert body["intake_enabled"] is False
+          assert body["result_amendment_owner_api_enabled"] is False
+          assert body["result_amendment_maintainer_api_enabled"] is False
+          assert re.fullmatch(r"[0-9a-f]{40}", os.environ["FINAL_STATE_COMMIT"])
+          PY
+          {
+            echo "### Staging amendment canary"
+            echo "- deployed commit: \`$EXPECTED_COMMIT\`"
+            echo "- final staging State commit: \`$FINAL_STATE_COMMIT\`"
+            echo "- apply reservation: \`eri1_362e69696a5c468d0482086b6eb3f24d68dea6b4795284a017096b092a800775\`"
+            echo "- reject candidate remained unreserved: \`eri1_b1f3167cd78dcdcef990d5b09ae447bdf3e470f60236c6a2be2009a260a6127a\`"
+            echo "- owner and maintainer APIs remained disabled"
+          } >> "$GITHUB_STEP_SUMMARY"

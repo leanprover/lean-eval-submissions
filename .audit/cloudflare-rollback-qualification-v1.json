@@ -11,10 +11,11 @@
     "server/src/result-amendment.ts",
     "server/src/result-owner.ts",
     "server/src/scheduled-subrequest-budget.ts",
+    "server/src/staging-amendment-canary.ts",
     "server/src/state-event.ts",
     "server/src/submission-view.ts"
   ],
-  "lifecycle_callback_contract_sha256": "5dd97a4bfcd0e4d3eccd9be3a5c747dac8ec9285b6b8b58aa19fca128c81b56e",
+  "lifecycle_callback_contract_sha256": "138810bc5268ef181027ef622fb0358f5b48cfa0c93a9c4db4803da85122d39d",
   "replay_durable_object_migration_tags": [
     "v1",
     "v2"

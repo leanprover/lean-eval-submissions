@@ -99,6 +99,17 @@ import {
   resultOwnerStateContractCommit,
 } from "./result-owner";
 import type { ComparatorEvidence, ResultAmendmentView } from "./result-amendment";
+import type { EffectiveResultIdentityReservation } from "./result-owner";
+import {
+  decodeStagingAmendmentCanaryRequest,
+  STAGING_CANARY_OWNER,
+  STAGING_CANARY_PROBLEM,
+  STAGING_CANARY_RESULTS_COMMIT,
+  STAGING_CANARY_REVIEWER,
+  STAGING_CANARY_STATE_REPOSITORY,
+  STAGING_CANARY_STATEMENT_REVISION,
+  STAGING_CANARY_TARGETS,
+} from "./staging-amendment-canary";
 
 export type RuntimeEnv = Omit<
   CloudflareEnv,
@@ -180,6 +191,9 @@ type Lifecycle = Pick<ExecutionContext, "waitUntil">;
 export type StateAccess = Readonly<{
   assertResultOwnerContract(): Promise<string>;
   readResultAmendmentForMaintainer(resultId: string): Promise<ResultAmendmentView>;
+  readEffectiveResultIdentity(
+    identifier: string,
+  ): Promise<Readonly<{ commit: string; reservation: EffectiveResultIdentityReservation | null }>>;
   appendEvent(event: WritableStateEvent): Promise<{ commit?: string; created: boolean }>;
   appendEventAtHead?(
     event: WritableStateEvent,
@@ -376,6 +390,138 @@ async function readinessAuthorized(request: Request, env: RuntimeEnv): Promise<b
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) return false;
   return equalSecret(header.slice("Bearer ".length), env.READINESS_TOKEN);
+}
+
+function stagingAmendmentCanaryAvailable(env: RuntimeEnv): boolean {
+  return env.DEPLOYMENT_ENVIRONMENT === "staging" &&
+    env.STATE_REPOSITORY === STAGING_CANARY_STATE_REPOSITORY &&
+    env.PROMOTION_CANARY_ENABLED === "true" &&
+    env.INTAKE_ENABLED === "false" &&
+    env.RESULT_AMENDMENT_OWNER_API_ENABLED === "false" &&
+    env.RESULT_AMENDMENT_MAINTAINER_API_ENABLED === "false" &&
+    env.RESULT_AMENDMENT_MAINTAINERS === "[]";
+}
+
+async function stagingAmendmentCanary(
+  request: Request,
+  env: RuntimeEnv,
+  dependencies: ApiDependencies,
+): Promise<Response> {
+  if (!(await readinessAuthorized(request, env))) return json({ error: "not_found" }, 404);
+  if (currentIntake(env, dependencies).effective) {
+    throw new ResultOwnerStateError(409, "staging amendment canary requires intake disabled");
+  }
+  const input = decodeStagingAmendmentCanaryRequest(await readJson(request));
+  if (input.deployed_commit !== env.DEPLOYED_COMMIT) {
+    throw new ApiDecodeError("staging amendment canary did not bind the deployed commit");
+  }
+  const now = dependencies.now?.() ?? Date.now();
+  if (Date.parse(input.occurred_at) > now) {
+    throw new ApiDecodeError("staging amendment canary timestamp is in the future");
+  }
+  const lane = input.operation.endsWith("apply") ? "apply" : "reject";
+  const target = STAGING_CANARY_TARGETS[lane];
+  const ledger = state(env, dependencies);
+  const initialStateCommit = await ledger.assertResultOwnerContract();
+  if (initialStateCommit !== input.expected_state_commit) {
+    throw new ResultOwnerStateError(409, "staging amendment canary State head changed");
+  }
+  const initial = await ledger.readResultAmendmentForMaintainer(target.resultId);
+  if (
+    initial.result_id !== target.resultId ||
+    initial.owner_login !== STAGING_CANARY_OWNER ||
+    initial.declared_model !== target.declaredModel ||
+    initial.authority_event_id !== target.authorityEventId ||
+    initial.base_problem_id !== "two_plus_two" ||
+    initial.base_statement_revision !== 1 ||
+    initial.retraction !== null ||
+    !initial.leaderboard_eligible
+  ) {
+    throw new ResultOwnerStateError(409, "staging amendment canary target identity changed");
+  }
+  const existing = initial.problem_repair;
+  const requesting = input.operation.startsWith("request_");
+  if (requesting) {
+    if (existing !== null && existing.request_event_id !== input.event_id) {
+      throw new ResultOwnerStateError(409, "staging amendment canary target was already exercised");
+    }
+    await ledger.requestResultProblemRepair({
+      eventId: input.event_id,
+      occurredAt: input.occurred_at,
+      resultId: target.resultId,
+      ownerLogin: STAGING_CANARY_OWNER,
+      correctedProblemId: STAGING_CANARY_PROBLEM,
+      correctedStatementRevision: STAGING_CANARY_STATEMENT_REVISION,
+      reasonCode: "wrong_problem_revision",
+    });
+  } else {
+    if (
+      existing?.request_event_id !== input.expected_request_event_id ||
+      existing.corrected_problem_id !== STAGING_CANARY_PROBLEM ||
+      existing.corrected_statement_revision !== STAGING_CANARY_STATEMENT_REVISION
+    ) {
+      throw new ResultOwnerStateError(409, "staging amendment canary pending request changed");
+    }
+    let comparatorEvidence: ComparatorEvidence | null = null;
+    let reasonCode: string | null = "insufficient_comparator_evidence";
+    if (input.operation === "apply") {
+      comparatorEvidence = await provider(env, dependencies).verifyProblemRepairComparator({
+        resultsCommit: STAGING_CANARY_RESULTS_COMMIT,
+        resultId: target.resultId,
+        ownerLogin: STAGING_CANARY_OWNER,
+        declaredModel: target.declaredModel,
+        baseProblemId: "two_plus_two",
+        baseStatementRevision: 1,
+        correctedProblemId: STAGING_CANARY_PROBLEM,
+        correctedStatementRevision: STAGING_CANARY_STATEMENT_REVISION,
+      });
+      reasonCode = null;
+    }
+    await ledger.decideResultProblemRepair({
+      eventId: input.event_id,
+      occurredAt: input.occurred_at,
+      resultId: target.resultId,
+      reviewerLogin: STAGING_CANARY_REVIEWER,
+      decision: lane,
+      reasonCode,
+      comparatorEvidence,
+    });
+  }
+  const final = await ledger.readResultAmendmentForMaintainer(target.resultId);
+  const candidate = await ledger.readEffectiveResultIdentity(target.candidateIdentityId);
+  const expectedStatus = requesting && existing !== null
+    ? existing.status
+    : requesting
+    ? "pending"
+    : lane === "apply"
+    ? "applied"
+    : "rejected";
+  const shouldBeReserved = expectedStatus === "applied";
+  if (
+    final.problem_repair?.status !== expectedStatus ||
+    (requesting
+      ? final.problem_repair.request_event_id !== input.event_id
+      : final.problem_repair.decision_event_id !== input.event_id) ||
+    (shouldBeReserved
+      ? candidate.reservation?.result_id !== target.resultId ||
+        candidate.reservation.reservation_event_id !== final.problem_repair.decision_event_id ||
+        candidate.reservation.reservation_kind !== "problem_repair"
+      : candidate.reservation !== null)
+  ) {
+    throw new GitHubStateError(502, "staging amendment canary postcondition failed");
+  }
+  return json({
+    status: "staging_amendment_canary_verified",
+    operation: input.operation,
+    deployed_commit: env.DEPLOYED_COMMIT,
+    state_commit: candidate.commit,
+    result_id: target.resultId,
+    event_id: input.event_id,
+    candidate_effective_result_identity_id: target.candidateIdentityId,
+    candidate_reserved: candidate.reservation !== null,
+    owner_api_enabled: false,
+    maintainer_api_enabled: false,
+  });
 }
 
 function readinessCacheKey(env: RuntimeEnv): Request {
@@ -2106,6 +2252,14 @@ export async function handleRequest(
     if (!promotionCanaryEnabled(env)) return json({ error: "not_found" }, 404);
     try {
       return await promotionCanary(request, env, dependencies);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  }
+  if (request.method === "POST" && url.pathname === "/internal/v1/staging-amendment-canary") {
+    if (!stagingAmendmentCanaryAvailable(env)) return json({ error: "not_found" }, 404);
+    try {
+      return await stagingAmendmentCanary(request, env, dependencies);
     } catch (error) {
       return errorResponse(error);
     }
