@@ -260,13 +260,20 @@ the already implemented owner status, metadata, and publication routes.
       requests / 135 results and leaves 246 / 498 explicitly pending; it has
       SHA-256 `13a0d95b…` and is checked in with complete shard provenance in
       [`historical-public-evidence-rerun.md`](historical-public-evidence-rerun.md).
+- [x] Rerun the public Gist lane without the repository-scoped installation
+      token. Sixteen sequential successful runs `32768996061`–`32770548866` at
+      exact source `6c13c245` resolved all 57 formerly permission-bound Gist
+      requests. The new aggregate resolves 126 requests / 192 results and
+      leaves 189 / 441 pending, has SHA-256 `8122b4ee…`, and is checked in with
+      complete shard provenance in
+      [`historical-public-gist-probe-rerun.md`](historical-public-gist-probe-rerun.md).
 - [ ] Inventory every historical accepted result at the migration cutoff and
       deterministically classify it as public-source replayable,
       private-archive replayable, or explicitly unavailable with a reviewed
       reason. The public evidence pass removes all unreviewed workflow-contract
-      classifications, but 498 public results still require retry or
-      adjudication and all 668 private results still require the separately
-      credentialed archive-migration lane.
+      classifications, but 441 public results still require adjudication or an
+      explicit unavailability policy, and all 668 private results still require
+      the separately credentialed archive-migration lane.
 - [ ] Enqueue and execute the complete historical replay corpus under exact
       original pins, recording terminal verdicts/statistics or explicit
       unavailability; the isolated staging proofs above do not satisfy this
@@ -276,7 +283,10 @@ the already implemented owner status, metadata, and publication routes.
       workflow, issue, Results snapshot, and aggregate identities. Protected
       run `32722572097` reproduced it twice from immutable tag `d0807084…`;
       the exact plan (`2b00c965…`) and toolchain registry (`5144fc19…`) are
-      permanently checked in under their digest-derived evidence paths.
+      permanently checked in under their digest-derived evidence paths. That
+      conservative plan covers the first pass's 69 resolved requests; generate
+      a new plan from aggregate `8122b4ee…` before treating all 126 resolved
+      request groups as planned.
       Activation
       remains fail-closed on `legacy_public_result_replay_authority_v1` because
       current State replay materialization admits only modern

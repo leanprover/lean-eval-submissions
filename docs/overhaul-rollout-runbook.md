@@ -783,6 +783,14 @@ The first complete post-registry pass followed this procedure at source
 and permanent aggregate are recorded in
 [`historical-public-evidence-rerun.md`](historical-public-evidence-rerun.md).
 
+The token-free public-Gist rerun followed the same procedure at source
+`6c13c245d17a1e25a59846769e533265e8ac9ba8`. Sixteen sequential retained runs
+`32768996061` through `32770548866` covered the same 315 requests / 633 results;
+126 / 192 are resolved and 189 / 441 remain pending, with zero source-probe or
+generic-probe indeterminacy. Exact inputs, classifications, artifact IDs,
+digests, expiry, and the permanent aggregate are recorded in
+[`historical-public-gist-probe-rerun.md`](historical-public-gist-probe-rerun.md).
+
 ## Results migration walkthrough
 
 After the results schema version 2 tooling PR is merged:
