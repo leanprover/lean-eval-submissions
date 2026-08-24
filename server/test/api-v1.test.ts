@@ -32,6 +32,7 @@ import {
   StateUpdateOutcomeUnknownError,
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
+  type ResultRetractionRequest,
 } from "../src/github-state";
 import {
   validateStateEvent,
@@ -106,6 +107,7 @@ class MemoryState implements StateAccess {
   head = "d".repeat(40);
   readonly legacyClaims: LegacyResultClaimRequest[] = [];
   readonly legacyBackfills: LegacyResultBackfillRequest[] = [];
+  readonly retractionRequests: ResultRetractionRequest[] = [];
   contractAssertions = 0;
 
   assertResultOwnerContract(): Promise<string> {
@@ -258,6 +260,21 @@ class MemoryState implements StateAccess {
       created: this.created,
       resultId: request.resultId,
       mutationEventId: request.eventId,
+    });
+  }
+
+  requestResultRetraction(request: ResultRetractionRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    retractionRevision: number;
+  }> {
+    this.retractionRequests.push(request);
+    return Promise.resolve({
+      created: this.created,
+      resultId: request.resultId,
+      mutationEventId: request.eventId,
+      retractionRevision: 1,
     });
   }
 }
@@ -2109,5 +2126,187 @@ describe("authenticated legacy result owner routes", () => {
     } finally {
       errorLog.mockRestore();
     }
+  });
+
+  it("keeps result amendment routes dark unless their independent reviewed gate is exact", async () => {
+    const identifier = `r2_${"1".repeat(64)}`;
+    const request = new Request(
+      `https://submit.test/api/v1/results/${identifier}/retractions`,
+      { method: "POST" },
+    );
+    const disabled = await handleRequest(request.clone(), enabledEnv, LIFECYCLE);
+    expect(disabled.status).toBe(404);
+    const wrongContract = await handleRequest(request, {
+      ...enabledEnv,
+      RESULT_AMENDMENT_OWNER_API_ENABLED: "true",
+      RESULT_OWNER_STATE_CONTRACT_COMMIT: "b".repeat(40),
+    }, LIFECYCLE);
+    expect(wrongContract.status).toBe(404);
+  });
+
+  it("records a redacted owner retraction request while intake stays disabled", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const response = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/retractions`,
+      {
+        method: "POST",
+        headers: {
+          authorization: await ownerAuthorization(),
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000011",
+        },
+        body: JSON.stringify({ reason_code: "owner_requested_withdrawal" }),
+      },
+    ), {
+      ...enabledEnv,
+      RESULT_AMENDMENT_OWNER_API_ENABLED: "true",
+    }, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    expect(body).toEqual({
+      result_id: identifier,
+      retraction_revision: 1,
+      status: "retraction_requested",
+    });
+    expect(JSON.stringify(body)).not.toContain("owner_requested_withdrawal");
+    expect(JSON.stringify(body)).not.toContain("alice");
+    expect(state.retractionRequests).toEqual([{
+      eventId: "0198abcd-3333-7000-8000-000000000011",
+      occurredAt: new Date(NOW_MS).toISOString(),
+      resultId: identifier,
+      ownerLogin: "alice",
+      reasonCode: "owner_requested_withdrawal",
+    }]);
+    expect(enabledEnv.INTAKE_ENABLED).toBe("false");
+  });
+
+  it("authenticates amendment requests and enforces same-origin cookie mutations", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const token = (await ownerAuthorization()).slice("Bearer ".length);
+    const request = (headers: HeadersInit) => new Request(
+      `https://submit.test/api/v1/results/${identifier}/retractions`,
+      {
+        method: "POST",
+        headers: {
+          ...Object.fromEntries(new Headers(headers)),
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000012",
+        },
+        body: JSON.stringify({ reason_code: "owner_requested_withdrawal" }),
+      },
+    );
+    const env = { ...enabledEnv, RESULT_AMENDMENT_OWNER_API_ENABLED: "true" };
+    const unauthenticated = await handleRequest(request({}), env, LIFECYCLE, { state });
+    expect(unauthenticated.status).toBe(401);
+    const crossSiteCookie = await handleRequest(
+      request({ cookie: `lean_eval_session=${token}`, origin: "https://attacker.test" }),
+      env,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(crossSiteCookie.status).toBe(401);
+    expect(state.retractionRequests).toHaveLength(0);
+  });
+
+  it("keeps problem repair authenticated but fails closed before any State write", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const request = (authorization?: string) => new Request(
+      `https://submit.test/api/v1/results/${identifier}/problem-repairs`,
+      {
+        method: "POST",
+        headers: {
+          ...(authorization === undefined ? {} : { authorization }),
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000013",
+        },
+        body: JSON.stringify({
+          corrected_problem_id: "corrected_problem",
+          corrected_statement_revision: 2,
+          reason_code: "wrong_problem_revision",
+        }),
+      },
+    );
+    const env = { ...enabledEnv, RESULT_AMENDMENT_OWNER_API_ENABLED: "true" };
+    const unauthenticated = await handleRequest(request(), env, LIFECYCLE, { state });
+    expect(unauthenticated.status).toBe(401);
+    const response = await handleRequest(
+      request(await ownerAuthorization()),
+      env,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "repair_state_unavailable" });
+    expect(state.retractionRequests).toHaveLength(0);
+  });
+
+  it("does not treat the lifecycle machine token as maintainer authority", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    for (const suffix of ["problem-repairs/decisions", "retractions/decisions", "retractions/override"]) {
+      const response = await handleRequest(new Request(
+        `https://submit.test/internal/v1/results/${identifier}/${suffix}`,
+        {
+          method: "POST",
+          headers: {
+            authorization: "Bearer machine-callback-token",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ reviewer_login: "forged-maintainer" }),
+        },
+      ), {
+        ...enabledEnv,
+        LIFECYCLE_CALLBACK_TOKEN: "machine-callback-token",
+        RESULT_AMENDMENT_OWNER_API_ENABLED: "true",
+      }, LIFECYCLE, { now: () => NOW_MS, state });
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "not_found" });
+    }
+    expect(state.retractionRequests).toHaveLength(0);
+  });
+
+  it("conceals wrong-owner retraction authority and preserves conflicts", async () => {
+    const identifier = `r2_${"1".repeat(64)}`;
+    const request = () => new Request(
+      `https://submit.test/api/v1/results/${identifier}/retractions`,
+      {
+        method: "POST",
+        headers: {
+          authorization: "placeholder",
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000014",
+        },
+        body: JSON.stringify({ reason_code: "owner_requested_withdrawal" }),
+      },
+    );
+    const env = { ...enabledEnv, RESULT_AMENDMENT_OWNER_API_ENABLED: "true" };
+    const hiddenState = new MemoryState();
+    vi.spyOn(hiddenState, "requestResultRetraction").mockRejectedValue(
+      new ResultOwnerStateError(404, "not found"),
+    );
+    const hiddenRequest = request();
+    hiddenRequest.headers.set("authorization", await ownerAuthorization("mallory"));
+    const hidden = await handleRequest(hiddenRequest, env, LIFECYCLE, {
+      now: () => NOW_MS,
+      state: hiddenState,
+    });
+    expect(hidden.status).toBe(404);
+    expect(await hidden.json()).toEqual({ error: "not_found" });
+
+    const conflictState = new MemoryState();
+    vi.spyOn(conflictState, "requestResultRetraction").mockRejectedValue(
+      new StateEventConflictError("event"),
+    );
+    const conflictRequest = request();
+    conflictRequest.headers.set("authorization", await ownerAuthorization());
+    const conflict = await handleRequest(conflictRequest, env, LIFECYCLE, {
+      now: () => NOW_MS,
+      state: conflictState,
+    });
+    expect(conflict.status).toBe(409);
+    expect(await conflict.json()).toEqual({ error: "idempotency_conflict" });
   });
 });

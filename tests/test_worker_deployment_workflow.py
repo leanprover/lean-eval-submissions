@@ -585,6 +585,10 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                     "false",
                 )
                 self.assertEqual(
+                    configuration["vars"]["RESULT_AMENDMENT_OWNER_API_ENABLED"],
+                    "false",
+                )
+                self.assertEqual(
                     configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],
                     "fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f",
                 )

@@ -117,4 +117,49 @@ describe("State event contract", () => {
       payload: { ...terminal.payload, build_retired_instructions_unavailable_reason: "counter_not_reported" },
     })).toThrow(/measured counter/);
   });
+
+  it("validates owner amendment requests and read-only maintainer decisions exactly", () => {
+    const request = {
+      schema_version: 1,
+      event_id: "0198abcd-3333-7000-8000-000000000002",
+      event_type: "result.retraction_requested",
+      occurred_at: "2026-08-20T06:07:10.000Z",
+      subject_id: `r2_${"a".repeat(64)}`,
+      causation_event_id: "0198abcd-3333-7000-8000-000000000001",
+      actor: { kind: "github", login: "alice" },
+      payload: { retraction_revision: 1, reason_code: "owner_requested_withdrawal" },
+    } as const;
+    expect(() => validateStateEvent(request)).not.toThrow();
+    expect(() => validateStateEvent({
+      ...request,
+      actor: { kind: "system" },
+    })).toThrow(/actor/u);
+    expect(() => validateStateEvent({
+      ...request,
+      payload: { ...request.payload, retraction_revision: 0 },
+    })).toThrow(/positive/u);
+
+    const decision = {
+      ...request,
+      event_id: "0198abcd-3333-7000-8000-000000000003",
+      event_type: "result.retraction_decided",
+      causation_event_id: request.event_id,
+      actor: { kind: "system" },
+      payload: {
+        retraction_revision: 1,
+        reviewer_login: "maintainer",
+        decision: "reject",
+        reason_code: "request_not_confirmed",
+      },
+    } as const;
+    expect(() => validateStateEvent(decision)).not.toThrow();
+    expect(() => validateStateEvent({
+      ...decision,
+      payload: { ...decision.payload, decision: "impersonate" },
+    })).toThrow(/decision/u);
+    expect(() => validateStateEvent({
+      ...decision,
+      actor: { kind: "github", login: "maintainer" },
+    })).toThrow(/actor/u);
+  });
 });

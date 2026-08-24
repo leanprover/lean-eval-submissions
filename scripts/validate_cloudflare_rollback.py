@@ -56,6 +56,7 @@ CALLBACK_CONTRACT_FILES = [
     "server/src/github-broker.ts",
     "server/src/github-provider.ts",
     "server/src/github-state.ts",
+    "server/src/result-amendment.ts",
     "server/src/result-owner.ts",
     "server/src/state-event.ts",
     "server/src/submission-view.ts",
@@ -739,47 +740,73 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         name in intake_expected for name in INTAKE_LEASE_BINDINGS - {"INTAKE_ENABLED", "INTAKE_ENABLEMENT_MODE"}
     ):
         raise RollbackValidationError("tracked intake enablement state is not closed")
-    owner_gate_fields = {
+    legacy_owner_gate_fields = {
         "LEGACY_RESULT_OWNER_API_ENABLED",
         "RESULT_OWNER_STATE_CONTRACT_COMMIT",
     }
-    present_owner_gate_fields = owner_gate_fields & set(intake_expected)
-    if present_owner_gate_fields and present_owner_gate_fields != owner_gate_fields:
+    amendment_owner_gate_fields = {
+        "RESULT_AMENDMENT_OWNER_API_ENABLED",
+        "RESULT_OWNER_STATE_CONTRACT_COMMIT",
+    }
+    present_legacy_owner_fields = legacy_owner_gate_fields & set(intake_expected)
+    present_amendment_owner_fields = amendment_owner_gate_fields & set(intake_expected)
+    if (
+        "LEGACY_RESULT_OWNER_API_ENABLED" in present_legacy_owner_fields
+        and present_legacy_owner_fields != legacy_owner_gate_fields
+    ):
         raise RollbackValidationError(
             "legacy result owner API gate and State contract pin must appear together"
         )
-    owner_contract_supported = present_owner_gate_fields == owner_gate_fields
-    plan["legacy_result_owner_api_contract_supported"] = owner_contract_supported
+    if (
+        "RESULT_AMENDMENT_OWNER_API_ENABLED" in present_amendment_owner_fields
+        and present_amendment_owner_fields != amendment_owner_gate_fields
+    ):
+        raise RollbackValidationError(
+            "result amendment owner API gate and State contract pin must appear together"
+        )
+    legacy_owner_supported = "LEGACY_RESULT_OWNER_API_ENABLED" in present_legacy_owner_fields
+    amendment_owner_supported = "RESULT_AMENDMENT_OWNER_API_ENABLED" in present_amendment_owner_fields
+    plan["legacy_result_owner_api_contract_supported"] = legacy_owner_supported
     plan["legacy_result_owner_api_enabled"] = (
         enabled(intake_expected, "LEGACY_RESULT_OWNER_API_ENABLED")
-        if owner_contract_supported
+        if legacy_owner_supported
+        else False
+    )
+    plan["result_amendment_owner_api_contract_supported"] = amendment_owner_supported
+    plan["result_amendment_owner_api_enabled"] = (
+        enabled(intake_expected, "RESULT_AMENDMENT_OWNER_API_ENABLED")
+        if amendment_owner_supported
         else False
     )
     owner_state_commit = (
         intake_expected["RESULT_OWNER_STATE_CONTRACT_COMMIT"]
-        if owner_contract_supported
+        if legacy_owner_supported or amendment_owner_supported
         else None
     )
     if owner_state_commit is not None and COMMIT.fullmatch(owner_state_commit) is None:
         raise RollbackValidationError(
             "RESULT_OWNER_STATE_CONTRACT_COMMIT is not a full lowercase commit"
         )
-    if plan["legacy_result_owner_api_enabled"] and owner_state_commit != state_contract["commit"]:
+    if (
+        plan["legacy_result_owner_api_enabled"]
+        or plan["result_amendment_owner_api_enabled"]
+    ) and owner_state_commit != state_contract["commit"]:
         raise RollbackValidationError(
-            "enabled legacy result owner API is not bound to current protected State"
+            "enabled result owner API is not bound to current protected State"
         )
     plan["result_owner_state_contract_commit"] = owner_state_commit
     if args.require_replay_disabled and any(
         plan[name]
         for name in (
             "legacy_result_owner_api_enabled",
+            "result_amendment_owner_api_enabled",
             "promotion_canary_enabled",
             "replay_enabled",
             "staging_acceptance_enabled",
         )
     ):
         raise RollbackValidationError(
-            "an emergency production rollback target must disable legacy result owner API, promotion canary, and replay"
+            "an emergency production rollback target must disable result owner APIs, promotion canary, and replay"
         )
     if getattr(args, "require_intake_disabled", False) and plan["intake_enabled"]:
         raise RollbackValidationError(
@@ -932,6 +959,10 @@ def validate_health(
             expected["legacy_result_owner_api_enabled"] = plan[
                 "legacy_result_owner_api_enabled"
             ]
+        if plan["result_amendment_owner_api_contract_supported"]:
+            expected["result_amendment_owner_api_enabled"] = plan[
+                "result_amendment_owner_api_enabled"
+            ]
         if plan["promotion_canary_contract_supported"]:
             expected.update(
                 {
@@ -996,6 +1027,8 @@ def build_prestate(args: argparse.Namespace) -> dict[str, Any]:
         "promotion_canary_contract_supported",
         "legacy_result_owner_api_contract_supported",
         "legacy_result_owner_api_enabled", "result_owner_state_contract_commit",
+        "result_amendment_owner_api_contract_supported",
+        "result_amendment_owner_api_enabled",
         "replay_enabled", "staging_acceptance_enabled",
         "staging_memory_limit_bytes", "production_memory_gate_bytes",
         "reviewed_execution_profile_digest",
@@ -1078,6 +1111,12 @@ def build_prestate(args: argparse.Namespace) -> dict[str, Any]:
             ],
             "legacy_result_owner_api_enabled": plan[
                 "legacy_result_owner_api_enabled"
+            ],
+            "result_amendment_owner_api_contract_supported": plan[
+                "result_amendment_owner_api_contract_supported"
+            ],
+            "result_amendment_owner_api_enabled": plan[
+                "result_amendment_owner_api_enabled"
             ],
             "promotion_canary_enabled": plan["promotion_canary_enabled"],
             "promotion_canary_contract_supported": plan[

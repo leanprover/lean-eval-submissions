@@ -198,7 +198,31 @@ export type ResultMetadataBackfilledEvent = Omit<EventEnvelope, "causation_event
     actor: Readonly<{ kind: "github"; login: string }>;
     payload: Readonly<{ production_metadata: Readonly<Record<string, unknown>> }>;
   }>;
-export type WritableResultOwnerEvent = ResultClaimedEvent | ResultMetadataBackfilledEvent;
+export type ResultProblemRepairRequestedEvent = Omit<EventEnvelope, "causation_event_id"> &
+  Readonly<{
+    event_type: "result.problem_repair_requested";
+    subject_id: string;
+    causation_event_id: string;
+    actor: Readonly<{ kind: "github"; login: string }>;
+    payload: Readonly<{
+      repair_revision: number;
+      corrected_problem_id: string;
+      corrected_statement_revision: number;
+      reason_code: string;
+    }>;
+  }>;
+export type ResultRetractionRequestedEvent = Omit<EventEnvelope, "causation_event_id"> &
+  Readonly<{
+    event_type: "result.retraction_requested";
+    subject_id: string;
+    causation_event_id: string;
+    actor: Readonly<{ kind: "github"; login: string }>;
+    payload: Readonly<{ retraction_revision: number; reason_code: string }>;
+  }>;
+export type WritableResultOwnerEvent =
+  | ResultClaimedEvent
+  | ResultMetadataBackfilledEvent
+  | ResultRetractionRequestedEvent;
 
 /** State events the public submission Worker is authorized to append. */
 export type WritableStateEvent =
@@ -245,7 +269,29 @@ export type LifecycleStateEvent = Readonly<{
   payload: Readonly<Record<string, unknown>>;
 }>;
 
-export type StateEvent = WritableStateEvent | LifecycleStateEvent;
+type ResultAmendmentSystemEventType =
+  | "result.problem_repaired"
+  | "result.problem_repair_rejected"
+  | "result.retraction_decided"
+  | "result.retraction_overridden"
+  | "result.retracted";
+
+export type ResultAmendmentSystemEvent = Readonly<{
+  schema_version: 1;
+  event_id: string;
+  event_type: ResultAmendmentSystemEventType;
+  occurred_at: string;
+  subject_id: string;
+  causation_event_id: string;
+  actor: Readonly<{ kind: "system" }>;
+  payload: Readonly<Record<string, unknown>>;
+}>;
+
+export type StateEvent =
+  | WritableStateEvent
+  | LifecycleStateEvent
+  | ResultProblemRepairRequestedEvent
+  | ResultAmendmentSystemEvent;
 
 function object(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -428,9 +474,37 @@ function validateResultOwnerEvent(event: Record<string, unknown>): void {
   validateCanonicalActor(event);
   const actor = object(event.actor, "State event actor");
   const payload = object(event.payload, "State event payload");
-  if (event.event_type === "result.metadata_backfilled") {
+  if (event.event_type !== "result.claimed") {
     if (typeof event.causation_event_id !== "string" || !UUID_V7.test(event.causation_event_id)) {
-      throw new TypeError("result metadata backfill must have a lowercase UUIDv7 cause");
+      throw new TypeError("result owner mutation must have a lowercase UUIDv7 cause");
+    }
+    if (event.event_type === "result.problem_repair_requested") {
+      exactFields(payload, [
+        "corrected_problem_id", "corrected_statement_revision", "reason_code", "repair_revision",
+      ], "State event payload");
+      if (typeof payload.corrected_problem_id !== "string" || !PROBLEM_ID.test(payload.corrected_problem_id)) {
+        throw new TypeError("corrected_problem_id is invalid");
+      }
+      if (typeof payload.corrected_statement_revision !== "number" || !Number.isSafeInteger(payload.corrected_statement_revision) || payload.corrected_statement_revision < 1) {
+        throw new TypeError("corrected_statement_revision must be positive");
+      }
+      if (typeof payload.repair_revision !== "number" || !Number.isSafeInteger(payload.repair_revision) || payload.repair_revision < 1) {
+        throw new TypeError("repair_revision must be positive");
+      }
+      if (typeof payload.reason_code !== "string" || !REASON.test(payload.reason_code)) {
+        throw new TypeError("reason_code is invalid");
+      }
+      return;
+    }
+    if (event.event_type === "result.retraction_requested") {
+      exactFields(payload, ["reason_code", "retraction_revision"], "State event payload");
+      if (typeof payload.retraction_revision !== "number" || !Number.isSafeInteger(payload.retraction_revision) || payload.retraction_revision < 1) {
+        throw new TypeError("retraction_revision must be positive");
+      }
+      if (typeof payload.reason_code !== "string" || !REASON.test(payload.reason_code)) {
+        throw new TypeError("reason_code is invalid");
+      }
+      return;
     }
     exactFields(payload, ["production_metadata"], "State event payload");
     const metadata = decodeProductionMetadata(payload.production_metadata);
@@ -585,6 +659,59 @@ function validateLifecycleEvent(event: Record<string, unknown>, kind: LifecycleE
   }
 }
 
+function validateResultAmendmentSystemEvent(
+  event: Record<string, unknown>,
+  kind: ResultAmendmentSystemEventType,
+): void {
+  if (typeof event.subject_id !== "string" || !RESULT_ID.test(event.subject_id)) {
+    throw new TypeError("result amendment system event subject is invalid");
+  }
+  if (typeof event.causation_event_id !== "string" || !UUID_V7.test(event.causation_event_id)) {
+    throw new TypeError("result amendment system event cause is invalid");
+  }
+  const actor = object(event.actor, "State event actor");
+  exactFields(actor, ["kind"], "State event actor");
+  if (actor.kind !== "system") throw new TypeError("result amendment decision actor must be system");
+  const payload = object(event.payload, "State event payload");
+  const fields: Readonly<Record<ResultAmendmentSystemEventType, readonly string[]>> = {
+    "result.problem_repaired": [
+      "comparator_binding_sha256", "comparator_blob_oid", "comparator_blob_sha256",
+      "comparator_commit", "comparator_path", "comparator_record_sha256",
+      "comparator_repository", "comparator_verification_method", "corrected_problem_id",
+      "corrected_statement_revision", "evidence_base_challenge_id", "evidence_base_problem_group",
+      "evidence_base_problem_id", "evidence_base_statement_revision", "evidence_corrected_challenge_id",
+      "evidence_corrected_problem_group", "evidence_corrected_problem_id",
+      "evidence_corrected_statement_revision", "evidence_declared_model", "evidence_owner_login",
+      "evidence_result_id", "repair_revision", "reviewer_login",
+    ],
+    "result.problem_repair_rejected": ["reason_code", "repair_revision", "reviewer_login"],
+    "result.retraction_decided": ["decision", "reason_code", "retraction_revision", "reviewer_login"],
+    "result.retraction_overridden": ["reason_code", "retraction_revision", "reviewer_login"],
+    "result.retracted": ["reason_code", "release_disposition", "retraction_revision", "reviewer_login"],
+  };
+  exactFields(payload, fields[kind], "State event payload");
+  const revisionField = kind.startsWith("result.problem_") ? "repair_revision" : "retraction_revision";
+  const revision = payload[revisionField];
+  if (typeof revision !== "number" || !Number.isSafeInteger(revision) || revision < 1) {
+    throw new TypeError("result amendment revision is invalid");
+  }
+  if (typeof payload.reviewer_login !== "string" || !GITHUB_LOGIN.test(payload.reviewer_login)) {
+    throw new TypeError("result amendment reviewer is invalid");
+  }
+  if ("reason_code" in payload && (typeof payload.reason_code !== "string" || !REASON.test(payload.reason_code))) {
+    throw new TypeError("result amendment reason is invalid");
+  }
+  if (kind === "result.retraction_decided" && payload.decision !== "approve" && payload.decision !== "reject") {
+    throw new TypeError("result retraction decision is invalid");
+  }
+  if (
+    kind === "result.retracted" &&
+    !new Set(["not_published", "removal_required", "already_removed"]).has(payload.release_disposition as string)
+  ) {
+    throw new TypeError("result retraction release disposition is invalid");
+  }
+}
+
 export function validateStateEvent(value: unknown): asserts value is StateEvent {
   const event = object(value, "State event");
   exactFields(event, TOP_LEVEL_FIELDS, "State event");
@@ -610,11 +737,21 @@ export function validateStateEvent(value: unknown): asserts value is StateEvent 
     validateSubmissionChild(event);
   } else if (
     event.event_type === "result.claimed" ||
-    event.event_type === "result.metadata_backfilled"
+    event.event_type === "result.metadata_backfilled" ||
+    event.event_type === "result.problem_repair_requested" ||
+    event.event_type === "result.retraction_requested"
   ) {
     validateResultOwnerEvent(event);
   } else if (typeof event.event_type === "string" && event.event_type in LIFECYCLE_FIELDS) {
     validateLifecycleEvent(event, event.event_type as LifecycleEventType);
+  } else if (
+    typeof event.event_type === "string" &&
+    new Set<ResultAmendmentSystemEventType>([
+      "result.problem_repaired", "result.problem_repair_rejected", "result.retraction_decided",
+      "result.retraction_overridden", "result.retracted",
+    ]).has(event.event_type as ResultAmendmentSystemEventType)
+  ) {
+    validateResultAmendmentSystemEvent(event, event.event_type as ResultAmendmentSystemEventType);
   } else {
     throw new TypeError("State event type is not writable by the submission Worker");
   }

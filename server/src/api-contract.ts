@@ -106,6 +106,14 @@ export type LegacyResultClaimInput = Readonly<{
   result_id: string;
   results_commit: string;
 }>;
+export type ProblemRepairRequestInput = Readonly<{
+  corrected_problem_id: string;
+  corrected_statement_revision: number;
+  reason_code: string;
+}>;
+export type ResultRetractionRequestInput = Readonly<{
+  reason_code: string;
+}>;
 
 export class ApiDecodeError extends Error {
   constructor(message: string) {
@@ -376,6 +384,36 @@ export function decodeLegacyResultClaim(value: unknown): LegacyResultClaimInput 
     throw new ApiDecodeError("results_commit must be a lowercase 40-character commit");
   }
   return { result_id: data.result_id, results_commit: data.results_commit };
+}
+
+export function decodeProblemRepairRequest(value: unknown): ProblemRepairRequestInput {
+  const data = object(value, "problem repair request");
+  exactFields(data, ["corrected_problem_id", "corrected_statement_revision", "reason_code"], [], "problem repair request");
+  if (typeof data.corrected_problem_id !== "string" || !PROBLEM.test(data.corrected_problem_id)) {
+    throw new ApiDecodeError("corrected_problem_id is invalid");
+  }
+  const correctedStatementRevision = safeNatural(
+    data.corrected_statement_revision,
+    "corrected_statement_revision",
+    true,
+  );
+  if (typeof data.reason_code !== "string" || !REASON.test(data.reason_code)) {
+    throw new ApiDecodeError("reason_code is invalid");
+  }
+  return {
+    corrected_problem_id: data.corrected_problem_id,
+    corrected_statement_revision: correctedStatementRevision,
+    reason_code: data.reason_code,
+  };
+}
+
+export function decodeResultRetractionRequest(value: unknown): ResultRetractionRequestInput {
+  const data = object(value, "result retraction request");
+  exactFields(data, ["reason_code"], [], "result retraction request");
+  if (typeof data.reason_code !== "string" || !REASON.test(data.reason_code)) {
+    throw new ApiDecodeError("reason_code is invalid");
+  }
+  return { reason_code: data.reason_code };
 }
 
 export function decodePublicationChoice(value: unknown): PublicationChoice {

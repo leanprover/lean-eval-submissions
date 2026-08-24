@@ -5,6 +5,8 @@ import {
   decodeArchiveFailure,
   decodeEvaluationCompletion,
   decodeLegacyResultClaim,
+  decodeProblemRepairRequest,
+  decodeResultRetractionRequest,
   decodeResultCompletion,
   decodeAgentChallengeInput,
   decodeBrowserSubmission,
@@ -37,6 +39,7 @@ import { browserPage, browserScript } from "./browser-ui";
 import {
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
+  type ResultRetractionRequest,
   type GitHubFetch,
   GitHubStateError,
   GitHubStateRepository,
@@ -103,6 +106,7 @@ export type RuntimeEnv = Omit<
   | "INTAKE_LEASE_TARGET_COMMIT"
   | "LIFECYCLE_CALLBACK_TOKEN"
   | "LEGACY_RESULT_OWNER_API_ENABLED"
+  | "RESULT_AMENDMENT_OWNER_API_ENABLED"
   | "OAUTH_CALLBACK_URL"
   | "PROMOTION_CANARY_ENABLED"
   | "READINESS_TOKEN"
@@ -137,6 +141,7 @@ export type RuntimeEnv = Omit<
     INTAKE_LEASE_TARGET_COMMIT?: string;
     LIFECYCLE_CALLBACK_TOKEN?: string;
     LEGACY_RESULT_OWNER_API_ENABLED?: string;
+    RESULT_AMENDMENT_OWNER_API_ENABLED?: string;
     OAUTH_CALLBACK_URL?: string;
     PROMOTION_CANARY_ENABLED?: string;
     READINESS_TOKEN?: string;
@@ -194,6 +199,12 @@ export type StateAccess = Readonly<{
     resultId: string;
     mutationEventId: string;
   }>;
+  requestResultRetraction(request: ResultRetractionRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    retractionRevision: number;
+  }>;
 }>;
 export type ApiDependencies = Readonly<{
   now?: () => number;
@@ -235,6 +246,17 @@ function currentIntake(env: RuntimeEnv, dependencies: ApiDependencies = {}): Int
 function resultOwnerApiEnabled(env: RuntimeEnv): boolean {
   return env.LEGACY_RESULT_OWNER_API_ENABLED === "true" &&
     env.RESULT_OWNER_STATE_CONTRACT_COMMIT === RESULT_OWNER_STATE_CONTRACT_COMMIT;
+}
+
+function resultAmendmentOwnerApiEnabled(env: RuntimeEnv): boolean {
+  return env.RESULT_AMENDMENT_OWNER_API_ENABLED === "true" &&
+    env.RESULT_OWNER_STATE_CONTRACT_COMMIT === RESULT_OWNER_STATE_CONTRACT_COMMIT;
+}
+
+function requireResultAmendmentOwnerApi(env: RuntimeEnv): void {
+  if (!resultAmendmentOwnerApiEnabled(env)) {
+    throw new GitHubProviderError(503, "result amendment owner API is not configured");
+  }
 }
 
 function requireResultOwnerApi(env: RuntimeEnv): void {
@@ -1715,6 +1737,33 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
       status: outcome.created ? "backfilled" : "unchanged",
     }, outcome.created ? 201 : 200);
   }
+  const problemRepairMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/problem-repairs$/.exec(url.pathname);
+  if (request.method === "POST" && problemRepairMatch?.[1]) {
+    requireResultAmendmentOwnerApi(env);
+    await session(request, env, dependencies);
+    idempotencyEventId(request);
+    decodeProblemRepairRequest(await readJson(request));
+    return json({ error: "repair_state_unavailable" }, 503);
+  }
+  const retractionMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/retractions$/.exec(url.pathname);
+  if (request.method === "POST" && retractionMatch?.[1]) {
+    requireResultAmendmentOwnerApi(env);
+    const authenticated = await session(request, env, dependencies);
+    const eventId = idempotencyEventId(request);
+    const input = decodeResultRetractionRequest(await readJson(request));
+    const outcome = await state(env, dependencies).requestResultRetraction({
+      eventId,
+      occurredAt: canonicalTimestamp(now),
+      resultId: retractionMatch[1],
+      ownerLogin: authenticated.login,
+      reasonCode: input.reason_code,
+    });
+    return json({
+      result_id: outcome.resultId,
+      retraction_revision: outcome.retractionRevision,
+      status: outcome.created ? "retraction_requested" : "retraction_already_requested",
+    }, outcome.created ? 201 : 200);
+  }
   const match = /^\/api\/v1\/submissions\/([^/]+)(?:\/(metadata|publication))?$/.exec(url.pathname);
   if (match?.[1] && isUuidV7(match[1])) {
     const authenticated = await session(request, env, dependencies);
@@ -1814,6 +1863,7 @@ export async function handleRequest(
       intake_enablement_mode: intake.mode,
       intake_lease_expires_at: intake.leaseExpiresAt,
       legacy_result_owner_api_enabled: resultOwnerApiEnabled(env),
+      result_amendment_owner_api_enabled: resultAmendmentOwnerApiEnabled(env),
       promotion_canary_configured_enabled: env.PROMOTION_CANARY_ENABLED === "true",
       promotion_canary_enabled: promotionCanaryEnabled(env),
     });
@@ -1871,14 +1921,17 @@ export async function handleRequest(
       return errorResponse(error);
     }
   }
-  const resultOwnerRoute = url.pathname === "/api/v1/results/claims" ||
+  const legacyResultOwnerRoute = url.pathname === "/api/v1/results/claims" ||
     /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/metadata$/.test(url.pathname);
-  if (resultOwnerRoute && !resultOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
+  const amendmentOwnerRoute = /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/(?:problem-repairs|retractions)$/.test(url.pathname);
+  if (legacyResultOwnerRoute && !resultOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
+  if (amendmentOwnerRoute && !resultAmendmentOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   const oauthRoute = url.pathname === "/api/v1/oauth/start" || url.pathname === "/api/v1/oauth/callback";
+  const anyOwnerApiEnabled = resultOwnerApiEnabled(env) || resultAmendmentOwnerApiEnabled(env);
   if (
     url.pathname.startsWith("/api/") &&
     !intake.effective &&
-    !(resultOwnerApiEnabled(env) && (resultOwnerRoute || oauthRoute))
+    !((legacyResultOwnerRoute || amendmentOwnerRoute || oauthRoute) && anyOwnerApiEnabled)
   ) {
     return json({ error: "intake_disabled" }, 503);
   }

@@ -114,16 +114,29 @@ the already implemented owner status, metadata, and publication routes.
       metadata backfill without rewriting historical facts
       (`lean-eval-state#8`, merge `6ba71d2a`). The v1 public projection remains
       byte-for-byte stable and the redacted lifecycle metadata is opt-in v2.
-- [ ] Add the authenticated owner writer/API for those State events, including
+- [x] Add the authenticated owner retraction-request writer/API behind a dark
+      independent feature flag, including authority-derived owner verification,
+      exact idempotence, causal CAS, and redacted responses. Problem repair is
+      deliberately fail-closed pending a targeted State release-status and
+      initial-amendment index; see `docs/result-amendment-owner-api.md`.
+- [ ] Add the remaining authenticated owner writer/API for repair requests, including
       owner verification and exact results-Git tuple/digest recomputation;
       preserve the stable result identifier and grandfathered release policy.
 - [ ] Add model-alias, rename, consolidation, and new-canonical-identity
       request events, authorization, materialization, collision tests, and
       lifecycle-aware public projection behavior.
-- [ ] Add problem-repair requests and maintainer repair events with explicit
-      revision/causation rules; do not rewrite prior accepted records.
-- [ ] Add owner retraction requests and public maintainer override/retraction
-      events, including release and leaderboard consequences.
+- [x] Add State problem-repair request and maintainer decision events with
+      explicit revision/causation rules without rewriting accepted records
+      (`lean-eval-state#13`, merge `0c875994`). The Worker repair writer remains
+      fail-closed on the targeted release-status gap above.
+- [ ] Add the authenticated maintainer repair decisions after a reviewed human
+      maintainer identity boundary exists.
+- [x] Add State owner-retraction request, maintainer decision/override, and
+      terminal retraction events, including release and leaderboard
+      consequences (`lean-eval-state#13`, merge `0c875994`), plus the dark owner
+      request API described above.
+- [ ] Add authenticated maintainer retraction decisions, override, and terminal
+      actions after a reviewed human maintainer identity boundary exists.
 - [ ] Add hostile-input, owner/maintainer authorization, idempotence, causal
       conflict, and public-redaction tests for every amendment flow.
 
