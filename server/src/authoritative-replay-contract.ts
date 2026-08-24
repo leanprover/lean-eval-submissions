@@ -34,6 +34,16 @@ export type ReplayVerdict = {
   statistics: Record<string, unknown>;
 };
 
+export type AuthoritativeReplayStatusRequest = {
+  schema_version: 1;
+  runner_nonce: string;
+  replay_task_id: string;
+  attempt: number;
+  execution_profile_digest: string;
+  measurement_config_digest: string;
+  vm_image_digest: string;
+};
+
 export class AuthoritativeReplayContractError extends Error {}
 
 function object(value: unknown, label: string): Record<string, unknown> {
@@ -92,12 +102,11 @@ async function sha256Base64(encoded: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export async function readAuthoritativeReplayRequest(
-  incoming: Request,
+function requireReviewedDigests(
   reviewedProfileDigest: string,
   reviewedMeasurementDigest: string,
   reviewedVmImageDigest: string,
-): Promise<AuthoritativeReplayInput> {
+): void {
   if (
     !DIGEST.test(reviewedProfileDigest) ||
     !DIGEST.test(reviewedMeasurementDigest) ||
@@ -108,6 +117,19 @@ export async function readAuthoritativeReplayRequest(
   ) {
     throw new AuthoritativeReplayContractError("reviewed replay digests are not configured");
   }
+}
+
+export async function readAuthoritativeReplayRequest(
+  incoming: Request,
+  reviewedProfileDigest: string,
+  reviewedMeasurementDigest: string,
+  reviewedVmImageDigest: string,
+): Promise<AuthoritativeReplayInput> {
+  requireReviewedDigests(
+    reviewedProfileDigest,
+    reviewedMeasurementDigest,
+    reviewedVmImageDigest,
+  );
   const contentLength = incoming.headers.get("content-length");
   if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) > MAX_REQUEST_BYTES)) {
     throw new AuthoritativeReplayContractError("request exceeds the size limit");
@@ -201,6 +223,66 @@ export async function readAuthoritativeReplayRequest(
   };
 }
 
+export async function readAuthoritativeReplayStatusRequest(
+  incoming: Request,
+  reviewedProfileDigest: string,
+  reviewedMeasurementDigest: string,
+  reviewedVmImageDigest: string,
+): Promise<AuthoritativeReplayStatusRequest> {
+  requireReviewedDigests(
+    reviewedProfileDigest,
+    reviewedMeasurementDigest,
+    reviewedVmImageDigest,
+  );
+  const maximumBytes = 4096;
+  const contentLength = incoming.headers.get("content-length");
+  if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) > maximumBytes)) {
+    throw new AuthoritativeReplayContractError("status request exceeds the size limit");
+  }
+  const bytes = new Uint8Array(await incoming.arrayBuffer());
+  if (bytes.length === 0 || bytes.length > maximumBytes) {
+    throw new AuthoritativeReplayContractError("status request exceeds the size limit");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes));
+  } catch {
+    throw new AuthoritativeReplayContractError("status request is not one UTF-8 JSON object");
+  }
+  const status = object(parsed, "status request");
+  exactFields(status, [
+    "schema_version",
+    "runner_nonce",
+    "replay_task_id",
+    "attempt",
+    "execution_profile_digest",
+    "measurement_config_digest",
+    "vm_image_digest",
+  ], "status request");
+  const runnerNonce = text(status.runner_nonce, "runner_nonce", 64);
+  const replayTaskId = text(status.replay_task_id, "replay_task_id", 68);
+  const attempt = safeInteger(status.attempt, "attempt", Number.MAX_SAFE_INTEGER);
+  if (
+    status.schema_version !== 1 ||
+    !DIGEST.test(runnerNonce) ||
+    !REPLAY_ID.test(replayTaskId) ||
+    status.execution_profile_digest !== reviewedProfileDigest ||
+    status.measurement_config_digest !== reviewedMeasurementDigest ||
+    status.vm_image_digest !== reviewedVmImageDigest
+  ) {
+    throw new AuthoritativeReplayContractError("status request does not match the reviewed execution");
+  }
+  return {
+    schema_version: 1,
+    runner_nonce: runnerNonce,
+    replay_task_id: replayTaskId,
+    attempt,
+    execution_profile_digest: reviewedProfileDigest,
+    measurement_config_digest: reviewedMeasurementDigest,
+    vm_image_digest: reviewedVmImageDigest,
+  };
+}
+
 function validateCounter(value: unknown, label: string): Record<string, unknown> {
   const counter = object(value, label);
   if (counter.status === "measured") {
@@ -221,7 +303,10 @@ function validateCounter(value: unknown, label: string): Record<string, unknown>
   return counter;
 }
 
-export function validateReplayVerdict(value: unknown, input: AuthoritativeReplayInput): ReplayVerdict {
+export function validateReplayVerdict(
+  value: unknown,
+  input: Pick<AuthoritativeReplayInput, "request">,
+): ReplayVerdict {
   const verdict = object(value, "verdict");
   exactFields(verdict, [
     "schema_version",

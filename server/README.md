@@ -61,10 +61,16 @@ verifies a State-selected ciphertext, plaintext digest, safe tar shape, blocked
 egress, and destruction without running the checker or writing State.
 Production acceptance and replay are both disabled.
 
-Each request creates a fresh nonce-derived Sandbox, uses no persistent default
-session, runs one fixed image command with public networking disabled, and
-calls `destroy()` before returning source-free evidence. The container is
-limited to one `standard-4` instance (12 GiB) with SSH disabled. That 12 GiB
+Each replay creates a fresh nonce-derived Sandbox, uses no persistent default
+session, and starts one fixed background image command with public networking
+disabled. Short, freshly authenticated status requests poll that exact process;
+the terminal poll validates its bounded output and calls `destroy()` before
+returning source-free evidence. This avoids making a multi-hour evaluator's
+lifetime depend on one HTTP/RPC connection. The image deletes the encoded
+identity and ciphertext immediately after decoding and removes every decrypted
+or source-derived file in its unconditional cleanup. The five-minute Sandbox
+sleep remains a cleanup fallback if the controller disappears. The container
+is limited to one `standard-4` instance (12 GiB) with SSH disabled. That 12 GiB
 ceiling is the reviewed production profile; exceeding it is a resource-limit
 outcome and does not authorize a larger unreviewed executor. Production remains
 disabled until the other replay gates pass. `npm run deploy:dry-run` validates

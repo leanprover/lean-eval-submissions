@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   readAuthoritativeReplayRequest,
+  readAuthoritativeReplayStatusRequest,
   validateReplayVerdict,
 } from "../src/authoritative-replay-contract";
 
@@ -114,6 +115,34 @@ describe("authoritative replay boundary contract", () => {
       body: JSON.stringify(await fixture()),
     }), PROFILE_DIGEST, MEASUREMENT_DIGEST, `sha256:${"7".repeat(64)}`))
       .rejects.toThrow("VM image is not reviewed");
+  });
+
+  it("binds polling to the same nonce, task, attempt, and reviewed runtime", async () => {
+    const input = await fixture();
+    const execution = input.request as Record<string, unknown>;
+    const profile = execution.execution_profile as Record<string, unknown>;
+    const status = {
+      schema_version: 1,
+      runner_nonce: input.runner_nonce,
+      replay_task_id: execution.replay_task_id,
+      attempt: execution.attempt,
+      execution_profile_digest: execution.execution_profile_digest,
+      measurement_config_digest: execution.measurement_config_digest,
+      vm_image_digest: profile.vm_image_digest,
+    };
+    const parsed = await readAuthoritativeReplayStatusRequest(new Request(
+      "https://example.test",
+      { method: "POST", body: JSON.stringify(status) },
+    ), PROFILE_DIGEST, MEASUREMENT_DIGEST, VM_IMAGE_DIGEST);
+    expect(parsed.replay_task_id).toBe(execution.replay_task_id);
+    await expect(readAuthoritativeReplayStatusRequest(new Request(
+      "https://example.test",
+      { method: "POST", body: JSON.stringify({ ...status, attempt: 2 }) },
+    ), PROFILE_DIGEST, MEASUREMENT_DIGEST, VM_IMAGE_DIGEST)).resolves.toMatchObject({ attempt: 2 });
+    await expect(readAuthoritativeReplayStatusRequest(new Request(
+      "https://example.test",
+      { method: "POST", body: JSON.stringify({ ...status, vm_image_digest: `sha256:${"7".repeat(64)}` }) },
+    ), PROFILE_DIGEST, MEASUREMENT_DIGEST, VM_IMAGE_DIGEST)).rejects.toThrow("does not match");
   });
 
   it("keeps decline, crash, and timeout outcomes distinct", async () => {

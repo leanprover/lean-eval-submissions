@@ -572,6 +572,8 @@ def main() -> None:
     from replay_orchestrator import validate_execution_request, validate_verdict
 
     scratch = WORKSPACE / "authoritative"
+    encoded_ciphertext = WORKSPACE / "archive.tar.gz.age.b64"
+    encoded_identity = WORKSPACE / "identity.age.b64"
     ciphertext = WORKSPACE / "accepted-source.tar.gz.age"
     identity = WORKSPACE / "accepted-source.identity.age"
     plaintext = WORKSPACE / "accepted-source.tar.gz"
@@ -590,8 +592,10 @@ def main() -> None:
         )
         validate_measurement_limits(request)
         validate_runtime_profile(request, *platform_evidence())
-        decode_file(WORKSPACE / "archive.tar.gz.age.b64", ciphertext, MAX_CIPHERTEXT)
-        decode_file(WORKSPACE / "identity.age.b64", identity, 4096)
+        decode_file(encoded_ciphertext, ciphertext, MAX_CIPHERTEXT)
+        encoded_ciphertext.unlink(missing_ok=True)
+        decode_file(encoded_identity, identity, 4096)
+        encoded_identity.unlink(missing_ok=True)
         if sha256(ciphertext) != expectation["archive_ciphertext_sha256"]:
             raise AuthoritativeReplayError("ciphertext digest mismatch")
         decrypt = subprocess.run(
@@ -673,6 +677,8 @@ def main() -> None:
         validate_verdict(verdict, request)
         print(json.dumps(verdict, separators=(",", ":"), sort_keys=True))
     finally:
+        encoded_ciphertext.unlink(missing_ok=True)
+        encoded_identity.unlink(missing_ok=True)
         identity.unlink(missing_ok=True)
         plaintext.unlink(missing_ok=True)
         ciphertext.unlink(missing_ok=True)

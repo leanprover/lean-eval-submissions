@@ -77,6 +77,40 @@ async function authoritativeInput(): Promise<Record<string, unknown>> {
   };
 }
 
+function authoritativeStatusInput(body: Record<string, unknown>): Record<string, unknown> {
+  const execution = body.request as Record<string, unknown>;
+  const profile = execution.execution_profile as Record<string, unknown>;
+  return {
+    schema_version: 1,
+    runner_nonce: body.runner_nonce,
+    replay_task_id: execution.replay_task_id,
+    attempt: execution.attempt,
+    execution_profile_digest: execution.execution_profile_digest,
+    measurement_config_digest: execution.measurement_config_digest,
+    vm_image_digest: profile.vm_image_digest,
+  };
+}
+
+function acceptedVerdict(body: Record<string, unknown>): Record<string, unknown> {
+  const execution = body.request as Record<string, unknown>;
+  return {
+    schema_version: 1,
+    replay_task_id: execution.replay_task_id,
+    attempt: execution.attempt,
+    execution_outcome: "completed",
+    checker_outcome: "accepted",
+    failure_reason: null,
+    statistics: {
+      checker_wall_time_ms: 10,
+      checker_retired_instructions: { status: "measured", value: 20 },
+      build_wall_time_ms: 30,
+      build_retired_instructions: { status: "measured", value: 40 },
+      lines_of_code: 2,
+      file_count: 1,
+    },
+  };
+}
+
 const ENV = {
   DEPLOYED_COMMIT: "a".repeat(40),
   DEPLOYMENT_ENVIRONMENT: "staging",
@@ -116,58 +150,48 @@ describe("Cloudflare replay executor", () => {
     expect(authenticated).toBe(false);
   });
 
-  it("runs only the authoritative command and confirms destruction", async () => {
+  it("starts one background command, polls it, and confirms destruction", async () => {
     const body = await authoritativeInput();
-    const execution = body.request as Record<string, unknown>;
     const writes: string[] = [];
     const commands: string[] = [];
     const timeouts: number[] = [];
     let destroyed = false;
-    const response = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {
+    let processStarted = false;
+    let processStatus: "running" | "completed" = "running";
+    const process = {
+      getStatus: () => Promise.resolve(processStatus),
+      getLogs: () => Promise.resolve({
+        stdout: JSON.stringify(acceptedVerdict(body)),
+        stderr: "",
+      }),
+    };
+    const sandbox = {
+      writeFile: (path: string) => {
+        writes.push(path);
+        return Promise.resolve({ success: true, path, timestamp: "fixture" });
+      },
+      exec: () => { throw new Error("blocking exec must remain unreachable"); },
+      getProcess: () => Promise.resolve(processStarted ? process as never : null),
+      startProcess: (command: string, options?: { timeout?: number }) => {
+        processStarted = true;
+        commands.push(command);
+        timeouts.push(options?.timeout ?? 0);
+        return Promise.resolve(process as never);
+      },
+      destroy: () => {
+        destroyed = true;
+        return Promise.resolve();
+      },
+    };
+    const start = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {
       method: "POST",
       body: JSON.stringify(body),
     }), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
       authenticate: () => Promise.resolve(),
-      sandbox: () => ({
-        writeFile: (path) => {
-          writes.push(path);
-          return Promise.resolve({ success: true, path, timestamp: "fixture" });
-        },
-        exec: (command, options) => {
-          commands.push(command);
-          timeouts.push(options?.timeout ?? 0);
-          return Promise.resolve({
-            success: true,
-            exitCode: 0,
-            stdout: JSON.stringify({
-              schema_version: 1,
-              replay_task_id: execution.replay_task_id,
-              attempt: execution.attempt,
-              execution_outcome: "completed",
-              checker_outcome: "accepted",
-              failure_reason: null,
-              statistics: {
-                checker_wall_time_ms: 10,
-                checker_retired_instructions: { status: "measured", value: 20 },
-                build_wall_time_ms: 30,
-                build_retired_instructions: { status: "measured", value: 40 },
-                lines_of_code: 2,
-                file_count: 1,
-              },
-            }),
-            stderr: "",
-            command,
-            duration: 1,
-            timestamp: "fixture",
-          });
-        },
-        destroy: () => {
-          destroyed = true;
-          return Promise.resolve();
-        },
-      }),
+      sandbox: () => sandbox,
     });
-    expect(response.status).toBe(200);
+    expect(start.status).toBe(202);
+    expect(await start.json()).toMatchObject({ status: "running" });
     expect(commands).toEqual(["/opt/lean-eval/replay-authoritative"]);
     expect(timeouts).toEqual([20_100_000]);
     expect(writes).toEqual([
@@ -176,8 +200,67 @@ describe("Cloudflare replay executor", () => {
       "/workspace/archive.tar.gz.age.b64",
       "/workspace/identity.age.b64",
     ]);
+    expect(destroyed).toBe(false);
+
+    const duplicateStart = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/replay",
+      { method: "POST", body: JSON.stringify(body) },
+    ), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+    });
+    expect(duplicateStart.status).toBe(202);
+    expect(commands).toHaveLength(1);
+    expect(writes).toHaveLength(4);
+
+    const running = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/replay/status",
+      { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
+    ), REVIEWED_ENV, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+    });
+    expect(running.status).toBe(202);
+    expect(await running.json()).toMatchObject({ status: "running" });
+    expect(destroyed).toBe(false);
+
+    processStatus = "completed";
+    const status = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/replay/status",
+      { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
+    ), REVIEWED_ENV, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+    });
+    expect(status.status).toBe(200);
+    expect(await status.json()).toMatchObject({ destruction: "confirmed" });
     expect(destroyed).toBe(true);
-    expect(await response.json()).toMatchObject({ destruction: "confirmed" });
+  });
+
+  it("leaves a running process intact when a status RPC is transiently unavailable", async () => {
+    const body = await authoritativeInput();
+    let destroyed = false;
+    const response = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/replay/status",
+      { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
+    ), REVIEWED_ENV, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => ({
+        writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+        exec: () => { throw new Error("blocking exec must remain unreachable"); },
+        getProcess: () => Promise.reject(new Error("transient RPC failure")),
+        destroy: () => {
+          destroyed = true;
+          return Promise.resolve();
+        },
+      }),
+    });
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({
+      error: "executor_failed",
+      reason: "command_rpc_failed",
+    });
+    expect(destroyed).toBe(false);
   });
 
   it("destroys without executing if authoritative input transfer is not confirmed", async () => {
@@ -190,9 +273,11 @@ describe("Cloudflare replay executor", () => {
       authenticate: () => Promise.resolve(),
       sandbox: () => ({
         writeFile: (path) => Promise.resolve({ success: false, path, timestamp: "fixture" }),
-        exec: () => {
+        exec: () => { throw new Error("blocking exec must remain unreachable"); },
+        getProcess: () => Promise.resolve(null),
+        startProcess: () => {
           executed = true;
-          throw new Error("exec must remain unreachable");
+          throw new Error("start must remain unreachable");
         },
         destroy: () => {
           destroyed = true;
@@ -209,25 +294,25 @@ describe("Cloudflare replay executor", () => {
     expect(destroyed).toBe(true);
   });
 
-  it("returns and logs only an allowlisted authoritative failure classification", async () => {
+  it("returns and logs only an allowlisted background failure classification", async () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
+      const body = await authoritativeInput();
       const response = await handleReplayRequest(new Request(
-        "https://example.test/api/v1/replay",
-        { method: "POST", body: JSON.stringify(await authoritativeInput()) },
-      ), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+        "https://example.test/api/v1/replay/status",
+        { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
+      ), REVIEWED_ENV, {
         authenticate: () => Promise.resolve(),
         sandbox: () => ({
           writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
-          exec: (command) => Promise.resolve({
-            success: false,
-            exitCode: 1,
-            stdout: "",
-            stderr: "replay-authoritative: measurement evidence is unavailable\n",
-            command,
-            duration: 1,
-            timestamp: "fixture",
-          }),
+          exec: () => { throw new Error("blocking exec must remain unreachable"); },
+          getProcess: () => Promise.resolve({
+            getStatus: () => Promise.resolve("failed"),
+            getLogs: () => Promise.resolve({
+              stdout: "",
+              stderr: "replay-authoritative: measurement evidence is unavailable\n",
+            }),
+          } as never),
           destroy: () => Promise.resolve(),
         }),
       });
@@ -239,7 +324,7 @@ describe("Cloudflare replay executor", () => {
       });
       expect(logged).toHaveBeenCalledExactlyOnceWith(JSON.stringify({
         event: "lean_eval_replay_executor_failure",
-        route: "authoritative_replay",
+        route: "authoritative_replay_status",
         reason: "command_failed",
         detail: "measurement_evidence_unavailable",
       }));
@@ -249,22 +334,22 @@ describe("Cloudflare replay executor", () => {
   });
 
   it("classifies evaluator preflight failures without exposing command output", async () => {
+    const body = await authoritativeInput();
     const response = await handleReplayRequest(new Request(
-      "https://example.test/api/v1/replay",
-      { method: "POST", body: JSON.stringify(await authoritativeInput()) },
-    ), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+      "https://example.test/api/v1/replay/status",
+      { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
+    ), REVIEWED_ENV, {
       authenticate: () => Promise.resolve(),
       sandbox: () => ({
         writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
-        exec: (command) => Promise.resolve({
-          success: false,
-          exitCode: 1,
-          stdout: "",
-          stderr: "replay-authoritative: evaluator failed before measurement\n",
-          command,
-          duration: 1,
-          timestamp: "fixture",
-        }),
+        exec: () => { throw new Error("blocking exec must remain unreachable"); },
+        getProcess: () => Promise.resolve({
+          getStatus: () => Promise.resolve("failed"),
+          getLogs: () => Promise.resolve({
+            stdout: "",
+            stderr: "replay-authoritative: evaluator failed before measurement\n",
+          }),
+        } as never),
         destroy: () => Promise.resolve(),
       }),
     });
@@ -280,36 +365,36 @@ describe("Cloudflare replay executor", () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const sensitive = "private identity fixture";
     try {
+      const body = await authoritativeInput();
       const response = await handleReplayRequest(new Request(
-        "https://example.test/api/v1/replay",
-        { method: "POST", body: JSON.stringify(await authoritativeInput()) },
-      ), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+        "https://example.test/api/v1/replay/status",
+        { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
+      ), REVIEWED_ENV, {
         authenticate: () => Promise.resolve(),
         sandbox: () => ({
           writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
-          exec: (command) => Promise.resolve({
-            success: false,
-            exitCode: 1,
-            stdout: "",
-            stderr: `replay-authoritative: ${sensitive}\n`,
-            command,
-            duration: 1,
-            timestamp: "fixture",
-          }),
+          exec: () => { throw new Error("blocking exec must remain unreachable"); },
+          getProcess: () => Promise.resolve({
+            getStatus: () => Promise.resolve("failed"),
+            getLogs: () => Promise.resolve({
+              stdout: "",
+              stderr: `replay-authoritative: ${sensitive}\n`,
+            }),
+          } as never),
           destroy: () => Promise.resolve(),
         }),
       });
-      const body = await response.json();
+      const responseBody = await response.json();
       expect(response.status).toBe(500);
-      expect(body).toEqual({
+      expect(responseBody).toEqual({
         error: "executor_failed",
         reason: "command_failed",
         detail: "unclassified_authoritative_failure",
       });
-      expect(JSON.stringify(body)).not.toContain(sensitive);
+      expect(JSON.stringify(responseBody)).not.toContain(sensitive);
       expect(logged).toHaveBeenCalledExactlyOnceWith(JSON.stringify({
         event: "lean_eval_replay_executor_failure",
-        route: "authoritative_replay",
+        route: "authoritative_replay_status",
         reason: "command_failed",
         detail: "unclassified_authoritative_failure",
       }));
