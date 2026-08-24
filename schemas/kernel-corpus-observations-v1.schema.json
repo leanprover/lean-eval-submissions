@@ -27,14 +27,14 @@
           "replay_attempt": {"$ref": "#/$defs/positive_integer"},
           "attempt_id": {"type": "string", "pattern": "^kca1_[0-9a-f]{64}$"},
           "status": {"enum": ["completed", "unavailable", "pending"]},
-          "outcome": {"enum": ["accepted", "rejected", "declined", "crashed", "timed_out", "source_unavailable", "replay_unavailable", "export_unavailable", "replay_pending", "export_format_unsupported"]},
+          "outcome": {"enum": ["accepted", "declined", "crashed", "timed_out", "source_unavailable", "replay_unavailable", "export_unavailable", "replay_pending", "export_format_unsupported"]},
           "evidence_sha256": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
           "statistics": {"oneOf": [{"$ref": "#/$defs/statistics"}, {"type": "null"}]},
           "execution_receipt": {"oneOf": [{"$ref": "#/$defs/execution_receipt"}, {"type": "null"}]}
         },
         "allOf": [
           {"oneOf": [{"properties": {"statistics": {"type": "null"}, "execution_receipt": {"type": "null"}}}, {"properties": {"statistics": {"$ref": "#/$defs/statistics"}, "execution_receipt": {"$ref": "#/$defs/execution_receipt"}}}]},
-          {"if": {"properties": {"status": {"const": "completed"}}}, "then": {"properties": {"outcome": {"enum": ["accepted", "rejected", "declined", "crashed", "timed_out"]}, "evidence_sha256": {"type": "null"}, "statistics": {"$ref": "#/$defs/statistics"}, "execution_receipt": {"$ref": "#/$defs/execution_receipt"}}}},
+          {"if": {"properties": {"status": {"const": "completed"}}}, "then": {"properties": {"outcome": {"enum": ["accepted", "declined", "crashed", "timed_out"]}, "evidence_sha256": {"type": "null"}, "statistics": {"$ref": "#/$defs/statistics"}, "execution_receipt": {"$ref": "#/$defs/execution_receipt"}}}},
           {"if": {"properties": {"status": {"const": "unavailable"}}}, "then": {"properties": {"outcome": {"enum": ["source_unavailable", "replay_unavailable", "export_unavailable"]}, "evidence_sha256": {"$ref": "#/$defs/digest"}}}},
           {"if": {"properties": {"status": {"const": "pending"}}}, "then": {"properties": {"outcome": {"enum": ["replay_pending", "export_format_unsupported"]}}, "allOf": [{"if": {"properties": {"outcome": {"const": "replay_pending"}}}, "then": {"properties": {"evidence_sha256": {"type": "null"}}}}, {"if": {"properties": {"outcome": {"const": "export_format_unsupported"}}}, "then": {"properties": {"evidence_sha256": {"$ref": "#/$defs/digest"}}}}]}}
         ]
@@ -70,7 +70,7 @@
         "input_sha256": {"$ref": "#/$defs/digest"},
         "configuration_id": {"$ref": "#/$defs/configuration_id"},
         "configuration_sha256": {"$ref": "#/$defs/digest"},
-        "outcome": {"enum": ["accepted", "rejected", "declined", "crashed", "timed_out", "export_unavailable", "export_format_unsupported"]},
+        "outcome": {"enum": ["accepted", "declined", "crashed", "timed_out", "export_unavailable", "export_format_unsupported"]},
         "resource_limit_disposition": {"enum": ["within_limits", "wall_timeout", "memory_limit"]},
         "statistics": {"$ref": "#/$defs/statistics"},
         "transcript_sha256": {"$ref": "#/$defs/digest"},
@@ -79,7 +79,7 @@
       },
       "allOf": [
         {"if": {"properties": {"outcome": {"enum": ["export_unavailable", "export_format_unsupported"]}}}, "then": {"properties": {"statistics": {"properties": {"checker_invocations": {"const": 0}}}}}},
-        {"if": {"properties": {"outcome": {"enum": ["accepted", "rejected", "declined", "crashed", "timed_out"]}}}, "then": {"properties": {"statistics": {"properties": {"checker_invocations": {"minimum": 1}}}}}}
+        {"if": {"properties": {"outcome": {"enum": ["accepted", "declined", "crashed", "timed_out"]}}}, "then": {"properties": {"statistics": {"properties": {"checker_invocations": {"minimum": 1}}}}}}
       ]
     }
   }

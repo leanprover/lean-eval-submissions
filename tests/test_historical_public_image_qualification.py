@@ -311,9 +311,23 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
         self.assertIn('git merge-base --is-ancestor "$image_source_commit" "$GITHUB_SHA"', workflow)
         self.assertIn('test "$image_source_remote_commit" = "$image_source_commit"', workflow)
         self.assertIn('test "$image_digest" = "$RESUME_DIGEST"', workflow)
+        for image_source_path in (
+            "Dockerfile.historical-public-replay",
+            "Dockerfile.historical-public-replay.dockerignore",
+            "configuration/historical-public-runner-v1.json",
+            "scripts/evaluate_submission.py",
+            "scripts/historical_public_runner.py",
+            "scripts/prepare_historical_image_layers.py",
+            "server/replay-image/comparator-71b52-phase-metrics.patch",
+            "server/replay-image/historical-public-runner",
+            "server/replay-image/replay-authoritative",
+            "server/replay-image/replay-measure",
+            "server/replay-image/replay-staging-acceptance",
+        ):
+            self.assertIn(image_source_path, workflow)
+        self.assertIn('for source_path in "${image_source_files[@]}"; do', workflow)
         self.assertIn(
-            'git show "$image_source_commit:server/replay-image/replay-staging-acceptance"',
-            workflow,
+            '--tmpfs /run/lean-eval:rw,noexec,nosuid,nodev,size=80m', workflow
         )
         self.assertIn('python "$FAILURE_SANITIZER" "$RUNNER_TEMP/probe-response.json"', workflow)
         self.assertIn('if [ "$number" -eq 2 ]; then', workflow)

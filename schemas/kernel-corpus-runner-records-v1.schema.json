@@ -22,7 +22,7 @@
         "properties": {
           "attempt_id": {"type": "string", "pattern": "^kca1_[0-9a-f]{64}$"},
           "input_sha256": {"$ref": "#/$defs/digest"},
-          "outcome": {"enum": ["accepted", "rejected", "declined", "crashed", "timed_out", "export_unavailable", "export_format_unsupported"]},
+          "outcome": {"enum": ["accepted", "declined", "crashed", "timed_out", "export_unavailable", "export_format_unsupported"]},
           "evidence_sha256": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
           "resource_limit_disposition": {"enum": ["within_limits", "wall_timeout", "memory_limit"]},
           "statistics": {"$ref": "#/$defs/statistics"},
@@ -31,7 +31,7 @@
           "source_free": {"const": true}
         },
         "allOf": [
-          {"if": {"properties": {"outcome": {"enum": ["accepted", "rejected", "declined", "crashed", "timed_out"]}}}, "then": {"properties": {"evidence_sha256": {"type": "null"}, "statistics": {"properties": {"checker_invocations": {"minimum": 1}}}}}},
+          {"if": {"properties": {"outcome": {"enum": ["accepted", "declined", "crashed", "timed_out"]}}}, "then": {"properties": {"evidence_sha256": {"type": "null"}, "statistics": {"properties": {"checker_invocations": {"minimum": 1}}}}}},
           {"if": {"properties": {"outcome": {"enum": ["export_unavailable", "export_format_unsupported"]}}}, "then": {"properties": {"evidence_sha256": {"$ref": "#/$defs/digest"}, "statistics": {"properties": {"checker_invocations": {"const": 0}}}}}}
         ]
       }

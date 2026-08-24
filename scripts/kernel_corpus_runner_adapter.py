@@ -18,8 +18,8 @@ import sys
 from typing import Any
 
 from kernel_corpus_report import (
+    CANDIDATE_TERMINAL_OUTCOMES,
     DIGEST,
-    TERMINAL_OUTCOMES,
     KernelCorpusError,
     _fields,
     _load,
@@ -58,7 +58,10 @@ RECORD_BUNDLE_FIELDS = {
     "records",
 }
 EXECUTED_OUTCOMES = (
-    *TERMINAL_OUTCOMES,
+    "accepted",
+    "declined",
+    "crashed",
+    "timed_out",
     "export_unavailable",
     "export_format_unsupported",
 )
@@ -69,6 +72,18 @@ MAX_INPUT_FILES = 100_000
 
 class KernelCorpusRunnerError(KernelCorpusError):
     """A runner record or source-free input violates the adapter contract."""
+
+
+def _stat_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
 
 
 def _sha256(value: Any) -> str:
@@ -127,12 +142,12 @@ def _digest_input(path: pathlib.Path, descriptor: int, name: str) -> tuple[str, 
     digest = hashlib.sha256()
     size = 0
     try:
-        metadata = os.fstat(input_descriptor)
-        if not stat.S_ISREG(metadata.st_mode):
+        metadata_before = os.fstat(input_descriptor)
+        if not stat.S_ISREG(metadata_before.st_mode):
             raise KernelCorpusRunnerError(
                 f"{path / name}: input must be a regular file"
             )
-        if metadata.st_size > MAX_INPUT_BYTES:
+        if metadata_before.st_size > MAX_INPUT_BYTES:
             raise KernelCorpusRunnerError(
                 f"{path / name}: input exceeds the per-file byte limit"
             )
@@ -148,6 +163,14 @@ def _digest_input(path: pathlib.Path, descriptor: int, name: str) -> tuple[str, 
                     f"{path / name}: input exceeds the per-file byte limit"
                 )
             digest.update(chunk)
+        metadata_after = os.fstat(input_descriptor)
+        if (
+            _stat_identity(metadata_before) != _stat_identity(metadata_after)
+            or size != metadata_before.st_size
+        ):
+            raise KernelCorpusRunnerError(
+                f"{path / name}: input changed while it was read"
+            )
     except OSError as error:
         raise KernelCorpusRunnerError(
             f"{path / name}: cannot read input: {error}"
@@ -266,7 +289,7 @@ def validate_record_bundle(
             raise KernelCorpusRunnerError(f"{label} exceeds the series memory limit")
         outcome = record["outcome"]
         evidence = record["evidence_sha256"]
-        if outcome in TERMINAL_OUTCOMES:
+        if outcome in CANDIDATE_TERMINAL_OUTCOMES:
             if evidence is not None:
                 raise KernelCorpusRunnerError(
                     f"{label} terminal checker outcome cannot claim availability evidence"
@@ -383,7 +406,7 @@ def materialize_observation_shard(
                 **common,
                 "status": (
                     "completed"
-                    if outcome in TERMINAL_OUTCOMES
+                    if outcome in CANDIDATE_TERMINAL_OUTCOMES
                     else "unavailable"
                     if outcome == "export_unavailable"
                     else "pending"

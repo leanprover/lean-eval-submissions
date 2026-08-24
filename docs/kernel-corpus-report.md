@@ -17,23 +17,32 @@ full-corpus evidence.
 Each layer is closed to unknown fields and validated both structurally and
 semantically:
 
-1. `kernel-checker-series-v1` binds the series name and exact candidate binary,
-   exporter artifact, checker configuration, runner image, repositories,
-   commits, protocols, architecture, operating system, and resource limits.
+1. `kernel-checker-series-v1` binds the series name and exact candidate binary
+   and series-wide candidate configuration policy, comparison framework,
+   runner image, repositories, commits, protocols, architecture, operating
+   system, and resource limits. Its sorted producer-profile registry binds each
+   runnable benchmark commit to the exact lean4export repository, commit,
+   binary digest, reported version, format contract, and Lean
+   toolchain/version/Git hash that
+   produced that attempt's bytes. A historical corpus spans several exporter
+   commits and Lean toolchains, so these identities are deliberately
+   per-benchmark rather than one false series-wide artifact.
    `configuration_id` is the SHA-256 identity of the canonical complete object
    with only that ID omitted.
 2. `kernel-corpus-inventory-v1` binds a migration cutoff, exact results-store
    commit and tree digest, the historical replay report digest, and every
-   result/replay-task pair, positive replay attempt, and exact terminal verdict,
-   terminal State event, and report-entry digests. Every runnable row also
-   binds the digest of the source-free replay/export input. `inventory_id`
+   result/replay-task pair, positive replay attempt, problem and statement
+   revision, benchmark repository/commit/configuration digest, and exact
+   terminal verdict, terminal State event, and report-entry digests. Every
+   runnable row also binds the digest of the source-free replay/export input. `inventory_id`
    binds the complete canonical object with only that ID omitted. Results and
    replay tasks are unique and sorted.
 3. `kernel-corpus-shard-plan-v1` assigns every inventory result to exactly one
    shard by `sha256(result_id) mod shard_count`. Every attempt ID binds the
    configuration ID, inventory ID, result ID, replay task, positive replay
-   attempt, terminal evidence tuple, and replay/export input. Recomputing the
-   plan rejects changed configurations, inventories, attempts, shard counts,
+   attempt, benchmark identity/configuration, terminal evidence tuple, and
+   replay/export input. Recomputing the plan rejects changed configurations,
+   inventories, attempts, shard counts,
    omissions, and duplicates.
 4. The reviewed runner receives one regular raw input named
    `<attempt_id>.input` for each planned `run`; its raw SHA-256 must be the
@@ -110,8 +119,20 @@ python scripts/kernel_corpus_report.py prepare-shards \
   --output-dir plans
 ```
 
-After a separately reviewed runner has produced the exact raw input files and
-one runner-record bundle for a shard, materialize the observation file:
+After a separately reviewed runner has produced the exact raw input and wire
+files, first bind those objects into the existing runner-record bundle:
+
+```bash
+python scripts/kernel_wire_record_adapter.py \
+  --series series.json \
+  --inventory inventory.json \
+  --plan plans/shard-0000.json \
+  --inputs-dir inputs/shard-0000 \
+  --wire-dir wire/shard-0000 \
+  --output runner-records/shard-0000.json
+```
+
+Then materialize the observation file:
 
 ```bash
 python scripts/kernel_corpus_runner_adapter.py \
@@ -140,9 +161,11 @@ against the existing semantic and JSON Schema contracts.
 The adapter does not execute any process and has no network, credential,
 repository-write, Results, State, or promotion interface. The raw-input and
 record JSON reads are regular-file, no-follow, count-, byte-, depth-, and
-node-bounded. Observation publication is exclusive, no-follow, atomic, and
-never overwrites an existing path. The input directory itself must exist and
-must not be a symlink, including for a shard with no planned `run` attempts.
+node-bounded. Each read rejects a change to the open file's device, inode,
+mode, link count, size, modification time, or change time. Observation
+publication is exclusive, no-follow, atomic, and never overwrites an existing
+path. The input directory itself must exist and must not be a symlink,
+including for a shard with no planned `run` attempts.
 
 After every separately reviewed shard has been materialized, aggregate them in
 deterministic filename order:
@@ -160,31 +183,39 @@ The tool refuses a nonempty preparation directory and refuses incomplete,
 mixed, reordered, duplicated, or altered plan/observation sets. JSON reads are
 per-file and aggregate-directory byte-, node-, depth-, and file-count-bounded;
 reject duplicate object keys; and
-accept only regular non-symlink files. Shard directories reject unknown names,
-FIFOs, devices, links, and membership differences. Outputs use no-follow,
+accept only regular non-symlink files. Each open file must retain the same
+device, inode, mode, link count, size, modification time, and change time for
+the complete read. Shard directories reject unknown names, FIFOs, devices,
+links, and membership differences. Outputs use no-follow,
 exclusive, same-directory atomic publication and never overwrite an existing
 path. Every runtime input and generated artifact is checked against its Draft
 2020-12 schema as well as the cross-artifact semantic validator. The tool
 performs no network access and has no credential or repository-write interface.
 
-Proposed exact raw-export, canonical Mathgraph invocation, structured
-transcript, and runner-attestation shapes for a future runner are specified in
+Exact raw-export, canonical Mathgraph invocation, structured transcript, and
+runner-attestation shapes and their offline record integration are specified in
 [`kernel-runner-wire-contract.md`](kernel-runner-wire-contract.md). That
-contract's validator explicitly blocks Mathgraph exit `1` because the pinned
-producer conflates rejection and internal failure. The current adapter does
-not import or enforce the wire objects, so runner integration remains a
-separate reviewed change; the adapter must never receive a guessed `rejected`
-record from that status.
+contract's validator and adapter explicitly block Mathgraph exit `1` because
+the pinned producer conflates rejection and internal failure. No guessed
+`rejected` record can cross the wire-to-record boundary or the generic
+runner-record materialization boundary. Historical authoritative inventory
+outcomes remain unchanged.
 
 ## Current rollout status
 
 This repository now provides the preparatory contract, a fail-closed offline
-runner-record adapter, deterministic aggregator, schemas, fixtures, and hostile
-tests. It does not provide or claim a corpus execution. An actual corpus report
-is still blocked on completion and review of the historical replay inventory;
-production of each ready row's real source-free replay/export input artifact;
-and a separately reviewed exact-image runner that executes the pinned exporter,
-checker, and candidate and produces the attested record bundle. Those missing
-artifacts are the execution dependency: synthetic fixtures cannot satisfy it.
+wire-to-record integration, runner-record adapter, deterministic aggregator,
+schemas, fixtures, and hostile tests. The authoritative and historical-public
+replay image sources have the exact-byte capture seam needed by an
+authoritative producer, but no changed image or runner is qualified and no
+handoff publishes a capture. It does not provide or
+claim a corpus execution. An actual corpus report is still blocked on
+an accepted historical image probe that really executes Lean, comparator, and
+`replay-measure` (not only the existing runtime-boundary probe);
+completion and review of the historical replay inventory; production of each
+ready row's real source-free replay/export input artifact; and a separately
+reviewed exact-image runner that executes the pinned checker and produces the
+attested wire chain. Those missing artifacts are the execution dependency:
+synthetic fixtures cannot satisfy it.
 AWS-backed private archive execution is not provisioned by this change.
 Production intake and automatic publication remain outside this contract.

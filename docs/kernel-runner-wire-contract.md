@@ -1,17 +1,23 @@
 # Independent-kernel runner wire contract
 
-This version-1 contract specifies a proposed byte and process boundary between
-authoritative replay and a future independent-kernel runner. It is an offline
-validation contract, not an exporter or runner. The existing record-only corpus
-adapter does not import or enforce these objects. Nothing here fetches source,
-executes Lean, invokes a checker, writes State or Results, or qualifies a
-candidate.
+This version-1 contract specifies the byte and process boundary between
+authoritative replay and a future independent-kernel runner. Its validators and
+wire-to-record adapter are offline and do not execute Lean or a checker. The
+authoritative and historical-public replay image sources now capture the exact
+solution-export bytes at the comparator boundary. The authoritative PR image
+workflow may produce source-only build evidence, but that is not execution
+qualification; the corresponding historical image remains unbuilt. Neither
+changed image is qualified, deployed, selected, or connected to a durable
+source-free artifact handoff.
+Nothing here fetches source, writes State or Results, or qualifies a candidate.
 
 The tracked fixtures use synthetic identities and a two-line structural NDJSON
 sample. The format-document and candidate-source pins refer to real reviewed
 source blobs; every execution identity and evidence digest is synthetic and
-unqualified. The fixtures are not replay evidence, an image attestation, a
-checker result, or a corpus execution.
+unqualified. Corpus-report and standalone wire fixtures are contract-local
+examples rather than one executable cross-file chain; the focused adapter tests
+synthesize and validate the complete cross-bound chain. The fixtures are not
+replay evidence, an image attestation, a checker result, or a corpus execution.
 
 ## Exact input bytes
 
@@ -23,12 +29,18 @@ an archive, an olean, a workspace, or a JSON wrapper around the export.
 The sidecar binds the result, replay task and positive attempt; raw byte count
 and SHA-256; exporter repository, commit, binary digest, name and reported
 version; the path and SHA-256 of `format_ndjson.md` at the pinned exporter
-commit; Lean toolchain,
+commit; comparison-framework repository, commit, and protocol; Lean toolchain,
 version and Git hash; the exact benchmark `config.json` commit, canonical path,
 blob digest and permitted-axiom list; and the terminal verdict, State event and
-historical report-entry digests. The invocation's axiom list must equal the
-list parsed from those supplied configuration bytes. Repository/commit/blob
-claims remain producer assertions until an approved producer verifies them.
+historical report-entry digests. The comparison framework must equal the exact
+checker series. The series also contains a sorted, unique producer profile for
+each benchmark commit, and the offline adapter requires the sidecar's complete
+exporter, format, and Lean identity to equal the profile selected by that exact
+attempt. A historical series intentionally spans five exporter commits and
+several Lean toolchains; one series-wide exporter or Lean identity would reject
+valid historical rows. Repository/commit/blob claims remain producer assertions
+until an approved producer verifies them and the reviewed series freezes the
+resulting profile.
 
 The semantic validator checks the raw file itself: at most 64 MiB, canonical
 LF termination, bounded NDJSON lines, strict JSON/UTF-8 scalars, exactly one
@@ -40,12 +52,35 @@ producer omitted source-shaped string values.
 
 `source_free: true` means the artifact contains the exported environment needed
 by a kernel, not submission source files or repository metadata. It remains an
-assertion of the reviewed producer. A future producer must capture the exact
-`solutionExport` bytes that comparator actually checked, using an exclusive,
-no-follow output owned by the trusted replay runtime. Regenerating similar
-bytes later is not evidence that they were the bytes used by terminal replay.
-No current replay verdict or historical artifact makes that assertion, so the
-fixture cannot be replaced with invented production metadata.
+assertion of the reviewed producer. The prepared comparator patch now labels
+only the solution export as `solution-export`; the trusted measurement adapter
+tees that exact bounded LF-terminated stdout both to comparator and to the
+exclusive, no-follow, mode-0600
+`/run/lean-eval/solution-export.ndjson`. Failed, empty, over-limit, or duplicate
+captures are removed or refused. Both authoritative and historical-public
+commands remove a stale capture before evaluation and scrub any capture in
+their `finally` cleanup. A process-level `SIGKILL` can bypass that cleanup, so
+the future handoff must use attempt-bound completion evidence and must never
+accept a fixed-path incumbent as current-run output; Sandbox destruction is the
+final cleanup boundary today. This is the producer capture seam, but no
+reviewed handoff retrieves it or finalizes the sidecar against terminal
+State/report evidence. Regenerating similar bytes later is not evidence that
+they were the bytes used by terminal replay. No current replay verdict or
+historical artifact makes that assertion, so the fixture cannot be replaced
+with invented production metadata. Because the trusted tee sits inside the
+measured solution-export invocation, current build-phase wall time and retired
+instruction counts include its forwarding/capture overhead; image qualification
+must review and freeze that changed measurement profile.
+
+Capture policy remains advisory, but forwarding is part of comparator execution.
+If the tee cannot forward the child's stdout, `replay-measure` records exit 125
+for that build-phase invocation before returning failure. The authoritative
+verdict therefore treats the infrastructure failure as a crash rather than a
+submission rejection. If the metrics store itself cannot be read or atomically
+updated, the adapter discards the complete store before returning 125; stale
+phase history therefore cannot turn a persistence fault into a verdict. The
+historical-image local verification mount reserves 80 MiB for `/run/lean-eval`,
+covering the 64 MiB capture ceiling plus metrics and atomic-update headroom.
 
 ## Fixed invocation
 
@@ -56,20 +91,32 @@ binary digest, export-sidecar digest and raw input digest are mandatory. The
 binary is explicitly `unqualified`: its digest is bound but has not been
 approved by an image/build provenance registry.
 
-The `attempt_id` is also explicitly `unbound`. Version 1 carries the asserted
-corpus-attempt label through the transcript and attestation, but lacks the
-series configuration and inventory identities required to recompute the
-adapter's `kca1_...` identity. A future integration must add and verify those
-inputs before converting this label into a corpus runner record.
+The invocation's `attempt_id` remains explicitly `unbound`: the standalone
+wire object does not contain the series and inventory. The offline integration
+adapter supplies those exact objects and their deterministic shard plan,
+recomputes the `kca1_...` identity, selects the one producer profile registered
+for the attempt's benchmark commit, and requires the invocation, transcript,
+attestation, export sidecar, terminal evidence, candidate, producer profile,
+runner, configuration, and limits all to match before emitting a runner record.
 
 The nanoda-compatible configuration is a closed object. Its exact bytes are
 UTF-8 canonical JSON (sorted keys, compact separators, no trailing newline),
 and `configuration_sha256` is computed over those bytes. Version 1 forces
 file input, the fixed read-only export path, a sorted unique permitted-axiom
 list, hard failure for unpermitted axioms, and the natural-number and string
-extensions. The axiom list must match the exact benchmark configuration bytes
-bound by the export sidecar. A hash without the corresponding closed
-configuration cannot be executed.
+extensions. Historical benchmark configuration bytes retain their exact
+order-preserving unique axiom list. The canonical candidate invocation sorts
+that same list, so historical source order cannot change either the permitted
+set or the executable configuration digest. A hash without the corresponding
+closed configuration cannot be executed.
+
+The series-wide candidate `configuration_policy_sha256` hashes the five fixed
+policy fields (file input, fixed export path, hard axiom failure, natural-number
+extension, and string extension) and deliberately excludes `permitted_axioms`.
+The latter is problem-specific: its exact list is bound per attempt by the
+benchmark configuration, full invocation `configuration_sha256`, transcript,
+and attestation. A corpus may therefore contain problems with different
+reviewed axiom lists without weakening the common candidate policy.
 
 The process receives exactly:
 
@@ -113,7 +160,10 @@ failure. The transcript must record `status: blocked` and
 promotion evidence. Other unregistered exits are blocked separately. A safe
 `rejected` outcome requires a reviewed producer change that emits a structured,
 versioned result distinct from internal failure. This contract does not guess
-at that future protocol.
+at that future protocol. The generic runner-record schema and semantic adapter
+also exclude `rejected`, so a hand-authored bundle cannot bypass this wire
+boundary. Historical inventory rows may retain an authoritative `rejected`
+outcome; only the unqualified candidate's new outcome is restricted.
 
 ## Transcript and attestation
 
@@ -136,21 +186,71 @@ claims by a future reviewed runtime; the schema does not prove them. The corpus
 adapter may use SHA-256 of the canonical transcript and attestation only after
 that runtime and its evidence path exist.
 
+## Offline wire-to-record integration
+
+For every planned `run` attempt, place the exact raw input in `inputs/` as
+`<attempt_id>.input` and place these five files in `wire/`:
+
+```text
+<attempt_id>.export-metadata.json
+<attempt_id>.benchmark-config.input
+<attempt_id>.invocation.json
+<attempt_id>.transcript.json
+<attempt_id>.attestation.json
+```
+
+Then build the existing version-1 runner-record bundle:
+
+```bash
+python scripts/kernel_wire_record_adapter.py \
+  --series series.json \
+  --inventory inventory.json \
+  --plan plans/shard-0000.json \
+  --inputs-dir inputs/shard-0000 \
+  --wire-dir wire/shard-0000 \
+  --output runner-records/shard-0000.json
+```
+
+Both directories must be real, exact-membership directories containing only
+regular, non-symlink, bounded files. The adapter checks each open file's device,
+inode, mode, link count, size, modification time, and change time before and
+after its read, then compares the same identities for the complete file set
+before and after validation. It also detects directory membership metadata
+changes and applies aggregate byte limits; callers must keep the artifact
+directories immutable. Every JSON object passes its tracked Draft
+2020-12 schema and semantic validator. The adapter then binds the complete chain to the exact
+series, inventory, and deterministic plan; it emits only classifications
+implied by the process termination. A blocked exit or signal cannot become a
+runner record. Because this adapter already possesses and validates the exact
+input bytes, it also refuses `export_unavailable` and requires an
+`export_format_unsupported` transcript to identify those bytes by digest.
+Output uses the existing exclusive atomic writer and is passed
+through the existing runner-record validator before publication.
+
+The adapter imports no process, network, credential, repository-write, State,
+Results, queue, or promotion interface. It validates claims emitted by a future
+qualified runner; it does not make an unqualified attestation true.
+
 ## Remaining execution blockers
 
-This contract enables implementation review but not a real shard. Execution
+This integration enables implementation review but not a real shard. Execution
 still requires all of the following:
 
-1. a trusted comparator/replay producer that captures the exact raw solution
-   export used for the terminal authoritative result and records its sidecar;
+1. build and qualification of both affected authoritative and
+   historical-public replay images, including an accepted historical probe
+   that actually executes Lean, comparator, and `replay-measure` (the existing
+   runtime-boundary build/unwrap/egress/destruction probe is insufficient), plus
+   a reviewed source-free handoff that retrieves the captured bytes before
+   Sandbox destruction and finalizes the sidecar against exact terminal
+   verdict, State-event, and report-entry evidence;
 2. a structured Mathgraph result protocol that separates rejection from
    internal failure;
 3. a reviewed exact-image runner that enforces the fixed paths, empty
    environment, resource limits, network/credential boundary and destruction,
    and emits these transcript and attestation objects;
-4. real terminal historical replay evidence and an inventory built from it.
-5. the series configuration and inventory identities needed to derive and
-   verify the corpus `attempt_id` instead of carrying an unbound label.
+4. real terminal historical replay evidence and an inventory built from it;
+   no State append may rely on this lane before the actual-execution image
+   qualification and reviewed evidence handoff above exist.
 
-Until then, `scripts/kernel_corpus_runner_adapter.py` remains record-only, does
-not consume this wire contract, and all corpus promotion remains human-blocked.
+Until then, both adapters remain record-only and all corpus promotion remains
+human-blocked.

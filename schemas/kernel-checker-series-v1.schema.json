@@ -4,7 +4,7 @@
   "title": "Independent-kernel checker series version 1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "series_name", "configuration_id", "candidate", "exporter", "checker", "runner"],
+  "required": ["schema_version", "series_name", "configuration_id", "candidate", "producer_profiles", "checker", "runner"],
   "properties": {
     "schema_version": {"const": 1},
     "series_name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,127}$"},
@@ -12,34 +12,62 @@
     "candidate": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repository", "commit", "name", "binary_sha256", "protocol"],
+      "required": ["repository", "commit", "name", "binary_sha256", "protocol", "configuration_policy_sha256"],
       "properties": {
         "repository": {"$ref": "#/$defs/repository"},
         "commit": {"$ref": "#/$defs/commit"},
         "name": {"$ref": "#/$defs/safe_name"},
         "binary_sha256": {"$ref": "#/$defs/digest"},
-        "protocol": {"$ref": "#/$defs/safe_name"}
+        "protocol": {"$ref": "#/$defs/safe_name"},
+        "configuration_policy_sha256": {"$ref": "#/$defs/digest"}
       }
     },
-    "exporter": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["repository", "commit", "artifact_sha256"],
-      "properties": {
-        "repository": {"$ref": "#/$defs/repository"},
-        "commit": {"$ref": "#/$defs/commit"},
-        "artifact_sha256": {"$ref": "#/$defs/digest"}
+    "producer_profiles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["benchmark_repository", "benchmark_commit", "exporter", "lean"],
+        "properties": {
+          "benchmark_repository": {"const": "leanprover/lean-eval"},
+          "benchmark_commit": {"$ref": "#/$defs/commit"},
+          "exporter": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["repository", "commit", "binary_sha256", "name", "version", "format_version", "format_specification_sha256", "format_specification_path"],
+            "properties": {
+              "repository": {"const": "leanprover/lean4export"},
+              "commit": {"$ref": "#/$defs/commit"},
+              "binary_sha256": {"$ref": "#/$defs/digest"},
+              "name": {"const": "lean4export"},
+              "version": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[^\\u0000-\\u001f\\u007f]+$"},
+              "format_version": {"const": "3.1.0"},
+              "format_specification_sha256": {"const": "f82a21e17e4258a1043895d0653ea4333bef8cb07aad2e3d6c1fc4be52b138e3"},
+              "format_specification_path": {"const": "format_ndjson.md"}
+            }
+          },
+          "lean": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["toolchain", "version", "githash"],
+            "properties": {
+              "toolchain": {"type": "string", "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+(?:-(?:rc|beta)[0-9]+)?$"},
+              "version": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[^\\u0000-\\u001f\\u007f]+$"},
+              "githash": {"$ref": "#/$defs/commit"}
+            }
+          }
+        }
       }
     },
     "checker": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["repository", "commit", "protocol", "configuration_sha256"],
+      "required": ["repository", "commit", "protocol"],
       "properties": {
         "repository": {"$ref": "#/$defs/repository"},
         "commit": {"$ref": "#/$defs/commit"},
-        "protocol": {"$ref": "#/$defs/safe_name"},
-        "configuration_sha256": {"$ref": "#/$defs/digest"}
+        "protocol": {"$ref": "#/$defs/safe_name"}
       }
     },
     "runner": {

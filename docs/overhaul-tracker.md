@@ -309,14 +309,22 @@ the already implemented owner status, metadata, and publication routes.
       adjudicated; the fixture and one-result smoke are non-authoritative. The
       proposed closed runner wire contract now specifies raw lean4export 3.1.0
       NDJSON, canonical Mathgraph config bytes/argv, and structured transcript
-      and attestation objects for a future runner. The current record adapter
-      does not consume it. Its semantic validator deliberately blocks candidate
-      exit `1`, which the pinned producer uses for both rejection-like errors
-      and internal failure; a structured producer change is still required
-      before a `rejected` corpus outcome can be recorded safely. Runner
-      integration must also supply the series and inventory identities needed
-      to derive the corpus attempt ID; version 1 marks that carried label
-      explicitly unbound.
+      and attestation objects for a future runner. The new offline integration
+      validates that complete chain against exact series, inventory, and shard
+      identities and emits only existing runner records, closing the formerly
+      unbound attempt/adapter gap. The authoritative and historical-public
+      replay image sources also prepare an exclusive exact-byte solution-export
+      capture at comparator's live checker boundary. The authoritative PR
+      source-build preflight is not qualification; the historical image remains
+      unbuilt, both are unqualified, and the Worker has no
+      durable source-free handoff yet. The semantic validator and adapter
+      deliberately block candidate exit `1`, which the pinned producer uses for
+      both rejection-like errors and internal failure; a structured upstream
+      producer change is still required before a `rejected` corpus outcome can
+      be recorded safely. The current historical profile evidence exercises
+      only the runtime boundary; a probe that actually runs Lean, comparator,
+      and `replay-measure` to an accepted result is a hard prerequisite before
+      any kernel handoff or State append.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
       window.
 - [x] Complete leaderboard preview review and cut over with rollback retained

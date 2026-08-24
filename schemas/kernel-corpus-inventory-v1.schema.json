@@ -26,11 +26,16 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["result_id", "replay_task_id", "replay_attempt", "terminal_verdict_sha256", "terminal_event_sha256", "report_entry_sha256", "replay_export_input_sha256", "authoritative_outcome", "availability", "unavailability_evidence_sha256"],
+        "required": ["result_id", "replay_task_id", "replay_attempt", "problem_id", "statement_revision", "benchmark_repository", "benchmark_commit", "benchmark_configuration_sha256", "terminal_verdict_sha256", "terminal_event_sha256", "report_entry_sha256", "replay_export_input_sha256", "authoritative_outcome", "availability", "unavailability_evidence_sha256"],
         "properties": {
           "result_id": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
           "replay_task_id": {"type": "string", "pattern": "^rt1_[0-9a-f]{64}$"},
           "replay_attempt": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+          "problem_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"},
+          "statement_revision": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+          "benchmark_repository": {"const": "leanprover/lean-eval"},
+          "benchmark_commit": {"$ref": "#/$defs/commit"},
+          "benchmark_configuration_sha256": {"$ref": "#/$defs/digest"},
           "terminal_verdict_sha256": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
           "terminal_event_sha256": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},
           "report_entry_sha256": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]},

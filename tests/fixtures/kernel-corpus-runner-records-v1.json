@@ -1,12 +1,12 @@
 {
-  "configuration_id": "kcc1_7c628a869a8d2794af0992dba12a6b616c2c03c47788b4daaa0b0dfecfa86528",
-  "configuration_sha256": "1e8eed6839e182a140e7951074cc7466507cd4f2ea0cc1f4fa4ff9d792f0ae85",
-  "inventory_id": "kci1_2fdf7932ee50d57a18c4a505b3441ddfb90f576ec3e8eabbc8829c9b11fd227d",
-  "inventory_sha256": "a8cd825cfeec26df94458f94bb7b96aef7590c20c7d0180ac07c09384590662c",
+  "configuration_id": "kcc1_c6c67dcc4bef96c5f1a44ec65c3cec1aa1a44feb16d40f6026b7f6155fe75bdd",
+  "configuration_sha256": "6324352048e4c7843079a090760037a29feb9a3614708b09d8a210c002d72041",
+  "inventory_id": "kci1_91b81287e208749d7ac0546ad3760246c8683f7ec63c3aa731d4292ba3cf1ce3",
+  "inventory_sha256": "aaf88da3a2f5695fdd65d8b82a37f6cb32f553a62c1cb413ea198b8ae92f1baa",
   "kind": "kernel_corpus_runner_records",
   "records": [
     {
-      "attempt_id": "kca1_a45b955c7d302cbc43dea729d560634da97ad095bc5e52530ee735872e788d23",
+      "attempt_id": "kca1_3e9eebb9d5ac3e4c33916a73bc4368503c19a832cb7e8fa940d38e4847eff096",
       "evidence_sha256": null,
       "input_sha256": "0000000000000000000000000000000000000000000000000000000000000050",
       "outcome": "accepted",
@@ -21,10 +21,10 @@
       "transcript_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
     },
     {
-      "attempt_id": "kca1_997753ccc5955b5359291906244be05aae140293541f4a048f8595a6b23972fb",
+      "attempt_id": "kca1_870c84afe7c6647f9c00624a0f77cb376d04992a125dccacd0b10eb8415209cb",
       "evidence_sha256": null,
       "input_sha256": "0000000000000000000000000000000000000000000000000000000000000051",
-      "outcome": "rejected",
+      "outcome": "declined",
       "resource_limit_disposition": "within_limits",
       "runner_attestation_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
       "source_free": true,
@@ -37,5 +37,5 @@
     }
   ],
   "schema_version": 1,
-  "shard_id": "ksh1_90d51e79a0d97a08ed8e691ca96b9b57366763732b4d389ed88e3839c2776a10"
+  "shard_id": "ksh1_33320b4b93f2df63c7205fdc6a184f7a68c8b2f25cf87ba96e8b791905bd80e1"
 }

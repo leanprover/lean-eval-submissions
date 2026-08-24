@@ -4,7 +4,7 @@
   "title": "Source-free solution-export input metadata version 1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "kind", "result_id", "replay_task_id", "replay_attempt", "input_sha256", "input_size_bytes", "encoding", "format_version", "source_free", "exporter", "lean", "benchmark_configuration", "terminal_evidence"],
+  "required": ["schema_version", "kind", "result_id", "replay_task_id", "replay_attempt", "input_sha256", "input_size_bytes", "encoding", "format_version", "source_free", "exporter", "comparison_framework", "lean", "benchmark_configuration", "terminal_evidence"],
   "properties": {
     "schema_version": {"const": 1},
     "kind": {"const": "kernel_solution_export_input"},
@@ -28,6 +28,16 @@
         "version": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[^\\u0000-\\u001f\\u007f]+$"},
         "format_specification_sha256": {"const": "f82a21e17e4258a1043895d0653ea4333bef8cb07aad2e3d6c1fc4be52b138e3"},
         "format_specification_path": {"const": "format_ndjson.md"}
+      }
+    },
+    "comparison_framework": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "protocol"],
+      "properties": {
+        "repository": {"const": "leanprover/comparator"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "protocol": {"const": "external_kernels_v1"}
       }
     },
     "benchmark_configuration": {
