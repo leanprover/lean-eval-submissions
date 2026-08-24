@@ -227,7 +227,8 @@ and calls the normal broker reconciliation/State-success path. The broker
 targets the dedicated permissionless `promotion-canary.yml` no-op at the exact
 tag; it never dispatches the full submission workflow or creates audit,
 evaluation, Results, or release records. The synthetic timestamp is derived in
-a fixed 2026-08-20 window solely for deterministic IDs. The production config
+a fixed 2026-08-21 window solely for deterministic IDs, strictly after the
+staging State initialization timestamp. The production config
 explicitly disables this authority, and the route rejects every non-staging
 runtime. A succeeded dispatch proves GitHub accepted the exact
 `workflow_dispatch` through broker/reconciliation; it does not prove the
