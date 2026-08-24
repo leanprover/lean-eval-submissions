@@ -177,6 +177,8 @@ etc.).
   [`docs/replay-orchestrator.md`](docs/replay-orchestrator.md).
 - Source-minimized historical public replay evidence and its read-only token
   boundary: [`docs/public-replay-resolution.md`](docs/public-replay-resolution.md).
+- Source-free independent-kernel corpus preparation and report contract:
+  [`docs/kernel-corpus-report.md`](docs/kernel-corpus-report.md).
 - Provider-neutral archive-key envelope and single-use capability claims:
   [`docs/key-capability-contract.md`](docs/key-capability-contract.md).
 - Trusted provider-neutral archive writer (not yet wired into production):

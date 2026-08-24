@@ -1,0 +1,53 @@
+{
+  "configuration_id": "kcc1_7c628a869a8d2794af0992dba12a6b616c2c03c47788b4daaa0b0dfecfa86528",
+  "configuration_sha256": "1e8eed6839e182a140e7951074cc7466507cd4f2ea0cc1f4fa4ff9d792f0ae85",
+  "counters": {
+    "accepted": 1,
+    "crashed": 0,
+    "declined": 0,
+    "export_format_unsupported": 0,
+    "export_unavailable": 0,
+    "rejected": 1,
+    "replay_pending": 1,
+    "replay_unavailable": 0,
+    "source_unavailable": 1,
+    "timed_out": 0
+  },
+  "coverage": {
+    "complete": true,
+    "inventory_results": 4,
+    "observations": 4
+  },
+  "disagreements": [],
+  "inventory_id": "kci1_2fdf7932ee50d57a18c4a505b3441ddfb90f576ec3e8eabbc8829c9b11fd227d",
+  "inventory_sha256": "a8cd825cfeec26df94458f94bb7b96aef7590c20c7d0180ac07c09384590662c",
+  "kind": "kernel_corpus_report",
+  "observation_set_sha256": "869a100a903c528edd922e5528923fa80075b34f04150b7542bc7239142db5ea",
+  "performance": {
+    "checker_invocations": {
+      "sum": 2
+    },
+    "peak_memory_bytes": {
+      "maximum": 1001
+    },
+    "sample_count": 2,
+    "wall_time_ms": {
+      "maximum": 101,
+      "median_upper": 101,
+      "minimum": 100,
+      "p95_nearest_rank": 101,
+      "sum": 201
+    }
+  },
+  "plan_set_sha256": "4d4eda215bc03d7b48efc37d5a08cee719f02d87db0b3995ede529f6d4e78b95",
+  "promotion": {
+    "automated_eligibility": false,
+    "blocking_reasons": [
+      "human_promotion_review_required",
+      "corpus_unavailable_results",
+      "corpus_pending_results"
+    ]
+  },
+  "schema_version": 1,
+  "shard_count": 1
+}
