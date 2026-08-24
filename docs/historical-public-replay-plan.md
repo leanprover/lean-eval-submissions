@@ -126,3 +126,8 @@ its filename is its SHA-256. Its exact toolchain-registry input is retained at
 `evidence/public-replay/toolchains/5144fc19bbbbcf0ef16a1d7c88b163254f96a250cb4a5846fbbb0d465ce16790.json`
 under the same rule. The plan remains explicitly blocked on authority and
 execution-profile qualification; retaining it does not enqueue work.
+
+The later token-free Gist probe aggregate `8122b4ee…` resolves 126 request
+groups. This retained 69-group seed remains valid for its exact inputs but is
+not the complete current public corpus plan; generate a new digest-bound plan
+from the newer aggregate before corpus execution.

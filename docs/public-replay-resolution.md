@@ -163,6 +163,9 @@ does not disappear when the 30-day Actions shard artifacts expire. A later
 probe or adjudication creates a new aggregate; it never rewrites this evidence
 object.
 
+The current classification after the token-free public-Gist rerun is recorded
+in [`historical-public-gist-probe-rerun.md`](historical-public-gist-probe-rerun.md).
+
 That deterministic, source-free bridge is specified in
 [`historical-public-replay-plan.md`](historical-public-replay-plan.md). Its seed
 plan remains explicitly blocked until State has a reviewed replay-authority
