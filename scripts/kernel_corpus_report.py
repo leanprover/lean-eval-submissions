@@ -32,12 +32,17 @@ ATTEMPT_ID = re.compile(r"kca1_[0-9a-f]{64}")
 SHARD_ID = re.compile(r"ksh1_[0-9a-f]{64}")
 SERIES_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,127}")
 SAFE_NAME = re.compile(r"[A-Za-z0-9_.+-]{1,128}")
+TOOLCHAIN = re.compile(
+    r"leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta)[0-9]+)?"
+)
+PROBLEM = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 TIMESTAMP = re.compile(
     r"(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T"
     r"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z"
 )
 
 TERMINAL_OUTCOMES = ("accepted", "rejected", "declined", "crashed", "timed_out")
+CANDIDATE_TERMINAL_OUTCOMES = ("accepted", "declined", "crashed", "timed_out")
 AVAILABILITIES = (
     "ready",
     "replay_pending",
@@ -56,7 +61,7 @@ SERIES_FIELDS = {
     "series_name",
     "configuration_id",
     "candidate",
-    "exporter",
+    "producer_profiles",
     "checker",
     "runner",
 }
@@ -72,6 +77,11 @@ INVENTORY_RESULT_FIELDS = {
     "result_id",
     "replay_task_id",
     "replay_attempt",
+    "problem_id",
+    "statement_revision",
+    "benchmark_repository",
+    "benchmark_commit",
+    "benchmark_configuration_sha256",
     "terminal_verdict_sha256",
     "terminal_event_sha256",
     "report_entry_sha256",
@@ -96,6 +106,11 @@ ATTEMPT_FIELDS = {
     "result_id",
     "replay_task_id",
     "replay_attempt",
+    "problem_id",
+    "statement_revision",
+    "benchmark_repository",
+    "benchmark_commit",
+    "benchmark_configuration_sha256",
     "terminal_verdict_sha256",
     "terminal_event_sha256",
     "report_entry_sha256",
@@ -261,8 +276,23 @@ def _check_json_complexity(value: Any) -> int:
     return nodes
 
 
+def _stat_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
 def _load_with_metrics(
-    path: pathlib.Path, *, directory_fd: int | None = None
+    path: pathlib.Path,
+    *,
+    directory_fd: int | None = None,
+    maximum: int = MAX_JSON_BYTES,
 ) -> tuple[Any, int, int]:
     flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NONBLOCK
     if hasattr(os, "O_NOFOLLOW"):
@@ -276,21 +306,27 @@ def _load_with_metrics(
     except OSError as error:
         raise KernelCorpusError(f"{path}: cannot read JSON: {error}") from error
     try:
-        metadata = os.fstat(descriptor)
-        if not stat.S_ISREG(metadata.st_mode):
+        metadata_before = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata_before.st_mode):
             raise KernelCorpusError(f"{path}: JSON input must be a regular file")
-        if metadata.st_size > MAX_JSON_BYTES:
+        if metadata_before.st_size > maximum:
             raise KernelCorpusError(f"{path}: JSON input exceeds the byte limit")
         chunks: list[bytes] = []
         total = 0
         while True:
-            chunk = os.read(descriptor, min(1_048_576, MAX_JSON_BYTES + 1 - total))
+            chunk = os.read(descriptor, min(1_048_576, maximum + 1 - total))
             if not chunk:
                 break
             chunks.append(chunk)
             total += len(chunk)
-            if total > MAX_JSON_BYTES:
+            if total > maximum:
                 raise KernelCorpusError(f"{path}: JSON input exceeds the byte limit")
+        metadata_after = os.fstat(descriptor)
+        if (
+            _stat_identity(metadata_before) != _stat_identity(metadata_after)
+            or total != metadata_before.st_size
+        ):
+            raise KernelCorpusError(f"{path}: JSON input changed while it was read")
     except OSError as error:
         raise KernelCorpusError(f"{path}: cannot read JSON: {error}") from error
     finally:
@@ -365,26 +401,85 @@ def validate_series(value: Any) -> dict[str, Any]:
     candidate = _component(
         series["candidate"],
         "series.candidate",
-        {"name", "binary_sha256", "protocol"},
+        {"name", "binary_sha256", "protocol", "configuration_policy_sha256"},
     )
     _match(SAFE_NAME, candidate["name"], "series.candidate.name")
     _match(DIGEST, candidate["binary_sha256"], "series.candidate.binary_sha256")
     _match(SAFE_NAME, candidate["protocol"], "series.candidate.protocol")
+    _match(
+        DIGEST,
+        candidate["configuration_policy_sha256"],
+        "series.candidate.configuration_policy_sha256",
+    )
 
-    exporter = _component(series["exporter"], "series.exporter", {"artifact_sha256"})
-    _match(DIGEST, exporter["artifact_sha256"], "series.exporter.artifact_sha256")
+    profiles = _array(series["producer_profiles"], "series.producer_profiles")
+    if not profiles:
+        raise KernelCorpusError("series.producer_profiles must not be empty")
+    profile_keys: list[tuple[str, str]] = []
+    for index, raw in enumerate(profiles):
+        label = f"series.producer_profiles[{index}]"
+        profile = _object(raw, label)
+        _fields(
+            profile,
+            {"benchmark_repository", "benchmark_commit", "exporter", "lean"},
+            label,
+        )
+        repository = _match(
+            REPOSITORY,
+            profile["benchmark_repository"],
+            f"{label}.benchmark_repository",
+        )
+        if repository != "leanprover/lean-eval":
+            raise KernelCorpusError(
+                f"{label}.benchmark_repository is not registered"
+            )
+        benchmark_commit = _match(
+            COMMIT, profile["benchmark_commit"], f"{label}.benchmark_commit"
+        )
+        profile_keys.append((repository, benchmark_commit))
+
+        exporter = _component(
+            profile["exporter"],
+            f"{label}.exporter",
+            {
+                "binary_sha256",
+                "name",
+                "version",
+                "format_version",
+                "format_specification_sha256",
+                "format_specification_path",
+            },
+        )
+        if (
+            exporter["repository"] != "leanprover/lean4export"
+            or exporter["name"] != "lean4export"
+            or exporter["format_version"] != "3.1.0"
+            or exporter["format_specification_sha256"]
+            != "f82a21e17e4258a1043895d0653ea4333bef8cb07aad2e3d6c1fc4be52b138e3"
+            or exporter["format_specification_path"] != "format_ndjson.md"
+        ):
+            raise KernelCorpusError(f"{label}.exporter is not registered")
+        _match(DIGEST, exporter["binary_sha256"], f"{label}.exporter.binary_sha256")
+        _string(exporter["version"], f"{label}.exporter.version", 64)
+
+        lean = _object(profile["lean"], f"{label}.lean")
+        _fields(lean, {"toolchain", "version", "githash"}, f"{label}.lean")
+        _match(TOOLCHAIN, lean["toolchain"], f"{label}.lean.toolchain")
+        _string(lean["version"], f"{label}.lean.version", 64)
+        _match(COMMIT, lean["githash"], f"{label}.lean.githash")
+    if profile_keys != sorted(profile_keys):
+        raise KernelCorpusError("series.producer_profiles must be sorted")
+    if len(set(profile_keys)) != len(profile_keys):
+        raise KernelCorpusError(
+            "series.producer_profiles contains a duplicate benchmark identity"
+        )
 
     checker = _component(
         series["checker"],
         "series.checker",
-        {"protocol", "configuration_sha256"},
+        {"protocol"},
     )
     _match(SAFE_NAME, checker["protocol"], "series.checker.protocol")
-    _match(
-        DIGEST,
-        checker["configuration_sha256"],
-        "series.checker.configuration_sha256",
-    )
 
     runner = _component(
         series["runner"],
@@ -459,6 +554,18 @@ def validate_inventory(value: Any) -> dict[str, Any]:
             )
         )
         _integer(result["replay_attempt"], f"{label}.replay_attempt", 1)
+        _match(PROBLEM, result["problem_id"], f"{label}.problem_id")
+        _integer(result["statement_revision"], f"{label}.statement_revision", 1)
+        if result["benchmark_repository"] != "leanprover/lean-eval":
+            raise KernelCorpusError(
+                f"{label}.benchmark_repository is not registered"
+            )
+        _match(COMMIT, result["benchmark_commit"], f"{label}.benchmark_commit")
+        _match(
+            DIGEST,
+            result["benchmark_configuration_sha256"],
+            f"{label}.benchmark_configuration_sha256",
+        )
         availability = result["availability"]
         if availability not in AVAILABILITIES:
             raise KernelCorpusError(f"{label}.availability is not registered")
@@ -532,6 +639,13 @@ def attempt_id(
             "inventory_id": inventory["inventory_id"],
             "replay_task_id": result["replay_task_id"],
             "replay_attempt": result["replay_attempt"],
+            "problem_id": result["problem_id"],
+            "statement_revision": result["statement_revision"],
+            "benchmark_repository": result["benchmark_repository"],
+            "benchmark_commit": result["benchmark_commit"],
+            "benchmark_configuration_sha256": result[
+                "benchmark_configuration_sha256"
+            ],
             "terminal_verdict_sha256": result["terminal_verdict_sha256"],
             "terminal_event_sha256": result["terminal_event_sha256"],
             "report_entry_sha256": result["report_entry_sha256"],
@@ -572,6 +686,23 @@ def build_shard_plans(
 ) -> list[dict[str, Any]]:
     series = validate_series(series_value)
     inventory = validate_inventory(inventory_value)
+    producer_profile_keys = {
+        (profile["benchmark_repository"], profile["benchmark_commit"])
+        for profile in series["producer_profiles"]
+    }
+    missing_profiles = sorted(
+        {
+            (result["benchmark_repository"], result["benchmark_commit"])
+            for result in inventory["results"]
+            if result["availability"] == "ready"
+            and (result["benchmark_repository"], result["benchmark_commit"])
+            not in producer_profile_keys
+        }
+    )
+    if missing_profiles:
+        raise KernelCorpusError(
+            "series producer profiles do not cover every ready benchmark"
+        )
     _integer(shard_count, "shard_count", 1)
     if shard_count > MAX_SHARDS:
         raise KernelCorpusError(f"shard_count cannot exceed {MAX_SHARDS}")
@@ -592,6 +723,13 @@ def build_shard_plans(
                 "result_id": result["result_id"],
                 "replay_task_id": result["replay_task_id"],
                 "replay_attempt": result["replay_attempt"],
+                "problem_id": result["problem_id"],
+                "statement_revision": result["statement_revision"],
+                "benchmark_repository": result["benchmark_repository"],
+                "benchmark_commit": result["benchmark_commit"],
+                "benchmark_configuration_sha256": result[
+                    "benchmark_configuration_sha256"
+                ],
                 "terminal_verdict_sha256": result["terminal_verdict_sha256"],
                 "terminal_event_sha256": result["terminal_event_sha256"],
                 "report_entry_sha256": result["report_entry_sha256"],
@@ -779,7 +917,7 @@ def _validate_observation_shard_against(
         if status == "completed":
             if required != "run":
                 raise KernelCorpusError(f"{label} cannot complete an unavailable input")
-            if outcome not in TERMINAL_OUTCOMES:
+            if outcome not in CANDIDATE_TERMINAL_OUTCOMES:
                 raise KernelCorpusError(f"{label}.outcome is not a terminal outcome")
             if evidence is not None:
                 raise KernelCorpusError(

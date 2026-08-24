@@ -159,8 +159,23 @@ jobs:
               = "$(sha256sum "$MATRIX" | cut -d' ' -f1)"
             test "$(git show "$image_source_commit:$CONTRACT" | sha256sum | cut -d' ' -f1)" \
               = "$(sha256sum "$CONTRACT" | cut -d' ' -f1)"
-            test "$(git show "$image_source_commit:server/replay-image/replay-staging-acceptance" | sha256sum | cut -d' ' -f1)" \
-              = "$(sha256sum server/replay-image/replay-staging-acceptance | cut -d' ' -f1)"
+            image_source_files=(
+              Dockerfile.historical-public-replay
+              Dockerfile.historical-public-replay.dockerignore
+              configuration/historical-public-runner-v1.json
+              scripts/evaluate_submission.py
+              scripts/historical_public_runner.py
+              scripts/prepare_historical_image_layers.py
+              server/replay-image/comparator-71b52-phase-metrics.patch
+              server/replay-image/historical-public-runner
+              server/replay-image/replay-authoritative
+              server/replay-image/replay-measure
+              server/replay-image/replay-staging-acceptance
+            )
+            for source_path in "${image_source_files[@]}"; do
+              test "$(git show "$image_source_commit:$source_path" | sha256sum | cut -d' ' -f1)" \
+                = "$(sha256sum "$source_path" | cut -d' ' -f1)"
+            done
           else
             test -z "$RESUME_IMAGE_SOURCE_COMMIT"
             image_source_commit="$GITHUB_SHA"
@@ -235,7 +250,7 @@ jobs:
             "$RUNNER_TEMP/image-layer-diff-ids.json" >/dev/null
           docker run --rm --network none --read-only --cpus 4 --memory 12g \
             --tmpfs /workspace:rw,noexec,nosuid,nodev,size=256m \
-            --tmpfs /run/lean-eval:rw,noexec,nosuid,nodev,size=16m \
+            --tmpfs /run/lean-eval:rw,noexec,nosuid,nodev,size=80m \
             --entrypoint /bin/sh "$IMAGE" -c '
               set -eu
               test "$(cat /opt/lean-eval/benchmark/.lean-eval-commit)" = "'"$BENCHMARK_COMMIT"'"

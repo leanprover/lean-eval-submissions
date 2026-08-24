@@ -11,6 +11,11 @@
     "repository": "leanprover/lean-eval",
     "statement_revision": 1
   },
+  "comparison_framework": {
+    "commit": "5555555555555555555555555555555555555555",
+    "protocol": "external_kernels_v1",
+    "repository": "leanprover/comparator"
+  },
   "encoding": "utf8_ndjson",
   "exporter": {
     "binary_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",

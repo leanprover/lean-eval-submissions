@@ -12,6 +12,7 @@ import hashlib
 import io
 import json
 import math
+import pathlib
 import re
 from typing import Any
 
@@ -72,10 +73,56 @@ EXPORT_RECORD_KEYS = {
     "inductive",
 }
 BACK_REFERENCE_KEYS = {"in", "il", "ie"}
+SCHEMA_DIRECTORY = pathlib.Path(__file__).resolve().parents[1] / "schemas"
+WIRE_SCHEMA_FILES = {
+    "export_metadata": "kernel-solution-export-input-v1.schema.json",
+    "invocation": "kernel-nanoda-invocation-v1.schema.json",
+    "transcript": "kernel-runner-transcript-v1.schema.json",
+    "attestation": "kernel-runner-attestation-v1.schema.json",
+}
+_SCHEMA_VALIDATORS: dict[str, Any] = {}
 
 
 class KernelRunnerWireError(ValueError):
     """A wire object or raw export violates the closed runner contract."""
+
+
+def validate_wire_schema(value: Any, kind: str) -> None:
+    """Apply the tracked Draft 2020-12 schema for one wire object."""
+
+    try:
+        from jsonschema import Draft202012Validator
+        from jsonschema.exceptions import SchemaError, ValidationError
+    except ImportError as error:
+        raise KernelRunnerWireError(
+            "jsonschema is required for kernel wire validation"
+        ) from error
+    validator = _SCHEMA_VALIDATORS.get(kind)
+    if validator is None:
+        try:
+            schema = json.loads(
+                (SCHEMA_DIRECTORY / WIRE_SCHEMA_FILES[kind]).read_text(
+                    encoding="utf-8"
+                )
+            )
+            Draft202012Validator.check_schema(schema)
+            validator = Draft202012Validator(schema)
+        except (
+            KeyError,
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            SchemaError,
+        ) as error:
+            raise KernelRunnerWireError(f"{kind} wire schema is unavailable") from error
+        _SCHEMA_VALIDATORS[kind] = validator
+    try:
+        validator.validate(value)
+    except ValidationError as error:
+        location = ".".join(str(item) for item in error.absolute_path) or "root"
+        raise KernelRunnerWireError(
+            f"{kind} fails JSON Schema at {location}: {error.message}"
+        ) from error
 
 
 def _object(value: Any, fields: set[str], label: str) -> dict[str, Any]:
@@ -139,6 +186,7 @@ def validate_export_metadata(
             "format_version",
             "source_free",
             "exporter",
+            "comparison_framework",
             "lean",
             "benchmark_configuration",
             "terminal_evidence",
@@ -190,6 +238,18 @@ def validate_export_metadata(
         )
     _string(exporter["version"], "export metadata.exporter.version", 64)
 
+    comparison = _object(
+        metadata["comparison_framework"],
+        {"repository", "commit", "protocol"},
+        "export metadata.comparison_framework",
+    )
+    if (
+        comparison["repository"] != "leanprover/comparator"
+        or comparison["protocol"] != "external_kernels_v1"
+    ):
+        raise KernelRunnerWireError("comparison framework identity is not registered")
+    _match(COMMIT, comparison["commit"], "comparison framework.commit")
+
     lean = _object(
         metadata["lean"], {"toolchain", "version", "githash"}, "export metadata.lean"
     )
@@ -229,7 +289,9 @@ def validate_export_metadata(
         DIGEST, benchmark_config["blob_sha256"], "benchmark configuration.blob_sha256"
     )
     _validate_axioms(
-        benchmark_config["permitted_axioms"], "benchmark configuration.permitted_axioms"
+        benchmark_config["permitted_axioms"],
+        "benchmark configuration.permitted_axioms",
+        require_sorted=False,
     )
     if not 1 <= len(benchmark_configuration_raw) <= MAX_BENCHMARK_CONFIGURATION_BYTES:
         raise KernelRunnerWireError(
@@ -381,15 +443,19 @@ def _reject_invalid_json_scalars(value: Any) -> None:
             stack.extend((child, depth + 1) for child in item)
 
 
-def _validate_axioms(value: Any, label: str) -> list[str]:
+def _validate_axioms(
+    value: Any, label: str, *, require_sorted: bool
+) -> list[str]:
     if (
         not isinstance(value, list)
         or len(value) > 64
         or not all(isinstance(item, str) and AXIOM.fullmatch(item) for item in value)
-        or value != sorted(set(value))
+        or len(value) != len(set(value))
+        or (require_sorted and value != sorted(value))
     ):
+        ordering = " sorted" if require_sorted else ""
         raise KernelRunnerWireError(
-            f"{label} must be a bounded sorted unique Lean-name list"
+            f"{label} must be a bounded{ordering} unique Lean-name list"
         )
     return value
 
@@ -474,8 +540,10 @@ def validate_invocation(value: Any, metadata: dict[str, Any]) -> dict[str, Any]:
         or config["string_extension"] is not True
     ):
         raise KernelRunnerWireError("nanoda configuration changes the reviewed policy")
-    axioms = _validate_axioms(config["permitted_axioms"], "permitted_axioms")
-    if axioms != metadata["benchmark_configuration"]["permitted_axioms"]:
+    axioms = _validate_axioms(
+        config["permitted_axioms"], "permitted_axioms", require_sorted=True
+    )
+    if axioms != sorted(metadata["benchmark_configuration"]["permitted_axioms"]):
         raise KernelRunnerWireError(
             "permitted_axioms differs from the bound benchmark configuration"
         )

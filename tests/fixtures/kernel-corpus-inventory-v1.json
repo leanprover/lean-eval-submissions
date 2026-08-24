@@ -1,16 +1,21 @@
 {
   "cutoff_at": "2026-08-24T00:00:00.000Z",
   "historical_replay_report_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  "inventory_id": "kci1_2fdf7932ee50d57a18c4a505b3441ddfb90f576ec3e8eabbc8829c9b11fd227d",
+  "inventory_id": "kci1_91b81287e208749d7ac0546ad3760246c8683f7ec63c3aa731d4292ba3cf1ce3",
   "results": [
     {
       "authoritative_outcome": "accepted",
       "availability": "ready",
+      "benchmark_commit": "0000000000000000000000000000000000000090",
+      "benchmark_configuration_sha256": "00000000000000000000000000000000000000000000000000000000000000a0",
+      "benchmark_repository": "leanprover/lean-eval",
+      "problem_id": "fixture_problem_0",
       "replay_attempt": 1,
       "replay_export_input_sha256": "0000000000000000000000000000000000000000000000000000000000000050",
       "replay_task_id": "rt1_0000000000000000000000000000000000000000000000000000000000000001",
       "report_entry_sha256": "000000000000000000000000000000000000000000000000000000000000003c",
       "result_id": "r2_0000000000000000000000000000000000000000000000000000000000000000",
+      "statement_revision": 1,
       "terminal_event_sha256": "0000000000000000000000000000000000000000000000000000000000000028",
       "terminal_verdict_sha256": "0000000000000000000000000000000000000000000000000000000000000014",
       "unavailability_evidence_sha256": null
@@ -18,11 +23,16 @@
     {
       "authoritative_outcome": "rejected",
       "availability": "ready",
+      "benchmark_commit": "0000000000000000000000000000000000000091",
+      "benchmark_configuration_sha256": "00000000000000000000000000000000000000000000000000000000000000a1",
+      "benchmark_repository": "leanprover/lean-eval",
+      "problem_id": "fixture_problem_1",
       "replay_attempt": 2,
       "replay_export_input_sha256": "0000000000000000000000000000000000000000000000000000000000000051",
       "replay_task_id": "rt1_0000000000000000000000000000000000000000000000000000000000000002",
       "report_entry_sha256": "000000000000000000000000000000000000000000000000000000000000003d",
       "result_id": "r2_1111111111111111111111111111111111111111111111111111111111111111",
+      "statement_revision": 2,
       "terminal_event_sha256": "0000000000000000000000000000000000000000000000000000000000000029",
       "terminal_verdict_sha256": "0000000000000000000000000000000000000000000000000000000000000015",
       "unavailability_evidence_sha256": null
@@ -30,11 +40,16 @@
     {
       "authoritative_outcome": null,
       "availability": "source_unavailable",
+      "benchmark_commit": "0000000000000000000000000000000000000092",
+      "benchmark_configuration_sha256": "00000000000000000000000000000000000000000000000000000000000000a2",
+      "benchmark_repository": "leanprover/lean-eval",
+      "problem_id": "fixture_problem_2",
       "replay_attempt": 8,
       "replay_export_input_sha256": null,
       "replay_task_id": "rt1_0000000000000000000000000000000000000000000000000000000000000008",
       "report_entry_sha256": null,
       "result_id": "r2_7777777777777777777777777777777777777777777777777777777777777777",
+      "statement_revision": 3,
       "terminal_event_sha256": null,
       "terminal_verdict_sha256": null,
       "unavailability_evidence_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -42,11 +57,16 @@
     {
       "authoritative_outcome": null,
       "availability": "replay_pending",
+      "benchmark_commit": "0000000000000000000000000000000000000093",
+      "benchmark_configuration_sha256": "00000000000000000000000000000000000000000000000000000000000000a3",
+      "benchmark_repository": "leanprover/lean-eval",
+      "problem_id": "fixture_problem_3",
       "replay_attempt": 10,
       "replay_export_input_sha256": null,
       "replay_task_id": "rt1_000000000000000000000000000000000000000000000000000000000000000a",
       "report_entry_sha256": null,
       "result_id": "r2_9999999999999999999999999999999999999999999999999999999999999999",
+      "statement_revision": 4,
       "terminal_event_sha256": null,
       "terminal_verdict_sha256": null,
       "unavailability_evidence_sha256": null

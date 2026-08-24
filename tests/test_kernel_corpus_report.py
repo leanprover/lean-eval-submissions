@@ -39,6 +39,31 @@ from kernel_corpus_report import (
 )
 
 
+def producer_profile(benchmark_commit: str) -> dict:
+    return {
+        "benchmark_repository": "leanprover/lean-eval",
+        "benchmark_commit": benchmark_commit,
+        "exporter": {
+            "repository": "leanprover/lean4export",
+            "commit": "3" * 40,
+            "binary_sha256": "4" * 64,
+            "name": "lean4export",
+            "version": "0.1.0",
+            "format_version": "3.1.0",
+            "format_specification_sha256": (
+                "f82a21e17e4258a1043895d0653ea4333"
+                "bef8cb07aad2e3d6c1fc4be52b138e3"
+            ),
+            "format_specification_path": "format_ndjson.md",
+        },
+        "lean": {
+            "toolchain": "leanprover/lean4:v4.33.0",
+            "version": "4.33.0",
+            "githash": "6" * 40,
+        },
+    }
+
+
 def series() -> dict:
     value = {
         "schema_version": 1,
@@ -50,17 +75,15 @@ def series() -> dict:
             "commit": "1" * 40,
             "binary_sha256": "2" * 64,
             "protocol": "nanoda_config_file",
+            "configuration_policy_sha256": "6" * 64,
         },
-        "exporter": {
-            "repository": "leanprover/lean4export",
-            "commit": "3" * 40,
-            "artifact_sha256": "4" * 64,
-        },
+        "producer_profiles": [
+            producer_profile(format(index + 100, "040x")) for index in range(7)
+        ],
         "checker": {
             "repository": "leanprover/comparator",
             "commit": "5" * 40,
             "protocol": "external_kernels_v1",
-            "configuration_sha256": "6" * 64,
         },
         "runner": {
             "repository": "leanprover/lean-eval-submissions",
@@ -96,6 +119,11 @@ def inventory() -> dict:
             "result_id": "r2_" + suffix * 64,
             "replay_task_id": "rt1_" + format(index + 1, "064x"),
             "replay_attempt": index + 1,
+            "problem_id": f"fixture_problem_{index}",
+            "statement_revision": 1,
+            "benchmark_repository": "leanprover/lean-eval",
+            "benchmark_commit": format(index + 100, "040x"),
+            "benchmark_configuration_sha256": format(index + 120, "064x"),
             "terminal_verdict_sha256": format(index + 20, "064x")
             if availability == "ready"
             else None,
@@ -133,7 +161,7 @@ def inventory() -> dict:
 def observations(plans: list[dict]) -> list[dict]:
     outcomes = {
         "r2_" + "0" * 64: "accepted",
-        "r2_" + "1" * 64: "rejected",
+        "r2_" + "1" * 64: "declined",
         "r2_" + "2" * 64: "declined",
         "r2_" + "3" * 64: "crashed",
         "r2_" + "4" * 64: "timed_out",
@@ -228,11 +256,15 @@ class KernelCorpusReportTests(unittest.TestCase):
         self.assertRegex(selected_series["configuration_id"], r"^kcc1_[0-9a-f]{64}$")
         self.assertRegex(selected_inventory["inventory_id"], r"^kci1_[0-9a-f]{64}$")
 
-        for component in ("candidate", "exporter", "checker", "runner"):
+        for component in ("candidate", "checker", "runner"):
             changed = copy.deepcopy(selected_series)
             changed[component]["commit"] = "9" * 40
             with self.assertRaisesRegex(KernelCorpusError, "does not bind"):
                 validate_series(changed)
+        changed = copy.deepcopy(selected_series)
+        changed["producer_profiles"][0]["exporter"]["commit"] = "9" * 40
+        with self.assertRaisesRegex(KernelCorpusError, "does not bind"):
+            validate_series(changed)
 
         changed_inventory = copy.deepcopy(selected_inventory)
         changed_inventory["historical_replay_report_sha256"] = "0" * 64
@@ -247,6 +279,43 @@ class KernelCorpusReportTests(unittest.TestCase):
                 changed["configuration_id"] = configuration_id(changed)
                 with self.assertRaisesRegex(KernelCorpusError, "path segment"):
                     validate_series(changed)
+
+    def test_series_allows_only_sorted_unique_per_benchmark_producer_profiles(
+        self,
+    ) -> None:
+        selected = series()
+        second = copy.deepcopy(selected["producer_profiles"][0])
+        second["benchmark_commit"] = format(200, "040x")
+        second["exporter"]["commit"] = "9" * 40
+        second["exporter"]["binary_sha256"] = "a" * 64
+        second["lean"] = {
+            "toolchain": "leanprover/lean4:v4.32.2",
+            "version": "4.32.2",
+            "githash": "b" * 40,
+        }
+        selected["producer_profiles"].append(second)
+        selected["configuration_id"] = configuration_id(selected)
+        self.assertEqual(len(validate_series(selected)["producer_profiles"]), 8)
+
+        reversed_profiles = copy.deepcopy(selected)
+        reversed_profiles["producer_profiles"].reverse()
+        reversed_profiles["configuration_id"] = configuration_id(reversed_profiles)
+        with self.assertRaisesRegex(KernelCorpusError, "must be sorted"):
+            validate_series(reversed_profiles)
+
+        duplicated = copy.deepcopy(selected)
+        duplicated["producer_profiles"][1]["benchmark_commit"] = duplicated[
+            "producer_profiles"
+        ][0]["benchmark_commit"]
+        duplicated["configuration_id"] = configuration_id(duplicated)
+        with self.assertRaisesRegex(KernelCorpusError, "duplicate benchmark"):
+            validate_series(duplicated)
+
+        incomplete = series()
+        incomplete["producer_profiles"].pop()
+        incomplete["configuration_id"] = configuration_id(incomplete)
+        with self.assertRaisesRegex(KernelCorpusError, "cover every ready benchmark"):
+            build_shard_plans(incomplete, inventory(), 1)
 
     def test_inventory_keeps_pending_and_unavailability_nonterminal(self) -> None:
         selected = inventory()
@@ -296,6 +365,11 @@ class KernelCorpusReportTests(unittest.TestCase):
         for field in (
             "replay_task_id",
             "replay_attempt",
+            "problem_id",
+            "statement_revision",
+            "benchmark_repository",
+            "benchmark_commit",
+            "benchmark_configuration_sha256",
             "terminal_verdict_sha256",
             "terminal_event_sha256",
             "report_entry_sha256",
@@ -306,7 +380,9 @@ class KernelCorpusReportTests(unittest.TestCase):
             )
 
         changed_inventory = copy.deepcopy(original_inventory)
-        changed_inventory["results"][0]["terminal_verdict_sha256"] = "f" * 64
+        changed_inventory["results"][0]["benchmark_configuration_sha256"] = (
+            "f" * 64
+        )
         changed_inventory["inventory_id"] = inventory_id(changed_inventory)
         changed_attempt = build_shard_plans(series(), changed_inventory, 1)[0][
             "attempts"
@@ -349,7 +425,6 @@ class KernelCorpusReportTests(unittest.TestCase):
             outcomes,
             {
                 "accepted",
-                "rejected",
                 "declined",
                 "crashed",
                 "timed_out",
@@ -588,9 +663,8 @@ class KernelCorpusReportTests(unittest.TestCase):
                 "complete": True,
             },
         )
-        for outcome in (
+        expected_counters = {
             "accepted",
-            "rejected",
             "declined",
             "crashed",
             "timed_out",
@@ -599,8 +673,11 @@ class KernelCorpusReportTests(unittest.TestCase):
             "export_unavailable",
             "replay_pending",
             "export_format_unsupported",
-        ):
-            self.assertEqual(report["counters"][outcome], 1)
+        }
+        for outcome in expected_counters:
+            expected = 2 if outcome == "declined" else 1
+            self.assertEqual(report["counters"][outcome], expected)
+        self.assertEqual(report["counters"]["rejected"], 0)
         self.assertEqual(sum(report["counters"].values()), 10)
         self.assertEqual(report["performance"]["sample_count"], 5)
         self.assertIs(report["promotion"]["automated_eligibility"], False)
@@ -617,7 +694,9 @@ class KernelCorpusReportTests(unittest.TestCase):
         plans = build_shard_plans(series(), inventory(), 1)
         shards = observations(plans)
         target = next(
-            item for item in shards[0]["observations"] if item["outcome"] == "rejected"
+            item
+            for item in shards[0]["observations"]
+            if item["result_id"] == "r2_" + "1" * 64
         )
         target["outcome"] = "accepted"
         target["execution_receipt"]["outcome"] = "accepted"

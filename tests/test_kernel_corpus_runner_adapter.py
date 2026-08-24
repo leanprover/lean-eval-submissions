@@ -35,7 +35,6 @@ from tests.test_kernel_corpus_report import inventory, series
 
 OUTCOMES = (
     "accepted",
-    "rejected",
     "declined",
     "crashed",
     "timed_out",
@@ -86,7 +85,7 @@ class AdapterFixture:
             "inventory_sha256": digest(self.inventory),
             "shard_id": self.plan["shard_id"],
             "records": [
-                self.record(attempt, OUTCOMES[index])
+                self.record(attempt, OUTCOMES[index % len(OUTCOMES)])
                 for index, attempt in enumerate(run_attempts)
             ],
         }
@@ -308,6 +307,11 @@ class KernelCorpusRunnerAdapterTests(unittest.TestCase):
             unknown_outcome = copy.deepcopy(fixture.bundle)
             unknown_outcome["records"][accepted]["outcome"] = "unknown"
             cases.append(("unknown outcome", unknown_outcome, "not registered"))
+            guessed_rejection = copy.deepcopy(fixture.bundle)
+            guessed_rejection["records"][accepted]["outcome"] = "rejected"
+            cases.append(
+                ("guessed rejection", guessed_rejection, "not registered")
+            )
             wrong_schema = copy.deepcopy(fixture.bundle)
             wrong_schema["schema_version"] = 2
             cases.append(("wrong schema", wrong_schema, "schema_version"))

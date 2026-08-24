@@ -116,7 +116,7 @@ index 3b29057..a3c9cca 100644
 -  safeLakeBuild solutionModule
 -  let solutionExport ← safeExport solutionModule exportTargets
 +  safeLakeBuild solutionModule (some "build")
-+  let solutionExport ← safeExport solutionModule exportTargets (some "build")
++  let solutionExport ← safeExport solutionModule exportTargets (some "solution-export")
  
    verifyMatch challengeExport solutionExport
  

@@ -1,7 +1,7 @@
 {
   "attempt_id": "kca1_6666666666666666666666666666666666666666666666666666666666666666",
   "input_sha256": "7d1ca64c0b12707ed286aab6fefbd3fde2301baf72712e83bcc4981105ef1afd",
-  "invocation_sha256": "9b627b0624116d70afcf3feee8366c745815410a41f49d224a128dc4f95562a5",
+  "invocation_sha256": "b3db746bcda1c21ad677097332d19e38fe13f4f4949fc82f1f981d118fa88ad9",
   "isolation": {
     "credentials_absent": true,
     "destroyed": true,
@@ -20,5 +20,5 @@
   },
   "schema_version": 1,
   "source_free": true,
-  "transcript_sha256": "2d700dd64a62396ce973e1b21f175ea7b936acccad623b72e771219fe6eb365e"
+  "transcript_sha256": "becc070fceba9cbbc8f966e76f2c9d66323d11a4e4ac147e8e3b138e90e81745"
 }

@@ -1057,6 +1057,7 @@ def execute_fixed_runner(
     scratch = workspace / "historical-public"
     output = workspace / "historical-public-output"
     metrics = pathlib.Path("/run/lean-eval/metrics.json")
+    solution_export = pathlib.Path("/run/lean-eval/solution-export.ndjson")
     try:
         handoff, source_root = validate_runner_inputs(
             handoff_path=workspace / "historical-public-request.json",
@@ -1083,6 +1084,10 @@ def execute_fixed_runner(
         revision = handoff["result"]["statement_revision"]
         file_count, lines_of_code = runtime.source_statistics(source_root, problem_id)
         metrics.unlink(missing_ok=True)
+        try:
+            solution_export.unlink(missing_ok=True)
+        except OSError:
+            pass
         returncode, timed_out = runtime.run_process_group(
             [
                 sys.executable,
@@ -1160,6 +1165,10 @@ def execute_fixed_runner(
         )
     finally:
         metrics.unlink(missing_ok=True)
+        try:
+            solution_export.unlink(missing_ok=True)
+        except OSError:
+            pass
         shutil.rmtree(scratch, ignore_errors=True)
         shutil.rmtree(output, ignore_errors=True)
 

@@ -6,7 +6,7 @@
     "status": "classified"
   },
   "input_sha256": "7d1ca64c0b12707ed286aab6fefbd3fde2301baf72712e83bcc4981105ef1afd",
-  "invocation_sha256": "9b627b0624116d70afcf3feee8366c745815410a41f49d224a128dc4f95562a5",
+  "invocation_sha256": "b3db746bcda1c21ad677097332d19e38fe13f4f4949fc82f1f981d118fa88ad9",
   "kind": "kernel_runner_transcript",
   "schema_version": 1,
   "statistics": {

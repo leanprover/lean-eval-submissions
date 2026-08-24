@@ -28,7 +28,7 @@
   "configuration_path": "/run/lean-eval/nanoda-config.json",
   "configuration_sha256": "284518cf96122e256ca29201d4942e4f2d8a63a45265df298c33d37ab062b885",
   "environment": {},
-  "export_metadata_sha256": "fbc73a04fc7d3cb3d25f6e081aae11857ab3d525221a0e9cf578ee020ed696a4",
+  "export_metadata_sha256": "69466b17f02a9795454b89379a23e53ab6fd283e6301021bbfd5367cf13c5be9",
   "input_path": "/run/lean-eval/solution-export.ndjson",
   "input_sha256": "7d1ca64c0b12707ed286aab6fefbd3fde2301baf72712e83bcc4981105ef1afd",
   "kind": "kernel_nanoda_invocation",
