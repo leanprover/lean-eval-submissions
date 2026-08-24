@@ -5,6 +5,12 @@ import {
   sha256Hex as canonicalSha256Hex,
   type VerifiedLegacyResult,
 } from "./result-owner";
+import {
+  challengeId,
+  comparatorBindingSha256,
+  type ComparatorEvidence,
+  type ProblemGroup,
+} from "./result-amendment";
 
 const API = "https://api.github.com";
 const OAUTH_TOKEN_URL = "https://github.com/login/oauth/access_token";
@@ -21,7 +27,20 @@ const MAX_LEGACY_METADATA_STRING_BYTES = 16 * 1024;
 const MAX_LEGACY_METADATA_KEY_BYTES = 256;
 const RESULT_ID_DOMAIN = "lean-eval-result-v2\0";
 const RESULT_TREE_DOMAIN = "lean-eval-result-tree-v1\0";
+const BENCHMARK_REPOSITORY = "leanprover/lean-eval";
+const MAX_MANIFEST_BYTES = 64 * 1024;
 export type ResultsProtectedBranch = "main" | "staging-results";
+
+export type ProblemRepairComparatorRequest = Readonly<{
+  resultsCommit: string;
+  resultId: string;
+  ownerLogin: string;
+  declaredModel: string;
+  baseProblemId: string;
+  baseStatementRevision: number;
+  correctedProblemId: string;
+  correctedStatementRevision: number;
+}>;
 
 export type ProviderFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -61,6 +80,68 @@ function isIsoCalendarDate(value: string): boolean {
   if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+async function gitBlobOid(bytes: Uint8Array): Promise<string> {
+  const header = new TextEncoder().encode(`blob ${String(bytes.byteLength)}\0`);
+  const material = new Uint8Array(header.byteLength + bytes.byteLength);
+  material.set(header);
+  material.set(bytes, header.byteLength);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-1", material));
+  return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function inlineContentBytes(
+  data: Record<string, unknown>,
+  path: string,
+  maxBytes: number,
+  label: string,
+): Uint8Array {
+  if (
+    data.type !== "file" ||
+    data.path !== path ||
+    data.encoding !== "base64" ||
+    typeof data.content !== "string" ||
+    typeof data.size !== "number" ||
+    !Number.isSafeInteger(data.size) ||
+    data.size < 1 ||
+    data.size > maxBytes
+  ) {
+    throw new GitHubProviderError(502, `${label} response fields were invalid`);
+  }
+  let bytes: Uint8Array;
+  try {
+    const binary = atob(data.content.replaceAll(/\s/g, ""));
+    bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  } catch {
+    throw new GitHubProviderError(502, `${label} was not valid base64`);
+  }
+  if (bytes.byteLength !== data.size) {
+    throw new GitHubProviderError(502, `${label} size disagreed with GitHub`);
+  }
+  return bytes;
+}
+
+function manifestField(text: string, field: "id" | "group"): string {
+  const expression = new RegExp(`^${field} = "([A-Za-z0-9_-]+)"$`, "gmu");
+  const matches = [...text.matchAll(expression)];
+  if (matches.length !== 1 || matches[0]?.[1] === undefined) {
+    throw new GitHubProviderError(409, `benchmark manifest ${field} was missing or ambiguous`);
+  }
+  return matches[0][1];
+}
+
+function manifestRevision(text: string): number {
+  const matches = [...text.matchAll(/^statement_revision = ([1-9][0-9]*)$/gmu)];
+  const raw = matches[0]?.[1];
+  if (matches.length !== 1 || raw === undefined) {
+    throw new GitHubProviderError(409, "benchmark manifest statement revision was missing or ambiguous");
+  }
+  const revision = Number(raw);
+  if (!Number.isSafeInteger(revision)) {
+    throw new GitHubProviderError(409, "benchmark manifest statement revision was invalid");
+  }
+  return revision;
 }
 
 function assertBoundedLegacyMetadata(value: Record<string, unknown>): void {
@@ -182,6 +263,7 @@ export class GitHubProvider {
   readonly #dispatchFetcher: ProviderFetch | undefined;
   readonly #resultFetcher: ProviderFetch | undefined;
   readonly #resultsProtectedBranch: ResultsProtectedBranch | undefined;
+  readonly #benchmarkFetcher: ProviderFetch | undefined;
 
   constructor(
     fetcher: ProviderFetch = fetch,
@@ -190,6 +272,7 @@ export class GitHubProvider {
     dispatchFetcher?: ProviderFetch,
     resultFetcher?: ProviderFetch,
     resultsProtectedBranch?: ResultsProtectedBranch,
+    benchmarkFetcher?: ProviderFetch,
   ) {
     // A Worker runtime fetch function must be invoked without rebinding its
     // receiver. Calling a function-valued private field as `this.#fetcher()`
@@ -207,6 +290,9 @@ export class GitHubProvider {
       ? undefined
       : (input, init) => resultFetcher(input, init);
     this.#resultsProtectedBranch = resultsProtectedBranch;
+    this.#benchmarkFetcher = benchmarkFetcher === undefined
+      ? undefined
+      : (input, init) => benchmarkFetcher(input, init);
   }
 
   async exchangeOAuth(
@@ -715,6 +801,220 @@ export class GitHubProvider {
         results_path: resultsPath,
         canonical_record_sha256: canonicalRecordSha256,
       },
+    };
+  }
+
+  async verifyProblemRepairComparator(
+    request: ProblemRepairComparatorRequest,
+  ): Promise<ComparatorEvidence> {
+    if (
+      !LOGIN.test(request.ownerLogin) ||
+      !COMMIT.test(request.resultsCommit) ||
+      !RESULT_ID.test(request.resultId) ||
+      request.declaredModel.length === 0 ||
+      new TextEncoder().encode(request.declaredModel).byteLength > 256 ||
+      containsControlCharacter(request.declaredModel) ||
+      !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(request.baseProblemId) ||
+      !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(request.correctedProblemId) ||
+      !Number.isSafeInteger(request.baseStatementRevision) ||
+      request.baseStatementRevision < 1 ||
+      !Number.isSafeInteger(request.correctedStatementRevision) ||
+      request.correctedStatementRevision < 1
+    ) {
+      throw new GitHubProviderError(409, "problem repair comparator request was invalid");
+    }
+    if (!this.#resultFetcher || !this.#resultsProtectedBranch || !this.#benchmarkFetcher) {
+      throw new GitHubProviderError(503, "result and benchmark verification authority is not configured");
+    }
+    const benchmarkFetcher = this.#benchmarkFetcher;
+    const verified = await this.verifyLegacyResult(
+      request.ownerLogin,
+      request.resultsCommit,
+      request.resultId,
+    );
+    if (
+      verified.baseResult.declared_model !== request.declaredModel ||
+      verified.baseResult.problem_id !== request.baseProblemId ||
+      verified.baseResult.statement_revision !== request.baseStatementRevision
+    ) {
+      throw new GitHubProviderError(409, "comparator record disagreed with the immutable base result");
+    }
+
+    const resultsPath = `results/${request.ownerLogin}.json`;
+    const resultHeaders = providerHeaders();
+    resultHeaders.set("x-lean-eval-expected-commit", request.resultsCommit);
+    const resultQuery = new URLSearchParams({ ref: request.resultsCommit });
+    const resultResponse = await this.#resultFetcher(
+      `${API}/repos/${RESULTS_REPOSITORY}/contents/${resultsPath}?${resultQuery.toString()}`,
+      { headers: resultHeaders, redirect: "manual", signal: AbortSignal.timeout(5000) },
+    );
+    const resultData = await jsonResponse(resultResponse, "problem repair comparator contents response");
+    const resultBytes = inlineContentBytes(
+      resultData,
+      resultsPath,
+      MAX_RESULT_FILE_BYTES,
+      "problem repair comparator contents",
+    );
+    if (typeof resultData.sha !== "string" || !COMMIT.test(resultData.sha)) {
+      throw new GitHubProviderError(502, "problem repair comparator blob OID was invalid");
+    }
+    const blobOid = await gitBlobOid(resultBytes);
+    if (blobOid !== resultData.sha) {
+      throw new GitHubProviderError(409, "problem repair comparator blob OID disagreed with its bytes");
+    }
+    let document: Record<string, unknown>;
+    try {
+      document = object(
+        JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(resultBytes)) as unknown,
+        "problem repair comparator file",
+      );
+    } catch (error) {
+      if (error instanceof GitHubProviderError) throw error;
+      throw new GitHubProviderError(502, "problem repair comparator file was not valid UTF-8 JSON");
+    }
+    if (!Array.isArray(document.results)) {
+      throw new GitHubProviderError(409, "problem repair comparator file had no results array");
+    }
+    const matches = document.results.filter((value) =>
+      value !== null && typeof value === "object" && !Array.isArray(value) &&
+      (value as Record<string, unknown>).result_id === request.resultId);
+    if (matches.length !== 1) {
+      throw new GitHubProviderError(409, "problem repair comparator file did not contain one exact result");
+    }
+    const record = object(matches[0], "problem repair comparator record");
+    const recordSha256 = await canonicalSha256Hex(canonicalJson(record));
+    if (
+      recordSha256 !== verified.baseResult.canonical_record_sha256 ||
+      typeof record.benchmark_commit !== "string" ||
+      !COMMIT.test(record.benchmark_commit)
+    ) {
+      throw new GitHubProviderError(409, "problem repair comparator record binding was invalid");
+    }
+
+    const benchmarkCommit = record.benchmark_commit;
+    const benchmarkHeaders = providerHeaders();
+    benchmarkHeaders.set("x-lean-eval-expected-commit", benchmarkCommit);
+    const benchmarkBranchResponse = await benchmarkFetcher(
+      `${API}/repos/${BENCHMARK_REPOSITORY}/branches/main`,
+      { headers: benchmarkHeaders, redirect: "manual", signal: AbortSignal.timeout(5000) },
+    );
+    const benchmarkBranch = await jsonResponse(
+      benchmarkBranchResponse,
+      "protected benchmark branch response",
+    );
+    const benchmarkBranchCommit = object(
+      benchmarkBranch.commit,
+      "protected benchmark branch commit",
+    );
+    if (
+      benchmarkBranch.name !== "main" ||
+      benchmarkBranch.protected !== true ||
+      typeof benchmarkBranchCommit.sha !== "string" ||
+      !COMMIT.test(benchmarkBranchCommit.sha)
+    ) {
+      throw new GitHubProviderError(502, "protected benchmark branch response fields were invalid");
+    }
+    const benchmarkCompareResponse = await benchmarkFetcher(
+      `${API}/repos/${BENCHMARK_REPOSITORY}/compare/${benchmarkCommit}...main`,
+      { headers: benchmarkHeaders, redirect: "manual", signal: AbortSignal.timeout(5000) },
+    );
+    const benchmarkComparison = await jsonResponse(
+      benchmarkCompareResponse,
+      "benchmark ancestry response",
+    );
+    const benchmarkBase = object(benchmarkComparison.base_commit, "benchmark ancestry base commit");
+    const benchmarkMergeBase = object(
+      benchmarkComparison.merge_base_commit,
+      "benchmark ancestry merge base",
+    );
+    const benchmarkHead = object(benchmarkComparison.head_commit, "benchmark ancestry head commit");
+    if (
+      typeof benchmarkHead.sha !== "string" ||
+      !COMMIT.test(benchmarkHead.sha) ||
+      benchmarkHead.sha !== benchmarkBranchCommit.sha
+    ) {
+      throw new GitHubProviderError(503, "protected benchmark branch moved during ancestry verification");
+    }
+    if (
+      (benchmarkComparison.status !== "ahead" && benchmarkComparison.status !== "identical") ||
+      benchmarkBase.sha !== benchmarkCommit ||
+      benchmarkMergeBase.sha !== benchmarkCommit
+    ) {
+      throw new GitHubProviderError(409, "benchmark commit is not an ancestor of protected main");
+    }
+
+    const readManifest = async (
+      problemId: string,
+      expectedRevision: number,
+    ): Promise<ProblemGroup> => {
+      const path = `manifests/problems/${problemId}.toml`;
+      const query = new URLSearchParams({ ref: benchmarkCommit });
+      const response = await benchmarkFetcher(
+        `${API}/repos/${BENCHMARK_REPOSITORY}/contents/${path}?${query.toString()}`,
+        { headers: benchmarkHeaders, redirect: "manual", signal: AbortSignal.timeout(5000) },
+      );
+      const data = await jsonResponse(response, "benchmark manifest contents response");
+      const bytes = inlineContentBytes(data, path, MAX_MANIFEST_BYTES, "benchmark manifest contents");
+      let text: string;
+      try {
+        text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes);
+      } catch {
+        throw new GitHubProviderError(502, "benchmark manifest was not valid UTF-8");
+      }
+      const manifestId = manifestField(text, "id");
+      const group = manifestField(text, "group");
+      if (
+        manifestId !== problemId ||
+        manifestRevision(text) !== expectedRevision ||
+        !new Set<string>([
+          "formalization-evaluation",
+          "software-verification",
+          "open-conjectures",
+        ]).has(group)
+      ) {
+        throw new GitHubProviderError(409, "benchmark manifest did not bind the requested problem tuple");
+      }
+      return group as ProblemGroup;
+    };
+
+    const [baseGroup, correctedGroup] = await Promise.all([
+      readManifest(request.baseProblemId, request.baseStatementRevision),
+      readManifest(request.correctedProblemId, request.correctedStatementRevision),
+    ]);
+    if (baseGroup !== correctedGroup) {
+      throw new GitHubProviderError(409, "problem repair cannot change the benchmark group");
+    }
+    const evidenceWithoutBinding: Omit<ComparatorEvidence, "binding_sha256"> = {
+      repository: RESULTS_REPOSITORY,
+      commit: request.resultsCommit,
+      path: resultsPath,
+      blob_oid: blobOid,
+      blob_sha256: await canonicalSha256Hex(resultBytes),
+      record_sha256: recordSha256,
+      verification_method: "github_commit_blob_v1",
+      evidence_result_id: request.resultId,
+      evidence_owner_login: request.ownerLogin,
+      evidence_declared_model: request.declaredModel,
+      evidence_base_problem_group: baseGroup,
+      evidence_base_problem_id: request.baseProblemId,
+      evidence_base_statement_revision: request.baseStatementRevision,
+      evidence_base_challenge_id: await challengeId(
+        baseGroup,
+        request.baseProblemId,
+        request.baseStatementRevision,
+      ),
+      evidence_corrected_problem_group: correctedGroup,
+      evidence_corrected_problem_id: request.correctedProblemId,
+      evidence_corrected_statement_revision: request.correctedStatementRevision,
+      evidence_corrected_challenge_id: await challengeId(
+        correctedGroup,
+        request.correctedProblemId,
+        request.correctedStatementRevision,
+      ),
+    };
+    return {
+      ...evidenceWithoutBinding,
+      binding_sha256: await comparatorBindingSha256(evidenceWithoutBinding),
     };
   }
 }

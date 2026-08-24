@@ -72,7 +72,7 @@ function environment(): BrokerRuntimeEnv {
 }
 
 function brokerRequest(
-  authority: "source" | "dispatch" | "results",
+  authority: "source" | "dispatch" | "results" | "benchmark",
   url: string,
   options: Readonly<{ method?: string; body?: string | null; expectedCommit?: string | null }> = {},
 ): Request {
@@ -415,6 +415,69 @@ describe("GitHub App broker", () => {
       NOW,
     );
     expect(rejected.status).toBe(403);
+  });
+
+  it("allows only ancestry-bound public benchmark reads without an App installation", async () => {
+    const upstream = vi.fn<typeof fetch>((input, init) => {
+      const url = inputUrl(input);
+      expect(new Headers(init?.headers).get("authorization")).toBeNull();
+      if (url.endsWith("/branches/main")) {
+        return Promise.resolve(Response.json({
+          name: "main",
+          protected: true,
+          commit: { sha: "f".repeat(40) },
+        }));
+      }
+      if (url.endsWith(`/compare/${COMMIT}...main`)) {
+        return Promise.resolve(Response.json({
+          status: "ahead",
+          base_commit: { sha: COMMIT },
+          merge_base_commit: { sha: COMMIT },
+          head_commit: { sha: "f".repeat(40) },
+        }));
+      }
+      expect(url).toBe(
+        `https://api.github.com/repos/leanprover/lean-eval/contents/manifests/problems/two_plus_two.toml?ref=${COMMIT}`,
+      );
+      return Promise.resolve(Response.json({
+        type: "file",
+        path: "manifests/problems/two_plus_two.toml",
+        encoding: "base64",
+        content: "aWQgPSAidHdvX3BsdXNfdHdvIg==",
+        size: 19,
+      }));
+    });
+    for (const suffix of [
+      "branches/main",
+      `compare/${COMMIT}...main`,
+      `contents/manifests/problems/two_plus_two.toml?ref=${COMMIT}`,
+    ]) {
+      const response = await handleBrokerRequest(
+        brokerRequest(
+          "benchmark",
+          `https://api.github.com/repos/leanprover/lean-eval/${suffix}`,
+          { expectedCommit: COMMIT },
+        ),
+        environment(),
+        upstream,
+        NOW,
+      );
+      expect(response.status).toBe(200);
+    }
+    const rejected = await handleBrokerRequest(
+      brokerRequest(
+        "benchmark",
+        `https://api.github.com/repos/leanprover/lean-eval/contents/README.md?ref=${COMMIT}`,
+        { expectedCommit: COMMIT },
+      ),
+      environment(),
+      upstream,
+      NOW,
+    );
+    expect(rejected.status).toBe(403);
+    expect(upstream.mock.calls.every(([input]) =>
+      !inputUrl(input).includes("/installation") &&
+      !inputUrl(input).includes("/access_tokens"))).toBe(true);
   });
 
   it("pins the Results branch allowlist to the deployment environment", async () => {

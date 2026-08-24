@@ -26,13 +26,18 @@ class RollbackContractCoverageTests(unittest.TestCase):
         self.assertIn("server/src/api-contract.ts", rollback.CALLBACK_CONTRACT_FILES)
 
     def test_qualifies_broker_client_boundary(self) -> None:
-        self.assertIn("server/src/github-broker-client.ts", rollback.CALLBACK_CONTRACT_FILES)
+        self.assertIn(
+            "server/src/github-broker-client.ts", rollback.CALLBACK_CONTRACT_FILES
+        )
 
     def test_qualifies_broker_allowlist(self) -> None:
         self.assertIn("server/src/github-broker.ts", rollback.CALLBACK_CONTRACT_FILES)
 
     def test_qualifies_owner_authentication_boundary(self) -> None:
         self.assertIn("server/src/auth.ts", rollback.CALLBACK_CONTRACT_FILES)
+
+    def test_qualifies_maintainer_authentication_boundary(self) -> None:
+        self.assertIn("server/src/maintainer.ts", rollback.CALLBACK_CONTRACT_FILES)
 
     def test_qualification_paths_are_deterministically_sorted(self) -> None:
         self.assertEqual(
@@ -57,7 +62,9 @@ class RollbackContractCoverageTests(unittest.TestCase):
 
 
 class CloudflareRollbackValidationTests(unittest.TestCase):
-    def test_repository_qualification_matches_runtime_schema_and_pause_guard(self) -> None:
+    def test_repository_qualification_matches_runtime_schema_and_pause_guard(
+        self,
+    ) -> None:
         qualification = json.loads(
             (ROOT / ".audit" / "cloudflare-rollback-qualification-v1.json").read_text(
                 encoding="utf-8"
@@ -204,11 +211,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                             {
                                 "class_name": "ReplaySandbox",
                                 "name": (
-                                    "lean-eval-replay-executor-"
-                                    "replaysandbox-production"
+                                    "lean-eval-replay-executor-replaysandbox-production"
                                 ),
                             }
-                        ]
+                        ],
                     },
                 },
             },
@@ -281,9 +287,12 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         self.assertIs(plan["legacy_result_owner_api_enabled"], False)
         self.assertIs(plan["result_amendment_owner_api_contract_supported"], True)
         self.assertIs(plan["result_amendment_owner_api_enabled"], False)
+        self.assertIs(plan["result_amendment_maintainer_api_contract_supported"], True)
+        self.assertIs(plan["result_amendment_maintainer_api_enabled"], False)
+        self.assertNotIn("RESULT_AMENDMENT_MAINTAINERS", plan)
         self.assertEqual(
             plan["result_owner_state_contract_commit"],
-            "163e9314c881493e08d23baf35ff40456f9c2331",
+            "501d237d46c7b3466a37554c1c2ceb310245a619",
         )
         self.assertIs(plan["promotion_canary_enabled"], False)
         self.assertIs(plan["replay_enabled"], False)
@@ -363,10 +372,87 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         ):
             rollback.build_plan(self._arguments())
 
+    def test_rejects_production_rollback_with_amendment_maintainer_api_enabled(
+        self,
+    ) -> None:
+        self.configs["intake"]["env"]["production"]["vars"][
+            "RESULT_AMENDMENT_MAINTAINER_API_ENABLED"
+        ] = "true"
+        self.configs["intake"]["env"]["production"]["vars"][
+            "RESULT_OWNER_STATE_CONTRACT_COMMIT"
+        ] = "d" * 40
+        self._write(self.paths["intake_config"], self.configs["intake"])
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "RESULT_AMENDMENT_MAINTAINER_API_ENABLED":
+                binding["text"] = "true"
+            if binding.get("name") == "RESULT_OWNER_STATE_CONTRACT_COMMIT":
+                binding["text"] = "d" * 40
+        self._write(self.paths["intake_version"], self.versions["intake"])
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "must disable result owner APIs"
+        ):
+            rollback.build_plan(self._arguments())
+
+    def test_maintainer_gate_is_closed_and_identities_fail_closed(self) -> None:
+        variables = self.configs["intake"]["env"]["production"]["vars"]
+        del variables["RESULT_AMENDMENT_MAINTAINERS"]
+        self._write(self.paths["intake_config"], self.configs["intake"])
+        self.versions["intake"]["resources"]["bindings"] = [
+            binding
+            for binding in self.versions["intake"]["resources"]["bindings"]
+            if binding.get("name") != "RESULT_AMENDMENT_MAINTAINERS"
+        ]
+        self._write(self.paths["intake_version"], self.versions["intake"])
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "gate, identities, and State contract pin"
+        ):
+            rollback.build_plan(self._arguments())
+
+    def test_malformed_maintainer_identities_fail_closed(self) -> None:
+        for malformed in (
+            "not-json",
+            '[{"github_id":1,"login":"Maintainer"}]',
+            '[{"github_id":1,"login":"maintainer-١"}]',
+            '[{"github_id":1,"login":"maintainer","role":"admin"}]',
+            '[{"github_id":1,"login":"maintainer"},{"github_id":1,"login":"other"}]',
+        ):
+            with self.subTest(malformed=malformed):
+                self.configs["intake"]["env"]["production"]["vars"][
+                    "RESULT_AMENDMENT_MAINTAINERS"
+                ] = malformed
+                self._write(self.paths["intake_config"], self.configs["intake"])
+                for binding in self.versions["intake"]["resources"]["bindings"]:
+                    if binding.get("name") == "RESULT_AMENDMENT_MAINTAINERS":
+                        binding["text"] = malformed
+                self._write(self.paths["intake_version"], self.versions["intake"])
+                with self.assertRaisesRegex(
+                    rollback.RollbackValidationError,
+                    "RESULT_AMENDMENT_MAINTAINERS",
+                ):
+                    rollback.build_plan(self._arguments())
+
+    def test_plan_validates_but_does_not_expose_maintainer_identities(self) -> None:
+        configured = '[{"github_id":477956,"login":"kim-em"}]'
+        self.configs["intake"]["env"]["production"]["vars"][
+            "RESULT_AMENDMENT_MAINTAINERS"
+        ] = configured
+        self._write(self.paths["intake_config"], self.configs["intake"])
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "RESULT_AMENDMENT_MAINTAINERS":
+                binding["text"] = configured
+        self._write(self.paths["intake_version"], self.versions["intake"])
+
+        encoded = json.dumps(rollback.build_plan(self._arguments()), sort_keys=True)
+        self.assertNotIn("RESULT_AMENDMENT_MAINTAINERS", encoded)
+        self.assertNotIn("kim-em", encoded)
+        self.assertNotIn("477956", encoded)
+
     def test_older_target_without_owner_gate_is_safely_disabled(self) -> None:
         for name in (
             "LEGACY_RESULT_OWNER_API_ENABLED",
             "RESULT_AMENDMENT_OWNER_API_ENABLED",
+            "RESULT_AMENDMENT_MAINTAINER_API_ENABLED",
+            "RESULT_AMENDMENT_MAINTAINERS",
             "RESULT_OWNER_STATE_CONTRACT_COMMIT",
         ):
             del self.configs["intake"]["env"]["production"]["vars"][name]
@@ -378,6 +464,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             not in {
                 "LEGACY_RESULT_OWNER_API_ENABLED",
                 "RESULT_AMENDMENT_OWNER_API_ENABLED",
+                "RESULT_AMENDMENT_MAINTAINER_API_ENABLED",
+                "RESULT_AMENDMENT_MAINTAINERS",
                 "RESULT_OWNER_STATE_CONTRACT_COMMIT",
             }
         ]
@@ -387,6 +475,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         self.assertIs(plan["legacy_result_owner_api_enabled"], False)
         self.assertIs(plan["result_amendment_owner_api_contract_supported"], False)
         self.assertIs(plan["result_amendment_owner_api_enabled"], False)
+        self.assertIs(plan["result_amendment_maintainer_api_contract_supported"], False)
+        self.assertIs(plan["result_amendment_maintainer_api_enabled"], False)
         self.assertIsNone(plan["result_owner_state_contract_commit"])
         rollback.validate_health(
             plan,
@@ -433,6 +523,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "intake_lease_expires_at": None,
                 "legacy_result_owner_api_enabled": False,
                 "result_amendment_owner_api_enabled": False,
+                "result_amendment_maintainer_api_enabled": False,
             },
             require_intake_disabled=True,
         )
@@ -465,6 +556,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "intake_enabled": False,
                 "legacy_result_owner_api_enabled": False,
                 "result_amendment_owner_api_enabled": False,
+                "result_amendment_maintainer_api_enabled": False,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -623,7 +715,9 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             "".join(f"{name}={value}\n" for name, value in lease.items()),
             encoding="utf-8",
         )
-        with self.assertRaisesRegex(rollback.RollbackValidationError, "exact deployed commit"):
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "exact deployed commit"
+        ):
             rollback.validate_component(arguments)
 
         lease["INTAKE_LEASE_TARGET_COMMIT"] = COMMIT
@@ -636,7 +730,9 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(rollback.RollbackValidationError, "UUIDv7"):
             rollback.validate_component(arguments)
 
-    def test_emergency_target_may_track_durable_intake_but_must_disable_replay(self) -> None:
+    def test_emergency_target_may_track_durable_intake_but_must_disable_replay(
+        self,
+    ) -> None:
         intake = self.configs["intake"]
         intake["env"]["production"]["vars"]["INTAKE_ENABLED"] = "true"
         intake["env"]["production"]["vars"]["INTAKE_ENABLEMENT_MODE"] = "durable"
@@ -776,10 +872,32 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "intake_lease_expires_at": None,
                 "legacy_result_owner_api_enabled": False,
                 "result_amendment_owner_api_enabled": False,
+                "result_amendment_maintainer_api_enabled": False,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
         )
+        with self.assertRaisesRegex(rollback.RollbackValidationError, "health exposes"):
+            rollback.validate_health(
+                plan,
+                "intake",
+                {
+                    "status": "ok",
+                    "environment": "production",
+                    "deployed_commit": COMMIT,
+                    "intake_configured_enabled": False,
+                    "intake_effective_enabled": False,
+                    "intake_enabled": False,
+                    "intake_enablement_mode": "disabled",
+                    "intake_lease_expires_at": None,
+                    "legacy_result_owner_api_enabled": False,
+                    "result_amendment_owner_api_enabled": False,
+                    "result_amendment_maintainer_api_enabled": False,
+                    "result_amendment_maintainers": [],
+                    "promotion_canary_configured_enabled": False,
+                    "promotion_canary_enabled": False,
+                },
+            )
         with self.assertRaisesRegex(rollback.RollbackValidationError, "health differs"):
             rollback.validate_health(
                 plan,
@@ -795,6 +913,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                     "intake_lease_expires_at": None,
                     "legacy_result_owner_api_enabled": False,
                     "result_amendment_owner_api_enabled": False,
+                    "result_amendment_maintainer_api_enabled": False,
                 },
             )
 
@@ -815,6 +934,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "intake_lease_expires_at": None,
                 "legacy_result_owner_api_enabled": False,
                 "result_amendment_owner_api_enabled": False,
+                "result_amendment_maintainer_api_enabled": False,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -834,6 +954,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "intake_lease_expires_at": None,
                 "legacy_result_owner_api_enabled": False,
                 "result_amendment_owner_api_enabled": False,
+                "result_amendment_maintainer_api_enabled": False,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -890,9 +1011,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         prestate_args.container_info = container_path
         prestate = rollback.build_prestate(prestate_args)
         encoded = json.dumps(prestate, sort_keys=True)
-        self.assertEqual(
-            prestate["original_version_ids"]["intake"], INTAKE_VERSION
-        )
+        self.assertEqual(prestate["original_version_ids"]["intake"], INTAKE_VERSION)
         self.assertEqual(prestate["original_replay_migration_tag"], "v2")
         self.assertEqual(
             prestate["rollback_feature_gates"],
@@ -904,17 +1023,20 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "legacy_result_owner_api_enabled": False,
                 "result_amendment_owner_api_contract_supported": True,
                 "result_amendment_owner_api_enabled": False,
+                "result_amendment_maintainer_api_enabled": False,
+                "result_amendment_maintainer_api_contract_supported": True,
                 "promotion_canary_enabled": False,
                 "promotion_canary_contract_supported": True,
                 "replay_enabled": False,
                 "staging_acceptance_enabled": False,
                 "result_owner_state_contract_commit": (
-                    "163e9314c881493e08d23baf35ff40456f9c2331"
+                    "501d237d46c7b3466a37554c1c2ceb310245a619"
                 ),
             },
         )
         self.assertNotIn("provider_future", encoded)
         self.assertNotIn("secret_text", encoded)
+        self.assertNotIn("RESULT_AMENDMENT_MAINTAINERS", encoded)
         self.assertIs(prestate["contains_secret_values"], False)
 
         container_value["configuration"]["vcpu"] = float("nan")

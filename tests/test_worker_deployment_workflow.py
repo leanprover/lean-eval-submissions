@@ -390,6 +390,18 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('body["intake_enabled"] is False', provisional)
         self.assertIn('body["intake_enabled"] is False', staging)
 
+    def test_deployments_require_the_dark_maintainer_gate_without_exposing_allowlist(
+        self,
+    ) -> None:
+        self.assertGreaterEqual(
+            DEPLOY.count(
+                'body["result_amendment_maintainer_api_enabled"] is False'
+            ),
+            4,
+        )
+        self.assertNotIn('body["RESULT_AMENDMENT_MAINTAINERS"]', DEPLOY)
+        self.assertNotIn('body["result_amendment_maintainers"]', DEPLOY)
+
     def test_production_enablement_is_provisional_and_fail_closed(self) -> None:
         production = DEPLOY.split("\n  deploy-production:", 1)[1]
         provisional = production.index("Provisionally deploy production intake disabled")
@@ -428,7 +440,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('arguments+=(--var "$name:$value")', production)
         self.assertIn("intake-lease-smoke.json", production)
         self.assertIn("intake_lease", production)
-        self.assertIn("163e9314c881493e08d23baf35ff40456f9c2331", production)
+        self.assertIn("501d237d46c7b3466a37554c1c2ceb310245a619", production)
         self.assertIn("af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb", production)
         self.assertIn("state_contract_verified", production)
         self.assertIn("timeout --signal=TERM --kill-after=10s 150s", production)
@@ -588,9 +600,14 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                     configuration["vars"]["RESULT_AMENDMENT_OWNER_API_ENABLED"],
                     "false",
                 )
+                expected_contract = (
+                    "6a386bb4362b10dd8d7743e826c82f1a0011c0c3"
+                    if environment == "staging"
+                    else "501d237d46c7b3466a37554c1c2ceb310245a619"
+                )
                 self.assertEqual(
                     configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],
-                    "163e9314c881493e08d23baf35ff40456f9c2331",
+                    expected_contract,
                 )
                 self.assertEqual(
                     configuration["vars"]["OAUTH_CALLBACK_URL"],

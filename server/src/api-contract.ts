@@ -115,6 +115,19 @@ export type ResultRetractionRequestInput = Readonly<{
   reason_code: string;
 }>;
 
+export type ResultRetractionDecisionInput = Readonly<{
+  decision: "approve" | "reject";
+  reason_code: string;
+}>;
+
+export type ResultRetractionOverrideInput = Readonly<{
+  reason_code: string;
+}>;
+
+export type ProblemRepairDecisionInput =
+  | Readonly<{ decision: "apply"; results_commit: string }>
+  | Readonly<{ decision: "reject"; reason_code: string }>;
+
 export class ApiDecodeError extends Error {
   constructor(message: string) {
     super(message);
@@ -414,6 +427,52 @@ export function decodeResultRetractionRequest(value: unknown): ResultRetractionR
     throw new ApiDecodeError("reason_code is invalid");
   }
   return { reason_code: data.reason_code };
+}
+
+export function decodeResultRetractionDecision(value: unknown): ResultRetractionDecisionInput {
+  const data = object(value, "result retraction decision");
+  exactFields(data, ["decision", "reason_code"], [], "result retraction decision");
+  if (data.decision !== "approve" && data.decision !== "reject") {
+    throw new ApiDecodeError("result retraction decision is invalid");
+  }
+  if (typeof data.reason_code !== "string" || !REASON.test(data.reason_code)) {
+    throw new ApiDecodeError("reason_code is invalid");
+  }
+  return { decision: data.decision, reason_code: data.reason_code };
+}
+
+export function decodeResultRetractionOverride(value: unknown): ResultRetractionOverrideInput {
+  const data = object(value, "result retraction override");
+  exactFields(data, ["reason_code"], [], "result retraction override");
+  if (typeof data.reason_code !== "string" || !REASON.test(data.reason_code)) {
+    throw new ApiDecodeError("reason_code is invalid");
+  }
+  return { reason_code: data.reason_code };
+}
+
+export function decodeProblemRepairDecision(value: unknown): ProblemRepairDecisionInput {
+  const data = object(value, "problem repair decision");
+  if (data.decision === "apply") {
+    exactFields(data, ["decision", "results_commit"], [], "problem repair apply decision");
+    if (typeof data.results_commit !== "string" || !COMMIT.test(data.results_commit)) {
+      throw new ApiDecodeError("results_commit must be a lowercase 40-character commit");
+    }
+    return { decision: "apply", results_commit: data.results_commit };
+  }
+  if (data.decision === "reject") {
+    exactFields(data, ["decision", "reason_code"], [], "problem repair reject decision");
+    if (typeof data.reason_code !== "string" || !REASON.test(data.reason_code)) {
+      throw new ApiDecodeError("reason_code is invalid");
+    }
+    return { decision: "reject", reason_code: data.reason_code };
+  }
+  throw new ApiDecodeError("problem repair decision is invalid");
+}
+
+export function decodeEmptyObject(value: unknown, label: string): Readonly<Record<string, never>> {
+  const data = object(value, label);
+  exactFields(data, [], [], label);
+  return {};
 }
 
 export function decodePublicationChoice(value: unknown): PublicationChoice {

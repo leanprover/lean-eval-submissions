@@ -16,44 +16,49 @@ import type {
   WritableSubmissionLifecycleEvent,
   WritableStateEvent,
 } from "../src/state-event";
+import { validateStateEvent } from "../src/state-event";
 import type { SubmissionView } from "../src/submission-view";
 import {
   backfilledOverlay,
   claimedGuard,
   claimedOverlay,
   claimedSourceIndex,
+  effectiveResultIdentityPath,
+  effectiveResultIdentityReservation,
   initialResultReleaseStatusView,
   recordedGuard,
   type VerifiedLegacyResult,
 } from "../src/result-owner";
 import {
+  challengeId,
+  comparatorBindingSha256,
+  decidedProblemRepairView,
+  decidedRetractionView,
   decodeResultAmendmentView,
   initialResultAmendmentView,
   requestedProblemRepairView,
   requestedRetractionView,
+  terminalRetractionView,
+  type ComparatorEvidence,
 } from "../src/result-amendment";
 
 const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
 const NEW_TREE = "3".repeat(40);
 const NEW_COMMIT = "4".repeat(40);
-const RESULT_OWNER_CONTRACT_COMMIT = "163e9314c881493e08d23baf35ff40456f9c2331";
-const RESULT_OWNER_CONTRACT_BLOBS = {
-  "docs/result-amendment-lifecycle.md": "6ef59628f12820a4af64ff9bff4fb174d1749684",
-  "docs/result-owner-operational-indexes.md": "2f784609f9117caf74cb7042e9ea45732925d77b",
-  "schema/result-amendment-view-v1.schema.json": "20282df2b419466f32998b93b49c55b107ed6f35",
-  "schema/result-amendments-v1.schema.json": "440d5039d1cef4bb055579b94cca928d36f66c96",
-  "schema/result-identity-guard-v1.schema.json": "1620b6d8aed37f652958ac86e311c00578edc8b4",
-  "schema/result-overlay-view-v1.schema.json": "1b50a92a76891bd21e0b67f7f40ab9c86d50beed",
-  "schema/result-overlays-v1.schema.json": "41d4078133d6854bf8de839873a3f58e9ba1afd1",
-  "schema/result-release-status-view-v1.schema.json": "7f115230736e5d45074e8172f6fe4e5ee1992021",
-  "schema/result-source-record-index-v1.schema.json": "4543225e0833af00913e436185532a769debebc1",
-  "schema/state-event-v1.schema.json": "5b670204c86c440b56afd81f62bd097e3b399be7",
-  "scripts/materialize_state.py": "f7985b70b6409616ac2020a2be2337eca13c640d",
-  "scripts/result_amendments.py": "61b44743c73d152fa92c489ac9228d16f0b694fd",
-  "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
-  "scripts/result_release_status.py": "27bae3e6faa9275463a1440483512e23bfda2f6e",
-  "scripts/validate_state.py": "0b4c876475fcc9c9d5cf6269c800509530673bb4",
+const RESULT_OWNER_CONTRACT_COMMIT = "501d237d46c7b3466a37554c1c2ceb310245a619";
+const RESULT_OWNER_CONTRACT_ROOT_ENTRIES = {
+  "README.md": { mode: "100644", type: "blob", sha: "069cc546e53d4ec2a109010f9e02dfffd8fdce06" },
+  docs: { mode: "040000", type: "tree", sha: "76e48513a1284d5945a4e1d0a45dbfa84f127325" },
+  schema: { mode: "040000", type: "tree", sha: "473e694e0d40026a7ec0ad33430ea622e3e03b66" },
+  scripts: { mode: "040000", type: "tree", sha: "ab90d1a997e3bfc7292dbf1a515db1abb4278c01" },
+} as const;
+const STAGING_RESULT_OWNER_CONTRACT_COMMIT = "6a386bb4362b10dd8d7743e826c82f1a0011c0c3";
+const STAGING_RESULT_OWNER_CONTRACT_ROOT_ENTRIES = {
+  "README.md": { mode: "100644", type: "blob", sha: "a302e9611c7c32dda7462828b6f02ab919ea39a9" },
+  docs: { mode: "040000", type: "tree", sha: "defb2fc26f37703008e49cb968c8971266bfb5e5" },
+  schema: { mode: "040000", type: "tree", sha: "95a264fb61bffcec21ae91055675baf9c9ed78fc" },
+  scripts: { mode: "040000", type: "tree", sha: "41962d05ebc32821a342ae6bc9cd6c2fa88db3eb" },
 } as const;
 
 const EVENT: StateEvent = {
@@ -281,6 +286,93 @@ const LEGACY_RELEASE_STATUS_VIEW = initialResultReleaseStatusView(
   LEGACY_RESULT.resultId,
   CLAIM_EVENT_ID,
 );
+const REPAIR_REQUEST_ID = "0198abcd-2222-7000-8000-000000000003";
+const REPAIR_DECISION_ID = "0198abcd-2222-7000-8000-000000000004";
+const REPAIR_REQUESTED_AT = "2026-08-20T06:07:09.000Z";
+const REPAIR_DECIDED_AT = "2026-08-20T06:07:10.000Z";
+
+function pendingLegacyProblemRepair() {
+  return requestedProblemRepairView(
+    LEGACY_AMENDMENT_VIEW,
+    REPAIR_REQUEST_ID,
+    REPAIR_REQUESTED_AT,
+    "two_plus_three",
+    2,
+    "wrong_problem_revision",
+  );
+}
+
+function legacyProblemRepairRequestEvent(): StateEvent {
+  return {
+    schema_version: 1,
+    event_id: REPAIR_REQUEST_ID,
+    event_type: "result.problem_repair_requested",
+    occurred_at: REPAIR_REQUESTED_AT,
+    subject_id: LEGACY_RESULT.resultId,
+    causation_event_id: CLAIM_EVENT_ID,
+    actor: { kind: "github", login: "alice" },
+    payload: {
+      repair_revision: 1,
+      corrected_problem_id: "two_plus_three",
+      corrected_statement_revision: 2,
+      reason_code: "wrong_problem_revision",
+    },
+  };
+}
+
+async function legacyComparatorEvidence(): Promise<ComparatorEvidence> {
+  const evidenceWithoutBinding = {
+    repository: "leanprover/lean-eval-submissions",
+    commit: "a".repeat(40),
+    path: "results/alice.json",
+    blob_oid: "c".repeat(40),
+    blob_sha256: "d".repeat(64),
+    record_sha256: "b".repeat(64),
+    verification_method: "github_commit_blob_v1" as const,
+    evidence_result_id: LEGACY_RESULT.resultId,
+    evidence_owner_login: "alice",
+    evidence_declared_model: "Example Model",
+    evidence_base_problem_group: "formalization-evaluation" as const,
+    evidence_base_problem_id: "two_plus_two",
+    evidence_base_statement_revision: 1,
+    evidence_base_challenge_id: await challengeId("formalization-evaluation", "two_plus_two", 1),
+    evidence_corrected_problem_group: "formalization-evaluation" as const,
+    evidence_corrected_problem_id: "two_plus_three",
+    evidence_corrected_statement_revision: 2,
+    evidence_corrected_challenge_id: await challengeId("formalization-evaluation", "two_plus_three", 2),
+  };
+  return {
+    ...evidenceWithoutBinding,
+    binding_sha256: await comparatorBindingSha256(evidenceWithoutBinding),
+  };
+}
+
+async function legacyBaseReservation() {
+  return effectiveResultIdentityReservation({
+    ownerLogin: LEGACY_RESULT.ownerLogin,
+    declaredModel: LEGACY_RESULT.baseResult.declared_model,
+    problemId: LEGACY_RESULT.baseResult.problem_id,
+    statementRevision: LEGACY_RESULT.baseResult.statement_revision,
+    resultId: LEGACY_RESULT.resultId,
+    reservationEventId: CLAIM_EVENT_ID,
+    reservationKind: "result_authority",
+  });
+}
+
+async function legacyRepairReservation(
+  resultId = LEGACY_RESULT.resultId,
+  reservationEventId = REPAIR_DECISION_ID,
+) {
+  return effectiveResultIdentityReservation({
+    ownerLogin: LEGACY_RESULT.ownerLogin,
+    declaredModel: LEGACY_RESULT.baseResult.declared_model,
+    problemId: "two_plus_three",
+    statementRevision: 2,
+    resultId,
+    reservationEventId,
+    reservationKind: "problem_repair",
+  });
+}
 
 function legacyClaimEvent(occurredAt = "2026-08-24T08:00:00.000Z"): StateEvent {
   return {
@@ -295,6 +387,82 @@ function legacyClaimEvent(occurredAt = "2026-08-24T08:00:00.000Z"): StateEvent {
   };
 }
 
+function startedReleaseEvent(eventId: string): StateEvent {
+  return {
+    schema_version: 1,
+    event_id: eventId,
+    event_type: "release.started",
+    occurred_at: "2026-08-20T06:07:08.500Z",
+    subject_id: LEGACY_RESULT.resultId,
+    causation_event_id: CLAIM_EVENT_ID,
+    actor: { kind: "system" },
+    payload: { attempt: 1 },
+  };
+}
+
+function publishedReleaseEvent(
+  eventId: string,
+  startedEventId = "0198abcd-2222-7000-8000-000000000004",
+): StateEvent {
+  return {
+    schema_version: 1,
+    event_id: eventId,
+    event_type: "release.published",
+    occurred_at: "2026-08-20T06:07:09.000Z",
+    subject_id: LEGACY_RESULT.resultId,
+    causation_event_id: startedEventId,
+    actor: { kind: "system" },
+    payload: {
+      attempt: 1,
+      repository_commit: "9".repeat(40),
+      tree_digest: "8".repeat(64),
+      path: `releases/2026/08/${LEGACY_RESULT.resultId}`,
+    },
+  };
+}
+
+function removedReleaseEvent(
+  eventId: string,
+  publishedEventId: string,
+  payloadOverrides: Readonly<Record<string, unknown>> = {},
+): Record<string, unknown> {
+  return {
+    schema_version: 1,
+    event_id: eventId,
+    event_type: "release.removed",
+    occurred_at: "2026-08-20T06:07:10.000Z",
+    subject_id: LEGACY_RESULT.resultId,
+    causation_event_id: publishedEventId,
+    actor: { kind: "system" },
+    payload: {
+      incident_id: "0198abcd-2222-7000-8000-000000000099",
+      classification: "erroneous_publication",
+      published_state_event_repository: "leanprover/lean-eval-state",
+      published_state_event_commit: "1".repeat(40),
+      published_state_event_path:
+        `events/${publishedEventId.replaceAll("-", "").slice(0, 2)}/${publishedEventId}.json`,
+      published_state_event_blob: "2".repeat(40),
+      published_state_event_sha256: "3".repeat(64),
+      published_repository_commit: "9".repeat(40),
+      published_repository_tree: "4".repeat(40),
+      published_release_tree_sha256: "8".repeat(64),
+      release_path: `releases/2026/08/${LEGACY_RESULT.resultId}`,
+      bundle_path: "sources/0198abcd-2222-7000-8000-000000000098.tar.gz",
+      bundle_sha256: "5".repeat(64),
+      bundle_disposition: "delete",
+      shared_release_paths: [],
+      evidence_repository: "leanprover/lean-eval-audit",
+      evidence_commit: "6".repeat(40),
+      evidence_path: "incidents/0198abcd-2222-7000-8000-000000000099.json",
+      evidence_blob: "7".repeat(40),
+      evidence_sha256: "a".repeat(64),
+      removal_repository_commit: "b".repeat(40),
+      removal_repository_tree: "c".repeat(40),
+      ...payloadOverrides,
+    },
+  };
+}
+
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status });
 }
@@ -304,16 +472,32 @@ function contents(value: unknown): Response {
 }
 
 function resultOwnerContractProofResponses(
-  changedPath?: keyof typeof RESULT_OWNER_CONTRACT_BLOBS,
+  changedPath?: keyof typeof RESULT_OWNER_CONTRACT_ROOT_ENTRIES,
+  treeSha = TREE,
 ): Response[] {
   return [
     json({
       status: "ahead",
       merge_base_commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
     }),
-    ...Object.entries(RESULT_OWNER_CONTRACT_BLOBS).map(([path, sha]) =>
-      json({ type: "file", path, sha: path === changedPath ? "0".repeat(40) : sha })),
+    resultOwnerContractRootTreeResponse(changedPath, treeSha),
   ];
+}
+
+function resultOwnerContractRootTreeResponse(
+  changedPath?: keyof typeof RESULT_OWNER_CONTRACT_ROOT_ENTRIES,
+  treeSha = TREE,
+): Response {
+  return json({
+    sha: treeSha,
+    truncated: false,
+    tree: Object.entries(RESULT_OWNER_CONTRACT_ROOT_ENTRIES).map(([path, entry]) => ({
+      path,
+      mode: entry.mode,
+      type: entry.type,
+      sha: path === changedPath ? "0".repeat(40) : entry.sha,
+    })),
+  });
 }
 
 function sequence(responses: readonly (Response | Error)[]) {
@@ -328,7 +512,7 @@ function sequence(responses: readonly (Response | Error)[]) {
 
 function repository(fetcher: GitHubFetch): GitHubStateRepository {
   return new GitHubStateRepository(
-    { repository: "leanprover/state", token: "secret", userAgent: "test" },
+    { repository: "leanprover/lean-eval-state", token: "secret", userAgent: "test" },
     fetcher,
   );
 }
@@ -336,6 +520,13 @@ function repository(fetcher: GitHubFetch): GitHubStateRepository {
 function productionRepository(fetcher: GitHubFetch): GitHubStateRepository {
   return new GitHubStateRepository(
     { repository: "leanprover/lean-eval-state", token: "secret", userAgent: "test" },
+    fetcher,
+  );
+}
+
+function stagingRepository(fetcher: GitHubFetch): GitHubStateRepository {
+  return new GitHubStateRepository(
+    { repository: "leanprover/lean-eval-state-staging", token: "secret", userAgent: "test" },
     fetcher,
   );
 }
@@ -352,9 +543,12 @@ describe("atomic Git State append", () => {
     expect(canonicalStateDocument({ z: "😀", a: { y: "β", x: true } })).toBe(
       "{\n  \"a\": {\n    \"x\": true,\n    \"y\": \"\\u03b2\"\n  },\n  \"z\": \"\\ud83d\\ude00\"\n}\n",
     );
+    expect(() => canonicalStateDocument({ payload: { omitted: undefined } })).toThrow(
+      /not JSON serializable/u,
+    );
   });
 
-  it("gates result-owner writes on protected-main ancestry and exact reviewed blobs", async () => {
+  it("gates result-owner writes on ancestry and exact reviewed contract subtrees", async () => {
     const valid = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
@@ -374,9 +568,38 @@ describe("atomic Git State append", () => {
     const changed = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
-      ...resultOwnerContractProofResponses("schema/result-identity-guard-v1.schema.json"),
+      ...resultOwnerContractProofResponses("schema"),
     ]);
     await expect(repository(changed).assertResultOwnerContract()).rejects.toMatchObject({ status: 503 });
+
+    const entries = Object.entries(RESULT_OWNER_CONTRACT_ROOT_ENTRIES).map(([path, entry]) => ({
+      path,
+      mode: entry.mode,
+      type: entry.type,
+      sha: entry.sha,
+    }));
+    const hostileTrees = [
+      entries.filter((entry) => entry.path !== "docs"),
+      [...entries, { ...entries[1] }],
+      entries.map((entry) => entry.path === "docs"
+        ? { ...entry, mode: "100644", type: "blob" }
+        : entry),
+    ];
+    for (const tree of hostileTrees) {
+      clearResultOwnerContractProofCacheForTest();
+      const hostile = sequence([
+        json({ object: { sha: HEAD } }),
+        json({ tree: { sha: TREE } }),
+        json({
+          status: "ahead",
+          merge_base_commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
+        }),
+        json({ sha: TREE, truncated: false, tree }),
+      ]);
+      await expect(repository(hostile).assertResultOwnerContract()).rejects.toMatchObject({
+        status: 503,
+      });
+    }
   });
 
   it("reuses content-addressed contract proofs across repository instances", async () => {
@@ -392,46 +615,50 @@ describe("atomic Git State append", () => {
       json({ tree: { sha: TREE } }),
     ]);
     await expect(repository(second).assertResultOwnerContract()).resolves.toBe(HEAD);
-    expect(first).toHaveBeenCalledTimes(2 + 1 + Object.keys(RESULT_OWNER_CONTRACT_BLOBS).length);
+    expect(first).toHaveBeenCalledTimes(4);
     expect(second).toHaveBeenCalledTimes(2);
   });
 
+  it("binds the migrated staging contract and its exact root subtrees", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: STAGING_RESULT_OWNER_CONTRACT_COMMIT } }),
+      json({ tree: { sha: TREE } }),
+      json({
+        sha: TREE,
+        truncated: false,
+        tree: Object.entries(STAGING_RESULT_OWNER_CONTRACT_ROOT_ENTRIES).map(
+          ([path, entry]) => ({ path, ...entry }),
+        ),
+      }),
+    ]);
+    await expect(stagingRepository(fetcher).assertResultOwnerContract()).resolves.toBe(
+      STAGING_RESULT_OWNER_CONTRACT_COMMIT,
+    );
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
   it("bounds the cross-request contract-proof cache and evicts the oldest key", async () => {
-    const fetcher = vi.fn<GitHubFetch>((input) => {
-      const url = new URL(input instanceof Request ? input.url : input.toString());
-      if (url.pathname.endsWith("/git/ref/heads/main")) {
-        return Promise.resolve(json({ object: { sha: HEAD } }));
-      }
-      if (url.pathname.endsWith(`/git/commits/${HEAD}`)) {
-        return Promise.resolve(json({ tree: { sha: TREE } }));
-      }
-      if (url.pathname.endsWith(`/compare/${RESULT_OWNER_CONTRACT_COMMIT}...${HEAD}`)) {
-        return Promise.resolve(json({
-          status: "ahead",
-          merge_base_commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
-        }));
-      }
-      const marker = "/contents/";
-      const index = url.pathname.indexOf(marker);
-      const path = index < 0 ? "" : decodeURI(url.pathname.slice(index + marker.length));
-      const sha = (RESULT_OWNER_CONTRACT_BLOBS as Readonly<Record<string, string>>)[path];
-      if (sha !== undefined) return Promise.resolve(json({ type: "file", path, sha }));
-      throw new Error(`unexpected contract proof request: ${url.toString()}`);
-    });
+    const heads: string[] = [];
     for (let index = 0; index < 65; index += 1) {
-      const candidate = new GitHubStateRepository(
-        { repository: `leanprover/state-${String(index)}`, token: "secret", userAgent: "test" },
-        fetcher,
-      );
-      await candidate.assertResultOwnerContract();
+      const head = index.toString(16).padStart(40, "0");
+      heads.push(head);
+      const fetcher = sequence([
+        json({ object: { sha: head } }),
+        json({ tree: { sha: TREE } }),
+        json({ status: "ahead", merge_base_commit: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
+        resultOwnerContractRootTreeResponse(),
+      ]);
+      await repository(fetcher).assertResultOwnerContract();
+      expect(fetcher).toHaveBeenCalledTimes(4);
     }
-    await new GitHubStateRepository(
-      { repository: "leanprover/state-0", token: "secret", userAgent: "test" },
-      fetcher,
-    ).assertResultOwnerContract();
-    const comparisons = fetcher.mock.calls.filter(([input]) =>
-      (input instanceof Request ? input.url : input.toString()).includes("/compare/"));
-    expect(comparisons).toHaveLength(66);
+    const evicted = sequence([
+      json({ object: { sha: heads[0] } }),
+      json({ tree: { sha: TREE } }),
+      json({ status: "ahead", merge_base_commit: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
+      resultOwnerContractRootTreeResponse(),
+    ]);
+    await repository(evicted).assertResultOwnerContract();
+    expect(evicted).toHaveBeenCalledTimes(4);
   });
 
   it("proves write authority with a non-forced same-commit ref update", async () => {
@@ -448,7 +675,7 @@ describe("atomic Git State append", () => {
     expect(JSON.parse(init.body)).toEqual({ force: false, sha: HEAD });
   });
 
-  it("binds production write authority to protected main and exact contract blobs", async () => {
+  it("binds production write authority to protected main and exact contract subtrees", async () => {
     const fetcher = sequence([
       json({ permissions: { push: true } }),
       json({ object: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
@@ -458,8 +685,7 @@ describe("atomic Git State append", () => {
         protected: true,
         commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
       }),
-      ...Object.entries(RESULT_OWNER_CONTRACT_BLOBS).map(([path, sha]) =>
-        json({ type: "file", path, sha })),
+      resultOwnerContractRootTreeResponse(),
       json({
         ref: "refs/heads/main",
         object: { sha: RESULT_OWNER_CONTRACT_COMMIT },
@@ -487,8 +713,7 @@ describe("atomic Git State append", () => {
         protected: true,
         commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
       }),
-      ...Object.entries(RESULT_OWNER_CONTRACT_BLOBS).map(([path, sha]) =>
-        json({ type: "file", path, sha })),
+      resultOwnerContractRootTreeResponse(),
       json({
         ref: "refs/heads/main",
         object: { sha: RESULT_OWNER_CONTRACT_COMMIT },
@@ -515,8 +740,7 @@ describe("atomic Git State append", () => {
         protected: false,
         commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
       }),
-      ...Object.entries(RESULT_OWNER_CONTRACT_BLOBS).map(([path, sha]) =>
-        json({ type: "file", path, sha })),
+      resultOwnerContractRootTreeResponse(),
     ]);
     await expect(
       productionRepository(unprotected).assertProductionQualifiedWritable(),
@@ -531,15 +755,14 @@ describe("atomic Git State append", () => {
         protected: true,
         commit: { sha: "f".repeat(40) },
       }),
-      ...Object.entries(RESULT_OWNER_CONTRACT_BLOBS).map(([path, sha]) =>
-        json({ type: "file", path, sha })),
+      resultOwnerContractRootTreeResponse(),
     ]);
     await expect(
       productionRepository(stale).assertProductionQualifiedWritable(),
     ).rejects.toMatchObject({ status: 503 });
 
     await expect(
-      repository(sequence([])).assertProductionQualifiedWritable(),
+      stagingRepository(sequence([])).assertProductionQualifiedWritable(),
     ).rejects.toMatchObject({ status: 503 });
   });
 
@@ -835,6 +1058,15 @@ describe("atomic Git State append", () => {
   });
 
   it("atomically records a result, release schedule, and submission view", async () => {
+    const reservation = await effectiveResultIdentityReservation({
+      ownerLogin: "alice",
+      declaredModel: "Example Model",
+      problemId: "two_plus_two",
+      statementRevision: 2,
+      resultId: RESULT_ID,
+      reservationEventId: RESULT_EVENT.event_id,
+      reservationKind: "result_authority",
+    });
     const fetcher = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
@@ -845,6 +1077,7 @@ describe("atomic Git State append", () => {
       contents(ARCHIVE_EVENT),
       contents(EVALUATION_ACCEPTED),
       contents(EVALUATION_STARTED),
+      new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
@@ -870,6 +1103,7 @@ describe("atomic Git State append", () => {
       `views/result-identities/aa/${RESULT_ID}.json`,
       `views/result-amendments/aa/${RESULT_ID}.json`,
       `views/result-release-status/aa/${RESULT_ID}.json`,
+      effectiveResultIdentityPath(reservation.effective_result_identity_id),
     ]);
     expect(JSON.parse(tree.tree[4]?.content ?? "null")).toEqual(RESULT_AMENDMENT_VIEW);
     expect(JSON.parse(tree.tree[5]?.content ?? "null")).toEqual(RESULT_RELEASE_STATUS_VIEW);
@@ -884,6 +1118,15 @@ describe("atomic Git State append", () => {
   });
 
   it("records an open-conjecture result with an exact not-scheduled release status", async () => {
+    const reservation = await effectiveResultIdentityReservation({
+      ownerLogin: "alice",
+      declaredModel: "Example Model",
+      problemId: "two_plus_two",
+      statementRevision: 2,
+      resultId: RESULT_ID,
+      reservationEventId: RESULT_EVENT.event_id,
+      reservationKind: "result_authority",
+    });
     const accepted = {
       ...ACCEPTED_VIEW,
       submission: {
@@ -902,6 +1145,7 @@ describe("atomic Git State append", () => {
       contents(ARCHIVE_EVENT),
       contents(EVALUATION_ACCEPTED),
       contents(EVALUATION_STARTED),
+      new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
@@ -925,13 +1169,16 @@ describe("atomic Git State append", () => {
       `views/result-identities/aa/${RESULT_ID}.json`,
       `views/result-amendments/aa/${RESULT_ID}.json`,
       `views/result-release-status/aa/${RESULT_ID}.json`,
+      effectiveResultIdentityPath(reservation.effective_result_identity_id),
     ]);
     expect(JSON.parse(tree.tree[4]?.content ?? "null")).toEqual({
-      schema_version: 1,
+      schema_version: 2,
       result_id: RESULT_ID,
       authority_event_id: RESULT_EVENT.event_id,
       status: "not_scheduled",
+      release_revision: 0,
       release_event_id: null,
+      supersedes_release_event_id: null,
     });
   });
 
@@ -954,6 +1201,7 @@ describe("atomic Git State append", () => {
       contents(claimedGuard(RESULT_ID, CLAIM_EVENT_ID)),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
     ]);
     await expect(repository(claimed).recordAcceptedResult(
       [RESULT_EVENT, RELEASE_EVENT],
@@ -973,6 +1221,7 @@ describe("atomic Git State append", () => {
       )),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
     ]);
     await expect(repository(recorded).recordAcceptedResult(
       [RESULT_EVENT, RELEASE_EVENT],
@@ -987,6 +1236,15 @@ describe("atomic Git State append", () => {
   });
 
   it("accepts only an exact same-authority record replay and refuses a missing guard", async () => {
+    const reservation = await effectiveResultIdentityReservation({
+      ownerLogin: "alice",
+      declaredModel: "Example Model",
+      problemId: "two_plus_two",
+      statementRevision: 2,
+      resultId: RESULT_ID,
+      reservationEventId: RESULT_EVENT.event_id,
+      reservationKind: "result_authority",
+    });
     const prefix = (
       guard: Response,
       amendment: unknown = RESULT_AMENDMENT_VIEW,
@@ -1007,6 +1265,7 @@ describe("atomic Git State append", () => {
       guard,
       contents(amendment),
       contents(releaseStatus),
+      contents(reservation),
     ];
     const exact = sequence([
       ...prefix(contents(recordedGuard(RESULT_ID, RESULT_EVENT.event_id))),
@@ -1026,7 +1285,9 @@ describe("atomic Git State append", () => {
         {
           ...RESULT_RELEASE_STATUS_VIEW,
           status: "published",
+          release_revision: 2,
           release_event_id: laterEventId,
+          supersedes_release_event_id: RELEASE_EVENT.event_id,
         },
       ),
     ]);
@@ -1047,11 +1308,21 @@ describe("atomic Git State append", () => {
     )).rejects.toBeInstanceOf(StateEventConflictError);
   });
 
-  it("atomically claims a verified legacy record and all five private indexes", async () => {
+  it("atomically claims a verified legacy record and all six private indexes", async () => {
+    const reservation = await effectiveResultIdentityReservation({
+      ownerLogin: LEGACY_RESULT.ownerLogin,
+      declaredModel: LEGACY_RESULT.baseResult.declared_model,
+      problemId: LEGACY_RESULT.baseResult.problem_id,
+      statementRevision: LEGACY_RESULT.baseResult.statement_revision,
+      resultId: LEGACY_RESULT.resultId,
+      reservationEventId: CLAIM_EVENT_ID,
+      reservationKind: "result_authority",
+    });
     const fetcher = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
       ...resultOwnerContractProofResponses(),
+      new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
@@ -1083,6 +1354,7 @@ describe("atomic Git State append", () => {
       "views/result-source-records/34/src1_34ef08a904550548d360cc62407a77a7e5e8dfe9184c8d472e4f4266ffc3f826.json",
       `views/result-amendments/11/${LEGACY_RESULT.resultId}.json`,
       `views/result-release-status/11/${LEGACY_RESULT.resultId}.json`,
+      effectiveResultIdentityPath(reservation.effective_result_identity_id),
     ]);
     expect(tree.tree.every((entry) => entry.content.endsWith("\n"))).toBe(true);
     expect(tree.tree[1]?.content).toContain('"authority_event_id"');
@@ -1105,12 +1377,14 @@ describe("atomic Git State append", () => {
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
       json({ sha: NEW_TREE }, 201),
       json({ sha: NEW_COMMIT }, 201),
       json({ message: "not a fast-forward" }, 409),
       json({ object: { sha: nextHead } }),
       json({ tree: { sha: nextTree } }),
-      ...resultOwnerContractProofResponses(),
+      ...resultOwnerContractProofResponses(undefined, nextTree),
+      new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
@@ -1141,6 +1415,9 @@ describe("atomic Git State append", () => {
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
     ]);
     await expect(repository(fetcher).claimLegacyResult({
       eventId: CLAIM_EVENT_ID,
@@ -1164,6 +1441,7 @@ describe("atomic Git State append", () => {
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
     ]);
     await expect(repository(fetcher).claimLegacyResult({
       eventId: CLAIM_EVENT_ID,
@@ -1174,7 +1452,7 @@ describe("atomic Git State append", () => {
       existingKind: "recorded",
     } satisfies Partial<ResultIdentityCollisionError>);
     expect(fetcher).toHaveBeenCalledTimes(
-      2 + 1 + Object.keys(RESULT_OWNER_CONTRACT_BLOBS).length + 6,
+      2 + 2 + 7,
     );
   });
 
@@ -1182,6 +1460,7 @@ describe("atomic Git State append", () => {
     const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
     const overlay = claimedOverlay(LEGACY_RESULT, CLAIM_EVENT_ID, "2026-08-24T08:00:00.000Z");
     const source = await claimedSourceIndex(LEGACY_RESULT, CLAIM_EVENT_ID);
+    const reservation = await legacyBaseReservation();
     const claimEvent = {
       schema_version: 1,
       event_id: CLAIM_EVENT_ID,
@@ -1212,6 +1491,31 @@ describe("atomic Git State append", () => {
         reason_code: "request_not_confirmed",
       },
     });
+    const retractionRequestEvent: StateEvent = {
+      schema_version: 1,
+      event_id: retractionRequestId,
+      event_type: "result.retraction_requested",
+      occurred_at: "2026-08-24T08:01:00.000Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: CLAIM_EVENT_ID,
+      actor: { kind: "github", login: "alice" },
+      payload: { retraction_revision: 1, reason_code: "owner_requested_withdrawal" },
+    };
+    const retractionDecisionEvent: StateEvent = {
+      schema_version: 1,
+      event_id: retractionDecisionId,
+      event_type: "result.retraction_decided",
+      occurred_at: "2026-08-24T08:02:00.000Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: retractionRequestId,
+      actor: { kind: "system" },
+      payload: {
+        retraction_revision: 1,
+        reviewer_login: "maintainer",
+        decision: "reject",
+        reason_code: "request_not_confirmed",
+      },
+    };
     const exact = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
@@ -1222,7 +1526,10 @@ describe("atomic Git State append", () => {
       contents(LEGACY_RELEASE_STATUS_VIEW),
       contents(source),
       contents(claimEvent),
+      contents(reservation),
       contents(claimEvent),
+      contents(retractionDecisionEvent),
+      contents(retractionRequestEvent),
     ]);
     await expect(repository(exact).claimLegacyResult({
       eventId: CLAIM_EVENT_ID,
@@ -1242,6 +1549,7 @@ describe("atomic Git State append", () => {
       contents(LEGACY_RELEASE_STATUS_VIEW),
       contents(source),
       contents({ ...claimEvent, event_id: otherEventId }),
+      contents(reservation),
     ]);
     await expect(repository(occupied).claimLegacyResult({
       eventId: otherEventId,
@@ -1260,6 +1568,7 @@ describe("atomic Git State append", () => {
       contents(LEGACY_RELEASE_STATUS_VIEW),
       contents({ ...source, result_id: `r2_${"2".repeat(64)}` }),
       contents(claimEvent),
+      contents(reservation),
       contents(claimEvent),
     ]);
     await expect(repository(forged).claimLegacyResult({
@@ -1273,6 +1582,7 @@ describe("atomic Git State append", () => {
     const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
     const overlay = claimedOverlay(LEGACY_RESULT, CLAIM_EVENT_ID, "2026-08-24T08:00:00.000Z");
     const source = await claimedSourceIndex(LEGACY_RESULT, CLAIM_EVENT_ID);
+    const reservation = await legacyBaseReservation();
     const claimEvent = {
       schema_version: 1,
       event_id: CLAIM_EVENT_ID,
@@ -1297,6 +1607,7 @@ describe("atomic Git State append", () => {
       contents(LEGACY_RELEASE_STATUS_VIEW),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
+      contents(reservation),
       contents(source),
       contents(claimEvent),
     ]);
@@ -1378,7 +1689,9 @@ describe("atomic Git State append", () => {
       contents({
         ...LEGACY_RELEASE_STATUS_VIEW,
         status: "running",
+        release_revision: 1,
         release_event_id: releaseEventId,
+        supersedes_release_event_id: null,
       }),
       new Response(null, { status: 404 }),
       contents(legacyClaimEvent()),
@@ -1953,6 +2266,486 @@ describe("atomic Git State append", () => {
     });
   });
 
+  it("records an authenticated maintainer retraction decision as one causal State mutation", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const overlay = claimedOverlay(
+      LEGACY_RESULT,
+      CLAIM_EVENT_ID,
+      "2026-08-20T06:07:08.000Z",
+    );
+    const authority = legacyClaimEvent("2026-08-20T06:07:08.000Z");
+    const requestId = "0198abcd-2222-7000-8000-000000000003";
+    const decisionId = "0198abcd-2222-7000-8000-000000000004";
+    const requestEvent: StateEvent = {
+      schema_version: 1,
+      event_id: requestId,
+      event_type: "result.retraction_requested",
+      occurred_at: "2026-08-20T06:07:09.000Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: CLAIM_EVENT_ID,
+      actor: { kind: "github", login: "alice" },
+      payload: { retraction_revision: 1, reason_code: "owner_requested_withdrawal" },
+    };
+    const pending = requestedRetractionView(
+      LEGACY_AMENDMENT_VIEW,
+      requestId,
+      requestEvent.occurred_at,
+      "owner_requested_withdrawal",
+    );
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(pending),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      new Response(null, { status: 404 }),
+      contents(authority),
+      contents(requestEvent),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    const decision = {
+      eventId: decisionId,
+      occurredAt: "2026-08-20T06:07:10.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      reviewerLogin: "maintainer",
+      decision: "approve" as const,
+      reasonCode: "owner_request_verified",
+    };
+    await expect(repository(fetcher).decideResultRetraction(decision)).resolves.toEqual({
+      commit: NEW_COMMIT,
+      created: true,
+      resultId: LEGACY_RESULT.resultId,
+      mutationEventId: decisionId,
+      retractionRevision: 1,
+    });
+    const treeRequest = fetcher.mock.calls.find(([input, init]) =>
+      fetchUrl(input).endsWith("/git/trees") && init?.method === "POST")?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
+    const event: unknown = JSON.parse(tree.tree[0]?.content ?? "null");
+    validateStateEvent(event);
+    const decided = decodeResultAmendmentView(JSON.parse(tree.tree[1]?.content ?? "null") as unknown);
+    expect(event).toMatchObject({
+      event_id: decisionId,
+      event_type: "result.retraction_decided",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: requestId,
+      actor: { kind: "system" },
+      payload: {
+        retraction_revision: 1,
+        reviewer_login: "maintainer",
+        decision: "approve",
+        reason_code: "owner_request_verified",
+      },
+    });
+    expect(decided).toMatchObject({
+      mutation_event_id: decisionId,
+      retraction: { status: "approved", decision_event_id: decisionId },
+    });
+
+    clearResultOwnerContractProofCacheForTest();
+    const replay = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(decided),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      contents(event),
+      contents(authority),
+      contents(event),
+      contents(requestEvent),
+    ]);
+    await expect(repository(replay).decideResultRetraction(decision)).resolves.toMatchObject({
+      created: false,
+      retractionRevision: 1,
+    });
+    expect(replay.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+
+    clearResultOwnerContractProofCacheForTest();
+    const changed = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(decided),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      contents(event),
+      contents(authority),
+      contents(event),
+      contents(requestEvent),
+    ]);
+    await expect(repository(changed).decideResultRetraction({
+      ...decision,
+      reasonCode: "changed_review_reason",
+    })).rejects.toBeInstanceOf(StateEventConflictError);
+    expect(changed.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("records a maintainer override without impersonating an owner", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const overlay = claimedOverlay(
+      LEGACY_RESULT,
+      CLAIM_EVENT_ID,
+      "2026-08-20T06:07:08.000Z",
+    );
+    const authority = legacyClaimEvent("2026-08-20T06:07:08.000Z");
+    const overrideId = "0198abcd-2222-7000-8000-000000000003";
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(LEGACY_AMENDMENT_VIEW),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      new Response(null, { status: 404 }),
+      contents(authority),
+      contents(authority),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    const override = {
+      eventId: overrideId,
+      occurredAt: "2026-08-20T06:07:09.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      reviewerLogin: "maintainer",
+      reasonCode: "owner_account_unavailable",
+    };
+    await expect(repository(fetcher).overrideResultRetraction(override)).resolves.toMatchObject({
+      created: true,
+      retractionRevision: 1,
+    });
+    const treeRequest = fetcher.mock.calls.find(([input, init]) =>
+      fetchUrl(input).endsWith("/git/trees") && init?.method === "POST")?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { content: string }[] };
+    const event: unknown = JSON.parse(tree.tree[0]?.content ?? "null");
+    validateStateEvent(event);
+    const overridden = decodeResultAmendmentView(JSON.parse(tree.tree[1]?.content ?? "null") as unknown);
+    expect(event).toMatchObject({
+      event_type: "result.retraction_overridden",
+      causation_event_id: CLAIM_EVENT_ID,
+      actor: { kind: "system" },
+      payload: {
+        retraction_revision: 1,
+        reviewer_login: "maintainer",
+        reason_code: "owner_account_unavailable",
+      },
+    });
+    expect(JSON.stringify(event)).not.toContain('"login":"alice"');
+
+    clearResultOwnerContractProofCacheForTest();
+    const replay = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(overridden),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      contents(event),
+      contents(authority),
+      contents(event),
+      contents(authority),
+    ]);
+    await expect(repository(replay).overrideResultRetraction(override)).resolves.toMatchObject({
+      created: false,
+      retractionRevision: 1,
+    });
+    expect(replay.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("round-trips a maintainer override after a rejected owner request", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const overlay = claimedOverlay(
+      LEGACY_RESULT,
+      CLAIM_EVENT_ID,
+      "2026-08-20T06:07:08.000Z",
+    );
+    const authority = legacyClaimEvent("2026-08-20T06:07:08.000Z");
+    const requestId = "0198abcd-2222-7000-8000-000000000010";
+    const rejectionId = "0198abcd-2222-7000-8000-000000000011";
+    const overrideId = "0198abcd-2222-7000-8000-000000000012";
+    const requestEvent: StateEvent = {
+      schema_version: 1,
+      event_id: requestId,
+      event_type: "result.retraction_requested",
+      occurred_at: "2026-08-20T06:07:09.000Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: CLAIM_EVENT_ID,
+      actor: { kind: "github", login: "alice" },
+      payload: { retraction_revision: 1, reason_code: "owner_requested_withdrawal" },
+    };
+    const pending = requestedRetractionView(
+      LEGACY_AMENDMENT_VIEW,
+      requestId,
+      requestEvent.occurred_at,
+      "owner_requested_withdrawal",
+    );
+    const rejected = decidedRetractionView(
+      pending,
+      rejectionId,
+      "2026-08-20T06:07:10.000Z",
+      "first-maintainer",
+      "reject",
+      "request_not_verified",
+    );
+    const rejectionEvent: StateEvent = {
+      schema_version: 1,
+      event_id: rejectionId,
+      event_type: "result.retraction_decided",
+      occurred_at: "2026-08-20T06:07:10.000Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: requestId,
+      actor: { kind: "system" },
+      payload: {
+        retraction_revision: 1,
+        reviewer_login: "first-maintainer",
+        decision: "reject",
+        reason_code: "request_not_verified",
+      },
+    };
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(rejected),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      new Response(null, { status: 404 }),
+      contents(authority),
+      contents(rejectionEvent),
+      contents(requestEvent),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    const override = {
+      eventId: overrideId,
+      occurredAt: "2026-08-20T06:07:11.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      reviewerLogin: "second-maintainer",
+      reasonCode: "owner_account_unavailable",
+    };
+    await expect(repository(fetcher).overrideResultRetraction(override)).resolves.toMatchObject({
+      created: true,
+      retractionRevision: 2,
+    });
+    const treeRequest = fetcher.mock.calls.find(([input, init]) =>
+      fetchUrl(input).endsWith("/git/trees") && init?.method === "POST")?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { content: string }[] };
+    const event = JSON.parse(tree.tree[0]?.content ?? "null") as StateEvent;
+    const overridden = decodeResultAmendmentView(
+      JSON.parse(tree.tree[1]?.content ?? "null") as unknown,
+    );
+    expect(event).toMatchObject({
+      event_type: "result.retraction_overridden",
+      causation_event_id: rejectionId,
+      payload: { retraction_revision: 2, reviewer_login: "second-maintainer" },
+    });
+
+    clearResultOwnerContractProofCacheForTest();
+    const replay = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(overridden),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      contents(event),
+      contents(authority),
+      contents(event),
+      contents(rejectionEvent),
+    ]);
+    await expect(repository(replay).overrideResultRetraction(override)).resolves.toMatchObject({
+      created: false,
+      retractionRevision: 2,
+    });
+    expect(replay.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("derives terminal retraction disposition from the exact release view and blocks running releases", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const overlay = claimedOverlay(
+      LEGACY_RESULT,
+      CLAIM_EVENT_ID,
+      "2026-08-20T06:07:08.000Z",
+    );
+    const authority = legacyClaimEvent("2026-08-20T06:07:08.000Z");
+    const requestId = "0198abcd-2222-7000-8000-000000000003";
+    const decisionId = "0198abcd-2222-7000-8000-000000000004";
+    const terminalId = "0198abcd-2222-7000-8000-000000000005";
+    const pending = requestedRetractionView(
+      LEGACY_AMENDMENT_VIEW,
+      requestId,
+      "2026-08-20T06:07:09.000Z",
+      "owner_requested_withdrawal",
+    );
+    const approved = decidedRetractionView(
+      pending,
+      decisionId,
+      "2026-08-20T06:07:10.000Z",
+      "maintainer",
+      "approve",
+      "owner_request_verified",
+    );
+    const decisionEvent: StateEvent = {
+      schema_version: 1,
+      event_id: decisionId,
+      event_type: "result.retraction_decided",
+      occurred_at: "2026-08-20T06:07:10.000Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: requestId,
+      actor: { kind: "system" },
+      payload: {
+        retraction_revision: 1,
+        reviewer_login: "maintainer",
+        decision: "approve",
+        reason_code: "owner_request_verified",
+      },
+    };
+    const requestEvent: StateEvent = {
+      schema_version: 1,
+      event_id: requestId,
+      event_type: "result.retraction_requested",
+      occurred_at: "2026-08-20T06:07:09.000Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: CLAIM_EVENT_ID,
+      actor: { kind: "github", login: "alice" },
+      payload: { retraction_revision: 1, reason_code: "owner_requested_withdrawal" },
+    };
+    const releaseEventId = "0198abcd-2222-7000-8000-000000000002";
+    const releaseEvent = (status: "running" | "published"): StateEvent => ({
+      schema_version: 1,
+      event_id: releaseEventId,
+      event_type: status === "running" ? "release.started" : "release.published",
+      occurred_at: "2026-08-20T06:07:08.500Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: CLAIM_EVENT_ID,
+      actor: { kind: "system" },
+      payload: status === "running"
+        ? { attempt: 1 }
+        : {
+            attempt: 1,
+            repository_commit: "9".repeat(40),
+            tree_digest: "8".repeat(64),
+            path: "releases/test",
+          },
+    });
+    const responses = (status: "running" | "published") => [
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(approved),
+      contents(overlay),
+      contents({
+        ...LEGACY_RELEASE_STATUS_VIEW,
+        status,
+        release_revision: 1,
+        release_event_id: releaseEventId,
+        supersedes_release_event_id: null,
+      }),
+      new Response(null, { status: 404 }),
+      contents(authority),
+      contents(releaseEvent(status)),
+      contents(decisionEvent),
+      contents(requestEvent),
+    ];
+    const running = sequence(responses("running"));
+    await expect(repository(running).finalizeResultRetraction({
+      eventId: terminalId,
+      occurredAt: "2026-08-20T06:07:11.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      maintainerLogin: "another-maintainer",
+    })).rejects.toMatchObject({ status: 409 });
+    expect(running.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+
+    clearResultOwnerContractProofCacheForTest();
+    const published = sequence([
+      ...responses("published"),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    await expect(repository(published).finalizeResultRetraction({
+      eventId: terminalId,
+      occurredAt: "2026-08-20T06:07:11.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      maintainerLogin: "another-maintainer",
+    })).resolves.toEqual({
+      commit: NEW_COMMIT,
+      created: true,
+      resultId: LEGACY_RESULT.resultId,
+      mutationEventId: terminalId,
+      releaseDisposition: "removal_required",
+    });
+    const treeRequest = published.mock.calls.find(([input, init]) =>
+      fetchUrl(input).endsWith("/git/trees") && init?.method === "POST")?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { content: string }[] };
+    const terminalEvent: unknown = JSON.parse(tree.tree[0]?.content ?? "null");
+    validateStateEvent(terminalEvent);
+    const terminalView = decodeResultAmendmentView(JSON.parse(tree.tree[1]?.content ?? "null") as unknown);
+    expect(terminalEvent).toMatchObject({
+      event_type: "result.retracted",
+      causation_event_id: decisionId,
+      payload: {
+        release_disposition: "removal_required",
+        reviewer_login: "maintainer",
+      },
+    });
+    expect(terminalView).toEqual(terminalRetractionView(
+      approved,
+      terminalId,
+      "2026-08-20T06:07:11.000Z",
+      "maintainer",
+      "owner_request_verified",
+      "removal_required",
+    ));
+
+    clearResultOwnerContractProofCacheForTest();
+    const replay = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(terminalView),
+      contents(overlay),
+      contents({
+        ...LEGACY_RELEASE_STATUS_VIEW,
+        status: "published",
+        release_revision: 1,
+        release_event_id: releaseEventId,
+        supersedes_release_event_id: null,
+      }),
+      contents(terminalEvent),
+      contents(authority),
+      contents(releaseEvent("published")),
+      contents(terminalEvent),
+      contents(requestEvent),
+      contents(decisionEvent),
+    ]);
+    await expect(repository(replay).finalizeResultRetraction({
+      eventId: terminalId,
+      occurredAt: "2026-08-20T06:08:00.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      maintainerLogin: "another-maintainer",
+    })).resolves.toMatchObject({ created: false, releaseDisposition: "removal_required" });
+    expect(replay.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
   it("atomically requests a problem repair without changing the targeted release status", async () => {
     const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
     const overlay = claimedOverlay(
@@ -2023,6 +2816,263 @@ describe("atomic Git State append", () => {
     });
   });
 
+  it("rejects an unregistered removed event smuggled in as a release predecessor", async () => {
+    const predecessorId = "0198abcd-2222-7000-8000-000000000006";
+    const currentId = "0198abcd-2222-7000-8000-000000000007";
+    const current: StateEvent = {
+      schema_version: 1,
+      event_id: currentId,
+      event_type: "release.published",
+      occurred_at: "2026-08-20T06:07:10.000Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: predecessorId,
+      actor: { kind: "system" },
+      payload: {
+        attempt: 1,
+        repository_commit: "9".repeat(40),
+        tree_digest: "8".repeat(64),
+        path: "releases/test",
+      },
+    };
+    const smuggledPredecessor = {
+      schema_version: 1,
+      event_id: predecessorId,
+      event_type: "release.removed",
+      occurred_at: "2026-08-20T06:07:09.000Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: CLAIM_EVENT_ID,
+      actor: { kind: "system" },
+      payload: {},
+    };
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID)),
+      contents(LEGACY_AMENDMENT_VIEW),
+      contents(claimedOverlay(
+        LEGACY_RESULT,
+        CLAIM_EVENT_ID,
+        "2026-08-20T06:07:08.000Z",
+      )),
+      contents({
+        ...LEGACY_RELEASE_STATUS_VIEW,
+        status: "published",
+        release_revision: 2,
+        release_event_id: currentId,
+        supersedes_release_event_id: predecessorId,
+      }),
+      new Response(null, { status: 404 }),
+      contents(legacyClaimEvent("2026-08-20T06:07:08.000Z")),
+      contents(current),
+      contents(smuggledPredecessor),
+    ]);
+    await expect(repository(fetcher).requestResultProblemRepair({
+      eventId: "0198abcd-2222-7000-8000-000000000008",
+      occurredAt: "2026-08-20T06:07:11.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      ownerLogin: "alice",
+      correctedProblemId: "two_plus_three",
+      correctedStatementRevision: 2,
+      reasonCode: "wrong_problem_revision",
+    })).rejects.toBeInstanceOf(StateEventConflictError);
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("rejects malformed current release-removal evidence before trusting its barrier", async () => {
+    const publishedEventId = "0198abcd-2222-7000-8000-000000000005";
+    const removalEventId = "0198abcd-2222-7000-8000-000000000006";
+    const valid = removedReleaseEvent(removalEventId, publishedEventId);
+    const validPayload = valid.payload as Record<string, unknown>;
+    const hostile = [
+      { ...valid, payload: {} },
+      { ...valid, payload: { ...validPayload, unexpected: true } },
+      { ...valid, payload: { ...validPayload, classification: "unreviewed" } },
+      { ...valid, payload: { ...validPayload, published_state_event_repository: "example/state" } },
+      { ...valid, payload: { ...validPayload, evidence_repository: "example/audit" } },
+      { ...valid, payload: { ...validPayload, evidence_commit: "not-a-commit" } },
+      { ...valid, payload: { ...validPayload, evidence_sha256: "not-a-digest" } },
+      { ...valid, payload: { ...validPayload, evidence_path: "../private.json" } },
+      { ...valid, subject_id: `r2_${"f".repeat(64)}` },
+      { ...valid, payload: { ...validPayload, release_path: `releases/2026/08/r2_${"f".repeat(64)}` } },
+      { ...valid, payload: { ...validPayload, published_state_event_path: "events/00/wrong.json" } },
+      { ...valid, payload: { ...validPayload, bundle_disposition: "retain_shared" } },
+      {
+        ...valid,
+        payload: {
+          ...validPayload,
+          bundle_disposition: "retain_shared",
+          shared_release_paths: [
+            `releases/2026/08/r2_${"e".repeat(64)}`,
+            `releases/2026/08/r2_${"e".repeat(64)}`,
+          ],
+        },
+      },
+      {
+        ...valid,
+        payload: {
+          ...validPayload,
+          bundle_disposition: "retain_shared",
+          shared_release_paths: [validPayload.release_path],
+        },
+      },
+    ];
+    for (const event of hostile) {
+      clearResultOwnerContractProofCacheForTest();
+      const fetcher = sequence([
+        json({ object: { sha: HEAD } }),
+        json({ tree: { sha: TREE } }),
+        ...resultOwnerContractProofResponses(),
+        contents(claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID)),
+        contents(LEGACY_AMENDMENT_VIEW),
+        contents(claimedOverlay(
+          LEGACY_RESULT,
+          CLAIM_EVENT_ID,
+          "2026-08-20T06:07:08.000Z",
+        )),
+        contents({
+          ...LEGACY_RELEASE_STATUS_VIEW,
+          status: "removed",
+          release_revision: 2,
+          release_event_id: removalEventId,
+          supersedes_release_event_id: publishedEventId,
+        }),
+        new Response(null, { status: 404 }),
+        contents(legacyClaimEvent("2026-08-20T06:07:08.000Z")),
+        contents(event),
+      ]);
+      await expect(repository(fetcher).requestResultProblemRepair({
+        eventId: "0198abcd-2222-7000-8000-000000000008",
+        occurredAt: "2026-08-20T06:07:11.000Z",
+        resultId: LEGACY_RESULT.resultId,
+        ownerLogin: "alice",
+        correctedProblemId: "two_plus_three",
+        correctedStatementRevision: 2,
+        reasonCode: "wrong_problem_revision",
+      })).rejects.toBeInstanceOf(StateEventConflictError);
+      expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+    }
+  });
+
+  it("rejects incoherent release-removal predecessor bindings", async () => {
+    const startedEventId = "0198abcd-2222-7000-8000-000000000004";
+    const publishedEventId = "0198abcd-2222-7000-8000-000000000005";
+    const removalEventId = "0198abcd-2222-7000-8000-000000000006";
+    const published = publishedReleaseEvent(publishedEventId, startedEventId);
+    const publishedPayload = published.payload as Record<string, unknown>;
+    const started = startedReleaseEvent(startedEventId);
+    const cases = [
+      {
+        statusRevision: 1,
+        supersedes: null,
+        removal: removedReleaseEvent(removalEventId, publishedEventId),
+        predecessor: published,
+        started,
+      },
+      {
+        statusRevision: 2,
+        supersedes: publishedEventId,
+        removal: removedReleaseEvent(
+          removalEventId,
+          "0198abcd-2222-7000-8000-000000000003",
+        ),
+        predecessor: published,
+        started,
+      },
+      {
+        statusRevision: 2,
+        supersedes: publishedEventId,
+        removal: removedReleaseEvent(removalEventId, publishedEventId),
+        predecessor: {
+          ...published,
+          event_type: "release.failed",
+          payload: { attempt: 1, reason_code: "failed", retryable: true },
+        },
+        started,
+      },
+      {
+        statusRevision: 2,
+        supersedes: publishedEventId,
+        removal: removedReleaseEvent(removalEventId, publishedEventId),
+        predecessor: { ...published, subject_id: `r2_${"f".repeat(64)}` },
+        started,
+      },
+      ...[
+        { published_repository_commit: "d".repeat(40) },
+        { tree_digest: "d".repeat(64) },
+        { path: `releases/2026/08/r2_${"f".repeat(64)}` },
+      ].map((payloadOverride) => ({
+        statusRevision: 2,
+        supersedes: publishedEventId,
+        removal: removedReleaseEvent(removalEventId, publishedEventId),
+        predecessor: { ...published, payload: { ...publishedPayload, ...payloadOverride } },
+        started,
+      })),
+      {
+        statusRevision: 2,
+        supersedes: publishedEventId,
+        removal: removedReleaseEvent(removalEventId, publishedEventId),
+        predecessor: published,
+        started: {
+          ...started,
+          event_type: "release.failed",
+          payload: { attempt: 1, reason_code: "failed", retryable: true },
+        },
+      },
+      {
+        statusRevision: 2,
+        supersedes: publishedEventId,
+        removal: removedReleaseEvent(removalEventId, publishedEventId),
+        predecessor: published,
+        started: { ...started, subject_id: `r2_${"f".repeat(64)}` },
+      },
+      {
+        statusRevision: 2,
+        supersedes: publishedEventId,
+        removal: removedReleaseEvent(removalEventId, publishedEventId),
+        predecessor: published,
+        started: { ...started, payload: { attempt: 2 } },
+      },
+    ];
+    for (const hostile of cases) {
+      clearResultOwnerContractProofCacheForTest();
+      const fetcher = sequence([
+        json({ object: { sha: HEAD } }),
+        json({ tree: { sha: TREE } }),
+        ...resultOwnerContractProofResponses(),
+        contents(claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID)),
+        contents(LEGACY_AMENDMENT_VIEW),
+        contents(claimedOverlay(
+          LEGACY_RESULT,
+          CLAIM_EVENT_ID,
+          "2026-08-20T06:07:08.000Z",
+        )),
+        contents({
+          ...LEGACY_RELEASE_STATUS_VIEW,
+          status: "removed",
+          release_revision: hostile.statusRevision,
+          release_event_id: removalEventId,
+          supersedes_release_event_id: hostile.supersedes,
+        }),
+        new Response(null, { status: 404 }),
+        contents(legacyClaimEvent("2026-08-20T06:07:08.000Z")),
+        contents(hostile.removal),
+        contents(hostile.predecessor),
+        contents(hostile.started),
+      ]);
+      await expect(repository(fetcher).requestResultProblemRepair({
+        eventId: "0198abcd-2222-7000-8000-000000000008",
+        occurredAt: "2026-08-20T06:07:11.000Z",
+        resultId: LEGACY_RESULT.resultId,
+        ownerLogin: "alice",
+        correctedProblemId: "two_plus_three",
+        correctedStatementRevision: 2,
+        reasonCode: "wrong_problem_revision",
+      })).rejects.toBeInstanceOf(StateEventConflictError);
+      expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+    }
+  });
+
   it("rejects problem repair after release starts, publishes, or is removed", async () => {
     const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
     const overlay = claimedOverlay(
@@ -2031,9 +3081,12 @@ describe("atomic Git State append", () => {
       "2026-08-20T06:07:08.000Z",
     );
     const authority = legacyClaimEvent("2026-08-20T06:07:08.000Z");
-    const releaseEventId = "0198abcd-2222-7000-8000-000000000002";
     for (const status of ["running", "published", "removed"] as const) {
       clearResultOwnerContractProofCacheForTest();
+      const publishedEventId = "0198abcd-2222-7000-8000-000000000005";
+      const releaseEventId = status === "removed"
+        ? "0198abcd-2222-7000-8000-000000000006"
+        : "0198abcd-2222-7000-8000-000000000002";
       const fetcher = sequence([
         json({ object: { sha: HEAD } }),
         json({ tree: { sha: TREE } }),
@@ -2044,33 +3097,37 @@ describe("atomic Git State append", () => {
         contents({
           ...LEGACY_RELEASE_STATUS_VIEW,
           status,
+          release_revision: status === "removed" ? 2 : 1,
           release_event_id: releaseEventId,
+          supersedes_release_event_id: status === "removed" ? publishedEventId : null,
         }),
         new Response(null, { status: 404 }),
         contents(authority),
-        contents({
-          schema_version: 1,
-          event_id: releaseEventId,
-          event_type: {
-            running: "release.started",
-            published: "release.published",
-            removed: "release.removed",
-          }[status],
-          occurred_at: "2026-08-20T06:07:08.500Z",
-          subject_id: LEGACY_RESULT.resultId,
-          causation_event_id: CLAIM_EVENT_ID,
-          actor: { kind: "system" },
-          payload: status === "running"
-            ? { attempt: 1 }
-            : status === "published"
-              ? {
-                  attempt: 1,
-                  repository_commit: "9".repeat(40),
-                  tree_digest: "8".repeat(64),
-                  path: "releases/test",
-                }
-              : {},
-        }),
+        contents(status === "removed"
+          ? removedReleaseEvent(releaseEventId, publishedEventId)
+          : {
+              schema_version: 1,
+              event_id: releaseEventId,
+              event_type: status === "running" ? "release.started" : "release.published",
+              occurred_at: "2026-08-20T06:07:08.500Z",
+              subject_id: LEGACY_RESULT.resultId,
+              causation_event_id: CLAIM_EVENT_ID,
+              actor: { kind: "system" },
+              payload: status === "running"
+                ? { attempt: 1 }
+                : {
+                    attempt: 1,
+                    repository_commit: "9".repeat(40),
+                    tree_digest: "8".repeat(64),
+                    path: "releases/test",
+                  },
+            }),
+        ...(status === "removed"
+          ? [
+              contents(publishedReleaseEvent(publishedEventId)),
+              contents(startedReleaseEvent("0198abcd-2222-7000-8000-000000000004")),
+            ]
+          : []),
         contents(authority),
       ]);
       await expect(repository(fetcher).requestResultProblemRepair({
@@ -2098,7 +3155,9 @@ describe("atomic Git State append", () => {
       contents({
         ...LEGACY_RELEASE_STATUS_VIEW,
         status: "running",
+        release_revision: 1,
         release_event_id: releaseEventId,
+        supersedes_release_event_id: null,
       }),
       new Response(null, { status: 404 }),
       contents(legacyClaimEvent("2026-08-20T06:07:08.000Z")),
@@ -2197,6 +3256,408 @@ describe("atomic Git State append", () => {
       correctedStatementRevision: 2,
       reasonCode: "wrong_problem_revision",
     })).rejects.toBeInstanceOf(StateEventConflictError);
+  });
+
+  it("applies and replays one maintainer problem-repair decision with bound comparator evidence", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const overlay = claimedOverlay(
+      LEGACY_RESULT,
+      CLAIM_EVENT_ID,
+      "2026-08-20T06:07:08.000Z",
+    );
+    const authority = legacyClaimEvent("2026-08-20T06:07:08.000Z");
+    const pending = pendingLegacyProblemRepair();
+    const requestEvent = legacyProblemRepairRequestEvent();
+    const evidence = await legacyComparatorEvidence();
+    const reservation = await legacyRepairReservation();
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(pending),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      new Response(null, { status: 404 }),
+      contents(authority),
+      contents(requestEvent),
+      new Response(null, { status: 404 }),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    const decision = {
+      eventId: REPAIR_DECISION_ID,
+      occurredAt: REPAIR_DECIDED_AT,
+      resultId: LEGACY_RESULT.resultId,
+      reviewerLogin: "maintainer",
+      decision: "apply" as const,
+      reasonCode: null,
+      comparatorEvidence: evidence,
+    };
+    await expect(repository(fetcher).decideResultProblemRepair(decision)).resolves.toEqual({
+      commit: NEW_COMMIT,
+      created: true,
+      resultId: LEGACY_RESULT.resultId,
+      mutationEventId: REPAIR_DECISION_ID,
+      repairRevision: 1,
+    });
+    const treeRequest = fetcher.mock.calls.find(([input, init]) =>
+      fetchUrl(input).endsWith("/git/trees") && init?.method === "POST")?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
+    const event: unknown = JSON.parse(tree.tree[0]?.content ?? "null");
+    validateStateEvent(event);
+    const decided = decodeResultAmendmentView(JSON.parse(tree.tree[1]?.content ?? "null") as unknown);
+    expect(tree.tree.map((entry) => entry.path)).toEqual([
+      `events/01/${REPAIR_DECISION_ID}.json`,
+      `views/result-amendments/11/${LEGACY_RESULT.resultId}.json`,
+      effectiveResultIdentityPath(reservation.effective_result_identity_id),
+    ]);
+    expect(event).toMatchObject({
+      event_type: "result.problem_repaired",
+      causation_event_id: REPAIR_REQUEST_ID,
+      actor: { kind: "system" },
+      payload: {
+        repair_revision: 1,
+        reviewer_login: "maintainer",
+        comparator_binding_sha256: evidence.binding_sha256,
+        evidence_base_challenge_id: evidence.evidence_base_challenge_id,
+        evidence_corrected_challenge_id: evidence.evidence_corrected_challenge_id,
+      },
+    });
+    expect(decided).toEqual(decidedProblemRepairView(
+      pending,
+      REPAIR_DECISION_ID,
+      REPAIR_DECIDED_AT,
+      "maintainer",
+      "apply",
+      null,
+      evidence,
+    ));
+
+    clearResultOwnerContractProofCacheForTest();
+    const replay = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(decided),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      contents(event),
+      contents(authority),
+      contents(event),
+      contents(requestEvent),
+      contents(reservation),
+      contents(event),
+    ]);
+    await expect(repository(replay).decideResultProblemRepair(decision)).resolves.toMatchObject({
+      created: false,
+      repairRevision: 1,
+    });
+    expect(replay.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+
+    clearResultOwnerContractProofCacheForTest();
+    const changed = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(decided),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      contents(event),
+      contents(authority),
+      contents(event),
+      contents(requestEvent),
+    ]);
+    await expect(repository(changed).decideResultProblemRepair({
+      ...decision,
+      comparatorEvidence: { ...evidence, blob_sha256: "e".repeat(64) },
+    })).rejects.toBeInstanceOf(StateEventConflictError);
+    expect(changed.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("allows a same-result historical identity revisit without rewriting its reservation", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const overlay = claimedOverlay(
+      LEGACY_RESULT,
+      CLAIM_EVENT_ID,
+      "2026-08-20T06:07:08.000Z",
+    );
+    const authority = legacyClaimEvent("2026-08-20T06:07:08.000Z");
+    const pending = pendingLegacyProblemRepair();
+    const requestEvent = legacyProblemRepairRequestEvent();
+    const evidence = await legacyComparatorEvidence();
+    const priorDecisionId = "0198abcd-2222-7000-8000-000000000002";
+    const priorEvent: StateEvent = {
+      schema_version: 1,
+      event_id: priorDecisionId,
+      event_type: "result.problem_repaired",
+      occurred_at: "2026-08-20T06:07:08.900Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: "0198abcd-2222-7000-8000-000000000001",
+      actor: { kind: "system" },
+      payload: {
+        repair_revision: 1,
+        corrected_problem_id: "two_plus_three",
+        corrected_statement_revision: 2,
+        reviewer_login: "maintainer",
+        comparator_repository: evidence.repository,
+        comparator_commit: evidence.commit,
+        comparator_path: evidence.path,
+        comparator_blob_oid: evidence.blob_oid,
+        comparator_blob_sha256: evidence.blob_sha256,
+        comparator_record_sha256: evidence.record_sha256,
+        comparator_binding_sha256: evidence.binding_sha256,
+        comparator_verification_method: evidence.verification_method,
+        evidence_result_id: evidence.evidence_result_id,
+        evidence_owner_login: evidence.evidence_owner_login,
+        evidence_declared_model: evidence.evidence_declared_model,
+        evidence_base_problem_group: evidence.evidence_base_problem_group,
+        evidence_base_problem_id: evidence.evidence_base_problem_id,
+        evidence_base_statement_revision: evidence.evidence_base_statement_revision,
+        evidence_base_challenge_id: evidence.evidence_base_challenge_id,
+        evidence_corrected_problem_group: evidence.evidence_corrected_problem_group,
+        evidence_corrected_problem_id: evidence.evidence_corrected_problem_id,
+        evidence_corrected_statement_revision: evidence.evidence_corrected_statement_revision,
+        evidence_corrected_challenge_id: evidence.evidence_corrected_challenge_id,
+      },
+    };
+    validateStateEvent(priorEvent);
+    const reservation = await legacyRepairReservation(
+      LEGACY_RESULT.resultId,
+      priorDecisionId,
+    );
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(pending),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      new Response(null, { status: 404 }),
+      contents(authority),
+      contents(requestEvent),
+      contents(reservation),
+      contents(priorEvent),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    await expect(repository(fetcher).decideResultProblemRepair({
+      eventId: REPAIR_DECISION_ID,
+      occurredAt: REPAIR_DECIDED_AT,
+      resultId: LEGACY_RESULT.resultId,
+      reviewerLogin: "maintainer",
+      decision: "apply",
+      reasonCode: null,
+      comparatorEvidence: evidence,
+    })).resolves.toMatchObject({ created: true, repairRevision: 1 });
+    const treeRequest = fetcher.mock.calls.find(([input, init]) =>
+      fetchUrl(input).endsWith("/git/trees") && init?.method === "POST")?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { path: string }[] };
+    expect(tree.tree.map((entry) => entry.path)).toEqual([
+      `events/01/${REPAIR_DECISION_ID}.json`,
+      `views/result-amendments/11/${LEGACY_RESULT.resultId}.json`,
+    ]);
+  });
+
+  it("records a problem-repair rejection without comparator evidence", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const overlay = claimedOverlay(
+      LEGACY_RESULT,
+      CLAIM_EVENT_ID,
+      "2026-08-20T06:07:08.000Z",
+    );
+    const authority = legacyClaimEvent("2026-08-20T06:07:08.000Z");
+    const pending = pendingLegacyProblemRepair();
+    const requestEvent = legacyProblemRepairRequestEvent();
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(pending),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      new Response(null, { status: 404 }),
+      contents(authority),
+      contents(requestEvent),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    await expect(repository(fetcher).decideResultProblemRepair({
+      eventId: REPAIR_DECISION_ID,
+      occurredAt: REPAIR_DECIDED_AT,
+      resultId: LEGACY_RESULT.resultId,
+      reviewerLogin: "maintainer",
+      decision: "reject",
+      reasonCode: "insufficient_comparator_evidence",
+      comparatorEvidence: null,
+    })).resolves.toMatchObject({ created: true, repairRevision: 1 });
+    const treeRequest = fetcher.mock.calls.find(([input, init]) =>
+      fetchUrl(input).endsWith("/git/trees") && init?.method === "POST")?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { content: string }[] };
+    expect(tree.tree).toHaveLength(2);
+    const writes: unknown[] = tree.tree.map((entry) => JSON.parse(entry.content) as unknown);
+    expect(writes[0]).toMatchObject({
+      event_type: "result.problem_repair_rejected",
+      causation_event_id: REPAIR_REQUEST_ID,
+      payload: {
+        reviewer_login: "maintainer",
+        reason_code: "insufficient_comparator_evidence",
+      },
+    });
+    expect(writes[1]).toMatchObject({
+      problem_repair: {
+        status: "rejected",
+        comparator_evidence: null,
+      },
+    });
+  });
+
+  it("recomputes every derived comparator field before any State write", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const overlay = claimedOverlay(
+      LEGACY_RESULT,
+      CLAIM_EVENT_ID,
+      "2026-08-20T06:07:08.000Z",
+    );
+    const authority = legacyClaimEvent("2026-08-20T06:07:08.000Z");
+    const pending = pendingLegacyProblemRepair();
+    const requestEvent = legacyProblemRepairRequestEvent();
+    const evidence = await legacyComparatorEvidence();
+    for (const corrupted of [
+      { ...evidence, evidence_base_challenge_id: `ch1_${"0".repeat(64)}` },
+      { ...evidence, evidence_corrected_challenge_id: `ch1_${"0".repeat(64)}` },
+      { ...evidence, binding_sha256: "0".repeat(64) },
+    ]) {
+      clearResultOwnerContractProofCacheForTest();
+      const fetcher = sequence([
+        json({ object: { sha: HEAD } }),
+        json({ tree: { sha: TREE } }),
+        ...resultOwnerContractProofResponses(),
+        contents(guard),
+        contents(pending),
+        contents(overlay),
+        contents(LEGACY_RELEASE_STATUS_VIEW),
+        new Response(null, { status: 404 }),
+        contents(authority),
+        contents(requestEvent),
+      ]);
+      await expect(repository(fetcher).decideResultProblemRepair({
+        eventId: REPAIR_DECISION_ID,
+        occurredAt: REPAIR_DECIDED_AT,
+        resultId: LEGACY_RESULT.resultId,
+        reviewerLogin: "maintainer",
+        decision: "apply",
+        reasonCode: null,
+        comparatorEvidence: corrupted,
+      })).rejects.toMatchObject({ status: 409 });
+      expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+    }
+  });
+
+  it("rejects effective-identity collisions and release barriers before any State write", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const overlay = claimedOverlay(
+      LEGACY_RESULT,
+      CLAIM_EVENT_ID,
+      "2026-08-20T06:07:08.000Z",
+    );
+    const authority = legacyClaimEvent("2026-08-20T06:07:08.000Z");
+    const pending = pendingLegacyProblemRepair();
+    const requestEvent = legacyProblemRepairRequestEvent();
+    const evidence = await legacyComparatorEvidence();
+    const collisionResultId = `r2_${"2".repeat(64)}`;
+    const collisionReservation = await legacyRepairReservation(
+      collisionResultId,
+      "0198abcd-2222-7000-8000-000000000002",
+    );
+    const collisionFetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(pending),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      new Response(null, { status: 404 }),
+      contents(authority),
+      contents(requestEvent),
+      contents(collisionReservation),
+    ]);
+    const decision = {
+      eventId: REPAIR_DECISION_ID,
+      occurredAt: REPAIR_DECIDED_AT,
+      resultId: LEGACY_RESULT.resultId,
+      reviewerLogin: "maintainer",
+      decision: "apply" as const,
+      reasonCode: null,
+      comparatorEvidence: evidence,
+    };
+    await expect(repository(collisionFetcher).decideResultProblemRepair(decision)).rejects.toMatchObject({ status: 409 });
+    expect(collisionFetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+
+    for (const status of ["running", "published", "removed"] as const) {
+      clearResultOwnerContractProofCacheForTest();
+      const publishedEventId = "0198abcd-2222-7000-8000-000000000005";
+      const releaseEventId = status === "removed"
+        ? "0198abcd-2222-7000-8000-000000000006"
+        : "0198abcd-2222-7000-8000-000000000002";
+      const releaseBarrier = {
+        ...LEGACY_RELEASE_STATUS_VIEW,
+        status,
+        release_revision: status === "removed" ? 2 : 1,
+        release_event_id: releaseEventId,
+        supersedes_release_event_id: status === "removed" ? publishedEventId : null,
+      };
+      const fetcher = sequence([
+        json({ object: { sha: HEAD } }),
+        json({ tree: { sha: TREE } }),
+        ...resultOwnerContractProofResponses(),
+        contents(guard),
+        contents(pending),
+        contents(overlay),
+        contents(releaseBarrier),
+        new Response(null, { status: 404 }),
+        contents(authority),
+        contents(status === "removed"
+          ? removedReleaseEvent(releaseEventId, publishedEventId)
+          : {
+              schema_version: 1,
+              event_id: releaseEventId,
+              event_type: status === "running" ? "release.started" : "release.published",
+              occurred_at: "2026-08-20T06:07:08.500Z",
+              subject_id: LEGACY_RESULT.resultId,
+              causation_event_id: CLAIM_EVENT_ID,
+              actor: { kind: "system" },
+              payload: status === "running"
+                ? { attempt: 1 }
+                : {
+                    attempt: 1,
+                    repository_commit: "9".repeat(40),
+                    tree_digest: "8".repeat(64),
+                    path: "releases/test",
+                  },
+            }),
+        ...(status === "removed"
+          ? [
+              contents(publishedReleaseEvent(publishedEventId)),
+              contents(startedReleaseEvent("0198abcd-2222-7000-8000-000000000004")),
+            ]
+          : []),
+        contents(requestEvent),
+      ]);
+      await expect(repository(fetcher).decideResultProblemRepair(decision)).rejects.toMatchObject({ status: 409 });
+      expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+    }
   });
 
   it("derives modern result retraction authority from the recorded submission view", async () => {

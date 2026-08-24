@@ -25,8 +25,8 @@ primary checkout is not the integration workspace.
 | Repository / lane | Published commit or pull request |
 | --- | --- |
 | `lean-eval-generator` | `77373a539b31f8f304c852f288d7d8469cceebff` on `main`; fixes `#1` / `#2` and synchronization `#3` are merged and green; merged LeanEval consumer `#553` pins this exact commit and removes the embedded core |
-| production State | `163e9314c881493e08d23baf35ff40456f9c2331` on private `main`; it descends from the reviewed `release.removed`, source-free historical-public replay, append-authority, result-status, and staging presentation-time reconciliation contracts, and currently contains only `system.initialized`, with no accepted submission or due release work |
-| staging State | `64eb3f9f76aedccb8a4e888ff53717dc3d33b743` on private `main`; accepted archive/result lifecycle, ordered release opt-out cutoff, the exact presentation-time reconciliation, and the latest post-initialization promotion canary are recorded; post-push validator run `32728600770` passed |
+| production State | `501d237d46c7b3466a37554c1c2ceb310245a619` on private `main`; release-status v2 and permanent effective-result reservation contracts are merged over the earlier reviewed lifecycle contracts, and the graph still contains only `system.initialized`, with no accepted submission, reservation, or due release work |
+| staging State | `6a386bb4362b10dd8d7743e826c82f1a0011c0c3` on private `main`; the two existing result authorities have exact release-status v2 views and permanent base-tuple reservations; exact-main validator run `32747670842` passed |
 | `lean-eval-releases` | `57ab36341ccf653b45366c32d4472b9ee670890b` on `main`; source-free recovery `#8`, State-bound removal planning `#9`, and the deterministic automatic controller `#10` are merged; exact-main validation `32719159678` and publication-disabled Git credential preflight `32723471497` passed; credentialed staging unwrap and publication remain disabled |
 | catalog, generator consumer, software verification | v1 freeze merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; terminology rule merged in `#554`; standalone-generator consumer merged in `#553`; current main `b91d4757aa0d7776c02540c9089df54fa0d0658a` |
 | results schema version 2, intake server, replay contracts | schema-version-3 per-submission archive lane `#1250`, accepted result lifecycle `#1251`, guarded historical migration `#1252`, private replay planning/schema alignment `#1253` / `#1254`, accepted-archive staging boundary `#1255`, and immutable release OIDC trust `#1256` are merged; exact runtime `71650c9d579e269d6a48a6563d3cd0110e41e9c6` is deployed intake- and replay-disabled after protected State-pin recovery run `32728324814` |
@@ -355,6 +355,51 @@ public program:
 **Approved 2026-08-20:** both deviations preserve the intended
 single-path/idempotency and no-dropped-writer invariants more strongly than the
 literal mechanisms.
+
+### Result-amendment collision-index gate
+
+The permanent historical-reservation policy is selected and implemented.
+State defines `eri1_<sha256>` over the canonical
+`[owner_login, declared_model, problem_id, statement_revision]` tuple and stores
+one closed reservation under `views/effective-result-identities/`. Once a tuple
+belongs to a stable result it is never deleted or rebound to another result;
+the same result may revisit it.
+
+Production contract `501d237d46c7b3466a37554c1c2ceb310245a619` validates the
+empty production authority/reservation set. Staging migration
+`6a386bb4362b10dd8d7743e826c82f1a0011c0c3` materializes the two existing
+base-tuple reservations and passed exact-main validation run `32747670842`.
+Recording or claiming creates/confirms the base reservation in the same CAS
+transaction as authority and lifecycle views. Repair application target-reads
+only the corrected reservation: absence creates it atomically with the event
+and amendment view, the same result is an allowed historical revisit, and any
+cross-result use permanently conflicts. Pending and rejected repairs never
+reserve. The aggregate is no longer in online admission.
+
+The Worker binds the complete repository-specific `README.md`, `docs`,
+`schema`, and `scripts` subtrees through one non-recursive current-root-tree
+response plus ancestry when the head has advanced. Changed, missing, duplicate,
+or wrong-type entries fail closed. This cuts an uncached descendant contract
+proof from 16 GitHub requests (comparison plus 15 contents reads) to 2 while
+binding whole subtrees rather than selected blobs.
+
+The maximum external-subrequest route is repair application under maximum CAS
+contention: 28 requests for the initial State graph, 8 for protected Results and
+benchmark ancestry, the twice-read exact Results blob, and two benchmark
+manifests, plus 9 writer attempts at a conservative 37 requests each (including
+the immutable reservation-provenance event on a same-result revisit), for a
+closed bound of 369. This
+includes uncached contract proofs, every schema-bounded historical reference,
+candidate reservation read, tree/commit creation, duplicate ref-update retry,
+and reachability check. Before any owner or maintainer gate is enabled, confirm
+the deployed Workers plan allows at least 369 external subrequests per request;
+the 50-subrequest free allowance is insufficient.
+
+One gate remains: run an authorized staging apply/reject canary against the
+exact disabled-qualified Worker and preserve the resulting State evidence.
+Until that happens, `RESULT_AMENDMENT_MAINTAINER_API_ENABLED` stays false and
+the tracked maintainer list stays empty. No full repository scan or aggregate
+may return to online collision admission.
 
 ### D9: GitHub App and token-broker boundary
 

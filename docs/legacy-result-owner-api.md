@@ -5,12 +5,14 @@ in private State and lets their authenticated owners add field-provenanced
 production metadata. It never rewrites a Results record, changes its stable
 result ID, or reinterprets its grandfathered solution-publication policy.
 
-The implementation is bound to private State contract commit
-`163e9314c881493e08d23baf35ff40456f9c2331`. Before an owner operation, the
+The implementation is bound to production State contract commit
+`501d237d46c7b3466a37554c1c2ceb310245a619` and staging migration commit
+`6a386bb4362b10dd8d7743e826c82f1a0011c0c3`. Before an owner operation, the
 Worker resolves protected State `main`, proves that it equals or descends from
-that commit, and checks the exact reviewed event schema, targeted-index
-schemas, materializer, result-owner index builder, validator, and contract
-documentation blob IDs. Successful proofs are cached across requests in one
+the repository-specific commit, and checks the exact current root entries for
+`README.md`, `docs`, `schema`, and `scripts`. The three tree entries bind their
+complete reviewed subtrees, so the proof is stronger than enumerating selected
+files while using one root-tree request. Successful proofs are cached across requests in one
 Worker isolate under a content-addressed repository/head/contract key. The LRU
 cache contains at most 64 completed proofs and never caches a promise,
 credential, response, or failed proof. The transaction then uses that same
@@ -23,7 +25,7 @@ Both environments track these non-secret variables:
 
 ```text
 LEGACY_RESULT_OWNER_API_ENABLED=false
-RESULT_OWNER_STATE_CONTRACT_COMMIT=163e9314c881493e08d23baf35ff40456f9c2331
+RESULT_OWNER_STATE_CONTRACT_COMMIT=<6a386bb… in staging; 501d237d… in production>
 ```
 
 The route exists only when the enable flag is exactly `true` and the contract
@@ -33,12 +35,12 @@ production `INTAKE_ENABLED` remains independently false. OAuth start/callback
 may operate while intake is disabled only when the owner API gate is enabled;
 submission routes remain disabled.
 
-The protected binding commit above contains the reviewed owner/amendment
-contract plus later append-authority and targeted release-status validation.
-Runtime checks all fifteen exact documentation, schema, materializer, index,
-and validator blobs before using the protected-main head as a compare-and-swap
-base. The rollback qualification binds the same protected commit and callback
-implementation.
+The protected bindings above contain the reviewed owner/amendment contract,
+monotone release-status version 2, and permanent effective-result identity
+reservations. Runtime checks the four exact root entries before using the
+protected-main head as a compare-and-swap base. Missing, changed, duplicate, or
+wrong-type entries fail closed. Rollback qualification binds the exact
+environment commit and callback implementation.
 
 ## Authentication and requests
 
@@ -97,7 +99,8 @@ fields retain their stricter semantic limits.
 
 It then atomically creates `result.claimed`, the shared result-identity guard,
 the owner overlay, the immutable source-record index, the initial targeted
-amendment view, and the initial targeted release-status view. The release
+amendment view, the initial targeted release-status view, and the permanent
+`eri1_…` reservation for the base owner/model/problem/revision tuple. The release
 status is exactly `not_scheduled` with a null release-event marker. A modern
 `result.recorded` write reserves the same identity-guard path and creates the
 same two lifecycle views in its result transaction. When that transaction also
@@ -183,8 +186,8 @@ logs contain stage and error class only.
 
 ## Enable and rollback gate
 
-The first enablement has a zero-event migration precondition. At the protected
-binding commit `163e9314c881493e08d23baf35ff40456f9c2331`, inspected on
+The first production enablement has a zero-event migration precondition. At the
+protected binding commit `501d237d46c7b3466a37554c1c2ceb310245a619`, inspected on
 2026-08-24, production State contained zero `result.recorded` events, zero
 `result.claimed` events, and zero files under `views/result-identities/`; its
 only event was `system.initialized`. Consequently no historical result guard
