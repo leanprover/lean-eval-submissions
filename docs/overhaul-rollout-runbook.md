@@ -25,12 +25,12 @@ primary checkout is not the integration workspace.
 | Repository / lane | Published commit or pull request |
 | --- | --- |
 | `lean-eval-generator` | `77373a539b31f8f304c852f288d7d8469cceebff` on `main`; fixes `#1` / `#2` and synchronization `#3` are merged and green; merged LeanEval consumer `#553` pins this exact commit and removes the embedded core |
-| production State | `cf1a1f0d62ebfda9c51a64c1b3b375fe26218f75` on private `main`; strict redacted public projection and ordered release opt-out cutoff enabled |
+| production State | `4b8dcdf0a3d03749f51bef23807eeb1d00c43b72` on private `main`; it descends from the reviewed `release.removed` contract, adds the source-free historical-public replay authority contract, and currently contains only `system.initialized`, with no accepted submission or due release work |
 | staging State | `583778969da009368e347e30eb357702d5440015` on private `main`; accepted archive/result lifecycle and ordered release opt-out cutoff recorded |
-| `lean-eval-releases` | `a0caa9688d10cbefc8efad4151de9878114276c6` on `main`; automatic controller, scoped audit reader, and credentialed staging smoke are merged; publication remains disabled |
+| `lean-eval-releases` | `57ab36341ccf653b45366c32d4472b9ee670890b` on `main`; source-free recovery `#8`, State-bound removal planning `#9`, and the deterministic automatic controller `#10` are merged; exact-main validation `32719159678` and publication-disabled Git credential preflight `32723471497` passed; credentialed staging unwrap and publication remain disabled |
 | catalog, generator consumer, software verification | v1 freeze merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; terminology rule merged in `#554`; standalone-generator consumer merged in `#553`; current main `b91d4757aa0d7776c02540c9089df54fa0d0658a` |
 | results schema version 2, intake server, replay contracts | schema-version-3 per-submission archive lane `#1250`, accepted result lifecycle `#1251`, guarded historical migration `#1252`, private replay planning/schema alignment `#1253` / `#1254`, accepted-archive staging boundary `#1255`, and immutable release OIDC trust `#1256` are merged; exact runtime `12da2fa504ea4b9408d9fb24773886df02e20d66` is deployed intake- and replay-disabled |
-| AWS archive-key custody | dedicated account `lean-eval` (`161072922960`) and isolated stacks are provisioned; accepted-archive staging run `32618166048` passed. Release OIDC template correction is merged but the live stacks still require an authenticated operator update; production intake archive/replay roles remain disconnected |
+| AWS archive-key custody | dedicated account `lean-eval` (`161072922960`) and isolated stacks are provisioned; accepted-archive staging run `32618166048` passed. Release OIDC template correction is merged but the live stacks still require an authenticated operator update: release staging runs `32617539355` and `32624640050` failed at STS before Lambda or decrypt. Production intake archive/replay roles remain disconnected |
 | lifecycle-aware leaderboard | preview foundation merged as `lean-eval-leaderboard#69`; UI terminology merged in `#73`; deeper schema terminology merged in `#74`; cutover `#72` is merged and live at `https://lean-lang.org/eval/`, with `/legacy/` retained and read-only State deploy key `160968617` provisioned |
 
 The private broker and intake Workers are deployed in staging and production
@@ -282,12 +282,37 @@ the trusted, provider-neutral archive preparation side: one fresh PQ-hybrid age
 identity per archive, strict stdin-only adapter wrapping, and atomic publication
 of ciphertext plus envelope. `scripts/aws_key_adapter.py` and
 `infrastructure/aws-key-adapter/template.yaml` implement the initial KMS wrap,
-direct-Lambda unwrap, and conditional DynamoDB consume boundary. Only the
-staging smoke has role variables; production remains disconnected. The
+direct-Lambda unwrap, and conditional DynamoDB consume boundary. Staging wrap,
+staging replay, and both release environments have role variables; production
+archive and replay remain disconnected. Release publication remains disabled
+because the repository variable `PUBLICATION_ENABLED` is absent. The
 Cloudflare Sandbox backend is provisioned with general replay disabled. The
 reviewed production ceiling is one 12 GiB `standard-4` instance; authoritative
 queue consumption and the remaining isolation evidence are separate launch
 gates.
+
+The release controller is merged through exact `lean-eval-releases` commit
+`57ab36341ccf653b45366c32d4472b9ee670890b`; protected main validation run
+`32719159678` passed. Protected production credential preflight `32723471497`
+bound that exact controller to production State
+`0c8759946df0da1338a0c73bf5bd75d182038286`, validated its sole immutable
+initialization event, materialized all six deterministic views, and passed
+exact-ref no-op dry-run pushes with both production write keys while the
+publication variable remained absent. This establishes current Git credential
+authentication only. It made no actual ref update and did not exercise the
+audit key, OIDC, AWS, Lambda, a one-use capability, archive decryption or
+reconstruction, State callback/recovery, artifact upload, or publication.
+
+Before publication can be enabled, apply and verify the reviewed live release
+OIDC trust correction, then pass `Prove one credentialed staging release
+unwrap` against one accepted staging release. Both existing attempts,
+`32617539355` and `32624640050`, stopped at STS role assumption before Lambda
+or decrypt. Record that successful staging evidence and complete the explicit
+launch review before deliberately creating repository variable
+`PUBLICATION_ENABLED=true`. Production State currently has no accepted
+submission or due release work, so the controller would initially be inert;
+the first later due release will still be the first production exercise of the
+audit/decrypt and real release/State push paths.
 
 **Contributor acknowledgement approved 2026-08-20:** “By submitting, I confirm
 that I have authority to provide this source. I authorize Lean Eval to store
