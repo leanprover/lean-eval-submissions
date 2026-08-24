@@ -79,6 +79,45 @@ class StagingPromotionCanaryTests(unittest.TestCase):
         )
         self.assertEqual(CANARY.http_failure_reason(400, b"not-json"), "http_400")
 
+    def test_only_exact_deployment_binding_failures_are_retryable(self) -> None:
+        binding = CANARY.http_failure(
+            "/internal/v1/promotion-canary",
+            400,
+            CANARY.json.dumps(
+                {
+                    "error": "invalid_request",
+                    "detail": "promotion canary request does not bind this exact deployment",
+                },
+                separators=(",", ":"),
+            ).encode(),
+        )
+        self.assertIsInstance(binding, CANARY.CanaryDeploymentBindingMismatch)
+        self.assertEqual(
+            str(binding),
+            "/internal/v1/promotion-canary returned HTTP 400 (deployment_binding_mismatch)",
+        )
+
+        hostile = {
+            "request_not_canonical": "promotion canary request is not canonical",
+            "invalid_request_other": "private upstream detail must never be emitted",
+        }
+        for expected, detail in hostile.items():
+            with self.subTest(expected=expected):
+                failure = CANARY.http_failure(
+                    "/internal/v1/promotion-canary",
+                    400,
+                    CANARY.json.dumps(
+                        {"error": "invalid_request", "detail": detail},
+                        separators=(",", ":"),
+                    ).encode(),
+                )
+                self.assertIs(type(failure), CANARY.CanaryFailure)
+                self.assertEqual(
+                    str(failure),
+                    f"/internal/v1/promotion-canary returned HTTP 400 ({expected})",
+                )
+                self.assertNotIn(detail, str(failure))
+
     def test_main_retries_a_bounded_canary_transport_timeout(self) -> None:
         commit = "c" * 40
         args = types.SimpleNamespace(
@@ -127,6 +166,159 @@ class StagingPromotionCanaryTests(unittest.TestCase):
             {"timeout_seconds": 30},
         )
         sleep.assert_called_once_with(5)
+
+    def test_main_retries_only_a_bounded_deployment_binding_mismatch(self) -> None:
+        commit = "c" * 40
+        args = types.SimpleNamespace(
+            commit=commit,
+            dispatch_ref=f"lean-eval-dispatch/{commit}",
+            run_id="32712345678",
+            run_attempt="1",
+            timeout_seconds=480,
+            poll_seconds=5,
+        )
+        readiness = {
+            "environment": "staging",
+            "intake_configured_enabled": False,
+            "intake_effective_enabled": False,
+            "intake_enabled": False,
+            "intake_enablement_mode": "disabled",
+            "intake_lease_expires_at": None,
+            "state_commit": "a" * 40,
+            "status": "state_writer_ready",
+        }
+        mismatch = CANARY.CanaryDeploymentBindingMismatch(
+            "/internal/v1/promotion-canary returned HTTP 400 "
+            "(deployment_binding_mismatch)"
+        )
+        request_json = mock.Mock(
+            side_effect=[
+                (200, readiness),
+                mismatch,
+                (200, {}),
+            ]
+        )
+        with (
+            mock.patch.object(CANARY, "parse_args", return_value=args),
+            mock.patch.object(CANARY, "opener", return_value=mock.sentinel.client),
+            mock.patch.object(CANARY, "request_json", request_json),
+            mock.patch.object(
+                CANARY,
+                "validate_canary",
+                return_value=("0198abcd-1111-7000-8000-0000000000ca", True),
+            ),
+            mock.patch.object(CANARY.time, "monotonic", side_effect=[100, 101]),
+            mock.patch.object(CANARY.time, "sleep") as sleep,
+            mock.patch("builtins.print"),
+            mock.patch.dict(CANARY.os.environ, {"READINESS_TOKEN": "x" * 32}),
+        ):
+            self.assertEqual(CANARY.main(), 0)
+        self.assertEqual(request_json.call_count, 3)
+        sleep.assert_called_once_with(5)
+
+    def test_main_never_retries_other_invalid_requests(self) -> None:
+        commit = "c" * 40
+        args = types.SimpleNamespace(
+            commit=commit,
+            dispatch_ref=f"lean-eval-dispatch/{commit}",
+            run_id="32712345678",
+            run_attempt="1",
+            timeout_seconds=480,
+            poll_seconds=5,
+        )
+        readiness = {
+            "environment": "staging",
+            "intake_configured_enabled": False,
+            "intake_effective_enabled": False,
+            "intake_enabled": False,
+            "intake_enablement_mode": "disabled",
+            "intake_lease_expires_at": None,
+            "state_commit": "a" * 40,
+            "status": "state_writer_ready",
+        }
+        hostile = {
+            "request_not_canonical": "promotion canary request is not canonical",
+            "invalid_request_other": "private arbitrary detail must not escape",
+        }
+        for reason, detail in hostile.items():
+            with self.subTest(reason=reason):
+                failure = CANARY.http_failure(
+                    "/internal/v1/promotion-canary",
+                    400,
+                    CANARY.json.dumps(
+                        {"error": "invalid_request", "detail": detail},
+                        separators=(",", ":"),
+                    ).encode(),
+                )
+                self.assertIs(type(failure), CANARY.CanaryFailure)
+                self.assertNotIn(detail, str(failure))
+                request_json = mock.Mock(
+                    side_effect=[
+                        (200, readiness),
+                        failure,
+                    ]
+                )
+                with (
+                    mock.patch.object(CANARY, "parse_args", return_value=args),
+                    mock.patch.object(
+                        CANARY,
+                        "opener",
+                        return_value=mock.sentinel.client,
+                    ),
+                    mock.patch.object(CANARY, "request_json", request_json),
+                    mock.patch.object(CANARY.time, "monotonic", return_value=100),
+                    mock.patch.object(CANARY.time, "sleep") as sleep,
+                    mock.patch.dict(
+                        CANARY.os.environ,
+                        {"READINESS_TOKEN": "x" * 32},
+                    ),
+                ):
+                    with self.assertRaises(CANARY.CanaryFailure):
+                        CANARY.main()
+                self.assertEqual(request_json.call_count, 2)
+                sleep.assert_not_called()
+
+    def test_deployment_binding_retry_stops_at_the_existing_deadline(self) -> None:
+        commit = "c" * 40
+        args = types.SimpleNamespace(
+            commit=commit,
+            dispatch_ref=f"lean-eval-dispatch/{commit}",
+            run_id="32712345678",
+            run_attempt="1",
+            timeout_seconds=480,
+            poll_seconds=5,
+        )
+        readiness = {
+            "environment": "staging",
+            "intake_configured_enabled": False,
+            "intake_effective_enabled": False,
+            "intake_enabled": False,
+            "intake_enablement_mode": "disabled",
+            "intake_lease_expires_at": None,
+            "state_commit": "a" * 40,
+            "status": "state_writer_ready",
+        }
+        request_json = mock.Mock(
+            side_effect=[
+                (200, readiness),
+                CANARY.CanaryDeploymentBindingMismatch("closed reason"),
+            ]
+        )
+        with (
+            mock.patch.object(CANARY, "parse_args", return_value=args),
+            mock.patch.object(CANARY, "opener", return_value=mock.sentinel.client),
+            mock.patch.object(CANARY, "request_json", request_json),
+            mock.patch.object(CANARY.time, "monotonic", side_effect=[100, 576]),
+            mock.patch.object(CANARY.time, "sleep") as sleep,
+            mock.patch.dict(CANARY.os.environ, {"READINESS_TOKEN": "x" * 32}),
+        ):
+            with self.assertRaisesRegex(
+                CANARY.CanaryFailure,
+                "deployment binding did not converge",
+            ):
+                CANARY.main()
+        self.assertEqual(request_json.call_count, 2)
+        sleep.assert_not_called()
 
     def test_accepts_only_the_source_free_exact_success_contract(self) -> None:
         commit = "c" * 40

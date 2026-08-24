@@ -49,6 +49,10 @@ class CanaryConnectivityFailure(CanaryFailure):
     """A retryable bounded transport failure."""
 
 
+class CanaryDeploymentBindingMismatch(CanaryFailure):
+    """A retryable stale staging deployment response."""
+
+
 class RejectRedirects(urllib.request.HTTPRedirectHandler):
     """Reject redirects before urllib can forward the readiness credential."""
 
@@ -80,6 +84,16 @@ def http_failure_reason(status: int, encoded: bytes) -> str:
     return CANARY_INVALID_REQUEST_REASONS.get(value["detail"], "invalid_request_other")
 
 
+def http_failure(path: str, status: int, encoded: bytes) -> CanaryFailure:
+    reason = http_failure_reason(status, encoded)
+    failure = (
+        CanaryDeploymentBindingMismatch
+        if reason == "deployment_binding_mismatch"
+        else CanaryFailure
+    )
+    return failure(f"{path} returned HTTP {status} ({reason})")
+
+
 def request_json(
     client: urllib.request.OpenerDirector,
     path: str,
@@ -107,8 +121,7 @@ def request_json(
             status = response.status
             encoded = response.read(16 * 1024 + 1)
     except urllib.error.HTTPError as error:
-        reason = http_failure_reason(error.code, error.read(4097))
-        raise CanaryFailure(f"{path} returned HTTP {error.code} ({reason})") from None
+        raise http_failure(path, error.code, error.read(4097)) from None
     except (OSError, TimeoutError, urllib.error.URLError) as error:
         raise CanaryConnectivityFailure(
             f"{path} connectivity failed ({type(error).__name__})"
@@ -266,6 +279,13 @@ def main() -> int:
             if time.monotonic() + args.poll_seconds > deadline:
                 raise CanaryFailure(
                     "promotion transport did not recover before the promotion deadline"
+                ) from None
+            time.sleep(args.poll_seconds)
+            continue
+        except CanaryDeploymentBindingMismatch:
+            if time.monotonic() + args.poll_seconds > deadline:
+                raise CanaryFailure(
+                    "staging deployment binding did not converge before the promotion deadline"
                 ) from None
             time.sleep(args.poll_seconds)
             continue
