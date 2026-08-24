@@ -37,9 +37,30 @@ jobs:
           [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           test "$GITHUB_SHA" = "$EXPECTED_COMMIT"
           test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
-          remote_commit=$(timeout 30s git ls-remote \
+          tag_ref="refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
+          mapfile -t tag_lines < <(timeout 30s git ls-remote \
             https://github.com/leanprover/lean-eval-submissions.git \
-            "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT" | cut -f1)
+            "$tag_ref" "$tag_ref^{}")
+          test "${#tag_lines[@]}" -ge 1
+          test "${#tag_lines[@]}" -le 2
+          tag_object=""
+          remote_commit=""
+          for line in "${tag_lines[@]}"; do
+            read -r object ref extra <<< "$line"
+            test -z "${extra:-}"
+            [[ "$object" =~ ^[0-9a-f]{40}$ ]]
+            if [ "$ref" = "$tag_ref" ]; then
+              test -z "$tag_object"
+              tag_object="$object"
+            elif [ "$ref" = "$tag_ref^{}" ]; then
+              test -z "$remote_commit"
+              remote_commit="$object"
+            else
+              exit 1
+            fi
+          done
+          test -n "$tag_object"
+          if [ -z "$remote_commit" ]; then remote_commit="$tag_object"; fi
           test "$remote_commit" = "$EXPECTED_COMMIT"
 
       # actions/checkout pinned to v7.0.1.

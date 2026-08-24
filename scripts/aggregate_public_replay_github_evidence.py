@@ -203,7 +203,8 @@ def validate_aggregate(
     if not isinstance(value, dict) or set(value) != expected_fields:
         raise AggregationError("aggregate fields are not closed")
     if (
-        value["schema_version"] != 1
+        type(value["schema_version"]) is not int
+        or value["schema_version"] != 1
         or value["kind"] != "historical_public_replay_github_evidence_aggregate"
         or value["source_repository"] != requests["source_repository"]
         or value["source_commit"] != requests["source_commit"]
@@ -248,7 +249,7 @@ def validate_aggregate(
 
     resolutions = value["resolutions"]
     if not isinstance(resolutions, list) or not all(
-        isinstance(item, dict) for item in resolutions
+        isinstance(item, dict) and "status" in item for item in resolutions
     ):
         raise AggregationError("aggregate resolutions are invalid")
     expected_ids = [request["request_id"] for request in requests["requests"]]

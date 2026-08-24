@@ -98,7 +98,8 @@ def validate_workflow_registry(value: Any) -> dict[str, dict[str, str]]:
     if not isinstance(value, dict) or set(value) != expected:
         raise EvidenceError("workflow definition registry fields are not closed")
     if (
-        value["schema_version"] != 1
+        type(value["schema_version"]) is not int
+        or value["schema_version"] != 1
         or value["kind"]
         != "historical_public_replay_workflow_definition_registry"
         or value["repository"] != "leanprover/lean-eval-submissions"
@@ -506,13 +507,18 @@ def _candidate(
     expected_issue_url = f"https://github.com/{repository}/issues/{issue_number}"
     if (
         issue.get("number") != issue_number
-        or issue.get("state") != "closed"
         or issue.get("html_url") != expected_issue_url
     ):
         return {
             "issue_repository": repository,
             "status": "probe_indeterminate",
             "reason_code": "github_identity_changed",
+        }
+    if issue.get("state") != "closed":
+        return {
+            "issue_repository": repository,
+            "status": "issue_invalid",
+            "reason_code": "issue_not_closed",
         }
     try:
         title = issue["title"]
@@ -683,12 +689,12 @@ def _candidate(
                 comment = dict(comment)
                 comment["_reported_pass_problem_ids"] = projected
                 matching_comments.append(comment)
+    if projection_too_large:
+        return {
+            "issue_repository": repository,
+            "status": "result_comment_projection_too_large",
+        }
     if len(matching_comments) != 1:
-        if projection_too_large and not matching_comments:
-            return {
-                "issue_repository": repository,
-                "status": "result_comment_projection_too_large",
-            }
         if not matching_comments and len(outside_window_comments) == 1:
             observed = outside_window_comments[0]
             return {
@@ -826,7 +832,7 @@ def validate_requests(value: Any) -> None:
     }
     if not isinstance(value, dict) or set(value) != top_fields:
         raise EvidenceError("resolution request fields are not closed")
-    if value["schema_version"] != 1:
+    if type(value["schema_version"]) is not int or value["schema_version"] != 1:
         raise EvidenceError("resolution requests are not schema version 1")
     if value["kind"] != "historical_public_replay_resolution_requests":
         raise EvidenceError("resolution requests have the wrong kind")
@@ -1169,7 +1175,8 @@ def validate_evidence(
     if set(value) != expected_top:
         raise EvidenceError("GitHub evidence top-level fields are not closed")
     if (
-        value["schema_version"] != 1
+        type(value["schema_version"]) is not int
+        or value["schema_version"] != 1
         or value["kind"] != "historical_public_replay_github_evidence"
         or value["source_repository"] != "leanprover/lean-eval-submissions"
         or not isinstance(value["source_commit"], str)
@@ -1323,7 +1330,11 @@ def validate_evidence(
             if status == "issue_invalid":
                 if set(candidate) != base | {"reason_code"} or candidate.get(
                     "reason_code"
-                ) not in {"candidate_not_issue", "issue_body_invalid"}:
+                ) not in {
+                    "candidate_not_issue",
+                    "issue_body_invalid",
+                    "issue_not_closed",
+                }:
                     raise EvidenceError(f"{candidate_label} issue reason is invalid")
                 continue
             if status == "probe_indeterminate":

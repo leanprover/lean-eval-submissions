@@ -316,6 +316,75 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
             hashlib.sha256(canonical_bytes(None)).hexdigest(),
         )
 
+    def test_unrelated_open_sibling_issue_does_not_strand_exact_match(self) -> None:
+        class OpenSiblingClient(FakeClient):
+            def get(self, path: str):
+                if path == "/repos/leanprover/lean-eval-submissions/issues/144":
+                    value = issue()
+                    value["state"] = "open"
+                    value["html_url"] = (
+                        "https://github.com/leanprover/lean-eval-submissions/issues/144"
+                    )
+                    return value, 200
+                return super().get(path)
+
+        value = request_value()
+        output = resolve(value, "8" * 64, OpenSiblingClient())
+        validate_evidence(output, value)
+        resolution = output["resolutions"][0]
+        self.assertEqual(resolution["status"], "resolved")
+        self.assertEqual(
+            resolution["candidates"][1],
+            {
+                "issue_repository": "leanprover/lean-eval-submissions",
+                "status": "issue_invalid",
+                "reason_code": "issue_not_closed",
+            },
+        )
+
+    def test_changed_github_issue_identity_remains_indeterminate(self) -> None:
+        class ChangedIdentityClient(FakeClient):
+            def get(self, path: str):
+                value, status = super().get(path)
+                if path == "/repos/leanprover/lean-eval/issues/144":
+                    value = dict(value)
+                    value["html_url"] = "https://github.com/attacker/issues/144"
+                return value, status
+
+        value = request_value()
+        output = resolve(value, "8" * 64, ChangedIdentityClient())
+        validate_evidence(output, value)
+        candidate = output["resolutions"][0]["candidates"][0]
+        self.assertEqual(candidate["status"], "probe_indeterminate")
+        self.assertEqual(candidate["reason_code"], "github_identity_changed")
+
+    def test_oversized_identity_matching_comment_makes_candidate_ambiguous(self) -> None:
+        class OversizedCommentClient(FakeClient):
+            def pages(self, path: str, item_key=None):
+                values = super().pages(path, item_key)
+                if path == "/repos/leanprover/lean-eval/issues/144/comments":
+                    oversized = comment()
+                    oversized["id"] = 2
+                    oversized["html_url"] = (
+                        "https://github.com/leanprover/lean-eval/issues/144#issuecomment-2"
+                    )
+                    extras = "\n".join(
+                        f"- `extra_{index:04d}`: pass" for index in range(4097)
+                    )
+                    oversized["body"] = f"{oversized['body']}\n{extras}\n"
+                    return [oversized, *values]
+                return values
+
+        value = request_value()
+        output = resolve(value, "8" * 64, OversizedCommentClient())
+        validate_evidence(output, value)
+        resolution = output["resolutions"][0]
+        self.assertEqual(resolution["status"], "ambiguous")
+        self.assertEqual(
+            resolution["candidates"][0]["status"],
+            "result_comment_projection_too_large",
+        )
+
     def test_unpinned_issue_identity_is_always_recomputable(self) -> None:
         value = request_value()
         output = resolve(value, "8" * 64, FakeClient())

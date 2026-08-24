@@ -39,6 +39,8 @@ class HistoricalReplayInventoryWorkflowTests(unittest.TestCase):
             '"refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"',
             WORKFLOW,
         )
+        self.assertIn('"$tag_ref^{}"', WORKFLOW)
+        self.assertIn('if [ -z "$remote_commit" ]; then remote_commit="$tag_object"; fi', WORKFLOW)
         self.assertIn("ref: ${{ inputs.expected_commit }}", WORKFLOW)
         self.assertIn('test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"', WORKFLOW)
         self.assertEqual(

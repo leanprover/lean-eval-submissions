@@ -213,7 +213,9 @@
               "enum": ["leanprover/lean-eval", "leanprover/lean-eval-submissions"]
             },
             "status": { "const": "issue_invalid" },
-            "reason_code": { "enum": ["candidate_not_issue", "issue_body_invalid"] }
+            "reason_code": {
+              "enum": ["candidate_not_issue", "issue_body_invalid", "issue_not_closed"]
+            }
           }
         },
         {

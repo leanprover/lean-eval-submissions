@@ -109,7 +109,7 @@ to its shard index, total shard count, request count, and result count. Shards
 must be scheduled across GitHub rate-limit windows; they are deliberately not a
 parallel matrix that would share and exhaust the repository's standard
 `GITHUB_TOKEN` budget. Empty date-local partitions are producible zero-count shards
-and must still be supplied to aggregation. The resolver uses bounded LRU caches
+and must still be supplied to aggregation. The resolver uses entry-bounded LRU caches
 for repeated workflow definitions and daily run lists, but never gist bodies. Its token has
 only repository contents, issues, and Actions read authority; source fetching,
 State/Results writes, deployments, and secrets are outside that boundary.
