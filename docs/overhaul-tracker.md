@@ -290,18 +290,31 @@ the already implemented owner status, metadata, and publication routes.
       This remains unchecked until the first
       protected run is recorded in the ledger.
 - [x] Validate the release controller's State and release-repository write
-      credentials without AWS decrypt or publication. Protected run
-      `32694754911` at release commit `2a4cdff2` passed both exact-ref dry-run
-      pushes while publication remained absent.
+      credentials without AWS decrypt or publication. The final controller
+      merged as `lean-eval-releases#10` at `57ab3634`, and exact-main validation
+      run `32719159678` passed. Protected preflight `32723471497` bound that
+      commit to production State `0c875994`, validated its sole initialization
+      event and six deterministic views, and passed both exact-ref no-op
+      dry-run pushes while `PUBLICATION_ENABLED` remained absent. This proves
+      the current keys reach receive-pack, not a real ref update, audit read,
+      AWS unwrap, decrypt, reconstruction, or publication.
 - [ ] Pass the credentialed staging release smoke after the live AWS OIDC trust
-      update. Keep publication disabled until its separate launch gate.
+      update. Runs `32617539355` and `32624640050` both failed at STS role
+      assumption before Lambda invocation or decrypt. Keep publication disabled
+      until this smoke and its separate launch gate pass. Production State
+      currently has no accepted submission or due release work.
 - [x] Add the publication-disabled confidentiality-incident recovery planner
       (`lean-eval-releases#8`, merge `d66c8dd`), including strict original
       publication bindings, canonical shared-path classification, and a
       fail-closed remediation plan that performs no mutation.
-- [ ] Complete and merge the immutable `release.removed` State correction
-      contract, then bind the recovery planner to it and qualify the protected
-      repository-removal/history-cleanup procedure without rewriting results.
+- [x] Complete and merge the immutable `release.removed` State correction
+      contract (`lean-eval-state` commit `940a2a4f`), then bind the read-only
+      recovery planner to its exact schema, materializer, projection, and
+      correction skeleton (`lean-eval-releases#9`, merge `ded9463`).
+- [ ] Qualify the protected repository-removal/history-cleanup procedure and
+      reviewed operator append of `release.removed` without rewriting Results.
+      The merged planner deliberately performs neither containment nor the
+      State append.
 - [x] Record and deploy the readiness monitor, alert destination, severity
       owner, support contact, emergency intake-pause owner, and response
       procedure (`lean-eval-submissions#1301`, merge `58d88268`). Main deploy

@@ -7,7 +7,7 @@ until this ledger changes in the same pull request or an immediately linked
 operations pull request. Secret **names, owners, scopes, and rotation dates**
 belong here; secret values do not.
 
-Last reconciled: 2026-08-23 (Worker commit `12da2fa5` is deployed and
+Last reconciled: 2026-08-24 (Worker commit `12da2fa5` is deployed and
 intake-disabled in both environments; deployment tokens exercise Workers and
 Containers; accepted-archive staging replay run `32618166048` passed;
 State-writer tokens, browser OAuth Apps, and both broker GitHub Apps remain
@@ -18,8 +18,11 @@ current ordinary production Wrap role is incompatible with its exact OIDC
 subject and awaits a dedicated role/output/variable replacement; the
 lifecycle-aware leaderboard cutover is live; D7
 migrated all 44 results files and 1,298 records to schema version 2 at commit
-`c3491661`; automatic release tooling is merged at `a0caa968`, with
-publication still disabled and its live AWS trust update pending).
+`c3491661`; the automatic release controller and recovery tooling are merged
+through `lean-eval-releases` commit `57ab3634`; current validation run
+`32719159678` and publication-disabled Git credential preflight
+`32723471497` passed; the credentialed staging unwrap and live AWS trust update
+remain pending, and publication remains disabled).
 Temporary owner: Kim Morrison. Target owner: leanprover organization
 administrators. Service code:
 [`server/`](server/).
@@ -40,7 +43,7 @@ administrators. Service code:
 | GitHub state repository | `leanprover/lean-eval-state-staging` | staging | **CREATED PRIVATE 2026-08-20** |
 | GitHub state repository | `leanprover/lean-eval-state` | production | **CREATED PRIVATE 2026-08-20** |
 | GitHub generator repository | `leanprover/lean-eval-generator` | shared | **CREATED PUBLIC 2026-08-20** |
-| GitHub release repository | `leanprover/lean-eval-releases` | production | **AUTOMATIC CONTROLLER MERGED; CREDENTIALED STAGING TRUST UPDATE PENDING; PUBLICATION DISABLED** |
+| GitHub release repository | `leanprover/lean-eval-releases` | production | **AUTOMATIC CONTROLLER `57ab3634` MERGED AND GREEN; CURRENT GIT CREDENTIAL PREFLIGHT PASSED; CREDENTIALED STAGING TRUST UPDATE PENDING; PUBLICATION DISABLED** |
 | GitHub branch ruleset | `lean-eval-generator` `Protect main` (`21094079`) | shared | **ACTIVE; PR + LINEAR HISTORY + `check` REQUIRED; APPROVAL COUNT 0** |
 | GitHub branch ruleset | `lean-eval-releases` `Protect main` (`21094082`) | production | **ACTIVE; PR + LINEAR HISTORY + `validate` REQUIRED; APPROVAL COUNT 0** |
 | GitHub Environment | `cloudflare-staging` (`20259250422`) | staging | **CREATED 2026-08-20; ACCOUNT ID SET; API TOKEN SET 2026-08-21** |
@@ -707,11 +710,14 @@ GitHub's repository OIDC API currently reports subject prefixes
 was transferred after GitHub's immutable-subject rollout, so its owner and
 repository IDs are part of every token subject even though its display name is
 unchanged. The stack template pins these API-reported prefixes separately.
-Credentialed release staging run `32617539355` proved the previous live role
-still trusted the obsolete name-only release subject: it failed at STS before
-Lambda invocation, consumed no capability, and decrypted no source. Apply the
-reviewed stack update before repeating that smoke; do not opt the repository
-out of immutable subjects to preserve an obsolete trust policy.
+Credentialed release staging runs `32617539355` and `32624640050` proved the
+live role still trusted the obsolete name-only release subject: both failed at
+STS before Lambda invocation, consumed no capability, and decrypted no source.
+The later run had already validated staging State, checked out the exact audit
+commit, bound the encrypted object and sidecar, and prepared the unwrap request;
+none of those earlier steps supplied AWS authority. Apply the reviewed stack
+update before repeating that smoke; do not opt the repository out of immutable
+subjects to preserve an obsolete trust policy.
 
 Both keys are enabled customer-managed symmetric keys with annual rotation.
 Both one-use tables are active, on-demand, server-side encrypted, and use
@@ -768,6 +774,25 @@ and State key `161041214`; release production uses audit key `161041000`,
 write-capable State controller key `161040898`, and release publisher key
 `161040897`. The production secrets are installed, but no
 publication-enabling variable exists.
+
+Protected production preflight `32723471497` ran at exact release-controller
+commit `57ab36341ccf653b45366c32d4472b9ee670890b` against exact production
+State commit `0c8759946df0da1338a0c73bf5bd75d182038286`. It required
+`PUBLICATION_ENABLED` to remain absent or `false`, validated the sole immutable
+`system.initialized` State event, materialized all six deterministic State
+views, produced a source-free preflight qualification, and reached GitHub's
+write-side receive-pack service with both write-capable deploy keys. Both
+exact-ref `git push --dry-run` operations reported `[up to date]`. This proves
+the current keys are installed and authenticated for the two exact live
+repositories; because neither ref needed an update and the pushes were dry
+runs, it does not prove a real ruleset-bypass update. The workflow did not use
+the audit key, assume an AWS role, invoke Lambda, consume a capability, decrypt
+or reconstruct an archive, write an artifact, mutate State or releases, or
+publish anything. Production State currently contains no accepted submission
+or due release work, so enabling the controller after all remaining gates would
+initially be inert; the first later due release would still be the first live
+production audit/decrypt/push exercise.
+
 Historical migration uses read-only audit key `161041934`; its required
 `LEGACY_ARCHIVE_IDENTITY` secret is deliberately absent. Accepted-archive
 replay uses distinct read-only State key `161043118` and audit key `161043119`.
@@ -1006,6 +1031,7 @@ new replay version produced by the full target deploy below.
 | Results schema version 2 migration (D7) | 2026-08-22 | maintainer approved fresh dry run `32569220655` at source `ddc0e4ec8980296a5312844dedd5513d1d604e5b`, source digest `884c38373f8ecafbbc3894a6cb90cdca476f558bb32fe44d0af08e8c62fd2e05`, 1,298 records, and canonical output digest `b78fb207d4711c2f59970fd3e769c483cf7eab8f5afb1fec07abe7cadbfc24c4`. Apply run `32569936026` created lock commit `fd1259b3`, rewrote 43 legacy files / 1,088 legacy records, removed the lock, and produced main `c3491661da9dcdad908d1b1e78576d9f64f112f4`. Independent post-apply validation found 44/44 files at schema version 2, 1,298/1,298 records, no duplicates, unchanged canonical output digest, zero further changes, no queued submission writers, and green main CI `32569954466`. |
 | Replay decrypt and destruction | 2026-08-23 | synthetic run `32574078784` and real accepted-archive run `32618166048` passed fixed-command decrypt, reuse refusal, egress denial, source-free evidence, and confirmed unconditional destruction; authoritative queue consumption and production replay remain disabled |
 | Release reconstruction | 2026-08-22 | protected `lean-eval-releases` run `32574614106` at exact main commit `f1f83344017333650b4066a533e5ff4eefda5b54` passed all tooling tests, planned one due synthetic release, reconstructed and validated its manifest, proved the exact public-file allowlist excludes `private-note.txt`, and left the checkout clean. The run used only a harmless local plaintext fixture: it wrote neither State nor the release repository, exercised no AWS authority, and did not enable publication. |
+| Automatic release controller and production Git preflight | 2026-08-24 | `lean-eval-releases#8` merged the source-free confidentiality-incident planner as `d66c8dd43bb8e168cb67740214a9e2084ae44496`; `#9` bound it to the immutable `release.removed` State contract as `ded94636bc7e2f0971d0005ad076c8ce74bcb99f`; and `#10` completed the deterministic automatic controller as `57ab36341ccf653b45366c32d4472b9ee670890b`. Exact-main validation run `32719159678` passed. Protected preflight `32723471497` then validated and materialized production State `0c8759946df0da1338a0c73bf5bd75d182038286`, found only its initialization event and no due work, and proved both production write keys reached receive-pack through no-op exact-ref dry-run pushes while `PUBLICATION_ENABLED` remained absent. The preflight made no real Git update and exercised no audit key, AWS, Lambda, capability, archive, decrypt, reconstruction, State callback, recovery, artifact, or publication path. Credentialed staging unwrap, live AWS trust, protected cleanup qualification, and the deliberate publication launch gate remain open. |
 
 ## Reconciliation checklist
 
