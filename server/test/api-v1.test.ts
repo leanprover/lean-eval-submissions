@@ -27,7 +27,10 @@ import {
 } from "../src/github-provider";
 import {
   GitHubStateError,
+  ResultIdentityCollisionError,
   ResultOwnerStateError,
+  StateEventConflictError,
+  StateUpdateOutcomeUnknownError,
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
 } from "../src/github-state";
@@ -768,6 +771,26 @@ describe("strict API contract", () => {
       result_event_id: state.events.at(-2)?.event_id,
     });
     expect(resultFetch).toHaveBeenCalledOnce();
+
+    const eventCount = state.events.length;
+    const guardCheck = vi.spyOn(state, "recordAcceptedResult").mockRejectedValue(
+      new StateEventConflictError(`views/result-identities/${resultId}.json`),
+    );
+    const retryRequest = jsonRequest("/internal/v1/result-completed", completion);
+    retryRequest.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+    const retry = await handleRequest(
+      retryRequest,
+      { ...ENV, INTAKE_ENABLED: "false" },
+      LIFECYCLE,
+      {
+        state,
+        provider: new GitHubProvider(undefined, undefined, undefined, undefined, resultFetch),
+      },
+    );
+    expect(retry.status).toBe(409);
+    await expect(retry.json()).resolves.toEqual({ error: "idempotency_conflict" });
+    expect(guardCheck).toHaveBeenCalledOnce();
+    expect(state.events).toHaveLength(eventCount);
   });
 
   it("fails closed with 429 when the Cloudflare limiter denies or errors", async () => {
@@ -1828,7 +1851,7 @@ describe("authenticated legacy result owner routes", () => {
     ...ENV,
     INTAKE_ENABLED: "false",
     LEGACY_RESULT_OWNER_API_ENABLED: "true",
-    RESULT_OWNER_STATE_CONTRACT_COMMIT: "a3081798468f8c364a5c7d619aee2fd83e2028e3",
+    RESULT_OWNER_STATE_CONTRACT_COMMIT: "889e07e3b8cf38ad147d8a23b7d1b35826de740f",
   };
 
   async function ownerAuthorization(login = "alice"): Promise<string> {
@@ -1999,6 +2022,50 @@ describe("authenticated legacy result owner routes", () => {
     ), enabledEnv, LIFECYCLE, { now: () => NOW_MS, state });
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ error: "idempotency_conflict" });
+  });
+
+  it("maps an unknown State update outcome to a retryable 503", async () => {
+    const state = new MemoryState();
+    vi.spyOn(state, "backfillLegacyResultMetadata").mockRejectedValue(
+      new StateUpdateOutcomeUnknownError(),
+    );
+    const identifier = `r2_${"1".repeat(64)}`;
+    const response = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/metadata`,
+      {
+        method: "PATCH",
+        headers: {
+          authorization: await ownerAuthorization(),
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000006",
+        },
+        body: JSON.stringify({ production_metadata: { web_access: false } }),
+      },
+    ), enabledEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "state_unavailable" });
+  });
+
+  it("maps a first-authority identity collision to a terminal 409", async () => {
+    const state = new MemoryState();
+    vi.spyOn(state, "backfillLegacyResultMetadata").mockRejectedValue(
+      new ResultIdentityCollisionError("recorded"),
+    );
+    const identifier = `r2_${"1".repeat(64)}`;
+    const response = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/metadata`,
+      {
+        method: "PATCH",
+        headers: {
+          authorization: await ownerAuthorization(),
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000007",
+        },
+        body: JSON.stringify({ production_metadata: { web_access: false } }),
+      },
+    ), enabledEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "result_identity_conflict" });
   });
 
   it("does not expose private provider details in a response or structured log", async () => {

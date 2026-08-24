@@ -53,6 +53,15 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("application/vnd.github.v3.raw", DEPLOY)
         self.assertIn("application/vnd.github.v3.raw", ROLLBACK)
 
+    def test_staging_deploy_proves_the_results_branch_is_protected(self) -> None:
+        staging = DEPLOY.split("  deploy-staging:", 1)[1].split(
+            "  deploy-production:", 1
+        )[0]
+        self.assertIn("branches/staging-results", staging)
+        self.assertIn('.protected == true', staging)
+        self.assertIn('[[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]', staging)
+        self.assertIn("GH_TOKEN: ${{ github.token }}", staging)
+
     def test_smoke_checks_use_approved_memory_limit_for_both_environments(self) -> None:
         self.assertEqual(DEPLOY.count('"staging_memory_limit_bytes": 12 * 1024**3'), 2)
         self.assertEqual(DEPLOY.count('"production_memory_gate_bytes": 12 * 1024**3'), 2)
@@ -573,7 +582,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],
-                    "a3081798468f8c364a5c7d619aee2fd83e2028e3",
+                    "889e07e3b8cf38ad147d8a23b7d1b35826de740f",
                 )
                 self.assertEqual(
                     configuration["vars"]["OAUTH_CALLBACK_URL"],

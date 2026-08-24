@@ -1,0 +1,8 @@
+{
+  "canonical_json": "{\"numbers\":[333333333.3333333,1e+30,4.5,0.002,1e-27,0]}",
+  "schema_version": 1,
+  "sha256": "5c34ad2f0b62822dda6a8fbcb5ad901f69fba1c84571ee09063f63266f06fc58",
+  "value": {
+    "numbers": [333333333.33333329, 1e30, 4.50, 2e-3, 1e-27, -0.0]
+  }
+}

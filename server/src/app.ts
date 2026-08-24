@@ -40,8 +40,10 @@ import {
   type GitHubFetch,
   GitHubStateError,
   GitHubStateRepository,
+  ResultIdentityCollisionError,
   ResultOwnerStateError,
   StateEventConflictError,
+  StateUpdateOutcomeUnknownError,
 } from "./github-state";
 import {
   buildDispatchRequest,
@@ -1449,13 +1451,6 @@ async function resultCompleted(
     if (view.result_id !== completion.result_id || view.result_event_id === null) {
       throw new StateEventConflictError(`result completion ${completion.result_id}`);
     }
-    return json({
-      status: "already_recorded",
-      submission_id: view.submission_id,
-      result_id: view.result_id,
-      event_id: view.result_event_id,
-      release_event_id: null,
-    });
   }
   const resultEventId = await lifecycleEventId(
     "result.recorded",
@@ -1757,6 +1752,12 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
 function errorResponse(error: unknown): Response {
   if (error instanceof ApiDecodeError) return json({ error: "invalid_request", detail: error.message }, 400);
   if (error instanceof AuthError) return json({ error: "authentication_failed" }, 401);
+  if (error instanceof StateUpdateOutcomeUnknownError) {
+    return json({ error: "state_unavailable" }, 503);
+  }
+  if (error instanceof ResultIdentityCollisionError) {
+    return json({ error: "result_identity_conflict" }, 409);
+  }
   if (error instanceof StateEventConflictError) return json({ error: "idempotency_conflict" }, 409);
   if (error instanceof ResultOwnerStateError) {
     return error.status === 404

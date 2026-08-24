@@ -51,11 +51,16 @@ const RESULT_OWNER_CONTRACT_BLOBS = {
   "schema/result-overlay-view-v1.schema.json": "1b50a92a76891bd21e0b67f7f40ab9c86d50beed",
   "schema/result-overlays-v1.schema.json": "41d4078133d6854bf8de839873a3f58e9ba1afd1",
   "schema/result-source-record-index-v1.schema.json": "4543225e0833af00913e436185532a769debebc1",
-  "schema/state-event-v1.schema.json": "c2b4e85ddd18b7a3d41c705cfa1454ff8f879da1",
-  "scripts/materialize_state.py": "55fe11c8df3ecb809467214efdb10b2b114af2d6",
+  "schema/state-event-v1.schema.json": "609f186c386867254dc0dc1e58b77ebcf74ef15c",
+  "scripts/materialize_state.py": "68b88d24d501751d18108bdb26494fa172dc4ec7",
   "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
-  "scripts/validate_state.py": "2805ec815bad62f3886f63718f296cc4bde9e54f",
+  "scripts/validate_state.py": "bc77bc9c75f0985bb38aa5487cf4c1a48089f0ce",
 } as const;
+const RESULT_OWNER_CONTRACT_PROOF_CACHE_LIMIT = 64;
+const RESULT_OWNER_CONTRACT_PROOF_ID = Object.entries(RESULT_OWNER_CONTRACT_BLOBS)
+  .map(([path, sha]) => `${path}:${sha}`)
+  .join("|");
+const resultOwnerContractProofCache = new Map<string, true>();
 
 export type GitHubFetch = (
   input: RequestInfo | URL,
@@ -116,6 +121,16 @@ export class ResultOwnerStateError extends Error {
   }
 }
 
+export class ResultIdentityCollisionError extends Error {
+  readonly existingKind: "claimed" | "recorded";
+
+  constructor(existingKind: "claimed" | "recorded") {
+    super(`result identity is already reserved by ${existingKind} authority`);
+    this.name = "ResultIdentityCollisionError";
+    this.existingKind = existingKind;
+  }
+}
+
 export class StateUpdateOutcomeUnknownError extends Error {
   constructor() {
     super("GitHub State reference update outcome is unknown");
@@ -128,6 +143,22 @@ export class StateEventConflictError extends Error {
     super(`immutable State event already exists at ${path}`);
     this.name = "StateEventConflictError";
   }
+}
+
+export function clearResultOwnerContractProofCacheForTest(): void {
+  resultOwnerContractProofCache.clear();
+}
+
+function resultOwnerContractProofCacheKey(repository: string, head: string): string {
+  return `${repository.toLowerCase()}\0${head}\0${RESULT_OWNER_STATE_CONTRACT_COMMIT}\0${RESULT_OWNER_CONTRACT_PROOF_ID}`;
+}
+
+function rememberResultOwnerContractProof(key: string): void {
+  resultOwnerContractProofCache.delete(key);
+  if (resultOwnerContractProofCache.size >= RESULT_OWNER_CONTRACT_PROOF_CACHE_LIMIT) {
+    resultOwnerContractProofCache.delete(resultOwnerContractProofCache.keys().next().value ?? "");
+  }
+  resultOwnerContractProofCache.set(key, true);
 }
 
 function headers(config: GitHubStateConfig): Headers {
@@ -598,7 +629,6 @@ async function readResultOwnerDocumentAt<T>(
 export class GitHubStateRepository {
   readonly #config: GitHubStateConfig;
   readonly #fetcher: GitHubFetch;
-  readonly #verifiedResultOwnerHeads = new Set<string>();
 
   constructor(config: GitHubStateConfig, fetcher: GitHubFetch = defaultGitHubFetch) {
     if (!/^[A-Za-z\d_.-]+\/[A-Za-z\d_.-]+$/.test(config.repository)) {
@@ -622,12 +652,15 @@ export class GitHubStateRepository {
 
   async #resultOwnerSnapshot(): Promise<BranchSnapshot> {
     const snapshot = await branchSnapshot(this.#config, this.#fetcher);
-    if (!this.#verifiedResultOwnerHeads.has(snapshot.headSha)) {
+    const proofKey = resultOwnerContractProofCacheKey(
+      this.#config.repository,
+      snapshot.headSha,
+    );
+    if (!resultOwnerContractProofCache.has(proofKey)) {
       await assertResultOwnerContractAt(this.#config, this.#fetcher, snapshot.headSha);
-      if (this.#verifiedResultOwnerHeads.size >= 16) {
-        this.#verifiedResultOwnerHeads.delete(this.#verifiedResultOwnerHeads.values().next().value ?? "");
-      }
-      this.#verifiedResultOwnerHeads.add(snapshot.headSha);
+      rememberResultOwnerContractProof(proofKey);
+    } else {
+      rememberResultOwnerContractProof(proofKey);
     }
     return snapshot;
   }
@@ -1033,15 +1066,35 @@ export class GitHubStateRepository {
       ) {
         throw new StateEventConflictError(viewPath);
       }
-      const existing = await Promise.all([
-        ...paths.map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)),
+      const [eventEntries, guardEntry] = await Promise.all([
+        Promise.all(paths.map((path) =>
+          readPathAt(this.#config, this.#fetcher, path, snapshot.headSha))),
         readPathAt(this.#config, this.#fetcher, identityPath, snapshot.headSha),
       ]);
-      if (existing.some((entry) => entry.found)) {
-        const conflictIndex = existing.findIndex((entry) => entry.found);
-        throw new StateEventConflictError(conflictIndex < paths.length
-          ? paths[conflictIndex] ?? viewPath
-          : identityPath);
+      if (guardEntry.found) {
+        let guard;
+        try {
+          guard = decodeResultIdentityGuard(guardEntry.value);
+        } catch {
+          throw new StateEventConflictError(identityPath);
+        }
+        if (guard.result_id !== result.subject_id) {
+          throw new StateEventConflictError(identityPath);
+        }
+        if (guard.record_kind === "claimed") {
+          throw new ResultIdentityCollisionError("claimed");
+        }
+        if (guard.authority_event_id !== result.event_id) {
+          throw new ResultIdentityCollisionError("recorded");
+        }
+        // A same-authority recorded guard and event are created atomically with
+        // the matching submission view. Missing that view is corruption, not a
+        // second result that this callback may safely adopt.
+        throw new StateEventConflictError(viewPath);
+      }
+      const eventConflict = eventEntries.findIndex((entry) => entry.found);
+      if (eventConflict >= 0) {
+        throw new StateEventConflictError(paths[eventConflict] ?? viewPath);
       }
       const commit = await createCommit(
         this.#config,
@@ -1104,10 +1157,7 @@ export class GitHubStateRepository {
           throw new StateEventConflictError(identityPath);
         }
         if (guard.record_kind === "recorded") {
-          throw new ResultOwnerStateError(
-            409,
-            "result identity is already reserved by a modern result; immutable records require operator reconciliation",
-          );
+          throw new ResultIdentityCollisionError("recorded");
         }
         let overlay;
         try {
@@ -1173,9 +1223,11 @@ export class GitHubStateRepository {
           throw new StateEventConflictError(sourcePath);
         }
         if (requestedEventEntry.found) {
+          const expectedReplay = { ...event, occurred_at: authority.occurred_at };
           if (
             request.eventId !== guard.authority_event_id ||
-            canonicalResultJson(requestedEventEntry.value) !== canonicalResultJson(event)
+            canonicalResultJson(requestedEventEntry.value) !==
+              canonicalResultJson(expectedReplay)
           ) {
             throw new StateEventConflictError(eventPath);
           }

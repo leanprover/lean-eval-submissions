@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import canonicalizationVector from "./fixtures/result-owner-canonicalization-vectors-v1.json";
 import { GitHubProvider } from "../src/github-provider";
 import {
   backfilledOverlay,
@@ -88,6 +89,16 @@ describe("legacy result owner contracts", () => {
   it("uses RFC 8785 ordering and rejects unpaired Unicode surrogates", () => {
     expect(canonicalJson({ z: "β", a: [1, true] })).toBe('{"a":[1,true],"z":"β"}');
     expect(() => canonicalJson({ value: "\ud800" })).toThrow(/surrogate/u);
+  });
+
+  it("freezes the language-neutral RFC 8785 floating-point vector", async () => {
+    expect(canonicalizationVector.schema_version).toBe(1);
+    expect(canonicalJson(canonicalizationVector.value)).toBe(
+      canonicalizationVector.canonical_json,
+    );
+    await expect(sha256Hex(canonicalizationVector.canonical_json)).resolves.toBe(
+      canonicalizationVector.sha256,
+    );
   });
 
   it("builds field-provenanced replacement overlays without changing the base", () => {
@@ -219,6 +230,39 @@ describe("legacy result owner contracts", () => {
     expect(calls).toHaveLength(2);
   });
 
+  it("reports a protected Results head race as retryable provider unavailability", async () => {
+    const commit = "e".repeat(40);
+    const resultFetcher = (input: RequestInfo | URL): Promise<Response> => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.endsWith("/branches/staging-results")) {
+        return Promise.resolve(Response.json({
+          name: "staging-results",
+          protected: true,
+          commit: { sha: "f".repeat(40) },
+        }));
+      }
+      if (url.endsWith(`/compare/${commit}...staging-results`)) {
+        return Promise.resolve(Response.json({
+          status: "ahead",
+          base_commit: { sha: commit },
+          merge_base_commit: { sha: commit },
+          head_commit: { sha: "9".repeat(40) },
+        }));
+      }
+      throw new Error("content must not be read after a branch-head race");
+    };
+    const provider = new GitHubProvider(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      resultFetcher,
+      "staging-results",
+    );
+    await expect(provider.verifyLegacyResult("alice", commit, `r2_${"1".repeat(64)}`))
+      .rejects.toMatchObject({ status: 503 });
+  });
+
   it("maps raw surrogate content to a bounded proof failure", async () => {
     const identifier = `r2_${"1".repeat(64)}`;
     const record = {
@@ -314,5 +358,42 @@ describe("legacy result owner contracts", () => {
       })), "main");
     await expect(duplicateTuple.verifyLegacyResult("alice", "e".repeat(40), identifier))
       .rejects.toThrow(/unique immutable identity tuple/u);
+  });
+
+  it("bounds grandfathered production metadata before canonicalization", async () => {
+    const identifier = await resultId("alice", "Example Model", "two_plus_two", 1);
+    const record = {
+      result_id: identifier,
+      problem_id: "two_plus_two",
+      statement_revision: 1,
+      declared_model: "Example Model",
+      accepted_at: "2024-01-02T03:04:05Z",
+      benchmark_commit: "c".repeat(40),
+      intake: { kind: "issue", issue_number: 42 },
+      submission: {
+        kind: "github_repo",
+        repo: "alice/proof",
+        ref: "d".repeat(40),
+        public: false,
+      },
+      production_metadata: {
+        solution_publication_status: "private",
+        grandfathered: "x".repeat(16 * 1024 + 1),
+      },
+    };
+    const provider = new GitHubProvider(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      reachableResultFetcher(() => resultContents({
+        schema_version: 2,
+        user: "alice",
+        results: [record],
+      })),
+      "main",
+    );
+    await expect(provider.verifyLegacyResult("alice", "e".repeat(40), identifier))
+      .rejects.toThrow(/byte bound/u);
   });
 });

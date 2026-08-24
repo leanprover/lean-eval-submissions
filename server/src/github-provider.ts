@@ -13,6 +13,12 @@ const COMMIT = /^[0-9a-f]{40}$/;
 const DISPATCH_REF = /^lean-eval-dispatch\/([0-9a-f]{40})$/;
 const RESULT_ID = /^r2_[0-9a-f]{64}$/;
 const MAX_RESULT_FILE_BYTES = 2 * 1024 * 1024;
+const MAX_LEGACY_METADATA_BYTES = 32 * 1024;
+const MAX_LEGACY_METADATA_DEPTH = 16;
+const MAX_LEGACY_METADATA_NODES = 256;
+const MAX_LEGACY_METADATA_CONTAINER_ITEMS = 128;
+const MAX_LEGACY_METADATA_STRING_BYTES = 16 * 1024;
+const MAX_LEGACY_METADATA_KEY_BYTES = 256;
 const RESULT_ID_DOMAIN = "lean-eval-result-v2\0";
 const RESULT_TREE_DOMAIN = "lean-eval-result-tree-v1\0";
 export type ResultsProtectedBranch = "main" | "staging-results";
@@ -55,6 +61,56 @@ function isIsoCalendarDate(value: string): boolean {
   if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function assertBoundedLegacyMetadata(value: Record<string, unknown>): void {
+  const stack: { value: unknown; depth: number }[] = [{ value, depth: 0 }];
+  let nodes = 0;
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === undefined) break;
+    nodes += 1;
+    if (nodes > MAX_LEGACY_METADATA_NODES || current.depth > MAX_LEGACY_METADATA_DEPTH) {
+      throw new GitHubProviderError(409, "legacy result production metadata exceeded its structural bound");
+    }
+    if (typeof current.value === "string") {
+      if (new TextEncoder().encode(current.value).byteLength > MAX_LEGACY_METADATA_STRING_BYTES) {
+        throw new GitHubProviderError(409, "legacy result production metadata string exceeded its byte bound");
+      }
+      continue;
+    }
+    if (Array.isArray(current.value)) {
+      if (current.value.length > MAX_LEGACY_METADATA_CONTAINER_ITEMS) {
+        throw new GitHubProviderError(409, "legacy result production metadata array exceeded its item bound");
+      }
+      for (const item of current.value) stack.push({ value: item, depth: current.depth + 1 });
+      continue;
+    }
+    if (current.value !== null && typeof current.value === "object") {
+      const entries = Object.entries(current.value as Record<string, unknown>);
+      if (entries.length > MAX_LEGACY_METADATA_CONTAINER_ITEMS) {
+        throw new GitHubProviderError(409, "legacy result production metadata object exceeded its field bound");
+      }
+      for (const [key, item] of entries) {
+        if (new TextEncoder().encode(key).byteLength > MAX_LEGACY_METADATA_KEY_BYTES) {
+          throw new GitHubProviderError(409, "legacy result production metadata key exceeded its byte bound");
+        }
+        stack.push({ value: item, depth: current.depth + 1 });
+      }
+    }
+  }
+  let canonical: string;
+  try {
+    canonical = canonicalJson(value);
+  } catch (caught) {
+    if (caught instanceof TypeError) {
+      throw new GitHubProviderError(409, "legacy result production metadata was not canonicalizable JSON");
+    }
+    throw caught;
+  }
+  if (new TextEncoder().encode(canonical).byteLength > MAX_LEGACY_METADATA_BYTES) {
+    throw new GitHubProviderError(409, "legacy result production metadata exceeded its canonical byte bound");
+  }
 }
 
 export class GitHubProviderError extends Error {
@@ -443,11 +499,16 @@ export class GitHubProvider {
     const baseCommit = object(comparison.base_commit, "Results ancestry base commit");
     const mergeBase = object(comparison.merge_base_commit, "Results ancestry merge base");
     const headCommit = object(comparison.head_commit, "Results ancestry head commit");
+    if (typeof headCommit.sha !== "string" || !COMMIT.test(headCommit.sha)) {
+      throw new GitHubProviderError(502, "Results ancestry head commit was invalid");
+    }
+    if (headCommit.sha !== branchCommit.sha) {
+      throw new GitHubProviderError(503, "protected Results branch moved during ancestry verification");
+    }
     if (
       (comparison.status !== "ahead" && comparison.status !== "identical") ||
       baseCommit.sha !== resultsCommit ||
-      mergeBase.sha !== resultsCommit ||
-      headCommit.sha !== branchCommit.sha
+      mergeBase.sha !== resultsCommit
     ) {
       throw new GitHubProviderError(409, "Results commit is not an ancestor of the protected environment branch");
     }
@@ -596,6 +657,7 @@ export class GitHubProvider {
       throw new GitHubProviderError(409, "legacy result submission was invalid");
     }
     const production = object(record.production_metadata, "legacy result production metadata");
+    assertBoundedLegacyMetadata(production);
     const description = production.production_description;
     if (
       description !== undefined &&

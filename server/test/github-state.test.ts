@@ -1,11 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   canonicalStateDocument,
+  clearResultOwnerContractProofCacheForTest,
   type GitHubFetch,
   GitHubStateError,
   GitHubStateRepository,
-  ResultOwnerStateError,
+  ResultIdentityCollisionError,
   StateEventConflictError,
   StateUpdateOutcomeUnknownError,
 } from "../src/github-state";
@@ -28,17 +29,17 @@ const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
 const NEW_TREE = "3".repeat(40);
 const NEW_COMMIT = "4".repeat(40);
-const RESULT_OWNER_CONTRACT_COMMIT = "a3081798468f8c364a5c7d619aee2fd83e2028e3";
+const RESULT_OWNER_CONTRACT_COMMIT = "889e07e3b8cf38ad147d8a23b7d1b35826de740f";
 const RESULT_OWNER_CONTRACT_BLOBS = {
   "docs/result-owner-operational-indexes.md": "2f784609f9117caf74cb7042e9ea45732925d77b",
   "schema/result-identity-guard-v1.schema.json": "1620b6d8aed37f652958ac86e311c00578edc8b4",
   "schema/result-overlay-view-v1.schema.json": "1b50a92a76891bd21e0b67f7f40ab9c86d50beed",
   "schema/result-overlays-v1.schema.json": "41d4078133d6854bf8de839873a3f58e9ba1afd1",
   "schema/result-source-record-index-v1.schema.json": "4543225e0833af00913e436185532a769debebc1",
-  "schema/state-event-v1.schema.json": "c2b4e85ddd18b7a3d41c705cfa1454ff8f879da1",
-  "scripts/materialize_state.py": "55fe11c8df3ecb809467214efdb10b2b114af2d6",
+  "schema/state-event-v1.schema.json": "609f186c386867254dc0dc1e58b77ebcf74ef15c",
+  "scripts/materialize_state.py": "68b88d24d501751d18108bdb26494fa172dc4ec7",
   "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
-  "scripts/validate_state.py": "2805ec815bad62f3886f63718f296cc4bde9e54f",
+  "scripts/validate_state.py": "bc77bc9c75f0985bb38aa5487cf4c1a48089f0ce",
 } as const;
 
 const EVENT: StateEvent = {
@@ -279,6 +280,8 @@ function repository(fetcher: GitHubFetch): GitHubStateRepository {
 }
 
 describe("atomic Git State append", () => {
+  beforeEach(() => clearResultOwnerContractProofCacheForTest());
+
   it("emits the exact Python-compatible canonical State document bytes", () => {
     expect(canonicalStateDocument({ z: "😀", a: { y: "β", x: true } })).toBe(
       "{\n  \"a\": {\n    \"x\": true,\n    \"y\": \"\\u03b2\"\n  },\n  \"z\": \"\\ud83d\\ude00\"\n}\n",
@@ -293,6 +296,7 @@ describe("atomic Git State append", () => {
     ]);
     await expect(repository(valid).assertResultOwnerContract()).resolves.toBe(HEAD);
 
+    clearResultOwnerContractProofCacheForTest();
     const diverged = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
@@ -300,12 +304,68 @@ describe("atomic Git State append", () => {
     ]);
     await expect(repository(diverged).assertResultOwnerContract()).rejects.toMatchObject({ status: 503 });
 
+    clearResultOwnerContractProofCacheForTest();
     const changed = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
       ...resultOwnerContractProofResponses("schema/result-identity-guard-v1.schema.json"),
     ]);
     await expect(repository(changed).assertResultOwnerContract()).rejects.toMatchObject({ status: 503 });
+  });
+
+  it("reuses content-addressed contract proofs across repository instances", async () => {
+    const first = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+    ]);
+    await expect(repository(first).assertResultOwnerContract()).resolves.toBe(HEAD);
+
+    const second = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+    ]);
+    await expect(repository(second).assertResultOwnerContract()).resolves.toBe(HEAD);
+    expect(first).toHaveBeenCalledTimes(2 + 1 + Object.keys(RESULT_OWNER_CONTRACT_BLOBS).length);
+    expect(second).toHaveBeenCalledTimes(2);
+  });
+
+  it("bounds the cross-request contract-proof cache and evicts the oldest key", async () => {
+    const fetcher = vi.fn<GitHubFetch>((input) => {
+      const url = new URL(input instanceof Request ? input.url : input.toString());
+      if (url.pathname.endsWith("/git/ref/heads/main")) {
+        return Promise.resolve(json({ object: { sha: HEAD } }));
+      }
+      if (url.pathname.endsWith(`/git/commits/${HEAD}`)) {
+        return Promise.resolve(json({ tree: { sha: TREE } }));
+      }
+      if (url.pathname.endsWith(`/compare/${RESULT_OWNER_CONTRACT_COMMIT}...${HEAD}`)) {
+        return Promise.resolve(json({
+          status: "ahead",
+          merge_base_commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
+        }));
+      }
+      const marker = "/contents/";
+      const index = url.pathname.indexOf(marker);
+      const path = index < 0 ? "" : decodeURI(url.pathname.slice(index + marker.length));
+      const sha = (RESULT_OWNER_CONTRACT_BLOBS as Readonly<Record<string, string>>)[path];
+      if (sha !== undefined) return Promise.resolve(json({ type: "file", path, sha }));
+      throw new Error(`unexpected contract proof request: ${url.toString()}`);
+    });
+    for (let index = 0; index < 65; index += 1) {
+      const candidate = new GitHubStateRepository(
+        { repository: `leanprover/state-${String(index)}`, token: "secret", userAgent: "test" },
+        fetcher,
+      );
+      await candidate.assertResultOwnerContract();
+    }
+    await new GitHubStateRepository(
+      { repository: "leanprover/state-0", token: "secret", userAgent: "test" },
+      fetcher,
+    ).assertResultOwnerContract();
+    const comparisons = fetcher.mock.calls.filter(([input]) =>
+      (input instanceof Request ? input.url : input.toString()).includes("/compare/"));
+    expect(comparisons).toHaveLength(66);
   });
 
   it("proves write authority with a non-forced same-commit ref update", async () => {
@@ -617,6 +677,86 @@ describe("atomic Git State append", () => {
     expect(fetcher.mock.calls.every(([, init]) => init?.redirect === "manual")).toBe(true);
   });
 
+  it("keeps the first result-identity authority and reports claimed and recorded collisions distinctly", async () => {
+    const prefix = () => [
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      contents(ACCEPTED_VIEW),
+      contents(RECEIVED),
+      contents(METADATA),
+      contents(ARCHIVE_EVENT),
+      contents(EVALUATION_ACCEPTED),
+      contents(EVALUATION_STARTED),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+    ];
+    const claimed = sequence([
+      ...prefix(),
+      contents(claimedGuard(RESULT_ID, CLAIM_EVENT_ID)),
+    ]);
+    await expect(repository(claimed).recordAcceptedResult(
+      [RESULT_EVENT, RELEASE_EVENT],
+      EVALUATION_ACCEPTED.event_id,
+      RESULT_VIEW,
+    )).rejects.toMatchObject({
+      name: "ResultIdentityCollisionError",
+      existingKind: "claimed",
+    } satisfies Partial<ResultIdentityCollisionError>);
+
+    const recorded = sequence([
+      ...prefix(),
+      contents(recordedGuard(
+        RESULT_ID,
+        "0198abcd-1111-7000-8000-000000000009",
+      )),
+    ]);
+    await expect(repository(recorded).recordAcceptedResult(
+      [RESULT_EVENT, RELEASE_EVENT],
+      EVALUATION_ACCEPTED.event_id,
+      RESULT_VIEW,
+    )).rejects.toMatchObject({
+      name: "ResultIdentityCollisionError",
+      existingKind: "recorded",
+    } satisfies Partial<ResultIdentityCollisionError>);
+    expect([...claimed.mock.calls, ...recorded.mock.calls].some((call) =>
+      call[1]?.method === "POST")).toBe(false);
+  });
+
+  it("accepts only an exact same-authority record replay and refuses a missing guard", async () => {
+    const prefix = () => [
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      contents(RESULT_VIEW),
+      contents(RECEIVED),
+      contents(METADATA),
+      contents(ARCHIVE_EVENT),
+      contents(EVALUATION_ACCEPTED),
+      contents(RESULT_EVENT),
+      contents(EVALUATION_STARTED),
+      contents(RESULT_EVENT),
+      contents(RELEASE_EVENT),
+    ];
+    const exact = sequence([
+      ...prefix(),
+      contents(recordedGuard(RESULT_ID, RESULT_EVENT.event_id)),
+    ]);
+    await expect(repository(exact).recordAcceptedResult(
+      [RESULT_EVENT, RELEASE_EVENT],
+      EVALUATION_ACCEPTED.event_id,
+      RESULT_VIEW,
+    )).resolves.toEqual({ commit: HEAD, created: false, view: RESULT_VIEW });
+
+    const missingGuard = sequence([
+      ...prefix(),
+      new Response(null, { status: 404 }),
+    ]);
+    await expect(repository(missingGuard).recordAcceptedResult(
+      [RESULT_EVENT, RELEASE_EVENT],
+      EVALUATION_ACCEPTED.event_id,
+      RESULT_VIEW,
+    )).rejects.toBeInstanceOf(StateEventConflictError);
+  });
+
   it("atomically claims a verified legacy record and all three private indexes", async () => {
     const fetcher = sequence([
       json({ object: { sha: HEAD } }),
@@ -703,11 +843,14 @@ describe("atomic Git State append", () => {
       eventId: CLAIM_EVENT_ID,
       occurredAt: "2026-08-24T08:00:00.000Z",
       verified: LEGACY_RESULT,
-    })).rejects.toBeInstanceOf(ResultOwnerStateError);
+    })).rejects.toMatchObject({
+      name: "ResultIdentityCollisionError",
+      existingKind: "recorded",
+    } satisfies Partial<ResultIdentityCollisionError>);
     expect(fetcher).toHaveBeenCalledTimes(16);
   });
 
-  it("accepts an exact existing claim but rejects a forged source binding", async () => {
+  it("accepts a later exact same-key claim retry but rejects a forged source binding", async () => {
     const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
     const overlay = claimedOverlay(LEGACY_RESULT, CLAIM_EVENT_ID, "2026-08-24T08:00:00.000Z");
     const source = await claimedSourceIndex(LEGACY_RESULT, CLAIM_EVENT_ID);
@@ -733,10 +876,11 @@ describe("atomic Git State append", () => {
     ]);
     await expect(repository(exact).claimLegacyResult({
       eventId: CLAIM_EVENT_ID,
-      occurredAt: "2026-08-24T08:00:00.000Z",
+      occurredAt: "2026-08-24T09:00:00.000Z",
       verified: LEGACY_RESULT,
     })).resolves.toMatchObject({ created: false, authorityEventId: CLAIM_EVENT_ID });
 
+    clearResultOwnerContractProofCacheForTest();
     const otherEventId = "0198abcd-0000-7000-8000-000000000009";
     const occupied = sequence([
       json({ object: { sha: HEAD } }),
@@ -753,6 +897,7 @@ describe("atomic Git State append", () => {
       verified: LEGACY_RESULT,
     })).rejects.toBeInstanceOf(StateEventConflictError);
 
+    clearResultOwnerContractProofCacheForTest();
     const forged = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
@@ -896,6 +1041,7 @@ describe("atomic Git State append", () => {
       productionMetadata: { web_access: false },
     })).resolves.toMatchObject({ created: false, mutationEventId: BACKFILL_EVENT_ID });
 
+    clearResultOwnerContractProofCacheForTest();
     const changed = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
@@ -912,6 +1058,7 @@ describe("atomic Git State append", () => {
       productionMetadata: { web_access: true },
     })).rejects.toBeInstanceOf(StateEventConflictError);
 
+    clearResultOwnerContractProofCacheForTest();
     const forgedProvenance = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),

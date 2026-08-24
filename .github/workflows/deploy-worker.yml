@@ -139,6 +139,17 @@ jobs:
         with:
           python-version: '3.11.10'
       - run: npm ci
+      - name: Verify the staging Results branch protection gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          commit=$(gh api "repos/$GITHUB_REPOSITORY/branches/staging-results" \
+            --jq 'select(.name == "staging-results" and .protected == true) | .commit.sha')
+          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "staging-results is missing, unprotected, or not commit-exact" >&2
+            exit 1
+          fi
       - name: Verify reviewed staging replay image manifest
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
