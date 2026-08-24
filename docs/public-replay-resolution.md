@@ -47,16 +47,18 @@ definition must resolve `leanprover/lean-eval@main` and propagate that SHA
 unchanged into the accepted record. The resolver does not incorrectly equate
 those two repository commits.
 
-The registry intentionally begins empty. An unknown evaluator commit produces
+The registry is closed by default: an unknown evaluator commit produces
 `workflow_contract_unreviewed` and remains pending; text fragments, comments,
-or dead steps never establish a contract. To review an entry, start from that
-pending candidate's exact commit and definition digest, prove the commit is
-reachable from protected `lean-eval-submissions` `main`, retrieve
-`.github/workflows/submission.yml` at that commit, verify the complete checkout,
-SHA-output, job-output, and record-input data flow, and recompute the exact blob
-SHA-256. Add the sorted tuple through a reviewed PR and rerun the affected shard.
-Never add a digest based only on a fragment search or the previous resolver's
-classification.
+or dead steps never establish a contract. The first historical review covers
+119 exact commit/definition tuples and is documented in
+[`historical-public-workflow-contract-review.md`](historical-public-workflow-contract-review.md).
+To review another entry, start from that pending candidate's exact commit and
+definition digest, prove the commit is reachable from protected
+`lean-eval-submissions` `main`, retrieve `.github/workflows/submission.yml` at
+that commit, verify the complete checkout, SHA-output, job-output, and
+record-input data flow, and recompute the exact blob SHA-256. Add the sorted
+tuple through a reviewed PR and rerun the affected shard. Never add a digest
+based only on a fragment search or the previous resolver's classification.
 
 Finally, the resolver explicitly verifies that both historical issue
 repositories and the selected source repository are public and readable, then

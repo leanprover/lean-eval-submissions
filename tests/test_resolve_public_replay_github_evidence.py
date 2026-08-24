@@ -947,13 +947,22 @@ class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
         for candidate in schema["$defs"]["candidate"]["oneOf"]:
             self.assertIs(candidate["additionalProperties"], False)
 
-    def test_reviewed_workflow_registry_starts_closed_and_schema_strict(self) -> None:
-        registry = json.loads(
-            (
-                ROOT / "configuration/public-replay-workflow-definitions-v1.json"
-            ).read_text()
+    def test_reviewed_workflow_registry_snapshot_and_schema_are_strict(self) -> None:
+        registry_path = (
+            ROOT / "configuration/public-replay-workflow-definitions-v1.json"
         )
-        self.assertEqual(validate_workflow_registry(registry), {})
+        registry_raw = registry_path.read_bytes()
+        registry = json.loads(registry_raw)
+        reviewed = validate_workflow_registry(registry)
+        self.assertEqual(len(reviewed), 119)
+        self.assertEqual(
+            len({entry["definition_sha256"] for entry in reviewed.values()}),
+            12,
+        )
+        self.assertEqual(
+            hashlib.sha256(registry_raw).hexdigest(),
+            "82eff4dce70c2fcb7f480522f4de1fb16884534ce5f9452032908bb299c12196",
+        )
         schema = json.loads(
             (
                 ROOT / "schemas/public-replay-workflow-definitions-v1.schema.json"
