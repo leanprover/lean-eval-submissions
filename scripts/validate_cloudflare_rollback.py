@@ -56,6 +56,7 @@ CALLBACK_CONTRACT_FILES = [
     "server/src/github-broker.ts",
     "server/src/github-provider.ts",
     "server/src/github-state.ts",
+    "server/src/maintainer.ts",
     "server/src/result-amendment.ts",
     "server/src/result-owner.ts",
     "server/src/state-event.ts",
@@ -78,10 +79,55 @@ INTAKE_LEASE_BINDINGS = {
     "INTAKE_LEASE_STATE_COMMIT",
     "INTAKE_LEASE_TARGET_COMMIT",
 }
+MAINTAINER_LOGIN = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\Z")
+MAX_MAINTAINERS = 16
+MAX_MAINTAINER_CONFIGURATION_BYTES = 2048
+MAX_JAVASCRIPT_SAFE_INTEGER = 2**53 - 1
 
 
 class RollbackValidationError(ValueError):
     """The proposed rollback unit is not exact or commit-coherent."""
+
+
+def _validate_maintainer_identities(value: str) -> None:
+    try:
+        encoded = value.encode("utf-8")
+        identities = json.loads(value)
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise RollbackValidationError(
+            "RESULT_AMENDMENT_MAINTAINERS is not valid JSON"
+        ) from error
+    if (
+        not encoded
+        or len(encoded) > MAX_MAINTAINER_CONFIGURATION_BYTES
+        or not isinstance(identities, list)
+        or len(identities) > MAX_MAINTAINERS
+    ):
+        raise RollbackValidationError(
+            "RESULT_AMENDMENT_MAINTAINERS is not one bounded array"
+        )
+    github_ids: set[int] = set()
+    logins: set[str] = set()
+    for identity in identities:
+        if not isinstance(identity, dict) or set(identity) != {"github_id", "login"}:
+            raise RollbackValidationError(
+                "RESULT_AMENDMENT_MAINTAINERS contains a non-closed identity"
+            )
+        github_id = identity["github_id"]
+        login = identity["login"]
+        if (
+            type(github_id) is not int
+            or not 1 <= github_id <= MAX_JAVASCRIPT_SAFE_INTEGER
+            or not isinstance(login, str)
+            or MAINTAINER_LOGIN.fullmatch(login) is None
+            or github_id in github_ids
+            or login in logins
+        ):
+            raise RollbackValidationError(
+                "RESULT_AMENDMENT_MAINTAINERS contains an invalid or duplicate identity"
+            )
+        github_ids.add(github_id)
+        logins.add(login)
 
 
 def _object(path: pathlib.Path) -> dict[str, Any]:
@@ -748,8 +794,19 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         "RESULT_AMENDMENT_OWNER_API_ENABLED",
         "RESULT_OWNER_STATE_CONTRACT_COMMIT",
     }
+    amendment_maintainer_gate_fields = {
+        "RESULT_AMENDMENT_MAINTAINER_API_ENABLED",
+        "RESULT_AMENDMENT_MAINTAINERS",
+        "RESULT_OWNER_STATE_CONTRACT_COMMIT",
+    }
+    amendment_maintainer_specific_fields = (
+        amendment_maintainer_gate_fields - {"RESULT_OWNER_STATE_CONTRACT_COMMIT"}
+    )
     present_legacy_owner_fields = legacy_owner_gate_fields & set(intake_expected)
     present_amendment_owner_fields = amendment_owner_gate_fields & set(intake_expected)
+    present_amendment_maintainer_fields = (
+        amendment_maintainer_gate_fields & set(intake_expected)
+    )
     if (
         "LEGACY_RESULT_OWNER_API_ENABLED" in present_legacy_owner_fields
         and present_legacy_owner_fields != legacy_owner_gate_fields
@@ -764,8 +821,19 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         raise RollbackValidationError(
             "result amendment owner API gate and State contract pin must appear together"
         )
+    if (
+        amendment_maintainer_specific_fields & present_amendment_maintainer_fields
+        and present_amendment_maintainer_fields != amendment_maintainer_gate_fields
+    ):
+        raise RollbackValidationError(
+            "result amendment maintainer API gate, identities, and State contract pin "
+            "must appear together"
+        )
     legacy_owner_supported = "LEGACY_RESULT_OWNER_API_ENABLED" in present_legacy_owner_fields
     amendment_owner_supported = "RESULT_AMENDMENT_OWNER_API_ENABLED" in present_amendment_owner_fields
+    amendment_maintainer_supported = (
+        present_amendment_maintainer_fields == amendment_maintainer_gate_fields
+    )
     plan["legacy_result_owner_api_contract_supported"] = legacy_owner_supported
     plan["legacy_result_owner_api_enabled"] = (
         enabled(intake_expected, "LEGACY_RESULT_OWNER_API_ENABLED")
@@ -778,9 +846,23 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         if amendment_owner_supported
         else False
     )
+    plan["result_amendment_maintainer_api_contract_supported"] = (
+        amendment_maintainer_supported
+    )
+    plan["result_amendment_maintainer_api_enabled"] = (
+        enabled(intake_expected, "RESULT_AMENDMENT_MAINTAINER_API_ENABLED")
+        if amendment_maintainer_supported
+        else False
+    )
+    if amendment_maintainer_supported:
+        _validate_maintainer_identities(intake_expected["RESULT_AMENDMENT_MAINTAINERS"])
     owner_state_commit = (
         intake_expected["RESULT_OWNER_STATE_CONTRACT_COMMIT"]
-        if legacy_owner_supported or amendment_owner_supported
+        if (
+            legacy_owner_supported
+            or amendment_owner_supported
+            or amendment_maintainer_supported
+        )
         else None
     )
     if owner_state_commit is not None and COMMIT.fullmatch(owner_state_commit) is None:
@@ -790,6 +872,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     if (
         plan["legacy_result_owner_api_enabled"]
         or plan["result_amendment_owner_api_enabled"]
+        or plan["result_amendment_maintainer_api_enabled"]
     ) and owner_state_commit != state_contract["commit"]:
         raise RollbackValidationError(
             "enabled result owner API is not bound to current protected State"
@@ -800,6 +883,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         for name in (
             "legacy_result_owner_api_enabled",
             "result_amendment_owner_api_enabled",
+            "result_amendment_maintainer_api_enabled",
             "promotion_canary_enabled",
             "replay_enabled",
             "staging_acceptance_enabled",
@@ -933,6 +1017,15 @@ def validate_health(
     *,
     require_intake_disabled: bool = False,
 ) -> None:
+    forbidden_maintainer_fields = {
+        "RESULT_AMENDMENT_MAINTAINERS",
+        "result_amendment_maintainers",
+        "result_amendment_maintainer_identities",
+    }
+    if forbidden_maintainer_fields & set(health):
+        raise RollbackValidationError(
+            "health exposes the private maintainer identity configuration"
+        )
     common = {
         "status": "ok",
         "environment": plan["environment"],
@@ -962,6 +1055,10 @@ def validate_health(
         if plan["result_amendment_owner_api_contract_supported"]:
             expected["result_amendment_owner_api_enabled"] = plan[
                 "result_amendment_owner_api_enabled"
+            ]
+        if plan["result_amendment_maintainer_api_contract_supported"]:
+            expected["result_amendment_maintainer_api_enabled"] = plan[
+                "result_amendment_maintainer_api_enabled"
             ]
         if plan["promotion_canary_contract_supported"]:
             expected.update(
@@ -1029,6 +1126,8 @@ def build_prestate(args: argparse.Namespace) -> dict[str, Any]:
         "legacy_result_owner_api_enabled", "result_owner_state_contract_commit",
         "result_amendment_owner_api_contract_supported",
         "result_amendment_owner_api_enabled",
+        "result_amendment_maintainer_api_contract_supported",
+        "result_amendment_maintainer_api_enabled",
         "replay_enabled", "staging_acceptance_enabled",
         "staging_memory_limit_bytes", "production_memory_gate_bytes",
         "reviewed_execution_profile_digest",
@@ -1117,6 +1216,12 @@ def build_prestate(args: argparse.Namespace) -> dict[str, Any]:
             ],
             "result_amendment_owner_api_enabled": plan[
                 "result_amendment_owner_api_enabled"
+            ],
+            "result_amendment_maintainer_api_contract_supported": plan[
+                "result_amendment_maintainer_api_contract_supported"
+            ],
+            "result_amendment_maintainer_api_enabled": plan[
+                "result_amendment_maintainer_api_enabled"
             ],
             "promotion_canary_enabled": plan["promotion_canary_enabled"],
             "promotion_canary_contract_supported": plan[

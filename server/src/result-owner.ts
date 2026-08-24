@@ -1,12 +1,26 @@
 import { decodeProductionMetadata, type ProductionMetadata } from "./api-contract";
 
+export const PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT =
+  "501d237d46c7b3466a37554c1c2ceb310245a619" as const;
+export const STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT =
+  "6a386bb4362b10dd8d7743e826c82f1a0011c0c3" as const;
 export const RESULT_OWNER_STATE_CONTRACT_COMMIT =
-  "163e9314c881493e08d23baf35ff40456f9c2331" as const;
+  PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT;
+
+export function resultOwnerStateContractCommit(
+  environment: "staging" | "production",
+): typeof PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT |
+  typeof STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT {
+  return environment === "production"
+    ? PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT
+    : STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT;
+}
 export const RESULTS_REPOSITORY = "leanprover/lean-eval-submissions" as const;
 
 const RESULT_ID_DOMAIN = "lean-eval-result-v2\0";
 const RESULT_ID = /^r2_[0-9a-f]{64}$/;
 const SOURCE_RECORD_ID = /^src1_[0-9a-f]{64}$/;
+const EFFECTIVE_RESULT_IDENTITY_ID = /^eri1_[0-9a-f]{64}$/;
 const EVENT_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const LOGIN = /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/;
@@ -70,7 +84,7 @@ export type SourceRecordIndex = Readonly<{
 }>;
 
 export type ResultReleaseStatusView = Readonly<{
-  schema_version: 1;
+  schema_version: 2;
   result_id: string;
   authority_event_id: string;
   status:
@@ -82,6 +96,20 @@ export type ResultReleaseStatusView = Readonly<{
     | "cancelled"
     | "removed";
   release_event_id: string | null;
+  release_revision: number;
+  supersedes_release_event_id: string | null;
+}>;
+
+export type EffectiveResultIdentityReservation = Readonly<{
+  schema_version: 1;
+  effective_result_identity_id: string;
+  owner_login: string;
+  declared_model: string;
+  problem_id: string;
+  statement_revision: number;
+  result_id: string;
+  reservation_event_id: string;
+  reservation_kind: "result_authority" | "problem_repair";
 }>;
 
 function object(value: unknown, label: string): Record<string, unknown> {
@@ -186,6 +214,20 @@ export async function sourceRecordId(base: LegacyResultBase): Promise<string> {
   ]))}`;
 }
 
+export async function effectiveResultIdentityId(
+  ownerLogin: string,
+  declaredModel: string,
+  problemId: string,
+  statementRevision: number,
+): Promise<string> {
+  return `eri1_${await sha256Hex(canonicalJson([
+    ownerLogin,
+    declaredModel,
+    problemId,
+    statementRevision,
+  ]))}`;
+}
+
 export function resultIdentityPath(identifier: string): string {
   if (!RESULT_ID.test(identifier)) throw new TypeError("result identity is invalid");
   return `views/result-identities/${identifier.slice(3, 5)}/${identifier}.json`;
@@ -199,6 +241,13 @@ export function resultOverlayPath(identifier: string): string {
 export function resultReleaseStatusPath(identifier: string): string {
   if (!RESULT_ID.test(identifier)) throw new TypeError("result identity is invalid");
   return `views/result-release-status/${identifier.slice(3, 5)}/${identifier}.json`;
+}
+
+export function effectiveResultIdentityPath(identifier: string): string {
+  if (!EFFECTIVE_RESULT_IDENTITY_ID.test(identifier)) {
+    throw new TypeError("effective result identity is invalid");
+  }
+  return `views/effective-result-identities/${identifier.slice(5, 7)}/${identifier}.json`;
 }
 
 export function sourceRecordPath(identifier: string): string {
@@ -365,12 +414,14 @@ export function decodeResultReleaseStatusView(
   exactFields(data, [
     "authority_event_id",
     "release_event_id",
+    "release_revision",
     "result_id",
     "schema_version",
     "status",
+    "supersedes_release_event_id",
   ], "result release-status view");
   if (
-    data.schema_version !== 1 ||
+    data.schema_version !== 2 ||
     typeof data.result_id !== "string" ||
     !RESULT_ID.test(data.result_id) ||
     typeof data.authority_event_id !== "string" ||
@@ -385,13 +436,67 @@ export function decodeResultReleaseStatusView(
       "cancelled",
       "removed",
     ]).has(data.status) ||
-    (data.status === "not_scheduled" && data.release_event_id !== null) ||
+    typeof data.release_revision !== "number" ||
+    !Number.isSafeInteger(data.release_revision) ||
+    data.release_revision < 0 ||
+    (data.status === "not_scheduled" &&
+      (data.release_revision !== 0 ||
+        data.release_event_id !== null ||
+        data.supersedes_release_event_id !== null)) ||
     (data.status !== "not_scheduled" &&
-      (typeof data.release_event_id !== "string" || !EVENT_ID.test(data.release_event_id)))
+      (data.release_revision < 1 ||
+        typeof data.release_event_id !== "string" ||
+        !EVENT_ID.test(data.release_event_id) ||
+        (data.release_revision === 1 && data.supersedes_release_event_id !== null) ||
+        (data.release_revision > 1 &&
+          (typeof data.supersedes_release_event_id !== "string" ||
+            !EVENT_ID.test(data.supersedes_release_event_id)))))
   ) {
     throw new TypeError("result release-status view values are invalid");
   }
   return data as ResultReleaseStatusView;
+}
+
+export function decodeEffectiveResultIdentityReservation(
+  value: unknown,
+): EffectiveResultIdentityReservation {
+  const data = object(value, "effective-result identity reservation");
+  exactFields(data, [
+    "declared_model",
+    "effective_result_identity_id",
+    "owner_login",
+    "problem_id",
+    "reservation_event_id",
+    "reservation_kind",
+    "result_id",
+    "schema_version",
+    "statement_revision",
+  ], "effective-result identity reservation");
+  if (
+    data.schema_version !== 1 ||
+    typeof data.effective_result_identity_id !== "string" ||
+    !EFFECTIVE_RESULT_IDENTITY_ID.test(data.effective_result_identity_id) ||
+    typeof data.owner_login !== "string" ||
+    !LOGIN.test(data.owner_login) ||
+    typeof data.declared_model !== "string" ||
+    data.declared_model.length === 0 ||
+    new TextEncoder().encode(data.declared_model).byteLength > 256 ||
+    containsControlCharacter(data.declared_model) ||
+    typeof data.problem_id !== "string" ||
+    !PROBLEM.test(data.problem_id) ||
+    typeof data.statement_revision !== "number" ||
+    !Number.isSafeInteger(data.statement_revision) ||
+    data.statement_revision < 1 ||
+    typeof data.result_id !== "string" ||
+    !RESULT_ID.test(data.result_id) ||
+    typeof data.reservation_event_id !== "string" ||
+    !EVENT_ID.test(data.reservation_event_id) ||
+    (data.reservation_kind !== "result_authority" &&
+      data.reservation_kind !== "problem_repair")
+  ) {
+    throw new TypeError("effective-result identity reservation values are invalid");
+  }
+  return data as EffectiveResultIdentityReservation;
 }
 
 export function initialResultReleaseStatusView(
@@ -400,11 +505,43 @@ export function initialResultReleaseStatusView(
   releaseEventId: string | null = null,
 ): ResultReleaseStatusView {
   return decodeResultReleaseStatusView({
-    schema_version: 1,
+    schema_version: 2,
     result_id: resultIdentifier,
     authority_event_id: authorityEventId,
     status: releaseEventId === null ? "not_scheduled" : "scheduled",
+    release_revision: releaseEventId === null ? 0 : 1,
     release_event_id: releaseEventId,
+    supersedes_release_event_id: null,
+  });
+}
+
+export async function effectiveResultIdentityReservation(
+  input: Readonly<{
+    ownerLogin: string;
+    declaredModel: string;
+    problemId: string;
+    statementRevision: number;
+    resultId: string;
+    reservationEventId: string;
+    reservationKind: "result_authority" | "problem_repair";
+  }>,
+): Promise<EffectiveResultIdentityReservation> {
+  const identifier = await effectiveResultIdentityId(
+    input.ownerLogin,
+    input.declaredModel,
+    input.problemId,
+    input.statementRevision,
+  );
+  return decodeEffectiveResultIdentityReservation({
+    schema_version: 1,
+    effective_result_identity_id: identifier,
+    owner_login: input.ownerLogin,
+    declared_model: input.declaredModel,
+    problem_id: input.problemId,
+    statement_revision: input.statementRevision,
+    result_id: input.resultId,
+    reservation_event_id: input.reservationEventId,
+    reservation_kind: input.reservationKind,
   });
 }
 

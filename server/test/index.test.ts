@@ -27,6 +27,7 @@ describe("Worker routing", () => {
       intake_enabled: false,
       legacy_result_owner_api_enabled: false,
       result_amendment_owner_api_enabled: false,
+      result_amendment_maintainer_api_enabled: false,
       promotion_canary_configured_enabled: true,
       promotion_canary_enabled: true,
       intake_enablement_mode: "disabled",
@@ -51,12 +52,64 @@ describe("Worker routing", () => {
       intake_enabled: false,
       legacy_result_owner_api_enabled: false,
       result_amendment_owner_api_enabled: false,
+      result_amendment_maintainer_api_enabled: false,
       promotion_canary_configured_enabled: false,
       promotion_canary_enabled: false,
       intake_enablement_mode: "disabled",
       intake_lease_expires_at: null,
     });
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("fails the maintainer gate closed and never exposes configured identities", async () => {
+    const configured = JSON.stringify([{ github_id: 477956, login: "kim-em" }]);
+    const enabled = await handleRequest(
+      new Request("https://example.test/healthz"),
+      {
+        ...ENV,
+        RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
+        RESULT_AMENDMENT_MAINTAINERS: configured,
+        RESULT_OWNER_STATE_CONTRACT_COMMIT:
+          "6a386bb4362b10dd8d7743e826c82f1a0011c0c3",
+      },
+      LIFECYCLE,
+    );
+    const enabledBody = await enabled.json<Record<string, unknown>>();
+    expect(enabledBody.result_amendment_maintainer_api_enabled).toBe(true);
+    expect(JSON.stringify(enabledBody)).not.toContain("kim-em");
+    expect(JSON.stringify(enabledBody)).not.toContain("477956");
+
+    for (const env of [
+      {
+        ...ENV,
+        RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
+        RESULT_AMENDMENT_MAINTAINERS: "[]",
+        RESULT_OWNER_STATE_CONTRACT_COMMIT:
+          "6a386bb4362b10dd8d7743e826c82f1a0011c0c3",
+      },
+      {
+        ...ENV,
+        RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
+        RESULT_AMENDMENT_MAINTAINERS: "not-json",
+        RESULT_OWNER_STATE_CONTRACT_COMMIT:
+          "6a386bb4362b10dd8d7743e826c82f1a0011c0c3",
+      },
+      {
+        ...ENV,
+        RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
+        RESULT_AMENDMENT_MAINTAINERS: configured,
+        RESULT_OWNER_STATE_CONTRACT_COMMIT: "b".repeat(40),
+      },
+    ] satisfies RuntimeEnv[]) {
+      const response = await handleRequest(
+        new Request("https://example.test/healthz"),
+        env,
+        LIFECYCLE,
+      );
+      expect(await response.json()).toMatchObject({
+        result_amendment_maintainer_api_enabled: false,
+      });
+    }
   });
 
   it("fails closed while intake is disabled", async () => {
@@ -160,30 +213,20 @@ describe("Worker routing", () => {
   });
 
   it("returns a closed protected-contract proof for production readiness", async () => {
-    const contract = "163e9314c881493e08d23baf35ff40456f9c2331";
-    const blobs = [
-      ["docs/result-amendment-lifecycle.md", "6ef59628f12820a4af64ff9bff4fb174d1749684"],
-      ["docs/result-owner-operational-indexes.md", "2f784609f9117caf74cb7042e9ea45732925d77b"],
-      ["schema/result-amendment-view-v1.schema.json", "20282df2b419466f32998b93b49c55b107ed6f35"],
-      ["schema/result-amendments-v1.schema.json", "440d5039d1cef4bb055579b94cca928d36f66c96"],
-      ["schema/result-identity-guard-v1.schema.json", "1620b6d8aed37f652958ac86e311c00578edc8b4"],
-      ["schema/result-overlay-view-v1.schema.json", "1b50a92a76891bd21e0b67f7f40ab9c86d50beed"],
-      ["schema/result-overlays-v1.schema.json", "41d4078133d6854bf8de839873a3f58e9ba1afd1"],
-      ["schema/result-release-status-view-v1.schema.json", "7f115230736e5d45074e8172f6fe4e5ee1992021"],
-      ["schema/result-source-record-index-v1.schema.json", "4543225e0833af00913e436185532a769debebc1"],
-      ["schema/state-event-v1.schema.json", "5b670204c86c440b56afd81f62bd097e3b399be7"],
-      ["scripts/materialize_state.py", "f7985b70b6409616ac2020a2be2337eca13c640d"],
-      ["scripts/result_amendments.py", "61b44743c73d152fa92c489ac9228d16f0b694fd"],
-      ["scripts/result_owner_indexes.py", "c07c29a81eb2ca5058563a8411c26f9358bde3e4"],
-      ["scripts/result_release_status.py", "27bae3e6faa9275463a1440483512e23bfda2f6e"],
-      ["scripts/validate_state.py", "0b4c876475fcc9c9d5cf6269c800509530673bb4"],
+    const contract = "501d237d46c7b3466a37554c1c2ceb310245a619";
+    const tree = "2".repeat(40);
+    const rootEntries = [
+      { path: "README.md", mode: "100644", type: "blob", sha: "069cc546e53d4ec2a109010f9e02dfffd8fdce06" },
+      { path: "docs", mode: "040000", type: "tree", sha: "76e48513a1284d5945a4e1d0a45dbfa84f127325" },
+      { path: "schema", mode: "040000", type: "tree", sha: "473e694e0d40026a7ec0ad33430ea622e3e03b66" },
+      { path: "scripts", mode: "040000", type: "tree", sha: "ab90d1a997e3bfc7292dbf1a515db1abb4278c01" },
     ] as const;
     const replies = [
       Response.json({ permissions: { push: true } }),
       Response.json({ object: { sha: contract } }),
-      Response.json({ tree: { sha: "2".repeat(40) } }),
+      Response.json({ tree: { sha: tree } }),
       Response.json({ name: "main", protected: true, commit: { sha: contract } }),
-      ...blobs.map(([path, sha]) => Response.json({ type: "file", path, sha })),
+      Response.json({ sha: tree, truncated: false, tree: rootEntries }),
       Response.json({ ref: "refs/heads/main", object: { sha: contract } }),
       Response.json({ name: "main", protected: true, commit: { sha: contract } }),
     ];
@@ -222,7 +265,7 @@ describe("Worker routing", () => {
       state_event_schema_sha256:
         "af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb",
     });
-    expect(upstream).toHaveBeenCalledTimes(6 + blobs.length);
+    expect(upstream).toHaveBeenCalledTimes(7);
     upstream.mockRestore();
   });
 

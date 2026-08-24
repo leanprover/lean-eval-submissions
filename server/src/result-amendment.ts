@@ -1,3 +1,5 @@
+import { canonicalJson, sha256Hex } from "./result-owner";
+
 const RESULT_ID = /^r2_[0-9a-f]{64}$/;
 const EVENT_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -61,6 +63,52 @@ export type ComparatorEvidence = Readonly<{
   evidence_corrected_statement_revision: number;
   evidence_corrected_challenge_id: string;
 }>;
+
+export type ProblemGroup =
+  | "formalization-evaluation"
+  | "software-verification"
+  | "open-conjectures";
+
+export async function challengeId(
+  problemGroup: ProblemGroup,
+  problemId: string,
+  statementRevision: number,
+): Promise<string> {
+  const body = JSON.stringify([problemGroup, problemId, statementRevision]);
+  return `ch1_${await sha256Hex(`lean-eval-challenge-v1\0${body}`)}`;
+}
+
+export async function comparatorBindingSha256(
+  evidence: Omit<ComparatorEvidence, "binding_sha256">,
+): Promise<string> {
+  return sha256Hex(canonicalJson({
+    schema_version: 1,
+    verification_method: evidence.verification_method,
+    result_id: evidence.evidence_result_id,
+    owner_login: evidence.evidence_owner_login,
+    declared_model: evidence.evidence_declared_model,
+    base: {
+      problem_group: evidence.evidence_base_problem_group,
+      problem_id: evidence.evidence_base_problem_id,
+      statement_revision: evidence.evidence_base_statement_revision,
+      challenge_id: evidence.evidence_base_challenge_id,
+    },
+    corrected: {
+      problem_group: evidence.evidence_corrected_problem_group,
+      problem_id: evidence.evidence_corrected_problem_id,
+      statement_revision: evidence.evidence_corrected_statement_revision,
+      challenge_id: evidence.evidence_corrected_challenge_id,
+    },
+    comparator: {
+      repository: evidence.repository,
+      commit: evidence.commit,
+      path: evidence.path,
+      blob_oid: evidence.blob_oid,
+      blob_sha256: evidence.blob_sha256,
+      record_sha256: evidence.record_sha256,
+    },
+  }));
+}
 
 export type ResultAmendmentView = Readonly<{
   schema_version: 1;
@@ -448,5 +496,137 @@ export function requestedRetractionView(
       release_disposition: null,
       overridden: false,
     },
+  });
+}
+
+export function decidedProblemRepairView(
+  current: ResultAmendmentView,
+  eventId: string,
+  occurredAt: string,
+  reviewerLogin: string,
+  decision: "apply" | "reject",
+  reasonCode: string | null,
+  comparatorEvidence: ComparatorEvidence | null,
+): ResultAmendmentView {
+  const pending = current.problem_repair;
+  if (
+    pending?.status !== "pending" ||
+    (decision === "apply" && (reasonCode !== null || comparatorEvidence === null)) ||
+    (decision === "reject" && (reasonCode === null || comparatorEvidence !== null))
+  ) {
+    throw new TypeError("problem repair decision does not match one pending request");
+  }
+  const repair: ProblemRepairState = {
+    ...pending,
+    status: decision === "apply" ? "applied" : "rejected",
+    decision_event_id: eventId,
+    decided_at: occurredAt,
+    reviewer_login: reviewerLogin,
+    reason_code: reasonCode,
+    comparator_evidence: comparatorEvidence,
+  };
+  return decodeResultAmendmentView({
+    ...current,
+    mutation_event_id: eventId,
+    effective_problem_id: decision === "apply"
+      ? pending.corrected_problem_id
+      : current.effective_problem_id,
+    effective_statement_revision: decision === "apply"
+      ? pending.corrected_statement_revision
+      : current.effective_statement_revision,
+    problem_repair: repair,
+    applied_problem_repair: decision === "apply" ? repair : current.applied_problem_repair,
+  });
+}
+
+export function decidedRetractionView(
+  current: ResultAmendmentView,
+  eventId: string,
+  occurredAt: string,
+  reviewerLogin: string,
+  decision: "approve" | "reject",
+  reasonCode: string,
+): ResultAmendmentView {
+  const pending = current.retraction;
+  if (pending?.status !== "pending") {
+    throw new TypeError("retraction decision does not match one pending request");
+  }
+  return decodeResultAmendmentView({
+    ...current,
+    mutation_event_id: eventId,
+    retraction: {
+      ...pending,
+      status: decision === "approve" ? "approved" : "rejected",
+      decision_event_id: eventId,
+      decided_at: occurredAt,
+      reviewer_login: reviewerLogin,
+      reason_code: reasonCode,
+    },
+  });
+}
+
+export function overriddenRetractionView(
+  current: ResultAmendmentView,
+  eventId: string,
+  occurredAt: string,
+  reviewerLogin: string,
+  reasonCode: string,
+): ResultAmendmentView {
+  if (
+    current.problem_repair?.status === "pending" ||
+    current.retraction?.status === "pending" ||
+    current.retraction?.status === "approved" ||
+    current.retraction?.status === "retracted" ||
+    !current.leaderboard_eligible
+  ) {
+    throw new TypeError("retraction override conflicts with current amendment state");
+  }
+  return decodeResultAmendmentView({
+    ...current,
+    mutation_event_id: eventId,
+    retraction: {
+      revision: (current.retraction?.revision ?? 0) + 1,
+      status: "approved",
+      request_event_id: null,
+      requested_at: null,
+      decision_event_id: eventId,
+      decided_at: occurredAt,
+      retraction_event_id: null,
+      retracted_at: null,
+      reviewer_login: reviewerLogin,
+      reason_code: reasonCode,
+      release_disposition: null,
+      overridden: true,
+    },
+  });
+}
+
+export function terminalRetractionView(
+  current: ResultAmendmentView,
+  eventId: string,
+  occurredAt: string,
+  reviewerLogin: string,
+  reasonCode: string,
+  releaseDisposition: "not_published" | "removal_required" | "already_removed",
+): ResultAmendmentView {
+  const approved = current.retraction;
+  if (
+    approved?.status !== "approved" ||
+    approved.reviewer_login !== reviewerLogin ||
+    approved.reason_code !== reasonCode
+  ) {
+    throw new TypeError("terminal retraction does not match one approved decision");
+  }
+  return decodeResultAmendmentView({
+    ...current,
+    mutation_event_id: eventId,
+    retraction: {
+      ...approved,
+      status: "retracted",
+      retraction_event_id: eventId,
+      retracted_at: occurredAt,
+      release_disposition: releaseDisposition,
+    },
+    leaderboard_eligible: false,
   });
 }

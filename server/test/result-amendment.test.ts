@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  challengeId,
+  comparatorBindingSha256,
+  decidedProblemRepairView,
+  decidedRetractionView,
   decodeResultAmendmentView,
   initialResultAmendmentView,
+  overriddenRetractionView,
   requestedProblemRepairView,
   requestedRetractionView,
   resultAmendmentPath,
+  terminalRetractionView,
 } from "../src/result-amendment";
 
 const RESULT_ID = `r2_${"1".repeat(64)}`;
@@ -13,6 +19,32 @@ const AUTHORITY = "0198abcd-2222-7000-8000-000000000001";
 const REQUEST = "0198abcd-2222-7000-8000-000000000002";
 
 describe("targeted result amendment contract", () => {
+  it("matches the protected State challenge and comparator-binding vectors", async () => {
+    await expect(challengeId("formalization-evaluation", "two_plus_two", 1)).resolves.toBe(
+      "ch1_6b96093e822f811a31d09ed4d35b44f3135e5170cf1ea84a59f87eb09aa20cf7",
+    );
+    await expect(comparatorBindingSha256({
+      repository: "leanprover/lean-eval-submissions",
+      commit: "a".repeat(40),
+      path: "results/kim-em.json",
+      blob_oid: "c".repeat(40),
+      blob_sha256: "d".repeat(64),
+      record_sha256: "b".repeat(64),
+      verification_method: "github_commit_blob_v1",
+      evidence_result_id: "r2_80f02f892fb0b90474675aa0b572252a8758faf74b95400521e9da724583931f",
+      evidence_owner_login: "kim-em",
+      evidence_declared_model: "Example Model",
+      evidence_base_problem_group: "formalization-evaluation",
+      evidence_base_problem_id: "two_plus_two",
+      evidence_base_statement_revision: 1,
+      evidence_base_challenge_id: "ch1_6b96093e822f811a31d09ed4d35b44f3135e5170cf1ea84a59f87eb09aa20cf7",
+      evidence_corrected_problem_group: "formalization-evaluation",
+      evidence_corrected_problem_id: "three_plus_three",
+      evidence_corrected_statement_revision: 2,
+      evidence_corrected_challenge_id: "ch1_2ee792b9940091b30b893826d3d60cd36378bbd2aabd5743a18ab2bc3d46c5fb",
+    })).resolves.toBe("8ff3254de3ebd9a7991f866b5a7e15877bb89e54739dbc1a166e53634ef7135d");
+  });
+
   it("constructs the exact initial and pending owner-request views", () => {
     const initial = initialResultAmendmentView({
       resultId: RESULT_ID,
@@ -185,14 +217,40 @@ describe("targeted result amendment contract", () => {
         evidence_corrected_challenge_id: `ch1_${"1".repeat(64)}`,
       },
     };
-    expect(decodeResultAmendmentView({
+    const applied = decodeResultAmendmentView({
       ...initial,
       mutation_event_id: decision,
       effective_problem_id: "two_plus_three",
       effective_statement_revision: 2,
       problem_repair: repair,
       applied_problem_repair: repair,
-    }).effective_problem_id).toBe("two_plus_three");
+    });
+    const pendingRepair = requestedProblemRepairView(
+      initial,
+      REQUEST,
+      "2026-08-20T06:07:09.000Z",
+      "two_plus_three",
+      2,
+      "wrong_problem_revision",
+    );
+    expect(decidedProblemRepairView(
+      pendingRepair,
+      decision,
+      "2026-08-20T06:07:10.000Z",
+      "maintainer",
+      "apply",
+      null,
+      repair.comparator_evidence,
+    )).toEqual(applied);
+    expect(decidedProblemRepairView(
+      pendingRepair,
+      decision,
+      "2026-08-20T06:07:10.000Z",
+      "maintainer",
+      "reject",
+      "evidence_mismatch",
+      null,
+    ).problem_repair?.status).toBe("rejected");
 
     const override = "0198abcd-2222-7000-8000-000000000004";
     const overridden = decodeResultAmendmentView({
@@ -213,8 +271,15 @@ describe("targeted result amendment contract", () => {
         overridden: true,
       },
     });
+    expect(overriddenRetractionView(
+      initial,
+      override,
+      "2026-08-20T06:07:11.000Z",
+      "maintainer",
+      "owner_account_unavailable",
+    )).toEqual(overridden);
     const terminal = "0198abcd-2222-7000-8000-000000000005";
-    expect(decodeResultAmendmentView({
+    const terminalView = decodeResultAmendmentView({
       ...overridden,
       mutation_event_id: terminal,
       leaderboard_eligible: false,
@@ -225,6 +290,29 @@ describe("targeted result amendment contract", () => {
         retracted_at: "2026-08-20T06:07:12.000Z",
         release_disposition: "not_published",
       },
-    }).retraction?.status).toBe("retracted");
+    });
+    expect(terminalRetractionView(
+      overridden,
+      terminal,
+      "2026-08-20T06:07:12.000Z",
+      "maintainer",
+      "owner_account_unavailable",
+      "not_published",
+    )).toEqual(terminalView);
+
+    const pendingRetraction = requestedRetractionView(
+      initial,
+      REQUEST,
+      "2026-08-20T06:07:09.000Z",
+      "owner_requested_withdrawal",
+    );
+    expect(decidedRetractionView(
+      pendingRetraction,
+      decision,
+      "2026-08-20T06:07:10.000Z",
+      "maintainer",
+      "reject",
+      "request_not_eligible",
+    ).retraction?.status).toBe("rejected");
   });
 });

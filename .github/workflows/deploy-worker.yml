@@ -206,6 +206,7 @@ jobs:
           assert body["intake_configured_enabled"] is False
           assert body["intake_effective_enabled"] is False
           assert body["intake_enabled"] is False
+          assert body["result_amendment_maintainer_api_enabled"] is False
           assert body["promotion_canary_configured_enabled"] is True
           assert body["promotion_canary_enabled"] is True
           assert body["intake_enablement_mode"] == "disabled"
@@ -359,6 +360,7 @@ jobs:
           assert body["intake_enabled"] is False
           assert body["intake_enablement_mode"] == "disabled"
           assert body["intake_lease_expires_at"] is None
+          assert body["result_amendment_maintainer_api_enabled"] is False
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY
@@ -511,7 +513,7 @@ jobs:
               or proof["intake_lease_expires_at"] is not None
               or proof["state_branch_protected"] is not True
               or proof["state_contract_verified"] is not True
-              or proof["state_contract_commit"] != "163e9314c881493e08d23baf35ff40456f9c2331"
+              or proof["state_contract_commit"] != "501d237d46c7b3466a37554c1c2ceb310245a619"
               or proof["state_event_schema_sha256"] != "af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb"
               or re.fullmatch(r"[0-9a-f]{40}", proof["state_commit"]) is None
           ):
@@ -611,6 +613,7 @@ jobs:
           assert body["intake_enabled"] is True
           assert body["intake_enablement_mode"] == "leased"
           assert body["intake_lease_expires_at"] == int(os.environ["INTAKE_LEASE_EXPIRES_AT"])
+          assert body["result_amendment_maintainer_api_enabled"] is False
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY
@@ -674,7 +677,7 @@ jobs:
               or proof["intake_lease_expires_at"] != int(os.environ["INTAKE_LEASE_EXPIRES_AT"])
               or proof["state_branch_protected"] is not True
               or proof["state_commit"] != os.environ["STATE_COMMIT"]
-              or proof["state_contract_commit"] != "163e9314c881493e08d23baf35ff40456f9c2331"
+              or proof["state_contract_commit"] != "501d237d46c7b3466a37554c1c2ceb310245a619"
               or proof["state_contract_verified"] is not True
               or proof["state_event_schema_sha256"] != "af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb"
           ):
@@ -699,6 +702,7 @@ jobs:
           assert body["intake_effective_enabled"] is False
           assert body["intake_enablement_mode"] == "disabled"
           assert body["intake_lease_expires_at"] is None
+          assert body["result_amendment_maintainer_api_enabled"] is False
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY

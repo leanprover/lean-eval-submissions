@@ -6,6 +6,10 @@ import {
   decodeEvaluationCompletion,
   decodeLegacyResultClaim,
   decodeProblemRepairRequest,
+  decodeProblemRepairDecision,
+  decodeEmptyObject,
+  decodeResultRetractionDecision,
+  decodeResultRetractionOverride,
   decodeResultRetractionRequest,
   decodeResultCompletion,
   decodeAgentChallengeInput,
@@ -40,6 +44,10 @@ import {
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
   type ResultProblemRepairRequest,
+  type ResultProblemRepairDecisionRequest,
+  type ResultRetractionDecisionRequest,
+  type ResultRetractionFinalizationRequest,
+  type ResultRetractionOverrideRequest,
   type ResultRetractionRequest,
   type GitHubFetch,
   GitHubStateError,
@@ -49,6 +57,11 @@ import {
   StateEventConflictError,
   StateUpdateOutcomeUnknownError,
 } from "./github-state";
+import {
+  authenticateMaintainer,
+  decodeMaintainerIdentities,
+  type MaintainerIdentity,
+} from "./maintainer";
 import {
   buildDispatchRequest,
   buildPromotionCanaryDispatchRequest,
@@ -76,7 +89,11 @@ import {
   type DispatchOutbox,
   type SubmissionView,
 } from "./submission-view";
-import { RESULT_OWNER_STATE_CONTRACT_COMMIT } from "./result-owner";
+import {
+  PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT,
+  resultOwnerStateContractCommit,
+} from "./result-owner";
+import type { ComparatorEvidence, ResultAmendmentView } from "./result-amendment";
 
 export type RuntimeEnv = Omit<
   CloudflareEnv,
@@ -108,6 +125,8 @@ export type RuntimeEnv = Omit<
   | "LIFECYCLE_CALLBACK_TOKEN"
   | "LEGACY_RESULT_OWNER_API_ENABLED"
   | "RESULT_AMENDMENT_OWNER_API_ENABLED"
+  | "RESULT_AMENDMENT_MAINTAINER_API_ENABLED"
+  | "RESULT_AMENDMENT_MAINTAINERS"
   | "OAUTH_CALLBACK_URL"
   | "PROMOTION_CANARY_ENABLED"
   | "READINESS_TOKEN"
@@ -143,6 +162,8 @@ export type RuntimeEnv = Omit<
     LIFECYCLE_CALLBACK_TOKEN?: string;
     LEGACY_RESULT_OWNER_API_ENABLED?: string;
     RESULT_AMENDMENT_OWNER_API_ENABLED?: string;
+    RESULT_AMENDMENT_MAINTAINER_API_ENABLED?: string;
+    RESULT_AMENDMENT_MAINTAINERS?: string;
     OAUTH_CALLBACK_URL?: string;
     PROMOTION_CANARY_ENABLED?: string;
     READINESS_TOKEN?: string;
@@ -153,6 +174,7 @@ export type RuntimeEnv = Omit<
 type Lifecycle = Pick<ExecutionContext, "waitUntil">;
 export type StateAccess = Readonly<{
   assertResultOwnerContract(): Promise<string>;
+  readResultAmendmentForMaintainer(resultId: string): Promise<ResultAmendmentView>;
   appendEvent(event: WritableStateEvent): Promise<{ commit?: string; created: boolean }>;
   appendEventAtHead?(
     event: WritableStateEvent,
@@ -206,7 +228,31 @@ export type StateAccess = Readonly<{
     mutationEventId: string;
     retractionRevision: number;
   }>;
+  decideResultRetraction(request: ResultRetractionDecisionRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    retractionRevision: number;
+  }>;
+  overrideResultRetraction(request: ResultRetractionOverrideRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    retractionRevision: number;
+  }>;
+  finalizeResultRetraction(request: ResultRetractionFinalizationRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    releaseDisposition: "not_published" | "removal_required" | "already_removed";
+  }>;
   requestResultProblemRepair(request: ResultProblemRepairRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    repairRevision: number;
+  }>;
+  decideResultProblemRepair(request: ResultProblemRepairDecisionRequest): Promise<{
     created: boolean;
     resultId: string;
     mutationEventId: string;
@@ -252,17 +298,49 @@ function currentIntake(env: RuntimeEnv, dependencies: ApiDependencies = {}): Int
 
 function resultOwnerApiEnabled(env: RuntimeEnv): boolean {
   return env.LEGACY_RESULT_OWNER_API_ENABLED === "true" &&
-    env.RESULT_OWNER_STATE_CONTRACT_COMMIT === RESULT_OWNER_STATE_CONTRACT_COMMIT;
+    env.RESULT_OWNER_STATE_CONTRACT_COMMIT ===
+      resultOwnerStateContractCommit(env.DEPLOYMENT_ENVIRONMENT);
 }
 
 function resultAmendmentOwnerApiEnabled(env: RuntimeEnv): boolean {
   return env.RESULT_AMENDMENT_OWNER_API_ENABLED === "true" &&
-    env.RESULT_OWNER_STATE_CONTRACT_COMMIT === RESULT_OWNER_STATE_CONTRACT_COMMIT;
+    env.RESULT_OWNER_STATE_CONTRACT_COMMIT ===
+      resultOwnerStateContractCommit(env.DEPLOYMENT_ENVIRONMENT);
+}
+
+function resultAmendmentMaintainerApiEnabled(env: RuntimeEnv): boolean {
+  if (
+    env.RESULT_AMENDMENT_MAINTAINER_API_ENABLED !== "true" ||
+    env.RESULT_OWNER_STATE_CONTRACT_COMMIT !==
+      resultOwnerStateContractCommit(env.DEPLOYMENT_ENVIRONMENT)
+  ) return false;
+  try {
+    return decodeMaintainerIdentities(env.RESULT_AMENDMENT_MAINTAINERS).length > 0;
+  } catch {
+    return false;
+  }
 }
 
 function requireResultAmendmentOwnerApi(env: RuntimeEnv): void {
   if (!resultAmendmentOwnerApiEnabled(env)) {
     throw new GitHubProviderError(503, "result amendment owner API is not configured");
+  }
+}
+
+function requireResultAmendmentMaintainer(
+  env: RuntimeEnv,
+  authenticated: BrowserSession,
+): MaintainerIdentity {
+  if (!resultAmendmentMaintainerApiEnabled(env)) {
+    throw new GitHubProviderError(503, "result amendment maintainer API is not configured");
+  }
+  try {
+    return authenticateMaintainer(env.RESULT_AMENDMENT_MAINTAINERS, authenticated);
+  } catch (error) {
+    if (error instanceof AuthError) {
+      throw new ResultOwnerStateError(404, "result amendment operation was not found");
+    }
+    throw error;
   }
 }
 
@@ -354,7 +432,7 @@ async function readiness(
       };
       if (production) {
         response.state_branch_protected = true;
-        response.state_contract_commit = RESULT_OWNER_STATE_CONTRACT_COMMIT;
+        response.state_contract_commit = PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT;
         response.state_contract_verified = true;
         response.state_event_schema_sha256 =
           "af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb";
@@ -446,6 +524,7 @@ function provider(env: RuntimeEnv, dependencies: ApiDependencies): GitHubProvide
     env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "dispatch") : undefined,
     env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "results") : undefined,
     env.DEPLOYMENT_ENVIRONMENT === "production" ? "main" : "staging-results",
+    env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "benchmark") : undefined,
   );
 }
 
@@ -1770,6 +1849,53 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
       status: outcome.created ? "problem_repair_requested" : "problem_repair_already_requested",
     }, outcome.created ? 201 : 200);
   }
+  const problemRepairDecisionMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/problem-repairs\/decisions$/.exec(url.pathname);
+  if (request.method === "POST" && problemRepairDecisionMatch?.[1]) {
+    const authenticated = await session(request, env, dependencies);
+    const maintainer = requireResultAmendmentMaintainer(env, authenticated);
+    const eventId = idempotencyEventId(request, nowMilliseconds);
+    const input = decodeProblemRepairDecision(await readJson(request));
+    const ledger = state(env, dependencies);
+    let comparatorEvidence: ComparatorEvidence | null = null;
+    let reasonCode: string | null = null;
+    if (input.decision === "apply") {
+      const current = await ledger.readResultAmendmentForMaintainer(problemRepairDecisionMatch[1]);
+      const pending = current.problem_repair;
+      if (pending?.status !== "pending") {
+        throw new ResultOwnerStateError(409, "result does not have one pending problem repair");
+      }
+      comparatorEvidence = await submissionStage(
+        "problem_repair_comparator_verification",
+        () => provider(env, dependencies).verifyProblemRepairComparator({
+          resultsCommit: input.results_commit,
+          resultId: current.result_id,
+          ownerLogin: current.owner_login,
+          declaredModel: current.declared_model,
+          baseProblemId: current.base_problem_id,
+          baseStatementRevision: current.base_statement_revision,
+          correctedProblemId: pending.corrected_problem_id,
+          correctedStatementRevision: pending.corrected_statement_revision,
+        }),
+      );
+    } else {
+      reasonCode = input.reason_code;
+    }
+    const outcome = await ledger.decideResultProblemRepair({
+      eventId,
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
+      resultId: problemRepairDecisionMatch[1],
+      reviewerLogin: maintainer.login,
+      decision: input.decision,
+      reasonCode,
+      comparatorEvidence,
+    });
+    const decisionStatus = input.decision === "apply" ? "applied" : "rejected";
+    return json({
+      result_id: outcome.resultId,
+      repair_revision: outcome.repairRevision,
+      status: outcome.created ? `problem_repair_${decisionStatus}` : `problem_repair_already_${decisionStatus}`,
+    }, outcome.created ? 201 : 200);
+  }
   const retractionMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/retractions$/.exec(url.pathname);
   if (request.method === "POST" && retractionMatch?.[1]) {
     requireResultAmendmentOwnerApi(env);
@@ -1787,6 +1913,63 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
       result_id: outcome.resultId,
       retraction_revision: outcome.retractionRevision,
       status: outcome.created ? "retraction_requested" : "retraction_already_requested",
+    }, outcome.created ? 201 : 200);
+  }
+  const retractionDecisionMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/retractions\/decisions$/.exec(url.pathname);
+  if (request.method === "POST" && retractionDecisionMatch?.[1]) {
+    const authenticated = await session(request, env, dependencies);
+    const maintainer = requireResultAmendmentMaintainer(env, authenticated);
+    const eventId = idempotencyEventId(request, nowMilliseconds);
+    const input = decodeResultRetractionDecision(await readJson(request));
+    const outcome = await state(env, dependencies).decideResultRetraction({
+      eventId,
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
+      resultId: retractionDecisionMatch[1],
+      reviewerLogin: maintainer.login,
+      decision: input.decision,
+      reasonCode: input.reason_code,
+    });
+    const decisionStatus = input.decision === "approve" ? "approved" : "rejected";
+    return json({
+      result_id: outcome.resultId,
+      retraction_revision: outcome.retractionRevision,
+      status: outcome.created ? `retraction_${decisionStatus}` : `retraction_already_${decisionStatus}`,
+    }, outcome.created ? 201 : 200);
+  }
+  const retractionOverrideMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/retractions\/override$/.exec(url.pathname);
+  if (request.method === "POST" && retractionOverrideMatch?.[1]) {
+    const authenticated = await session(request, env, dependencies);
+    const maintainer = requireResultAmendmentMaintainer(env, authenticated);
+    const eventId = idempotencyEventId(request, nowMilliseconds);
+    const input = decodeResultRetractionOverride(await readJson(request));
+    const outcome = await state(env, dependencies).overrideResultRetraction({
+      eventId,
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
+      resultId: retractionOverrideMatch[1],
+      reviewerLogin: maintainer.login,
+      reasonCode: input.reason_code,
+    });
+    return json({
+      result_id: outcome.resultId,
+      retraction_revision: outcome.retractionRevision,
+      status: outcome.created ? "retraction_overridden" : "retraction_already_overridden",
+    }, outcome.created ? 201 : 200);
+  }
+  const retractionFinalizationMatch = /^\/api\/v1\/results\/(r2_[0-9a-f]{64})\/retractions\/finalize$/.exec(url.pathname);
+  if (request.method === "POST" && retractionFinalizationMatch?.[1]) {
+    const authenticated = await session(request, env, dependencies);
+    const maintainer = requireResultAmendmentMaintainer(env, authenticated);
+    decodeEmptyObject(await readJson(request), "terminal retraction request");
+    const outcome = await state(env, dependencies).finalizeResultRetraction({
+      eventId: idempotencyEventId(request, nowMilliseconds),
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
+      resultId: retractionFinalizationMatch[1],
+      maintainerLogin: maintainer.login,
+    });
+    return json({
+      result_id: outcome.resultId,
+      release_disposition: outcome.releaseDisposition,
+      status: outcome.created ? "retracted" : "already_retracted",
     }, outcome.created ? 201 : 200);
   }
   const match = /^\/api\/v1\/submissions\/([^/]+)(?:\/(metadata|publication))?$/.exec(url.pathname);
@@ -1889,6 +2072,7 @@ export async function handleRequest(
       intake_lease_expires_at: intake.leaseExpiresAt,
       legacy_result_owner_api_enabled: resultOwnerApiEnabled(env),
       result_amendment_owner_api_enabled: resultAmendmentOwnerApiEnabled(env),
+      result_amendment_maintainer_api_enabled: resultAmendmentMaintainerApiEnabled(env),
       promotion_canary_configured_enabled: env.PROMOTION_CANARY_ENABLED === "true",
       promotion_canary_enabled: promotionCanaryEnabled(env),
     });
@@ -1949,14 +2133,17 @@ export async function handleRequest(
   const legacyResultOwnerRoute = url.pathname === "/api/v1/results/claims" ||
     /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/metadata$/.test(url.pathname);
   const amendmentOwnerRoute = /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/(?:problem-repairs|retractions)$/.test(url.pathname);
+  const amendmentMaintainerRoute = /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/(?:problem-repairs\/decisions|retractions\/(?:decisions|override|finalize))$/.test(url.pathname);
   if (legacyResultOwnerRoute && !resultOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (amendmentOwnerRoute && !resultAmendmentOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
+  if (amendmentMaintainerRoute && !resultAmendmentMaintainerApiEnabled(env)) return json({ error: "not_found" }, 404);
   const oauthRoute = url.pathname === "/api/v1/oauth/start" || url.pathname === "/api/v1/oauth/callback";
-  const anyOwnerApiEnabled = resultOwnerApiEnabled(env) || resultAmendmentOwnerApiEnabled(env);
+  const anyOwnerApiEnabled = resultOwnerApiEnabled(env) || resultAmendmentOwnerApiEnabled(env) ||
+    resultAmendmentMaintainerApiEnabled(env);
   if (
     url.pathname.startsWith("/api/") &&
     !intake.effective &&
-    !((legacyResultOwnerRoute || amendmentOwnerRoute || oauthRoute) && anyOwnerApiEnabled)
+    !((legacyResultOwnerRoute || amendmentOwnerRoute || amendmentMaintainerRoute || oauthRoute) && anyOwnerApiEnabled)
   ) {
     return json({ error: "intake_disabled" }, 503);
   }

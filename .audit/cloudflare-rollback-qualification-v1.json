@@ -7,12 +7,13 @@
     "server/src/github-broker.ts",
     "server/src/github-provider.ts",
     "server/src/github-state.ts",
+    "server/src/maintainer.ts",
     "server/src/result-amendment.ts",
     "server/src/result-owner.ts",
     "server/src/state-event.ts",
     "server/src/submission-view.ts"
   ],
-  "lifecycle_callback_contract_sha256": "6c52a4cccf5848ae679cbacdfb17c7a75d73d45882139201d1899bd3dc780995",
+  "lifecycle_callback_contract_sha256": "29e0d55b75f4ad6703e5730847b4abc28a7c9d935a5740b5073d63cf7386def4",
   "replay_durable_object_migration_tags": [
     "v1",
     "v2"
@@ -22,7 +23,7 @@
   "state_event_schema_path": "schema/state-event-v1.schema.json",
   "state_event_schema_sha256": "af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb",
   "state_event_schema_version": 1,
-  "state_main_commit": "163e9314c881493e08d23baf35ff40456f9c2331",
+  "state_main_commit": "501d237d46c7b3466a37554c1c2ceb310245a619",
   "state_repository": "leanprover/lean-eval-state",
   "wrangler_version": "4.124.0"
 }

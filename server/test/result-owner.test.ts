@@ -163,19 +163,23 @@ describe("legacy result owner contracts", () => {
       `views/result-release-status/11/${VERIFIED.resultId}.json`,
     );
     expect(initialResultReleaseStatusView(VERIFIED.resultId, EVENT_ID)).toEqual({
-      schema_version: 1,
+      schema_version: 2,
       result_id: VERIFIED.resultId,
       authority_event_id: EVENT_ID,
       status: "not_scheduled",
+      release_revision: 0,
       release_event_id: null,
+      supersedes_release_event_id: null,
     });
     const schedule = "0198abcd-0000-7000-8000-000000000002";
     expect(initialResultReleaseStatusView(VERIFIED.resultId, EVENT_ID, schedule)).toEqual({
-      schema_version: 1,
+      schema_version: 2,
       result_id: VERIFIED.resultId,
       authority_event_id: EVENT_ID,
       status: "scheduled",
+      release_revision: 1,
       release_event_id: schedule,
+      supersedes_release_event_id: null,
     });
   });
 

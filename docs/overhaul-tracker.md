@@ -118,14 +118,16 @@ the already implemented owner status, metadata, and publication routes.
       dark independent feature flag, including authority-derived owner
       verification, exact idempotence, causal CAS, targeted amendment and
       release-status reads, release barriers, and redacted responses. The local
-      integration is bound to protected State contract `163e931`; see
+      integration is bound to production State contract `501d237` and staging
+      migration `6a386bb`; see
       `docs/result-amendment-owner-api.md` for the exact closed blob proof.
-- [ ] Before enabling either owner mutation gate, version the targeted release
-      status with a monotone revision/supersedes proof (or land an equivalently
-      strong reviewed State invariant), rebind the Worker contract, and add an
-      explicit owner-operation subrequest ceiling. The current dark runtime
-      proves the named immutable release marker and all amendment history but
-      does not global-scan for a later unindexed release event.
+- [x] Version the targeted release status with monotone revision/supersedes
+      proof, rebind each State repository to its exact reviewed contract, and
+      document the explicit 369-request worst-case external-subrequest ceiling.
+      Production State `501d237` and staging migration `6a386bb` are green; the
+      runtime validates the named marker, its predecessor for revisions after
+      one, and all bounded amendment history without a repository scan. The
+      deployed plan allowance remains a mandatory pre-enable check.
 - [x] Add model-alias, rename, consolidation, and new-canonical-identity
       request events, authorization, deterministic materialization, collision,
       hostile-input, causal, and idempotence tests, and lifecycle-aware public
@@ -139,17 +141,31 @@ the already implemented owner status, metadata, and publication routes.
       explicit revision/causation rules without rewriting accepted records
       (`lean-eval-state#13`, merge `0c875994`) and the targeted private
       release-status contract in draft State PR `#16`.
-- [ ] Add the authenticated maintainer repair decisions after a reviewed human
-      maintainer identity boundary exists, including exact results-Git
-      comparator tuple/digest recomputation.
+- [x] Add authenticated maintainer repair-decision routes and State writers
+      using the qualified human identity boundary, including exact results-Git
+      comparator tuple/digest recomputation. The credentialed comparator binds
+      the protected Results blob and exact benchmark manifests; the State
+      writer independently recomputes both challenge IDs and the envelope
+      digest before an append.
+- [x] Qualify the separate maintainer identity configuration and feature gate
+      while false in both environments, with rollback validation and health
+      evidence that never disclose the configured identity list. The routes
+      remain unavailable while the tracked gate is false and the list empty.
 - [x] Add State owner-retraction request, maintainer decision/override, and
       terminal retraction events, including release and leaderboard
       consequences (`lean-eval-state#13`, merge `0c875994`), plus the dark owner
       request API described above.
-- [ ] Add authenticated maintainer retraction decisions, override, and terminal
-      actions after a reviewed human maintainer identity boundary exists.
-- [ ] Add hostile-input, owner/maintainer authorization, idempotence, causal
+- [x] Add authenticated maintainer retraction-decision, override, and terminal
+      routes and State writers using the qualified human identity boundary.
+- [x] Add hostile-input, owner/maintainer authorization, idempotence, causal
       conflict, and public-redaction tests for every amendment flow.
+- [ ] Complete the final staging apply/reject canary for the targeted `eri1_…`
+      permanent effective-identity reservation contract. The online aggregate
+      read is removed; production's empty set and staging's two reservations
+      are migrated and validated, and the runtime uses atomic create/confirm
+      semantics. The canary remains deliberately unexecuted in this source-only
+      lane, so the maintainer gate stays false; see the rollout runbook's
+      collision-index gate.
 
 ## Cloudflare bootstrap
 

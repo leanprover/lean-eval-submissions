@@ -6,7 +6,7 @@ const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const DISPATCH_REF = /^lean-eval-dispatch\/([0-9a-f]{40})$/;
 
-type Authority = "source" | "dispatch" | "results";
+type Authority = "source" | "dispatch" | "results" | "benchmark";
 type BrokerRequest = Readonly<{
   schema_version: 1;
   audience: "lean-eval-submission-server";
@@ -115,7 +115,8 @@ function decodeRequest(value: unknown): BrokerRequest {
   if (
     data.schema_version !== 1 ||
     data.audience !== "lean-eval-submission-server" ||
-    (data.authority !== "source" && data.authority !== "dispatch" && data.authority !== "results") ||
+    (data.authority !== "source" && data.authority !== "dispatch" &&
+      data.authority !== "results" && data.authority !== "benchmark") ||
     (data.method !== "GET" && data.method !== "POST" && data.method !== "PATCH") ||
     typeof data.url !== "string" ||
     (data.body !== null && typeof data.body !== "string") ||
@@ -260,6 +261,26 @@ function assertResultsRequest(request: BrokerRequest, url: URL, env: BrokerRunti
   return repository;
 }
 
+function assertBenchmarkRequest(request: BrokerRequest, url: URL): string {
+  const { repository, suffix } = repositoryFromPath(url.pathname);
+  const contentRead = /^\/contents\/manifests\/problems\/[A-Za-z0-9][A-Za-z0-9_-]{0,127}\.toml$/.test(suffix) &&
+    url.searchParams.size === 1 &&
+    url.searchParams.get("ref") === request.expected_commit;
+  const branchRead = suffix === "/branches/main" && url.searchParams.size === 0;
+  const compareRead = suffix === `/compare/${request.expected_commit ?? ""}...main` &&
+    url.searchParams.size === 0;
+  if (
+    request.method !== "GET" ||
+    request.body !== null ||
+    request.expected_commit === null ||
+    repository.toLowerCase() !== "leanprover/lean-eval" ||
+    (!contentRead && !branchRead && !compareRead)
+  ) {
+    throw new BrokerError(403, "benchmark verification operation was not allowlisted");
+  }
+  return repository;
+}
+
 function appFor(authority: Authority, env: BrokerRuntimeEnv): GitHubApp {
   const dispatchAuthority = authority === "dispatch" || authority === "results";
   const appId = dispatchAuthority ? env.DISPATCH_APP_ID : env.SOURCE_APP_ID;
@@ -352,6 +373,14 @@ function githubHeaders(token: string): Headers {
   return new Headers({
     accept: "application/vnd.github+json",
     authorization: `Bearer ${token}`,
+    "user-agent": "lean-eval-github-broker",
+    "x-github-api-version": "2022-11-28",
+  });
+}
+
+function anonymousGitHubHeaders(): Headers {
+  return new Headers({
+    accept: "application/vnd.github+json",
     "user-agent": "lean-eval-github-broker",
     "x-github-api-version": "2022-11-28",
   });
@@ -510,6 +539,59 @@ async function validateResultsResponse(
   }
 }
 
+async function validateBenchmarkResponse(
+  response: Response,
+  request: BrokerRequest,
+  url: URL,
+): Promise<void> {
+  if (!response.ok) return;
+  let data: Record<string, unknown>;
+  try {
+    data = object(await response.clone().json<unknown>(), "GitHub benchmark response");
+  } catch (error) {
+    if (error instanceof BrokerError) throw error;
+    throw new BrokerError(502, "GitHub benchmark response was not valid JSON");
+  }
+  const suffix = repositoryFromPath(url.pathname).suffix;
+  if (suffix === "/branches/main") {
+    const commit = object(data.commit, "protected benchmark branch commit");
+    if (data.name !== "main" || data.protected !== true ||
+      typeof commit.sha !== "string" || !COMMIT.test(commit.sha)) {
+      throw new BrokerError(502, "protected benchmark branch response fields were invalid");
+    }
+    return;
+  }
+  if (suffix === `/compare/${request.expected_commit ?? ""}...main`) {
+    const base = object(data.base_commit, "benchmark comparison base commit");
+    const mergeBase = object(data.merge_base_commit, "benchmark comparison merge base");
+    const head = object(data.head_commit, "benchmark comparison head commit");
+    if (
+      (data.status !== "ahead" && data.status !== "identical") ||
+      base.sha !== request.expected_commit ||
+      mergeBase.sha !== request.expected_commit ||
+      typeof head.sha !== "string" ||
+      !COMMIT.test(head.sha)
+    ) {
+      throw new BrokerError(409, "benchmark commit did not descend to protected main");
+    }
+    return;
+  }
+  const expectedPath = suffix.slice("/contents/".length);
+  if (
+    data.type !== "file" ||
+    data.path !== expectedPath ||
+    data.encoding !== "base64" ||
+    typeof data.content !== "string" ||
+    data.content.length > 128 * 1024 ||
+    typeof data.size !== "number" ||
+    !Number.isSafeInteger(data.size) ||
+    data.size < 1 ||
+    data.size > 64 * 1024
+  ) {
+    throw new BrokerError(502, "GitHub benchmark response fields were invalid");
+  }
+}
+
 async function proxy(
   brokerRequest: BrokerRequest,
   env: BrokerRuntimeEnv,
@@ -529,9 +611,12 @@ async function proxy(
     ? assertSourceRequest(brokerRequest, url)
     : brokerRequest.authority === "dispatch"
       ? assertDispatchRequest(brokerRequest, url, env)
-      : assertResultsRequest(brokerRequest, url, env);
-  const token = await installationToken(brokerRequest.authority, repository, env, fetcher, nowMs);
-  const headers = githubHeaders(token);
+      : brokerRequest.authority === "results"
+        ? assertResultsRequest(brokerRequest, url, env)
+        : assertBenchmarkRequest(brokerRequest, url);
+  const headers = brokerRequest.authority === "benchmark"
+    ? anonymousGitHubHeaders()
+    : githubHeaders(await installationToken(brokerRequest.authority, repository, env, fetcher, nowMs));
   if (brokerRequest.body !== null) headers.set("content-type", "application/json");
   const response = await fetcher(url, {
     method: brokerRequest.method,
@@ -544,6 +629,8 @@ async function proxy(
     await validateSourceResponse(response, brokerRequest, url, repository);
   } else if (brokerRequest.authority === "results") {
     await validateResultsResponse(response, brokerRequest, url, env);
+  } else if (brokerRequest.authority === "benchmark") {
+    await validateBenchmarkResponse(response, brokerRequest, url);
   }
   return safeResponse(response);
 }

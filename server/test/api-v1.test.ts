@@ -4,6 +4,10 @@ import {
   ApiDecodeError,
   assertSourcePolicy,
   decodeArchiveCompletion,
+  decodeEmptyObject,
+  decodeProblemRepairDecision,
+  decodeResultRetractionDecision,
+  decodeResultRetractionOverride,
   decodeResultCompletion,
   decodeSourceReaderPreflight,
   decodeSubmissionInput,
@@ -33,8 +37,18 @@ import {
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
   type ResultProblemRepairRequest,
+  type ResultProblemRepairDecisionRequest,
+  type ResultRetractionDecisionRequest,
+  type ResultRetractionFinalizationRequest,
+  type ResultRetractionOverrideRequest,
   type ResultRetractionRequest,
 } from "../src/github-state";
+import {
+  initialResultAmendmentView,
+  requestedProblemRepairView,
+  type ComparatorEvidence,
+  type ResultAmendmentView,
+} from "../src/result-amendment";
 import {
   validateStateEvent,
   type WritableResultLifecycleEvent,
@@ -109,12 +123,24 @@ class MemoryState implements StateAccess {
   readonly legacyClaims: LegacyResultClaimRequest[] = [];
   readonly legacyBackfills: LegacyResultBackfillRequest[] = [];
   readonly problemRepairRequests: ResultProblemRepairRequest[] = [];
+  readonly problemRepairDecisions: ResultProblemRepairDecisionRequest[] = [];
   readonly retractionRequests: ResultRetractionRequest[] = [];
+  readonly retractionDecisions: ResultRetractionDecisionRequest[] = [];
+  readonly retractionOverrides: ResultRetractionOverrideRequest[] = [];
+  readonly retractionFinalizations: ResultRetractionFinalizationRequest[] = [];
+  maintainerAmendment: ResultAmendmentView | null = null;
   contractAssertions = 0;
 
   assertResultOwnerContract(): Promise<string> {
     this.contractAssertions += 1;
     return Promise.resolve("f".repeat(40));
+  }
+
+  readResultAmendmentForMaintainer(): Promise<ResultAmendmentView> {
+    if (this.maintainerAmendment === null) {
+      return Promise.reject(new ResultOwnerStateError(404, "result amendment was not found"));
+    }
+    return Promise.resolve(this.maintainerAmendment);
   }
 
   appendEvent(event: WritableStateEvent): Promise<{ created: boolean }> {
@@ -294,6 +320,66 @@ class MemoryState implements StateAccess {
       repairRevision: 1,
     });
   }
+
+  decideResultProblemRepair(request: ResultProblemRepairDecisionRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    repairRevision: number;
+  }> {
+    this.problemRepairDecisions.push(request);
+    return Promise.resolve({
+      created: this.created,
+      resultId: request.resultId,
+      mutationEventId: request.eventId,
+      repairRevision: 1,
+    });
+  }
+
+  decideResultRetraction(request: ResultRetractionDecisionRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    retractionRevision: number;
+  }> {
+    this.retractionDecisions.push(request);
+    return Promise.resolve({
+      created: this.created,
+      resultId: request.resultId,
+      mutationEventId: request.eventId,
+      retractionRevision: 1,
+    });
+  }
+
+  overrideResultRetraction(request: ResultRetractionOverrideRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    retractionRevision: number;
+  }> {
+    this.retractionOverrides.push(request);
+    return Promise.resolve({
+      created: this.created,
+      resultId: request.resultId,
+      mutationEventId: request.eventId,
+      retractionRevision: 1,
+    });
+  }
+
+  finalizeResultRetraction(request: ResultRetractionFinalizationRequest): Promise<{
+    created: boolean;
+    resultId: string;
+    mutationEventId: string;
+    releaseDisposition: "not_published";
+  }> {
+    this.retractionFinalizations.push(request);
+    return Promise.resolve({
+      created: this.created,
+      resultId: request.resultId,
+      mutationEventId: request.eventId,
+      releaseDisposition: "not_published",
+    });
+  }
 }
 
 function jsonRequest(path: string, body: unknown): Request {
@@ -385,6 +471,35 @@ describe("strict API contract", () => {
       body: "{}",
     });
     await expect(readJson(request)).rejects.toThrow(/too large/);
+  });
+
+  it("strictly separates maintainer decision shapes and rejects smuggled fields", () => {
+    expect(() => decodeProblemRepairDecision({
+      decision: "apply",
+      results_commit: "a".repeat(40),
+      reason_code: "smuggled",
+    })).toThrow(ApiDecodeError);
+    expect(() => decodeProblemRepairDecision({
+      decision: "reject",
+      reason_code: "insufficient_comparator_evidence",
+      results_commit: "a".repeat(40),
+    })).toThrow(ApiDecodeError);
+    expect(() => decodeProblemRepairDecision({
+      decision: "apply",
+      results_commit: "A".repeat(40),
+    })).toThrow(ApiDecodeError);
+    expect(() => decodeResultRetractionDecision({
+      decision: "approve",
+      reason_code: "owner_request_verified",
+      reviewer_login: "forged",
+    })).toThrow(ApiDecodeError);
+    expect(() => decodeResultRetractionOverride({
+      reason_code: "owner_account_unavailable",
+      owner_login: "forged",
+    })).toThrow(ApiDecodeError);
+    expect(() => decodeEmptyObject({ event_id: "forged" }, "terminal retraction request")).toThrow(
+      ApiDecodeError,
+    );
   });
 
   it("signs purpose-bound expiring tokens and rejects tampering", async () => {
@@ -1893,7 +2008,7 @@ describe("authenticated legacy result owner routes", () => {
     ...ENV,
     INTAKE_ENABLED: "false",
     LEGACY_RESULT_OWNER_API_ENABLED: "true",
-    RESULT_OWNER_STATE_CONTRACT_COMMIT: "163e9314c881493e08d23baf35ff40456f9c2331",
+    RESULT_OWNER_STATE_CONTRACT_COMMIT: "6a386bb4362b10dd8d7743e826c82f1a0011c0c3",
   };
 
   async function ownerAuthorization(login = "alice"): Promise<string> {
@@ -1905,6 +2020,30 @@ describe("authenticated legacy result owner routes", () => {
       expires_at: Math.floor(NOW_MS / 1000) + 3600,
     };
     return `Bearer ${await signToken(SECRET, browser)}`;
+  }
+
+  function comparatorEvidence(identifier: string, ownerLogin: string): ComparatorEvidence {
+    return {
+      repository: "leanprover/lean-eval-submissions",
+      commit: "a".repeat(40),
+      path: `results/${ownerLogin}.json`,
+      blob_oid: "b".repeat(40),
+      blob_sha256: "c".repeat(64),
+      record_sha256: "d".repeat(64),
+      binding_sha256: "e".repeat(64),
+      verification_method: "github_commit_blob_v1",
+      evidence_result_id: identifier,
+      evidence_owner_login: ownerLogin,
+      evidence_declared_model: "Example Model",
+      evidence_base_problem_group: "formalization-evaluation",
+      evidence_base_problem_id: "two_plus_two",
+      evidence_base_statement_revision: 1,
+      evidence_base_challenge_id: `ch1_${"1".repeat(64)}`,
+      evidence_corrected_problem_group: "formalization-evaluation",
+      evidence_corrected_problem_id: "two_plus_three",
+      evidence_corrected_statement_revision: 2,
+      evidence_corrected_challenge_id: `ch1_${"2".repeat(64)}`,
+    };
   }
 
   it("keeps the route dark unless both reviewed configuration values are exact", async () => {
@@ -2336,7 +2475,12 @@ describe("authenticated legacy result owner routes", () => {
   it("does not treat the lifecycle machine token as maintainer authority", async () => {
     const state = new MemoryState();
     const identifier = `r2_${"1".repeat(64)}`;
-    for (const suffix of ["problem-repairs/decisions", "retractions/decisions", "retractions/override"]) {
+    for (const suffix of [
+      "problem-repairs/decisions",
+      "retractions/decisions",
+      "retractions/override",
+      "retractions/finalize",
+    ]) {
       const response = await handleRequest(new Request(
         `https://submit.test/internal/v1/results/${identifier}/${suffix}`,
         {
@@ -2356,6 +2500,251 @@ describe("authenticated legacy result owner routes", () => {
       expect(await response.json()).toEqual({ error: "not_found" });
     }
     expect(state.retractionRequests).toHaveLength(0);
+  });
+
+  it("keeps maintainer routes dark unless the gate, State pin, and closed allowlist are valid", async () => {
+    const identifier = `r2_${"1".repeat(64)}`;
+    const request = () => new Request(
+      `https://submit.test/api/v1/results/${identifier}/retractions/decisions`,
+      { method: "POST" },
+    );
+    for (const env of [
+      enabledEnv,
+      {
+        ...enabledEnv,
+        RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
+        RESULT_AMENDMENT_MAINTAINERS: "[]",
+        RESULT_OWNER_STATE_CONTRACT_COMMIT: "b".repeat(40),
+      },
+      {
+        ...enabledEnv,
+        RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
+        RESULT_AMENDMENT_MAINTAINERS: "not-json",
+      },
+    ]) {
+      const response = await handleRequest(request(), env, LIFECYCLE);
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: "not_found" });
+    }
+  });
+
+  it("verifies and records a redacted maintainer problem-repair application", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const authorityEventId = "0198abcd-3333-7000-8000-000000000010";
+    const requestEventId = "0198abcd-3333-7000-8000-000000000011";
+    state.maintainerAmendment = requestedProblemRepairView(
+      initialResultAmendmentView({
+        resultId: identifier,
+        ownerLogin: "owner",
+        declaredModel: "Example Model",
+        authorityEventId,
+        mutationEventId: authorityEventId,
+        problemId: "two_plus_two",
+        statementRevision: 1,
+      }),
+      requestEventId,
+      "2026-08-20T06:07:09.000Z",
+      "two_plus_three",
+      2,
+      "wrong_problem_revision",
+    );
+    const evidence = comparatorEvidence(identifier, "owner");
+    const provider = new GitHubProvider();
+    const verify = vi.spyOn(provider, "verifyProblemRepairComparator").mockResolvedValue(evidence);
+    const env = {
+      ...enabledEnv,
+      RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
+      RESULT_AMENDMENT_MAINTAINERS: JSON.stringify([{ github_id: 42, login: "alice" }]),
+    };
+    const response = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/problem-repairs/decisions`,
+      {
+        method: "POST",
+        headers: {
+          authorization: await ownerAuthorization(),
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000018",
+        },
+        body: JSON.stringify({ decision: "apply", results_commit: "a".repeat(40) }),
+      },
+    ), env, LIFECYCLE, { now: () => NOW_MS, provider, state });
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    expect(body).toEqual({
+      result_id: identifier,
+      repair_revision: 1,
+      status: "problem_repair_applied",
+    });
+    expect(JSON.stringify(body)).not.toContain("alice");
+    expect(JSON.stringify(body)).not.toContain("results/");
+    expect(verify).toHaveBeenCalledWith({
+      resultsCommit: "a".repeat(40),
+      resultId: identifier,
+      ownerLogin: "owner",
+      declaredModel: "Example Model",
+      baseProblemId: "two_plus_two",
+      baseStatementRevision: 1,
+      correctedProblemId: "two_plus_three",
+      correctedStatementRevision: 2,
+    });
+    expect(state.problemRepairDecisions).toEqual([{
+      eventId: "0198abcd-3333-7000-8000-000000000018",
+      occurredAt: new Date(NOW_MS).toISOString(),
+      resultId: identifier,
+      reviewerLogin: "alice",
+      decision: "apply",
+      reasonCode: null,
+      comparatorEvidence: evidence,
+    }]);
+  });
+
+  it("records a redacted problem-repair rejection without invoking the comparator", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const provider = new GitHubProvider();
+    const verify = vi.spyOn(provider, "verifyProblemRepairComparator");
+    const env = {
+      ...enabledEnv,
+      RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
+      RESULT_AMENDMENT_MAINTAINERS: JSON.stringify([{ github_id: 42, login: "alice" }]),
+    };
+    const response = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/problem-repairs/decisions`,
+      {
+        method: "POST",
+        headers: {
+          authorization: await ownerAuthorization(),
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000019",
+        },
+        body: JSON.stringify({
+          decision: "reject",
+          reason_code: "insufficient_comparator_evidence",
+        }),
+      },
+    ), env, LIFECYCLE, { now: () => NOW_MS, provider, state });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      result_id: identifier,
+      repair_revision: 1,
+      status: "problem_repair_rejected",
+    });
+    expect(verify).not.toHaveBeenCalled();
+    expect(state.problemRepairDecisions).toEqual([{
+      eventId: "0198abcd-3333-7000-8000-000000000019",
+      occurredAt: new Date(NOW_MS).toISOString(),
+      resultId: identifier,
+      reviewerLogin: "alice",
+      decision: "reject",
+      reasonCode: "insufficient_comparator_evidence",
+      comparatorEvidence: null,
+    }]);
+  });
+
+  it("authenticates the exact maintainer pair and returns a redacted retraction decision", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const env = {
+      ...enabledEnv,
+      RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
+      RESULT_AMENDMENT_MAINTAINERS: JSON.stringify([{ github_id: 42, login: "alice" }]),
+    };
+    const request = (authorization: string) => new Request(
+      `https://submit.test/api/v1/results/${identifier}/retractions/decisions`,
+      {
+        method: "POST",
+        headers: {
+          authorization,
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000015",
+        },
+        body: JSON.stringify({ decision: "approve", reason_code: "owner_request_verified" }),
+      },
+    );
+    const unauthorized = await handleRequest(
+      request(await ownerAuthorization("mallory")),
+      env,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(unauthorized.status).toBe(404);
+    expect(await unauthorized.json()).toEqual({ error: "not_found" });
+    expect(state.retractionDecisions).toHaveLength(0);
+
+    const response = await handleRequest(
+      request(await ownerAuthorization()),
+      env,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    expect(body).toEqual({
+      result_id: identifier,
+      retraction_revision: 1,
+      status: "retraction_approved",
+    });
+    expect(JSON.stringify(body)).not.toContain("owner_request_verified");
+    expect(JSON.stringify(body)).not.toContain("alice");
+    expect(state.retractionDecisions).toEqual([{
+      eventId: "0198abcd-3333-7000-8000-000000000015",
+      occurredAt: new Date(NOW_MS).toISOString(),
+      resultId: identifier,
+      reviewerLogin: "alice",
+      decision: "approve",
+      reasonCode: "owner_request_verified",
+    }]);
+  });
+
+  it("uses closed redacted maintainer requests for override and terminal retraction", async () => {
+    const state = new MemoryState();
+    const identifier = `r2_${"1".repeat(64)}`;
+    const env = {
+      ...enabledEnv,
+      RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
+      RESULT_AMENDMENT_MAINTAINERS: JSON.stringify([{ github_id: 42, login: "alice" }]),
+    };
+    const authorization = await ownerAuthorization();
+    const override = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/retractions/override`,
+      {
+        method: "POST",
+        headers: {
+          authorization,
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000016",
+        },
+        body: JSON.stringify({ reason_code: "owner_account_unavailable" }),
+      },
+    ), env, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(override.status).toBe(201);
+    expect(await override.json()).toEqual({
+      result_id: identifier,
+      retraction_revision: 1,
+      status: "retraction_overridden",
+    });
+    const terminal = await handleRequest(new Request(
+      `https://submit.test/api/v1/results/${identifier}/retractions/finalize`,
+      {
+        method: "POST",
+        headers: {
+          authorization,
+          "content-type": "application/json",
+          "idempotency-key": "0198abcd-3333-7000-8000-000000000017",
+        },
+        body: JSON.stringify({}),
+      },
+    ), env, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(terminal.status).toBe(201);
+    expect(await terminal.json()).toEqual({
+      result_id: identifier,
+      release_disposition: "not_published",
+      status: "retracted",
+    });
+    expect(state.retractionOverrides).toHaveLength(1);
+    expect(state.retractionFinalizations).toHaveLength(1);
+    expect(state.retractionFinalizations[0]?.maintainerLogin).toBe("alice");
   });
 
   it("conceals wrong-owner retraction authority and preserves conflicts", async () => {
