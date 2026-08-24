@@ -55,6 +55,7 @@ class AuthoritativeReplayStagingWorkflowTests(unittest.TestCase):
         self.assertNotIn("STAGING_STATE_WRITE_KEY", section)
         self.assertIn("--max-time 15", section)
         self.assertIn("--max-time 300", section)
+        self.assertIn("--retry-all-errors", section)
         self.assertIn("deadline=$(( $(date +%s) + 20400 ))", section)
         self.assertIn('"$REPLAY_EXECUTOR_URL/status"', section)
         self.assertIn('sleep 15', section)
