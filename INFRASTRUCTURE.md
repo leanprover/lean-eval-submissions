@@ -886,8 +886,10 @@ the reviewed broker, replay Worker/container, and intake Worker version IDs,
 plus the one full commit recorded by all three versions. The historical version
 IDs prove the target unit, but they are never activated directly: Cloudflare
 rollback can force old secret values after a rotation. Instead, the workflow
-builds and fully deploys exact target code/configuration with `--keep-vars`,
-which preserves the current secret values. Before any mutation,
+builds and fully deploys exact target code/configuration. For the intake Worker,
+the exact reviewed `secrets.required` bindings make Wrangler inherit the current
+secret values while allowing rollback to clear residual lease variables; the
+other components use `--keep-vars`. Before any mutation,
 the protected production job proves the immutable dispatch tag, protected-main
 reachability, every tracked plain-text binding from that exact commit, the
 exact allowed secret/resource capability names and types, unchanged live

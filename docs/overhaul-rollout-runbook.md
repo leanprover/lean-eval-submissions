@@ -724,14 +724,21 @@ replay, and protected State dependencies are then qualified. Before any
 effective enabled mutation, the controller creates a one-use request bound to
 its exact commit, run ID and attempt, target commit, production environment,
 and reviewed State commit. The first enabled deployment is a Worker-enforced
-lease of at most fifteen minutes. Every intake request checks the lease and fails
-closed at the exact expiry even if every Actions runner disappears. The
+lease of at most fifteen minutes. Every intake request checks the lease at
+admission and again immediately before State acceptance, failing closed once
+the lease expires even if every Actions runner disappears. The
 controller must observe 100% traffic, exact merge-commit configured/effective
 leased health, consume the request nonce by exact-head State CAS, and prove
 protected State is unchanged. Only then may it deploy the same code in durable
 mode; that durable deployment is the final workflow step and no risky
 verification follows it. Begin the four-week issue-intake overlap only after
-this controller succeeds.
+this controller succeeds. The ordinary health monitor compares against tracked
+durable configuration and will therefore alert during the intentional leased
+window; correlate that alert with the protected controller run. If recovery is
+needed, inspect the dispatch outbox for an accepted request whose inline
+dispatch failed. If public health is unreadable, recovery refuses to change an
+unproven deployment and an operator must investigate or invoke the reviewed
+manual disable path.
 An ordinary deployment also restores staging to its tracked disabled state, so
 review whether any temporary staging intake window must be resumed afterward.
 

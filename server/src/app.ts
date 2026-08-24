@@ -645,6 +645,9 @@ async function intakeLeaseSmoke(
     body.issued_at * 1000,
     body.expires_at,
   );
+  if (!currentIntake(env, dependencies).effective) {
+    return json({ error: "lease_not_effective" }, 409);
+  }
   const outcome = await ledger.appendEventAtHead(event, body.state_commit);
   return json({
     status: outcome.created ? "lease_smoke_consumed" : "lease_smoke_already_consumed",
@@ -880,6 +883,9 @@ async function acceptSubmission(
   ];
   const ledger = state(env, dependencies);
   const proposedView = initialSubmissionView(grant, identity.login, input, acceptedAtMilliseconds, workflowRef);
+  if (!currentIntake(env, dependencies).effective) {
+    throw new GitHubStateError(503, "intake lease expired before State acceptance");
+  }
   const outcome = await submissionStage(
     "state_acceptance",
     () => ledger.acceptSubmission(events, proposedView, initialDispatchOutbox(proposedView)),

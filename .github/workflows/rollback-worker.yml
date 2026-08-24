@@ -226,6 +226,8 @@ jobs:
             exit 1
           fi
           target="$RUNNER_TEMP/lean-eval-rollback/target/server"
+          # The validated secrets.required allowlist inherits live secrets while
+          # a full variable deploy clears every residual INTAKE_LEASE_* binding.
           "$target/node_modules/.bin/wrangler" deploy \
             --config "$target/wrangler.jsonc" --env production \
             --var "DEPLOYED_COMMIT:$EXPECTED_COMMIT" \

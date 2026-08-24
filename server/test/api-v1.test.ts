@@ -805,6 +805,18 @@ describe("production intake lease smoke", () => {
     expect(state.events).toHaveLength(1);
   });
 
+  it("rechecks lease expiry immediately before the State mutation", async () => {
+    const state = new MemoryState();
+    const env = await leasedEnvironment();
+    const times = [NOW_MS, expiresAt * 1000];
+    const response = await handleRequest(request(), env, LIFECYCLE, {
+      now: () => times.shift() ?? expiresAt * 1000,
+      state,
+    });
+    expect(response.status).toBe(409);
+    expect(state.events).toHaveLength(0);
+  });
+
   it("rejects forged and cross-bound requests before touching State", async () => {
     const env = await leasedEnvironment();
     for (const [changed, expectedStatus] of [

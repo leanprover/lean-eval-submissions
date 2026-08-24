@@ -45,7 +45,10 @@ signed grant preallocates UUIDv7 identities, while the first accepted request
 records its actual acceptance time. The targeted view preserves that batch;
 retries read it instead of fabricating issuance-time occurrences. A partial or
 colliding batch fails closed. OAuth-state consumption records the actual
-callback time and a byte-identical existing event is replay, not success.
+callback time and a byte-identical existing event is replay, not success. The
+lease-smoke nonce is the exception: its event time is the lease issuance time so
+a lost State compare-and-swap response can be retried byte-identically; the
+event payload separately binds the absolute expiry.
 
 Metadata amendments require the GitHub identity that owns the base record.
 Maintainer repairs and retractions use a separate privileged path and become
