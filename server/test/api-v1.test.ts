@@ -34,6 +34,7 @@ import {
   ResultOwnerStateError,
   StateEventConflictError,
   StateUpdateOutcomeUnknownError,
+  type GitHubFetch,
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
   type ResultProblemRepairRequest,
@@ -43,6 +44,10 @@ import {
   type ResultRetractionOverrideRequest,
   type ResultRetractionRequest,
 } from "../src/github-state";
+import {
+  ScheduledSubrequestBudget,
+  ScheduledSubrequestBudgetError,
+} from "../src/scheduled-subrequest-budget";
 import {
   initialResultAmendmentView,
   requestedProblemRepairView,
@@ -246,8 +251,14 @@ class MemoryState implements StateAccess {
     return Promise.resolve({ view: nextView });
   }
 
-  listDispatchOutbox(shard: string): Promise<readonly DispatchOutbox[]> {
-    return Promise.resolve([...this.outbox.values()].filter((entry) => entry.submission_id.replaceAll("-", "").endsWith(shard)));
+  listDispatchOutbox(shard: string, scanOffset: number, scanLimit: number): Promise<readonly DispatchOutbox[]> {
+    const entries = [...this.outbox.values()]
+      .filter((entry) => entry.submission_id.replaceAll("-", "").endsWith(shard))
+      .sort((left, right) => left.submission_id.localeCompare(right.submission_id));
+    const start = entries.length === 0 ? 0 : scanOffset % entries.length;
+    return Promise.resolve(entries.length <= scanLimit
+      ? entries
+      : [...entries.slice(start, start + scanLimit), ...entries.slice(0, Math.max(0, start + scanLimit - entries.length))]);
   }
 
   provePromotionCanaryContention(event: WritableStateEvent): Promise<{
@@ -1307,6 +1318,62 @@ describe("agent intake in workerd", () => {
 });
 
 describe("scheduled dispatch reconciliation in workerd", () => {
+  it("routes the real scheduled State adapter through the shared budget", async () => {
+    const responses = [
+      Response.json({ object: { sha: "1".repeat(40) } }),
+      Response.json({ tree: { sha: "2".repeat(40) } }),
+    ];
+    const stateFetch = vi.fn<GitHubFetch>(() => {
+      const response = responses.shift();
+      if (response === undefined) throw new Error("unexpected State request");
+      return Promise.resolve(response);
+    });
+    const budget = new ScheduledSubrequestBudget(2);
+
+    await expect(handleScheduled(
+      { ...ENV, GITHUB_STATE_TOKEN: "state-token" },
+      NOW_MS,
+      {
+        stateFetch,
+        scheduledSubrequestBudget: budget,
+        dispatch: () => Promise.resolve(),
+      },
+    )).rejects.toBeInstanceOf(ScheduledSubrequestBudgetError);
+
+    expect(stateFetch).toHaveBeenCalledTimes(2);
+    expect(budget.remaining).toBe(0);
+  });
+
+  it("logs and leaves due work pending when a full item reserve is unavailable", async () => {
+    const state = new MemoryState();
+    const scheduledTime = (Math.floor(NOW_MS / (256 * 60_000)) * 256 + 1) * 60_000;
+    const submissionId = "019debcf-cb48-7000-8000-000000000001";
+    const view = pendingView(submissionId, new Date(scheduledTime - 60_000).toISOString());
+    state.views.set(submissionId, view);
+    state.outbox.set(submissionId, {
+      schema_version: 1,
+      submission_id: submissionId,
+      owner_login: view.owner_login,
+      submission: view.submission,
+      attempts: 0,
+      next_attempt_at: new Date(scheduledTime - 1).toISOString(),
+      workflow_ref: view.dispatch.workflow_ref,
+    });
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await handleScheduled(ENV, scheduledTime, {
+      state,
+      dispatch,
+      scheduledSubrequestBudget: new ScheduledSubrequestBudget(154),
+    });
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(state.outbox).toHaveLength(1);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("scheduled_dispatch_budget_deferred"));
+    log.mockRestore();
+  });
+
   it("does not read or mutate State while intake is disabled", async () => {
     const state = new MemoryState();
     const list = vi.spyOn(state, "listDispatchOutbox");
@@ -1370,6 +1437,91 @@ describe("scheduled dispatch reconciliation in workerd", () => {
     expect(dispatch).toHaveBeenCalledOnce();
     expect(state.views.get(submissionId)?.dispatch).toMatchObject({ status: "succeeded", attempts: 2 });
     expect(state.outbox).toHaveLength(0);
+  });
+
+  it("reconciles due entries while the scheduled budget retains a full-item reserve", async () => {
+    const state = new MemoryState();
+    const scheduledTime = (Math.floor(NOW_MS / (256 * 60_000)) * 256 + 1) * 60_000;
+    for (let index = 0; index < 3; index += 1) {
+      const submissionId = `019debcf-cb48-7000-8000-000000000${String(index)}01`;
+      const view = pendingView(submissionId, new Date(scheduledTime - 60_000).toISOString());
+      state.views.set(submissionId, view);
+      state.outbox.set(submissionId, {
+        schema_version: 1,
+        submission_id: submissionId,
+        owner_login: view.owner_login,
+        submission: view.submission,
+        attempts: 0,
+        next_attempt_at: new Date(scheduledTime - 1).toISOString(),
+        workflow_ref: view.dispatch.workflow_ref,
+      });
+    }
+    const list = vi.spyOn(state, "listDispatchOutbox");
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+
+    await handleScheduled(ENV, scheduledTime, { state, dispatch });
+
+    expect(list).toHaveBeenCalledOnce();
+    expect(list.mock.calls[0]?.[0]).toBe("01");
+    expect(list.mock.calls[0]?.[2]).toBe(32);
+    expect(dispatch).toHaveBeenCalledTimes(3);
+    expect(state.outbox).toHaveLength(0);
+  });
+
+  it("does not reinterpret a failed success-state write as a provider failure", async () => {
+    const state = new MemoryState();
+    const scheduledTime = (Math.floor(NOW_MS / (256 * 60_000)) * 256 + 1) * 60_000;
+    const submissionId = "019debcf-cb48-7000-8000-000000000001";
+    const view = pendingView(submissionId, new Date(scheduledTime - 60_000).toISOString());
+    state.views.set(submissionId, view);
+    state.outbox.set(submissionId, {
+      schema_version: 1,
+      submission_id: submissionId,
+      owner_login: view.owner_login,
+      submission: view.submission,
+      attempts: 0,
+      next_attempt_at: new Date(scheduledTime - 1).toISOString(),
+      workflow_ref: view.dispatch.workflow_ref,
+    });
+    const update = vi.spyOn(state, "updateDispatch").mockRejectedValue(new Error("State unavailable"));
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+
+    await expect(handleScheduled(ENV, scheduledTime, { state, dispatch })).rejects.toThrow("State unavailable");
+
+    expect(dispatch).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledOnce();
+    expect(state.outbox).toHaveLength(1);
+  });
+
+  it("removes an ordinary outbox after its terminal retry bound", async () => {
+    const state = new MemoryState();
+    const scheduledTime = (Math.floor(NOW_MS / (256 * 60_000)) * 256 + 1) * 60_000;
+    const submissionId = "019debcf-cb48-7000-8000-000000000001";
+    const view = pendingView(
+      submissionId,
+      new Date(scheduledTime - 60_000).toISOString(),
+      32,
+      "failed",
+    );
+    state.views.set(submissionId, view);
+    state.outbox.set(submissionId, {
+      schema_version: 1,
+      submission_id: submissionId,
+      owner_login: view.owner_login,
+      submission: view.submission,
+      attempts: 32,
+      next_attempt_at: new Date(scheduledTime - 1).toISOString(),
+      workflow_ref: view.dispatch.workflow_ref,
+    });
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await handleScheduled(ENV, scheduledTime, { state, dispatch });
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(state.outbox).toHaveLength(0);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("submission_dispatch_terminal_retry_exhausted"));
+    log.mockRestore();
   });
 
   it("does not let a canary-looking model label bypass production reconciliation", async () => {
@@ -1562,7 +1714,7 @@ describe("automatic staging promotion canary in workerd", () => {
     expect(state.outbox).toHaveLength(0);
   });
 
-  it("bounds each fixed-shard scheduled canary pass to twenty dispatches", async () => {
+  it("reconciles one complete fixed-shard canary scan when operations are in-memory", async () => {
     const state = new MemoryState();
     const source = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
       full_name: "kim-em/lean-eval-intake-fixture",
@@ -1587,8 +1739,8 @@ describe("automatic staging promotion canary in workerd", () => {
     }
     const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
     await handleScheduled(canaryEnv, Date.UTC(2026, 7, 25), { state, dispatch });
-    expect(dispatch).toHaveBeenCalledTimes(20);
-    expect(state.outbox).toHaveLength(1);
+    expect(dispatch).toHaveBeenCalledTimes(21);
+    expect(state.outbox).toHaveLength(0);
   });
 
   it("records a failed no-op dispatch and reports it without claiming success", async () => {

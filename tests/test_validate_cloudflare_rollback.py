@@ -39,6 +39,12 @@ class RollbackContractCoverageTests(unittest.TestCase):
     def test_qualifies_maintainer_authentication_boundary(self) -> None:
         self.assertIn("server/src/maintainer.ts", rollback.CALLBACK_CONTRACT_FILES)
 
+    def test_qualifies_scheduled_subrequest_guard(self) -> None:
+        self.assertIn(
+            "server/src/scheduled-subrequest-budget.ts",
+            rollback.CALLBACK_CONTRACT_FILES,
+        )
+
     def test_qualification_paths_are_deterministically_sorted(self) -> None:
         self.assertEqual(
             rollback.CALLBACK_CONTRACT_FILES,
@@ -86,7 +92,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         )
         app = (ROOT / "server" / "src" / "app.ts").read_text(encoding="utf-8")
         self.assertIn("STATE_EVENT_SCHEMA_VERSION = 1 as const", state_event)
-        self.assertIn("if (!currentIntake(env, dependencies).effective) return;", app)
+        self.assertIn("const intake = currentIntake(env, dependencies);", app)
+        self.assertIn("if (!intake.effective) return;", app)
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()

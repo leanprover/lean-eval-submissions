@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   canonicalStateDocument,
   clearResultOwnerContractProofCacheForTest,
+  DISPATCH_OUTBOX_SCAN_LIMIT,
+  DISPATCH_UPDATE_MAX_SUBREQUESTS,
   type GitHubFetch,
   GitHubStateError,
   GitHubStateRepository,
@@ -41,6 +43,10 @@ import {
   terminalRetractionView,
   type ComparatorEvidence,
 } from "../src/result-amendment";
+import {
+  ScheduledSubrequestBudget,
+  ScheduledSubrequestBudgetError,
+} from "../src/scheduled-subrequest-budget";
 
 const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
@@ -471,6 +477,19 @@ function contents(value: unknown): Response {
   return json({ encoding: "base64", content: btoa(`${JSON.stringify(value)}\n`) });
 }
 
+function outbox(index: number, shard = "01") {
+  const submissionId = `0198abcd-1111-7000-8000-${index.toString(16).padStart(10, "0")}${shard}`;
+  return {
+    schema_version: 1,
+    submission_id: submissionId,
+    owner_login: VIEW.owner_login,
+    submission: VIEW.submission,
+    attempts: 0,
+    next_attempt_at: VIEW.accepted_at,
+    workflow_ref: VIEW.dispatch.workflow_ref,
+  } as const;
+}
+
 function resultOwnerContractProofResponses(
   changedPath?: keyof typeof RESULT_OWNER_CONTRACT_ROOT_ENTRIES,
   treeSha = TREE,
@@ -539,6 +558,111 @@ function fetchUrl(input: RequestInfo | URL): string {
 describe("atomic Git State append", () => {
   beforeEach(() => clearResultOwnerContractProofCacheForTest());
 
+  it("exports the exact scheduled dispatch CAS subrequest ceiling", () => {
+    expect(DISPATCH_UPDATE_MAX_SUBREQUESTS).toBe(144);
+  });
+
+  it("binds the dispatch CAS ceiling to nine maximal ambiguous collisions", async () => {
+    const publication: StateEvent = {
+      schema_version: 1,
+      event_id: "0198abcd-1111-7000-8000-000000000008",
+      event_type: "submission.publication_changed",
+      occurred_at: "2026-08-20T06:07:12.000Z",
+      subject_id: SUBMISSION_ID,
+      causation_event_id: METADATA_ID,
+      actor: { kind: "github", login: "alice" },
+      payload: { publication_choice: "scheduled" },
+    };
+    const current: SubmissionView = {
+      ...RESULT_VIEW,
+      mutation_event_id: publication.event_id,
+      publication_event_id: publication.event_id,
+      dispatch: {
+        ...RESULT_VIEW.dispatch,
+        status: "failed",
+        attempts: 0,
+        last_error_code: "dispatch_provider_unavailable",
+      },
+    };
+    const next: SubmissionView = {
+      ...current,
+      dispatch: {
+        ...current.dispatch,
+        status: "succeeded",
+        attempts: 1,
+        last_error_code: null,
+      },
+    };
+    const responses: Response[] = [];
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      responses.push(
+        json({ object: { sha: HEAD } }),
+        json({ tree: { sha: TREE } }),
+        contents(current),
+        contents(RECEIVED),
+        contents(METADATA),
+        contents(publication),
+        contents(ARCHIVE_EVENT),
+        contents(EVALUATION_ACCEPTED),
+        contents(RESULT_EVENT),
+        contents(EVALUATION_STARTED),
+        json({ sha: NEW_TREE }, 201),
+        json({ sha: NEW_COMMIT }, 201),
+        json({ message: "temporary failure" }, 500),
+        json({ message: "not a fast-forward" }, 409),
+        json({ object: { sha: HEAD } }),
+        json({ status: "diverged", merge_base_commit: { sha: HEAD } }),
+      );
+    }
+    const fetcher = sequence(responses);
+    vi.useFakeTimers();
+    try {
+      const outcome = repository(fetcher).updateDispatch(next, 0, null);
+      const rejected = expect(outcome).rejects.toMatchObject({ status: 409 });
+      await vi.runAllTimersAsync();
+      await rejected;
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(fetcher).toHaveBeenCalledTimes(DISPATCH_UPDATE_MAX_SUBREQUESTS);
+  });
+
+  it("preserves scheduled budget exhaustion through reference-update recovery", async () => {
+    const current: SubmissionView = {
+      ...VIEW,
+      dispatch: {
+        ...VIEW.dispatch,
+        status: "failed",
+        attempts: 0,
+        last_error_code: "dispatch_provider_unavailable",
+      },
+    };
+    const next: SubmissionView = {
+      ...current,
+      dispatch: {
+        ...current.dispatch,
+        status: "succeeded",
+        attempts: 1,
+        last_error_code: null,
+      },
+    };
+    const upstream = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      contents(current),
+      contents(RECEIVED),
+      contents(METADATA),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+    ]);
+    const budget = new ScheduledSubrequestBudget(7);
+
+    await expect(repository(budget.wrap(upstream)).updateDispatch(next, 0, null))
+      .rejects.toBeInstanceOf(ScheduledSubrequestBudgetError);
+    expect(upstream).toHaveBeenCalledTimes(7);
+    expect(budget.remaining).toBe(0);
+  });
+
   it("emits the exact Python-compatible canonical State document bytes", () => {
     expect(canonicalStateDocument({ z: "😀", a: { y: "β", x: true } })).toBe(
       "{\n  \"a\": {\n    \"x\": true,\n    \"y\": \"\\u03b2\"\n  },\n  \"z\": \"\\ud83d\\ude00\"\n}\n",
@@ -546,6 +670,44 @@ describe("atomic Git State append", () => {
     expect(() => canonicalStateDocument({ payload: { omitted: undefined } })).toThrow(
       /not JSON serializable/u,
     );
+  });
+
+  it("reads only one bounded rotating dispatch-outbox window", async () => {
+    const outboxes = Array.from({ length: DISPATCH_OUTBOX_SCAN_LIMIT + 3 }, (_, index) =>
+      outbox(index));
+    const directory = "views/dispatch-outbox/01";
+    const listed = [...outboxes].reverse().map((entry) => ({
+      type: "file",
+      path: `${directory}/${entry.submission_id}.json`,
+    }));
+    const selected = [...outboxes.slice(DISPATCH_OUTBOX_SCAN_LIMIT), ...outboxes.slice(0, DISPATCH_OUTBOX_SCAN_LIMIT - 3)];
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      json(listed),
+      ...selected.map(contents),
+    ]);
+
+    await expect(repository(fetcher).listDispatchOutbox(
+      "01",
+      DISPATCH_OUTBOX_SCAN_LIMIT,
+      DISPATCH_OUTBOX_SCAN_LIMIT,
+    )).resolves.toEqual(selected);
+    expect(fetcher).toHaveBeenCalledTimes(3 + DISPATCH_OUTBOX_SCAN_LIMIT);
+    const selectedUrls = fetcher.mock.calls.slice(3).map(([input]) => fetchUrl(input));
+    selected.forEach((entry, index) => {
+      expect(selectedUrls[index]).toContain(`${directory}/${entry.submission_id}.json`);
+    });
+  });
+
+  it("rejects an oversized dispatch-outbox scan before reading State", async () => {
+    const fetcher = sequence([]);
+    await expect(repository(fetcher).listDispatchOutbox(
+      "01",
+      0,
+      DISPATCH_OUTBOX_SCAN_LIMIT + 1,
+    )).rejects.toThrow(/scan limit/u);
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it("gates result-owner writes on ancestry and exact reviewed contract subtrees", async () => {
