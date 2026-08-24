@@ -70,6 +70,7 @@ jobs:
           tests.test_staging_promotion_canary
           tests.test_staging_intake_workflow
           tests.test_worker_deployment_workflow
+          tests.test_intake_disable_recovery_workflow
           tests.test_prepare_intake_enablement_lease
           tests.test_validate_cloudflare_rollback
           tests.test_monitor_cloudflare_health

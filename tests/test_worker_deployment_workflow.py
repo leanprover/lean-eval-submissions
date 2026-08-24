@@ -584,7 +584,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
     def test_disable_recovery_is_derived_protected_and_can_never_enable(self) -> None:
         self.assertIn("workflow_run:", RECOVERY)
         self.assertIn("workflow_dispatch:", RECOVERY)
-        self.assertIn("github.ref == 'refs/heads/main'", RECOVERY)
+        self.assertIn('test "$EVENT_REF" = refs/heads/main', RECOVERY)
         self.assertIn("github.event.workflow_run.event == 'push'", RECOVERY)
         self.assertIn("github.event.workflow_run.event == 'workflow_dispatch'", RECOVERY)
         self.assertIn(
