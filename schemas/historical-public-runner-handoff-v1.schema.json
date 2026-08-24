@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/historical-public-runner-handoff-v1.schema.json",
+  "title": "Historical public replay controller-to-runner handoff version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "contract", "contract_sha256", "plan_sha256",
+    "profile_matrix_sha256", "request_id", "source", "benchmark", "result",
+    "profile", "checker", "network", "untrusted_environment"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_public_runner_handoff"},
+    "contract": {"const": "historical_public_runner_v1"},
+    "contract_sha256": {"$ref": "#/$defs/digest"},
+    "plan_sha256": {"$ref": "#/$defs/digest"},
+    "profile_matrix_sha256": {"$ref": "#/$defs/digest"},
+    "request_id": {"type": "string", "pattern": "^prr_[0-9a-f]{64}$"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository", "commit", "tree", "visibility", "archive_format",
+        "archive_member_prefix", "archive_sha256", "archive_size_bytes"
+      ],
+      "properties": {
+        "repository": {"$ref": "#/$defs/repository"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "tree": {"$ref": "#/$defs/commit"},
+        "visibility": {"const": "public"},
+        "archive_format": {"const": "git_archive_tar_gzip_v1"},
+        "archive_member_prefix": {"const": "source"},
+        "archive_sha256": {"$ref": "#/$defs/digest"},
+        "archive_size_bytes": {"type": "integer", "minimum": 1, "maximum": 52428800}
+      }
+    },
+    "benchmark": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository", "commit", "tree", "toolchain", "lean_toolchain_blob_sha256"
+      ],
+      "properties": {
+        "repository": {"const": "leanprover/lean-eval"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "tree": {"$ref": "#/$defs/commit"},
+        "toolchain": {"$ref": "#/$defs/toolchain"},
+        "lean_toolchain_blob_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_id", "problem_id", "statement_revision", "results_repository",
+        "results_commit", "result_tree_digest"
+      ],
+      "properties": {
+        "result_id": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
+        "problem_id": {"$ref": "#/$defs/problem"},
+        "statement_revision": {
+          "type": "integer", "minimum": 1, "maximum": 9007199254740991
+        },
+        "results_repository": {"const": "leanprover/lean-eval-submissions"},
+        "results_commit": {"$ref": "#/$defs/commit"},
+        "result_tree_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["matrix_entry_sha256", "qualification_status", "profile_lock"],
+      "properties": {
+        "matrix_entry_sha256": {"$ref": "#/$defs/digest"},
+        "qualification_status": {"const": "unqualified"},
+        "profile_lock": {"$ref": "historical-public-replay-profile-matrix-v1.schema.json#/$defs/profileLock"}
+      }
+    },
+    "checker": {"const": "nanoda"},
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["controller_fetch_phase", "untrusted_execution_phase"],
+      "properties": {
+        "controller_fetch_phase": {"const": "public_https_exact_commits_only"},
+        "untrusted_execution_phase": {"const": "disabled"}
+      }
+    },
+    "untrusted_environment": {
+      "type": "object",
+      "maxProperties": 0
+    }
+  },
+  "$defs": {
+    "repository": {
+      "type": "string",
+      "pattern": "^(?!\\.{1,2}/)(?![^/]+/\\.{1,2}$)[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    },
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "problem": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"},
+    "toolchain": {
+      "type": "string",
+      "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+(?:-(?:rc|beta)[0-9]+)?$"
+    }
+  }
+}

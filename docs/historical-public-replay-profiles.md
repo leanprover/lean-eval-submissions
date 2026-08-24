@@ -46,6 +46,17 @@ requirements are complete:
    isolation, destruction, architecture, kernel, CPU, and memory boundary in
    staging.
 
+The first boundary is specified by
+[`historical-public-runner.md`](historical-public-runner.md). Its controller
+accepts only the exact reviewed plan, matrix, contract digests, request ID, and
+result ID. It verifies exact public source and benchmark Git commits and trees,
+creates a deterministic source archive, and hands a separate runner a closed
+JSON object. The runner revalidates the matrix entry and baked benchmark tree,
+actively checks that networking is disabled, and then invokes the fixed
+evaluator command. This implementation does not change the private replay
+request or endpoint. It also does not make any matrix entry qualified: the
+immutable image publication and staging runtime evidence are still absent.
+
 Only then may the runtime evidence be frozen into an execution profile. The
 profile digest includes the unique image manifest digest, so the 25 benchmark
 images produce 25 independently reviewed execution profiles even where their
@@ -57,12 +68,12 @@ reviewed action.
 
 ## Known contract work before execution
 
-The shared replay request currently models a modern result and requires a UUID
-submission ID. Historical public State tasks intentionally have no submission
-ID or archive locator. The deployed authoritative Worker also accepts only a
-private encrypted archive. The public runner must therefore have a distinct
-closed request/handoff contract rather than weakening the private endpoint or
-synthesizing modern lifecycle fields.
+The shared replay request models a modern result and requires a UUID submission
+ID. Historical public State tasks intentionally have no submission ID or
+archive locator. The deployed authoritative Worker also accepts only a private
+encrypted archive. The dedicated historical controller/runner therefore uses
+`schemas/historical-public-runner-handoff-v1.schema.json` and does not alter or
+reuse the private endpoint's request shape.
 
 The current authoritative Dockerfile, publication workflow, and configuration
 freezer are also one-profile implementations: they hard-code benchmark

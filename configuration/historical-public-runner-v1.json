@@ -1,0 +1,24 @@
+{
+  "contract": "historical_public_runner_v1",
+  "kind": "historical_public_runner_contract",
+  "measurement_command": [
+    "/opt/lean-eval/replay-measure"
+  ],
+  "memory_limit_bytes": 12884901888,
+  "network": {
+    "controller_fetch_phase": "public_https_exact_commits_only",
+    "untrusted_execution_phase": "disabled"
+  },
+  "runner_command": [
+    "/opt/lean-eval/historical-public-runner"
+  ],
+  "schema_version": 1,
+  "source_archive": {
+    "format": "git_archive_tar_gzip_v1",
+    "maximum_compressed_bytes": 52428800,
+    "maximum_expanded_bytes": 268435456,
+    "maximum_members": 16384,
+    "member_prefix": "source"
+  },
+  "wall_time_limit_ms": 19800000
+}

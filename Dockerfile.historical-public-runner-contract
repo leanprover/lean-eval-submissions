@@ -1,0 +1,12 @@
+FROM docker.io/cloudflare/sandbox:0.12.7-python@sha256:6dfa7301e69d3e5cd8e0404b92fd240026fe834ed7101ee29cb66337b0af0981
+
+USER root
+
+COPY scripts/historical_public_runner.py /opt/lean-eval/historical_public_runner.py
+COPY configuration/historical-public-runner-v1.json /opt/lean-eval/historical-public-runner-v1.json
+COPY configuration/historical-public-replay-profile-matrix-v1.json /opt/lean-eval/historical-public-replay-profile-matrix-v1.json
+
+RUN chmod 0555 /opt/lean-eval/historical_public_runner.py \
+    && mkdir -p -m 0700 /workspace /opt/lean-eval/benchmark
+
+ENTRYPOINT ["python3", "/opt/lean-eval/historical_public_runner.py", "contract-check"]
