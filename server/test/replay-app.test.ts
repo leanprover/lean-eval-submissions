@@ -111,6 +111,32 @@ function acceptedVerdict(body: Record<string, unknown>): Record<string, unknown>
   };
 }
 
+function terminalReceiptStore(initialBinding?: Record<string, unknown>) {
+  let binding: unknown = initialBinding === undefined
+    ? null
+    : { ...initialBinding, retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000 };
+  let receipt: unknown = null;
+  return {
+    readBinding: () => Promise.resolve(binding),
+    claimBinding: (value: unknown) => {
+      if (binding === null) binding = value;
+      return Promise.resolve(binding);
+    },
+    readReceipt: () => Promise.resolve(receipt),
+    prepareReceipt: (value: unknown) => {
+      if (receipt === null) receipt = value;
+      return Promise.resolve(receipt);
+    },
+    confirmReceipt: () => {
+      if (typeof receipt !== "object" || receipt === null || Array.isArray(receipt)) {
+        return Promise.reject(new Error("receipt is unavailable"));
+      }
+      receipt = { ...receipt, destruction_state: "confirmed" };
+      return Promise.resolve(receipt);
+    },
+  };
+}
+
 const ENV = {
   DEPLOYED_COMMIT: "a".repeat(40),
   DEPLOYMENT_ENVIRONMENT: "staging",
@@ -158,6 +184,7 @@ describe("Cloudflare replay executor", () => {
     let destroyed = false;
     let processStarted = false;
     let processStatus: "running" | "completed" = "running";
+    const receipts = terminalReceiptStore();
     const process = {
       getStatus: () => Promise.resolve(processStatus),
       getLogs: () => Promise.resolve({
@@ -189,6 +216,7 @@ describe("Cloudflare replay executor", () => {
     }), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
       authenticate: () => Promise.resolve(),
       sandbox: () => sandbox,
+      receiptStore: () => receipts,
     });
     expect(start.status).toBe(202);
     expect(await start.json()).toMatchObject({ status: "running" });
@@ -208,6 +236,7 @@ describe("Cloudflare replay executor", () => {
     ), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
       authenticate: () => Promise.resolve(),
       sandbox: () => sandbox,
+      receiptStore: () => receipts,
     });
     expect(duplicateStart.status).toBe(202);
     expect(commands).toHaveLength(1);
@@ -219,6 +248,7 @@ describe("Cloudflare replay executor", () => {
     ), REVIEWED_ENV, {
       authenticate: () => Promise.resolve(),
       sandbox: () => sandbox,
+      receiptStore: () => receipts,
     });
     expect(running.status).toBe(202);
     expect(await running.json()).toMatchObject({ status: "running" });
@@ -231,15 +261,264 @@ describe("Cloudflare replay executor", () => {
     ), REVIEWED_ENV, {
       authenticate: () => Promise.resolve(),
       sandbox: () => sandbox,
+      receiptStore: () => receipts,
     });
     expect(status.status).toBe(200);
-    expect(await status.json()).toMatchObject({ destruction: "confirmed" });
+    const terminalBody = await status.json();
+    expect(terminalBody).toMatchObject({ destruction: "confirmed" });
     expect(destroyed).toBe(true);
+
+    const repeatedStatus = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/replay/status",
+      { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
+    ), REVIEWED_ENV, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+      receiptStore: () => receipts,
+    });
+    expect(repeatedStatus.status).toBe(200);
+    expect(await repeatedStatus.json()).toEqual(terminalBody);
+
+    const startAfterLostTerminalResponse = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/replay",
+      { method: "POST", body: JSON.stringify(body) },
+    ), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+      receiptStore: () => receipts,
+    });
+    expect(startAfterLostTerminalResponse.status).toBe(202);
+    expect(commands).toHaveLength(1);
+  });
+
+  it("persists the exact nonce binding before start and rejects a mismatched duplicate", async () => {
+    const body = await authoritativeInput();
+    const receipts = terminalReceiptStore();
+    let sandboxLookups = 0;
+    let starts = 0;
+    const sandbox = {
+      writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+      exec: () => { throw new Error("blocking exec must remain unreachable"); },
+      getProcess: () => Promise.resolve(starts === 0 ? null : {} as never),
+      startProcess: () => {
+        starts += 1;
+        return Promise.resolve({} as never);
+      },
+      destroy: () => Promise.resolve(),
+    };
+    const dependencies = {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => {
+        sandboxLookups += 1;
+        return sandbox;
+      },
+      receiptStore: () => receipts,
+    };
+    const first = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, dependencies);
+    expect(first.status).toBe(202);
+
+    const mismatched = structuredClone(body);
+    (mismatched.request as Record<string, unknown>).replay_task_id = `rt1_${"9".repeat(64)}`;
+    const duplicate = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {
+      method: "POST",
+      body: JSON.stringify(mismatched),
+    }), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, dependencies);
+    expect(duplicate.status).toBe(400);
+    expect(await duplicate.json()).toEqual({ error: "invalid_request" });
+    expect(sandboxLookups).toBe(1);
+    expect(starts).toBe(1);
+  });
+
+  it("recovers a lost binding-claim response without starting an unbound process", async () => {
+    const body = await authoritativeInput();
+    let binding: unknown = null;
+    let loseClaimResponse = true;
+    let sandboxLookups = 0;
+    let processStarted = false;
+    const receipts = {
+      readBinding: () => Promise.resolve(binding),
+      claimBinding: (value: unknown) => {
+        if (binding === null) binding = value;
+        if (loseClaimResponse) {
+          loseClaimResponse = false;
+          return Promise.reject(new Error("lost binding claim response"));
+        }
+        return Promise.resolve(binding);
+      },
+      readReceipt: () => Promise.resolve(null),
+      prepareReceipt: (value: unknown) => Promise.resolve(value),
+      confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
+    };
+    const dependencies = {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => {
+        sandboxLookups += 1;
+        return {
+          writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+          exec: () => { throw new Error("blocking exec must remain unreachable"); },
+          getProcess: () => Promise.resolve(processStarted ? {} as never : null),
+          startProcess: () => {
+            processStarted = true;
+            return Promise.resolve({} as never);
+          },
+          destroy: () => Promise.resolve(),
+        };
+      },
+      receiptStore: () => receipts,
+    };
+    const request = () => new Request("https://example.test/api/v1/replay", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    const first = await handleReplayRequest(
+      request(),
+      { ...REVIEWED_ENV, REPLAY_ENABLED: "true" },
+      dependencies,
+    );
+    expect(first.status).toBe(500);
+    expect(await first.json()).toEqual({
+      error: "executor_failed",
+      reason: "command_rpc_failed",
+    });
+    expect(sandboxLookups).toBe(0);
+
+    const retry = await handleReplayRequest(
+      request(),
+      { ...REVIEWED_ENV, REPLAY_ENABLED: "true" },
+      dependencies,
+    );
+    expect(retry.status).toBe(202);
+    expect(sandboxLookups).toBe(1);
+    expect(processStarted).toBe(true);
+  });
+
+  it("rejects missing, corrupt, or mismatched active bindings before sandbox lookup", async () => {
+    const body = await authoritativeInput();
+    const status = authoritativeStatusInput(body);
+    const mismatched = {
+      ...status,
+      attempt: 2,
+      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
+    };
+    for (const [binding, expectedStatus, reason] of [
+      [null, 500, "command_rpc_failed"],
+      [{ schema_version: 1 }, 500, "command_output_invalid"],
+      [mismatched, 400, null],
+    ] as const) {
+      let sandboxLookups = 0;
+      const response = await handleReplayRequest(new Request(
+        "https://example.test/api/v1/replay/status",
+        { method: "POST", body: JSON.stringify(status) },
+      ), REVIEWED_ENV, {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => {
+          sandboxLookups += 1;
+          throw new Error("sandbox must remain unreachable");
+        },
+        receiptStore: () => ({
+          readBinding: () => Promise.resolve(binding),
+          claimBinding: (value) => Promise.resolve(value),
+          readReceipt: () => Promise.resolve(null),
+          prepareReceipt: (value) => Promise.resolve(value),
+          confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
+        }),
+      });
+      expect(response.status).toBe(expectedStatus);
+      expect(await response.json()).toEqual(reason === null
+        ? { error: "invalid_request" }
+        : { error: "executor_failed", reason });
+      expect(sandboxLookups).toBe(0);
+    }
+  });
+
+  it("atomically selects one canonical terminal receipt across concurrent polls", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const body = await authoritativeInput();
+      const binding = {
+        ...authoritativeStatusInput(body),
+        retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
+      };
+      let receipt: unknown = null;
+      let logCalls = 0;
+      let releaseLogs!: () => void;
+      const logsReady = new Promise<void>((resolve) => { releaseLogs = resolve; });
+      let prepareCalls = 0;
+      let destroyCalls = 0;
+      const receipts = {
+        readBinding: () => Promise.resolve(binding),
+        claimBinding: () => Promise.resolve(binding),
+        readReceipt: () => Promise.resolve(receipt),
+        prepareReceipt: (value: unknown) => {
+          prepareCalls += 1;
+          if (receipt === null) receipt = value;
+          return Promise.resolve(receipt);
+        },
+        confirmReceipt: () => {
+          if (
+            typeof receipt === "object"
+            && receipt !== null
+            && !Array.isArray(receipt)
+            && (receipt as Record<string, unknown>).destruction_state !== "confirmed"
+          ) {
+            receipt = { ...receipt, destruction_state: "confirmed" };
+          }
+          return Promise.resolve(receipt);
+        },
+      };
+      const process = {
+        getStatus: () => Promise.resolve("completed"),
+        getLogs: async () => {
+          logCalls += 1;
+          const call = logCalls;
+          if (call === 2) releaseLogs();
+          await logsReady;
+          return call === 1
+            ? { stdout: JSON.stringify(acceptedVerdict(body)), stderr: "" }
+            : { stdout: "not-json", stderr: "" };
+        },
+      };
+      const sandbox = {
+        writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+        exec: () => { throw new Error("blocking exec must remain unreachable"); },
+        getProcess: () => Promise.resolve(process as never),
+        destroy: () => {
+          destroyCalls += 1;
+          return Promise.resolve();
+        },
+      };
+      const request = () => new Request("https://example.test/api/v1/replay/status", {
+        method: "POST",
+        body: JSON.stringify(authoritativeStatusInput(body)),
+      });
+      const responses = await Promise.all([0, 1].map(() => handleReplayRequest(
+        request(),
+        REVIEWED_ENV,
+        {
+          authenticate: () => Promise.resolve(),
+          sandbox: () => sandbox,
+          receiptStore: () => receipts,
+        },
+      )));
+      const responseBodies = await Promise.all(responses.map((response) => response.json()));
+      expect(logCalls).toBe(2);
+      expect(prepareCalls).toBe(2);
+      expect(destroyCalls).toBe(2);
+      expect(responses[0]?.status).toBe(responses[1]?.status);
+      expect(responseBodies[0]).toEqual(responseBodies[1]);
+      expect((receipt as Record<string, unknown>).destruction_state).toBe("confirmed");
+    } finally {
+      logged.mockRestore();
+    }
   });
 
   it("leaves a running process intact when a status RPC is transiently unavailable", async () => {
     const body = await authoritativeInput();
     let destroyed = false;
+    const receipts = terminalReceiptStore(authoritativeStatusInput(body));
     const response = await handleReplayRequest(new Request(
       "https://example.test/api/v1/replay/status",
       { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
@@ -254,6 +533,7 @@ describe("Cloudflare replay executor", () => {
           return Promise.resolve();
         },
       }),
+      receiptStore: () => receipts,
     });
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({
@@ -263,9 +543,261 @@ describe("Cloudflare replay executor", () => {
     expect(destroyed).toBe(false);
   });
 
+  it("retries a failed destruction from the durable pending receipt", async () => {
+    const body = await authoritativeInput();
+    const binding = {
+      ...authoritativeStatusInput(body),
+      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
+    };
+    let receipt: unknown = null;
+    let destroyCalls = 0;
+    const receipts = {
+      readBinding: () => Promise.resolve(binding),
+      claimBinding: () => Promise.resolve(binding),
+      readReceipt: () => Promise.resolve(receipt),
+      prepareReceipt: (value: unknown) => {
+        if (receipt === null) receipt = value;
+        return Promise.resolve(receipt);
+      },
+      confirmReceipt: () => {
+        receipt = { ...(receipt as Record<string, unknown>), destruction_state: "confirmed" };
+        return Promise.resolve(receipt);
+      },
+    };
+    const sandbox = {
+      writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+      exec: () => { throw new Error("blocking exec must remain unreachable"); },
+      getProcess: () => Promise.resolve({
+        getStatus: () => Promise.resolve("completed"),
+        getLogs: () => Promise.resolve({
+          stdout: JSON.stringify(acceptedVerdict(body)),
+          stderr: "",
+        }),
+      } as never),
+      destroy: () => {
+        destroyCalls += 1;
+        return destroyCalls === 1
+          ? Promise.reject(new Error("transient destroy failure"))
+          : Promise.resolve();
+      },
+    };
+    const request = () => new Request("https://example.test/api/v1/replay/status", {
+      method: "POST",
+      body: JSON.stringify(authoritativeStatusInput(body)),
+    });
+    const first = await handleReplayRequest(request(), REVIEWED_ENV, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+      receiptStore: () => receipts,
+    });
+    expect(first.status).toBe(500);
+    expect(await first.json()).toEqual({
+      error: "executor_failed",
+      reason: "sandbox_destroy_failed",
+    });
+
+    const retry = await handleReplayRequest(request(), REVIEWED_ENV, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+      receiptStore: () => receipts,
+    });
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toMatchObject({ destruction: "confirmed" });
+    expect(destroyCalls).toBe(2);
+  });
+
+  it("recovers when the durable pending-receipt response is lost before destruction", async () => {
+    const body = await authoritativeInput();
+    const binding = {
+      ...authoritativeStatusInput(body),
+      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
+    };
+    let receipt: unknown = null;
+    let rejectPrepared = true;
+    let destroyCalls = 0;
+    const receipts = {
+      readBinding: () => Promise.resolve(binding),
+      claimBinding: () => Promise.resolve(binding),
+      readReceipt: () => Promise.resolve(receipt),
+      prepareReceipt: (value: unknown) => {
+        if (rejectPrepared) {
+          rejectPrepared = false;
+          receipt = value;
+          return Promise.reject(new Error("lost pending receipt write response"));
+        }
+        if (receipt === null) receipt = value;
+        return Promise.resolve(receipt);
+      },
+      confirmReceipt: () => {
+        receipt = { ...(receipt as Record<string, unknown>), destruction_state: "confirmed" };
+        return Promise.resolve(receipt);
+      },
+    };
+    const sandbox = {
+      writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+      exec: () => { throw new Error("blocking exec must remain unreachable"); },
+      getProcess: () => Promise.resolve({
+        getStatus: () => Promise.resolve("completed"),
+        getLogs: () => Promise.resolve({
+          stdout: JSON.stringify(acceptedVerdict(body)),
+          stderr: "",
+        }),
+      } as never),
+      destroy: () => {
+        destroyCalls += 1;
+        return Promise.resolve();
+      },
+    };
+    const request = () => new Request("https://example.test/api/v1/replay/status", {
+      method: "POST",
+      body: JSON.stringify(authoritativeStatusInput(body)),
+    });
+    const first = await handleReplayRequest(request(), REVIEWED_ENV, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+      receiptStore: () => receipts,
+    });
+    expect(first.status).toBe(500);
+    expect(await first.json()).toEqual({
+      error: "executor_failed",
+      reason: "command_rpc_failed",
+    });
+    expect(destroyCalls).toBe(0);
+
+    const retry = await handleReplayRequest(request(), REVIEWED_ENV, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+      receiptStore: () => receipts,
+    });
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toMatchObject({ destruction: "confirmed" });
+    expect(destroyCalls).toBe(1);
+  });
+
+  it("recovers after destruction when the durable confirmation response is lost", async () => {
+    const body = await authoritativeInput();
+    const binding = {
+      ...authoritativeStatusInput(body),
+      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
+    };
+    let receipt: unknown = null;
+    let rejectConfirmation = true;
+    let destroyCalls = 0;
+    const receipts = {
+      readBinding: () => Promise.resolve(binding),
+      claimBinding: () => Promise.resolve(binding),
+      readReceipt: () => Promise.resolve(receipt),
+      prepareReceipt: (value: unknown) => {
+        if (receipt === null) receipt = value;
+        return Promise.resolve(receipt);
+      },
+      confirmReceipt: () => {
+        if (rejectConfirmation) {
+          rejectConfirmation = false;
+          receipt = { ...(receipt as Record<string, unknown>), destruction_state: "confirmed" };
+          return Promise.reject(new Error("lost receipt write response"));
+        }
+        receipt = { ...(receipt as Record<string, unknown>), destruction_state: "confirmed" };
+        return Promise.resolve(receipt);
+      },
+    };
+    const sandbox = {
+      writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+      exec: () => { throw new Error("blocking exec must remain unreachable"); },
+      getProcess: () => Promise.resolve({
+        getStatus: () => Promise.resolve("completed"),
+        getLogs: () => Promise.resolve({
+          stdout: JSON.stringify(acceptedVerdict(body)),
+          stderr: "",
+        }),
+      } as never),
+      destroy: () => {
+        destroyCalls += 1;
+        return Promise.resolve();
+      },
+    };
+    const request = () => new Request("https://example.test/api/v1/replay/status", {
+      method: "POST",
+      body: JSON.stringify(authoritativeStatusInput(body)),
+    });
+    const first = await handleReplayRequest(request(), REVIEWED_ENV, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+      receiptStore: () => receipts,
+    });
+    expect(first.status).toBe(500);
+    expect(await first.json()).toEqual({
+      error: "executor_failed",
+      reason: "command_rpc_failed",
+    });
+
+    const retry = await handleReplayRequest(request(), REVIEWED_ENV, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+      receiptStore: () => receipts,
+    });
+    expect(retry.status).toBe(200);
+    expect(await retry.json()).toMatchObject({ destruction: "confirmed" });
+    expect(destroyCalls).toBe(1);
+  });
+
+  it("fails closed on corrupt or differently bound terminal receipts", async () => {
+    const body = await authoritativeInput();
+    const binding = authoritativeStatusInput(body);
+    const storedAt = 1_000;
+    const mismatched = {
+      schema_version: 1,
+      binding: { ...binding, runner_nonce: "9".repeat(64) },
+      http_status: 200,
+      body: {
+        schema_version: 1,
+        verdict: acceptedVerdict(body),
+        destruction: "confirmed",
+      },
+      destruction_state: "confirmed",
+      stored_at_epoch_ms: storedAt,
+      retained_until_epoch_ms: storedAt + 24 * 60 * 60 * 1000,
+    };
+    for (const receipt of [{ schema_version: 1 }, mismatched]) {
+      let processRead = false;
+      const response = await handleReplayRequest(new Request(
+        "https://example.test/api/v1/replay/status",
+        { method: "POST", body: JSON.stringify(binding) },
+      ), REVIEWED_ENV, {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => ({
+          writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+          exec: () => { throw new Error("blocking exec must remain unreachable"); },
+          getProcess: () => {
+            processRead = true;
+            return Promise.resolve(null);
+          },
+          destroy: () => Promise.resolve(),
+        }),
+        receiptStore: () => ({
+          readBinding: () => Promise.resolve({
+            ...binding,
+            retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
+          }),
+          claimBinding: (value) => Promise.resolve(value),
+          readReceipt: () => Promise.resolve(receipt),
+          prepareReceipt: (value) => Promise.resolve(value),
+          confirmReceipt: () => Promise.resolve(receipt),
+        }),
+      });
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({
+        error: "executor_failed",
+        reason: "command_output_invalid",
+      });
+      expect(processRead).toBe(false);
+    }
+  });
+
   it("destroys without executing if authoritative input transfer is not confirmed", async () => {
     let executed = false;
     let destroyed = false;
+    const receipts = terminalReceiptStore();
     const response = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {
       method: "POST",
       body: JSON.stringify(await authoritativeInput()),
@@ -284,6 +816,7 @@ describe("Cloudflare replay executor", () => {
           return Promise.resolve();
         },
       }),
+      receiptStore: () => receipts,
     });
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({
@@ -298,26 +831,30 @@ describe("Cloudflare replay executor", () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       const body = await authoritativeInput();
+      const receipts = terminalReceiptStore(authoritativeStatusInput(body));
+      const sandbox = {
+        writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+        exec: () => { throw new Error("blocking exec must remain unreachable"); },
+        getProcess: () => Promise.resolve({
+          getStatus: () => Promise.resolve("failed"),
+          getLogs: () => Promise.resolve({
+            stdout: "",
+            stderr: "replay-authoritative: measurement evidence is unavailable\n",
+          }),
+        } as never),
+        destroy: () => Promise.resolve(),
+      };
       const response = await handleReplayRequest(new Request(
         "https://example.test/api/v1/replay/status",
         { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
       ), REVIEWED_ENV, {
         authenticate: () => Promise.resolve(),
-        sandbox: () => ({
-          writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
-          exec: () => { throw new Error("blocking exec must remain unreachable"); },
-          getProcess: () => Promise.resolve({
-            getStatus: () => Promise.resolve("failed"),
-            getLogs: () => Promise.resolve({
-              stdout: "",
-              stderr: "replay-authoritative: measurement evidence is unavailable\n",
-            }),
-          } as never),
-          destroy: () => Promise.resolve(),
-        }),
+        sandbox: () => sandbox,
+        receiptStore: () => receipts,
       });
       expect(response.status).toBe(500);
-      expect(await response.json()).toEqual({
+      const responseBody = await response.json();
+      expect(responseBody).toEqual({
         error: "executor_failed",
         reason: "command_failed",
         detail: "measurement_evidence_unavailable",
@@ -328,6 +865,18 @@ describe("Cloudflare replay executor", () => {
         reason: "command_failed",
         detail: "measurement_evidence_unavailable",
       }));
+
+      const repeated = await handleReplayRequest(new Request(
+        "https://example.test/api/v1/replay/status",
+        { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
+      ), REVIEWED_ENV, {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => sandbox,
+        receiptStore: () => receipts,
+      });
+      expect(repeated.status).toBe(500);
+      expect(await repeated.json()).toEqual(responseBody);
+      expect(logged).toHaveBeenCalledTimes(1);
     } finally {
       logged.mockRestore();
     }
@@ -335,6 +884,7 @@ describe("Cloudflare replay executor", () => {
 
   it("classifies evaluator preflight failures without exposing command output", async () => {
     const body = await authoritativeInput();
+    const receipts = terminalReceiptStore(authoritativeStatusInput(body));
     const response = await handleReplayRequest(new Request(
       "https://example.test/api/v1/replay/status",
       { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
@@ -352,6 +902,7 @@ describe("Cloudflare replay executor", () => {
         } as never),
         destroy: () => Promise.resolve(),
       }),
+      receiptStore: () => receipts,
     });
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({
@@ -366,6 +917,7 @@ describe("Cloudflare replay executor", () => {
     const sensitive = "private identity fixture";
     try {
       const body = await authoritativeInput();
+      const receipts = terminalReceiptStore(authoritativeStatusInput(body));
       const response = await handleReplayRequest(new Request(
         "https://example.test/api/v1/replay/status",
         { method: "POST", body: JSON.stringify(authoritativeStatusInput(body)) },
@@ -383,6 +935,7 @@ describe("Cloudflare replay executor", () => {
           } as never),
           destroy: () => Promise.resolve(),
         }),
+        receiptStore: () => receipts,
       });
       const responseBody = await response.json();
       expect(response.status).toBe(500);

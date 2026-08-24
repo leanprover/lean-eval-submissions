@@ -26,6 +26,9 @@ WORKER_APP = (ROOT / "server/src/app.ts").read_text(encoding="utf-8")
 WORKER_ENTRYPOINT = (ROOT / "server/src/index.ts").read_text(encoding="utf-8")
 REPLAY_ENTRYPOINT = (ROOT / "server/src/replay-entry.ts").read_text(encoding="utf-8")
 REPLAY_APP = (ROOT / "server/src/replay-app.ts").read_text(encoding="utf-8")
+REPLAY_RECEIPT = (ROOT / "server/src/replay-terminal-receipt.ts").read_text(
+    encoding="utf-8"
+)
 REPLAY_DOCKERFILE = (ROOT / "server/Dockerfile.replay").read_text(encoding="utf-8")
 
 
@@ -80,6 +83,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 configuration = REPLAY_WRANGLER["env"][environment]
                 container = configuration["containers"][0]
                 variables = configuration["vars"]
+                bindings = configuration["durable_objects"]["bindings"]
                 self.assertEqual(container["class_name"], "ReplaySandbox")
                 self.assertEqual(container["instance_type"], "standard-4")
                 self.assertEqual(container["max_instances"], 1)
@@ -93,11 +97,32 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 )
                 self.assertEqual(variables["STAGING_MEMORY_LIMIT_BYTES"], "12884901888")
                 self.assertEqual(variables["PRODUCTION_MEMORY_GATE_BYTES"], "12884901888")
+                self.assertEqual(
+                    bindings,
+                    [
+                        {"name": "REPLAY_SANDBOX", "class_name": "ReplaySandbox"},
+                        {
+                            "name": "REPLAY_TERMINAL_RECEIPT",
+                            "class_name": "ReplayTerminalReceipt",
+                        },
+                    ],
+                )
+                self.assertEqual(
+                    configuration["migrations"][-1],
+                    {"tag": "v2", "new_sqlite_classes": ["ReplayTerminalReceipt"]},
+                )
                 self.assertIn(expected_urls[environment], DEPLOY)
 
         self.assertIn("override enableInternet = false", REPLAY_ENTRYPOINT)
         self.assertIn("`r-${runnerNonce.slice(0, 61)}`", REPLAY_ENTRYPOINT)
         self.assertIn("await sandbox.destroy()", REPLAY_APP)
+        self.assertIn("AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS", REPLAY_APP)
+        self.assertIn("claimBinding(binding: unknown)", REPLAY_RECEIPT)
+        self.assertIn("prepareReceipt(receipt: unknown)", REPLAY_RECEIPT)
+        self.assertIn("confirmReceipt()", REPLAY_RECEIPT)
+        self.assertGreaterEqual(REPLAY_RECEIPT.count("storage.transaction"), 3)
+        self.assertGreaterEqual(REPLAY_RECEIPT.count("transaction.setAlarm"), 3)
+        self.assertIn("override async alarm()", REPLAY_RECEIPT)
         self.assertIn("/api/v1/staging-archive-acceptance", REPLAY_APP)
         self.assertIn("/opt/lean-eval/replay-archive-acceptance", REPLAY_DOCKERFILE)
         self.assertIn("/opt/lean-eval/replay-measure", REPLAY_DOCKERFILE)
