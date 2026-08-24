@@ -541,14 +541,24 @@ jobs:
               --benchmark-commit "$BENCHMARK_COMMIT" --runner-nonce "$runner_nonce" \
               --output "$RUNNER_TEMP/probe-$number-request.json"
           done
-          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
-            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-public-qualification-staging" \
-            --output "$RUNNER_TEMP/oidc.json"
-          oidc_token=$(jq -er .value "$RUNNER_TEMP/oidc.json")
-          test -n "$oidc_token"
-          rm -f "$RUNNER_TEMP/oidc.json"
           for number in 1 2; do
+            if [ "$number" -eq 2 ]; then
+              # destroy() confirms container termination before probe one
+              # returns, but the single container slot and its route can take
+              # longer to become reusable. Preserve the same-nonce recreation
+              # proof while allowing teardown to converge before the first
+              # write into the replacement container.
+              sleep 30
+            fi
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --max-time 15 --retry 3 --retry-max-time 60 \
+              --retry-all-errors --retry-delay 2 \
+              --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-public-qualification-staging" \
+              --output "$RUNNER_TEMP/oidc.json"
+            oidc_token=$(jq -er .value "$RUNNER_TEMP/oidc.json")
+            test -n "$oidc_token"
+            rm -f "$RUNNER_TEMP/oidc.json"
             set +e
             probe_http_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
               --max-time 480 --max-filesize 16384 --write-out '%{http_code}' \

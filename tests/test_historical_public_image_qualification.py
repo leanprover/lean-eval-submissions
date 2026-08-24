@@ -316,6 +316,22 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
             workflow,
         )
         self.assertIn('python "$FAILURE_SANITIZER" "$RUNNER_TEMP/probe-response.json"', workflow)
+        self.assertIn('if [ "$number" -eq 2 ]; then', workflow)
+        self.assertEqual(workflow.count("sleep 30"), 1)
+        self.assertIn("Preserve the same-nonce recreation", workflow)
+        oidc_mint = (
+            '"${ACTIONS_ID_TOKEN_REQUEST_URL}'
+            '&audience=lean-eval-historical-public-qualification-staging"'
+        )
+        self.assertEqual(workflow.count(oidc_mint), 1)
+        probe_loop = workflow.index('for number in 1 2; do\n            if')
+        mint = workflow.index(oidc_mint)
+        probe_fail_open = workflow.index("set +e", probe_loop)
+        self.assertLess(probe_loop, mint)
+        self.assertLess(workflow.index("sleep 30", probe_loop), mint)
+        self.assertLess(mint, probe_fail_open)
+        self.assertIn("--max-time 15 --retry 3 --retry-max-time 60", workflow)
+        self.assertIn("--retry-all-errors --retry-delay 2", workflow)
         self.assertIn("if: always()", workflow)
         self.assertIn("write_diagnostic evidence_invalid 2 200", workflow)
         self.assertIn('local -a arguments=(', workflow)

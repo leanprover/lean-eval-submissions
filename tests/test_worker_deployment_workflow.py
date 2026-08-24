@@ -108,6 +108,10 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         for trigger in (pull_request, push):
             self.assertIn("'.github/workflows/submission.yml'", trigger)
             self.assertIn("'.github/workflows/promotion-canary.yml'", trigger)
+            self.assertIn(
+                "'.github/workflows/historical-public-image-qualification.yml'",
+                trigger,
+            )
             self.assertIn("'.audit/**'", trigger)
             self.assertIn("'scripts/**'", trigger)
 
