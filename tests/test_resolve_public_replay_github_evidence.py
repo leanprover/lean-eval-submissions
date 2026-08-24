@@ -17,6 +17,8 @@ from resolve_public_replay_github_evidence import (  # noqa: E402
     EvidenceError,
     GitHubClient,
     ProbeIndeterminate,
+    _legacy_candidate,
+    _legacy_candidate_projection,
     _read_bounded,
     _RejectRedirects,
     _require_public_gist_probe_budget,
@@ -1173,7 +1175,7 @@ GPT-5.5 Codex
         self.assertEqual(len(reviewed), 5)
         self.assertEqual(
             hashlib.sha256(raw).hexdigest(),
-            "1bd9e0cf0859650cbe55c382d8af5d0b9468c39d8f44a22f36afa85a3af55d92",
+            "648812445d52e0358bcb278da7b933ad3a3ac14b845bf1f4940737d05b699354",
         )
         schema = json.loads(
             (ROOT / "schemas/public-replay-legacy-adjudications-v1.schema.json").read_text()
@@ -1207,6 +1209,11 @@ GPT-5.5 Codex
         ] = hashlib.sha256(
             canonical_bytes(adjudications["adjudications"][0])
         ).hexdigest()
+        output["resolutions"][0]["candidates"][0].update(
+            _legacy_candidate_projection(
+                adjudications["adjudications"][0], requests["requests"][0]
+            )
+        )
         with self.assertRaisesRegex(EvidenceError, "legacy adjudication is invalid"):
             workflow_registry, workflow_digest = registry_bytes()
             _validate_evidence(
@@ -1252,6 +1259,271 @@ GPT-5.5 Codex
                 changed, request, request["declared_model"]
             )
 
+    def test_live_shaped_schema_v2_gists_resolve_and_projection_is_closed(self) -> None:
+        fixtures = json.loads(
+            (ROOT / "tests/fixtures/legacy-gist-result-records-v1.json").read_text()
+        )
+        adjudication_value, adjudication_digest = adjudication_bytes()
+        adjudications = validate_legacy_adjudication_registry(adjudication_value)
+        workflow_registry, workflow_digest = registry_bytes()
 
+        for fixture in fixtures:
+            request = fixture["request"]
+            entry = adjudications[request["request_id"]]
+            repository = entry["issue"]["repository"]
+            issue_url = f"https://github.com/{repository}/issues/{request['issue_number']}"
+            workflow_url = (
+                f"https://github.com/{repository}/actions/runs/"
+                f"{entry['workflow_run']['id']}"
+            )
+            result_raw = json.dumps(fixture["result_document"]).encode()
+            case = self
+
+            class LegacyGistClient:
+                def get(self, path):
+                    if path == f"/repos/{repository}":
+                        return {
+                            "full_name": repository,
+                            "private": False,
+                            "visibility": "public",
+                        }, 200
+                    if path == f"/repos/{repository}/issues/{request['issue_number']}":
+                        return {
+                            "number": request["issue_number"],
+                            "html_url": issue_url,
+                            "state": "closed",
+                            "user": {"login": entry["issue"]["author"]},
+                            "created_at": entry["issue"]["created_at"],
+                            "closed_at": entry["issue"]["closed_at"],
+                            "title": {
+                                46: "[submission] two_plus_two via Grok 4.3",
+                                47: "[submission] two_plus_two via Qwen3.6 Max",
+                            }[request["issue_number"]],
+                            "body": fixture["issue_body"],
+                        }, 200
+                    if path == (
+                        f"/repos/{repository}/actions/runs/"
+                        f"{entry['workflow_run']['id']}"
+                    ):
+                        run = entry["workflow_run"]
+                        return {
+                            "id": run["id"],
+                            "name": run["name"],
+                            "event": run["event"],
+                            "run_attempt": run["attempt"],
+                            "actor": {"login": run["actor"]},
+                            "triggering_actor": {"login": run["triggering_actor"]},
+                            "head_sha": run["head_sha"],
+                            "head_branch": run["head_branch"],
+                            "path": run["path"],
+                            "created_at": run["created_at"],
+                            "updated_at": run["updated_at"],
+                            "display_title": {
+                                46: "[submission] two_plus_two via Grok 4.3",
+                                47: "[submission] two_plus_two via Qwen3.6 Max",
+                            }[request["issue_number"]],
+                            "status": "completed",
+                            "conclusion": "success",
+                            "repository": {"full_name": repository},
+                            "head_repository": {"full_name": repository},
+                            "html_url": workflow_url,
+                        }, 200
+                    if path == (
+                        f"/repos/{repository}/issues/comments/{entry['comment']['id']}"
+                    ):
+                        comment = entry["comment"]
+                        return {
+                            "id": comment["id"],
+                            "user": {"login": comment["author"]},
+                            "created_at": comment["created_at"],
+                            "updated_at": comment["created_at"],
+                            "html_url": f"{issue_url}#issuecomment-{comment['id']}",
+                            "body": fixture["comment_body"],
+                        }, 200
+                    if path == (
+                        f"/repos/{repository}/actions/jobs/{entry['record_job']['id']}"
+                    ):
+                        job = entry["record_job"]
+                        return {
+                            **job,
+                            "status": "completed",
+                            "conclusion": "success",
+                            "run_url": (
+                                f"https://api.github.com/repos/{repository}/actions/"
+                                f"runs/{entry['workflow_run']['id']}"
+                            ),
+                        }, 200
+                    commit = entry["result_commit"]
+                    if path == (
+                        f"/repos/{commit['repository']}/commits/{commit['commit']}"
+                    ):
+                        identity = {
+                            "name": "lean-eval-bot",
+                            "email": "lean-eval-bot@users.noreply.github.com",
+                            "date": commit["committed_at"],
+                        }
+                        return {
+                            "sha": commit["commit"],
+                            "parents": [{"sha": commit["parent"]}],
+                            "commit": {"author": identity, "committer": identity},
+                            "files": [
+                                {"filename": commit["path"], "sha": commit["blob_sha"]}
+                            ],
+                        }, 200
+                    if path == (
+                        f"/repos/{commit['repository']}/contents/{commit['path']}"
+                        f"?ref={commit['commit']}"
+                    ):
+                        return {
+                            "sha": commit["blob_sha"],
+                            "encoding": "base64",
+                            "content": base64.b64encode(result_raw).decode(),
+                            "size": len(result_raw),
+                        }, 200
+                    raise AssertionError(path)
+
+                def get_public_gist(self, gist_id, commit):
+                    owner, expected_id = request["source"]["repository"].split("/")
+                    case.assertEqual(gist_id, expected_id)
+                    case.assertEqual(commit, request["source"]["commit"])
+                    return {
+                        "id": expected_id,
+                        "owner": {"login": owner},
+                        "public": True,
+                        "history": [{"version": commit}],
+                    }, 200
+
+            workflow = {
+                "contract": "benchmark_repository_head",
+                "repository_commit": entry["workflow_run"]["head_sha"],
+                "definition_sha256": entry["workflow_run"]["definition_sha256"],
+                "reviewed": True,
+            }
+            with mock.patch(
+                "resolve_public_replay_github_evidence._workflow_binding",
+                return_value=workflow,
+            ):
+                candidate = _legacy_candidate(
+                    LegacyGistClient(), request, repository, workflow_registry, entry
+                )
+            self.assertEqual(candidate["status"], "matched_source_available")
+            result_record = fixture["result_document"]["solved"][
+                request["declared_model"]
+            ]["two_plus_two"]
+            self.assertNotIn("submission_kind", result_record)
+            conflicting = copy.deepcopy(fixture["result_document"])
+            conflicting["solved"][request["declared_model"]]["two_plus_two"][
+                "submission_kind"
+            ] = "github_repo"
+            with self.assertRaisesRegex(EvidenceError, "source kind does not match"):
+                _validate_historical_results(
+                    conflicting, request, request["declared_model"]
+                )
+
+            requests = {
+                "schema_version": 1,
+                "kind": "historical_public_replay_resolution_requests",
+                "source_repository": "leanprover/lean-eval-submissions",
+                "source_commit": "a" * 40,
+                "inventory_sha256": "b" * 64,
+                "request_count": 1,
+                "result_count": 1,
+                "requests": [request],
+            }
+            evidence = {
+                "schema_version": 1,
+                "kind": "historical_public_replay_github_evidence",
+                "source_repository": requests["source_repository"],
+                "source_commit": requests["source_commit"],
+                "inventory_sha256": requests["inventory_sha256"],
+                "resolution_requests_sha256": "c" * 64,
+                "workflow_definition_registry_sha256": workflow_digest,
+                "legacy_adjudication_registry_sha256": adjudication_digest,
+                "request_count": 1,
+                "result_count": 1,
+                "shard_index": 0,
+                "shard_count": 1,
+                "shard_request_count": 1,
+                "shard_result_count": 1,
+                "resolved_count": 1,
+                "source_unavailable_count": 0,
+                "source_indeterminate_count": 0,
+                "probe_indeterminate_count": 0,
+                "timing_indeterminate_count": 0,
+                "workflow_contract_unreviewed_count": 0,
+                "pending_count": 0,
+                "resolutions": [
+                    {
+                        "request_id": request["request_id"],
+                        "status": "resolved",
+                        "selected_issue_repository": repository,
+                        "candidates": [
+                            candidate,
+                            {
+                                "issue_repository": "leanprover/lean-eval-submissions",
+                                "status": "issue_not_found",
+                            },
+                        ],
+                    }
+                ],
+            }
+            _validate_evidence(
+                evidence,
+                requests,
+                workflow_registry,
+                workflow_digest,
+                adjudication_value,
+                adjudication_digest,
+            )
+            hostile = {
+                "legacy_adjudication_sha256": "f" * 64,
+                "legacy_reason_code": "historical_issue_body_edit",
+                "issue_url": f"https://github.com/{repository}/issues/99999",
+                "issue_author": "attacker",
+                "issue_created_at": "2026-05-01T03:53:00Z",
+                "issue_closed_at": "2026-05-01T03:56:00Z",
+                "issue_title_sha256": "f" * 64,
+                "issue_body_sha256": "f" * 64,
+                "issue_identity_sha256": "f" * 64,
+                "issue_source_ref_sha256": "f" * 64,
+                "issue_source_reference_binding": "exact_commit",
+                "workflow_run_id": entry["workflow_run"]["id"] + 1,
+                "workflow_run_url": f"https://github.com/{repository}/actions/runs/1",
+                "workflow_run_created_at": "2026-05-01T03:54:00Z",
+                "workflow_run_updated_at": "2026-05-01T03:56:00Z",
+                "workflow_run_attempt": entry["workflow_run"]["attempt"] + 1,
+                "workflow_run_actor": "attacker",
+                "workflow_run_triggering_actor": "attacker",
+                "workflow_run_display_title_sha256": "f" * 64,
+                "workflow_run_identity_sha256": "f" * 64,
+                "workflow_contract": "split_repository_recorded_benchmark_v1",
+                "workflow_repository_commit": "f" * 40,
+                "record_job_id": entry["record_job"]["id"] + 1,
+                "record_job_started_at": "2026-05-01T03:54:54Z",
+                "record_job_completed_at": "2026-05-01T03:55:01Z",
+                "result_commit_sha": "f" * 40,
+                "result_blob_sha": "f" * 40,
+                "result_comment_url": f"{issue_url}#issuecomment-1",
+                "result_comment_created_at": "2026-05-01T03:56:00Z",
+                "result_comment_author": "attacker",
+                "result_comment_body_sha256": "f" * 64,
+                "workflow_definition_sha256": "f" * 64,
+                "model_rename_sha256": "f" * 64,
+                "reported_pass_problem_ids": [],
+                "source_commit_url": "https://gist.github.com/kim-em/abc/f" + "f" * 39,
+            }
+            for field, replacement in hostile.items():
+                changed = copy.deepcopy(evidence)
+                changed["resolutions"][0]["candidates"][0][field] = replacement
+                with self.subTest(request=request["request_id"], field=field):
+                    with self.assertRaisesRegex(EvidenceError, "registry-bound"):
+                        _validate_evidence(
+                            changed,
+                            requests,
+                            workflow_registry,
+                            workflow_digest,
+                            adjudication_value,
+                            adjudication_digest,
+                        )
 if __name__ == "__main__":
     unittest.main()

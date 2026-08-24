@@ -34,15 +34,15 @@
       "oneOf": [
         {
           "type": "object", "additionalProperties": false,
-          "required": ["kind", "accepted_body_sha256"],
-          "properties": {"kind": {"const": "current"}, "accepted_body_sha256": {"$ref": "#/$defs/digest"}}
+          "required": ["kind", "accepted_body_sha256", "source_reference_binding"],
+          "properties": {"kind": {"const": "current"}, "accepted_body_sha256": {"$ref": "#/$defs/digest"}, "source_reference_binding": {"enum": ["exact_commit", "unpinned"]}}
         },
         {
           "type": "object", "additionalProperties": false,
-          "required": ["kind", "accepted_body_sha256", "current_body_sha256", "edit_count", "edits"],
+          "required": ["kind", "accepted_body_sha256", "current_body_sha256", "edit_count", "edits", "source_reference_binding"],
           "properties": {
             "kind": {"const": "historical_edit"}, "accepted_body_sha256": {"$ref": "#/$defs/digest"},
-            "current_body_sha256": {"$ref": "#/$defs/digest"}, "edit_count": {"type": "integer", "minimum": 1, "maximum": 20},
+            "current_body_sha256": {"$ref": "#/$defs/digest"}, "source_reference_binding": {"enum": ["exact_commit", "unpinned"]}, "edit_count": {"type": "integer", "minimum": 1, "maximum": 20},
             "edits": {"type": "array", "minItems": 1, "maxItems": 20, "items": {
               "type": "object", "additionalProperties": false, "required": ["edited_at", "editor", "body_sha256"],
               "properties": {"edited_at": {"$ref": "#/$defs/timestamp"}, "editor": {"type": "string"}, "body_sha256": {"$ref": "#/$defs/digest"}}
@@ -68,8 +68,8 @@
           "properties": {"id": {"type": "integer", "minimum": 1}, "author": {"const": "github-actions[bot]"}, "created_at": {"$ref": "#/$defs/timestamp"}, "body_sha256": {"$ref": "#/$defs/digest"}, "projection": {"enum": ["newly_solved", "pass_lines"]}}
         },
         "workflow_run": {
-          "type": "object", "additionalProperties": false, "required": ["id", "name", "event", "attempt", "actor", "triggering_actor", "head_sha", "head_branch", "path", "created_at", "updated_at", "display_title_sha256"],
-          "properties": {"id": {"type": "integer", "minimum": 1}, "name": {"const": "Submission"}, "event": {"const": "issues"}, "attempt": {"type": "integer", "minimum": 1}, "actor": {"type": "string"}, "triggering_actor": {"type": "string"}, "head_sha": {"$ref": "#/$defs/commit"}, "head_branch": {"const": "main"}, "path": {"const": ".github/workflows/submission.yml"}, "created_at": {"$ref": "#/$defs/timestamp"}, "updated_at": {"$ref": "#/$defs/timestamp"}, "display_title_sha256": {"$ref": "#/$defs/digest"}}
+          "type": "object", "additionalProperties": false, "required": ["id", "name", "event", "attempt", "actor", "triggering_actor", "head_sha", "head_branch", "path", "created_at", "updated_at", "display_title_sha256", "definition_sha256"],
+          "properties": {"id": {"type": "integer", "minimum": 1}, "name": {"const": "Submission"}, "event": {"const": "issues"}, "attempt": {"type": "integer", "minimum": 1}, "actor": {"type": "string"}, "triggering_actor": {"type": "string"}, "head_sha": {"$ref": "#/$defs/commit"}, "head_branch": {"const": "main"}, "path": {"const": ".github/workflows/submission.yml"}, "created_at": {"$ref": "#/$defs/timestamp"}, "updated_at": {"$ref": "#/$defs/timestamp"}, "display_title_sha256": {"$ref": "#/$defs/digest"}, "definition_sha256": {"$ref": "#/$defs/digest"}}
         },
         "record_job": {
           "type": "object", "additionalProperties": false, "required": ["id", "name", "started_at", "completed_at"],

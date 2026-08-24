@@ -205,6 +205,7 @@ def validate_legacy_adjudication_registry(value: Any) -> dict[str, dict[str, Any
         "created_at",
         "updated_at",
         "display_title_sha256",
+        "definition_sha256",
     }
     job_fields = {"id", "name", "started_at", "completed_at"}
     result_commit_fields = {
@@ -223,13 +224,18 @@ def validate_legacy_adjudication_registry(value: Any) -> dict[str, dict[str, Any
         "body_sha256",
         "projection",
     }
-    current_body_fields = {"kind", "accepted_body_sha256"}
+    current_body_fields = {
+        "kind",
+        "accepted_body_sha256",
+        "source_reference_binding",
+    }
     edited_body_fields = {
         "kind",
         "accepted_body_sha256",
         "current_body_sha256",
         "edit_count",
         "edits",
+        "source_reference_binding",
     }
     edit_fields = {"edited_at", "editor", "body_sha256"}
     rename_fields = {
@@ -330,6 +336,11 @@ def validate_legacy_adjudication_registry(value: Any) -> dict[str, dict[str, Any
                 or DIGEST.fullmatch(body_binding[field]) is None
             ):
                 raise EvidenceError("legacy body digest is invalid")
+        if body_binding["source_reference_binding"] not in {
+            "exact_commit",
+            "unpinned",
+        }:
+            raise EvidenceError("legacy source reference binding is invalid")
 
         comment_value = entry["comment"]
         if (
@@ -366,6 +377,8 @@ def validate_legacy_adjudication_registry(value: Any) -> dict[str, dict[str, Any
             or run_value["path"] != ".github/workflows/submission.yml"
             or not isinstance(run_value["display_title_sha256"], str)
             or DIGEST.fullmatch(run_value["display_title_sha256"]) is None
+            or not isinstance(run_value["definition_sha256"], str)
+            or DIGEST.fullmatch(run_value["definition_sha256"]) is None
         ):
             raise EvidenceError("legacy adjudication run identity is invalid")
         run_created = timestamp(run_value["created_at"], "adjudication.run.created_at")
@@ -1035,7 +1048,8 @@ def _validate_historical_results(
             raise IntegrityError(f"legacy result {problem} is not cross-bound")
         if not nested and record.get("model") != accepted_model:
             raise IntegrityError(f"legacy result {problem} model does not match")
-        if nested and record.get("submission_kind") != source["kind"]:
+        submission_kind = record.get("submission_kind")
+        if nested and submission_kind is not None and submission_kind != source["kind"]:
             raise IntegrityError(f"legacy result {problem} source kind does not match")
 
 
@@ -1131,6 +1145,106 @@ def _validate_model_rename(client: GitHubClient, rename: dict[str, Any]) -> None
         raise IntegrityError("legacy model-rename commit changed other content")
 
 
+def _legacy_candidate_projection(
+    entry: dict[str, Any], request: dict[str, Any]
+) -> dict[str, Any]:
+    issue = entry["issue"]
+    body_binding = issue["body_binding"]
+    run = entry["workflow_run"]
+    comment = entry["comment"]
+    job = entry["record_job"]
+    result_commit = entry["result_commit"]
+    rename = entry["model_rename"]
+    repository = issue["repository"]
+    issue_url = f"https://github.com/{repository}/issues/{issue['number']}"
+    workflow_url = f"https://github.com/{repository}/actions/runs/{run['id']}"
+    source_ref: str | None = (
+        entry["source"]["commit"]
+        if body_binding["source_reference_binding"] == "exact_commit"
+        else None
+    )
+    issue_identity = {
+        "declared_model": request["declared_model"],
+        "source_kind": entry["source"]["kind"],
+        "source_repository": entry["source"]["repository"].casefold(),
+    }
+    run_identity = {
+        "id": run["id"],
+        "name": run["name"],
+        "event": run["event"],
+        "attempt": run["attempt"],
+        "actor": run["actor"].casefold(),
+        "repository": repository,
+        "head_repository": repository,
+        "head_branch": run["head_branch"],
+        "head_sha": run["head_sha"],
+        "path": run["path"],
+        "display_title_sha256": run["display_title_sha256"],
+        "created_at": run["created_at"],
+        "updated_at": run["updated_at"],
+        "status": "completed",
+        "conclusion": "success",
+        "html_url": workflow_url,
+    }
+    return {
+        "legacy_adjudication_sha256": hashlib.sha256(
+            canonical_bytes(entry)
+        ).hexdigest(),
+        "legacy_reason_code": entry["reason_code"],
+        "issue_url": issue_url,
+        "issue_author": issue["author"],
+        "issue_created_at": issue["created_at"],
+        "issue_closed_at": issue["closed_at"],
+        "issue_title_sha256": issue["title_sha256"],
+        "issue_body_sha256": body_binding["accepted_body_sha256"],
+        "issue_identity_sha256": hashlib.sha256(
+            canonical_bytes(issue_identity)
+        ).hexdigest(),
+        "issue_source_ref_sha256": hashlib.sha256(
+            canonical_bytes(source_ref)
+        ).hexdigest(),
+        "issue_source_reference_binding": body_binding[
+            "source_reference_binding"
+        ],
+        "workflow_run_id": run["id"],
+        "workflow_run_url": workflow_url,
+        "workflow_run_created_at": run["created_at"],
+        "workflow_run_updated_at": run["updated_at"],
+        "workflow_run_attempt": run["attempt"],
+        "workflow_run_actor": run["actor"],
+        "workflow_run_triggering_actor": run["triggering_actor"],
+        "workflow_run_display_title_sha256": run["display_title_sha256"],
+        "workflow_run_identity_sha256": hashlib.sha256(
+            canonical_bytes(run_identity)
+        ).hexdigest(),
+        "workflow_contract": (
+            "benchmark_repository_head"
+            if repository == "leanprover/lean-eval"
+            else SPLIT_WORKFLOW_CONTRACT
+        ),
+        "workflow_repository_commit": run["head_sha"],
+        "workflow_definition_sha256": run["definition_sha256"],
+        "record_job_id": job["id"],
+        "record_job_started_at": job["started_at"],
+        "record_job_completed_at": job["completed_at"],
+        "result_commit_sha": result_commit["commit"],
+        "result_blob_sha": result_commit["blob_sha"],
+        "result_comment_url": f"{issue_url}#issuecomment-{comment['id']}",
+        "result_comment_created_at": comment["created_at"],
+        "result_comment_author": comment["author"],
+        "result_comment_body_sha256": comment["body_sha256"],
+        "reported_pass_problem_ids": sorted(
+            item["problem_id"] for item in request["results"]
+        ),
+        "model_rename_sha256": (
+            hashlib.sha256(canonical_bytes(rename)).hexdigest()
+            if rename is not None
+            else None
+        ),
+        "source_commit_url": _source_url(request["source"]),
+    }
+
+
 def _legacy_candidate(
     client: GitHubClient,
     request: dict[str, Any],
@@ -1211,6 +1325,13 @@ def _legacy_candidate(
         or source_ref not in {None, request["source"]["commit"]}
     ):
         raise IntegrityError("legacy issue body is not cross-bound")
+    actual_reference_binding = (
+        "exact_commit"
+        if source_ref == request["source"]["commit"]
+        else "unpinned"
+    )
+    if actual_reference_binding != body_binding["source_reference_binding"]:
+        raise IntegrityError("legacy issue source reference binding does not match")
 
     run_binding = entry["workflow_run"]
     run, status = client.get(f"/repos/{repository}/actions/runs/{run_binding['id']}")
@@ -1236,7 +1357,11 @@ def _legacy_candidate(
     except (KeyError, TypeError) as error:
         raise IntegrityError("legacy workflow run binding is invalid") from error
     workflow = _workflow_binding(client, request, repository, run, workflow_registry)
-    if workflow is None or not workflow["reviewed"]:
+    if (
+        workflow is None
+        or not workflow["reviewed"]
+        or workflow["definition_sha256"] != run_binding["definition_sha256"]
+    ):
         raise IntegrityError("legacy workflow definition is not reviewed")
 
     comment_binding = entry["comment"]
@@ -1287,41 +1412,11 @@ def _legacy_candidate(
 
     source_probe = _probe_source(client, request)
     source_status = source_probe["status"]
-    issue_identity = {
-        "declared_model": request["declared_model"],
-        "source_kind": source_kind,
-        "source_repository": source_repository.casefold(),
-    }
-    run_identity = {
-        "id": run["id"], "name": run["name"], "event": run["event"],
-        "attempt": run["run_attempt"], "actor": run["actor"]["login"].casefold(),
-        "repository": run["repository"]["full_name"],
-        "head_repository": run["head_repository"]["full_name"],
-        "head_branch": run["head_branch"], "head_sha": run["head_sha"],
-        "path": run["path"], "display_title_sha256": text_digest(run["display_title"]),
-        "created_at": run["created_at"], "updated_at": run["updated_at"],
-        "status": run["status"], "conclusion": run["conclusion"], "html_url": run["html_url"],
-    }
+    projection = _legacy_candidate_projection(entry, request)
     return {
         "issue_repository": repository,
         "status": {"available": "matched_source_available", "unavailable": "matched_source_unavailable", "indeterminate": "matched_source_indeterminate"}[source_status],
-        "legacy_adjudication_sha256": hashlib.sha256(canonical_bytes(entry)).hexdigest(),
-        "issue_url": expected_issue_url, "issue_author": issue_binding["author"],
-        "issue_created_at": issue_binding["created_at"], "issue_closed_at": issue_binding["closed_at"],
-        "issue_title_sha256": issue_binding["title_sha256"], "issue_body_sha256": body_binding["accepted_body_sha256"],
-        "issue_identity_sha256": hashlib.sha256(canonical_bytes(issue_identity)).hexdigest(),
-        "issue_source_ref_sha256": hashlib.sha256(canonical_bytes(source_ref)).hexdigest(),
-        "issue_source_reference_binding": "exact_commit" if source_ref == request["source"]["commit"] else "unpinned",
-        "workflow_run_id": run["id"], "workflow_run_url": run["html_url"],
-        "workflow_run_created_at": run["created_at"], "workflow_run_updated_at": run["updated_at"],
-        "workflow_run_attempt": run["run_attempt"], "workflow_run_actor": run["actor"]["login"],
-        "workflow_run_display_title_sha256": text_digest(run["display_title"]),
-        "workflow_run_identity_sha256": hashlib.sha256(canonical_bytes(run_identity)).hexdigest(),
-        "workflow_contract": workflow["contract"], "workflow_repository_commit": workflow["repository_commit"],
-        "workflow_definition_sha256": workflow["definition_sha256"],
-        "result_comment_url": comment["html_url"], "result_comment_created_at": comment["created_at"],
-        "result_comment_author": comment["user"]["login"], "result_comment_body_sha256": text_digest(comment["body"]),
-        "reported_pass_problem_ids": sorted(projected), "source_commit_url": source_probe["commit_url"],
+        **projection,
         **({"source_probe_reason_code": source_probe["reason_code"]} if source_status == "indeterminate" else {}),
     }
 
@@ -2433,21 +2528,44 @@ def validate_evidence(
             }
             legacy_digest = candidate.get("legacy_adjudication_sha256")
             if legacy_digest is not None:
-                matched_fields.add("legacy_adjudication_sha256")
+                matched_fields.update(
+                    {
+                        "legacy_adjudication_sha256",
+                        "legacy_reason_code",
+                        "workflow_run_triggering_actor",
+                        "record_job_id",
+                        "record_job_started_at",
+                        "record_job_completed_at",
+                        "result_commit_sha",
+                        "result_blob_sha",
+                        "model_rename_sha256",
+                    }
+                )
             if status == "matched_source_indeterminate":
                 matched_fields.add("source_probe_reason_code")
             if set(candidate) != matched_fields:
                 raise EvidenceError(f"{candidate_label} fields are not closed")
             legacy_entry = adjudications.get(request_id)
             is_legacy = legacy_digest is not None
-            if is_legacy and (
-                legacy_entry is None
-                or candidate["issue_repository"]
-                != legacy_entry["issue"]["repository"]
-                or legacy_digest
-                != hashlib.sha256(canonical_bytes(legacy_entry)).hexdigest()
-            ):
-                raise EvidenceError(f"{candidate_label} legacy adjudication is invalid")
+            if is_legacy:
+                if legacy_entry is None:
+                    raise EvidenceError(
+                        f"{candidate_label} legacy adjudication is invalid"
+                    )
+                expected_projection = _legacy_candidate_projection(
+                    legacy_entry, request
+                )
+                actual_projection = {
+                    field: candidate[field] for field in expected_projection
+                }
+                if (
+                    candidate["issue_repository"]
+                    != legacy_entry["issue"]["repository"]
+                    or actual_projection != expected_projection
+                ):
+                    raise EvidenceError(
+                        f"{candidate_label} legacy projection is not registry-bound"
+                    )
             for url_field in (
                 "issue_url",
                 "workflow_run_url",

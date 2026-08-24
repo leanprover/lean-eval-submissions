@@ -1,0 +1,46 @@
+[
+  {
+    "comment_body": "## Submission result\n\n✅ Newly-solved problems: two_plus_two\n\nAttempted 1 / 1; succeeded on 1.\n\n### Per-problem\n- `two_plus_two`: pass",
+    "issue_body": "### Submission URL\n\nhttps://gist.github.com/kim-em/399479d951188afdbc6ad90c25f7cddb\n\n### Model\n\nQwen3.6 Max\n\n### How this solution was produced (optional)\n\nSeed submission to populate the leaderboard. Solved by Qwen3.6 Max via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators.\n\n### Acknowledgements\n\n- [X] I understand that the lean-eval CI will fetch my submission URL and run comparator on every lakefile.toml whose name matches a benchmark problem id.\n- [X] I understand that only the set of solved problem IDs, along with the metadata I entered above, will be published to the public leaderboard results store.\n",
+    "request": {
+      "accepted_at": "2026-05-01T03:55:01Z",
+      "benchmark": {"commit": "c9c95847698c275591233dd487ac44e199f7b248", "repository": "leanprover/lean-eval"},
+      "candidate_issue_repositories": ["leanprover/lean-eval", "leanprover/lean-eval-submissions"],
+      "declared_model": "Qwen3.6 Max",
+      "expected_workflow": {"event": "issues", "name": "Submission"},
+      "issue_number": 47,
+      "owner": "kim-em",
+      "readiness": "github_evidence_fetch_pending",
+      "request_id": "prr_2adff6979df15e006fb93b614bd4442f945d157c0dead0d49f5a4f3c74f48518",
+      "results": [{"owner": "kim-em", "problem_id": "two_plus_two", "result_id": "r2_72bb3f4c2c1a84d7a195278569eabc83f5ed28f3a57a38bdf20d9f4e2a2294d9", "statement_revision": 1}],
+      "source": {"commit": "62b7a0a44e4ac9c67be030ce2c382fee10209e11", "kind": "gist", "repository": "kim-em/399479d951188afdbc6ad90c25f7cddb", "visibility": "public"}
+    },
+    "result_document": {
+      "schema_version": 2,
+      "solved": {"Qwen3.6 Max": {"two_plus_two": {"benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248", "issue_number": 47, "solved_at": "2026-05-01T03:55:01Z", "submission_public": true, "submission_ref": "62b7a0a44e4ac9c67be030ce2c382fee10209e11", "submission_repo": "kim-em/399479d951188afdbc6ad90c25f7cddb"}}},
+      "user": "kim-em"
+    }
+  },
+  {
+    "comment_body": "## Submission result\n\n✅ Newly-solved problems: two_plus_two\n\nAttempted 1 / 1; succeeded on 1.\n\n### Per-problem\n- `two_plus_two`: pass",
+    "issue_body": "### Submission URL\n\nhttps://gist.github.com/kim-em/11fe79b3ff4112a8db688b5925586f7c\n\n### Model\n\nGrok 4.3\n\n### How this solution was produced (optional)\n\nSeed submission to populate the leaderboard. Solved by Grok 4.3 via the Pi coding agent (badlogic/pi-mono) on OpenRouter, driven by Kim Morrison. Test submission, not affiliated with the model creators.\n\n### Acknowledgements\n\n- [X] I understand that the lean-eval CI will fetch my submission URL and run comparator on every lakefile.toml whose name matches a benchmark problem id.\n- [X] I understand that only the set of solved problem IDs, along with the metadata I entered above, will be published to the public leaderboard results store.\n",
+    "request": {
+      "accepted_at": "2026-05-01T03:55:50Z",
+      "benchmark": {"commit": "c9c95847698c275591233dd487ac44e199f7b248", "repository": "leanprover/lean-eval"},
+      "candidate_issue_repositories": ["leanprover/lean-eval", "leanprover/lean-eval-submissions"],
+      "declared_model": "Grok 4.3",
+      "expected_workflow": {"event": "issues", "name": "Submission"},
+      "issue_number": 46,
+      "owner": "kim-em",
+      "readiness": "github_evidence_fetch_pending",
+      "request_id": "prr_c2c1fef4cd70ffc42680e1424a4e092e7211a4e3c8bb996d0589dea767707985",
+      "results": [{"owner": "kim-em", "problem_id": "two_plus_two", "result_id": "r2_e502f17e00909c6b1c5f59dba38d6d881f2855fdcee5fb25e4e1cdb9c1a26fb6", "statement_revision": 1}],
+      "source": {"commit": "730ee114f8fdae4cc3cdca00931b78833097a978", "kind": "gist", "repository": "kim-em/11fe79b3ff4112a8db688b5925586f7c", "visibility": "public"}
+    },
+    "result_document": {
+      "schema_version": 2,
+      "solved": {"Grok 4.3": {"two_plus_two": {"benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248", "issue_number": 46, "solved_at": "2026-05-01T03:55:50Z", "submission_public": true, "submission_ref": "730ee114f8fdae4cc3cdca00931b78833097a978", "submission_repo": "kim-em/11fe79b3ff4112a8db688b5925586f7c"}}},
+      "user": "kim-em"
+    }
+  }
+]

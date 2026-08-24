@@ -311,6 +311,24 @@
             },
             "source_commit_url": { "$ref": "#/$defs/url" },
             "legacy_adjudication_sha256": { "$ref": "#/$defs/digest" },
+            "legacy_reason_code": {
+              "enum": [
+                "historical_issue_body_edit", "historical_model_rename",
+                "legacy_delayed_workflow", "truncated_result_comment"
+              ]
+            },
+            "workflow_run_triggering_actor": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
+            },
+            "record_job_id": { "type": "integer", "minimum": 1 },
+            "record_job_started_at": { "$ref": "#/$defs/timestamp" },
+            "record_job_completed_at": { "$ref": "#/$defs/timestamp" },
+            "result_commit_sha": { "$ref": "#/$defs/commit" },
+            "result_blob_sha": { "$ref": "#/$defs/commit" },
+            "model_rename_sha256": {
+              "oneOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }]
+            },
             "source_probe_reason_code": {
               "enum": [
                 "source_probe_response_too_large",
