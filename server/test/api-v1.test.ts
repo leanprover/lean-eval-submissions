@@ -12,12 +12,14 @@ import {
 import {
   lifecycleEventId,
   makeSubmissionGrant,
+  nonceDigest,
   signToken,
   verifyToken,
   type BrowserSession,
   type SubmissionGrant,
 } from "../src/auth";
 import { handleRequest, handleScheduled, type RuntimeEnv, type StateAccess } from "../src/app";
+import { GitHubStateError, StateEventConflictError } from "../src/github-state";
 import {
   buildDispatchRequest,
   buildPromotionCanaryDispatchRequest,
@@ -48,6 +50,7 @@ const ENV = {
   DISPATCH_WORKFLOW: "submission.yml",
   DISPATCH_WORKFLOW_REF: `lean-eval-dispatch/${"b".repeat(40)}`,
   INTAKE_ENABLED: "true",
+  INTAKE_ENABLEMENT_MODE: "durable",
   LIFECYCLE_CALLBACK_TOKEN: "callback-token-with-at-least-thirty-two-bytes",
   STATE_REPOSITORY: "leanprover/state-staging",
 } satisfies RuntimeEnv;
@@ -69,10 +72,29 @@ class MemoryState implements StateAccess {
   readonly views = new Map<string, SubmissionView>();
   readonly outbox = new Map<string, DispatchOutbox>();
   created = true;
+  head = "d".repeat(40);
 
   appendEvent(event: WritableStateEvent): Promise<{ created: boolean }> {
     this.events.push(event);
     return Promise.resolve({ created: this.created });
+  }
+
+  appendEventAtHead(
+    event: WritableStateEvent,
+    expectedHead: string,
+  ): Promise<{ commit: string; created: boolean }> {
+    const existing = this.events.find((candidate) => candidate.event_id === event.event_id);
+    if (existing !== undefined) {
+      if (JSON.stringify(existing) !== JSON.stringify(event)) {
+        throw new StateEventConflictError(event.event_id);
+      }
+      return Promise.resolve({ commit: this.head, created: false });
+    }
+    if (expectedHead !== this.head) throw new GitHubStateError(409, "State moved");
+    validateStateEvent(event);
+    this.events.push(event);
+    this.head = "e".repeat(40);
+    return Promise.resolve({ commit: this.head, created: true });
   }
 
   appendSubmissionLifecycle(
@@ -688,6 +710,152 @@ describe("strict API contract", () => {
   });
 });
 
+describe("production intake lease smoke", () => {
+  const issuedAt = Math.floor(NOW_MS / 1000);
+  const expiresAt = issuedAt + 900;
+  const nonce = "lease-smoke-secret-with-at-least-thirty-two-bytes";
+  const eventId = "0198abcd-2222-7000-8000-000000000001";
+  const stateCommit = "d".repeat(40);
+  const targetCommit = "a".repeat(40);
+  const body = {
+    schema_version: 1,
+    environment: "production",
+    controller_commit: targetCommit,
+    controller_run_attempt: "2",
+    controller_run_id: "123456",
+    event_id: eventId,
+    expires_at: expiresAt,
+    issued_at: issuedAt,
+    nonce,
+    state_commit: stateCommit,
+    target_commit: targetCommit,
+  } as const;
+
+  async function leasedEnvironment(): Promise<RuntimeEnv> {
+    return {
+      ...ENV,
+      DEPLOYED_COMMIT: targetCommit,
+      DEPLOYMENT_ENVIRONMENT: "production",
+      INTAKE_ENABLEMENT_MODE: "leased",
+      INTAKE_LEASE_CONTROLLER_COMMIT: body.controller_commit,
+      INTAKE_LEASE_CONTROLLER_RUN_ATTEMPT: body.controller_run_attempt,
+      INTAKE_LEASE_CONTROLLER_RUN_ID: body.controller_run_id,
+      INTAKE_LEASE_EVENT_ID: body.event_id,
+      INTAKE_LEASE_EXPIRES_AT: String(body.expires_at),
+      INTAKE_LEASE_ISSUED_AT: String(body.issued_at),
+      INTAKE_LEASE_NONCE_DIGEST: await nonceDigest("intake_lease", nonce),
+      INTAKE_LEASE_STATE_COMMIT: body.state_commit,
+      INTAKE_LEASE_TARGET_COMMIT: body.target_commit,
+      READINESS_TOKEN: "readiness-secret",
+      STATE_REPOSITORY: "leanprover/lean-eval-state",
+    };
+  }
+
+  function request(value: unknown = body): Request {
+    return new Request("https://submit.test/internal/v1/intake-lease-smoke", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer readiness-secret",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(value),
+    });
+  }
+
+  it("consumes one exact deterministic State nonce and survives response loss", async () => {
+    const state = new MemoryState();
+    const env = await leasedEnvironment();
+    const dependencies = { now: () => NOW_MS, state };
+    const first = await handleRequest(request(), env, LIFECYCLE, dependencies);
+    expect(first.status).toBe(200);
+    await expect(first.json()).resolves.toMatchObject({
+      status: "lease_smoke_consumed",
+      state_commit: "e".repeat(40),
+    });
+    expect(state.events).toHaveLength(1);
+    expect(state.events[0]).toMatchObject({
+      event_id: eventId,
+      occurred_at: new Date(issuedAt * 1000).toISOString(),
+      payload: {
+        purpose: "intake_lease",
+        expires_at: new Date(expiresAt * 1000).toISOString(),
+      },
+    });
+
+    const retry = await handleRequest(request(), env, LIFECYCLE, dependencies);
+    expect(retry.status).toBe(200);
+    await expect(retry.json()).resolves.toMatchObject({
+      status: "lease_smoke_already_consumed",
+      state_commit: "e".repeat(40),
+    });
+    expect(state.events).toHaveLength(1);
+  });
+
+  it("serializes concurrent duplicate consumption to one State event", async () => {
+    const state = new MemoryState();
+    const env = await leasedEnvironment();
+    const responses = await Promise.all([
+      handleRequest(request(), env, LIFECYCLE, { now: () => NOW_MS, state }),
+      handleRequest(request(), env, LIFECYCLE, { now: () => NOW_MS, state }),
+    ]);
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    const statuses = await Promise.all(responses.map(async (response) =>
+      (await response.json<{ status: string }>()).status));
+    expect(statuses.sort()).toEqual(["lease_smoke_already_consumed", "lease_smoke_consumed"]);
+    expect(state.events).toHaveLength(1);
+  });
+
+  it("rejects forged and cross-bound requests before touching State", async () => {
+    const env = await leasedEnvironment();
+    for (const [changed, expectedStatus] of [
+      [{ ...body, nonce: `${nonce}x` }, 409],
+      [{ ...body, target_commit: "c".repeat(40) }, 409],
+      [{ ...body, controller_run_id: "123457" }, 409],
+      [{ ...body, controller_run_attempt: "3" }, 409],
+      [{ ...body, controller_commit: "c".repeat(40) }, 409],
+      [{ ...body, state_commit: "c".repeat(40) }, 409],
+      [{ ...body, environment: "staging" }, 400],
+    ]) {
+      const state = new MemoryState();
+      const response = await handleRequest(request(changed), env, LIFECYCLE, {
+        now: () => NOW_MS,
+        state,
+      });
+      expect(response.status).toBe(expectedStatus);
+      expect(state.events).toHaveLength(0);
+    }
+  });
+
+  it("fails closed after expiry and when the exact State head has moved", async () => {
+    const env = await leasedEnvironment();
+    const expiredState = new MemoryState();
+    const expired = await handleRequest(request(), env, LIFECYCLE, {
+      now: () => expiresAt * 1000,
+      state: expiredState,
+    });
+    expect(expired.status).toBe(409);
+    expect(expiredState.events).toHaveLength(0);
+
+    const ordinaryIntake = await handleRequest(
+      new Request("https://submit.test/api/v1/agent/challenges", { method: "POST" }),
+      env,
+      LIFECYCLE,
+      { now: () => expiresAt * 1000, state: expiredState },
+    );
+    expect(ordinaryIntake.status).toBe(503);
+    await expect(ordinaryIntake.json()).resolves.toEqual({ error: "intake_disabled" });
+
+    const moved = new MemoryState();
+    moved.head = "f".repeat(40);
+    const drifted = await handleRequest(request(), env, LIFECYCLE, {
+      now: () => NOW_MS,
+      state: moved,
+    });
+    expect(drifted.status).toBe(503);
+    expect(moved.events).toHaveLength(0);
+  });
+});
+
 describe("agent intake in workerd", () => {
   it("reads the exact secret gist anonymously instead of through the source broker", async () => {
     const anonymousFetch = vi.fn<typeof fetch>(function (this: unknown, _input, init) {
@@ -865,6 +1033,36 @@ describe("scheduled dispatch reconciliation in workerd", () => {
       { ...ENV, INTAKE_ENABLED: "false" },
       NOW_MS,
       { state, dispatch },
+    );
+    expect(list).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("does not reconcile ordinary outboxes at the exact lease expiry", async () => {
+    const issuedAt = Math.floor(NOW_MS / 1000);
+    const expiresAt = issuedAt + 900;
+    const targetCommit = "a".repeat(40);
+    const state = new MemoryState();
+    const list = vi.spyOn(state, "listDispatchOutbox");
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    await handleScheduled(
+      {
+        ...ENV,
+        DEPLOYED_COMMIT: targetCommit,
+        DEPLOYMENT_ENVIRONMENT: "production",
+        INTAKE_ENABLEMENT_MODE: "leased",
+        INTAKE_LEASE_CONTROLLER_COMMIT: targetCommit,
+        INTAKE_LEASE_CONTROLLER_RUN_ATTEMPT: "1",
+        INTAKE_LEASE_CONTROLLER_RUN_ID: "123456",
+        INTAKE_LEASE_EVENT_ID: "0198abcd-2222-7000-8000-000000000001",
+        INTAKE_LEASE_EXPIRES_AT: String(expiresAt),
+        INTAKE_LEASE_ISSUED_AT: String(issuedAt),
+        INTAKE_LEASE_NONCE_DIGEST: "b".repeat(64),
+        INTAKE_LEASE_STATE_COMMIT: "d".repeat(40),
+        INTAKE_LEASE_TARGET_COMMIT: targetCommit,
+      },
+      expiresAt * 1000,
+      { now: () => expiresAt * 1000, state, dispatch },
     );
     expect(list).not.toHaveBeenCalled();
     expect(dispatch).not.toHaveBeenCalled();

@@ -47,6 +47,7 @@ import {
   type GitHubIdentity,
 } from "./github-provider";
 import { githubBrokerFetch } from "./github-broker-client";
+import { intakeEnablement, type IntakeEnablement } from "./intake-enablement";
 import {
   type ArchiveCompletedEvent,
   type ArchiveFailedEvent,
@@ -83,6 +84,16 @@ export type RuntimeEnv = Omit<
   | "GITHUB_STATE_TOKEN"
   | "GITHUB_VERIFICATION_TOKEN"
   | "INTAKE_ENABLED"
+  | "INTAKE_ENABLEMENT_MODE"
+  | "INTAKE_LEASE_CONTROLLER_COMMIT"
+  | "INTAKE_LEASE_CONTROLLER_RUN_ATTEMPT"
+  | "INTAKE_LEASE_CONTROLLER_RUN_ID"
+  | "INTAKE_LEASE_EVENT_ID"
+  | "INTAKE_LEASE_EXPIRES_AT"
+  | "INTAKE_LEASE_ISSUED_AT"
+  | "INTAKE_LEASE_NONCE_DIGEST"
+  | "INTAKE_LEASE_STATE_COMMIT"
+  | "INTAKE_LEASE_TARGET_COMMIT"
   | "LIFECYCLE_CALLBACK_TOKEN"
   | "OAUTH_CALLBACK_URL"
   | "PROMOTION_CANARY_ENABLED"
@@ -105,6 +116,16 @@ export type RuntimeEnv = Omit<
     GITHUB_STATE_TOKEN?: string;
     GITHUB_VERIFICATION_TOKEN?: string;
     INTAKE_ENABLED: string;
+    INTAKE_ENABLEMENT_MODE?: string;
+    INTAKE_LEASE_CONTROLLER_COMMIT?: string;
+    INTAKE_LEASE_CONTROLLER_RUN_ATTEMPT?: string;
+    INTAKE_LEASE_CONTROLLER_RUN_ID?: string;
+    INTAKE_LEASE_EVENT_ID?: string;
+    INTAKE_LEASE_EXPIRES_AT?: string;
+    INTAKE_LEASE_ISSUED_AT?: string;
+    INTAKE_LEASE_NONCE_DIGEST?: string;
+    INTAKE_LEASE_STATE_COMMIT?: string;
+    INTAKE_LEASE_TARGET_COMMIT?: string;
     LIFECYCLE_CALLBACK_TOKEN?: string;
     OAUTH_CALLBACK_URL?: string;
     PROMOTION_CANARY_ENABLED?: string;
@@ -114,7 +135,11 @@ export type RuntimeEnv = Omit<
 
 type Lifecycle = Pick<ExecutionContext, "waitUntil">;
 export type StateAccess = Readonly<{
-  appendEvent(event: WritableStateEvent): Promise<{ created: boolean }>;
+  appendEvent(event: WritableStateEvent): Promise<{ commit?: string; created: boolean }>;
+  appendEventAtHead?(
+    event: WritableStateEvent,
+    expectedHead: string,
+  ): Promise<{ commit: string; created: boolean }>;
   appendSubmissionLifecycle(
     events: readonly WritableSubmissionLifecycleEvent[],
     expectedLifecycleEventId: string,
@@ -179,8 +204,8 @@ function json(body: unknown, status = 200, additionalHeaders?: HeadersInit): Res
   return Response.json(body, { status, headers });
 }
 
-function intakeEnabled(env: RuntimeEnv): boolean {
-  return env.INTAKE_ENABLED === "true";
+function currentIntake(env: RuntimeEnv, dependencies: ApiDependencies = {}): IntakeEnablement {
+  return intakeEnablement(env, dependencies.now?.() ?? Date.now());
 }
 
 async function equalSecret(actual: string, expected: string): Promise<boolean> {
@@ -229,10 +254,16 @@ function stateRepository(env: RuntimeEnv): GitHubStateRepository {
   );
 }
 
-async function readiness(request: Request, env: RuntimeEnv, lifecycle: Lifecycle): Promise<Response> {
+async function readiness(
+  request: Request,
+  env: RuntimeEnv,
+  lifecycle: Lifecycle,
+  dependencies: ApiDependencies,
+): Promise<Response> {
   if (!(await readinessAuthorized(request, env))) return json({ error: "not_found" }, 404);
   const verifyWrite = request.method === "POST";
-  if (!verifyWrite && !intakeEnabled(env)) {
+  const intake = currentIntake(env, dependencies);
+  if (!verifyWrite && !intake.effective) {
     return json({ status: "not_ready", reason: "intake_disabled", environment: env.DEPLOYMENT_ENVIRONMENT }, 503);
   }
   if (!env.GITHUB_STATE_TOKEN) return json({ status: "not_ready", reason: "state_credential_missing" }, 503);
@@ -247,7 +278,11 @@ async function readiness(request: Request, env: RuntimeEnv, lifecycle: Lifecycle
       return json({
         status: "state_writer_ready",
         environment: env.DEPLOYMENT_ENVIRONMENT,
-        intake_enabled: intakeEnabled(env),
+        intake_configured_enabled: intake.configured,
+        intake_effective_enabled: intake.effective,
+        intake_enabled: intake.effective,
+        intake_enablement_mode: intake.mode,
+        intake_lease_expires_at: intake.leaseExpiresAt,
         state_commit: stateCommit,
       });
     }
@@ -517,7 +552,7 @@ async function promotionCanaryMaterial(
 async function nonceEvent(
   eventId: string,
   nonce: string,
-  purpose: "agent" | "oauth" | "submission",
+  purpose: "agent" | "intake_lease" | "oauth" | "submission",
   occurredAtMilliseconds: number,
   expiresAt: number,
 ): Promise<WritableStateEvent> {
@@ -535,6 +570,91 @@ async function nonceEvent(
       expires_at: canonicalTimestamp(expiresAt),
     },
   };
+}
+
+type IntakeLeaseSmoke = Readonly<{
+  controller_commit: string;
+  controller_run_attempt: string;
+  controller_run_id: string;
+  environment: "production";
+  event_id: string;
+  expires_at: number;
+  issued_at: number;
+  nonce: string;
+  schema_version: 1;
+  state_commit: string;
+  target_commit: string;
+}>;
+
+function decodeIntakeLeaseSmoke(value: unknown): IntakeLeaseSmoke {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new ApiDecodeError("intake lease smoke body must be an object");
+  }
+  const body = value as Record<string, unknown>;
+  const fields = [
+    "controller_commit", "controller_run_attempt", "controller_run_id", "environment",
+    "event_id", "expires_at", "issued_at", "nonce", "schema_version", "state_commit",
+    "target_commit",
+  ];
+  if (Object.keys(body).sort().join("\0") !== [...fields].sort().join("\0")) {
+    throw new ApiDecodeError("intake lease smoke body fields are not exact");
+  }
+  if (
+    body.schema_version !== 1 || body.environment !== "production" ||
+    typeof body.controller_commit !== "string" || typeof body.controller_run_attempt !== "string" ||
+    typeof body.controller_run_id !== "string" || typeof body.event_id !== "string" ||
+    typeof body.expires_at !== "number" || typeof body.issued_at !== "number" ||
+    typeof body.nonce !== "string" || typeof body.state_commit !== "string" ||
+    typeof body.target_commit !== "string"
+  ) {
+    throw new ApiDecodeError("intake lease smoke body types are invalid");
+  }
+  return body as IntakeLeaseSmoke;
+}
+
+async function intakeLeaseSmoke(
+  request: Request,
+  env: RuntimeEnv,
+  dependencies: ApiDependencies,
+): Promise<Response> {
+  if (!(await readinessAuthorized(request, env))) return json({ error: "not_found" }, 404);
+  const intake = currentIntake(env, dependencies);
+  if (env.DEPLOYMENT_ENVIRONMENT !== "production" || intake.mode !== "leased" || !intake.effective) {
+    return json({ error: "lease_not_effective" }, 409);
+  }
+  const body = decodeIntakeLeaseSmoke(await readJson(request));
+  const exact =
+    body.controller_commit === env.INTAKE_LEASE_CONTROLLER_COMMIT &&
+    body.controller_run_attempt === env.INTAKE_LEASE_CONTROLLER_RUN_ATTEMPT &&
+    body.controller_run_id === env.INTAKE_LEASE_CONTROLLER_RUN_ID &&
+    body.event_id === env.INTAKE_LEASE_EVENT_ID &&
+    String(body.expires_at) === env.INTAKE_LEASE_EXPIRES_AT &&
+    String(body.issued_at) === env.INTAKE_LEASE_ISSUED_AT &&
+    body.state_commit === env.INTAKE_LEASE_STATE_COMMIT &&
+    body.target_commit === env.INTAKE_LEASE_TARGET_COMMIT;
+  const digest = await nonceDigest("intake_lease", body.nonce);
+  if (!exact || !env.INTAKE_LEASE_NONCE_DIGEST || !(await equalSecret(digest, env.INTAKE_LEASE_NONCE_DIGEST))) {
+    return json({ error: "lease_binding_mismatch" }, 409);
+  }
+  const ledger = state(env, dependencies);
+  if (!ledger.appendEventAtHead) throw new GitHubStateError(503, "bound State append unavailable");
+  const event = await nonceEvent(
+    body.event_id,
+    body.nonce,
+    "intake_lease",
+    body.issued_at * 1000,
+    body.expires_at,
+  );
+  const outcome = await ledger.appendEventAtHead(event, body.state_commit);
+  return json({
+    status: outcome.created ? "lease_smoke_consumed" : "lease_smoke_already_consumed",
+    environment: "production",
+    intake_configured_enabled: true,
+    intake_effective_enabled: true,
+    intake_enablement_mode: "leased",
+    intake_lease_expires_at: body.expires_at,
+    state_commit: outcome.commit,
+  });
 }
 
 function receivedEvent(submissionId: string, login: string, input: SubmissionInput, occurredAtMilliseconds: number): WritableStateEvent {
@@ -840,7 +960,7 @@ async function promotionCanary(
 ): Promise<Response> {
   if (!(await readinessAuthorized(request, env))) return json({ error: "not_found" }, 404);
   requirePromotionCanaryConfiguration(env, dependencies);
-  if (intakeEnabled(env)) {
+  if (currentIntake(env, dependencies).effective) {
     throw new GitHubStateError(503, "promotion canary requires ordinary intake to remain disabled");
   }
   const canaryRequest = decodePromotionCanaryRequest(await readJson(request));
@@ -1570,8 +1690,9 @@ export async function handleRequest(
   dependencies: ApiDependencies = {},
 ): Promise<Response> {
   const url = new URL(request.url);
+  const intake = currentIntake(env, dependencies);
   if (request.method === "GET" && url.pathname === "/") {
-    return browserPage(env.DEPLOYMENT_ENVIRONMENT, intakeEnabled(env));
+    return browserPage(env.DEPLOYMENT_ENVIRONMENT, intake.effective);
   }
   if (request.method === "GET" && url.pathname === "/intake.js") {
     return browserScript();
@@ -1582,13 +1703,17 @@ export async function handleRequest(
       service: "lean-eval-submission",
       deployed_commit: env.DEPLOYED_COMMIT,
       environment: env.DEPLOYMENT_ENVIRONMENT,
-      intake_enabled: intakeEnabled(env),
+      intake_configured_enabled: intake.configured,
+      intake_effective_enabled: intake.effective,
+      intake_enabled: intake.effective,
+      intake_enablement_mode: intake.mode,
+      intake_lease_expires_at: intake.leaseExpiresAt,
       promotion_canary_configured_enabled: env.PROMOTION_CANARY_ENABLED === "true",
       promotion_canary_enabled: promotionCanaryEnabled(env),
     });
   }
   if ((request.method === "GET" || request.method === "POST") && url.pathname === "/readyz") {
-    return readiness(request, env, lifecycle);
+    return readiness(request, env, lifecycle, dependencies);
   }
   if (request.method === "POST" && url.pathname === "/internal/v1/promotion-canary") {
     if (!promotionCanaryEnabled(env)) return json({ error: "not_found" }, 404);
@@ -1633,7 +1758,14 @@ export async function handleRequest(
       return errorResponse(error);
     }
   }
-  if (url.pathname.startsWith("/api/") && !intakeEnabled(env)) return json({ error: "intake_disabled" }, 503);
+  if (request.method === "POST" && url.pathname === "/internal/v1/intake-lease-smoke") {
+    try {
+      return await intakeLeaseSmoke(request, env, dependencies);
+    } catch (error) {
+      return errorResponse(error);
+    }
+  }
+  if (url.pathname.startsWith("/api/") && !intake.effective) return json({ error: "intake_disabled" }, 503);
   if (url.pathname.startsWith("/api/v1/")) {
     if (!(await rateLimit(request, env, dependencies))) {
       return json({ error: "rate_limited" }, 429, { "retry-after": "60" });
@@ -1700,7 +1832,7 @@ async function reconcilePromotionCanariesScheduled(
   dependencies: ApiDependencies,
 ): Promise<void> {
   requirePromotionCanaryConfiguration(env, dependencies);
-  if (intakeEnabled(env)) {
+  if (currentIntake(env, dependencies).effective) {
     throw new GitHubStateError(503, "promotion canary scheduling requires ordinary intake disabled");
   }
   const ledger = state(env, dependencies);
@@ -1782,7 +1914,7 @@ export async function handleScheduled(
       }));
     }
   }
-  if (!intakeEnabled(env)) return;
+  if (!currentIntake(env, dependencies).effective) return;
   requireDispatchConfiguration(env, dependencies);
   const ledger = state(env, dependencies);
   const shardNumber = Math.floor(scheduledTime / 60_000) % 256;

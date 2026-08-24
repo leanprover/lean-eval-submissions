@@ -8,7 +8,6 @@ import unittest
 
 from scripts import validate_cloudflare_rollback as rollback
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 COMMIT = "a" * 40
 INTAKE_VERSION = "11111111-1111-1111-1111-111111111111"
@@ -39,7 +38,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         )
         app = (ROOT / "server" / "src" / "app.ts").read_text(encoding="utf-8")
         self.assertIn("STATE_EVENT_SCHEMA_VERSION = 1 as const", state_event)
-        self.assertIn("if (!intakeEnabled(env)) return;", app)
+        self.assertIn("if (!currentIntake(env, dependencies).effective) return;", app)
 
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
@@ -187,7 +186,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             intake_version_id=INTAKE_VERSION,
             broker_version_id=BROKER_VERSION,
             replay_version_id=REPLAY_VERSION,
-            require_disabled=True,
+            require_intake_disabled=False,
+            require_replay_disabled=True,
             current_replay_config=self.paths["replay_config"],
             qualification=self.paths["qualification"],
             target_root=ROOT,
@@ -220,7 +220,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 binding["text"] = "true"
         self._write(self.paths["intake_version"], self.versions["intake"])
         with self.assertRaisesRegex(
-            rollback.RollbackValidationError, "must disable intake, promotion canary"
+            rollback.RollbackValidationError, "must disable promotion canary and replay"
         ):
             rollback.build_plan(self._arguments())
 
@@ -235,10 +235,91 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             if binding.get("name") != "PROMOTION_CANARY_ENABLED"
         ]
         self._write(self.paths["intake_version"], self.versions["intake"])
-        self.assertIs(
-            rollback.build_plan(self._arguments())["promotion_canary_enabled"],
-            False,
+        plan = rollback.build_plan(self._arguments())
+        self.assertIs(plan["promotion_canary_enabled"], False)
+        self.assertIs(plan["promotion_canary_contract_supported"], False)
+        rollback.validate_health(
+            plan,
+            "intake",
+            {
+                "status": "ok",
+                "environment": "production",
+                "deployed_commit": COMMIT,
+                "intake_configured_enabled": False,
+                "intake_effective_enabled": False,
+                "intake_enabled": False,
+                "intake_enablement_mode": "disabled",
+                "intake_lease_expires_at": None,
+            },
+            require_intake_disabled=True,
         )
+
+    def test_legacy_disabled_target_without_enablement_contract_remains_rollbackable(
+        self,
+    ) -> None:
+        del self.configs["intake"]["env"]["production"]["vars"][
+            "INTAKE_ENABLEMENT_MODE"
+        ]
+        self._write(self.paths["intake_config"], self.configs["intake"])
+        self.versions["intake"]["resources"]["bindings"] = [
+            binding
+            for binding in self.versions["intake"]["resources"]["bindings"]
+            if binding.get("name") != "INTAKE_ENABLEMENT_MODE"
+        ]
+        self._write(self.paths["intake_version"], self.versions["intake"])
+
+        plan = rollback.build_plan(self._arguments())
+        self.assertIs(plan["intake_enabled"], False)
+        self.assertIs(plan["intake_enablement_contract_supported"], False)
+        self.assertEqual(plan["intake_enablement_mode"], "disabled")
+        rollback.validate_health(
+            plan,
+            "intake",
+            {
+                "status": "ok",
+                "environment": "production",
+                "deployed_commit": COMMIT,
+                "intake_enabled": False,
+                "promotion_canary_configured_enabled": False,
+                "promotion_canary_enabled": False,
+            },
+            require_intake_disabled=True,
+        )
+
+    def test_legacy_target_cannot_be_tracked_enabled(self) -> None:
+        variables = self.configs["intake"]["env"]["production"]["vars"]
+        variables["INTAKE_ENABLED"] = "true"
+        del variables["INTAKE_ENABLEMENT_MODE"]
+        self._write(self.paths["intake_config"], self.configs["intake"])
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "INTAKE_ENABLED":
+                binding["text"] = "true"
+        self.versions["intake"]["resources"]["bindings"] = [
+            binding
+            for binding in self.versions["intake"]["resources"]["bindings"]
+            if binding.get("name") != "INTAKE_ENABLEMENT_MODE"
+        ]
+        self._write(self.paths["intake_version"], self.versions["intake"])
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError,
+            "legacy intake target cannot be tracked enabled",
+        ):
+            rollback.build_plan(self._arguments())
+
+    def test_present_malformed_intake_enablement_mode_fails_closed(self) -> None:
+        self.configs["intake"]["env"]["production"]["vars"][
+            "INTAKE_ENABLEMENT_MODE"
+        ] = "Disabled"
+        self._write(self.paths["intake_config"], self.configs["intake"])
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "INTAKE_ENABLEMENT_MODE":
+                binding["text"] = "Disabled"
+        self._write(self.paths["intake_version"], self.versions["intake"])
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError,
+            "tracked intake enablement state is not closed",
+        ):
+            rollback.build_plan(self._arguments())
 
     def test_present_malformed_canary_binding_still_fails_closed(self) -> None:
         self.configs["intake"]["env"]["production"]["vars"][
@@ -306,18 +387,107 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             INTAKE_VERSION,
         )
 
-    def test_emergency_target_must_disable_intake_canary_and_replay(self) -> None:
+    def test_leased_component_requires_exact_commit_and_uuidv7_variant(self) -> None:
+        lease = {
+            "INTAKE_ENABLED": "true",
+            "INTAKE_ENABLEMENT_MODE": "leased",
+            "INTAKE_LEASE_CONTROLLER_COMMIT": COMMIT,
+            "INTAKE_LEASE_CONTROLLER_RUN_ATTEMPT": "2",
+            "INTAKE_LEASE_CONTROLLER_RUN_ID": "123",
+            "INTAKE_LEASE_EVENT_ID": "0198abcd-1111-7000-8000-000000000001",
+            "INTAKE_LEASE_EXPIRES_AT": "1800000900",
+            "INTAKE_LEASE_ISSUED_AT": "1800000000",
+            "INTAKE_LEASE_NONCE_DIGEST": "b" * 64,
+            "INTAKE_LEASE_STATE_COMMIT": "c" * 40,
+            "INTAKE_LEASE_TARGET_COMMIT": COMMIT,
+        }
+        lease_path = self.directory / "intake-lease.env"
+        lease_path.write_text(
+            "".join(f"{name}={value}\n" for name, value in lease.items()),
+            encoding="utf-8",
+        )
+        version = self.versions["intake"]
+        plain = {
+            binding["name"]: binding
+            for binding in version["resources"]["bindings"]
+            if binding.get("type") == "plain_text"
+        }
+        plain["INTAKE_ENABLED"]["text"] = "true"
+        plain["INTAKE_ENABLEMENT_MODE"]["text"] = "leased"
+        for name, value in lease.items():
+            if name not in plain:
+                version["resources"]["bindings"].append(
+                    {"type": "plain_text", "name": name, "text": value}
+                )
+        self._write(self.paths["intake_version"], version)
+        arguments = argparse.Namespace(
+            component="intake",
+            expected_commit=COMMIT,
+            environment="production",
+            config=self.paths["intake_config"],
+            version=self.paths["intake_version"],
+            version_id=INTAKE_VERSION,
+            require_intake_disabled=False,
+            intake_lease_bindings=lease_path,
+        )
+        rollback.validate_component(arguments)
+
+        lease["INTAKE_LEASE_TARGET_COMMIT"] = "d" * 40
+        lease["INTAKE_LEASE_CONTROLLER_COMMIT"] = "d" * 40
+        lease_path.write_text(
+            "".join(f"{name}={value}\n" for name, value in lease.items()),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(rollback.RollbackValidationError, "exact deployed commit"):
+            rollback.validate_component(arguments)
+
+        lease["INTAKE_LEASE_TARGET_COMMIT"] = COMMIT
+        lease["INTAKE_LEASE_CONTROLLER_COMMIT"] = COMMIT
+        lease["INTAKE_LEASE_EVENT_ID"] = "0198abcd-1111-7000-7000-000000000001"
+        lease_path.write_text(
+            "".join(f"{name}={value}\n" for name, value in lease.items()),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(rollback.RollbackValidationError, "UUIDv7"):
+            rollback.validate_component(arguments)
+
+    def test_emergency_target_may_track_durable_intake_but_must_disable_replay(self) -> None:
         intake = self.configs["intake"]
         intake["env"]["production"]["vars"]["INTAKE_ENABLED"] = "true"
+        intake["env"]["production"]["vars"]["INTAKE_ENABLEMENT_MODE"] = "durable"
         self._write(self.paths["intake_config"], intake)
         for binding in self.versions["intake"]["resources"]["bindings"]:
             if binding.get("name") == "INTAKE_ENABLED":
                 binding["text"] = "true"
+            if binding.get("name") == "INTAKE_ENABLEMENT_MODE":
+                binding["text"] = "durable"
         self._write(self.paths["intake_version"], self.versions["intake"])
+        arguments = self._arguments()
+        arguments.require_intake_disabled = False
+        enabled_plan = rollback.build_plan(arguments)
+        self.assertIs(enabled_plan["intake_enabled"], True)
+        self.assertEqual(enabled_plan["intake_enablement_mode"], "durable")
+
+        intake["env"]["production"]["vars"]["INTAKE_ENABLED"] = "false"
+        intake["env"]["production"]["vars"]["INTAKE_ENABLEMENT_MODE"] = "disabled"
+        self._write(self.paths["intake_config"], intake)
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "INTAKE_ENABLED":
+                binding["text"] = "false"
+            if binding.get("name") == "INTAKE_ENABLEMENT_MODE":
+                binding["text"] = "disabled"
+        self._write(self.paths["intake_version"], self.versions["intake"])
+        replay = self.configs["replay"]
+        replay["env"]["production"]["vars"]["REPLAY_ENABLED"] = "true"
+        self._write(self.paths["replay_config"], replay)
+        for binding in self.versions["replay"]["resources"]["bindings"]:
+            if binding.get("name") == "REPLAY_ENABLED":
+                binding["text"] = "true"
+        self._write(self.paths["replay_version"], self.versions["replay"])
         with self.assertRaisesRegex(
-            rollback.RollbackValidationError, "must disable intake, promotion canary"
+            rollback.RollbackValidationError, "must disable promotion canary and replay"
         ):
-            rollback.build_plan(self._arguments())
+            rollback.build_plan(arguments)
 
     def test_rejects_missing_secret_or_changed_durable_object_capability(self) -> None:
         self.versions["broker"]["resources"]["bindings"] = [
@@ -413,7 +583,13 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "status": "ok",
                 "environment": "production",
                 "deployed_commit": COMMIT,
+                "intake_configured_enabled": False,
+                "intake_effective_enabled": False,
                 "intake_enabled": False,
+                "intake_enablement_mode": "disabled",
+                "intake_lease_expires_at": None,
+                "promotion_canary_configured_enabled": False,
+                "promotion_canary_enabled": False,
             },
         )
         with self.assertRaisesRegex(rollback.RollbackValidationError, "health differs"):
@@ -424,9 +600,50 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                     "status": "ok",
                     "environment": "production",
                     "deployed_commit": COMMIT,
+                    "intake_configured_enabled": True,
+                    "intake_effective_enabled": True,
                     "intake_enabled": True,
+                    "intake_enablement_mode": "durable",
+                    "intake_lease_expires_at": None,
                 },
             )
+
+        enabled_plan = dict(plan)
+        enabled_plan["intake_enabled"] = True
+        enabled_plan["intake_enablement_mode"] = "durable"
+        rollback.validate_health(
+            enabled_plan,
+            "intake",
+            {
+                "status": "ok",
+                "environment": "production",
+                "deployed_commit": COMMIT,
+                "intake_configured_enabled": False,
+                "intake_effective_enabled": False,
+                "intake_enabled": False,
+                "intake_enablement_mode": "disabled",
+                "intake_lease_expires_at": None,
+                "promotion_canary_configured_enabled": False,
+                "promotion_canary_enabled": False,
+            },
+            require_intake_disabled=True,
+        )
+        rollback.validate_health(
+            enabled_plan,
+            "intake",
+            {
+                "status": "ok",
+                "environment": "production",
+                "deployed_commit": COMMIT,
+                "intake_configured_enabled": True,
+                "intake_effective_enabled": True,
+                "intake_enabled": True,
+                "intake_enablement_mode": "durable",
+                "intake_lease_expires_at": None,
+                "promotion_canary_configured_enabled": False,
+                "promotion_canary_enabled": False,
+            },
+        )
 
     def test_prestate_is_closed_sanitized_and_exactly_recoverable(self) -> None:
         plan = rollback.build_plan(self._arguments())

@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   verify:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     environment: cloudflare-${{ inputs.target_environment }}
     permissions:
@@ -26,6 +26,10 @@ jobs:
       READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
       TARGET_ENVIRONMENT: ${{ inputs.target_environment }}
     steps:
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
       - name: Verify stored credential and ruleset bypass without changing State
         run: |
           set -euo pipefail
@@ -42,7 +46,9 @@ jobs:
               ;;
           esac
           response_file=$(mktemp)
-          curl --fail-with-body --silent --show-error \
+          curl --fail-with-body --silent --show-error --proto '=https' \
+            --max-redirs 0 --max-time 20 --retry 2 --retry-all-errors \
+            --retry-max-time 45 \
             --request POST \
             --header "Authorization: Bearer ${READINESS_TOKEN}" \
             --output "$response_file" \
@@ -58,9 +64,22 @@ jobs:
               raise SystemExit("State writer preflight did not report ready")
           if payload["environment"] != os.environ["TARGET_ENVIRONMENT"]:
               raise SystemExit("State writer preflight reached the wrong environment")
-          if payload["intake_enabled"] is not False:
-              raise SystemExit("State writer preflight requires intake to remain disabled")
+          if type(payload["intake_enabled"]) is not bool:
+              raise SystemExit("State writer preflight returned an invalid intake state")
+          if payload.get("intake_configured_enabled") is not payload["intake_enabled"]:
+              raise SystemExit("configured and effective intake state differ unexpectedly")
+          if payload.get("intake_effective_enabled") is not payload["intake_enabled"]:
+              raise SystemExit("effective and compatibility intake state differ")
+          expected_mode = "durable" if payload["intake_enabled"] else "disabled"
+          if payload.get("intake_enablement_mode") != expected_mode:
+              raise SystemExit("State writer preflight returned an unexpected intake mode")
+          if payload.get("intake_lease_expires_at") is not None:
+              raise SystemExit("ordinary State writer verification found a temporary lease")
           if re.fullmatch(r"[0-9a-f]{40}", payload["state_commit"]) is None:
               raise SystemExit("State writer preflight returned an invalid commit")
-          print(f"State writer ready at {payload['state_commit']}")
+          intake_state = "enabled" if payload["intake_enabled"] else "disabled"
+          print(
+              f"State writer ready at {payload['state_commit']}; "
+              f"intake is {intake_state}"
+          )
           PY

@@ -59,7 +59,7 @@ class CloudflareHealthMonitorTests(unittest.TestCase):
 
         responses = self.responses()
         responses[endpoints["production"]["intake"]][
-            "intake_enabled"
+            "intake_effective_enabled"
         ] = True
         with self.assertRaisesRegex(monitor.MonitorError, "health differs"):
             monitor.verify_snapshot(self.intake, self.replay, lambda url: responses[url])
@@ -68,6 +68,19 @@ class CloudflareHealthMonitorTests(unittest.TestCase):
         intake = json.loads(json.dumps(self.intake))
         intake["env"]["production"]["vars"]["INTAKE_ENABLED"] = "1"
         with self.assertRaisesRegex(monitor.MonitorError, "canonical boolean"):
+            monitor.expected_health(intake, self.replay, "production")
+
+    def test_rejects_incoherent_mode_or_tracked_lease_material(self) -> None:
+        intake = copy.deepcopy(self.intake)
+        intake["env"]["production"]["vars"]["INTAKE_ENABLEMENT_MODE"] = "durable"
+        with self.assertRaisesRegex(monitor.MonitorError, "must be disabled"):
+            monitor.expected_health(intake, self.replay, "production")
+
+        intake = copy.deepcopy(self.intake)
+        intake["env"]["production"]["vars"]["INTAKE_LEASE_EVENT_ID"] = (
+            "0198abcd-1111-7000-8000-000000000001"
+        )
+        with self.assertRaisesRegex(monitor.MonitorError, "lease material"):
             monitor.expected_health(intake, self.replay, "production")
 
     def test_derives_unique_endpoints_from_tracked_worker_names(self) -> None:

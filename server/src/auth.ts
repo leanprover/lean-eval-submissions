@@ -264,7 +264,7 @@ export function makeAgentChallenge(
   };
 }
 
-export async function nonceDigest(purpose: "agent" | "oauth" | "submission", nonce: string): Promise<string> {
+export async function nonceDigest(purpose: "agent" | "intake_lease" | "oauth" | "submission", nonce: string): Promise<string> {
   const bytes = new TextEncoder().encode(`lean-eval-auth-nonce-v1\0${purpose}\0${nonce}`);
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
   return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");

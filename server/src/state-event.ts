@@ -86,7 +86,7 @@ export type AuthenticationNonceConsumedEvent = EventEnvelope &
     actor: Readonly<{ kind: "system" }>;
     payload: Readonly<{
       nonce_digest: string;
-      purpose: "agent" | "oauth" | "submission";
+      purpose: "agent" | "intake_lease" | "oauth" | "submission";
       expires_at: string;
     }>;
   }>;
@@ -364,7 +364,7 @@ function validateNonceEvent(event: Record<string, unknown>): void {
   if (typeof payload.nonce_digest !== "string" || !/^[0-9a-f]{64}$/.test(payload.nonce_digest)) {
     throw new TypeError("nonce digest must be lowercase SHA-256");
   }
-  if (!new Set(["agent", "oauth", "submission"]).has(String(payload.purpose))) {
+  if (!new Set(["agent", "intake_lease", "oauth", "submission"]).has(String(payload.purpose))) {
     throw new TypeError("nonce purpose is invalid");
   }
   if (typeof payload.expires_at !== "string" || !isCanonicalUtcTimestamp(payload.expires_at)) {

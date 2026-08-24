@@ -30,9 +30,13 @@ class StagingIntakeWorkflowTests(unittest.TestCase):
         inputs = self.workflow[True]["workflow_dispatch"]["inputs"]
         self.assertEqual(inputs["state"]["options"], ["disabled", "enabled"])
         self.assertIn('INTAKE_ENABLED:$intake_enabled', self.text)
+        self.assertIn('INTAKE_ENABLEMENT_MODE:$intake_mode', self.text)
         self.assertIn('body["environment"] == "staging"', self.text)
         self.assertIn('body["deployed_commit"]', self.text)
         self.assertIn('body["intake_enabled"]', self.text)
+        self.assertIn('body["intake_configured_enabled"]', self.text)
+        self.assertIn('body["intake_effective_enabled"]', self.text)
+        self.assertIn('body["intake_lease_expires_at"] is None', self.text)
 
 
 if __name__ == "__main__":

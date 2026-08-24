@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       intake_version_id:
-        description: Disabled intake version proving the target commit/config
+        description: Intake version proving the target commit/config
         required: true
         type: string
       broker_version_id:
@@ -33,9 +33,11 @@ defaults:
 
 jobs:
   rollback-production:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
     environment: cloudflare-production
+    permissions:
+      contents: read
     steps:
       # actions/checkout pinned to v7.0.1.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -50,9 +52,13 @@ jobs:
           cache: npm
           cache-dependency-path: server/package-lock.json
 
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
       - run: npm ci
 
-      - name: Validate and prepare the complete disabled rollback unit
+      - name: Validate and prepare the complete replay-disabled rollback unit
         env:
           BROKER_VERSION: ${{ inputs.broker_version_id }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -157,7 +163,7 @@ jobs:
             --target-root "$plan_dir/target" \
             --state-main "$plan_dir/state-main.json" \
             --state-schema "$plan_dir/state-event-schema.json" \
-            --require-disabled \
+            --require-replay-disabled \
             --output "$plan_dir/plan.json"
 
           for component in intake broker replay; do
@@ -222,9 +228,10 @@ jobs:
           target="$RUNNER_TEMP/lean-eval-rollback/target/server"
           "$target/node_modules/.bin/wrangler" deploy \
             --config "$target/wrangler.jsonc" --env production \
-            --keep-vars \
             --var "DEPLOYED_COMMIT:$EXPECTED_COMMIT" \
-            --var "DISPATCH_WORKFLOW_REF:lean-eval-dispatch/$EXPECTED_COMMIT"
+            --var "DISPATCH_WORKFLOW_REF:lean-eval-dispatch/$EXPECTED_COMMIT" \
+            --var "INTAKE_ENABLED:false" \
+            --var "INTAKE_ENABLEMENT_MODE:disabled"
 
       - name: Verify disabled intake before dependency mutation
         env:
@@ -245,14 +252,16 @@ jobs:
             --environment production \
             --config "$plan_dir/target/server/wrangler.jsonc" \
             --version "$plan_dir/deployed-intake-version.json" \
-            --version-id "$deployed_version"
+            --version-id "$deployed_version" \
+            --require-intake-disabled
           curl --fail --silent --show-error --max-time 10 \
             --retry 12 --retry-all-errors --retry-delay 5 \
             https://lean-eval-submission-server.lean-eval.workers.dev/healthz \
             > "$plan_dir/intake-health.json"
           python ../scripts/validate_cloudflare_rollback.py health \
             --plan "$plan_dir/plan.json" --component intake \
-            --health "$plan_dir/intake-health.json"
+            --health "$plan_dir/intake-health.json" \
+            --require-intake-disabled
 
       - name: Deploy exact target broker code with current secrets
         env:
@@ -341,6 +350,45 @@ jobs:
             --plan "$plan_dir/plan.json" --component replay \
             --health "$plan_dir/replay-health.json"
           echo "Restored replay version: $deployed_version" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Verify intake remains disabled and protected State remains valid
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          plan_dir="$RUNNER_TEMP/lean-eval-rollback"
+          timeout 60s npx wrangler deployments status --config wrangler.jsonc \
+            --env production --json > "$plan_dir/final-intake-status.json"
+          deployed_version=$(python ../scripts/validate_cloudflare_rollback.py \
+            active-version --status "$plan_dir/final-intake-status.json")
+          timeout 60s npx wrangler versions view "$deployed_version" \
+            --config wrangler.jsonc --env production --json \
+            > "$plan_dir/final-intake-version.json"
+          python ../scripts/validate_cloudflare_rollback.py component \
+            --component intake --expected-commit "$EXPECTED_COMMIT" \
+            --environment production \
+            --config "$plan_dir/target/server/wrangler.jsonc" \
+            --version "$plan_dir/final-intake-version.json" \
+            --version-id "$deployed_version" --require-intake-disabled
+          curl --fail --silent --show-error --proto '=https' --max-redirs 0 --max-time 10 \
+            --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 120 \
+            https://lean-eval-submission-server.lean-eval.workers.dev/healthz \
+            > "$plan_dir/final-intake-health.json"
+          python ../scripts/validate_cloudflare_rollback.py health \
+            --plan "$plan_dir/plan.json" --component intake \
+            --health "$plan_dir/final-intake-health.json" --require-intake-disabled
+          final_state=$(gh api repos/leanprover/lean-eval-state/branches/main \
+            --jq '[.commit.sha, .protected] | @tsv')
+          IFS=$'\t' read -r final_state_commit final_state_protected <<< "$final_state"
+          if [[ ! "$final_state_commit" =~ ^[0-9a-f]{40}$ ]] ||
+             [ "$final_state_protected" != true ]; then
+            echo "disabled rollback cannot prove protected State" >&2
+            exit 1
+          fi
+          echo "Restored intake version: $deployed_version" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove rollback scratch
         if: always()

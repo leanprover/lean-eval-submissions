@@ -79,8 +79,12 @@ deployment performs the real image build and rollout.
 
 ## Operational readiness
 
-`GET /healthz` is public and secret-free. Authenticated `GET /readyz` reports
-normal dependency readiness only when intake is enabled. Authenticated
+`GET /healthz` is public and secret-free. It distinguishes the reviewed
+configured state from the Worker-enforced effective state, reports
+`disabled`, `leased`, `durable`, or fail-closed `invalid` mode, and exposes only
+the exact lease expiry (never the nonce or controller bindings). Authenticated
+`GET /readyz` reports normal dependency readiness only when intake is
+effectively enabled. Authenticated
 `POST /readyz` is the State-writer preflight used before enablement and after
 credential rotation: it reads the current State head and submits a non-forced
 update of the branch to that same commit. Success therefore proves repository
@@ -88,6 +92,17 @@ read/write authority and the ruleset bypass without changing State. The
 preflight uses `READINESS_TOKEN`, remains available while intake is disabled,
 and is invoked through `verify-state-writer.yml` so the State credential never
 leaves its Worker secret binding.
+
+Production enablement first deploys a finite `leased` configuration bound to
+the exact controller commit/run/attempt, target commit, State commit, event,
+and nonce digest. Every public API request recomputes effective state and fails
+closed at the exact expiry second even if rollout automation disappears. The
+authenticated lease smoke consumes the nonce by an exact-head State CAS; its
+event is deterministic so a committed response loss is idempotently
+recoverable. Only after that proof may protected deployment make a final
+`durable` deployment with all lease bindings absent. Tracked configuration may
+contain only closed `disabled` or `durable` mode; lease material is generated
+ephemerally by the controller and is never committed.
 
 ## Local API version 1 (`/api/v1`) contract
 

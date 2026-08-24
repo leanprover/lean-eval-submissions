@@ -9,6 +9,7 @@ const ENV = {
   DEPLOYED_COMMIT: "test-commit",
   DEPLOYMENT_ENVIRONMENT: "staging",
   INTAKE_ENABLED: "false",
+  INTAKE_ENABLEMENT_MODE: "disabled",
   STATE_REPOSITORY: "leanprover/lean-eval-state-staging",
 } satisfies RuntimeEnv;
 
@@ -21,9 +22,13 @@ describe("Worker routing", () => {
     expect(await response.json()).toMatchObject({
       deployed_commit: "development",
       environment: "staging",
+      intake_configured_enabled: false,
+      intake_effective_enabled: false,
       intake_enabled: false,
       promotion_canary_configured_enabled: true,
       promotion_canary_enabled: true,
+      intake_enablement_mode: "disabled",
+      intake_lease_expires_at: null,
     });
   });
 
@@ -39,9 +44,13 @@ describe("Worker routing", () => {
       service: "lean-eval-submission",
       deployed_commit: "test-commit",
       environment: "staging",
+      intake_configured_enabled: false,
+      intake_effective_enabled: false,
       intake_enabled: false,
       promotion_canary_configured_enabled: false,
       promotion_canary_enabled: false,
+      intake_enablement_mode: "disabled",
+      intake_lease_expires_at: null,
     });
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
@@ -83,6 +92,7 @@ describe("Worker routing", () => {
       ...ENV,
       GITHUB_STATE_TOKEN: "state-secret",
       INTAKE_ENABLED: "true",
+      INTAKE_ENABLEMENT_MODE: "durable",
       READINESS_TOKEN: "readiness-secret",
     } satisfies RuntimeEnv;
     const request = new Request("https://example.test/readyz", {
@@ -132,7 +142,11 @@ describe("Worker routing", () => {
     expect(await response.json()).toEqual({
       status: "state_writer_ready",
       environment: "staging",
+      intake_configured_enabled: false,
+      intake_effective_enabled: false,
       intake_enabled: false,
+      intake_enablement_mode: "disabled",
+      intake_lease_expires_at: null,
       state_commit: "1".repeat(40),
     });
     expect(upstream).toHaveBeenCalledTimes(4);

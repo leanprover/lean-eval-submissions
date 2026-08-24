@@ -152,6 +152,14 @@ def expected_health(
     promotion_canary_enabled = _boolean_variable(
         intake_vars, "PROMOTION_CANARY_ENABLED", environment
     )
+    intake_mode = intake_vars.get("INTAKE_ENABLEMENT_MODE")
+    expected_intake_mode = "durable" if intake_enabled else "disabled"
+    if intake_mode != expected_intake_mode:
+        raise MonitorError(
+            f"tracked {environment} INTAKE_ENABLEMENT_MODE must be {expected_intake_mode}"
+        )
+    if any(name.startswith("INTAKE_LEASE_") for name in intake_vars):
+        raise MonitorError(f"tracked {environment} configuration contains intake lease material")
     replay_enabled = _boolean_variable(replay_vars, "REPLAY_ENABLED", environment)
     staging_enabled = _boolean_variable(
         replay_vars, "STAGING_ACCEPTANCE_ENABLED", environment
@@ -166,11 +174,15 @@ def expected_health(
         "status": "ok",
         "service": intake_service,
         "environment": environment,
+        "intake_configured_enabled": intake_enabled,
+        "intake_effective_enabled": intake_enabled,
         "intake_enabled": intake_enabled,
         "promotion_canary_configured_enabled": promotion_canary_enabled,
         "promotion_canary_enabled": (
             environment == "staging" and promotion_canary_enabled
         ),
+        "intake_enablement_mode": intake_mode,
+        "intake_lease_expires_at": None,
     }
     replay = {
         "status": "ok",
