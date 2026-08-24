@@ -37,7 +37,7 @@
       "vars": {
         "DEPLOYED_COMMIT": "development",
         "DEPLOYMENT_ENVIRONMENT": "staging",
-        "REPLAY_ENABLED": "true",
+        "REPLAY_ENABLED": "false",
         "STAGING_ACCEPTANCE_ENABLED": "true",
         "GITHUB_OIDC_AUDIENCE": "lean-eval-replay-staging",
         "GITHUB_OIDC_ENVIRONMENT": "replay-staging",

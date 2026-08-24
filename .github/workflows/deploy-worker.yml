@@ -194,7 +194,7 @@ jobs:
           done
           echo "health payload did not converge: $body" >&2
           exit 1
-      - name: Smoke-test enabled staging replay executor
+      - name: Smoke-test disabled staging replay executor
         env:
           EXPECTED_COMMIT: ${{ github.sha }}
         run: |
@@ -209,7 +209,7 @@ jobs:
               "service": "lean-eval-replay-executor",
               "environment": "staging",
               "deployed_commit": os.environ["EXPECTED_COMMIT"],
-              "replay_enabled": True,
+              "replay_enabled": False,
               "staging_acceptance_enabled": True,
               "staging_memory_limit_bytes": 12 * 1024**3,
               "production_memory_gate_bytes": 12 * 1024**3,
