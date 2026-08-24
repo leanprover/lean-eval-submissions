@@ -21,6 +21,8 @@ import {
   claimedGuard,
   claimedOverlay,
   claimedSourceIndex,
+  initialResultAmendmentView,
+  initialResultReleaseStatusView,
   recordedGuard,
   type VerifiedLegacyResult,
 } from "../src/result-owner";
@@ -29,17 +31,22 @@ const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
 const NEW_TREE = "3".repeat(40);
 const NEW_COMMIT = "4".repeat(40);
-const RESULT_OWNER_CONTRACT_COMMIT = "163e9314c881493e08d23baf35ff40456f9c2331";
+const RESULT_OWNER_CONTRACT_COMMIT = "fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f";
 const RESULT_OWNER_CONTRACT_BLOBS = {
+  "docs/result-amendment-lifecycle.md": "6ef59628f12820a4af64ff9bff4fb174d1749684",
   "docs/result-owner-operational-indexes.md": "2f784609f9117caf74cb7042e9ea45732925d77b",
   "schema/result-identity-guard-v1.schema.json": "1620b6d8aed37f652958ac86e311c00578edc8b4",
+  "schema/result-amendment-view-v1.schema.json": "20282df2b419466f32998b93b49c55b107ed6f35",
   "schema/result-overlay-view-v1.schema.json": "1b50a92a76891bd21e0b67f7f40ab9c86d50beed",
   "schema/result-overlays-v1.schema.json": "41d4078133d6854bf8de839873a3f58e9ba1afd1",
+  "schema/result-release-status-view-v1.schema.json": "7f115230736e5d45074e8172f6fe4e5ee1992021",
   "schema/result-source-record-index-v1.schema.json": "4543225e0833af00913e436185532a769debebc1",
   "schema/state-event-v1.schema.json": "5b670204c86c440b56afd81f62bd097e3b399be7",
   "scripts/materialize_state.py": "f7985b70b6409616ac2020a2be2337eca13c640d",
+  "scripts/result_amendments.py": "61b44743c73d152fa92c489ac9228d16f0b694fd",
   "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
-  "scripts/validate_state.py": "0b4c876475fcc9c9d5cf6269c800509530673bb4",
+  "scripts/result_release_status.py": "27bae3e6faa9275463a1440483512e23bfda2f6e",
+  "scripts/validate_state.py": "23f9fdf8bffb4c24c4e0d67255c514ad8b2ebfbe",
 } as const;
 
 const EVENT: StateEvent = {
@@ -225,6 +232,19 @@ const RESULT_VIEW: SubmissionView = {
   result_id: RESULT_ID,
   result_event_id: RESULT_EVENT.event_id,
 };
+const RESULT_AMENDMENT_VIEW = initialResultAmendmentView({
+  resultId: RESULT_ID,
+  ownerLogin: "alice",
+  declaredModel: "Example Model",
+  problemId: "two_plus_two",
+  statementRevision: 2,
+  authorityEventId: RESULT_EVENT.event_id,
+});
+const RESULT_RELEASE_STATUS_VIEW = initialResultReleaseStatusView(
+  RESULT_ID,
+  RESULT_EVENT.event_id,
+  RELEASE_EVENT.event_id,
+);
 const CLAIM_EVENT_ID = "0198abcd-2222-7000-8000-000000000001";
 const BACKFILL_EVENT_ID = "0198abcd-2222-7000-8000-000000000002";
 const LEGACY_RESULT: VerifiedLegacyResult = {
@@ -240,6 +260,18 @@ const LEGACY_RESULT: VerifiedLegacyResult = {
     canonical_record_sha256: "b".repeat(64),
   },
 };
+const LEGACY_AMENDMENT_VIEW = initialResultAmendmentView({
+  resultId: LEGACY_RESULT.resultId,
+  ownerLogin: LEGACY_RESULT.ownerLogin,
+  declaredModel: LEGACY_RESULT.baseResult.declared_model,
+  problemId: LEGACY_RESULT.baseResult.problem_id,
+  statementRevision: LEGACY_RESULT.baseResult.statement_revision,
+  authorityEventId: CLAIM_EVENT_ID,
+});
+const LEGACY_RELEASE_STATUS_VIEW = initialResultReleaseStatusView(
+  LEGACY_RESULT.resultId,
+  CLAIM_EVENT_ID,
+);
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status });
@@ -744,12 +776,15 @@ describe("atomic Git State append", () => {
     const fetcher = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
       contents(ACCEPTED_VIEW),
       contents(RECEIVED),
       contents(METADATA),
       contents(ARCHIVE_EVENT),
       contents(EVALUATION_ACCEPTED),
       contents(EVALUATION_STARTED),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
@@ -762,7 +797,8 @@ describe("atomic Git State append", () => {
       EVALUATION_ACCEPTED.event_id,
       RESULT_VIEW,
     )).resolves.toEqual({ commit: NEW_COMMIT, created: true, view: RESULT_VIEW });
-    const treeRequest = fetcher.mock.calls[11]?.[1]?.body;
+    const treeRequest = fetcher.mock.calls.find(([, init]) =>
+      init?.method === "POST" && (typeof init.body === "string") && init.body.includes("base_tree"))?.[1]?.body;
     if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
     const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
     expect(tree.tree.map((entry) => entry.path)).toEqual([
@@ -770,12 +806,18 @@ describe("atomic Git State append", () => {
       `events/01/${RELEASE_EVENT.event_id}.json`,
       `views/submissions/01/${SUBMISSION_ID}.json`,
       `views/result-identities/aa/${RESULT_ID}.json`,
+      `views/result-amendments/aa/${RESULT_ID}.json`,
+      `views/result-release-status/aa/${RESULT_ID}.json`,
     ]);
+    expect(JSON.parse(tree.tree[4]?.content ?? "null")).toEqual(RESULT_AMENDMENT_VIEW);
+    expect(JSON.parse(tree.tree[5]?.content ?? "null")).toEqual(RESULT_RELEASE_STATUS_VIEW);
     expect(fetcher.mock.calls.map(([input]) => input instanceof Request
       ? input.url
       : typeof input === "string"
         ? input
-        : input.toString()).join("\n")).not.toContain("/compare/");
+        : input.toString()).join("\n")).toContain(
+          `/compare/${RESULT_OWNER_CONTRACT_COMMIT}...${HEAD}`,
+        );
     expect(fetcher.mock.calls.every(([, init]) => init?.redirect === "manual")).toBe(true);
   });
 
@@ -783,6 +825,7 @@ describe("atomic Git State append", () => {
     const prefix = () => [
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
       contents(ACCEPTED_VIEW),
       contents(RECEIVED),
       contents(METADATA),
@@ -795,6 +838,8 @@ describe("atomic Git State append", () => {
     const claimed = sequence([
       ...prefix(),
       contents(claimedGuard(RESULT_ID, CLAIM_EVENT_ID)),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
     ]);
     await expect(repository(claimed).recordAcceptedResult(
       [RESULT_EVENT, RELEASE_EVENT],
@@ -805,12 +850,15 @@ describe("atomic Git State append", () => {
       existingKind: "claimed",
     } satisfies Partial<ResultIdentityCollisionError>);
 
+    clearResultOwnerContractProofCacheForTest();
     const recorded = sequence([
       ...prefix(),
       contents(recordedGuard(
         RESULT_ID,
         "0198abcd-1111-7000-8000-000000000009",
       )),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
     ]);
     await expect(repository(recorded).recordAcceptedResult(
       [RESULT_EVENT, RELEASE_EVENT],
@@ -825,9 +873,14 @@ describe("atomic Git State append", () => {
   });
 
   it("accepts only an exact same-authority record replay and refuses a missing guard", async () => {
-    const prefix = () => [
+    const prefix = (
+      guard: Response,
+      amendment: unknown = RESULT_AMENDMENT_VIEW,
+      releaseStatus: unknown = RESULT_RELEASE_STATUS_VIEW,
+    ) => [
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
       contents(RESULT_VIEW),
       contents(RECEIVED),
       contents(METADATA),
@@ -837,10 +890,12 @@ describe("atomic Git State append", () => {
       contents(EVALUATION_STARTED),
       contents(RESULT_EVENT),
       contents(RELEASE_EVENT),
+      guard,
+      contents(amendment),
+      contents(releaseStatus),
     ];
     const exact = sequence([
-      ...prefix(),
-      contents(recordedGuard(RESULT_ID, RESULT_EVENT.event_id)),
+      ...prefix(contents(recordedGuard(RESULT_ID, RESULT_EVENT.event_id))),
     ]);
     await expect(repository(exact).recordAcceptedResult(
       [RESULT_EVENT, RELEASE_EVENT],
@@ -848,9 +903,28 @@ describe("atomic Git State append", () => {
       RESULT_VIEW,
     )).resolves.toEqual({ commit: HEAD, created: false, view: RESULT_VIEW });
 
+    clearResultOwnerContractProofCacheForTest();
+    const laterEventId = "0198abcd-1111-7000-8000-000000000009";
+    const evolved = sequence([
+      ...prefix(
+        contents(recordedGuard(RESULT_ID, RESULT_EVENT.event_id)),
+        { ...RESULT_AMENDMENT_VIEW, mutation_event_id: laterEventId },
+        {
+          ...RESULT_RELEASE_STATUS_VIEW,
+          status: "published",
+          release_event_id: laterEventId,
+        },
+      ),
+    ]);
+    await expect(repository(evolved).recordAcceptedResult(
+      [RESULT_EVENT, RELEASE_EVENT],
+      EVALUATION_ACCEPTED.event_id,
+      RESULT_VIEW,
+    )).resolves.toEqual({ commit: HEAD, created: false, view: RESULT_VIEW });
+
+    clearResultOwnerContractProofCacheForTest();
     const missingGuard = sequence([
-      ...prefix(),
-      new Response(null, { status: 404 }),
+      ...prefix(new Response(null, { status: 404 })),
     ]);
     await expect(repository(missingGuard).recordAcceptedResult(
       [RESULT_EVENT, RELEASE_EVENT],
@@ -859,11 +933,13 @@ describe("atomic Git State append", () => {
     )).rejects.toBeInstanceOf(StateEventConflictError);
   });
 
-  it("atomically claims a verified legacy record and all three private indexes", async () => {
+  it("atomically claims a verified legacy record and all five private indexes", async () => {
     const fetcher = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
       ...resultOwnerContractProofResponses(),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
@@ -882,7 +958,8 @@ describe("atomic Git State append", () => {
       resultId: LEGACY_RESULT.resultId,
       authorityEventId: CLAIM_EVENT_ID,
     });
-    const treeRequest = fetcher.mock.calls[16]?.[1]?.body;
+    const treeRequest = fetcher.mock.calls.find(([, init]) =>
+      init?.method === "POST" && (typeof init.body === "string") && init.body.includes("base_tree"))?.[1]?.body;
     if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
     const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
     expect(tree.tree.map((entry) => entry.path)).toEqual([
@@ -890,9 +967,13 @@ describe("atomic Git State append", () => {
       `views/result-identities/11/${LEGACY_RESULT.resultId}.json`,
       `views/result-overlays/11/${LEGACY_RESULT.resultId}.json`,
       "views/result-source-records/34/src1_34ef08a904550548d360cc62407a77a7e5e8dfe9184c8d472e4f4266ffc3f826.json",
+      `views/result-amendments/11/${LEGACY_RESULT.resultId}.json`,
+      `views/result-release-status/11/${LEGACY_RESULT.resultId}.json`,
     ]);
     expect(tree.tree.every((entry) => entry.content.endsWith("\n"))).toBe(true);
     expect(tree.tree[1]?.content).toContain('"authority_event_id"');
+    expect(JSON.parse(tree.tree[4]?.content ?? "null")).toEqual(LEGACY_AMENDMENT_VIEW);
+    expect(JSON.parse(tree.tree[5]?.content ?? "null")).toEqual(LEGACY_RELEASE_STATUS_VIEW);
   });
 
   it("restarts the complete claim preflight after a stale-base CAS collision", async () => {
@@ -908,12 +989,16 @@ describe("atomic Git State append", () => {
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
       json({ sha: NEW_TREE }, 201),
       json({ sha: NEW_COMMIT }, 201),
       json({ message: "not a fast-forward" }, 409),
       json({ object: { sha: nextHead } }),
       json({ tree: { sha: nextTree } }),
       ...resultOwnerContractProofResponses(),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
@@ -940,6 +1025,8 @@ describe("atomic Git State append", () => {
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
     ]);
     await expect(repository(fetcher).claimLegacyResult({
       eventId: CLAIM_EVENT_ID,
@@ -949,7 +1036,9 @@ describe("atomic Git State append", () => {
       name: "ResultIdentityCollisionError",
       existingKind: "recorded",
     } satisfies Partial<ResultIdentityCollisionError>);
-    expect(fetcher).toHaveBeenCalledTimes(16);
+    expect(fetcher).toHaveBeenCalledTimes(
+      2 + 1 + Object.keys(RESULT_OWNER_CONTRACT_BLOBS).length + 6,
+    );
   });
 
   it("accepts a later exact same-key claim retry but rejects a forged source binding", async () => {
@@ -972,6 +1061,8 @@ describe("atomic Git State append", () => {
       ...resultOwnerContractProofResponses(),
       contents(guard),
       contents(overlay),
+      contents(LEGACY_AMENDMENT_VIEW),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
       contents(source),
       contents(claimEvent),
       contents(claimEvent),
@@ -990,6 +1081,8 @@ describe("atomic Git State append", () => {
       ...resultOwnerContractProofResponses(),
       contents(guard),
       contents(overlay),
+      contents(LEGACY_AMENDMENT_VIEW),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
       contents(source),
       contents({ ...claimEvent, event_id: otherEventId }),
     ]);
@@ -1006,6 +1099,8 @@ describe("atomic Git State append", () => {
       ...resultOwnerContractProofResponses(),
       contents(guard),
       contents(overlay),
+      contents(LEGACY_AMENDMENT_VIEW),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
       contents({ ...source, result_id: `r2_${"2".repeat(64)}` }),
       contents(claimEvent),
       contents(claimEvent),
@@ -1041,6 +1136,8 @@ describe("atomic Git State append", () => {
       ...resultOwnerContractProofResponses(),
       contents(guard),
       contents(overlay),
+      contents(LEGACY_AMENDMENT_VIEW),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
       new Response(null, { status: 404 }),
       new Response(null, { status: 404 }),
       contents(source),
@@ -1085,7 +1182,8 @@ describe("atomic Git State append", () => {
       resultId: LEGACY_RESULT.resultId,
       mutationEventId: BACKFILL_EVENT_ID,
     });
-    const treeRequest = fetcher.mock.calls[15]?.[1]?.body;
+    const treeRequest = fetcher.mock.calls.find(([, init]) =>
+      init?.method === "POST" && (typeof init.body === "string") && init.body.includes("base_tree"))?.[1]?.body;
     if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
     const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
     expect(tree.tree.map((entry) => entry.path)).toEqual([

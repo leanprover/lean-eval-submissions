@@ -6,7 +6,7 @@ production metadata. It never rewrites a Results record, changes its stable
 result ID, or reinterprets its grandfathered solution-publication policy.
 
 The implementation is bound to private State contract commit
-`163e9314c881493e08d23baf35ff40456f9c2331`. Before an owner operation, the
+`fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f`. Before an owner operation, the
 Worker resolves protected State `main`, proves that it equals or descends from
 that commit, and checks the exact reviewed event schema, targeted-index
 schemas, materializer, result-owner index builder, validator, and contract
@@ -23,7 +23,7 @@ Both environments track these non-secret variables:
 
 ```text
 LEGACY_RESULT_OWNER_API_ENABLED=false
-RESULT_OWNER_STATE_CONTRACT_COMMIT=163e9314c881493e08d23baf35ff40456f9c2331
+RESULT_OWNER_STATE_CONTRACT_COMMIT=fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f
 ```
 
 The route exists only when the enable flag is exactly `true` and the contract
@@ -32,6 +32,16 @@ false. Enabling this owner-only API does not enable submission intake:
 production `INTAKE_ENABLED` remains independently false. OAuth start/callback
 may operate while intake is disabled only when the owner API gate is enabled;
 submission routes remain disabled.
+
+Local integration sequencing note: commit
+`fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f` is the unmerged State contract
+anchor. The local rollback qualification temporarily uses that same value as
+`state_main_commit` so this branch is internally testable. Before this branch
+is pushed, rebind that qualification field to the actual protected State
+`main` commit produced when the contract lands. The runtime contract anchor may
+remain `fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f` only if that exact commit lands
+unchanged and every pinned blob remains exact; otherwise refresh every contract
+pin and proof listed below.
 
 ## Authentication and requests
 
@@ -82,13 +92,20 @@ per string, and 256 bytes per object key. The known historical publication
 fields retain their stricter semantic limits.
 
 It then atomically creates `result.claimed`, the shared result-identity guard,
-the owner overlay, and the immutable source-record index. A modern
-`result.recorded` write reserves the same identity-guard path, so a claim can
-never collide silently with a server result. The global policy is one immutable
-result authority per deterministic result identity: whichever valid `claimed`
-or `recorded` guard lands first wins. A later claim, a modern result after a
-claim, or a second modern submission with the same owner/model/problem/revision
-tuple cannot adopt or replace that authority.
+the owner overlay, the immutable source-record index, the initial targeted
+amendment view, and the initial targeted release-status view. The release
+status is exactly `not_scheduled` with a null release-event marker. A modern
+`result.recorded` write reserves the same identity-guard path and creates the
+same two lifecycle views in its result transaction. When that transaction also
+contains `release.scheduled`, its release-status view is exactly `scheduled`
+and names the schedule event; otherwise it is `not_scheduled` with a null
+marker. A claim can therefore never collide silently with a server result, and
+every result authority begins with the complete targeted lifecycle indexes
+required by State validation. The global policy is one immutable result
+authority per deterministic result identity: whichever valid `claimed` or
+`recorded` guard lands first wins. A later claim, a modern result after a claim,
+or a second modern submission with the same owner/model/problem/revision tuple
+cannot adopt or replace that authority.
 
 Backfill one or more current metadata fields:
 
@@ -151,7 +168,7 @@ logs contain stage and error class only.
 ## Enable and rollback gate
 
 The first enablement has a zero-event migration precondition. At exact private
-State `main` commit `163e9314c881493e08d23baf35ff40456f9c2331`, inspected on
+State `main` commit `82a036df052b4bd66f358b50925e939c862ee6f3`, inspected on
 2026-08-24, the repository contained zero `result.recorded` events, zero
 `result.claimed` events, and zero files under `views/result-identities/` (the
 only event was `system.initialized`). Consequently no historical result guard

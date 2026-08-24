@@ -158,17 +158,22 @@ describe("Worker routing", () => {
   });
 
   it("returns a closed protected-contract proof for production readiness", async () => {
-    const contract = "163e9314c881493e08d23baf35ff40456f9c2331";
+    const contract = "fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f";
     const blobs = [
+      ["docs/result-amendment-lifecycle.md", "6ef59628f12820a4af64ff9bff4fb174d1749684"],
       ["docs/result-owner-operational-indexes.md", "2f784609f9117caf74cb7042e9ea45732925d77b"],
       ["schema/result-identity-guard-v1.schema.json", "1620b6d8aed37f652958ac86e311c00578edc8b4"],
+      ["schema/result-amendment-view-v1.schema.json", "20282df2b419466f32998b93b49c55b107ed6f35"],
       ["schema/result-overlay-view-v1.schema.json", "1b50a92a76891bd21e0b67f7f40ab9c86d50beed"],
       ["schema/result-overlays-v1.schema.json", "41d4078133d6854bf8de839873a3f58e9ba1afd1"],
+      ["schema/result-release-status-view-v1.schema.json", "7f115230736e5d45074e8172f6fe4e5ee1992021"],
       ["schema/result-source-record-index-v1.schema.json", "4543225e0833af00913e436185532a769debebc1"],
       ["schema/state-event-v1.schema.json", "5b670204c86c440b56afd81f62bd097e3b399be7"],
       ["scripts/materialize_state.py", "f7985b70b6409616ac2020a2be2337eca13c640d"],
+      ["scripts/result_amendments.py", "61b44743c73d152fa92c489ac9228d16f0b694fd"],
       ["scripts/result_owner_indexes.py", "c07c29a81eb2ca5058563a8411c26f9358bde3e4"],
-      ["scripts/validate_state.py", "0b4c876475fcc9c9d5cf6269c800509530673bb4"],
+      ["scripts/result_release_status.py", "27bae3e6faa9275463a1440483512e23bfda2f6e"],
+      ["scripts/validate_state.py", "23f9fdf8bffb4c24c4e0d67255c514ad8b2ebfbe"],
     ] as const;
     const replies = [
       Response.json({ permissions: { push: true } }),
@@ -214,7 +219,7 @@ describe("Worker routing", () => {
       state_event_schema_sha256:
         "af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb",
     });
-    expect(upstream).toHaveBeenCalledTimes(15);
+    expect(upstream).toHaveBeenCalledTimes(6 + blobs.length);
     upstream.mockRestore();
   });
 

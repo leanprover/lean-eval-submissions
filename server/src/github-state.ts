@@ -15,12 +15,18 @@ import {
   claimedOverlay,
   claimedSourceIndex,
   decodeResultIdentityGuard,
+  decodeResultAmendmentView,
+  decodeResultReleaseStatusView,
   decodeResultOverlay,
   decodeSourceRecordIndex,
+  initialResultAmendmentView,
+  initialResultReleaseStatusView,
   metadataAlreadyEqual,
   recordedGuard,
+  resultAmendmentPath,
   resultIdentityPath,
   resultOverlayPath,
+  resultReleaseStatusPath,
   sourceRecordId,
   sourceRecordPath,
   RESULT_OWNER_STATE_CONTRACT_COMMIT,
@@ -47,15 +53,20 @@ const MAX_WRITE_ATTEMPTS = 8;
 const SHA = /^[0-9a-f]{40}$/i;
 const GITHUB_TIMEOUT_MS = 5000;
 const RESULT_OWNER_CONTRACT_BLOBS = {
+  "docs/result-amendment-lifecycle.md": "6ef59628f12820a4af64ff9bff4fb174d1749684",
   "docs/result-owner-operational-indexes.md": "2f784609f9117caf74cb7042e9ea45732925d77b",
   "schema/result-identity-guard-v1.schema.json": "1620b6d8aed37f652958ac86e311c00578edc8b4",
+  "schema/result-amendment-view-v1.schema.json": "20282df2b419466f32998b93b49c55b107ed6f35",
   "schema/result-overlay-view-v1.schema.json": "1b50a92a76891bd21e0b67f7f40ab9c86d50beed",
   "schema/result-overlays-v1.schema.json": "41d4078133d6854bf8de839873a3f58e9ba1afd1",
+  "schema/result-release-status-view-v1.schema.json": "7f115230736e5d45074e8172f6fe4e5ee1992021",
   "schema/result-source-record-index-v1.schema.json": "4543225e0833af00913e436185532a769debebc1",
   "schema/state-event-v1.schema.json": "5b670204c86c440b56afd81f62bd097e3b399be7",
   "scripts/materialize_state.py": "f7985b70b6409616ac2020a2be2337eca13c640d",
+  "scripts/result_amendments.py": "61b44743c73d152fa92c489ac9228d16f0b694fd",
   "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
-  "scripts/validate_state.py": "0b4c876475fcc9c9d5cf6269c800509530673bb4",
+  "scripts/result_release_status.py": "27bae3e6faa9275463a1440483512e23bfda2f6e",
+  "scripts/validate_state.py": "23f9fdf8bffb4c24c4e0d67255c514ad8b2ebfbe",
 } as const;
 const RESULT_OWNER_CONTRACT_PROOF_CACHE_LIMIT = 64;
 const RESULT_OWNER_CONTRACT_PROOF_ID = Object.entries(RESULT_OWNER_CONTRACT_BLOBS)
@@ -1071,8 +1082,23 @@ export class GitHubStateRepository {
     const viewPath = submissionViewPath(decodedView.submission_id);
     const identityPath = resultIdentityPath(result.subject_id);
     const identityGuard = recordedGuard(result.subject_id, result.event_id);
+    const amendmentPath = resultAmendmentPath(result.subject_id);
+    const amendmentView = initialResultAmendmentView({
+      resultId: result.subject_id,
+      ownerLogin: decodedView.owner_login,
+      declaredModel: decodedView.submission.declared_model,
+      problemId: result.payload.problem_id,
+      statementRevision: result.payload.statement_revision,
+      authorityEventId: result.event_id,
+    });
+    const releaseStatusPath = resultReleaseStatusPath(result.subject_id);
+    const releaseStatusView = initialResultReleaseStatusView(
+      result.subject_id,
+      result.event_id,
+      release?.event_id ?? null,
+    );
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
-      const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+      const snapshot = await this.#resultOwnerSnapshot();
       const current = await readSubmissionAt(
         this.#config,
         this.#fetcher,
@@ -1084,13 +1110,37 @@ export class GitHubStateRepository {
         const existing = await Promise.all([
           ...paths.map((path) => readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)),
           readPathAt(this.#config, this.#fetcher, identityPath, snapshot.headSha),
+          readPathAt(this.#config, this.#fetcher, amendmentPath, snapshot.headSha),
+          readPathAt(this.#config, this.#fetcher, releaseStatusPath, snapshot.headSha),
         ]);
-        const currentGuardEntry = existing.at(-1);
+        const currentGuardEntry = existing.at(paths.length);
+        const currentAmendmentEntry = existing.at(paths.length + 1);
+        const currentReleaseStatusEntry = existing.at(paths.length + 2);
+        let currentAmendment;
+        let currentReleaseStatus;
+        try {
+          currentAmendment = decodeResultAmendmentView(
+            currentAmendmentEntry?.found ? currentAmendmentEntry.value : null,
+          );
+          currentReleaseStatus = decodeResultReleaseStatusView(
+            currentReleaseStatusEntry?.found ? currentReleaseStatusEntry.value : null,
+          );
+        } catch {
+          throw new StateEventConflictError(viewPath);
+        }
         if (
           existing.slice(0, paths.length).some((entry, index) =>
             !entry.found || canonicalJson(entry.value) !== canonicalJson(events[index])) ||
           !currentGuardEntry?.found ||
           canonicalJson(currentGuardEntry.value) !== canonicalJson(identityGuard) ||
+          currentAmendment.result_id !== result.subject_id ||
+          currentAmendment.owner_login !== decodedView.owner_login ||
+          currentAmendment.declared_model !== decodedView.submission.declared_model ||
+          currentAmendment.authority_event_id !== result.event_id ||
+          currentAmendment.base_problem_id !== result.payload.problem_id ||
+          currentAmendment.base_statement_revision !== result.payload.statement_revision ||
+          currentReleaseStatus.result_id !== result.subject_id ||
+          currentReleaseStatus.authority_event_id !== result.event_id ||
           canonicalJson(current) !== canonicalJson(decodedView)
         ) {
           throw new StateEventConflictError(viewPath);
@@ -1104,10 +1154,12 @@ export class GitHubStateRepository {
       ) {
         throw new StateEventConflictError(viewPath);
       }
-      const [eventEntries, guardEntry] = await Promise.all([
+      const [eventEntries, guardEntry, amendmentEntry, releaseStatusEntry] = await Promise.all([
         Promise.all(paths.map((path) =>
           readPathAt(this.#config, this.#fetcher, path, snapshot.headSha))),
         readPathAt(this.#config, this.#fetcher, identityPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, amendmentPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, releaseStatusPath, snapshot.headSha),
       ]);
       if (guardEntry.found) {
         let guard;
@@ -1130,6 +1182,8 @@ export class GitHubStateRepository {
         // second result that this callback may safely adopt.
         throw new StateEventConflictError(viewPath);
       }
+      if (amendmentEntry.found) throw new StateEventConflictError(amendmentPath);
+      if (releaseStatusEntry.found) throw new StateEventConflictError(releaseStatusPath);
       const eventConflict = eventEntries.findIndex((entry) => entry.found);
       if (eventConflict >= 0) {
         throw new StateEventConflictError(paths[eventConflict] ?? viewPath);
@@ -1142,6 +1196,8 @@ export class GitHubStateRepository {
         [
           { path: viewPath, value: decodedView },
           { path: identityPath, value: identityGuard },
+          { path: amendmentPath, value: amendmentView },
+          { path: releaseStatusPath, value: releaseStatusView },
         ],
         `Record accepted result ${result.subject_id} for ${decodedView.submission_id}`,
       );
@@ -1176,18 +1232,34 @@ export class GitHubStateRepository {
     validateStateEvent(event);
     const identityPath = resultIdentityPath(verified.resultId);
     const overlayPath = resultOverlayPath(verified.resultId);
+    const amendmentPath = resultAmendmentPath(verified.resultId);
+    const releaseStatusPath = resultReleaseStatusPath(verified.resultId);
     const sourceId = await sourceRecordId(verified.baseResult);
     const sourcePath = sourceRecordPath(sourceId);
     const eventPath = stateEventPath(event);
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
       const snapshot = await this.#resultOwnerSnapshot();
-      const [guardEntry, overlayEntry, incomingSourceEntry, requestedEventEntry] = await Promise.all([
+      const [
+        guardEntry,
+        overlayEntry,
+        amendmentEntry,
+        releaseStatusEntry,
+        incomingSourceEntry,
+        requestedEventEntry,
+      ] = await Promise.all([
         readPathAt(this.#config, this.#fetcher, identityPath, snapshot.headSha),
         readPathAt(this.#config, this.#fetcher, overlayPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, amendmentPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, releaseStatusPath, snapshot.headSha),
         readPathAt(this.#config, this.#fetcher, sourcePath, snapshot.headSha),
         readPathAt(this.#config, this.#fetcher, eventPath, snapshot.headSha),
       ]);
-      if (guardEntry.found || overlayEntry.found) {
+      if (
+        guardEntry.found ||
+        overlayEntry.found ||
+        amendmentEntry.found ||
+        releaseStatusEntry.found
+      ) {
         let guard;
         try {
           guard = decodeResultIdentityGuard(guardEntry.found ? guardEntry.value : null);
@@ -1203,11 +1275,31 @@ export class GitHubStateRepository {
         } catch {
           throw new StateEventConflictError(identityPath);
         }
+        let amendment;
+        let releaseStatus;
+        try {
+          amendment = decodeResultAmendmentView(
+            amendmentEntry.found ? amendmentEntry.value : null,
+          );
+          releaseStatus = decodeResultReleaseStatusView(
+            releaseStatusEntry.found ? releaseStatusEntry.value : null,
+          );
+        } catch {
+          throw new StateEventConflictError(identityPath);
+        }
         if (
           guard.result_id !== verified.resultId ||
           overlay.result_id !== verified.resultId ||
           overlay.owner_login !== verified.ownerLogin ||
-          overlay.claim_event_id !== guard.authority_event_id
+          overlay.claim_event_id !== guard.authority_event_id ||
+          amendment.result_id !== verified.resultId ||
+          amendment.owner_login !== verified.ownerLogin ||
+          amendment.declared_model !== overlay.base_result.declared_model ||
+          amendment.authority_event_id !== guard.authority_event_id ||
+          amendment.base_problem_id !== overlay.base_result.problem_id ||
+          amendment.base_statement_revision !== overlay.base_result.statement_revision ||
+          releaseStatus.result_id !== verified.resultId ||
+          releaseStatus.authority_event_id !== guard.authority_event_id
         ) {
           throw new StateEventConflictError(identityPath);
         }
@@ -1282,6 +1374,18 @@ export class GitHubStateRepository {
       const guard = claimedGuard(verified.resultId, request.eventId);
       const overlay = claimedOverlay(verified, request.eventId, request.occurredAt);
       const source = await claimedSourceIndex(verified, request.eventId);
+      const amendment = initialResultAmendmentView({
+        resultId: verified.resultId,
+        ownerLogin: verified.ownerLogin,
+        declaredModel: verified.baseResult.declared_model,
+        problemId: verified.baseResult.problem_id,
+        statementRevision: verified.baseResult.statement_revision,
+        authorityEventId: request.eventId,
+      });
+      const releaseStatus = initialResultReleaseStatusView(
+        verified.resultId,
+        request.eventId,
+      );
       const commit = await createCommit(
         this.#config,
         this.#fetcher,
@@ -1291,6 +1395,8 @@ export class GitHubStateRepository {
           { path: identityPath, value: guard },
           { path: overlayPath, value: overlay },
           { path: sourcePath, value: source },
+          { path: amendmentPath, value: amendment },
+          { path: releaseStatusPath, value: releaseStatus },
         ],
         `Claim legacy result ${verified.resultId}`,
       );

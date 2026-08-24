@@ -281,7 +281,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         self.assertIs(plan["legacy_result_owner_api_enabled"], False)
         self.assertEqual(
             plan["result_owner_state_contract_commit"],
-            "163e9314c881493e08d23baf35ff40456f9c2331",
+            "fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f",
         )
         self.assertIs(plan["promotion_canary_enabled"], False)
         self.assertIs(plan["replay_enabled"], False)
@@ -876,7 +876,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "replay_enabled": False,
                 "staging_acceptance_enabled": False,
                 "result_owner_state_contract_commit": (
-                    "163e9314c881493e08d23baf35ff40456f9c2331"
+                    "fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f"
                 ),
             },
         )

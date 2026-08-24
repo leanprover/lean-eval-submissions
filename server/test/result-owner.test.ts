@@ -6,11 +6,17 @@ import {
   backfilledOverlay,
   canonicalJson,
   claimedOverlay,
+  decodeInitialResultAmendmentView,
+  decodeResultReleaseStatusView,
   decodeResultIdentityGuard,
   decodeResultOverlay,
   decodeSourceRecordIndex,
+  initialResultAmendmentView,
+  initialResultReleaseStatusView,
   metadataAlreadyEqual,
+  resultAmendmentPath,
   resultId,
+  resultReleaseStatusPath,
   sha256Hex,
   sourceRecordId,
   type VerifiedLegacyResult,
@@ -120,6 +126,73 @@ describe("legacy result owner contracts", () => {
     });
     expect(metadataAlreadyEqual(backfilled, { web_access: false })).toBe(true);
     expect(metadataAlreadyEqual(backfilled, { web_access: true })).toBe(false);
+  });
+
+  it("matches the State materializers for initial amendment and release-status views", () => {
+    const amendment = initialResultAmendmentView({
+      resultId: VERIFIED.resultId,
+      ownerLogin: VERIFIED.ownerLogin,
+      declaredModel: VERIFIED.baseResult.declared_model,
+      problemId: VERIFIED.baseResult.problem_id,
+      statementRevision: VERIFIED.baseResult.statement_revision,
+      authorityEventId: EVENT_ID,
+    });
+    expect(resultAmendmentPath(VERIFIED.resultId)).toBe(
+      `views/result-amendments/11/${VERIFIED.resultId}.json`,
+    );
+    expect(amendment).toEqual({
+      schema_version: 1,
+      result_id: VERIFIED.resultId,
+      owner_login: "alice",
+      declared_model: "Example Model",
+      authority_event_id: EVENT_ID,
+      base_problem_id: "two_plus_two",
+      base_statement_revision: 1,
+      effective_problem_id: "two_plus_two",
+      effective_statement_revision: 1,
+      mutation_event_id: EVENT_ID,
+      problem_repair: null,
+      applied_problem_repair: null,
+      retraction: null,
+      leaderboard_eligible: true,
+    });
+    expect(resultReleaseStatusPath(VERIFIED.resultId)).toBe(
+      `views/result-release-status/11/${VERIFIED.resultId}.json`,
+    );
+    expect(initialResultReleaseStatusView(VERIFIED.resultId, EVENT_ID)).toEqual({
+      schema_version: 1,
+      result_id: VERIFIED.resultId,
+      authority_event_id: EVENT_ID,
+      status: "not_scheduled",
+      release_event_id: null,
+    });
+    const schedule = "0198abcd-0000-7000-8000-000000000002";
+    expect(initialResultReleaseStatusView(VERIFIED.resultId, EVENT_ID, schedule)).toEqual({
+      schema_version: 1,
+      result_id: VERIFIED.resultId,
+      authority_event_id: EVENT_ID,
+      status: "scheduled",
+      release_event_id: schedule,
+    });
+  });
+
+  it("rejects non-initial amendment views and incoherent release markers", () => {
+    const amendment = initialResultAmendmentView({
+      resultId: VERIFIED.resultId,
+      ownerLogin: VERIFIED.ownerLogin,
+      declaredModel: VERIFIED.baseResult.declared_model,
+      problemId: VERIFIED.baseResult.problem_id,
+      statementRevision: VERIFIED.baseResult.statement_revision,
+      authorityEventId: EVENT_ID,
+    });
+    expect(() => decodeInitialResultAmendmentView({
+      ...amendment,
+      mutation_event_id: "0198abcd-0000-7000-8000-000000000002",
+    })).toThrow(/initial result amendment view values/u);
+    expect(() => decodeResultReleaseStatusView({
+      ...initialResultReleaseStatusView(VERIFIED.resultId, EVENT_ID),
+      status: "published",
+    })).toThrow(/release-status view values/u);
   });
 
   it("rejects unknown, forged, and cross-bound operational documents", () => {
