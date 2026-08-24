@@ -186,6 +186,33 @@ a bounded backoff. State validation must deploy the matching view/outbox
 contract before intake is enabled. Submission-view schema version 1 remains
 readable for pre-lifecycle records; any lifecycle append upgrades the same
 canonical path to the strict lifecycle-aware schema.
+
+Automatic protected-main deployment has one staging-only promotion exception
+while ordinary intake remains disabled. Authenticated `POST
+/internal/v1/promotion-canary` accepts a deterministic, withheld synthetic
+fixture for the exact `DEPLOYED_COMMIT` and its matching immutable dispatch
+tag plus the deployment `GITHUB_RUN_ID`/`GITHUB_RUN_ATTEMPT`. Polls for that
+tuple reuse the exact submission and evidence; a workflow rerun creates fresh
+material. From one current branch snapshot the State adapter creates two
+sibling commits, applies one, observes the other's real forward-only 409/422
+collision, then rebuilds/retries and verifies the evidence on the new head. The
+winner is an intentional empty-tree barrier commit: the distinct commit object
+advances the ref without changing the State tree, which remains valid under the
+repository's full-tree and append-only CI checks.
+
+The request leaves the fixed-`ca`-shard dispatch outbox pending. The actual Cron
+Trigger discovers all strict run-scoped canaries, contains source-free errors,
+and calls the normal broker reconciliation/State-success path. The broker
+targets the dedicated permissionless `promotion-canary.yml` no-op at the exact
+tag; it never dispatches the full submission workflow or creates audit,
+evaluation, Results, or release records. The synthetic timestamp is derived in
+a fixed 2026-08-20 window solely for deterministic IDs. The production config
+explicitly disables this authority, and the route rejects every non-staging
+runtime. A succeeded dispatch proves GitHub accepted the exact
+`workflow_dispatch` through broker/reconciliation; it does not prove the
+asynchronous no-op job completed. Responses contain no fixture contents,
+credentials, or upstream response bodies.
+
 State independently reconstructs archive/evaluation/result summaries from the
 immutable event graph and rejects a stale or fabricated view. The safe current
 behavior remains `INTAKE_ENABLED=false` until the staged live path and all

@@ -195,25 +195,28 @@ async function createCommit(
   writes: readonly TreeWrite[] = [],
   message?: string,
 ): Promise<string> {
-  const tree = await jsonCall(config, fetcher, "/git/trees", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      base_tree: snapshot.treeSha,
-      tree: [
-        ...events.map((event) => ({
-          path: stateEventPath(event),
-          mode: "100644",
-          type: "blob",
-          content: `${JSON.stringify(event, null, 2)}\n`,
-        })),
-        ...writes.map((write) => write.value === null
-          ? { path: write.path, mode: "100644", type: "blob", sha: null }
-          : { path: write.path, mode: "100644", type: "blob", content: `${JSON.stringify(write.value, null, 2)}\n` }),
-      ],
-    }),
-  });
-  const treeSha = requiredSha(object(tree, "created State tree").sha, "created State tree");
+  let treeSha = snapshot.treeSha;
+  if (events.length > 0 || writes.length > 0) {
+    const tree = await jsonCall(config, fetcher, "/git/trees", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        base_tree: snapshot.treeSha,
+        tree: [
+          ...events.map((event) => ({
+            path: stateEventPath(event),
+            mode: "100644",
+            type: "blob",
+            content: `${JSON.stringify(event, null, 2)}\n`,
+          })),
+          ...writes.map((write) => write.value === null
+            ? { path: write.path, mode: "100644", type: "blob", sha: null }
+            : { path: write.path, mode: "100644", type: "blob", content: `${JSON.stringify(write.value, null, 2)}\n` }),
+        ],
+      }),
+    });
+    treeSha = requiredSha(object(tree, "created State tree").sha, "created State tree");
+  }
   const commit = await jsonCall(config, fetcher, "/git/commits", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -490,6 +493,80 @@ export class GitHubStateRepository {
       throw new GitHubStateError(409, "State branch rejected a same-commit write probe");
     }
     return snapshot.headSha;
+  }
+
+  async provePromotionCanaryContention(event: WritableStateEvent): Promise<{
+    collisionObserved: boolean;
+    retryApplied: boolean;
+    idempotent: boolean;
+    commit: string;
+    created: boolean;
+  }> {
+    validateStateEvent(event);
+    if (event.event_type !== "authentication.nonce_consumed") {
+      throw new TypeError("promotion canary evidence must be an authentication.nonce_consumed event");
+    }
+    const path = stateEventPath(event);
+    const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+    const existing = await readPathAt(this.#config, this.#fetcher, path, snapshot.headSha);
+    if (existing.found) {
+      try {
+        validateStateEvent(existing.value);
+      } catch {
+        throw new StateEventConflictError(path);
+      }
+      if (canonicalJson(existing.value) !== canonicalJson(event)) {
+        throw new StateEventConflictError(path);
+      }
+      return {
+        collisionObserved: true,
+        retryApplied: true,
+        idempotent: true,
+        commit: snapshot.headSha,
+        created: false,
+      };
+    }
+
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const current = attempt === 0
+        ? snapshot
+        : await branchSnapshot(this.#config, this.#fetcher);
+      const winner = await createCommit(
+        this.#config,
+        this.#fetcher,
+        current,
+        [],
+        [],
+        `Promotion canary CAS winner ${event.event_id}`,
+      );
+      const contender = await createCommit(
+        this.#config,
+        this.#fetcher,
+        current,
+        [event],
+        [],
+        `Promotion canary CAS contender ${event.event_id}`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, winner)) !== "applied") {
+        if (attempt === MAX_WRITE_ATTEMPTS) {
+          throw new GitHubStateError(409, "State branch kept changing before the canary collision");
+        }
+        await pause(attempt);
+        continue;
+      }
+      if ((await updateReference(this.#config, this.#fetcher, contender)) !== "collision") {
+        throw new GitHubStateError(502, "promotion canary competing commit did not collide");
+      }
+      const outcome = await this.appendEvent(event);
+      return {
+        collisionObserved: true,
+        retryApplied: true,
+        idempotent: !outcome.created,
+        commit: outcome.commit,
+        created: outcome.created,
+      };
+    }
+    throw new Error("unreachable promotion canary CAS attempt");
   }
 
   async readSubmission(submissionId: string): Promise<SubmissionView | null> {

@@ -41,6 +41,7 @@ import {
 } from "./github-state";
 import {
   buildDispatchRequest,
+  buildPromotionCanaryDispatchRequest,
   GitHubProvider,
   GitHubProviderError,
   type GitHubIdentity,
@@ -84,6 +85,7 @@ export type RuntimeEnv = Omit<
   | "INTAKE_ENABLED"
   | "LIFECYCLE_CALLBACK_TOKEN"
   | "OAUTH_CALLBACK_URL"
+  | "PROMOTION_CANARY_ENABLED"
   | "READINESS_TOKEN"
   | "STATE_REPOSITORY"
 > &
@@ -105,6 +107,7 @@ export type RuntimeEnv = Omit<
     INTAKE_ENABLED: string;
     LIFECYCLE_CALLBACK_TOKEN?: string;
     OAUTH_CALLBACK_URL?: string;
+    PROMOTION_CANARY_ENABLED?: string;
     READINESS_TOKEN?: string;
     STATE_REPOSITORY: string;
   }>;
@@ -139,6 +142,12 @@ export type StateAccess = Readonly<{
     nextOutbox: DispatchOutbox | null,
   ): Promise<{ view: SubmissionView }>;
   listDispatchOutbox(shard: string): Promise<readonly DispatchOutbox[]>;
+  provePromotionCanaryContention?(event: WritableStateEvent): Promise<{
+    collisionObserved: boolean;
+    retryApplied: boolean;
+    idempotent: boolean;
+    created: boolean;
+  }>;
 }>;
 export type ApiDependencies = Readonly<{
   now?: () => number;
@@ -157,6 +166,13 @@ const JSON_HEADERS = {
 } as const;
 const SESSION_COOKIE = "lean_eval_session";
 const OAUTH_COOKIE = "lean_eval_oauth_state";
+const PROMOTION_CANARY_REPOSITORY = "kim-em/lean-eval-intake-fixture";
+const PROMOTION_CANARY_SOURCE_COMMIT = "ae38f4d3e4ad2991212135435f54e6640bcc89e7";
+const PROMOTION_CANARY_LOGIN = "kim-em";
+const PROMOTION_CANARY_EPOCH_MS = Date.UTC(2026, 7, 20);
+const PROMOTION_CANARY_OUTBOX_SHARD = "ca";
+const PROMOTION_CANARY_MODEL = /^lean-eval automatic staging promotion canary commit ([0-9a-f]{40}) run ([1-9][0-9]{0,19}) attempt ([1-9][0-9]{0,5})$/;
+const PROMOTION_CANARY_NOTES = "Synthetic staging-only promotion canary using a deliberately rejected fixture; never a benchmark or publication claim.";
 
 function json(body: unknown, status = 200, additionalHeaders?: HeadersInit): Response {
   const headers = new Headers(JSON_HEADERS);
@@ -358,6 +374,147 @@ function canonicalMilliseconds(milliseconds: number): string {
   return new Date(milliseconds).toISOString();
 }
 
+type PromotionCanaryRequest = Readonly<{
+  schema_version: 2;
+  deployed_commit: string;
+  dispatch_ref: string;
+  controller_run_id: string;
+  controller_run_attempt: string;
+}>;
+
+type PromotionCanaryIdentity = Readonly<{
+  commit: string;
+  runId: string;
+  runAttempt: string;
+}>;
+
+type PromotionCanaryMaterial = Readonly<{
+  acceptedAtMilliseconds: number;
+  evidenceEvent: WritableStateEvent;
+  grant: SubmissionGrant;
+  input: SubmissionInput;
+}>;
+
+function decodePromotionCanaryRequest(value: unknown): PromotionCanaryRequest {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new ApiDecodeError("promotion canary request must be an object");
+  }
+  const request = value as Record<string, unknown>;
+  if (
+    Object.keys(request).sort().join(",") !==
+      "controller_run_attempt,controller_run_id,deployed_commit,dispatch_ref,schema_version" ||
+    request.schema_version !== 2 ||
+    typeof request.deployed_commit !== "string" ||
+    !/^[0-9a-f]{40}$/.test(request.deployed_commit) ||
+    typeof request.dispatch_ref !== "string" ||
+    !/^lean-eval-dispatch\/[0-9a-f]{40}$/.test(request.dispatch_ref) ||
+    typeof request.controller_run_id !== "string" ||
+    !/^[1-9][0-9]{0,19}$/.test(request.controller_run_id) ||
+    typeof request.controller_run_attempt !== "string" ||
+    !/^[1-9][0-9]{0,5}$/.test(request.controller_run_attempt)
+  ) {
+    throw new ApiDecodeError("promotion canary request is not canonical");
+  }
+  return request as PromotionCanaryRequest;
+}
+
+async function canaryDigest(
+  commit: string,
+  identity: PromotionCanaryIdentity,
+  label: string,
+): Promise<Uint8Array> {
+  return new Uint8Array(await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(
+      `lean-eval-promotion-canary-v2\0${commit}\0${identity.runId}\0${identity.runAttempt}\0${label}`,
+    ),
+  ));
+}
+
+function base64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
+}
+
+function uuidV7FromDigest(
+  digest: Uint8Array,
+  occurredAtMilliseconds: number,
+  fixedOutboxShard = false,
+): string {
+  if (digest.length !== 32) throw new TypeError("promotion canary digest must be SHA-256");
+  const bytes = digest.slice(0, 16);
+  let timestamp = BigInt(occurredAtMilliseconds);
+  for (let index = 5; index >= 0; index -= 1) {
+    bytes[index] = Number(timestamp & 0xffn);
+    timestamp >>= 8n;
+  }
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x70;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  if (fixedOutboxShard) bytes[15] = 0xca;
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+async function promotionCanaryMaterial(
+  identity: PromotionCanaryIdentity,
+): Promise<PromotionCanaryMaterial> {
+  const commit = identity.commit;
+  const [submissionDigest, nonceDigestBytes, metadataDigest, evidenceDigest, timeDigest] = await Promise.all([
+    canaryDigest(commit, identity, "submission"),
+    canaryDigest(commit, identity, "nonce"),
+    canaryDigest(commit, identity, "metadata"),
+    canaryDigest(commit, identity, "cas-evidence"),
+    canaryDigest(commit, identity, "accepted-at"),
+  ]);
+  const offset = (
+    ((timeDigest[0] ?? 0) * 0x1000000) +
+    ((timeDigest[1] ?? 0) * 0x10000) +
+    ((timeDigest[2] ?? 0) * 0x100) +
+    (timeDigest[3] ?? 0)
+  ) % (24 * 60 * 60 * 1000 - 10);
+  const acceptedAtMilliseconds = PROMOTION_CANARY_EPOCH_MS + offset;
+  const issuedAt = Math.floor(acceptedAtMilliseconds / 1000);
+  const nonce = base64Url(nonceDigestBytes);
+  const evidenceNonce = base64Url(evidenceDigest);
+  const grant: SubmissionGrant = {
+    kind: "submission_grant",
+    login: PROMOTION_CANARY_LOGIN,
+    submission_id: uuidV7FromDigest(submissionDigest, acceptedAtMilliseconds + 1, true),
+    nonce,
+    nonce_event_id: uuidV7FromDigest(
+      await canaryDigest(commit, identity, "nonce-event"),
+      acceptedAtMilliseconds,
+    ),
+    metadata_event_id: uuidV7FromDigest(metadataDigest, acceptedAtMilliseconds + 2),
+    issued_at: issuedAt,
+    expires_at: issuedAt + 600,
+  };
+  const input: SubmissionInput = {
+    problem_id: "two_plus_two",
+    problem_group: "formalization-evaluation",
+    statement_revision: 1,
+    declared_model: `lean-eval automatic staging promotion canary commit ${identity.commit} run ${identity.runId} attempt ${identity.runAttempt}`,
+    source_repository: PROMOTION_CANARY_REPOSITORY,
+    source_commit: PROMOTION_CANARY_SOURCE_COMMIT,
+    source_visibility: "private",
+    publication_choice: "withheld",
+    production_metadata: {
+      notes: PROMOTION_CANARY_NOTES,
+      web_access: false,
+      billing_mode: "unknown",
+    },
+  };
+  const evidenceEvent = await nonceEvent(
+    uuidV7FromDigest(evidenceDigest, acceptedAtMilliseconds + 4),
+    evidenceNonce,
+    "submission",
+    acceptedAtMilliseconds + 4,
+    issuedAt + 600,
+  );
+  return { acceptedAtMilliseconds, evidenceEvent, grant, input };
+}
+
 async function nonceEvent(
   eventId: string,
   nonce: string,
@@ -436,16 +593,27 @@ async function dispatchSubmission(
   submissionId: string,
   login: string,
   input: SubmissionInput,
+  workflowRef: string,
+  target: "submission" | "promotion_canary" = "submission",
 ): Promise<void> {
-  const request = buildDispatchRequest(
-    env.DISPATCH_REPOSITORY ?? "leanprover/lean-eval-submissions",
-    env.DISPATCH_WORKFLOW ?? "submission.yml",
-    env.DISPATCH_WORKFLOW_REF ?? "",
-    submissionId,
-    login,
-    env.DEPLOYMENT_ENVIRONMENT,
-    input,
-  );
+  const identity = promotionCanaryIdentity(input);
+  const request = target === "promotion_canary"
+    ? buildPromotionCanaryDispatchRequest(
+      env.DISPATCH_REPOSITORY ?? "leanprover/lean-eval-submissions",
+      workflowRef,
+      submissionId,
+      identity?.runId ?? "",
+      identity?.runAttempt ?? "",
+    )
+    : buildDispatchRequest(
+      env.DISPATCH_REPOSITORY ?? "leanprover/lean-eval-submissions",
+      env.DISPATCH_WORKFLOW ?? "submission.yml",
+      workflowRef,
+      submissionId,
+      login,
+      env.DEPLOYMENT_ENVIRONMENT,
+      input,
+    );
   if (dependencies.dispatch) return dependencies.dispatch(request);
   await provider(env, dependencies).dispatch(env.GITHUB_DISPATCH_TOKEN ?? "", request);
 }
@@ -515,12 +683,21 @@ async function reconcileDispatch(
   ledger: StateAccess,
   view: SubmissionView,
   nowMilliseconds: number,
+  target: "submission" | "promotion_canary" = "submission",
 ): Promise<SubmissionView> {
   if (view.dispatch.status === "succeeded") return view;
   const attempt = view.dispatch.attempts + 1;
   if (attempt > 32) return view;
   try {
-    await dispatchSubmission(env, dependencies, view.submission_id, view.owner_login, view.submission);
+    await dispatchSubmission(
+      env,
+      dependencies,
+      view.submission_id,
+      view.owner_login,
+      view.submission,
+      view.dispatch.workflow_ref,
+      target,
+    );
     const succeeded: SubmissionView = {
       ...view,
       dispatch: {
@@ -601,6 +778,168 @@ async function acceptSubmission(
     reconciled.dispatch.status === "succeeded" && !outcome.created ? 200 : 202,
     { location: `/api/v1/submissions/${grant.submission_id}` },
   );
+}
+
+function promotionCanaryEnabled(env: RuntimeEnv): boolean {
+  return env.DEPLOYMENT_ENVIRONMENT === "staging" && env.PROMOTION_CANARY_ENABLED === "true";
+}
+
+function requirePromotionCanaryConfiguration(env: RuntimeEnv, dependencies: ApiDependencies): void {
+  if (!promotionCanaryEnabled(env)) {
+    throw new GitHubStateError(503, "promotion canary is not enabled for this staging Worker");
+  }
+  if (env.STATE_REPOSITORY !== "leanprover/lean-eval-state-staging") {
+    throw new GitHubStateError(503, "promotion canary is not bound to staging State");
+  }
+  if (env.DISPATCH_REPOSITORY !== "leanprover/lean-eval-submissions") {
+    throw new GitHubProviderError(503, "promotion canary dispatch repository is not canonical");
+  }
+  if (!/^[0-9a-f]{40}$/.test(env.DEPLOYED_COMMIT)) {
+    throw new GitHubStateError(503, "promotion canary is not bound to an exact deployed commit");
+  }
+  if (env.DISPATCH_WORKFLOW_REF !== `lean-eval-dispatch/${env.DEPLOYED_COMMIT}`) {
+    throw new GitHubProviderError(503, "promotion canary dispatch ref does not bind the deployed commit");
+  }
+  requireDispatchConfiguration(env, dependencies);
+}
+
+function assertPromotionCanaryView(expected: SubmissionView, actual: SubmissionView): void {
+  if (
+    actual.schema_version !== 2 ||
+    expected.schema_version !== 2 ||
+    actual.submission_id !== expected.submission_id ||
+    actual.owner_login !== expected.owner_login ||
+    actual.received_event_id !== expected.received_event_id ||
+    actual.mutation_event_id !== expected.mutation_event_id ||
+    actual.metadata_event_id !== expected.metadata_event_id ||
+    actual.publication_event_id !== null ||
+    actual.accepted_at !== expected.accepted_at ||
+    JSON.stringify(actual.submission) !== JSON.stringify(expected.submission) ||
+    JSON.stringify(actual.production_metadata) !== JSON.stringify(expected.production_metadata) ||
+    actual.publication_choice !== "withheld" ||
+    actual.archive.status !== "pending" ||
+    actual.evaluation.status !== "pending" ||
+    actual.result_id !== null ||
+    actual.result_event_id !== null ||
+    actual.dispatch.workflow_ref !== expected.dispatch.workflow_ref ||
+    actual.dispatch.requested_at !== expected.dispatch.requested_at ||
+    (actual.dispatch.status === "pending" &&
+      (actual.dispatch.attempts !== 0 || actual.dispatch.last_error_code !== null)) ||
+    (actual.dispatch.status === "failed" &&
+      (actual.dispatch.attempts < 1 || actual.dispatch.last_error_code === null)) ||
+    (actual.dispatch.status === "succeeded" &&
+      (actual.dispatch.attempts < 1 || actual.dispatch.last_error_code !== null))
+  ) {
+    throw new GitHubStateError(502, "promotion canary State view does not match the exact synthetic intake");
+  }
+}
+
+async function promotionCanary(
+  request: Request,
+  env: RuntimeEnv,
+  dependencies: ApiDependencies,
+): Promise<Response> {
+  if (!(await readinessAuthorized(request, env))) return json({ error: "not_found" }, 404);
+  requirePromotionCanaryConfiguration(env, dependencies);
+  if (intakeEnabled(env)) {
+    throw new GitHubStateError(503, "promotion canary requires ordinary intake to remain disabled");
+  }
+  const canaryRequest = decodePromotionCanaryRequest(await readJson(request));
+  if (
+    canaryRequest.deployed_commit !== env.DEPLOYED_COMMIT ||
+    canaryRequest.dispatch_ref !== env.DISPATCH_WORKFLOW_REF
+  ) {
+    throw new ApiDecodeError("promotion canary request does not bind this exact deployment");
+  }
+
+  const identity = {
+    commit: canaryRequest.deployed_commit,
+    runId: canaryRequest.controller_run_id,
+    runAttempt: canaryRequest.controller_run_attempt,
+  } satisfies PromotionCanaryIdentity;
+  const material = await promotionCanaryMaterial(identity);
+  const repository = await submissionStage(
+    "promotion_canary_github_connectivity",
+    () => provider(env, dependencies).repository(PROMOTION_CANARY_REPOSITORY),
+  );
+  if (!repository.private || repository.fullName.toLowerCase() !== PROMOTION_CANARY_REPOSITORY.toLowerCase()) {
+    throw new GitHubProviderError(409, "promotion canary fixture repository identity or visibility changed");
+  }
+  assertSourcePolicy(material.input.problem_group, material.input.source_visibility, repository.private);
+
+  const ledger = state(env, dependencies);
+  const consumedNonce = await nonceEvent(
+    material.grant.nonce_event_id,
+    material.grant.nonce,
+    "submission",
+    material.acceptedAtMilliseconds,
+    material.grant.expires_at,
+  );
+  const events: WritableStateEvent[] = [
+    consumedNonce,
+    receivedEvent(
+      material.grant.submission_id,
+      PROMOTION_CANARY_LOGIN,
+      material.input,
+      material.acceptedAtMilliseconds + 1,
+    ),
+    metadataEvent(
+      material.grant.metadata_event_id,
+      material.grant.submission_id,
+      PROMOTION_CANARY_LOGIN,
+      material.input.production_metadata,
+      material.acceptedAtMilliseconds + 2,
+    ),
+  ];
+  const proposedView = initialSubmissionView(
+    material.grant,
+    PROMOTION_CANARY_LOGIN,
+    material.input,
+    material.acceptedAtMilliseconds,
+    env.DISPATCH_WORKFLOW_REF ?? "",
+  );
+  const outcome = await submissionStage(
+    "promotion_canary_state_acceptance",
+    () => ledger.acceptSubmission(events, proposedView, initialDispatchOutbox(proposedView)),
+  );
+  assertPromotionCanaryView(proposedView, outcome.view);
+  const proveContention = ledger.provePromotionCanaryContention?.bind(ledger);
+  if (proveContention === undefined) {
+    throw new GitHubStateError(503, "State adapter does not implement the promotion canary CAS proof");
+  }
+  const contention = await submissionStage(
+    "promotion_canary_cas_contention",
+    () => proveContention(material.evidenceEvent),
+  );
+  if (
+    !contention.collisionObserved ||
+    !contention.retryApplied ||
+    contention.created === contention.idempotent
+  ) {
+    throw new GitHubStateError(502, "promotion canary CAS adapter did not prove collision and retry");
+  }
+  const current = await ledger.readSubmission(material.grant.submission_id);
+  if (current === null) throw new GitHubStateError(502, "promotion canary submission disappeared from State");
+  assertPromotionCanaryView(proposedView, current);
+  const complete = current.dispatch.status === "succeeded";
+  const failed = current.dispatch.status === "failed";
+  return json({
+    status: complete ? "passed" : failed ? "dispatch_failed" : "awaiting_scheduled_reconciliation",
+    environment: "staging",
+    deployed_commit: env.DEPLOYED_COMMIT,
+    dispatch_ref: env.DISPATCH_WORKFLOW_REF,
+    controller_run_id: identity.runId,
+    controller_run_attempt: identity.runAttempt,
+    submission_id: material.grant.submission_id,
+    github_connectivity: "verified",
+    synthetic_intake: outcome.created ? "created" : "idempotent",
+    cas_contention: contention.idempotent
+      ? "idempotent_collision_and_retry_proof"
+      : "collision_observed_and_retry_applied",
+    dispatch_state: current.dispatch.status,
+    workflow_dispatch: complete ? "accepted_by_github" : failed ? "retry_pending" : "pending",
+    scheduled_reconciliation: complete ? "completed" : failed ? "retry_pending" : "pending",
+  }, complete ? 200 : 202);
 }
 
 async function archiveCompleted(
@@ -1240,10 +1579,26 @@ export async function handleRequest(
     return browserScript();
   }
   if (request.method === "GET" && url.pathname === "/healthz") {
-    return json({ status: "ok", service: "lean-eval-submission", deployed_commit: env.DEPLOYED_COMMIT, environment: env.DEPLOYMENT_ENVIRONMENT, intake_enabled: intakeEnabled(env) });
+    return json({
+      status: "ok",
+      service: "lean-eval-submission",
+      deployed_commit: env.DEPLOYED_COMMIT,
+      environment: env.DEPLOYMENT_ENVIRONMENT,
+      intake_enabled: intakeEnabled(env),
+      promotion_canary_configured_enabled: env.PROMOTION_CANARY_ENABLED === "true",
+      promotion_canary_enabled: promotionCanaryEnabled(env),
+    });
   }
   if ((request.method === "GET" || request.method === "POST") && url.pathname === "/readyz") {
     return readiness(request, env, lifecycle);
+  }
+  if (request.method === "POST" && url.pathname === "/internal/v1/promotion-canary") {
+    if (!promotionCanaryEnabled(env)) return json({ error: "not_found" }, 404);
+    try {
+      return await promotionCanary(request, env, dependencies);
+    } catch (error) {
+      return errorResponse(error);
+    }
   }
   if (request.method === "POST" && url.pathname === "/internal/v1/archive-completed") {
     try {
@@ -1294,11 +1649,145 @@ export async function handleRequest(
   return json({ error: "not_found" }, 404);
 }
 
+function promotionCanaryIdentity(input: SubmissionInput): PromotionCanaryIdentity | null {
+  const match = PROMOTION_CANARY_MODEL.exec(input.declared_model);
+  if (
+    match?.[1] === undefined ||
+    match[2] === undefined ||
+    match[3] === undefined ||
+    input.problem_id !== "two_plus_two" ||
+    input.problem_group !== "formalization-evaluation" ||
+    input.statement_revision !== 1 ||
+    input.source_repository !== PROMOTION_CANARY_REPOSITORY ||
+    input.source_commit !== PROMOTION_CANARY_SOURCE_COMMIT ||
+    input.source_visibility !== "private" ||
+    input.publication_choice !== "withheld" ||
+    input.production_metadata.notes !== PROMOTION_CANARY_NOTES ||
+    input.production_metadata.web_access !== false ||
+    input.production_metadata.billing_mode !== "unknown"
+  ) {
+    return null;
+  }
+  return { commit: match[1], runId: match[2], runAttempt: match[3] };
+}
+
+type PromotionCanaryClassification =
+  | Readonly<{ kind: "ordinary" }>
+  | Readonly<{ kind: "invalid_canary" }>
+  | Readonly<{ kind: "canary"; identity: PromotionCanaryIdentity }>;
+
+function classifyPromotionCanary(entry: DispatchOutbox): PromotionCanaryClassification {
+  const claimed =
+    entry.submission.declared_model.startsWith("lean-eval automatic staging promotion canary ") ||
+    (
+      entry.owner_login === PROMOTION_CANARY_LOGIN &&
+      entry.submission.source_repository === PROMOTION_CANARY_REPOSITORY &&
+      entry.submission.source_commit === PROMOTION_CANARY_SOURCE_COMMIT &&
+      entry.submission.source_visibility === "private" &&
+      entry.submission.publication_choice === "withheld" &&
+      entry.submission_id.endsWith("ca")
+    );
+  if (!claimed) return { kind: "ordinary" };
+  const identity = promotionCanaryIdentity(entry.submission);
+  if (
+    entry.owner_login !== PROMOTION_CANARY_LOGIN ||
+    identity === null ||
+    entry.workflow_ref !== `lean-eval-dispatch/${identity.commit}` ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{10}ca$/.test(entry.submission_id)
+  ) {
+    return { kind: "invalid_canary" };
+  }
+  return { kind: "canary", identity };
+}
+
+async function reconcilePromotionCanariesScheduled(
+  env: RuntimeEnv,
+  scheduledTime: number,
+  dependencies: ApiDependencies,
+): Promise<void> {
+  requirePromotionCanaryConfiguration(env, dependencies);
+  if (intakeEnabled(env)) {
+    throw new GitHubStateError(503, "promotion canary scheduling requires ordinary intake disabled");
+  }
+  const ledger = state(env, dependencies);
+  const entries = await ledger.listDispatchOutbox(PROMOTION_CANARY_OUTBOX_SHARD);
+  const due = entries
+    .filter((entry) => classifyPromotionCanary(entry).kind !== "ordinary")
+    .filter((entry) => Date.parse(entry.next_attempt_at) <= scheduledTime)
+    .sort((left, right) =>
+      left.next_attempt_at.localeCompare(right.next_attempt_at) ||
+      left.submission_id.localeCompare(right.submission_id))
+    .slice(0, 20);
+  for (const entry of due) {
+    try {
+      const classification = classifyPromotionCanary(entry);
+      if (classification.kind !== "canary") {
+        throw new GitHubStateError(502, "promotion canary outbox material is not exact");
+      }
+      const { identity } = classification;
+      const material = await promotionCanaryMaterial(identity);
+      const expected = initialSubmissionView(
+        material.grant,
+        PROMOTION_CANARY_LOGIN,
+        material.input,
+        material.acceptedAtMilliseconds,
+        `lean-eval-dispatch/${identity.commit}`,
+      );
+      if (
+        entry.submission_id !== material.grant.submission_id ||
+        entry.owner_login !== PROMOTION_CANARY_LOGIN ||
+        entry.workflow_ref !== expected.dispatch.workflow_ref ||
+        JSON.stringify(entry.submission) !== JSON.stringify(expected.submission)
+      ) {
+        throw new GitHubStateError(502, "promotion canary outbox identity is not exact");
+      }
+      const view = await ledger.readSubmission(material.grant.submission_id);
+      if (view === null) throw new GitHubStateError(502, "promotion canary State view is missing");
+      assertPromotionCanaryView(expected, view);
+      if (view.dispatch.status === "succeeded") continue;
+      if (entry.attempts !== view.dispatch.attempts) {
+        throw new GitHubStateError(502, "promotion canary outbox attempt does not match State");
+      }
+      if (view.dispatch.status === "failed" && view.dispatch.attempts >= 32) {
+        await ledger.updateDispatch(view, view.dispatch.attempts, null);
+        console.error(JSON.stringify({
+          event: "promotion_canary_terminal_retry_exhausted",
+          error_name: "retry_limit_reached",
+        }));
+        continue;
+      }
+      await reconcileDispatch(
+        env,
+        dependencies,
+        ledger,
+        view,
+        scheduledTime,
+        "promotion_canary",
+      );
+    } catch (error) {
+      console.error(JSON.stringify({
+        event: "promotion_canary_scheduled_item_failed",
+        error_name: error instanceof Error ? error.name : "unknown",
+      }));
+    }
+  }
+}
+
 export async function handleScheduled(
   env: RuntimeEnv,
   scheduledTime: number,
   dependencies: ApiDependencies = {},
 ): Promise<void> {
+  if (promotionCanaryEnabled(env)) {
+    try {
+      await reconcilePromotionCanariesScheduled(env, scheduledTime, dependencies);
+    } catch (error) {
+      console.error(JSON.stringify({
+        event: "promotion_canary_scheduled_scan_failed",
+        error_name: error instanceof Error ? error.name : "unknown",
+      }));
+    }
+  }
   if (!intakeEnabled(env)) return;
   requireDispatchConfiguration(env, dependencies);
   const ledger = state(env, dependencies);
@@ -1306,6 +1795,7 @@ export async function handleScheduled(
   const shard = shardNumber.toString(16).padStart(2, "0");
   const entries = await ledger.listDispatchOutbox(shard);
   const due = entries
+    .filter((entry) => classifyPromotionCanary(entry).kind === "ordinary")
     .filter((entry) => Date.parse(entry.next_attempt_at) <= scheduledTime)
     .sort((left, right) => left.next_attempt_at.localeCompare(right.next_attempt_at) || left.submission_id.localeCompare(right.submission_id))
     .slice(0, 20);

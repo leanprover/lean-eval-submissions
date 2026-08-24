@@ -207,7 +207,52 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             },
         )
         self.assertIs(plan["intake_enabled"], False)
+        self.assertIs(plan["promotion_canary_enabled"], False)
         self.assertIs(plan["replay_enabled"], False)
+
+    def test_rejects_production_rollback_with_promotion_canary_enabled(self) -> None:
+        self.configs["intake"]["env"]["production"]["vars"][
+            "PROMOTION_CANARY_ENABLED"
+        ] = "true"
+        self._write(self.paths["intake_config"], self.configs["intake"])
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "PROMOTION_CANARY_ENABLED":
+                binding["text"] = "true"
+        self._write(self.paths["intake_version"], self.versions["intake"])
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "must disable intake, promotion canary"
+        ):
+            rollback.build_plan(self._arguments())
+
+    def test_older_target_without_canary_binding_is_safely_disabled(self) -> None:
+        del self.configs["intake"]["env"]["production"]["vars"][
+            "PROMOTION_CANARY_ENABLED"
+        ]
+        self._write(self.paths["intake_config"], self.configs["intake"])
+        self.versions["intake"]["resources"]["bindings"] = [
+            binding
+            for binding in self.versions["intake"]["resources"]["bindings"]
+            if binding.get("name") != "PROMOTION_CANARY_ENABLED"
+        ]
+        self._write(self.paths["intake_version"], self.versions["intake"])
+        self.assertIs(
+            rollback.build_plan(self._arguments())["promotion_canary_enabled"],
+            False,
+        )
+
+    def test_present_malformed_canary_binding_still_fails_closed(self) -> None:
+        self.configs["intake"]["env"]["production"]["vars"][
+            "PROMOTION_CANARY_ENABLED"
+        ] = "False"
+        self._write(self.paths["intake_config"], self.configs["intake"])
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "PROMOTION_CANARY_ENABLED":
+                binding["text"] = "False"
+        self._write(self.paths["intake_version"], self.versions["intake"])
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "PROMOTION_CANARY_ENABLED"
+        ):
+            rollback.build_plan(self._arguments())
 
     def test_rejects_one_component_from_a_different_commit(self) -> None:
         self.versions["broker"]["resources"]["bindings"][0]["text"] = "b" * 40
@@ -261,7 +306,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             INTAKE_VERSION,
         )
 
-    def test_emergency_target_must_disable_intake_and_replay(self) -> None:
+    def test_emergency_target_must_disable_intake_canary_and_replay(self) -> None:
         intake = self.configs["intake"]
         intake["env"]["production"]["vars"]["INTAKE_ENABLED"] = "true"
         self._write(self.paths["intake_config"], intake)
@@ -270,7 +315,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 binding["text"] = "true"
         self._write(self.paths["intake_version"], self.versions["intake"])
         with self.assertRaisesRegex(
-            rollback.RollbackValidationError, "must disable intake and replay"
+            rollback.RollbackValidationError, "must disable intake, promotion canary"
         ):
             rollback.build_plan(self._arguments())
 

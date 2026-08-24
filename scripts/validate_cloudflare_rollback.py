@@ -541,6 +541,12 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             "intake": args.intake_version_id,
         },
         "intake_enabled": enabled(intake_expected, "INTAKE_ENABLED"),
+        # Rollback targets predating the canary binding had no canary route and
+        # are therefore safely equivalent to explicit false. A present value
+        # remains strict and malformed values still fail closed.
+        "promotion_canary_enabled": False
+        if "PROMOTION_CANARY_ENABLED" not in intake_expected
+        else enabled(intake_expected, "PROMOTION_CANARY_ENABLED"),
         "replay_enabled": enabled(replay_expected, "REPLAY_ENABLED"),
         "staging_acceptance_enabled": enabled(
             replay_expected, "STAGING_ACCEPTANCE_ENABLED"
@@ -564,12 +570,13 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         plan[name]
         for name in (
             "intake_enabled",
+            "promotion_canary_enabled",
             "replay_enabled",
             "staging_acceptance_enabled",
         )
     ):
         raise RollbackValidationError(
-            "an emergency production rollback target must disable intake and replay"
+            "an emergency production rollback target must disable intake, promotion canary, and replay"
         )
     return plan
 
@@ -720,7 +727,8 @@ def build_prestate(args: argparse.Namespace) -> dict[str, Any]:
     plan = _object(args.plan)
     if set(plan) != {
         "schema_version", "environment", "expected_commit", "version_ids",
-        "intake_enabled", "replay_enabled", "staging_acceptance_enabled",
+        "intake_enabled", "promotion_canary_enabled", "replay_enabled",
+        "staging_acceptance_enabled",
         "staging_memory_limit_bytes", "production_memory_gate_bytes",
         "reviewed_execution_profile_digest",
         "reviewed_measurement_config_digest", "reviewed_vm_image_digest",

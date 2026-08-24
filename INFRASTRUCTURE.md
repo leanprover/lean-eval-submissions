@@ -230,9 +230,19 @@ tag is created until the reviewed workflow reaches protected `main`.
 
 Protected `main` is the human promotion decision. The production job has no
 second manual approval, so an approved merge automatically reaches staging and
-then production only after the smoke gate succeeds. Deployment workflow
-concurrency is intentionally latest-main-wins: skipped intermediate commits
-are already ancestors of the latest tested commit.
+then production only after the exact staging promotion canary succeeds. That
+readiness-authenticated gate binds the deployed commit to its immutable
+dispatch tag, checks the private synthetic fixture through the staging
+source-reader broker, records a deterministic withheld intake in staging State,
+requires a real non-fast-forward State CAS rejection and retry, and waits for
+the actual Cron Trigger to reconcile the resulting outbox through the dispatch
+broker. `PROMOTION_CANARY_ENABLED` is tracked `true` only in staging and
+explicitly `false` in production; the route also requires the staging runtime,
+staging State repository, ordinary intake disabled, and the exact commit-named
+dispatch ref. The existing environment-scoped `READINESS_TOKEN` authenticates
+the gate, so no new secret or production canary authority is created.
+Deployment workflow concurrency is intentionally latest-main-wins: skipped
+intermediate commits are already ancestors of the latest tested commit.
 
 Staging intake state is changed only through the protected, manual
 `Set staging intake` workflow. The operator must select `main`, provide the
@@ -399,7 +409,54 @@ view/outbox paths, shapes,
 event references, ownership, and consistency. Workflow concurrency is keyed by
 submission UUID, and deterministic result/State identities remain the final
 duplicate-record guard. The selected broker supplies dispatch authorization;
-it is not the persistence mechanism. The archive job emits a strict completion
+it is not the persistence mechanism.
+
+The staging promotion canary is the sole intake-disabled exception to the
+ordinary scheduled no-op. Its UUIDv7, nonce, metadata event, acceptance time,
+and CAS-evidence event are deterministic for the exact deployed protected-main
+commit plus the deployment workflow's `GITHUB_RUN_ID` and
+`GITHUB_RUN_ATTEMPT`. A workflow rerun therefore creates fresh material, while
+HTTP polling within one attempt reuses the exact State identities. Only the
+first call creates and observes the collision/retry proof; later polls report
+that the exact proof was already recorded rather than claiming a fresh collision. The
+synthetic timestamp is intentionally derived inside a fixed 2026-08-20 UTC
+window; it is an identity input, not a claim about wall-clock execution time.
+
+Before recording the evidence event, the State adapter creates two source-free
+competing commits from one current branch snapshot, applies the first by a
+non-forced update, requires GitHub to reject the second with a real 409/422
+non-fast-forward collision, then rebuilds and applies the evidence atop the new
+head through the ordinary bounded CAS writer. The response reports the
+adapter's observed collision/retry outcome rather than a hard-coded success.
+The first commit is an intentional empty-tree barrier: it has a distinct commit
+object but preserves the exact State tree. This satisfies the State repository's
+full-tree validator, and its append-only CI diff rejects only modified/deleted
+event or environment files; the adapter unit test also fixes the base tree and
+`force:false` update contract.
+
+All canary UUIDs use the fixed `ca` outbox shard. Each synthetic model string
+and outbox workflow ref retain the originating deployed commit, so a later
+Worker deployment re-derives and dispatches pending material against its
+original immutable tag instead of orphaning it. The one-minute scheduled
+entrypoint scans that shard for every strict run-scoped canary, bounds each pass
+to 20 due entries, and uses the normal dispatch reconciliation and State-success
+update. An exact failed canary that reaches the 32-attempt retry bound is
+classified and removed from the outbox rather than retained forever. Per-item
+and scan errors emit only source-free classifications and do
+not block ordinary staging reconciliation. Dispatch goes through the actual
+broker to the immutable-ref `promotion-canary.yml`, whose permissionless job
+only validates the source-free run identity. Under that exact dedicated target,
+it never runs `submission.yml` and does not write audit archives, evaluator jobs, Results records, or release
+events. `dispatch.status=succeeded` and the production gate prove that GitHub
+accepted the exact `workflow_dispatch` through broker/reconciliation; they do
+not claim that the asynchronous no-op job completed. Responses and workflow logs contain commit/ref, synthetic UUID, run
+identity, and categorical results only—never source contents, credentials, or
+upstream response bodies. The immutable source pin is the deliberately rejected fixture commit
+`ae38f4d3e4ad2991212135435f54e6640bcc89e7`; publication is withheld and the
+record is explicitly synthetic, so it cannot become a production benchmark
+claim.
+
+The archive job emits a strict completion
 object only after reading the ciphertext back at its immutable commit and
 verifying its digest. A separate source-free `archive_state` job holds only the
 matching environment's callback token and sends that object to the Worker. The
@@ -786,8 +843,9 @@ exact schema blob on the current protected production State `main`. Any State
 commit/schema movement invalidates an old qualification until it is reviewed
 again. This matters even with intake disabled because authenticated archive,
 evaluation, and result callbacks can still append State. The target must make
-scheduled reconciliation a no-op while intake is disabled, and must track both
-production intake and replay as disabled. The pre-mutation recovery artifact records the
+scheduled reconciliation a no-op while intake is disabled by retaining
+`PROMOTION_CANARY_ENABLED=false`, and must track both production intake and
+replay as disabled. The pre-mutation recovery artifact records the
 original three active version IDs, hashed capability contracts, live replay
 migration tag, and a closed allowlist of effective container recovery fields.
 Raw provider version/status/container responses are not uploaded; the artifact

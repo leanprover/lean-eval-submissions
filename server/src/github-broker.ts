@@ -188,18 +188,53 @@ function decodeDispatchBody(body: string | null, expectedRepository: string, exp
   }
 }
 
+function decodePromotionCanaryDispatchBody(body: string | null, env: BrokerRuntimeEnv): void {
+  if (body === null) throw new BrokerError(400, "promotion canary dispatch body was missing");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body) as unknown;
+  } catch {
+    throw new BrokerError(400, "promotion canary dispatch body was not JSON");
+  }
+  const data = object(parsed, "promotion canary dispatch body");
+  exactKeys(data, ["ref", "inputs"], "promotion canary dispatch body");
+  const inputs = object(data.inputs, "promotion canary dispatch inputs");
+  exactKeys(
+    inputs,
+    ["controller_run_attempt", "controller_run_id", "submission_id", "workflow_commit"],
+    "promotion canary dispatch inputs",
+  );
+  const commit = typeof data.ref === "string" ? DISPATCH_REF.exec(data.ref)?.[1] : undefined;
+  if (
+    env.DEPLOYMENT_ENVIRONMENT !== "staging" ||
+    env.DISPATCH_REPOSITORY !== "leanprover/lean-eval-submissions" ||
+    !commit ||
+    inputs.workflow_commit !== commit ||
+    typeof inputs.submission_id !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{10}ca$/.test(inputs.submission_id) ||
+    typeof inputs.controller_run_id !== "string" ||
+    !/^[1-9][0-9]{0,19}$/.test(inputs.controller_run_id) ||
+    typeof inputs.controller_run_attempt !== "string" ||
+    !/^[1-9][0-9]{0,5}$/.test(inputs.controller_run_attempt)
+  ) {
+    throw new BrokerError(403, "promotion canary dispatch was not exactly allowlisted");
+  }
+}
+
 function assertDispatchRequest(request: BrokerRequest, url: URL, env: BrokerRuntimeEnv): string {
   const { repository, suffix } = repositoryFromPath(url.pathname);
   const expectedSuffix = `/actions/workflows/${env.DISPATCH_WORKFLOW}/dispatches`;
+  const canarySuffix = "/actions/workflows/promotion-canary.yml/dispatches";
   if (
     request.method !== "POST" ||
     repository.toLowerCase() !== env.DISPATCH_REPOSITORY.toLowerCase() ||
-    suffix !== expectedSuffix ||
+    (suffix !== expectedSuffix && suffix !== canarySuffix) ||
     request.expected_commit !== null
   ) {
     throw new BrokerError(403, "dispatch operation was not allowlisted");
   }
-  decodeDispatchBody(request.body, env.DISPATCH_REPOSITORY, env.DISPATCH_WORKFLOW);
+  if (suffix === canarySuffix) decodePromotionCanaryDispatchBody(request.body, env);
+  else decodeDispatchBody(request.body, env.DISPATCH_REPOSITORY, env.DISPATCH_WORKFLOW);
   return repository;
 }
 

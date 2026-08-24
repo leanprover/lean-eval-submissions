@@ -239,6 +239,90 @@ describe("GitHub App broker", () => {
     expect(response.status).toBe(204);
   });
 
+  it("allows only the exact run-scoped source-free promotion canary target", async () => {
+    const upstream = vi.fn<typeof fetch>((input) => {
+      const url = inputUrl(input);
+      if (url.endsWith("/installation")) return Promise.resolve(Response.json({ id: 457 }));
+      if (url.endsWith("/access_tokens")) {
+        return Promise.resolve(Response.json({
+          token: "ghs_canary-installation-token",
+          expires_at: new Date(NOW + 3_600_000).toISOString(),
+        }));
+      }
+      expect(url).toBe(
+        "https://api.github.com/repos/leanprover/lean-eval-submissions/actions/workflows/promotion-canary.yml/dispatches",
+      );
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+    const body = JSON.stringify({
+      ref: `lean-eval-dispatch/${COMMIT}`,
+      inputs: {
+        workflow_commit: COMMIT,
+        submission_id: "0198abcd-1111-7000-8000-0000000000ca",
+        controller_run_id: "32712345678",
+        controller_run_attempt: "2",
+      },
+    });
+    const response = await handleBrokerRequest(
+      brokerRequest(
+        "dispatch",
+        "https://api.github.com/repos/leanprover/lean-eval-submissions/actions/workflows/promotion-canary.yml/dispatches",
+        { method: "POST", body },
+      ),
+      { ...environment(), DEPLOYED_COMMIT: COMMIT },
+      upstream,
+      NOW,
+    );
+    expect(response.status).toBe(204);
+
+    const production = await handleBrokerRequest(
+      brokerRequest(
+        "dispatch",
+        "https://api.github.com/repos/leanprover/lean-eval-submissions/actions/workflows/promotion-canary.yml/dispatches",
+        { method: "POST", body },
+      ),
+      { ...environment(), DEPLOYED_COMMIT: COMMIT, DEPLOYMENT_ENVIRONMENT: "production" },
+      upstream,
+      NOW,
+    );
+    expect(production.status).toBe(403);
+  });
+
+  it("accepts an exact historical no-op canary after the broker deploy changes", async () => {
+    const upstream = vi.fn<typeof fetch>((input) => {
+      const url = inputUrl(input);
+      if (url.endsWith("/installation")) return Promise.resolve(Response.json({ id: 458 }));
+      if (url.endsWith("/access_tokens")) {
+        return Promise.resolve(Response.json({
+          token: "ghs_historical-canary-token",
+          expires_at: new Date(NOW + 3_600_000).toISOString(),
+        }));
+      }
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+    const body = JSON.stringify({
+      ref: `lean-eval-dispatch/${COMMIT}`,
+      inputs: {
+        workflow_commit: COMMIT,
+        submission_id: "0198abcd-1111-7000-8000-0000000000ca",
+        controller_run_id: "32712345678",
+        controller_run_attempt: "1",
+      },
+    });
+    const response = await handleBrokerRequest(
+      brokerRequest(
+        "dispatch",
+        "https://api.github.com/repos/leanprover/lean-eval-submissions/actions/workflows/promotion-canary.yml/dispatches",
+        { method: "POST", body },
+      ),
+      { ...environment(), DEPLOYED_COMMIT: "b".repeat(40) },
+      upstream,
+      NOW,
+    );
+    expect(response.status).toBe(204);
+    expect(upstream).toHaveBeenCalled();
+  });
+
   it("allows only exact-commit Results reads through the dispatch installation", async () => {
     const upstream = vi.fn<typeof fetch>((input, init) => {
       const url = inputUrl(input);

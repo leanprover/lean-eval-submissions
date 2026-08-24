@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/deploy-worker.yml'
       - '.github/workflows/submission.yml'
+      - '.github/workflows/promotion-canary.yml'
       - '.github/workflows/aws-key-adapter-staging-smoke.yml'
       - '.audit/**'
       - 'INFRASTRUCTURE.md'
@@ -15,6 +16,7 @@ on:
     paths:
       - '.github/workflows/deploy-worker.yml'
       - '.github/workflows/submission.yml'
+      - '.github/workflows/promotion-canary.yml'
       - '.github/workflows/aws-key-adapter-staging-smoke.yml'
       - '.audit/**'
       - 'scripts/**'
@@ -186,6 +188,8 @@ jobs:
           assert body["environment"] == os.environ["EXPECTED_ENVIRONMENT"]
           assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
           assert body["intake_enabled"] is False
+          assert body["promotion_canary_configured_enabled"] is True
+          assert body["promotion_canary_enabled"] is True
           PY
             then
               exit 0
@@ -226,8 +230,37 @@ jobs:
           echo "replay health payload did not converge: $body" >&2
           exit 1
 
-  deploy-production:
+  staging-promotion-canary:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: [deploy-staging, promote-dispatch-ref]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: cloudflare-staging
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      # actions/setup-python pinned to v7.0.0.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+      - name: Prove the exact staging promotion boundary
+        env:
+          READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
+          DISPATCH_WORKFLOW_REF: ${{ needs.promote-dispatch-ref.outputs.ref }}
+        run: >-
+          python ../scripts/run_staging_promotion_canary.py
+          --commit "$GITHUB_SHA"
+          --dispatch-ref "$DISPATCH_WORKFLOW_REF"
+          --run-id "$GITHUB_RUN_ID"
+          --run-attempt "$GITHUB_RUN_ATTEMPT"
+          --timeout-seconds 480
+          --poll-seconds 5
+
+  deploy-production:
+    needs: [staging-promotion-canary, promote-dispatch-ref]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: cloudflare-production
@@ -295,6 +328,8 @@ jobs:
           assert body["environment"] == os.environ["EXPECTED_ENVIRONMENT"]
           assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
           assert body["intake_enabled"] is False
+          assert body["promotion_canary_configured_enabled"] is False
+          assert body["promotion_canary_enabled"] is False
           PY
             then
               exit 0
