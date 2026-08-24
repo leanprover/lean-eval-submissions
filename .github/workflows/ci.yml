@@ -62,6 +62,7 @@ jobs:
           tests.test_monitor_cloudflare_health
           tests.test_historical_replay_inventory
           tests.test_historical_replay_inventory_workflow
+          tests.test_prepare_public_replay_resolution
 
       - name: Submission intake tests
         run: python -m unittest tests.test_validate_submission_intake
