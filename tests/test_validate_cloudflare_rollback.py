@@ -15,6 +15,47 @@ BROKER_VERSION = "22222222-2222-2222-2222-222222222222"
 REPLAY_VERSION = "33333333-3333-3333-3333-333333333333"
 
 
+class RollbackContractCoverageTests(unittest.TestCase):
+    def test_qualifies_result_owner_runtime(self) -> None:
+        self.assertIn("server/src/result-owner.ts", rollback.CALLBACK_CONTRACT_FILES)
+
+    def test_qualifies_results_provider_verifier(self) -> None:
+        self.assertIn("server/src/github-provider.ts", rollback.CALLBACK_CONTRACT_FILES)
+
+    def test_qualifies_owner_request_decoder(self) -> None:
+        self.assertIn("server/src/api-contract.ts", rollback.CALLBACK_CONTRACT_FILES)
+
+    def test_qualifies_broker_client_boundary(self) -> None:
+        self.assertIn("server/src/github-broker-client.ts", rollback.CALLBACK_CONTRACT_FILES)
+
+    def test_qualifies_broker_allowlist(self) -> None:
+        self.assertIn("server/src/github-broker.ts", rollback.CALLBACK_CONTRACT_FILES)
+
+    def test_qualifies_owner_authentication_boundary(self) -> None:
+        self.assertIn("server/src/auth.ts", rollback.CALLBACK_CONTRACT_FILES)
+
+    def test_qualification_paths_are_deterministically_sorted(self) -> None:
+        self.assertEqual(
+            rollback.CALLBACK_CONTRACT_FILES,
+            sorted(rollback.CALLBACK_CONTRACT_FILES),
+        )
+
+    def test_qualification_paths_are_unique(self) -> None:
+        self.assertEqual(
+            len(rollback.CALLBACK_CONTRACT_FILES),
+            len(set(rollback.CALLBACK_CONTRACT_FILES)),
+        )
+
+    def test_qualification_paths_are_bounded_typescript_sources(self) -> None:
+        for relative in rollback.CALLBACK_CONTRACT_FILES:
+            self.assertTrue(relative.startswith("server/src/"))
+            self.assertTrue(relative.endswith(".ts"))
+
+    def test_every_qualified_source_is_nonempty(self) -> None:
+        for relative in rollback.CALLBACK_CONTRACT_FILES:
+            self.assertGreater((ROOT / relative).stat().st_size, 0)
+
+
 class CloudflareRollbackValidationTests(unittest.TestCase):
     def test_repository_qualification_matches_runtime_schema_and_pause_guard(self) -> None:
         qualification = json.loads(

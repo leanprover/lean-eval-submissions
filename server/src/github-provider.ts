@@ -15,6 +15,7 @@ const RESULT_ID = /^r2_[0-9a-f]{64}$/;
 const MAX_RESULT_FILE_BYTES = 2 * 1024 * 1024;
 const RESULT_ID_DOMAIN = "lean-eval-result-v2\0";
 const RESULT_TREE_DOMAIN = "lean-eval-result-tree-v1\0";
+export type ResultsProtectedBranch = "main" | "staging-results";
 
 export type ProviderFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -124,6 +125,7 @@ export class GitHubProvider {
   readonly #verificationFetcher: ProviderFetch | undefined;
   readonly #dispatchFetcher: ProviderFetch | undefined;
   readonly #resultFetcher: ProviderFetch | undefined;
+  readonly #resultsProtectedBranch: ResultsProtectedBranch | undefined;
 
   constructor(
     fetcher: ProviderFetch = fetch,
@@ -131,6 +133,7 @@ export class GitHubProvider {
     verificationFetcher?: ProviderFetch,
     dispatchFetcher?: ProviderFetch,
     resultFetcher?: ProviderFetch,
+    resultsProtectedBranch?: ResultsProtectedBranch,
   ) {
     // A Worker runtime fetch function must be invoked without rebinding its
     // receiver. Calling a function-valued private field as `this.#fetcher()`
@@ -147,6 +150,7 @@ export class GitHubProvider {
     this.#resultFetcher = resultFetcher === undefined
       ? undefined
       : (input, init) => resultFetcher(input, init);
+    this.#resultsProtectedBranch = resultsProtectedBranch;
   }
 
   async exchangeOAuth(
@@ -163,6 +167,7 @@ export class GitHubProvider {
         "user-agent": "lean-eval-submission-worker",
       },
       body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret, code, redirect_uri: redirectUri }),
+      redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
     const tokenData = await jsonResponse(response, "OAuth token response");
@@ -177,6 +182,7 @@ export class GitHubProvider {
     // neither returned nor placed into an event, cache, log, or exception.
     const identityResponse = await this.#fetcher(`${API}/user`, {
       headers: providerHeaders(tokenData.access_token),
+      redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
     const identity = await jsonResponse(identityResponse, "authenticated user");
@@ -198,6 +204,7 @@ export class GitHubProvider {
     }
     const response = await (this.#verificationFetcher ?? this.#fetcher)(`${API}/repos/${repository}`, {
       headers: providerHeaders(this.#verificationToken),
+      redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
     const data = await jsonResponse(response, "repository response");
@@ -222,6 +229,7 @@ export class GitHubProvider {
     const verifiedFetch = this.#verificationFetcher ?? this.#fetcher;
     const refResponse = await verifiedFetch(`${API}/repos/${repository}/git/ref/tags/${encodeURIComponent(tag)}`, {
       headers,
+      redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
     const ref = await jsonResponse(refResponse, "tag reference");
@@ -233,6 +241,7 @@ export class GitHubProvider {
       }
       const tagResponse = await verifiedFetch(`${API}/repos/${repository}/git/tags/${target.sha}`, {
         headers,
+        redirect: "manual",
         signal: AbortSignal.timeout(5000),
       });
       const annotated = await jsonResponse(tagResponse, "annotated tag");
@@ -253,6 +262,7 @@ export class GitHubProvider {
     // reader (or the browser OAuth flow) unrelated user-level gist authority.
     const response = await this.#fetcher(`${API}/gists/${gistId}`, {
       headers: providerHeaders(),
+      redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
     const gist = await jsonResponse(response, "gist response");
@@ -284,6 +294,7 @@ export class GitHubProvider {
       method: request.method,
       headers,
       body: await request.text(),
+      redirect: "manual",
       signal: AbortSignal.timeout(5000),
     });
     if (response.status !== 204) throw await error(response);
@@ -320,7 +331,7 @@ export class GitHubProvider {
     headers.set("x-lean-eval-expected-commit", completion.result_commit);
     const response = await this.#resultFetcher(
       `${API}/repos/${completion.result_repository}/contents/${completion.result_path}?${query.toString()}`,
-      { headers, signal: AbortSignal.timeout(5000) },
+      { headers, redirect: "manual", signal: AbortSignal.timeout(5000) },
     );
     const data = await jsonResponse(response, "result contents response");
     if (
@@ -401,19 +412,49 @@ export class GitHubProvider {
     resultsCommit: string,
     requestedResultId: string,
   ): Promise<VerifiedLegacyResult> {
-    if (!this.#resultFetcher) {
+    if (!this.#resultFetcher || !this.#resultsProtectedBranch) {
       throw new GitHubProviderError(503, "result verification authority is not configured");
     }
     if (!LOGIN.test(ownerLogin) || !COMMIT.test(resultsCommit) || !RESULT_ID.test(requestedResultId)) {
       throw new GitHubProviderError(409, "legacy result request was invalid");
     }
     const resultsPath = `results/${ownerLogin}.json`;
-    const query = new URLSearchParams({ ref: resultsCommit });
     const headers = providerHeaders();
     headers.set("x-lean-eval-expected-commit", resultsCommit);
+    const branchResponse = await this.#resultFetcher(
+      `${API}/repos/${RESULTS_REPOSITORY}/branches/${this.#resultsProtectedBranch}`,
+      { headers, redirect: "manual", signal: AbortSignal.timeout(5000) },
+    );
+    const branch = await jsonResponse(branchResponse, "protected Results branch response");
+    const branchCommit = object(branch.commit, "protected Results branch commit");
+    if (
+      branch.name !== this.#resultsProtectedBranch ||
+      branch.protected !== true ||
+      typeof branchCommit.sha !== "string" ||
+      !COMMIT.test(branchCommit.sha)
+    ) {
+      throw new GitHubProviderError(502, "protected Results branch response fields were invalid");
+    }
+    const compareResponse = await this.#resultFetcher(
+      `${API}/repos/${RESULTS_REPOSITORY}/compare/${resultsCommit}...${this.#resultsProtectedBranch}`,
+      { headers, redirect: "manual", signal: AbortSignal.timeout(5000) },
+    );
+    const comparison = await jsonResponse(compareResponse, "Results ancestry response");
+    const baseCommit = object(comparison.base_commit, "Results ancestry base commit");
+    const mergeBase = object(comparison.merge_base_commit, "Results ancestry merge base");
+    const headCommit = object(comparison.head_commit, "Results ancestry head commit");
+    if (
+      (comparison.status !== "ahead" && comparison.status !== "identical") ||
+      baseCommit.sha !== resultsCommit ||
+      mergeBase.sha !== resultsCommit ||
+      headCommit.sha !== branchCommit.sha
+    ) {
+      throw new GitHubProviderError(409, "Results commit is not an ancestor of the protected environment branch");
+    }
+    const query = new URLSearchParams({ ref: resultsCommit });
     const response = await this.#resultFetcher(
       `${API}/repos/${RESULTS_REPOSITORY}/contents/${resultsPath}?${query.toString()}`,
-      { headers, signal: AbortSignal.timeout(5000) },
+      { headers, redirect: "manual", signal: AbortSignal.timeout(5000) },
     );
     const data = await jsonResponse(response, "legacy result contents response");
     if (
@@ -500,12 +541,20 @@ export class GitHubProvider {
     if (tupleMatches.length !== 1) {
       throw new GitHubProviderError(409, "legacy result file did not contain one unique immutable identity tuple");
     }
-    const recomputedResultId = await resultId(
-      ownerLogin,
-      record.declared_model,
-      record.problem_id,
-      record.statement_revision,
-    );
+    let recomputedResultId: string;
+    try {
+      recomputedResultId = await resultId(
+        ownerLogin,
+        record.declared_model,
+        record.problem_id,
+        record.statement_revision,
+      );
+    } catch (caught) {
+      if (caught instanceof TypeError) {
+        throw new GitHubProviderError(409, "legacy result identity was not canonicalizable Unicode");
+      }
+      throw caught;
+    }
     if (record.result_id !== recomputedResultId || requestedResultId !== recomputedResultId) {
       throw new GitHubProviderError(409, "legacy result identity did not match its schema-version-2 tuple");
     }
@@ -583,6 +632,15 @@ export class GitHubProvider {
     } else if (publicationDate !== undefined) {
       throw new GitHubProviderError(409, "legacy result publication date was not allowed");
     }
+    let canonicalRecordSha256: string;
+    try {
+      canonicalRecordSha256 = await canonicalSha256Hex(canonicalJson(record));
+    } catch (caught) {
+      if (caught instanceof TypeError) {
+        throw new GitHubProviderError(409, "legacy result record was not canonicalizable Unicode");
+      }
+      throw caught;
+    }
     return {
       resultId: recomputedResultId,
       ownerLogin,
@@ -593,7 +651,7 @@ export class GitHubProvider {
         results_repository: RESULTS_REPOSITORY,
         results_commit: resultsCommit,
         results_path: resultsPath,
-        canonical_record_sha256: await canonicalSha256Hex(canonicalJson(record)),
+        canonical_record_sha256: canonicalRecordSha256,
       },
     };
   }

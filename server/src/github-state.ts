@@ -24,6 +24,7 @@ import {
   sourceRecordId,
   sourceRecordPath,
   RESULT_OWNER_STATE_CONTRACT_COMMIT,
+  type LegacyResultBase,
   type MetadataProvenance,
   type ResultOverlay,
   type VerifiedLegacyResult,
@@ -104,6 +105,17 @@ export class GitHubStateError extends Error {
   }
 }
 
+/** Expected owner-API absence or contention; other State failures remain retryable. */
+export class ResultOwnerStateError extends Error {
+  readonly status: 404 | 409;
+
+  constructor(status: 404 | 409, message: string) {
+    super(message);
+    this.name = "ResultOwnerStateError";
+    this.status = status;
+  }
+}
+
 export class StateUpdateOutcomeUnknownError extends Error {
   constructor() {
     super("GitHub State reference update outcome is unknown");
@@ -146,6 +158,7 @@ async function jsonCall(
   const response = await fetcher(repoPath(config, path), {
     ...init,
     headers: requestHeaders,
+    redirect: "manual",
   });
   if (response.status === 404) return null;
   if (!response.ok) throw await responseError(response);
@@ -275,10 +288,22 @@ function sortJson(value: unknown): unknown {
   return value;
 }
 
-function canonicalStateDocument(value: unknown): string {
+export function canonicalStateDocument(value: unknown): string {
   return `${JSON.stringify(sortJson(value), null, 2)
     .replace(/[\u0080-\uffff]/g, (character) =>
       `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`)}\n`;
+}
+
+function sameLogicalLegacyResult(left: LegacyResultBase, right: LegacyResultBase): boolean {
+  const identity = (base: LegacyResultBase) => ({
+    declared_model: base.declared_model,
+    problem_id: base.problem_id,
+    statement_revision: base.statement_revision,
+    results_repository: base.results_repository,
+    results_path: base.results_path,
+    canonical_record_sha256: base.canonical_record_sha256,
+  });
+  return canonicalResultJson(identity(left)) === canonicalResultJson(identity(right));
 }
 
 async function createCommit(
@@ -352,6 +377,7 @@ async function updateReference(
     method: "PATCH",
     headers: requestHeaders,
     body: JSON.stringify({ sha: commit, force: false }),
+    redirect: "manual",
   };
   let response: Response | null = null;
   let uncertain = false;
@@ -975,7 +1001,7 @@ export class GitHubStateRepository {
     const identityPath = resultIdentityPath(result.subject_id);
     const identityGuard = recordedGuard(result.subject_id, result.event_id);
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
-      const snapshot = await this.#resultOwnerSnapshot();
+      const snapshot = await branchSnapshot(this.#config, this.#fetcher);
       const current = await readSubmissionAt(
         this.#config,
         this.#fetcher,
@@ -1064,27 +1090,52 @@ export class GitHubStateRepository {
     const eventPath = stateEventPath(event);
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
       const snapshot = await this.#resultOwnerSnapshot();
-      const [guardEntry, overlayEntry, sourceEntry, requestedEventEntry] = await Promise.all([
+      const [guardEntry, overlayEntry, incomingSourceEntry, requestedEventEntry] = await Promise.all([
         readPathAt(this.#config, this.#fetcher, identityPath, snapshot.headSha),
         readPathAt(this.#config, this.#fetcher, overlayPath, snapshot.headSha),
         readPathAt(this.#config, this.#fetcher, sourcePath, snapshot.headSha),
         readPathAt(this.#config, this.#fetcher, eventPath, snapshot.headSha),
       ]);
-      const presentCount = [guardEntry, overlayEntry, sourceEntry].filter((entry) => entry.found).length;
-      if (presentCount > 0) {
-        if (presentCount !== 3) throw new StateEventConflictError(identityPath);
+      if (guardEntry.found || overlayEntry.found) {
         let guard;
-        let overlay;
-        let source;
         try {
           guard = decodeResultIdentityGuard(guardEntry.found ? guardEntry.value : null);
-          overlay = decodeResultOverlay(overlayEntry.found ? overlayEntry.value : null);
-          source = decodeSourceRecordIndex(sourceEntry.found ? sourceEntry.value : null);
         } catch {
           throw new StateEventConflictError(identityPath);
         }
-        if (requestedEventEntry.found && guard.authority_event_id !== request.eventId) {
+        if (guard.record_kind === "recorded") {
+          throw new ResultOwnerStateError(
+            409,
+            "result identity is already reserved by a modern result; immutable records require operator reconciliation",
+          );
+        }
+        let overlay;
+        try {
+          overlay = decodeResultOverlay(overlayEntry.found ? overlayEntry.value : null);
+        } catch {
+          throw new StateEventConflictError(identityPath);
+        }
+        if (
+          guard.result_id !== verified.resultId ||
+          overlay.result_id !== verified.resultId ||
+          overlay.owner_login !== verified.ownerLogin ||
+          overlay.claim_event_id !== guard.authority_event_id
+        ) {
+          throw new StateEventConflictError(identityPath);
+        }
+        if (requestedEventEntry.found && request.eventId !== guard.authority_event_id) {
           throw new StateEventConflictError(eventPath);
+        }
+        const authoritySourceId = await sourceRecordId(overlay.base_result);
+        const authoritySourcePath = sourceRecordPath(authoritySourceId);
+        const authoritySourceEntry = authoritySourcePath === sourcePath
+          ? incomingSourceEntry
+          : await readPathAt(this.#config, this.#fetcher, authoritySourcePath, snapshot.headSha);
+        let source;
+        try {
+          source = decodeSourceRecordIndex(authoritySourceEntry.found ? authoritySourceEntry.value : null);
+        } catch {
+          throw new StateEventConflictError(authoritySourcePath);
         }
         const authority = await readEventAt(
           this.#config,
@@ -1093,13 +1144,8 @@ export class GitHubStateRepository {
           snapshot.headSha,
         );
         if (
-          guard.record_kind !== "claimed" ||
-          guard.result_id !== verified.resultId ||
-          overlay.result_id !== verified.resultId ||
-          overlay.owner_login !== verified.ownerLogin ||
-          overlay.claim_event_id !== guard.authority_event_id ||
-          canonicalResultJson(overlay.base_result) !== canonicalResultJson(verified.baseResult) ||
-          source.source_record_id !== sourceId ||
+          !sameLogicalLegacyResult(overlay.base_result, verified.baseResult) ||
+          source.source_record_id !== authoritySourceId ||
           source.result_id !== verified.resultId ||
           source.owner_login !== verified.ownerLogin ||
           source.claim_event_id !== guard.authority_event_id ||
@@ -1110,18 +1156,29 @@ export class GitHubStateRepository {
             canonical_record_sha256: source.canonical_record_sha256,
           }) !== canonicalResultJson({
             results_repository: verified.baseResult.results_repository,
-            results_commit: verified.baseResult.results_commit,
-            results_path: verified.baseResult.results_path,
-            canonical_record_sha256: verified.baseResult.canonical_record_sha256,
+            results_commit: overlay.base_result.results_commit,
+            results_path: overlay.base_result.results_path,
+            canonical_record_sha256: overlay.base_result.canonical_record_sha256,
           }) ||
           authority.event_type !== "result.claimed" ||
           authority.event_id !== guard.authority_event_id ||
           authority.subject_id !== verified.resultId ||
           authority.actor.login !== verified.ownerLogin ||
           authority.occurred_at !== overlay.claimed_at ||
-          canonicalResultJson(authority.payload) !== canonicalResultJson(verified.baseResult)
+          canonicalResultJson(authority.payload) !== canonicalResultJson(overlay.base_result)
         ) {
           throw new StateEventConflictError(identityPath);
+        }
+        if (authoritySourcePath !== sourcePath && incomingSourceEntry.found) {
+          throw new StateEventConflictError(sourcePath);
+        }
+        if (requestedEventEntry.found) {
+          if (
+            request.eventId !== guard.authority_event_id ||
+            canonicalResultJson(requestedEventEntry.value) !== canonicalResultJson(event)
+          ) {
+            throw new StateEventConflictError(eventPath);
+          }
         }
         return {
           commit: snapshot.headSha,
@@ -1130,6 +1187,7 @@ export class GitHubStateRepository {
           authorityEventId: guard.authority_event_id,
         };
       }
+      if (incomingSourceEntry.found) throw new StateEventConflictError(sourcePath);
       if (requestedEventEntry.found) throw new StateEventConflictError(eventPath);
       const guard = claimedGuard(verified.resultId, request.eventId);
       const overlay = claimedOverlay(verified, request.eventId, request.occurredAt);
@@ -1155,7 +1213,7 @@ export class GitHubStateRepository {
         };
       }
       if (attempt === MAX_WRITE_ATTEMPTS) {
-        throw new GitHubStateError(409, "State branch kept changing during legacy result claim");
+        throw new ResultOwnerStateError(409, "State branch kept changing during legacy result claim");
       }
       await pause(attempt);
     }
@@ -1199,7 +1257,7 @@ export class GitHubStateRepository {
         guard.authority_event_id !== overlay.claim_event_id ||
         overlay.owner_login !== request.ownerLogin
       ) {
-        throw new GitHubStateError(404, "legacy result claim was not found");
+        throw new ResultOwnerStateError(404, "legacy result claim was not found");
       }
       if (requestedEventEntry.found) {
         let existing: StateEvent;
@@ -1210,8 +1268,8 @@ export class GitHubStateRepository {
           throw new StateEventConflictError(requestedEventPath);
         }
         if (
-          overlay.mutation_event_id !== request.eventId ||
           existing.event_type !== "result.metadata_backfilled" ||
+          existing.event_id !== request.eventId ||
           existing.subject_id !== request.resultId ||
           existing.actor.login !== request.ownerLogin ||
           canonicalResultJson(existing.payload.production_metadata) !==
@@ -1275,7 +1333,7 @@ export class GitHubStateRepository {
         };
       }
       if (attempt === MAX_WRITE_ATTEMPTS) {
-        throw new GitHubStateError(409, "State branch kept changing during legacy result backfill");
+        throw new ResultOwnerStateError(409, "State branch kept changing during legacy result backfill");
       }
       await pause(attempt);
     }

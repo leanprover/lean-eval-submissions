@@ -49,8 +49,14 @@ QUALIFICATION_FIELDS = set(QUALIFICATION_FIXED) | {
     "lifecycle_callback_contract_sha256",
 }
 CALLBACK_CONTRACT_FILES = [
+    "server/src/api-contract.ts",
     "server/src/app.ts",
+    "server/src/auth.ts",
+    "server/src/github-broker-client.ts",
+    "server/src/github-broker.ts",
+    "server/src/github-provider.ts",
     "server/src/github-state.ts",
+    "server/src/result-owner.ts",
     "server/src/state-event.ts",
     "server/src/submission-view.ts",
 ]

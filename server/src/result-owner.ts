@@ -160,6 +160,9 @@ export async function resultId(
 }
 
 export async function sourceRecordId(base: LegacyResultBase): Promise<string> {
+  // The exact pinned State contract defines src1 as the bare canonical tuple
+  // digest. Domain separation would be a new cross-language index version,
+  // not a compatible Worker-only change.
   return `src1_${await sha256Hex(canonicalJson([
     base.results_repository,
     base.results_commit,

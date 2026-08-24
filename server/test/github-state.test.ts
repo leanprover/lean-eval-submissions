@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  canonicalStateDocument,
   type GitHubFetch,
   GitHubStateError,
   GitHubStateRepository,
+  ResultOwnerStateError,
   StateEventConflictError,
   StateUpdateOutcomeUnknownError,
 } from "../src/github-state";
@@ -14,6 +16,7 @@ import type {
 } from "../src/state-event";
 import type { SubmissionView } from "../src/submission-view";
 import {
+  backfilledOverlay,
   claimedGuard,
   claimedOverlay,
   claimedSourceIndex,
@@ -276,6 +279,12 @@ function repository(fetcher: GitHubFetch): GitHubStateRepository {
 }
 
 describe("atomic Git State append", () => {
+  it("emits the exact Python-compatible canonical State document bytes", () => {
+    expect(canonicalStateDocument({ z: "😀", a: { y: "β", x: true } })).toBe(
+      "{\n  \"a\": {\n    \"x\": true,\n    \"y\": \"\\u03b2\"\n  },\n  \"z\": \"\\ud83d\\ude00\"\n}\n",
+    );
+  });
+
   it("gates result-owner writes on protected-main ancestry and exact reviewed blobs", async () => {
     const valid = sequence([
       json({ object: { sha: HEAD } }),
@@ -573,7 +582,6 @@ describe("atomic Git State append", () => {
     const fetcher = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
-      ...resultOwnerContractProofResponses(),
       contents(ACCEPTED_VIEW),
       contents(RECEIVED),
       contents(METADATA),
@@ -592,7 +600,7 @@ describe("atomic Git State append", () => {
       EVALUATION_ACCEPTED.event_id,
       RESULT_VIEW,
     )).resolves.toEqual({ commit: NEW_COMMIT, created: true, view: RESULT_VIEW });
-    const treeRequest = fetcher.mock.calls[21]?.[1]?.body;
+    const treeRequest = fetcher.mock.calls[11]?.[1]?.body;
     if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
     const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
     expect(tree.tree.map((entry) => entry.path)).toEqual([
@@ -601,6 +609,12 @@ describe("atomic Git State append", () => {
       `views/submissions/01/${SUBMISSION_ID}.json`,
       `views/result-identities/aa/${RESULT_ID}.json`,
     ]);
+    expect(fetcher.mock.calls.map(([input]) => input instanceof Request
+      ? input.url
+      : typeof input === "string"
+        ? input
+        : input.toString()).join("\n")).not.toContain("/compare/");
+    expect(fetcher.mock.calls.every(([, init]) => init?.redirect === "manual")).toBe(true);
   });
 
   it("atomically claims a verified legacy record and all three private indexes", async () => {
@@ -689,7 +703,7 @@ describe("atomic Git State append", () => {
       eventId: CLAIM_EVENT_ID,
       occurredAt: "2026-08-24T08:00:00.000Z",
       verified: LEGACY_RESULT,
-    })).rejects.toBeInstanceOf(StateEventConflictError);
+    })).rejects.toBeInstanceOf(ResultOwnerStateError);
     expect(fetcher).toHaveBeenCalledTimes(16);
   });
 
@@ -754,6 +768,48 @@ describe("atomic Git State append", () => {
       occurredAt: "2026-08-24T08:00:00.000Z",
       verified: LEGACY_RESULT,
     })).rejects.toBeInstanceOf(StateEventConflictError);
+  });
+
+  it("keeps the first claim canonical when the same record is re-claimed at another reachable commit", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const overlay = claimedOverlay(LEGACY_RESULT, CLAIM_EVENT_ID, "2026-08-24T08:00:00.000Z");
+    const source = await claimedSourceIndex(LEGACY_RESULT, CLAIM_EVENT_ID);
+    const claimEvent = {
+      schema_version: 1,
+      event_id: CLAIM_EVENT_ID,
+      event_type: "result.claimed",
+      occurred_at: "2026-08-24T08:00:00.000Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: null,
+      actor: { kind: "github", login: "alice" },
+      payload: LEGACY_RESULT.baseResult,
+    } as const;
+    const newer = {
+      ...LEGACY_RESULT,
+      baseResult: { ...LEGACY_RESULT.baseResult, results_commit: "c".repeat(40) },
+    };
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(overlay),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      contents(source),
+      contents(claimEvent),
+    ]);
+    await expect(repository(fetcher).claimLegacyResult({
+      eventId: "0198abcd-0000-7000-8000-000000000009",
+      occurredAt: "2026-08-24T08:05:00.000Z",
+      verified: newer,
+    })).resolves.toEqual({
+      commit: HEAD,
+      created: false,
+      resultId: LEGACY_RESULT.resultId,
+      authorityEventId: CLAIM_EVENT_ID,
+    });
+    expect(fetcher.mock.calls.some((call) => call[1]?.method === "POST")).toBe(false);
   });
 
   it("serializes metadata backfills through the current overlay mutation head", async () => {
@@ -879,6 +935,54 @@ describe("atomic Git State append", () => {
       ownerLogin: "alice",
       productionMetadata: { web_access: false },
     })).rejects.toBeInstanceOf(StateEventConflictError);
+  });
+
+  it("replays an older exact backfill after a later mutation using per-field provenance", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const claimed = claimedOverlay(LEGACY_RESULT, CLAIM_EVENT_ID, "2026-08-24T08:00:00.000Z");
+    const first = backfilledOverlay(
+      claimed,
+      BACKFILL_EVENT_ID,
+      "2026-08-24T08:01:00.000Z",
+      { web_access: false },
+    );
+    const laterEventId = "0198abcd-0000-7000-8000-000000000003";
+    const current = backfilledOverlay(
+      first,
+      laterEventId,
+      "2026-08-24T08:02:00.000Z",
+      { notes: "later mutation" },
+    );
+    const firstEvent = {
+      schema_version: 1,
+      event_id: BACKFILL_EVENT_ID,
+      event_type: "result.metadata_backfilled",
+      occurred_at: "2026-08-24T08:01:00.000Z",
+      subject_id: LEGACY_RESULT.resultId,
+      causation_event_id: CLAIM_EVENT_ID,
+      actor: { kind: "github", login: "alice" },
+      payload: { production_metadata: { web_access: false } },
+    } as const;
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(current),
+      contents(firstEvent),
+    ]);
+    await expect(repository(fetcher).backfillLegacyResultMetadata({
+      eventId: BACKFILL_EVENT_ID,
+      occurredAt: "2026-08-24T08:01:00.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      ownerLogin: "alice",
+      productionMetadata: { web_access: false },
+    })).resolves.toEqual({
+      commit: HEAD,
+      created: false,
+      resultId: LEGACY_RESULT.resultId,
+      mutationEventId: BACKFILL_EVENT_ID,
+    });
   });
 
   it("hides a legacy claim from a different authenticated owner", async () => {

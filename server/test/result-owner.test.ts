@@ -28,6 +28,33 @@ function resultContents(document: unknown): Response {
   });
 }
 
+function reachableResultFetcher(
+  contents: () => Response,
+  commit = "e".repeat(40),
+  branch: "main" | "staging-results" = "main",
+): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+  return (input, init) => {
+    const url = input instanceof Request ? input.url : input.toString();
+    expect(new Headers(init?.headers).get("x-lean-eval-expected-commit")).toBe(commit);
+    expect(init?.redirect).toBe("manual");
+    if (url.endsWith(`/branches/${branch}`)) {
+      return Promise.resolve(Response.json({ name: branch, protected: true, commit: { sha: "f".repeat(40) } }));
+    }
+    if (url.endsWith(`/compare/${commit}...${branch}`)) {
+      return Promise.resolve(Response.json({
+        status: "ahead",
+        base_commit: { sha: commit },
+        merge_base_commit: { sha: commit },
+        head_commit: { sha: "f".repeat(40) },
+      }));
+    }
+    if (url === `https://api.github.com/repos/leanprover/lean-eval-submissions/contents/results/alice.json?ref=${commit}`) {
+      return Promise.resolve(contents());
+    }
+    throw new Error(`unexpected Results verification request: ${url}`);
+  };
+}
+
 const EVENT_ID = "0198abcd-0000-7000-8000-000000000001";
 const VERIFIED: VerifiedLegacyResult = {
   resultId: `r2_${"1".repeat(64)}`,
@@ -130,19 +157,14 @@ describe("legacy result owner contracts", () => {
         solution_publication_date: "2026-10-01",
       },
     };
-    const resultFetcher = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-      const url = input instanceof Request
-        ? input.url
-        : typeof input === "string"
-          ? input
-          : input.toString();
-      expect(url).toBe(
-        `https://api.github.com/repos/leanprover/lean-eval-submissions/contents/results/alice.json?ref=${"e".repeat(40)}`,
-      );
-      expect(new Headers(init?.headers).get("x-lean-eval-expected-commit")).toBe("e".repeat(40));
-      return Promise.resolve(resultContents({ schema_version: 2, user: "Alice", results: [record] }));
-    };
-    const provider = new GitHubProvider(undefined, undefined, undefined, undefined, resultFetcher);
+    const provider = new GitHubProvider(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      reachableResultFetcher(() => resultContents({ schema_version: 2, user: "Alice", results: [record] })),
+      "main",
+    );
     const verified = await provider.verifyLegacyResult("alice", "e".repeat(40), identifier);
     expect(verified).toEqual({
       resultId: identifier,
@@ -161,6 +183,68 @@ describe("legacy result owner contracts", () => {
     expect(JSON.stringify(verified)).not.toContain("solution_publication_status");
   });
 
+  it("requires merge-base ancestry to the exact protected environment branch", async () => {
+    const commit = "e".repeat(40);
+    const calls: string[] = [];
+    const resultFetcher = (input: RequestInfo | URL): Promise<Response> => {
+      const url = input instanceof Request ? input.url : input.toString();
+      calls.push(url);
+      if (url.endsWith("/branches/staging-results")) {
+        return Promise.resolve(Response.json({
+          name: "staging-results",
+          protected: true,
+          commit: { sha: "f".repeat(40) },
+        }));
+      }
+      if (url.endsWith(`/compare/${commit}...staging-results`)) {
+        return Promise.resolve(Response.json({
+          status: "diverged",
+          base_commit: { sha: commit },
+          merge_base_commit: { sha: "d".repeat(40) },
+          head_commit: { sha: "f".repeat(40) },
+        }));
+      }
+      throw new Error("unreachable content read");
+    };
+    const provider = new GitHubProvider(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      resultFetcher,
+      "staging-results",
+    );
+    await expect(provider.verifyLegacyResult("alice", commit, `r2_${"1".repeat(64)}`))
+      .rejects.toThrow(/not an ancestor/u);
+    expect(calls).toHaveLength(2);
+  });
+
+  it("maps raw surrogate content to a bounded proof failure", async () => {
+    const identifier = `r2_${"1".repeat(64)}`;
+    const record = {
+      result_id: identifier,
+      problem_id: "two_plus_two",
+      statement_revision: 1,
+      declared_model: "\ud800",
+      accepted_at: "2024-01-02T03:04:05Z",
+      benchmark_commit: "c".repeat(40),
+      intake: { kind: "issue", issue_number: 42 },
+      submission: { kind: "gist", repo: "alice/abcdef", ref: "d".repeat(40), public: true },
+      production_metadata: { solution_publication_status: "private" },
+    };
+    const provider = new GitHubProvider(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      reachableResultFetcher(() => resultContents({ schema_version: 2, user: "alice", results: [record] })),
+      "main",
+    );
+    await expect(provider.verifyLegacyResult("alice", "e".repeat(40), identifier)).rejects.toMatchObject({
+      status: 409,
+    });
+  });
+
   it("rejects a forged tuple and an owner-mismatched Results envelope", async () => {
     const identifier = await resultId("alice", "Example Model", "two_plus_two", 1);
     const baseRecord = {
@@ -174,13 +258,13 @@ describe("legacy result owner contracts", () => {
       submission: { kind: "gist", repo: "alice/abcdef", ref: "d".repeat(40), public: true },
       production_metadata: { solution_publication_status: "published", solution_publication_date: "2024-02-01" },
     };
-    const forged = new GitHubProvider(undefined, undefined, undefined, undefined, () =>
-      Promise.resolve(resultContents({ schema_version: 2, user: "alice", results: [baseRecord] })));
+    const forged = new GitHubProvider(undefined, undefined, undefined, undefined, reachableResultFetcher(() =>
+      resultContents({ schema_version: 2, user: "alice", results: [baseRecord] })), "main");
     await expect(forged.verifyLegacyResult("alice", "e".repeat(40), identifier))
       .rejects.toThrow(/identity/u);
 
-    const wrongOwner = new GitHubProvider(undefined, undefined, undefined, undefined, () =>
-      Promise.resolve(resultContents({ schema_version: 2, user: "mallory", results: [baseRecord] })));
+    const wrongOwner = new GitHubProvider(undefined, undefined, undefined, undefined, reachableResultFetcher(() =>
+      resultContents({ schema_version: 2, user: "mallory", results: [baseRecord] })), "main");
     await expect(wrongOwner.verifyLegacyResult("alice", "e".repeat(40), identifier))
       .rejects.toThrow(/owner/u);
   });
@@ -198,17 +282,17 @@ describe("legacy result owner contracts", () => {
       submission: { kind: "github_repo", repo: "alice/proof", ref: "d".repeat(40), public: true },
       production_metadata: { solution_publication_status: "published", solution_publication_date: "2024-02-01" },
     };
-    const invalidTimestamp = new GitHubProvider(undefined, undefined, undefined, undefined, () =>
-      Promise.resolve(resultContents({
+    const invalidTimestamp = new GitHubProvider(undefined, undefined, undefined, undefined, reachableResultFetcher(() =>
+      resultContents({
         schema_version: 2,
         user: "alice",
         results: [{ ...record, accepted_at: "2024-02-30T03:04:05Z" }],
-      })));
+      })), "main");
     await expect(invalidTimestamp.verifyLegacyResult("alice", "e".repeat(40), identifier))
       .rejects.toThrow(/acceptance/u);
 
-    const invalidPublication = new GitHubProvider(undefined, undefined, undefined, undefined, () =>
-      Promise.resolve(resultContents({
+    const invalidPublication = new GitHubProvider(undefined, undefined, undefined, undefined, reachableResultFetcher(() =>
+      resultContents({
         schema_version: 2,
         user: "alice",
         results: [{
@@ -218,16 +302,16 @@ describe("legacy result owner contracts", () => {
             solution_publication_date: "2024-02-30",
           },
         }],
-      })));
+      })), "main");
     await expect(invalidPublication.verifyLegacyResult("alice", "e".repeat(40), identifier))
       .rejects.toThrow(/publication date/u);
 
-    const duplicateTuple = new GitHubProvider(undefined, undefined, undefined, undefined, () =>
-      Promise.resolve(resultContents({
+    const duplicateTuple = new GitHubProvider(undefined, undefined, undefined, undefined, reachableResultFetcher(() =>
+      resultContents({
         schema_version: 2,
         user: "alice",
         results: [record, { ...record, result_id: `r2_${"f".repeat(64)}` }],
-      })));
+      })), "main");
     await expect(duplicateTuple.verifyLegacyResult("alice", "e".repeat(40), identifier))
       .rejects.toThrow(/unique immutable identity tuple/u);
   });

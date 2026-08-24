@@ -40,6 +40,7 @@ import {
   type GitHubFetch,
   GitHubStateError,
   GitHubStateRepository,
+  ResultOwnerStateError,
   StateEventConflictError,
 } from "./github-state";
 import {
@@ -400,6 +401,7 @@ function provider(env: RuntimeEnv, dependencies: ApiDependencies): GitHubProvide
     env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "source") : undefined,
     env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "dispatch") : undefined,
     env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "results") : undefined,
+    env.DEPLOYMENT_ENVIRONMENT === "production" ? "main" : "staging-results",
   );
 }
 
@@ -1665,7 +1667,6 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const eventId = idempotencyEventId(request);
     const input = decodeLegacyResultClaim(await readJson(request));
     const ledger = state(env, dependencies);
-    await ledger.assertResultOwnerContract();
     const verified = await submissionStage(
       "legacy_result_verification",
       () => provider(env, dependencies).verifyLegacyResult(
@@ -1694,7 +1695,6 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
       throw new ApiDecodeError("production_metadata must contain at least one backfill field");
     }
     const ledger = state(env, dependencies);
-    await ledger.assertResultOwnerContract();
     const outcome = await ledger.backfillLegacyResultMetadata({
       eventId,
       occurredAt: canonicalTimestamp(now),
@@ -1758,13 +1758,16 @@ function errorResponse(error: unknown): Response {
   if (error instanceof ApiDecodeError) return json({ error: "invalid_request", detail: error.message }, 400);
   if (error instanceof AuthError) return json({ error: "authentication_failed" }, 401);
   if (error instanceof StateEventConflictError) return json({ error: "idempotency_conflict" }, 409);
+  if (error instanceof ResultOwnerStateError) {
+    return error.status === 404
+      ? json({ error: "not_found" }, 404)
+      : json({ error: "idempotency_conflict" }, 409);
+  }
   if (error instanceof GitHubProviderError) {
     const status = error.status === 409 ? 409 : error.status === 404 ? 422 : 503;
     return json({ error: status === 409 ? "proof_failed" : status === 422 ? "source_not_found" : "provider_unavailable" }, status);
   }
   if (error instanceof GitHubStateError) {
-    if (error.status === 404) return json({ error: "not_found" }, 404);
-    if (error.status === 409) return json({ error: "idempotency_conflict" }, 409);
     return json({ error: "state_unavailable" }, 503);
   }
   console.error(JSON.stringify({ event: "api_request_failed", error_name: error instanceof Error ? error.name : "unknown" }));

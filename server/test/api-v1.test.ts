@@ -27,6 +27,7 @@ import {
 } from "../src/github-provider";
 import {
   GitHubStateError,
+  ResultOwnerStateError,
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
 } from "../src/github-state";
@@ -72,6 +73,29 @@ const SUBMISSION = {
   production_metadata: { web_access: false, input_tokens: 123 },
 } as const;
 
+function reachableLegacyResultFetch(contents: typeof fetch): typeof fetch {
+  return (input, init) => {
+    const url = input instanceof Request ? input.url : input.toString();
+    const expected = new Headers(init?.headers).get("x-lean-eval-expected-commit");
+    if (url.endsWith("/branches/staging-results")) {
+      return Promise.resolve(Response.json({
+        name: "staging-results",
+        protected: true,
+        commit: { sha: "f".repeat(40) },
+      }));
+    }
+    if (url.endsWith(`/compare/${expected ?? ""}...staging-results`)) {
+      return Promise.resolve(Response.json({
+        status: "ahead",
+        base_commit: { sha: expected },
+        merge_base_commit: { sha: expected },
+        head_commit: { sha: "f".repeat(40) },
+      }));
+    }
+    return contents(input, init);
+  };
+}
+
 class MemoryState implements StateAccess {
   readonly events: WritableStateEvent[] = [];
   readonly views = new Map<string, SubmissionView>();
@@ -80,8 +104,10 @@ class MemoryState implements StateAccess {
   head = "d".repeat(40);
   readonly legacyClaims: LegacyResultClaimRequest[] = [];
   readonly legacyBackfills: LegacyResultBackfillRequest[] = [];
+  contractAssertions = 0;
 
   assertResultOwnerContract(): Promise<string> {
+    this.contractAssertions += 1;
     return Promise.resolve("f".repeat(40));
   }
 
@@ -571,6 +597,42 @@ describe("strict API contract", () => {
       { state },
     );
     expect(unauthorized.status).toBe(401);
+  });
+
+  it("keeps lifecycle callback CAS exhaustion retryable", async () => {
+    const state = new MemoryState();
+    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    state.views.set(submissionId, pendingView(
+      submissionId,
+      "2026-05-01T00:00:00.000Z",
+      1,
+      "succeeded",
+    ));
+    vi.spyOn(state, "appendSubmissionLifecycle").mockRejectedValue(
+      new GitHubStateError(409, "State branch kept changing during lifecycle update"),
+    );
+    const request = jsonRequest("/internal/v1/archive-completed", {
+      schema_version: 1,
+      occurred_at: "2026-05-02T03:04:05.000Z",
+      locator: {
+        schema_version: 1,
+        submission_id: submissionId,
+        archive_repository: "leanprover/lean-eval-audit",
+        archive_commit: "a".repeat(40),
+        archive_path: `archives/01/${submissionId}.tar.age`,
+        archive_ciphertext_sha256: "b".repeat(64),
+        encrypted: true,
+      },
+    });
+    request.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+    const response = await handleRequest(
+      request,
+      { ...ENV, INTAKE_ENABLED: "false" },
+      LIFECYCLE,
+      { state },
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "state_unavailable" });
   });
 
   it("records an authenticated archive failure without leaving status pending", async () => {
@@ -1833,13 +1895,21 @@ describe("authenticated legacy result owner routes", () => {
       body: JSON.stringify({ result_id: identifier, results_commit: "e".repeat(40) }),
     }), enabledEnv, LIFECYCLE, {
       now: () => NOW_MS,
-      provider: new GitHubProvider(undefined, undefined, undefined, undefined, resultFetch),
+      provider: new GitHubProvider(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        reachableLegacyResultFetch(resultFetch),
+        "staging-results",
+      ),
       state,
     });
     expect(response.status).toBe(201);
     const responseBody = await response.json();
     expect(responseBody).toEqual({ result_id: identifier, status: "claimed" });
     expect(state.legacyClaims).toHaveLength(1);
+    expect(state.contractAssertions).toBe(0);
     expect(state.legacyClaims[0]).toMatchObject({
       eventId: "0198abcd-3333-7000-8000-000000000001",
       occurredAt: new Date(NOW_MS).toISOString(),
@@ -1882,6 +1952,7 @@ describe("authenticated legacy result owner routes", () => {
       ownerLogin: "alice",
       productionMetadata: { notes: "historical note", web_access: false },
     }]);
+    expect(state.contractAssertions).toBe(0);
   });
 
   it("rejects missing authentication and empty metadata without invoking State", async () => {
@@ -1908,10 +1979,10 @@ describe("authenticated legacy result owner routes", () => {
     expect(state.legacyBackfills).toHaveLength(0);
   });
 
-  it("preserves a protected-main CAS exhaustion as an explicit 409 conflict", async () => {
+  it("preserves owner-operation CAS exhaustion as an explicit 409 conflict", async () => {
     const state = new MemoryState();
     vi.spyOn(state, "backfillLegacyResultMetadata").mockRejectedValue(
-      new GitHubStateError(409, "State branch kept changing"),
+      new ResultOwnerStateError(409, "State branch kept changing"),
     );
     const identifier = `r2_${"1".repeat(64)}`;
     const response = await handleRequest(new Request(
@@ -1948,7 +2019,7 @@ describe("authenticated legacy result owner routes", () => {
         body: JSON.stringify({ result_id: `r2_${"1".repeat(64)}`, results_commit: "e".repeat(40) }),
       }), enabledEnv, LIFECYCLE, {
         now: () => NOW_MS,
-        provider: new GitHubProvider(undefined, undefined, undefined, undefined, resultFetch),
+        provider: new GitHubProvider(undefined, undefined, undefined, undefined, resultFetch, "staging-results"),
         state: new MemoryState(),
       });
       const publicBody = await response.text();

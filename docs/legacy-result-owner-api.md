@@ -47,9 +47,13 @@ Content-Type: application/json
 {"result_id":"r2_<64 lowercase hex>","results_commit":"<40 lowercase hex>"}
 ```
 
-The server derives `results/<authenticated-lowercase-login>.json`, fetches it
-only at the requested immutable commit through the bounded Results GitHub App
-authority, requires exactly one matching record, and recomputes:
+The server derives `results/<authenticated-lowercase-login>.json`. Before it
+fetches that path, both the provider and bounded Results GitHub App authority
+prove with GitHub's compare/merge-base response that the client commit is an
+ancestor of the exact protected environment branch (`main` in production,
+`staging-results` in staging). The protected branch response, comparison head,
+base, and merge base must agree. The server then fetches only the requested
+immutable commit, requires exactly one matching record, and recomputes:
 
 - the schema-version-2 result ID from owner, verbatim model, problem, and
   statement revision;
@@ -57,6 +61,11 @@ authority, requires exactly one matching record, and recomputes:
   publication fields; and
 - the provider-neutral source-record identity over exact repository, commit,
   owner-derived path, and canonical-record digest.
+
+The pinned State contract defines `src1_` as SHA-256 of that canonical tuple
+without a domain prefix. Changing only the Worker would split the operational
+index, so domain separation requires a versioned State-contract migration and
+new cross-language vectors rather than an in-place change to `src1_`.
 
 It then atomically creates `result.claimed`, the shared result-identity guard,
 the owner overlay, and the immutable source-record index. A modern
@@ -88,13 +97,23 @@ causal mutation. No branch is rewound.
 
 - An exact existing claim is a 200 idempotent success even after later
   backfills, but only when its authority event and all immutable bindings agree.
+- Re-claiming the same logical record at another reachable Results commit is a
+  200 idempotent success. The first claim remains canonical; its immutable base
+  event, commit binding, and source-record index are never rewritten or
+  duplicated.
 - A backfill whose requested values are already current is a 200 no-op.
-- Replaying the same event ID succeeds only when the current event, body,
-  actor, and field-level overlay provenance agree.
+- Replaying the same backfill event ID succeeds after later mutations when its
+  immutable event, body, actor, and each field it wrote still agree with the
+  field-level overlay provenance; it need not remain the overlay's latest
+  mutation.
 - A changed same-key body, partial/forged indexes, stale causal head, recorded
   result collision, or occupied event path returns 409.
 - A missing claim or different owner returns the same 404 response.
-- Repeated protected-main CAS loss returns 409; State/provider unavailability
+- A claim whose tuple is already reserved by `result.recorded` returns 409 and
+  preserves both immutable histories for explicit operator reconciliation; it
+  never converts, overlays, or overwrites the modern record.
+- Repeated owner-operation protected-main CAS loss returns 409. CAS exhaustion
+  in lifecycle callbacks remains a retryable 503; State/provider unavailability
   and contract drift return 503.
 
 Successful responses contain only `result_id` and a bounded status string.
