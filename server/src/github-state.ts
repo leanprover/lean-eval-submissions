@@ -53,9 +53,9 @@ const RESULT_OWNER_CONTRACT_BLOBS = {
   "schema/result-overlays-v1.schema.json": "41d4078133d6854bf8de839873a3f58e9ba1afd1",
   "schema/result-source-record-index-v1.schema.json": "4543225e0833af00913e436185532a769debebc1",
   "schema/state-event-v1.schema.json": "5b670204c86c440b56afd81f62bd097e3b399be7",
-  "scripts/materialize_state.py": "ac906e34a4c1bcf21bbc50e1650d0db075cc44cf",
+  "scripts/materialize_state.py": "f7985b70b6409616ac2020a2be2337eca13c640d",
   "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
-  "scripts/validate_state.py": "10e48b06aebc410145c1c8da8ff13ad297cf344d",
+  "scripts/validate_state.py": "0b4c876475fcc9c9d5cf6269c800509530673bb4",
 } as const;
 const RESULT_OWNER_CONTRACT_PROOF_CACHE_LIMIT = 64;
 const RESULT_OWNER_CONTRACT_PROOF_ID = Object.entries(RESULT_OWNER_CONTRACT_BLOBS)
