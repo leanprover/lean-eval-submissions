@@ -1,7 +1,6 @@
 import pathlib
+import re
 import unittest
-
-import yaml
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -14,12 +13,17 @@ class EvaluationAppWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.text = WORKFLOW.read_text(encoding="utf-8")
-        cls.workflow = yaml.safe_load(cls.text)
 
     def test_is_protected_staging_only_and_read_only(self) -> None:
-        self.assertEqual(self.workflow["permissions"], {"contents": "read"})
-        job = self.workflow["jobs"]["verify"]
-        self.assertEqual(job["environment"], "cloudflare-staging")
+        self.assertIn(
+            "\npermissions:\n  contents: read\n\nconcurrency:",
+            self.text,
+        )
+        verify_job = self.text.split("  verify:", 1)[1]
+        self.assertRegex(
+            verify_job,
+            re.compile(r"^    environment: cloudflare-staging$", re.MULTILINE),
+        )
         self.assertNotIn("cloudflare-production", self.text)
         self.assertNotIn("actions/checkout", self.text)
         self.assertNotIn("GITHUB_STATE_TOKEN", self.text)
