@@ -20,6 +20,9 @@ Parameters:
     Default: leanprover@7233018/lean-eval-releases@1340741242
     AllowedPattern: ^[A-Za-z0-9_.-]+(?:@[0-9]+)?/[A-Za-z0-9_.-]+(?:@[0-9]+)?$
 
+Conditions:
+  IsProduction: !Equals [!Ref EnvironmentName, production]
+
 Resources:
   ArchiveIdentityKey:
     Type: AWS::KMS::Key
@@ -75,6 +78,48 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
                 token.actions.githubusercontent.com:sub: !Sub repo:${SubmissionGitHubSubjectPrefix}:environment:archive-${EnvironmentName}
+      Policies:
+        - PolicyName: EncryptOneArchiveIdentity
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: kms:Encrypt
+                Resource: !GetAtt ArchiveIdentityKey.Arn
+                Condition:
+                  StringEquals:
+                    kms:EncryptionContext:contract: lean-eval-archive-key-v1
+                  ForAllValues:StringEquals:
+                    kms:EncryptionContextKeys:
+                      - contract
+                      - submission_id
+                      - archive_ciphertext_sha256
+                      - data_key_id
+                      - age_recipient_sha256
+                  "Null":
+                    kms:EncryptionContext:contract: false
+                    kms:EncryptionContext:submission_id: false
+                    kms:EncryptionContext:archive_ciphertext_sha256: false
+                    kms:EncryptionContext:data_key_id: false
+                    kms:EncryptionContext:age_recipient_sha256: false
+
+  MigrationWrapRole:
+    Type: AWS::IAM::Role
+    Condition: IsProduction
+    Properties:
+      RoleName: lean-eval-archive-migration-wrap-production
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Ref GitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repo:${SubmissionGitHubSubjectPrefix}:environment:archive-migration-production
       Policies:
         - PolicyName: EncryptOneArchiveIdentity
           PolicyDocument:
@@ -235,6 +280,9 @@ Outputs:
     Value: !Ref CapabilityConsumption
   WrapRoleArn:
     Value: !GetAtt WrapRole.Arn
+  MigrationWrapRoleArn:
+    Condition: IsProduction
+    Value: !GetAtt MigrationWrapRole.Arn
   UnwrapFunctionAliasArn:
     Value: !Sub ${UnwrapFunction.Arn}:live
   ReplayInvokerRoleArn:

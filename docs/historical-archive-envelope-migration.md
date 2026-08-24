@@ -41,8 +41,13 @@ run is the default and needs no legacy identity. Apply additionally requires:
   recipient, in `archive-migration-production`;
 - `AUDIT_MIGRATION_READ_KEY`, a read-only deploy key scoped only to the audit
   repository (the write-capable App is minted only after apply confirmation);
-- `AWS_WRAP_ROLE_ARN`, restricted to KMS Encrypt on the production archive
-  identity key; and
+- `AWS_WRAP_ROLE_ARN`, set to the production stack's
+  `MigrationWrapRoleArn` output. That dedicated role trusts only the exact
+  `repo:leanprover/lean-eval-submissions:environment:archive-migration-production`
+  OIDC subject and grants only KMS Encrypt on the production archive identity
+  key with the complete archive encryption context. The ordinary production
+  `WrapRoleArn` trusts `archive-production` instead and is incompatible with
+  this workflow; and
 - the existing audit-writer GitHub App, restricted to the private audit repo.
 
 For every entry the job decrypts into runner scratch, verifies the historical
