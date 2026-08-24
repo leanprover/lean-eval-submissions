@@ -1321,6 +1321,15 @@ describe("automatic staging promotion canary in workerd", () => {
     expect(state.outbox).toHaveLength(1);
 
     const canaryId = String(firstBody.submission_id);
+    const canaryMilliseconds = Number.parseInt(
+      canaryId.replaceAll("-", "").slice(0, 12),
+      16,
+    );
+    expect(canaryMilliseconds).toBeGreaterThanOrEqual(Date.UTC(2026, 7, 21));
+    expect(canaryMilliseconds).toBeLessThan(Date.UTC(2026, 7, 22));
+    expect(canaryMilliseconds).toBeGreaterThan(
+      Date.parse("2026-08-20T06:47:06.000Z"),
+    );
     const unrelatedId = `0198abcd-2222-7000-8000-0000000000${canaryId.slice(-2)}`;
     const canaryOutbox = [...state.outbox.values()][0];
     if (canaryOutbox === undefined) throw new Error("canary outbox was not persisted");

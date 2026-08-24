@@ -215,7 +215,9 @@ const OAUTH_COOKIE = "lean_eval_oauth_state";
 const PROMOTION_CANARY_REPOSITORY = "kim-em/lean-eval-intake-fixture";
 const PROMOTION_CANARY_SOURCE_COMMIT = "ae38f4d3e4ad2991212135435f54e6640bcc89e7";
 const PROMOTION_CANARY_LOGIN = "kim-em";
-const PROMOTION_CANARY_EPOCH_MS = Date.UTC(2026, 7, 20);
+// Keep deterministic canary identities strictly after staging State's
+// 2026-08-20T06:47:06Z system.initialized event.
+const PROMOTION_CANARY_EPOCH_MS = Date.UTC(2026, 7, 21);
 const PROMOTION_CANARY_OUTBOX_SHARD = "ca";
 const PROMOTION_CANARY_MODEL = /^lean-eval automatic staging promotion canary commit ([0-9a-f]{40}) run ([1-9][0-9]{0,19}) attempt ([1-9][0-9]{0,5})$/;
 const PROMOTION_CANARY_NOTES = "Synthetic staging-only promotion canary using a deliberately rejected fixture; never a benchmark or publication claim.";
