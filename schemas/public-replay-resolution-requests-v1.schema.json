@@ -73,7 +73,19 @@
             },
             "commit": { "$ref": "#/$defs/commit" },
             "visibility": { "const": "public" }
-          }
+          },
+          "allOf": [
+            {
+              "if": { "properties": { "kind": { "const": "gist" } } },
+              "then": {
+                "properties": {
+                  "repository": {
+                    "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[0-9a-f]+$"
+                  }
+                }
+              }
+            }
+          ]
         },
         "benchmark": {
           "type": "object",

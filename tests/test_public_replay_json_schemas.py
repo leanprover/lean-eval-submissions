@@ -19,12 +19,14 @@ from aggregate_public_replay_github_evidence import (
     validate_aggregate,
 )
 from resolve_public_replay_github_evidence import (
+    SOURCE_PROBE_REASON_CODES,
     shard_requests,
     validate_evidence,
     validate_requests,
 )
 from tests.test_resolve_public_replay_github_evidence import (
     FakeClient,
+    refresh_request_id,
     registry_bytes,
     request_value,
     resolve,
@@ -58,6 +60,18 @@ class PublicReplayJsonSchemaParityTests(unittest.TestCase):
         jsonschema.Draft202012Validator(
             self.schemas[schema_name], registry=self.registry
         ).validate(value)
+
+    def test_source_probe_reason_codes_match_runtime(self) -> None:
+        matched_source = next(
+            branch
+            for branch in self.schemas["evidence"]["$defs"]["candidate"]["oneOf"]
+            if "matched_source_indeterminate"
+            in branch.get("properties", {}).get("status", {}).get("enum", [])
+        )
+        schema_codes = matched_source["properties"]["source_probe_reason_code"][
+            "enum"
+        ]
+        self.assertEqual(set(schema_codes), SOURCE_PROBE_REASON_CODES)
 
     def artifacts(self) -> tuple[dict, dict, dict, dict]:
         requests = request_value()
@@ -163,6 +177,35 @@ class PublicReplayJsonSchemaParityTests(unittest.TestCase):
             self.validate("requests", requests)
         with self.assertRaisesRegex(ValueError, "repository"):
             validate_requests(requests)
+
+    def test_gist_source_name_is_variable_length_lowercase_hex(self) -> None:
+        for gist_id in ("a", "a" * 20, "a" * 32, "a" * 64):
+            with self.subTest(gist_id=gist_id):
+                requests = request_value()
+                requests["requests"][0]["source"] = {
+                    "kind": "gist",
+                    "repository": f"A-M-Berns/{gist_id}",
+                    "commit": "2" * 40,
+                    "visibility": "public",
+                }
+                refresh_request_id(requests)
+                self.validate("requests", requests)
+                validate_requests(requests)
+
+        for gist_id in ("", "G", "A" * 32, "not-a-gist"):
+            with self.subTest(gist_id=gist_id):
+                requests = request_value()
+                requests["requests"][0]["source"] = {
+                    "kind": "gist",
+                    "repository": f"A-M-Berns/{gist_id}",
+                    "commit": "2" * 40,
+                    "visibility": "public",
+                }
+                refresh_request_id(requests)
+                with self.assertRaises(jsonschema.ValidationError):
+                    self.validate("requests", requests)
+                with self.assertRaisesRegex(ValueError, "source identity|repository"):
+                    validate_requests(requests)
 
 
 if __name__ == "__main__":
