@@ -96,6 +96,26 @@ class StagingPromotionCanaryTests(unittest.TestCase):
                 "1",
                 response["submission_id"],
             )
+        with self.assertRaisesRegex(CANARY.CanaryFailure, "non-canonical submission"):
+            CANARY.validate_canary(
+                202,
+                {**response, "submission_id": "0198abcd-1111-7000-8000-000000000001"},
+                commit,
+                dispatch_ref,
+                "32712345678",
+                "1",
+                None,
+            )
+        with self.assertRaisesRegex(CANARY.CanaryFailure, "proof disagree"):
+            CANARY.validate_canary(
+                202,
+                {**response, "synthetic_intake": "idempotent"},
+                commit,
+                dispatch_ref,
+                "32712345678",
+                "1",
+                None,
+            )
         with self.assertRaises(CANARY.CanaryFailure):
             CANARY.validate_canary(
                 200,
