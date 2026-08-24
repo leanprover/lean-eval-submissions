@@ -11,6 +11,7 @@ on:
       - '.github/workflows/historical-public-replay-plan.yml'
       - '.github/workflows/historical-public-runner-contract.yml'
       - '.github/workflows/historical-replay-inventory.yml'
+      - '.github/workflows/kernel-structured-accepted-probe.yml'
       - '.github/workflows/public-replay-github-evidence.yml'
       - 'configuration/public-replay-legacy-adjudications-v1.json'
       - 'configuration/public-replay-workflow-definitions-v1.json'

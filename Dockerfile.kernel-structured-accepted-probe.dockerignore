@@ -1,0 +1,7 @@
+**
+!Dockerfile.kernel-structured-accepted-probe
+!scripts/kernel_corpus_report.py
+!scripts/kernel_runner_wire_contract.py
+!scripts/kernel_structured_accepted_probe.py
+!tests/fixtures/kernel-structured-accepted-probe-v1.json
+!server/replay-image/kernel-structured-accepted-probe

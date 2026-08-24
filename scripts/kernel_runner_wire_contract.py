@@ -337,12 +337,52 @@ def validate_export_metadata(
     for field in evidence:
         _match(DIGEST, evidence[field], f"export metadata.terminal_evidence.{field}")
 
-    if not 1 <= len(raw) <= MAX_EXPORT_BYTES:
-        raise KernelRunnerWireError("raw export size is outside the contract")
     if metadata["input_size_bytes"] != len(raw):
         raise KernelRunnerWireError("raw export size does not match metadata")
-    if hashlib.sha256(raw).hexdigest() != metadata["input_sha256"]:
-        raise KernelRunnerWireError("raw export digest does not match metadata")
+    validate_solution_export(
+        raw,
+        input_sha256=metadata["input_sha256"],
+        exporter={"name": exporter["name"], "version": exporter["version"]},
+        lean={"version": lean["version"], "githash": lean["githash"]},
+        format_version=metadata["format_version"],
+    )
+    return metadata
+
+
+def validate_solution_export(
+    raw: bytes,
+    *,
+    input_sha256: str,
+    exporter: dict[str, Any],
+    lean: dict[str, Any],
+    format_version: str,
+) -> dict[str, Any]:
+    """Validate exact solution-export bytes against their reported identity.
+
+    The accepted-result staging probe and the offline corpus adapter share this
+    byte validator.  Keeping the raw artifact in the caller prevents this
+    helper from acquiring a file, process, network, credential, or persistence
+    interface.
+    """
+
+    _match(DIGEST, input_sha256, "raw export digest")
+    expected_exporter = _object(
+        exporter, {"name", "version"}, "expected raw exporter metadata"
+    )
+    expected_lean = _object(
+        lean, {"version", "githash"}, "expected raw Lean metadata"
+    )
+    if expected_exporter["name"] != "lean4export":
+        raise KernelRunnerWireError("raw exporter name is not registered")
+    _string(expected_exporter["version"], "raw exporter version", 64)
+    _string(expected_lean["version"], "raw Lean version", 64)
+    _match(COMMIT, expected_lean["githash"], "raw Lean githash")
+    if format_version != "3.1.0":
+        raise KernelRunnerWireError("raw export format is not registered")
+    if not 1 <= len(raw) <= MAX_EXPORT_BYTES:
+        raise KernelRunnerWireError("raw export size is outside the contract")
+    if hashlib.sha256(raw).hexdigest() != input_sha256:
+        raise KernelRunnerWireError("raw export digest differs")
     if not raw.endswith(b"\n") or b"\r" in raw or b"\x00" in raw:
         raise KernelRunnerWireError("raw export is not canonical LF-terminated NDJSON")
     first: Any = None
@@ -397,13 +437,20 @@ def validate_export_metadata(
     )
     raw_lean = _object(meta["lean"], {"version", "githash"}, "raw Lean metadata")
     raw_format = _object(meta["format"], {"version"}, "raw format metadata")
-    if raw_exporter != {"name": exporter["name"], "version": exporter["version"]}:
+    if raw_exporter != expected_exporter:
         raise KernelRunnerWireError("raw exporter metadata differs from its sidecar")
-    if raw_lean != {"version": lean["version"], "githash": lean["githash"]}:
+    if raw_lean != expected_lean:
         raise KernelRunnerWireError("raw Lean metadata differs from its sidecar")
-    if raw_format != {"version": metadata["format_version"]}:
+    if raw_format != {"version": format_version}:
         raise KernelRunnerWireError("raw export format differs from its sidecar")
-    return metadata
+    return {
+        "exporter": raw_exporter,
+        "lean": raw_lean,
+        "format": raw_format,
+        "line_count": line_count,
+        "size_bytes": len(raw),
+        "sha256": input_sha256,
+    }
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

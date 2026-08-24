@@ -1,0 +1,41 @@
+{
+  "candidate": {
+    "binary": "sokonanoda",
+    "build_repository": "kim-em/mathgraph-lean-kernel",
+    "commit": "400ab9c1cc4fba03f7a3f95f4604b5cef4e23a44",
+    "protocol": "sokonanoda_result_v1",
+    "protocol_schema_sha256": "b96b99526a143ae39a9e8d058f80337f34d3e7c153e9e1878d2c29d9a56767d9",
+    "protocol_vectors_sha256": "0712d67d88c65f10742ede70d0697360a0fc22b5ff79197f19050ae5e2812f4d",
+    "pull_request": 51,
+    "pull_request_head_commit": "400ab9c1cc4fba03f7a3f95f4604b5cef4e23a44",
+    "repository": "metalogiclabs/mathgraph-lean-kernel",
+    "source_tree": "05ebd1a6a4bba6d38729e51f38680186288f4ac3",
+    "upstream_status": "provisional_unmerged_pull_request"
+  },
+  "kind": "kernel_structured_accepted_probe_fixture",
+  "qualification_status": "blocked_on_unmerged_upstream",
+  "runner": {
+    "architecture": "x86_64",
+    "credentials": "absent",
+    "environment": "replay-staging",
+    "network": "disabled",
+    "source_handoff": "source_free_attestation_only"
+  },
+  "schema_version": 1,
+  "target": {
+    "benchmark_commit": "3f3786f3b4d9a4b64a5859b3036aca190cd25613",
+    "benchmark_configuration_sha256": "dd9f6978ec36ba027cddda161e49abb435a219bf4766e115b7f81fdc69f70f4e",
+    "benchmark_repository": "leanprover/lean-eval",
+    "historical_plan_sha256": "2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942",
+    "historical_smoke_fixture_sha256": "9568054991db378206e67e92c8094b177f8ef138096357eff7c03f8107c5d72c",
+    "problem_id": "two_plus_two",
+    "profile_matrix_sha256": "aad9132f729ef9f429532900d1e50b665330721fa9360699328c47bdfb2aedfc",
+    "request_id": "prr_632ee5cddf6bb19fe0ffd786c0c0985825bc9a01e155a1c7d237946cc405e422",
+    "result_id": "r2_c4e178fbb6cdafcb8f2146245adf02a709a60836f022e8a3d75d72c84b472b60",
+    "source_commit": "a7cf16eead7f54a3eae4099c154eb80b0f520c92",
+    "source_repository": "KitaKen1/lean-eval-two-plus-two",
+    "source_tree": "b2ec72251e306391171598b21835d58ebde84757",
+    "statement_revision": 1,
+    "toolchain": "leanprover/lean4:v4.32.2"
+  }
+}

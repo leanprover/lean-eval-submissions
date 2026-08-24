@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+"""Fixed entrypoint for the staging-only structured accepted-result probe."""
+
+from __future__ import annotations
+
+import pathlib
+import sys
+
+INSTALL = pathlib.Path("/opt/lean-eval")
+INPUT = pathlib.Path("/input")
+WORKSPACE = pathlib.Path("/workspace")
+sys.path.insert(0, str(INSTALL))
+
+from kernel_structured_accepted_probe import main
+
+
+if __name__ == "__main__":
+    raise SystemExit(
+        main(
+            [
+                "run",
+                "--fixture", str(INSTALL / "kernel-structured-accepted-probe-v1.json"),
+                "--attempt", str(INPUT / "kernel-structured-accepted-attempt.json"),
+                "--input-root", str(INPUT),
+                "--install", str(INSTALL),
+                "--workspace", str(WORKSPACE),
+            ]
+        )
+    )

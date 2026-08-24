@@ -437,7 +437,13 @@ the already implemented owner status, metadata, and publication routes.
       deliberately block candidate exit `1`, which the pinned producer uses for
       both rejection-like errors and internal failure; a structured upstream
       producer change is still required before a `rejected` corpus outcome can
-      be recorded safely. The current historical profile evidence exercises
+      be recorded safely. A staging-only accepted-result qualification lane now
+      binds issue 906's already-reproduced public `two_plus_two` result, the
+      exact evaluator capture, a source-locked Mathgraph builder, the proposed
+      `--result-file` protocol, and source-free attempt attestations. It is
+      deliberately hard-blocked while Mathgraph PR #51 remains unmerged and
+      has not been dispatched, so it closes no execution or promotion gate.
+      The current historical profile evidence exercises
       only the runtime boundary; a probe that actually runs Lean, comparator,
       and `replay-measure` to an accepted result is a hard prerequisite before
       any kernel handoff or State append.

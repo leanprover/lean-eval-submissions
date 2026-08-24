@@ -218,6 +218,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "historical-public-replay-plan.yml",
                 "historical-public-runner-contract.yml",
                 "historical-replay-inventory.yml",
+                "kernel-structured-accepted-probe.yml",
                 "public-replay-github-evidence.yml",
                 "server-archive.yml",
                 "set-staging-intake.yml",

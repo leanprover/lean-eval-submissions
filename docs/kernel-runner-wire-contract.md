@@ -243,8 +243,11 @@ still requires all of the following:
    a reviewed source-free handoff that retrieves the captured bytes before
    Sandbox destruction and finalizes the sidecar against exact terminal
    verdict, State-event, and report-entry evidence;
-2. a structured Mathgraph result protocol that separates rejection from
-   internal failure;
+2. the proposed structured Mathgraph result protocol must land upstream, then
+   its exact accepted-result staging probe in
+   [`kernel-structured-accepted-probe.md`](kernel-structured-accepted-probe.md)
+   must pass before the corpus contract adopts separate rejection and internal
+   failure outcomes;
 3. a reviewed exact-image runner that enforces the fixed paths, empty
    environment, resource limits, network/credential boundary and destruction,
    and emits these transcript and attestation objects;

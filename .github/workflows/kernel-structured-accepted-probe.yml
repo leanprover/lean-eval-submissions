@@ -1,0 +1,259 @@
+name: Qualify structured kernel on one accepted public result
+
+# This manual lane is intentionally blocked by its committed fixture until
+# metalogiclabs/mathgraph-lean-kernel#51 lands and the provisional fork pin is
+# replaced by the exact upstream-owned commit. It never writes State, Results,
+# a replay queue, AWS, a registry, or a deployment.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact protected source commit selected through its immutable dispatch tag
+        required: true
+        type: string
+      confirm_staging_only_source_free_probe:
+        description: Run only the network-disabled replay-staging qualification and upload source-free evidence
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kernel-structured-accepted-probe
+  cancel-in-progress: false
+
+jobs:
+  authorize-manual:
+    permissions: {}
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    env:
+      EVENT_REPOSITORY: ${{ github.repository }}
+      EVENT_REF: ${{ github.ref }}
+      EVENT_SHA: ${{ github.sha }}
+      EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      CONFIRMED: ${{ inputs.confirm_staging_only_source_free_probe }}
+    steps:
+      - name: Reject every non-exact manual dispatch visibly
+        run: |
+          set -euo pipefail
+          test "$EVENT_REPOSITORY" = leanprover/lean-eval-submissions
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$EVENT_SHA" = "$EXPECTED_COMMIT"
+          test "$EVENT_REF" = "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
+          test "$CONFIRMED" = true
+
+  validate-provisional-gate:
+    needs: authorize-manual
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      FIXTURE: tests/fixtures/kernel-structured-accepted-probe-v1.json
+      PLAN: evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json
+      MATRIX: configuration/historical-public-replay-profile-matrix-v1.json
+      SMOKE: tests/fixtures/public-replay-smoke-v1.json
+    steps:
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate the exact public-result and provisional candidate pins
+        run: |
+          set -euo pipefail
+          python scripts/kernel_structured_accepted_probe.py validate-fixture \
+            --fixture "$FIXTURE" --plan "$PLAN" --matrix "$MATRIX" --smoke "$SMOKE"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Refuse execution until upstream merge and reviewed pin update
+        run: |
+          set -euo pipefail
+          # At the committed provisional status this exits nonzero with the
+          # actionable PR #51 blocker before any source fetch or image build.
+          python scripts/kernel_structured_accepted_probe.py require-runnable \
+            --fixture "$FIXTURE"
+
+      - name: Verify protected source and the exact upstream-owned candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag_ref="refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
+          remote_tag=$(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            "$tag_ref^{}" | cut -f1)
+          if [ -z "$remote_tag" ]; then
+            remote_tag=$(timeout 30s git ls-remote \
+              https://github.com/leanprover/lean-eval-submissions.git "$tag_ref" | cut -f1)
+          fi
+          test "$remote_tag" = "$EXPECTED_COMMIT"
+          remote_main=$(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git refs/heads/main | cut -f1)
+          git fetch --no-tags origin "$remote_main"
+          git merge-base --is-ancestor "$EXPECTED_COMMIT" "$remote_main"
+
+          candidate_commit=$(jq -er .candidate.commit "$FIXTURE")
+          pull_request_head_commit=$(jq -er .candidate.pull_request_head_commit "$FIXTURE")
+          candidate_tree=$(jq -er .candidate.source_tree "$FIXTURE")
+          protocol_schema_sha256=$(jq -er .candidate.protocol_schema_sha256 "$FIXTURE")
+          protocol_vectors_sha256=$(jq -er .candidate.protocol_vectors_sha256 "$FIXTURE")
+          build_repository=$(jq -er .candidate.build_repository "$FIXTURE")
+          test "$build_repository" = metalogiclabs/mathgraph-lean-kernel
+          probe_repository="$RUNNER_TEMP/mathgraph-upstream"
+          git init "$probe_repository"
+          git -C "$probe_repository" remote add origin \
+            https://github.com/metalogiclabs/mathgraph-lean-kernel.git
+          main_commit=$(timeout 30s git ls-remote \
+            https://github.com/metalogiclabs/mathgraph-lean-kernel.git refs/heads/main | cut -f1)
+          git -C "$probe_repository" fetch --depth 256 origin "$main_commit"
+          git -C "$probe_repository" fetch origin "$candidate_commit"
+          test "$(git -C "$probe_repository" rev-parse FETCH_HEAD)" = "$candidate_commit"
+          test "$(git -C "$probe_repository" rev-parse 'FETCH_HEAD^{tree}')" = "$candidate_tree"
+          git -C "$probe_repository" merge-base --is-ancestor "$candidate_commit" "$main_commit"
+          pr=$(gh api repos/metalogiclabs/mathgraph-lean-kernel/pulls/51)
+          test "$(jq -r .merged_at <<< "$pr")" != null
+          test "$(jq -r .head.sha <<< "$pr")" = "$pull_request_head_commit"
+          test "$(jq -r .merge_commit_sha <<< "$pr")" = "$candidate_commit"
+          grep -F \
+            "remote add origin https://github.com/$build_repository.git" \
+            Dockerfile.kernel-structured-accepted-probe
+          for identity in \
+            "$candidate_commit" "$candidate_tree" \
+            "$protocol_schema_sha256" "$protocol_vectors_sha256"
+          do
+            grep -F "$identity" Dockerfile.kernel-structured-accepted-probe
+          done
+
+  probe:
+    needs: validate-provisional-gate
+    environment: replay-staging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    env:
+      EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+      FIXTURE: tests/fixtures/kernel-structured-accepted-probe-v1.json
+      PLAN: evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json
+      MATRIX: configuration/historical-public-replay-profile-matrix-v1.json
+      CONTRACT: configuration/historical-public-runner-v1.json
+      SOURCE_REPOSITORY: KitaKen1/lean-eval-two-plus-two
+      SOURCE_COMMIT: a7cf16eead7f54a3eae4099c154eb80b0f520c92
+      BENCHMARK_REPOSITORY: leanprover/lean-eval
+      BENCHMARK_COMMIT: 3f3786f3b4d9a4b64a5859b3036aca190cd25613
+      REQUEST_ID: prr_632ee5cddf6bb19fe0ffd786c0c0985825bc9a01e155a1c7d237946cc405e422
+      RESULT_ID: r2_c4e178fbb6cdafcb8f2146245adf02a709a60836f022e8a3d75d72c84b472b60
+      BASE_IMAGE: lean-eval-kernel-structured-accepted-base:${{ inputs.expected_commit }}
+      IMAGE: lean-eval-kernel-structured-accepted-probe:${{ inputs.expected_commit }}
+    steps:
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_commit }}
+          persist-credentials: false
+
+      # Both checkouts fetch reviewed public Git objects before the isolated
+      # phase and persist no credential into their repositories.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: KitaKen1/lean-eval-two-plus-two
+          ref: a7cf16eead7f54a3eae4099c154eb80b0f520c92
+          path: public-source
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval
+          ref: 3f3786f3b4d9a4b64a5859b3036aca190cd25613
+          path: benchmark
+          persist-credentials: false
+
+      # The exact benchmark cache and checker builds exceed the stock disk.
+      # jlumbroso/free-disk-space pinned to v1.3.1.
+      - uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - name: Prepare the exact public handoff without inventing State authority
+        run: |
+          set -euo pipefail
+          input="$RUNNER_TEMP/kernel-probe-input"
+          mkdir -m 0700 "$input"
+          python scripts/historical_public_runner.py prepare \
+            --plan "$PLAN" --profile-matrix "$MATRIX" --contract "$CONTRACT" \
+            --expected-plan-sha256 2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942 \
+            --expected-profile-matrix-sha256 aad9132f729ef9f429532900d1e50b665330721fa9360699328c47bdfb2aedfc \
+            --expected-contract-sha256 6d341a642dfd6aa9092228269da6761000bf0818128ce3f35cb259bd8fb2303f \
+            --request-id "$REQUEST_ID" --result-id "$RESULT_ID" \
+            --source-repository public-source --benchmark-repository benchmark \
+            --source-archive "$input/historical-public-source.tar.gz" \
+            --output "$input/historical-public-request.json"
+          echo "PROBE_INPUT=$input" >> "$GITHUB_ENV"
+
+      - name: Build the exact source-locked staging probe image
+        run: |
+          set -euo pipefail
+          docker build --progress=plain --build-arg "BENCHMARK_COMMIT=$BENCHMARK_COMMIT" \
+            --tag "$BASE_IMAGE" --file Dockerfile.historical-public-replay .
+          docker build --progress=plain --build-arg "BASE_IMAGE=$BASE_IMAGE" \
+            --tag "$IMAGE" --file Dockerfile.kernel-structured-accepted-probe .
+          image_id=$(docker image inspect "$IMAGE" --format '{{.Id}}')
+          [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
+          candidate_sha256=$(docker run --rm --network none \
+            --entrypoint /usr/bin/sha256sum "$image_id" /opt/lean-eval/bin/sokonanoda \
+            | cut -d' ' -f1)
+          [[ "$candidate_sha256" =~ ^[0-9a-f]{64}$ ]]
+          marker=$(docker run --rm --network none --entrypoint /bin/cat \
+            "$image_id" /opt/lean-eval/bin/sokonanoda.sha256)
+          test "$marker" = "$candidate_sha256"
+          echo "RUNNER_IMAGE_ID=$image_id" >> "$GITHUB_ENV"
+          echo "CANDIDATE_BINARY_SHA256=$candidate_sha256" >> "$GITHUB_ENV"
+
+      - name: Bind a fresh attempt before entering the network-disabled phase
+        run: |
+          set -euo pipefail
+          nonce=$(openssl rand -hex 32)
+          python scripts/kernel_structured_accepted_probe.py prepare-attempt \
+            --fixture "$FIXTURE" \
+            --handoff "$PROBE_INPUT/historical-public-request.json" \
+            --source-archive "$PROBE_INPUT/historical-public-source.tar.gz" \
+            --nonce "$nonce" --runner-source-commit "$EXPECTED_COMMIT" \
+            --runner-image-id "$RUNNER_IMAGE_ID" \
+            --candidate-binary-sha256 "$CANDIDATE_BINARY_SHA256" \
+            --output "$PROBE_INPUT/kernel-structured-accepted-attempt.json"
+
+      - name: Reproduce acceptance and check the same attempt-bound export
+        run: |
+          set -euo pipefail
+          docker run --rm --network none --cpus 4 --memory 12g \
+            --pids-limit 4096 --cap-drop ALL --security-opt no-new-privileges \
+            --mount "type=bind,src=$PROBE_INPUT,dst=/input,readonly" \
+            --tmpfs /workspace:rw,nosuid,nodev,size=2g \
+            --tmpfs /run/lean-eval:rw,noexec,nosuid,nodev,size=80m \
+            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=1g \
+            --entrypoint /opt/lean-eval/kernel-structured-accepted-probe \
+            "$RUNNER_IMAGE_ID" > kernel-structured-accepted-attestation.json
+          python scripts/kernel_structured_accepted_probe.py validate-attestation \
+            --fixture "$FIXTURE" \
+            --attempt "$PROBE_INPUT/kernel-structured-accepted-attempt.json" \
+            --attestation kernel-structured-accepted-attestation.json
+
+      # actions/upload-artifact pinned to v7.0.1. Raw source, evaluator output,
+      # and solution-export bytes never cross the network-disabled container.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: kernel-structured-accepted-probe-${{ inputs.expected_commit }}
+          path: kernel-structured-accepted-attestation.json
+          if-no-files-found: error
+          retention-days: 30
