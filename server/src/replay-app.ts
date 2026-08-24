@@ -3,6 +3,8 @@ import type { Sandbox } from "@cloudflare/sandbox";
 import {
   AuthoritativeReplayContractError,
   readAuthoritativeReplayRequest,
+  readAuthoritativeReplayStatusRequest,
+  type AuthoritativeReplayStatusRequest,
   validateReplayVerdict,
 } from "./authoritative-replay-contract";
 import { ReplayAuthError, type ReplayAuthEnvironment, verifyGithubOidc } from "./replay-auth";
@@ -30,7 +32,8 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
   REVIEWED_VM_IMAGE_DIGEST: string;
 };
 
-type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy">;
+type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy"> &
+  Partial<Pick<Sandbox, "startProcess" | "getProcess">>;
 
 type ExecutorFailureReason =
   | "input_transfer_failed"
@@ -83,6 +86,9 @@ const ARCHIVE_COMMAND_FAILURES = new Map([
 ]);
 
 const AUTHORITATIVE_COMMAND_PREFIX = "replay-authoritative: ";
+const AUTHORITATIVE_PROCESS_ID = "lean-eval-authoritative";
+const AUTHORITATIVE_COMMAND = "/opt/lean-eval/replay-authoritative";
+const AUTHORITATIVE_TIMEOUT_MS = 20_100_000;
 const AUTHORITATIVE_COMMAND_FAILURES = new Map([
   ["request does not match the baked profile lock", "profile_lock_mismatch"],
   ["baked benchmark identity is unavailable", "benchmark_identity_unavailable"],
@@ -164,13 +170,95 @@ function authoritativeCommandFailureDetail(stderr: string): string {
 }
 
 function safeCommandFailureDetail(command: string, stderr: string): string | undefined {
-  if (command === "/opt/lean-eval/replay-authoritative") {
+  if (command === AUTHORITATIVE_COMMAND) {
     return authoritativeCommandFailureDetail(stderr);
   }
   if (command === "/opt/lean-eval/replay-archive-acceptance") {
     return ARCHIVE_COMMAND_FAILURES.get(stderr.trim()) ?? "unclassified_archive_failure";
   }
   return undefined;
+}
+
+async function startAuthoritativeProcess(
+  sandbox: SandboxClient,
+  prepare: () => Promise<void>,
+): Promise<void> {
+  if (sandbox.getProcess === undefined || sandbox.startProcess === undefined) {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  let existing: Awaited<ReturnType<NonNullable<SandboxClient["getProcess"]>>>;
+  try {
+    existing = await sandbox.getProcess(AUTHORITATIVE_PROCESS_ID);
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  if (existing !== null) return;
+  await prepare();
+  try {
+    await sandbox.startProcess(AUTHORITATIVE_COMMAND, {
+      timeout: AUTHORITATIVE_TIMEOUT_MS,
+      processId: AUTHORITATIVE_PROCESS_ID,
+      autoCleanup: false,
+    });
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+}
+
+async function authoritativeProcessStatus(
+  sandbox: SandboxClient,
+  request: AuthoritativeReplayStatusRequest,
+): Promise<Response> {
+  if (sandbox.getProcess === undefined) throw new ReplayExecutorError("command_rpc_failed");
+  let process: Awaited<ReturnType<NonNullable<SandboxClient["getProcess"]>>>;
+  try {
+    process = await sandbox.getProcess(AUTHORITATIVE_PROCESS_ID);
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  if (process === null) throw new ReplayExecutorError("command_rpc_failed");
+  let status: Awaited<ReturnType<typeof process.getStatus>>;
+  try {
+    status = await process.getStatus();
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  if (status === "starting" || status === "running") {
+    return json({
+      schema_version: 1,
+      replay_task_id: request.replay_task_id,
+      attempt: request.attempt,
+      status: "running",
+    }, 202);
+  }
+  let logs: Awaited<ReturnType<typeof process.getLogs>>;
+  try {
+    logs = await process.getLogs();
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  return withSandboxDestruction(sandbox, () => {
+    if (status !== "completed") {
+      throw new ReplayExecutorError(
+        "command_failed",
+        safeCommandFailureDetail(AUTHORITATIVE_COMMAND, logs.stderr),
+      );
+    }
+    if (logs.stdout.length > 64 * 1024) {
+      throw new ReplayExecutorError("command_output_invalid");
+    }
+    try {
+      const verdict = validateReplayVerdict(JSON.parse(logs.stdout) as unknown, {
+        request: {
+          replay_task_id: request.replay_task_id,
+          attempt: request.attempt,
+        },
+      });
+      return json({ schema_version: 1, verdict, destruction: "confirmed" });
+    } catch {
+      throw new ReplayExecutorError("command_output_invalid");
+    }
+  });
 }
 
 async function writeSandboxFile(
@@ -215,7 +303,7 @@ async function executeSandboxCommand(
 
 async function withSandboxDestruction<T>(
   sandbox: SandboxClient,
-  operation: () => Promise<T>,
+  operation: () => T | Promise<T>,
 ): Promise<T> {
   let outcome: { ok: true; value: T } | { ok: false; error: unknown };
   try {
@@ -281,11 +369,36 @@ export async function handleReplayRequest(
   const syntheticAcceptance = url.pathname === "/api/v1/staging-acceptance";
   const archiveAcceptance = url.pathname === "/api/v1/staging-archive-acceptance";
   const authoritativeReplay = url.pathname === "/api/v1/replay";
-  if ((!syntheticAcceptance && !archiveAcceptance && !authoritativeReplay) || request.method !== "POST") {
+  const authoritativeStatus = url.pathname === "/api/v1/replay/status";
+  if (
+    (!syntheticAcceptance && !archiveAcceptance && !authoritativeReplay && !authoritativeStatus) ||
+    request.method !== "POST"
+  ) {
     return json({ error: "not_found" }, 404);
   }
   if (authoritativeReplay && env.REPLAY_ENABLED !== "true") {
     return json({ error: "replay_disabled" }, 503);
+  }
+  if (authoritativeStatus) {
+    let sandbox: SandboxClient | undefined;
+    try {
+      await dependencies.authenticate(request, env);
+      const input = await readAuthoritativeReplayStatusRequest(
+        request,
+        env.REVIEWED_EXECUTION_PROFILE_DIGEST,
+        env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
+        env.REVIEWED_VM_IMAGE_DIGEST,
+      );
+      sandbox = dependencies.sandbox(env, input.runner_nonce);
+      return await authoritativeProcessStatus(sandbox, input);
+    } catch (error) {
+      if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
+      if (error instanceof AuthoritativeReplayContractError || error instanceof SyntaxError) {
+        return json({ error: "invalid_request" }, 400);
+      }
+      recordExecutorFailure("authoritative_replay_status", error);
+      return authoritativeExecutorFailure(error);
+    }
   }
   if (authoritativeReplay) {
     try {
@@ -297,7 +410,8 @@ export async function handleReplayRequest(
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
       const sandbox = dependencies.sandbox(env, input.runner_nonce);
-      const verdict = await withSandboxDestruction(sandbox, async () => {
+      try {
+        await startAuthoritativeProcess(sandbox, async () => {
           await writeSandboxFile(sandbox, "/workspace/replay-request.json", JSON.stringify(input.request));
           await writeSandboxFile(
             sandbox,
@@ -306,19 +420,17 @@ export async function handleReplayRequest(
           );
           await writeSandboxFile(sandbox, "/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
           await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);
-          const stdout = await executeSandboxCommand(
-            sandbox,
-            "/opt/lean-eval/replay-authoritative",
-            20_100_000,
-            64 * 1024,
-          );
-          try {
-            return validateReplayVerdict(JSON.parse(stdout) as unknown, input);
-          } catch {
-            throw new ReplayExecutorError("command_output_invalid");
-          }
-      });
-      return json({ schema_version: 1, verdict, destruction: "confirmed" });
+        });
+      } catch (error) {
+        await sandbox.destroy();
+        throw error;
+      }
+      return json({
+        schema_version: 1,
+        replay_task_id: input.request.replay_task_id,
+        attempt: input.request.attempt,
+        status: "running",
+      }, 202);
     } catch (error) {
       if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
       if (error instanceof AuthoritativeReplayContractError || error instanceof SyntaxError) {

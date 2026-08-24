@@ -38,9 +38,10 @@ provider-neutral.
 The orchestrator is a Lean-Eval-owned controller behind a provider-neutral
 disposable-executor interface. It does not reuse another project's runner. For
 each approved replay it creates a fresh Cloudflare Sandbox from the reviewed
-image, assigns a unique request nonce, executes exactly one fixed command, and
-destroys the Sandbox in an unconditional cleanup path. Cloudflare is not part
-of the stable request, State, archive, capability, or verdict contracts.
+image, assigns a unique request nonce, starts exactly one fixed background
+command, and destroys the Sandbox after an authenticated terminal poll.
+Cloudflare is not part of the stable request, State, archive, capability, or
+verdict contracts.
 
 The disposable executor may receive only:
 
@@ -102,7 +103,8 @@ boundary and is not sufficient for automated replay.
    records the incident, audit, or recovery reason.
 2. A trusted preparation job resolves the immutable State event, ciphertext
    object, digests, evaluator commit, benchmark commit, and authorization.
-3. The Lean Eval controller creates a fresh nonce-specific Sandbox. A
+3. The Lean Eval controller creates a fresh nonce-specific Sandbox and starts
+   one fixed background process. Start is idempotent for that nonce. A
    persistent or shared generic replay executor is a configuration error.
 4. The trusted controller verifies the exact ciphertext, consumes the one-use
    unwrap capability, drops AWS authority, and sends only that ciphertext, its
@@ -113,10 +115,19 @@ boundary and is not sufficient for automated replay.
    are removed. Evaluation uses the same Comparator/landrun boundary and
    resource caps as normal intake. Plaintext, source-derived paths, and command
    output that could reproduce source are excluded from logs and artifacts.
-6. The job publishes only the reviewed result/audit projection. It removes
-   plaintext and identity material before returning source-free evidence.
-7. An unconditional controller teardown destroys the Sandbox before success
-   is returned. Failure to confirm destruction fails the request.
+6. Short status requests each use a fresh protected-environment OIDC token and
+   bind the same nonce, task, attempt, execution profile, measurement config,
+   and image. Transient client disconnects and control-plane RPC failures do
+   not stop or duplicate the fixed process.
+7. The image deletes encoded key/ciphertext inputs after decoding and removes
+   plaintext, extracted source, metrics, and evaluator output in an
+   unconditional `finally` path. The job publishes only the reviewed
+   result/audit projection.
+8. The terminal poll validates bounded process output and destroys the Sandbox
+   before success is returned. Failure to confirm destruction fails the
+   request. If the controller disappears, the process cleanup still removes
+   private material and the five-minute idle timeout stops the disposable
+   Sandbox; State recovery records the lost runner before any retry.
 
 No source artifact crosses jobs. Fetch, decrypt, evaluate, and plaintext cleanup
 therefore remain in the same disposable replay job, matching the existing

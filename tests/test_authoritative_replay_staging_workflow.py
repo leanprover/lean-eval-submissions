@@ -54,7 +54,11 @@ class AuthoritativeReplayStagingWorkflowTests(unittest.TestCase):
         self.assertIn('test -z "${STATE_WRITE_KEY:-}"', section)
         self.assertNotIn("STAGING_STATE_WRITE_KEY", section)
         self.assertIn("--max-time 15", section)
-        self.assertIn("--max-time 20400", section)
+        self.assertIn("--max-time 300", section)
+        self.assertIn("--retry-all-errors", section)
+        self.assertIn("deadline=$(( $(date +%s) + 20400 ))", section)
+        self.assertIn('"$REPLAY_EXECUTOR_URL/status"', section)
+        self.assertIn('sleep 15', section)
 
     def test_every_started_attempt_gets_terminal_or_explicit_failure(self) -> None:
         self.assertIn("state-event terminal", self.text)
@@ -75,7 +79,10 @@ class AuthoritativeReplayStagingWorkflowTests(unittest.TestCase):
         failure = self.text.split(
             "- name: Fail a started attempt explicitly if orchestration did not finish", 1
         )[1].split("- name: Write source-free successful replay evidence", 1)[0]
-        self.assertIn("--fail-with-body", executor)
+        self.assertIn("--write-out '%{http_code}'", executor)
+        self.assertIn('test "$poll_status" = 200', executor)
+        self.assertIn('executor-poll-response.json', executor)
+        self.assertIn('reason: "command_rpc_failed"', executor)
         self.assertIn('scripts/sanitize_executor_failure.py', failure)
         self.assertIn('sanitized_failure', failure)
         self.assertNotIn('cat "$RUNNER_TEMP/executor-response.json"', failure)
@@ -113,7 +120,11 @@ class AuthoritativeReplayStagingWorkflowTests(unittest.TestCase):
         self.assertNotIn("archive.tar.age", evidence)
         self.assertNotIn("archive-sidecar", evidence)
         self.assertIn('"executor_health"', evidence)
-        self.assertIn('shred --remove "$RUNNER_TEMP/identity.age"', self.text)
+        self.assertIn(
+            'shred --remove "$RUNNER_TEMP/identity.age" '
+            '"$RUNNER_TEMP/executor-request.json"',
+            self.text,
+        )
 
     def test_actions_are_commit_pinned(self) -> None:
         pins = re.findall(r"uses:\s*[^\s@]+@([^\s#]+)", self.text)

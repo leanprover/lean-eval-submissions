@@ -273,32 +273,97 @@ jobs:
             --unwrap "$RUNNER_TEMP/unwrap-request.json" \
             --identity "$RUNNER_TEMP/identity.age" \
             --output "$RUNNER_TEMP/executor-request.json"
+          jq '{
+            schema_version,
+            runner_nonce,
+            replay_task_id: .request.replay_task_id,
+            attempt: .request.attempt,
+            execution_profile_digest: .request.execution_profile_digest,
+            measurement_config_digest: .request.measurement_config_digest,
+            vm_image_digest: .request.execution_profile.vm_image_digest
+          }' "$RUNNER_TEMP/executor-request.json" > "$RUNNER_TEMP/executor-status-request.json"
           echo 'runner_lost' > "$RUNNER_TEMP/failure-reason"
-          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
-            --max-time 15 \
-            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-replay-staging" \
-            --output "$RUNNER_TEMP/replay-oidc-response.json"
-          replay_oidc_token=$(python -c \
-            'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["value"])' \
-            "$RUNNER_TEMP/replay-oidc-response.json")
-          test -n "$replay_oidc_token"
-          rm "$RUNNER_TEMP/replay-oidc-response.json"
-          curl --proto '=https' --tlsv1.2 --fail-with-body --silent --show-error \
-            --max-time 20400 \
+          mint_oidc() {
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --max-time 15 \
+              --retry 3 \
+              --retry-all-errors \
+              --retry-delay 2 \
+              --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-replay-staging" \
+              --output "$RUNNER_TEMP/replay-oidc-response.json"
+            replay_oidc_token=$(python -c \
+              'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["value"])' \
+              "$RUNNER_TEMP/replay-oidc-response.json")
+            test -n "$replay_oidc_token"
+            rm "$RUNNER_TEMP/replay-oidc-response.json"
+          }
+          mint_oidc
+          start_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+            --max-time 300 \
+            --retry 3 \
+            --retry-all-errors \
+            --retry-delay 2 \
             --header "Authorization: Bearer $replay_oidc_token" \
             --header 'Content-Type: application/json' \
             --request POST \
             --data-binary "@$RUNNER_TEMP/executor-request.json" \
             "$REPLAY_EXECUTOR_URL" \
-            --output "$RUNNER_TEMP/executor-response.json"
+            --output "$RUNNER_TEMP/executor-start-response.json" \
+            --write-out '%{http_code}')
           unset replay_oidc_token
+          if [ "$start_status" != 202 ]; then
+            mv "$RUNNER_TEMP/executor-start-response.json" "$RUNNER_TEMP/executor-response.json"
+            exit 1
+          fi
+          jq -e --arg task "$(jq -r .replay_task_id "$RUNNER_TEMP/executor-status-request.json")" \
+            --argjson attempt "$(jq -r .attempt "$RUNNER_TEMP/executor-status-request.json")" \
+            '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, status: "running"}' \
+            "$RUNNER_TEMP/executor-start-response.json" >/dev/null
+          shred --remove "$RUNNER_TEMP/identity.age" "$RUNNER_TEMP/executor-request.json"
+          rm -f "$RUNNER_TEMP/archive.tar.age" "$RUNNER_TEMP/archive-sidecar.json"
+
+          deadline=$(( $(date +%s) + 20400 ))
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            sleep 15
+            mint_oidc
+            poll_status=000
+            if poll_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+              --max-time 300 \
+              --header "Authorization: Bearer $replay_oidc_token" \
+              --header 'Content-Type: application/json' \
+              --request POST \
+              --data-binary "@$RUNNER_TEMP/executor-status-request.json" \
+              "$REPLAY_EXECUTOR_URL/status" \
+              --output "$RUNNER_TEMP/executor-poll-response.json" \
+              --write-out '%{http_code}'); then
+              unset replay_oidc_token
+              if [ "$poll_status" = 202 ]; then
+                jq -e --arg task "$(jq -r .replay_task_id "$RUNNER_TEMP/executor-status-request.json")" \
+                  --argjson attempt "$(jq -r .attempt "$RUNNER_TEMP/executor-status-request.json")" \
+                  '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, status: "running"}' \
+                  "$RUNNER_TEMP/executor-poll-response.json" >/dev/null
+                continue
+              fi
+              if [ "$poll_status" = 500 ] && jq -e \
+                '. == {error: "executor_failed", reason: "command_rpc_failed"}' \
+                "$RUNNER_TEMP/executor-poll-response.json" >/dev/null; then
+                rm "$RUNNER_TEMP/executor-poll-response.json"
+                continue
+              fi
+              mv "$RUNNER_TEMP/executor-poll-response.json" "$RUNNER_TEMP/executor-response.json"
+              test "$poll_status" = 200
+              break
+            fi
+            unset replay_oidc_token
+            rm -f "$RUNNER_TEMP/executor-poll-response.json"
+          done
+          test -f "$RUNNER_TEMP/executor-response.json"
           echo 'verdict_invalid' > "$RUNNER_TEMP/failure-reason"
           python scripts/replay_controller.py validate-response \
             --plan "$RUNNER_TEMP/replay-plan.json" \
             --response "$RUNNER_TEMP/executor-response.json" \
             --verdict-output "$RUNNER_TEMP/replay-verdict.json"
-          shred --remove "$RUNNER_TEMP/identity.age"
           python scripts/replay_controller.py state-event terminal \
             --plan "$RUNNER_TEMP/replay-plan.json" \
             --started-event "$RUNNER_TEMP/started-event.json" \
@@ -422,6 +487,9 @@ jobs:
             "$RUNNER_TEMP/unwrap-response.json" \
             "$RUNNER_TEMP/unwrap-metadata.json" \
             "$RUNNER_TEMP/executor-request.json" \
+            "$RUNNER_TEMP/executor-status-request.json" \
+            "$RUNNER_TEMP/executor-start-response.json" \
+            "$RUNNER_TEMP/executor-poll-response.json" \
             "$RUNNER_TEMP/executor-response.json" \
             "$RUNNER_TEMP/replay-oidc-response.json" \
             "$RUNNER_TEMP/replay-health.json" \
