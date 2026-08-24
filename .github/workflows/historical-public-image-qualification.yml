@@ -177,6 +177,10 @@ jobs:
             --file Dockerfile.historical-public-replay .
           image_size=$(docker image inspect "$IMAGE" --format '{{.Size}}')
           test "$image_size" -le "$IMAGE_LIMIT_BYTES"
+          docker image inspect "$IMAGE" --format '{{json .RootFS.Layers}}' \
+            > "$RUNNER_TEMP/image-layer-diff-ids.json"
+          jq -e 'type == "array" and length > 0 and all(.[]; test("^sha256:[0-9a-f]{64}\\z"))' \
+            "$RUNNER_TEMP/image-layer-diff-ids.json" >/dev/null
           docker run --rm --network none --read-only --cpus 4 --memory 12g \
             --tmpfs /workspace:rw,noexec,nosuid,nodev,size=256m \
             --tmpfs /run/lean-eval:rw,noexec,nosuid,nodev,size=16m \
@@ -199,12 +203,16 @@ jobs:
               toolchain=$(cat /opt/lean-eval/benchmark/lean-toolchain)
               elan run "$toolchain" lean --version | grep -F "Lean (version ${toolchain##*:v}"
             '
-          docker run --rm --network none --cpus 4 --memory 12g \
-            --entrypoint /bin/sh "$IMAGE" -c '
+          first_problem_id=$(jq -er .first_problem_id "$RUNNER_TEMP/candidate.json")
+          timeout --signal=TERM --kill-after=30s 1800s \
+            docker run --rm --network none --cpus 4 --memory 12g \
+              --env "FIRST_PROBLEM_ID=$first_problem_id" \
+              --entrypoint /bin/sh "$IMAGE" -c "
               set -eu
               cd /opt/lean-eval/benchmark
-              lake --dir "generated/'"$(jq -r .first_problem_id "$RUNNER_TEMP/candidate.json")"'" build
-            '
+              lake --dir \"generated/\$FIRST_PROBLEM_ID\" build
+              test -z \"\$(find .lake/packages -name '*.olean' -newermt @1 -print -quit)\"
+            "
           echo "IMAGE_SIZE_BYTES=$image_size" >> "$GITHUB_ENV"
 
       - name: Recheck source and tag, push once, and resolve the OCI digest
@@ -340,6 +348,8 @@ jobs:
               "publication_mode": "resumed" if os.environ.get("IMAGE_SIZE_BYTES") is None else "created",
               "image_size_bytes": int(os.environ["IMAGE_SIZE_BYTES"]) if os.environ.get("IMAGE_SIZE_BYTES") is not None else None,
               "dockerfile_sha256": hashlib.sha256(pathlib.Path("Dockerfile.historical-public-replay").read_bytes()).hexdigest(),
+              "layer_preparation_sha256": hashlib.sha256(pathlib.Path("scripts/prepare_historical_image_layers.py").read_bytes()).hexdigest(),
+              "layer_diff_ids": json.loads(pathlib.Path(os.environ["RUNNER_TEMP"] + "/image-layer-diff-ids.json").read_text()) if os.environ.get("IMAGE_SIZE_BYTES") is not None else None,
               "matrix_sha256": hashlib.sha256(pathlib.Path(os.environ["MATRIX"]).read_bytes()).hexdigest(),
               "matrix_entry_sha256": candidate["entry_sha256"],
               "profile_lock_sha256": candidate["profile_lock_sha256"],
@@ -366,7 +376,7 @@ jobs:
         run: |
           rm -f "$QUALIFIER_CONFIG" "$RUNNER_TEMP/registry-credentials.json" \
             "$RUNNER_TEMP/registry-headers" "$RUNNER_TEMP/registry-images.json" \
-            "$RUNNER_TEMP/registry-netrc"
+            "$RUNNER_TEMP/registry-netrc" "$RUNNER_TEMP/image-layer-diff-ids.json"
 
   probe-isolated-qualifier:
     needs: publish-and-deploy-isolated-qualifier
