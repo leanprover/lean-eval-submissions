@@ -24,7 +24,9 @@ concurrency:
 
 jobs:
   set-staging-intake:
-    if: github.ref == 'refs/heads/main'
+    if: >-
+      github.ref_type == 'tag' &&
+      startsWith(github.ref, 'refs/tags/lean-eval-dispatch/')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: cloudflare-staging
@@ -54,7 +56,11 @@ jobs:
         run: |
           set -euo pipefail
           if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || [ "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]; then
-            echo "expected_commit must equal the selected protected-main commit" >&2
+            echo "expected_commit must equal the selected immutable dispatch commit" >&2
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT" ]; then
+            echo "workflow must run from the exact immutable dispatch tag" >&2
             exit 1
           fi
           resolved=$(git rev-parse "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT^{commit}")

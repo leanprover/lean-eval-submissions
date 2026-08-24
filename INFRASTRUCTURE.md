@@ -190,6 +190,13 @@ scripts, or archive recipient set merged to protected `main` runs:
 3. production broker, disabled replay Worker/container, and intake Worker
    deploys, followed by the same exact health gates.
 
+Workflow-only operations that require an immutable dispatch tag but do not
+change deployed runtime are promoted separately by
+[`promote-workflow-dispatch-ref.yml`](.github/workflows/promote-workflow-dispatch-ref.yml).
+That path uses the same protected promotion environment and collision-safe tag
+contract, but it cannot deploy a Worker or container. This separation prevents
+maintenance-workflow edits from interrupting production intake after launch.
+
 GitHub environment `cloudflare-staging` must contain:
 
 | Name | Kind | Required scope |
@@ -256,9 +263,10 @@ Deployment workflow concurrency is intentionally latest-main-wins: skipped
 intermediate commits are already ancestors of the latest tested commit.
 
 Staging intake state is changed only through the protected, manual
-`Set staging intake` workflow. The operator must select `main`, provide the
-exact current protected-main commit, and choose `enabled` or `disabled`. The
-workflow requires that commit's immutable `lean-eval-dispatch/<commit>` tag,
+`Set staging intake` workflow. The operator must select an exact immutable
+`lean-eval-dispatch/<commit>` tag, provide the same full commit, and choose
+`enabled` or `disabled`. The
+workflow requires that tag to resolve to the selected commit,
 deploys only the staging intake Worker, and verifies the resulting structured
 health response. It cannot target production. Any later ordinary main
 deployment returns staging to the tracked safe default `INTAKE_ENABLED=false`;

@@ -21,8 +21,16 @@ class StagingIntakeWorkflowTests(unittest.TestCase):
         self.assertEqual(job["environment"], "cloudflare-staging")
         self.assertNotIn("cloudflare-production", self.text)
 
-    def test_requires_exact_main_commit_and_immutable_tag(self) -> None:
-        self.assertIn("github.ref == 'refs/heads/main'", self.text)
+    def test_requires_exact_dispatch_commit_and_immutable_tag(self) -> None:
+        self.assertIn("github.ref_type == 'tag'", self.text)
+        self.assertIn(
+            "startsWith(github.ref, 'refs/tags/lean-eval-dispatch/')",
+            self.text,
+        )
+        self.assertIn(
+            'if [ "$GITHUB_REF" != "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT" ]',
+            self.text,
+        )
         self.assertIn('"$EXPECTED_COMMIT" != "$GITHUB_SHA"', self.text)
         self.assertIn("refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT", self.text)
 

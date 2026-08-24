@@ -8,6 +8,9 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEPLOY = (ROOT / ".github/workflows/deploy-worker.yml").read_text(encoding="utf-8")
+WORKFLOW_PROMOTION = (
+    ROOT / ".github/workflows/promote-workflow-dispatch-ref.yml"
+).read_text(encoding="utf-8")
 PROMOTION_CANARY = (ROOT / ".github/workflows/promotion-canary.yml").read_text(
     encoding="utf-8"
 )
@@ -102,18 +105,28 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("'!server/*.md'", push)
         self.assertIn("'!server/**/*.md'", push)
 
-    def test_dispatch_dependency_changes_promote_and_deploy_exact_ref(self) -> None:
+    def test_dispatch_dependencies_are_promoted_without_unearned_deploys(self) -> None:
         pull_request = DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0]
         push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
         workflow_directory = ROOT / ".github/workflows"
-        directly_tag_gated = {
+        tag_mentions = {
             path.name
-            for path in workflow_directory.glob("*.yml")
-            if 'refs/tags/lean-eval-dispatch/' in path.read_text(encoding="utf-8")
-            and 'test "$GITHUB_REF"' in path.read_text(encoding="utf-8")
+            for path in workflow_directory.glob("*.y*ml")
+            if "lean-eval-dispatch/" in path.read_text(encoding="utf-8")
+        }
+        historical_target_or_minter = {
+            "deploy-worker.yml",
+            "intake-disable-recovery.yml",
+            "promote-workflow-dispatch-ref.yml",
+            "rollback-worker.yml",
+        }
+        dispatch_dependencies = (tag_mentions - historical_target_or_minter) | {
+            # The submission workflow receives the immutable tag through its
+            # Worker-supplied workflow_commit rather than spelling out the ref.
+            "submission.yml",
         }
         self.assertEqual(
-            directly_tag_gated,
+            dispatch_dependencies,
             {
                 "accepted-archive-replay-staging.yml",
                 "authoritative-replay-staging.yml",
@@ -125,19 +138,48 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "historical-replay-inventory.yml",
                 "public-replay-github-evidence.yml",
                 "server-archive.yml",
+                "set-staging-intake.yml",
+                "submission.yml",
+                "promotion-canary.yml",
             },
         )
-        dispatch_dependencies = directly_tag_gated | {
+        deployed_dependencies = {
             "promotion-canary.yml",
-            "set-staging-intake.yml",
+            "server-archive.yml",
             "submission.yml",
         }
+        promotion_push = WORKFLOW_PROMOTION.split("  push:", 1)[1].split(
+            "permissions:", 1
+        )[0]
+        for workflow in dispatch_dependencies:
+            path = f"'.github/workflows/{workflow}'"
+            with self.subTest(workflow=workflow):
+                if workflow in deployed_dependencies:
+                    self.assertIn(path, pull_request)
+                    self.assertIn(path, push)
+                    self.assertNotIn(path, promotion_push)
+                else:
+                    self.assertNotIn(path, pull_request)
+                    self.assertNotIn(path, push)
+                    self.assertIn(path, promotion_push)
+        self.assertIn(
+            "'.github/workflows/promote-workflow-dispatch-ref.yml'",
+            promotion_push,
+        )
         for trigger in (pull_request, push):
-            for workflow in dispatch_dependencies:
-                with self.subTest(workflow=workflow):
-                    self.assertIn(f"'.github/workflows/{workflow}'", trigger)
             self.assertIn("'.audit/**'", trigger)
             self.assertIn("'scripts/**'", trigger)
+
+    def test_workflow_only_promotion_is_protected_and_deployment_free(self) -> None:
+        self.assertIn("environment: submission-dispatch-promotion", WORKFLOW_PROMOTION)
+        self.assertIn("contents: write", WORKFLOW_PROMOTION)
+        self.assertIn("secrets.DISPATCH_PROMOTION_APPROVAL_GUARD", WORKFLOW_PROMOTION)
+        self.assertIn("workflow commit is not reachable from protected main", WORKFLOW_PROMOTION)
+        self.assertIn("dispatch tag collision", WORKFLOW_PROMOTION)
+        self.assertIn("dispatch tag read-back did not resolve", WORKFLOW_PROMOTION)
+        self.assertNotIn("wrangler", WORKFLOW_PROMOTION)
+        self.assertNotIn("deploy-staging", WORKFLOW_PROMOTION)
+        self.assertNotIn("deploy-production", WORKFLOW_PROMOTION)
 
     def test_smoke_retries_structured_payload_propagation(self) -> None:
         self.assertEqual(DEPLOY.count("for attempt in $(seq 1 13); do"), 3)
