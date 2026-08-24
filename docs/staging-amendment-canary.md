@@ -45,6 +45,11 @@ mutation is bound to the supplied State head. The route first reads one
 validated current snapshot: a stale supplied head is accepted only when that
 snapshot proves the exact compiled request or decision event, its complete
 target and linkage, its immutable outcome, and the matching reservation state.
+An applied retry also rereads the immutable Results blob through the provider
+and requires the stored evidence to equal the freshly compiled evidence in
+every field, including the blob OID, blob, record, and binding digests,
+verification method, and both challenge IDs. The reject lane rechecks that same
+exact provider evidence for its applied predecessor before it can write.
 That makes an already-written event a read-only success after ambiguous response
 loss, while an absent or changed event never rebases onto a different head. The
 exact post-mutation snapshot commit is chained into the next operation. A
@@ -65,5 +70,5 @@ four operations and the final disabled-health proof pass.
 After recording successful evidence, rotate or delete the dedicated credential
 from both locations and remove the one-shot route and workflow in a reviewed
 follow-up deployment. Keep the permanent staging events and reservation; older
-production rollback qualifications remain accepted through their exact
-historical callback file set.
+production rollback qualifications remain accepted only when their target tree
+lacks the canary contract and carries the exact historical callback file set.

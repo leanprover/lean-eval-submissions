@@ -69,10 +69,6 @@ HISTORICAL_CALLBACK_CONTRACT_FILES = [
     for relative in CALLBACK_CONTRACT_FILES
     if relative != "server/src/staging-amendment-canary.ts"
 ]
-SUPPORTED_CALLBACK_CONTRACT_FILE_SETS = (
-    HISTORICAL_CALLBACK_CONTRACT_FILES,
-    CALLBACK_CONTRACT_FILES,
-)
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 MAX_CONTRACT_FILE_BYTES = 2 * 1024 * 1024
@@ -196,9 +192,15 @@ def _validate_qualification_header(
                 f"target rollback qualification has wrong {name}"
             )
     qualified_files = qualification["lifecycle_callback_contract_files"]
-    if qualified_files not in SUPPORTED_CALLBACK_CONTRACT_FILE_SETS:
+    canary_contract = target_root / "server/src/staging-amendment-canary.ts"
+    expected_files = (
+        CALLBACK_CONTRACT_FILES
+        if canary_contract.exists()
+        else HISTORICAL_CALLBACK_CONTRACT_FILES
+    )
+    if qualified_files != expected_files:
         raise RollbackValidationError(
-            "target rollback qualification has wrong callback contract files"
+            "target rollback qualification does not cover its exact callback contract files"
         )
     callback_digest = _callback_contract_digest(target_root, qualified_files)
     if qualification["lifecycle_callback_contract_sha256"] != callback_digest:

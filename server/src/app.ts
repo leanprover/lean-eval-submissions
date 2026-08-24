@@ -574,27 +574,17 @@ function stagingCanaryEventsMatch(
 
 function stagingCanaryAppliedEvidenceMatches(
   evidence: ComparatorEvidence | null,
-  lane: "apply" | "reject",
+  exactEvidence: ComparatorEvidence | null,
 ): boolean {
-  const target = STAGING_CANARY_TARGETS[lane];
-  return evidence?.repository === "leanprover/lean-eval-submissions" &&
-    evidence.commit === STAGING_CANARY_RESULTS_COMMIT &&
-    evidence.path === "results/kim-em.json" &&
-    evidence.evidence_result_id === target.resultId &&
-    evidence.evidence_owner_login === STAGING_CANARY_OWNER &&
-    evidence.evidence_declared_model === target.declaredModel &&
-    evidence.evidence_base_problem_group === "formalization-evaluation" &&
-    evidence.evidence_base_problem_id === "two_plus_two" &&
-    evidence.evidence_base_statement_revision === 1 &&
-    evidence.evidence_corrected_problem_group === "formalization-evaluation" &&
-    evidence.evidence_corrected_problem_id === STAGING_CANARY_PROBLEM &&
-    evidence.evidence_corrected_statement_revision === STAGING_CANARY_STATEMENT_REVISION;
+  return evidence !== null && exactEvidence !== null &&
+    canonicalJson(evidence) === canonicalJson(exactEvidence);
 }
 
 function stagingCanaryOperationMatches(
   view: ResultAmendmentView,
   reservation: EffectiveResultIdentityReservation | null,
   operation: keyof typeof STAGING_CANARY_INTENTS,
+  exactApplyEvidence: ComparatorEvidence | null = null,
 ): boolean {
   const lane = operation.endsWith("apply") ? "apply" : "reject";
   if (!stagingCanaryTargetMatches(view, lane) || !stagingCanaryRequestMatches(view, lane)) {
@@ -627,7 +617,7 @@ function stagingCanaryOperationMatches(
       repair.status === "applied" &&
       decisionMatches &&
       repair.reason_code === null &&
-      stagingCanaryAppliedEvidenceMatches(repair.comparator_evidence, lane) &&
+      stagingCanaryAppliedEvidenceMatches(repair.comparator_evidence, exactApplyEvidence) &&
       view.applied_problem_repair !== null &&
       JSON.stringify(view.applied_problem_repair) === JSON.stringify(repair) &&
       view.effective_problem_id === STAGING_CANARY_PROBLEM &&
@@ -655,12 +645,18 @@ function stagingCanaryResponse(
     requestEvent?: StateEvent | null;
     decisionEvent?: StateEvent | null;
   }>,
+  exactApplyEvidence: ComparatorEvidence | null = null,
 ): Response {
   const lane = operation.endsWith("apply") ? "apply" : "reject";
   const target = STAGING_CANARY_TARGETS[lane];
   const repair = snapshot.view.problem_repair;
   if (repair === null ||
-    !stagingCanaryOperationMatches(snapshot.view, snapshot.reservation, operation) ||
+    !stagingCanaryOperationMatches(
+      snapshot.view,
+      snapshot.reservation,
+      operation,
+      exactApplyEvidence,
+    ) ||
     !stagingCanaryEventsMatch(
       snapshot.view,
       operation,
@@ -703,6 +699,23 @@ async function stagingAmendmentCanary(
   const lane = input.operation.endsWith("apply") ? "apply" : "reject";
   const target = STAGING_CANARY_TARGETS[lane];
   const ledger = state(env, dependencies);
+  let exactApplyEvidencePromise: Promise<ComparatorEvidence> | undefined;
+  const exactApplyEvidence = (): Promise<ComparatorEvidence> => {
+    exactApplyEvidencePromise ??= provider(
+      env,
+      dependencies,
+    ).verifyProblemRepairComparator({
+      resultsCommit: STAGING_CANARY_RESULTS_COMMIT,
+      resultId: STAGING_CANARY_TARGETS.apply.resultId,
+      ownerLogin: STAGING_CANARY_OWNER,
+      declaredModel: STAGING_CANARY_TARGETS.apply.declaredModel,
+      baseProblemId: "two_plus_two",
+      baseStatementRevision: 1,
+      correctedProblemId: STAGING_CANARY_PROBLEM,
+      correctedStatementRevision: STAGING_CANARY_STATEMENT_REVISION,
+    });
+    return exactApplyEvidencePromise;
+  };
   const initialSnapshot = await ledger.readResultAmendmentCanary(
     target.resultId,
     target.candidateIdentityId,
@@ -714,7 +727,13 @@ async function stagingAmendmentCanary(
       applyTarget.candidateIdentityId,
       initialSnapshot.commit,
     );
-    if (!stagingCanaryOperationMatches(predecessor.view, predecessor.reservation, "apply") ||
+    const storedPredecessorEvidence = predecessor.view.problem_repair?.comparator_evidence ?? null;
+    if (!stagingCanaryOperationMatches(
+      predecessor.view,
+      predecessor.reservation,
+      "apply",
+      storedPredecessorEvidence,
+    ) ||
       !stagingCanaryEventsMatch(
         predecessor.view,
         "apply",
@@ -723,15 +742,29 @@ async function stagingAmendmentCanary(
       )) {
       throw new ResultOwnerStateError(409, "staging amendment canary predecessor changed");
     }
+    const predecessorEvidence = await exactApplyEvidence();
+    if (!stagingCanaryOperationMatches(
+      predecessor.view,
+      predecessor.reservation,
+      "apply",
+      predecessorEvidence,
+    )) {
+      throw new ResultOwnerStateError(409, "staging amendment canary predecessor changed");
+    }
   }
   const initial = initialSnapshot.view;
   if (!stagingCanaryTargetMatches(initial, lane)) {
     throw new ResultOwnerStateError(409, "staging amendment canary target identity changed");
   }
+  const existingApplyEvidence = lane === "apply" &&
+      initial.problem_repair?.status === "applied"
+    ? await exactApplyEvidence()
+    : null;
   const existingOperationMatches = stagingCanaryOperationMatches(
     initial,
     initialSnapshot.reservation,
     input.operation,
+    existingApplyEvidence,
   );
   if (existingOperationMatches) {
     if (!stagingCanaryEventsMatch(
@@ -742,7 +775,12 @@ async function stagingAmendmentCanary(
     )) {
       throw new GitHubStateError(409, "staging amendment canary event binding changed");
     }
-    return stagingCanaryResponse(env, input.operation, initialSnapshot);
+    return stagingCanaryResponse(
+      env,
+      input.operation,
+      initialSnapshot,
+      existingApplyEvidence,
+    );
   }
   if (initialSnapshot.commit !== input.expected_state_commit) {
     throw new GitHubStateError(409, "State moved before the bound amendment canary operation");
@@ -750,6 +788,7 @@ async function stagingAmendmentCanary(
   const existing = initial.problem_repair;
   const requesting = input.operation.startsWith("request_");
   let outcome: Readonly<{ commit: string }>;
+  let finalApplyEvidence: ComparatorEvidence | null = null;
   if (requesting) {
     if (existing !== null && existing.request_event_id !== intent.eventId) {
       throw new ResultOwnerStateError(409, "staging amendment canary target was already exercised");
@@ -771,19 +810,9 @@ async function stagingAmendmentCanary(
     ) {
       throw new ResultOwnerStateError(409, "staging amendment canary pending request changed");
     }
-    let comparatorEvidence: ComparatorEvidence | null = null;
     let reasonCode: string | null = "insufficient_comparator_evidence";
     if (input.operation === "apply") {
-      comparatorEvidence = await provider(env, dependencies).verifyProblemRepairComparator({
-        resultsCommit: STAGING_CANARY_RESULTS_COMMIT,
-        resultId: target.resultId,
-        ownerLogin: STAGING_CANARY_OWNER,
-        declaredModel: target.declaredModel,
-        baseProblemId: "two_plus_two",
-        baseStatementRevision: 1,
-        correctedProblemId: STAGING_CANARY_PROBLEM,
-        correctedStatementRevision: STAGING_CANARY_STATEMENT_REVISION,
-      });
+      finalApplyEvidence = await exactApplyEvidence();
       reasonCode = null;
     }
     outcome = await ledger.decideResultProblemRepair({
@@ -793,7 +822,7 @@ async function stagingAmendmentCanary(
       reviewerLogin: STAGING_CANARY_REVIEWER,
       decision: lane,
       reasonCode,
-      comparatorEvidence,
+      comparatorEvidence: finalApplyEvidence,
     }, input.expected_state_commit);
   }
   const finalSnapshot = await ledger.readResultAmendmentCanaryAtHead(
@@ -801,7 +830,12 @@ async function stagingAmendmentCanary(
     target.candidateIdentityId,
     outcome.commit,
   );
-  return stagingCanaryResponse(env, input.operation, finalSnapshot);
+  return stagingCanaryResponse(
+    env,
+    input.operation,
+    finalSnapshot,
+    finalApplyEvidence,
+  );
 }
 
 function readinessCacheKey(env: RuntimeEnv): Request {

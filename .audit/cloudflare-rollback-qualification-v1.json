@@ -15,7 +15,7 @@
     "server/src/state-event.ts",
     "server/src/submission-view.ts"
   ],
-  "lifecycle_callback_contract_sha256": "e33eff39da423948ef9149d50dac58ddb3309bc3710f751071d009d3ca1ed46a",
+  "lifecycle_callback_contract_sha256": "6ee01332ebbb7addf5e13c2348fcc3c84293b9c24d321001d54c084d24f87bd2",
   "replay_durable_object_migration_tags": [
     "v1",
     "v2"

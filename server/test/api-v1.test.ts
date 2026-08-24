@@ -1134,6 +1134,56 @@ describe("staging amendment canary route boundary", () => {
     evidence_corrected_challenge_id: `ch1_${"f".repeat(64)}`,
   });
 
+  const comparatorEvidenceFields = [
+    "repository",
+    "commit",
+    "path",
+    "blob_oid",
+    "blob_sha256",
+    "record_sha256",
+    "binding_sha256",
+    "verification_method",
+    "evidence_result_id",
+    "evidence_owner_login",
+    "evidence_declared_model",
+    "evidence_base_problem_group",
+    "evidence_base_problem_id",
+    "evidence_base_statement_revision",
+    "evidence_base_challenge_id",
+    "evidence_corrected_problem_group",
+    "evidence_corrected_problem_id",
+    "evidence_corrected_statement_revision",
+    "evidence_corrected_challenge_id",
+  ] as const satisfies readonly (keyof ComparatorEvidence)[];
+
+  const corruptCanaryEvidence = (
+    evidence: ComparatorEvidence,
+    field: keyof ComparatorEvidence,
+  ): ComparatorEvidence => {
+    const replacements: Readonly<Record<keyof ComparatorEvidence, unknown>> = {
+      repository: "attacker/example",
+      commit: "0".repeat(40),
+      path: "results/attacker.json",
+      blob_oid: "1".repeat(40),
+      blob_sha256: "2".repeat(64),
+      record_sha256: "3".repeat(64),
+      binding_sha256: "4".repeat(64),
+      verification_method: "github_commit_blob_v2",
+      evidence_result_id: `r2_${"5".repeat(64)}`,
+      evidence_owner_login: "attacker",
+      evidence_declared_model: "Attacker fixture",
+      evidence_base_problem_group: "software-verification",
+      evidence_base_problem_id: "different_base",
+      evidence_base_statement_revision: 2,
+      evidence_base_challenge_id: `ch1_${"6".repeat(64)}`,
+      evidence_corrected_problem_group: "software-verification",
+      evidence_corrected_problem_id: "different_corrected",
+      evidence_corrected_statement_revision: 2,
+      evidence_corrected_challenge_id: `ch1_${"7".repeat(64)}`,
+    };
+    return { ...evidence, [field]: replacements[field] };
+  };
+
   const canaryReservation = (lane: "apply" | "reject") => ({
     schema_version: 1 as const,
     effective_result_identity_id: STAGING_CANARY_TARGETS[lane].candidateIdentityId,
@@ -1380,6 +1430,93 @@ describe("staging amendment canary route boundary", () => {
     );
     expect(currentHeadResponse.status).toBe(503);
     expect(currentHeadChangedEvent.problemRepairRequests).toHaveLength(0);
+  });
+
+  it("rejects coherent stale State when any compiled comparator evidence field changed", async () => {
+    const requestIntent = STAGING_CANARY_INTENTS.request_apply;
+    const decisionIntent = STAGING_CANARY_INTENTS.apply;
+    const exactEvidence = canaryEvidence("apply");
+    const pending = requestedProblemRepairView(
+      initialCanaryView("apply"),
+      requestIntent.eventId,
+      requestIntent.occurredAt,
+      "list_append_singleton_length",
+      1,
+      "wrong_problem_revision",
+    );
+    const exactApplied = decidedProblemRepairView(
+      pending,
+      decisionIntent.eventId,
+      decisionIntent.occurredAt,
+      "kim-em",
+      "apply",
+      null,
+      exactEvidence,
+    );
+    const exactRepair = exactApplied.problem_repair;
+    if (exactRepair === null) throw new TypeError("applied fixture requires a repair");
+
+    for (const field of comparatorEvidenceFields) {
+      const changedEvidence = corruptCanaryEvidence(exactEvidence, field);
+      const changedRepair = {
+        ...exactRepair,
+        comparator_evidence: changedEvidence,
+      };
+      const applied: ResultAmendmentView = {
+        ...exactApplied,
+        problem_repair: changedRepair,
+        applied_problem_repair: changedRepair,
+      };
+      for (const operation of ["request_apply", "apply"] as const) {
+        const state = new MemoryState();
+        state.head = "e".repeat(40);
+        vi.spyOn(state, "readResultAmendmentCanary").mockResolvedValue({
+          commit: state.head,
+          view: applied,
+          reservation: canaryReservation("apply"),
+          ...canaryEvents("apply", applied),
+        });
+        const provider = new GitHubProvider();
+        const verify = vi.spyOn(provider, "verifyProblemRepairComparator")
+          .mockResolvedValue(exactEvidence);
+        const response = await handleRequest(
+          canaryRequest(operation, "d".repeat(40)),
+          canaryEnv,
+          LIFECYCLE,
+          { provider, state },
+        );
+        expect(response.status, `${operation}:${field}`).toBe(503);
+        expect(verify, `${operation}:${field}`).toHaveBeenCalledOnce();
+        expect(state.problemRepairRequests, `${operation}:${field}`).toHaveLength(0);
+        expect(state.problemRepairDecisions, `${operation}:${field}`).toHaveLength(0);
+      }
+
+      const rejectState = new MemoryState();
+      rejectState.head = "e".repeat(40);
+      vi.spyOn(rejectState, "readResultAmendmentCanary").mockResolvedValue({
+        commit: rejectState.head,
+        view: initialCanaryView("reject"),
+        reservation: null,
+      });
+      vi.spyOn(rejectState, "readResultAmendmentCanaryAtHead").mockResolvedValue({
+        commit: rejectState.head,
+        view: applied,
+        reservation: canaryReservation("apply"),
+        ...canaryEvents("apply", applied),
+      });
+      const rejectProvider = new GitHubProvider();
+      const rejectVerify = vi.spyOn(rejectProvider, "verifyProblemRepairComparator")
+        .mockResolvedValue(exactEvidence);
+      const rejectResponse = await handleRequest(
+        canaryRequest("request_reject", "d".repeat(40)),
+        canaryEnv,
+        LIFECYCLE,
+        { provider: rejectProvider, state: rejectState },
+      );
+      expect(rejectResponse.status, `request_reject:${field}`).toBe(409);
+      expect(rejectVerify, `request_reject:${field}`).toHaveBeenCalledOnce();
+      expect(rejectState.problemRepairRequests, `request_reject:${field}`).toHaveLength(0);
+    }
   });
 
   it("keeps production unreachable even with the matching readiness token", async () => {
@@ -1692,12 +1829,15 @@ describe("staging amendment canary route boundary", () => {
       mutationEventId: rejectDecision.eventId,
       repairRevision: 1,
     });
+    const provider = new GitHubProvider();
+    const verify = vi.spyOn(provider, "verifyProblemRepairComparator")
+      .mockResolvedValue(canaryEvidence("apply"));
 
     const responses = [];
     let chainedHead = applyHead;
     for (const operation of ["request_apply", "apply", "request_reject", "reject"] as const) {
       const response = await handleRequest(
-        canaryRequest(operation, chainedHead), canaryEnv, LIFECYCLE, { state },
+        canaryRequest(operation, chainedHead), canaryEnv, LIFECYCLE, { provider, state },
       );
       expect(response.status).toBe(200);
       const body: { state_commit: string } = await response.json();
@@ -1714,6 +1854,7 @@ describe("staging amendment canary route boundary", () => {
     expect(requestMutation.mock.calls[0]?.[0].eventId).toBe(rejectRequest.eventId);
     expect(decisionMutation).toHaveBeenCalledOnce();
     expect(decisionMutation.mock.calls[0]?.[0].eventId).toBe(rejectDecision.eventId);
+    expect(verify).toHaveBeenCalledTimes(3);
   });
 
   it("rejects without comparator evidence and exact-event reruns stay read-only", async () => {
@@ -1840,8 +1981,11 @@ describe("staging amendment canary route boundary", () => {
         reservation: null,
         ...canaryEvents("reject", rejectPending),
       });
+    const provider = new GitHubProvider();
+    const verify = vi.spyOn(provider, "verifyProblemRepairComparator")
+      .mockResolvedValue(evidence);
     const response = await handleRequest(
-      canaryRequest("request_reject"), canaryEnv, LIFECYCLE, { state },
+      canaryRequest("request_reject"), canaryEnv, LIFECYCLE, { provider, state },
     );
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
@@ -1849,6 +1993,7 @@ describe("staging amendment canary route boundary", () => {
       event_id: rejectRequest.eventId,
       candidate_reserved: false,
     });
+    expect(verify).toHaveBeenCalledOnce();
 
     const blocked = new MemoryState();
     vi.spyOn(blocked, "readResultAmendmentCanary").mockResolvedValueOnce({
@@ -1901,6 +2046,62 @@ describe("staging amendment canary route boundary", () => {
     );
     expect(comparator.status).toBe(500);
     expect(comparatorState.problemRepairDecisions).toHaveLength(0);
+
+    const exactEvidence = canaryEvidence("apply");
+    const applied = decidedProblemRepairView(
+      requested,
+      STAGING_CANARY_INTENTS.apply.eventId,
+      STAGING_CANARY_INTENTS.apply.occurredAt,
+      "kim-em",
+      "apply",
+      null,
+      exactEvidence,
+    );
+    const staleAppliedState = new MemoryState();
+    staleAppliedState.head = "e".repeat(40);
+    vi.spyOn(staleAppliedState, "readResultAmendmentCanary").mockResolvedValue({
+      commit: staleAppliedState.head,
+      view: applied,
+      reservation: canaryReservation("apply"),
+      ...canaryEvents("apply", applied),
+    });
+    const staleProvider = new GitHubProvider();
+    vi.spyOn(staleProvider, "verifyProblemRepairComparator").mockRejectedValue(
+      new Error("fresh comparator unavailable"),
+    );
+    const staleApplied = await handleRequest(
+      canaryRequest("apply", "d".repeat(40)),
+      canaryEnv,
+      LIFECYCLE,
+      { provider: staleProvider, state: staleAppliedState },
+    );
+    expect(staleApplied.status).toBe(500);
+    expect(staleAppliedState.problemRepairDecisions).toHaveLength(0);
+
+    const predecessorState = new MemoryState();
+    vi.spyOn(predecessorState, "readResultAmendmentCanary").mockResolvedValue({
+      commit: predecessorState.head,
+      view: initialCanaryView("reject"),
+      reservation: null,
+    });
+    vi.spyOn(predecessorState, "readResultAmendmentCanaryAtHead").mockResolvedValue({
+      commit: predecessorState.head,
+      view: applied,
+      reservation: canaryReservation("apply"),
+      ...canaryEvents("apply", applied),
+    });
+    const predecessorProvider = new GitHubProvider();
+    vi.spyOn(predecessorProvider, "verifyProblemRepairComparator").mockRejectedValue(
+      new Error("fresh predecessor comparator unavailable"),
+    );
+    const predecessor = await handleRequest(
+      canaryRequest("request_reject"),
+      canaryEnv,
+      LIFECYCLE,
+      { provider: predecessorProvider, state: predecessorState },
+    );
+    expect(predecessor.status).toBe(500);
+    expect(predecessorState.problemRepairRequests).toHaveLength(0);
 
     const movedState = new MemoryState();
     vi.spyOn(movedState, "readResultAmendmentCanary")
