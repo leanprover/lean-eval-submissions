@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import pathlib
 import tempfile
 import unittest
@@ -15,6 +16,14 @@ SPEC = importlib.util.spec_from_file_location("historical_qualification", MODULE
 assert SPEC is not None and SPEC.loader is not None
 qualification = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(qualification)
+
+LAYER_MODULE_PATH = ROOT / "scripts/prepare_historical_image_layers.py"
+LAYER_SPEC = importlib.util.spec_from_file_location(
+    "prepare_historical_image_layers", LAYER_MODULE_PATH
+)
+assert LAYER_SPEC is not None and LAYER_SPEC.loader is not None
+image_layers = importlib.util.module_from_spec(LAYER_SPEC)
+LAYER_SPEC.loader.exec_module(image_layers)
 
 
 class HistoricalPublicImageQualificationTests(unittest.TestCase):
@@ -150,6 +159,128 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
         self.assertIn(qualification.MATRIX_SHA256, dockerfile)
         self.assertIn('matrix["image_count"] == len(matrix["images"]) == 25', dockerfile)
         self.assertNotIn("containers push", dockerfile)
+
+    def test_large_image_layers_are_separated_canonical_and_root_owned(self) -> None:
+        dockerfile = (ROOT / "Dockerfile.historical-public-replay").read_text()
+        package_copy = (
+            "COPY --from=lean-builder --chown=0:0 /runtime/benchmark-packages/ "
+            "/opt/lean-eval/benchmark/.lake/packages/"
+        )
+        benchmark_copy = (
+            "COPY --from=lean-builder --chown=0:0 /runtime/benchmark/ "
+            "/opt/lean-eval/benchmark/"
+        )
+        home_copy = (
+            "COPY --from=lean-builder --chown=0:0 /runtime/home/ "
+            "/opt/lean-eval/home/"
+        )
+        self.assertEqual(dockerfile.count(package_copy), 1)
+        self.assertEqual(dockerfile.count(benchmark_copy), 1)
+        self.assertEqual(dockerfile.count(home_copy), 1)
+        self.assertLess(dockerfile.index(benchmark_copy), dockerfile.index(package_copy))
+        self.assertIn(
+            "python3 /tmp/prepare-historical-image-layers.py --runtime-root /runtime",
+            dockerfile,
+        )
+        self.assertIn(
+            "pathlib.Path(package[\"dir\"]).is_dir() for package in packages",
+            dockerfile,
+        )
+        self.assertIn("git diff --exit-code -- lake-manifest.json", dockerfile)
+        self.assertNotIn(
+            "COPY --from=lean-builder /runtime/benchmark /opt/lean-eval/benchmark",
+            dockerfile,
+        )
+        dockerignore = (
+            ROOT / "Dockerfile.historical-public-replay.dockerignore"
+        ).read_text().splitlines()
+        self.assertIn("!scripts/prepare_historical_image_layers.py", dockerignore)
+
+    def test_layer_preparation_separates_packages_and_canonicalizes_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = pathlib.Path(directory) / "runtime"
+            for path in (
+                runtime / "benchmark/.lake/packages/mathlib",
+                runtime / "bin",
+                runtime / "home/.elan/toolchains/lean",
+                runtime / "profile",
+            ):
+                path.mkdir(parents=True)
+            (runtime / "benchmark/generated").mkdir()
+            files = (
+                runtime / "benchmark/.lake/packages/mathlib/Mathlib.olean",
+                runtime / "benchmark/generated/Main.lean",
+                runtime / "bin/comparator",
+                runtime / "home/.elan/toolchains/lean/lean",
+                runtime / "profile/profile-lock.json",
+            )
+            for index, path in enumerate(files, start=1):
+                path.write_text(f"fixture-{index}")
+                os.utime(path, ns=(index, index), follow_symlinks=False)
+            link = runtime / "benchmark/.lake/packages/mathlib/current"
+            link.symlink_to("Mathlib.olean")
+            os.utime(link, ns=(99, 99), follow_symlinks=False)
+
+            image_layers.prepare_runtime_layers(runtime)
+
+            packages = runtime / "benchmark-packages"
+            self.assertTrue((packages / "mathlib/Mathlib.olean").is_file())
+            self.assertEqual(
+                (packages / "mathlib/current").readlink(),
+                pathlib.Path("Mathlib.olean"),
+            )
+            self.assertTrue((runtime / "benchmark/.lake/packages").is_dir())
+            self.assertEqual(list((runtime / "benchmark/.lake/packages").iterdir()), [])
+            self.assertTrue((runtime / "benchmark/generated/Main.lean").is_file())
+            for root, directories, names in os.walk(runtime, followlinks=False):
+                paths = [
+                    pathlib.Path(root),
+                    *[pathlib.Path(root) / name for name in directories + names],
+                ]
+                for path in paths:
+                    self.assertEqual(
+                        path.lstat().st_mtime_ns,
+                        image_layers.CANONICAL_MTIME_NS,
+                    )
+
+    def test_layer_preparation_rejects_ambiguous_or_linked_package_store(self) -> None:
+        for obstruction in ("existing-layer", "linked-packages", "extra-layer"):
+            with (
+                self.subTest(obstruction=obstruction),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                runtime = pathlib.Path(directory) / "runtime"
+                for path in (
+                    runtime / "benchmark/.lake",
+                    runtime / "bin",
+                    runtime / "home",
+                    runtime / "profile",
+                ):
+                    path.mkdir(parents=True)
+                if obstruction == "existing-layer":
+                    (runtime / "benchmark/.lake/packages").mkdir()
+                    (runtime / "benchmark-packages").mkdir()
+                else:
+                    (runtime / "benchmark/.lake/packages").mkdir()
+                    if obstruction == "linked-packages":
+                        target = runtime / "external-packages"
+                        target.mkdir()
+                        (runtime / "benchmark/.lake/packages").rmdir()
+                        (runtime / "benchmark/.lake/packages").symlink_to(target)
+                    else:
+                        (runtime / "unexpected").mkdir()
+                with self.assertRaises(image_layers.LayerPreparationError):
+                    image_layers.prepare_runtime_layers(runtime)
+
+    def test_workflow_bounds_offline_cache_check_and_records_layer_identity(self) -> None:
+        workflow = (
+            ROOT / ".github/workflows/historical-public-image-qualification.yml"
+        ).read_text()
+        self.assertIn("timeout --signal=TERM --kill-after=30s 1800s", workflow)
+        self.assertIn("find .lake/packages -name '*.olean' -newermt @1", workflow)
+        self.assertIn("image-layer-diff-ids.json", workflow)
+        self.assertIn('"layer_diff_ids": json.loads(', workflow)
+        self.assertIn('"layer_preparation_sha256": hashlib.sha256(', workflow)
 
 
 if __name__ == "__main__":

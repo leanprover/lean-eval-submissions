@@ -4,6 +4,7 @@
 !configuration/historical-public-replay-profile-matrix-v1.json
 !scripts/evaluate_submission.py
 !scripts/historical_public_runner.py
+!scripts/prepare_historical_image_layers.py
 !server/replay-image/comparator-71b52-phase-metrics.patch
 !server/replay-image/historical-public-runner
 !server/replay-image/replay-authoritative

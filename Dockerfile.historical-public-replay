@@ -29,6 +29,7 @@ ENV PATH=/opt/lean-eval/home/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:
 
 COPY configuration/historical-public-replay-profile-matrix-v1.json /tmp/profile-matrix.json
 COPY server/replay-image/comparator-71b52-phase-metrics.patch /tmp/comparator-phase-metrics.patch
+COPY scripts/prepare_historical_image_layers.py /tmp/prepare-historical-image-layers.py
 
 # The dispatch commit only selects an existing matrix entry. Every build input is
 # recovered from the digest-locked matrix and written in a closed, validated form.
@@ -128,6 +129,7 @@ RUN . /tmp/image.env \
     && test "$(cat /build/benchmark/lean-toolchain)" = "$TOOLCHAIN" \
     && cd /build/benchmark \
     && lake update \
+    && git diff --exit-code -- lake-manifest.json \
     && lake exe cache get \
     && lake build lean-eval \
     && printf '%s\n' "$BENCHMARK_COMMIT" > .lean-eval-commit \
@@ -158,7 +160,8 @@ RUN . /tmp/image.env \
     && cp -a "$ELAN_HOME/settings.toml" /runtime/home/.elan/settings.toml \
     && toolchain_dir="leanprover--lean4---${TOOLCHAIN##*:}" \
     && cp -a "$ELAN_HOME/toolchains/$toolchain_dir" /runtime/home/.elan/toolchains/ \
-    && cp /tmp/profile-lock.json /tmp/matrix-entry.json /runtime/profile/
+    && cp /tmp/profile-lock.json /tmp/matrix-entry.json /runtime/profile/ \
+    && python3 /tmp/prepare-historical-image-layers.py --runtime-root /runtime
 
 
 FROM docker.io/cloudflare/sandbox:0.12.7-python@sha256:6dfa7301e69d3e5cd8e0404b92fd240026fe834ed7101ee29cb66337b0af0981
@@ -183,11 +186,16 @@ RUN apt-get update \
 
 COPY --from=landrun-builder /go/bin/landrun /usr/local/bin/landrun
 COPY --from=nanoda-builder /build/nanoda/target/release/nanoda_bin /opt/lean-eval/bin/nanoda_bin
-COPY --from=lean-builder /runtime/benchmark /opt/lean-eval/benchmark
-COPY --from=lean-builder /runtime/bin /opt/lean-eval/bin
-COPY --from=lean-builder /runtime/home /opt/lean-eval/home
-COPY --from=lean-builder /runtime/profile/profile-lock.json /opt/lean-eval/replay-profile-lock.json
-COPY --from=lean-builder /runtime/profile/matrix-entry.json /opt/lean-eval/historical-public-matrix-entry.json
+# Keep the dependency store and each toolchain home in independently reusable,
+# metadata-canonical layers. The profile-specific benchmark creates an empty
+# package destination first, so the package layer contains no implicit parent
+# directory metadata and no profile-specific source or generated output.
+COPY --from=lean-builder --chown=0:0 /runtime/benchmark/ /opt/lean-eval/benchmark/
+COPY --from=lean-builder --chown=0:0 /runtime/benchmark-packages/ /opt/lean-eval/benchmark/.lake/packages/
+COPY --from=lean-builder --chown=0:0 /runtime/bin/ /opt/lean-eval/bin/
+COPY --from=lean-builder --chown=0:0 /runtime/home/ /opt/lean-eval/home/
+COPY --from=lean-builder --chown=0:0 /runtime/profile/profile-lock.json /opt/lean-eval/replay-profile-lock.json
+COPY --from=lean-builder --chown=0:0 /runtime/profile/matrix-entry.json /opt/lean-eval/historical-public-matrix-entry.json
 COPY configuration/historical-public-runner-v1.json /opt/lean-eval/historical-public-runner-v1.json
 COPY configuration/historical-public-replay-profile-matrix-v1.json /opt/lean-eval/historical-public-replay-profile-matrix-v1.json
 COPY scripts/evaluate_submission.py /opt/lean-eval/evaluate_submission.py
@@ -204,6 +212,9 @@ RUN chmod 0555 /usr/local/bin/landrun /opt/lean-eval/bin/* \
     && mkdir -p -m 0700 /run/lean-eval /workspace \
     && chmod 0555 /opt/lean-eval/replay-authoritative \
     && test "$(find /opt/lean-eval -type d -name .git -print -quit)" = '' \
+    && test -d /opt/lean-eval/benchmark/.lake/packages \
+    && test -f /opt/lean-eval/benchmark/.lake/package-overrides.json \
+    && python3 -c 'import json, pathlib; overrides = json.loads(pathlib.Path("/opt/lean-eval/benchmark/.lake/package-overrides.json").read_text()); packages = overrides["packages"]; assert packages and all(pathlib.Path(package["dir"]).is_dir() for package in packages)' \
     && test "$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" = 3.11 \
     && python3 -c 'import sys; sys.path.insert(0, "/opt/lean-eval"); from historical_public_runner import execute_fixed_runner; assert callable(execute_fixed_runner)' \
     && python3 -c 'import hashlib, pathlib; assert hashlib.sha256(pathlib.Path("/opt/lean-eval/historical-public-replay-profile-matrix-v1.json").read_bytes()).hexdigest() == "aad9132f729ef9f429532900d1e50b665330721fa9360699328c47bdfb2aedfc"'
