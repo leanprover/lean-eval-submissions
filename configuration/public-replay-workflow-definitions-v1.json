@@ -1,5 +1,601 @@
 {
-  "contracts": [],
+  "contracts": [
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "00730f4226ee4f4818abcdf38033b368a247d63b"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "01b49497799cfa9110c136dae1c3ca7651d4593d"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "01f64b97180801f6da7da10e61ee54c68e3c6bb7"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "07683f73e7fae1fdd5afcc4b4d3bb8670e897cc1"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "e14dd7a28ca829e17132da4267e8b16b1db564bfa853296a1142022989a91a23",
+      "evaluator_commit": "07cd096f4f3953e2fa3f8735082bbeab818b6429"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "1d0650f3821f066e93f0b8432b2cecad43ffd8c0a9a66c3eb977422aeb356587",
+      "evaluator_commit": "0995de7b0c1dee33be1f7cbceebe0d400363d842"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "0e1cb218b0e715963b51f3b2d624b8e505181cfa"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7b15e22709ba65f73fcc953a778fd1de7d95552e25c52be9fa99693089b573f5",
+      "evaluator_commit": "1021dba0a1d78b07cb03a7e4e4d7163ef4083a37"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "1106e8c0077d4da920baf7a5b6c8f8d2a430acba"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7b5794fd605ae7fcbb4e9b3984414d364c0b3081a0f87dd0ec90fa5973aed0e0",
+      "evaluator_commit": "1221b841ffc41a50d696129dae280308d3f3970d"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "171d426ae49284e0bc6f24abe2c24af226445486"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "177847f5b1b59c07c63b024a2ab0d7af99cfd623"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "17ef113b885881b1e1c8ec3b57db9e4ac93646b7"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "19be05743fd5264152fce621c5051b6180406e60"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "204d4e3fb4b49dc76c934fa2b6b171fe79e08d66"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "3dc721027f5c5560a6de1453971bfd078fc65c821e81f8b05ff4ed10ef0eba3a",
+      "evaluator_commit": "2220b0f2b339ee2dc005d16a19f63b0b64d6ae7c"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "22c14385c3acdb7f7323828d9d4410f36a3bd7f3"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "23fffa773f05fb6b19fc7c0cc6edf7f73e38aba4"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "29b8d921b7321c939196b18c2be4967ec86d9e9e"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "2b0fb39e247d2b81c54d43b9a9172e177deb2764"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "2b2c46102015c38d37a137a4533a21d9018011bb"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "2c69297fe98ea569eb141b2b7af04c3cb331d64a"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "2e46e516589d4cc6a205b56855580e3d860fc253"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "3749005630adb8264875593270abd5c9e312d090"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "3930106dea1fa9878f0f5c17a06e2d1e6212f0cf"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7b15e22709ba65f73fcc953a778fd1de7d95552e25c52be9fa99693089b573f5",
+      "evaluator_commit": "39b257650e5868c5c6f62d2fe5f2075a97734a59"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "39fa63039b5c24f0a654dc9ecf2015b9f8267713"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "3ac5658558e80bc996b3eb60087afe4acbdf56cc"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "3b80ea5c81cbe1c128507ad98eac6182bd5b4504"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "3c1312199b150b1777e205a3efc33f1652fdc81e"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "1d0650f3821f066e93f0b8432b2cecad43ffd8c0a9a66c3eb977422aeb356587",
+      "evaluator_commit": "3d5da9082dd6fb718c5e5cc8f78c8ee6641bc1a7"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "43a9c2a127ac9929ffce5ff44e2a7f8bd51f1522"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "43affdfdc28fe436b0fde1d12410536c3b50c8be"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "4489a1b133984d6f4531de9dfbe3c810981c97bb"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "45f5fe615beed039a8954d1b6c354968581688b9"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "4709d253d70ddc2e13b582821936583f417696fe"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "e14dd7a28ca829e17132da4267e8b16b1db564bfa853296a1142022989a91a23",
+      "evaluator_commit": "4bcfce4099b7359d83704cd8d042b74d2fa9e223"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "4d7918c5977ee2f816b9419369b6b554f7d3d3d9"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "4fc63abfef377fea9a1050c2f0c3c1115e3cb362"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "4fd2cc6402af2e1f210d3e297f62dc4adaeb011e"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "4fe41fb37902516ee3820f8ce83e2c5527efb70c"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "50c26696e884e790d1063a99c1b248e06c7449b2"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "50cc13ef96ef9d8301b1fb0e5864c44daea9cb0b"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "51057bddd4414b95cfaeb1224c09eff1456af27e"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "5221aed41d40125500d392fc9775366d73306350"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "528a359bb6c5c45eadca290f98608260f64e0b90"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "52d58a043be6bfd658872f5f2663148a06fa7b59"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7b15e22709ba65f73fcc953a778fd1de7d95552e25c52be9fa99693089b573f5",
+      "evaluator_commit": "57165141653e8fa32fdad311a1a1269f6671ee48"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "596dc6415a498e2992f654c447c6e1e7434e0a5a"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "5d8eb90b9f51ae40707dcc660ed4eda6ba3035d7"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "5dc5b13a414263ac45a9131d3291e325c9d37f68"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "5ea5e32b551e6912c35c4792b98684580ed47e88"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "5fbc920a8498f210d5c8dc5cae4366957eecc998"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "60708286f47ac0b99bb34cf62d62ffa676f09b3b"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "624951b74bb322720b807fe321e86ead40504889"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7b5794fd605ae7fcbb4e9b3984414d364c0b3081a0f87dd0ec90fa5973aed0e0",
+      "evaluator_commit": "655eb1d340266f43f6ca7f7ab53b157bc98bd894"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "675b884635553e09d0b072ee160e9853f5039186"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "68b08f3c88c9000ffc2880cd9f2c26e5df462a00"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba279a2230ed38d075c162835dbc67455104bd2ec513db459da8a17ffa3cfa40",
+      "evaluator_commit": "6b3be460bdebb24610bfe2ba48f77a23c5211095"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "6dcba4b0e0552202893a945f17a4a9790cf22b7e"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "6dfb5a95d212c9afa2a3c979bca77751312a1701"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "6e8a289373d7cb9bc357fcf7e51000bc2dec160d"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "712cc23201355157485956bd4585dc534f70da12"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "73be719f4f1e271faf87b8db1635353411adae7e"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "743a9cc0531af6c75a4285b1056f64a91e6aadcf"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "7e48191e426c675492c99a93886c26e294dffb34"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "7f6f0f800252be7d1c6a8b578bdea5fff0e06bbe"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "8213aa55b3c370c3093bba5b3536941744c8c493"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7b15e22709ba65f73fcc953a778fd1de7d95552e25c52be9fa99693089b573f5",
+      "evaluator_commit": "8447423578fe70ebcfbdda6418c1421ef211f6ed"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "8b9e84762106c99d45857cfd7a7d6b244bdf109e"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "9063ce7268a89245b4c7a02ebdba2aa2ba63515d"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "90cc2f77f497a517bcafe8eafdf2e1f2b1ce809f"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "91616b4933ce5146160404116297ae7cfebff16c"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "96730ab74f508705eb3a3a19e24133fbf7007c57"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "969413273910f7f2316db0d1cef7210c1aee4e0d"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "9d12e5ef91712d449972aaaef5c24ed4a18722d0"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "9f51690f5b261e1892b965a6aed4eeef19f92d15"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "a261e071434b0cc80811179cd6b2fc227f9fcce9"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7b15e22709ba65f73fcc953a778fd1de7d95552e25c52be9fa99693089b573f5",
+      "evaluator_commit": "a4a3c52bbcb96d6a736ef276490fdeee9dfa8717"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "a5f943a874ad420c6e14a0c1448e183c1464e489"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "a83c0c1d99f7ae90b69b3eaa2392a0e557992719"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "a8a4be5bd7a054044073838ca6a32e9b86cf0a9c"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "ab8abe26f6906700dd2767ec0a46362a9c779494"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "e14dd7a28ca829e17132da4267e8b16b1db564bfa853296a1142022989a91a23",
+      "evaluator_commit": "abf1fba52898cff0810a581c42c87dfe874a7d9f"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "b305bb438df371621317059b2fdc8bb774a2cf27"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "b3422c0bd12da89a93bdd297a7810000686fd1a9"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "b574a37927d3db8c01763ef992bc27856330c5f2"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "baaa89e3d8c8f99084806b717b3172c977210353"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "e14dd7a28ca829e17132da4267e8b16b1db564bfa853296a1142022989a91a23",
+      "evaluator_commit": "bc0119d09ce4702a9b0790c6047fdfe38665c667"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "f851886da7ca7caf8616355531e0aedf99dee9bb5e262f18e4cce751e8df1a7a",
+      "evaluator_commit": "bcc8fdef486e013f1edf6654280833912ed6b22d"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "bfb2b3d38ac68a419bf5a8226ba012a5c4939e47"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "1d0650f3821f066e93f0b8432b2cecad43ffd8c0a9a66c3eb977422aeb356587",
+      "evaluator_commit": "c1ac0d77d548db40f4980f8003304700556e3369"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "c7ef577cc54b6cf2902409840a118c529e2a3f2a"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "c952a174e3e43d717e56af66c2a85ba83bb9e8de"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "cbbf447162a67d7018b4bc3429e1155cd7b99e7a"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "f851886da7ca7caf8616355531e0aedf99dee9bb5e262f18e4cce751e8df1a7a",
+      "evaluator_commit": "cbd220952b7bde0c0eb4b47595e45e44c5bc7ab5"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "d08a59a5268b2b516da285138120b6120ba41c0c"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "d55207b811b95dcefd8cb7ded443216de3c3f495"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "d8335ba43660cedd2249300727f5579a48780dae"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "d83e76f6a740c66828d5649457090eb1aa0a42f2"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "daa0a74ef1d8c755b0f12cdbd419bd8455d62e25"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "daaf5985e9df6ca93e0a64eadcd347c546bcf77c"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "dc3c89dc6bca2c87c96f09fbb36e650a7efa7381"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "dec0c703ca9a426ca05b14fc77091cba17c2a4bc"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "1d0650f3821f066e93f0b8432b2cecad43ffd8c0a9a66c3eb977422aeb356587",
+      "evaluator_commit": "dffc2586bc874faf68b8af050015b010abb06643"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7b15e22709ba65f73fcc953a778fd1de7d95552e25c52be9fa99693089b573f5",
+      "evaluator_commit": "e07d3a531c86ffcc3182134df98a63123e70dd0e"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "e132790715d13554f007a344c74b10a367d5ab23"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "e1deaac4a19c4fc40e9b3194d24cca55a92d4c52"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "e2fb6731c80bfe88088ae9ec50c8e4c890427f57"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
+      "evaluator_commit": "e35e79a0cbbead83d15988301b8a4bf2398fbcd3"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "e61d529e500e385427094dce11086533a5441074"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "e7594cda8ed2c54c230dc9c7a402c30bccb9d7b3"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "e800c7ff780a8cc9af98e0166a820ee9a44ef329"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "f082061c4329c1d4165f737b910bbc5f2ebc2756"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "2e50c16f2244c4e0d2811215287dd30ff0db62b99e5f34617064236f7f8a5c0e",
+      "evaluator_commit": "f1ec5540b2f3537fa61d66079929d5dc6d66f734"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "f357e02a4dd7c356de885a812a37bde699518cb5"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "d8685a08f6a4c5e6b95913e6f906ef4a9364cce360dc862841118d56dc773c1a",
+      "evaluator_commit": "f503615eff3544ae469689c7de51d8512b5e78f0"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
+      "evaluator_commit": "fbe517bd4569f2f07c691a14cbff968970805498"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
+      "evaluator_commit": "fcb795a10ac43639d29a5c8021d8f7a387958951"
+    }
+  ],
   "kind": "historical_public_replay_workflow_definition_registry",
   "repository": "leanprover/lean-eval-submissions",
   "schema_version": 1,
