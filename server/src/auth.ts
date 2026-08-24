@@ -218,6 +218,30 @@ export function randomNonce(bytes = 32): string {
   return base64Url(crypto.getRandomValues(new Uint8Array(bytes)));
 }
 
+function intakeEventIds(nowSeconds: number): Readonly<{
+  nonceEventId: string;
+  submissionId: string;
+  metadataEventId: string;
+}> {
+  // State requires every causation event ID to sort after its parent. Reserve
+  // adjacent UUIDv7 milliseconds so independent random tails cannot invert the
+  // nonce -> submission -> metadata chain when a grant is issued quickly.
+  const firstMillisecond = nowSeconds * 1000;
+  if (
+    !Number.isSafeInteger(nowSeconds) ||
+    nowSeconds < 0 ||
+    !Number.isSafeInteger(firstMillisecond) ||
+    firstMillisecond + 2 > 0xffffffffffff
+  ) {
+    throw new TypeError("intake grant time must fit an ordered UUIDv7 sequence");
+  }
+  return {
+    nonceEventId: newEventId(firstMillisecond),
+    submissionId: newEventId(firstMillisecond + 1),
+    metadataEventId: newEventId(firstMillisecond + 2),
+  };
+}
+
 export function makeOAuthState(nowSeconds: number): OAuthState {
   return {
     kind: "oauth_state",
@@ -229,13 +253,14 @@ export function makeOAuthState(nowSeconds: number): OAuthState {
 }
 
 export function makeSubmissionGrant(login: string, nowSeconds: number): SubmissionGrant {
+  const eventIds = intakeEventIds(nowSeconds);
   return {
     kind: "submission_grant",
     login,
-    submission_id: newEventId(),
-    metadata_event_id: newEventId(),
+    submission_id: eventIds.submissionId,
+    metadata_event_id: eventIds.metadataEventId,
     nonce: randomNonce(),
-    nonce_event_id: newEventId(),
+    nonce_event_id: eventIds.nonceEventId,
     issued_at: nowSeconds,
     expires_at: nowSeconds + 900,
   };
@@ -250,15 +275,15 @@ export function makeAgentChallenge(
   }>,
   nowSeconds: number,
 ): AgentChallenge {
-  const submissionId = newEventId();
+  const eventIds = intakeEventIds(nowSeconds);
   return {
     kind: "agent_challenge",
     ...input,
-    tag: `lean-eval/${submissionId}`,
-    submission_id: submissionId,
-    metadata_event_id: newEventId(),
+    tag: `lean-eval/${eventIds.submissionId}`,
+    submission_id: eventIds.submissionId,
+    metadata_event_id: eventIds.metadataEventId,
     nonce: randomNonce(),
-    nonce_event_id: newEventId(),
+    nonce_event_id: eventIds.nonceEventId,
     issued_at: nowSeconds,
     expires_at: nowSeconds + 600,
   };

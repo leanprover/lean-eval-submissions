@@ -11,6 +11,7 @@ import {
 } from "../src/api-contract";
 import {
   lifecycleEventId,
+  makeAgentChallenge,
   makeSubmissionGrant,
   nonceDigest,
   signToken,
@@ -380,6 +381,24 @@ describe("strict API contract", () => {
         Math.floor(NOW_MS / 1000),
       ),
     ).rejects.toThrow(/login|identity/);
+  });
+
+  it("preallocates causally ordered intake UUIDv7 identities", () => {
+    const now = Math.floor(NOW_MS / 1000);
+    const grant = makeSubmissionGrant("alice", now);
+    const challenge = makeAgentChallenge({
+      login: "alice",
+      source_repository: "alice/example",
+      source_commit: "a".repeat(40),
+      gist_id: "abcde",
+    }, now);
+    for (const material of [grant, challenge]) {
+      expect(material.nonce_event_id < material.submission_id).toBe(true);
+      expect(material.submission_id < material.metadata_event_id).toBe(true);
+      expect(material.nonce_event_id.slice(0, 13)).not.toBe(material.submission_id.slice(0, 13));
+      expect(material.submission_id.slice(0, 13)).not.toBe(material.metadata_event_id.slice(0, 13));
+    }
+    expect(() => makeSubmissionGrant("alice", -1)).toThrow(/ordered UUIDv7 sequence/);
   });
 
   it("builds an exact-ref dispatch carrying the UUID archive contract", async () => {
