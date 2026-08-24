@@ -118,8 +118,8 @@ the already implemented owner status, metadata, and publication routes.
       dark independent feature flag, including authority-derived owner
       verification, exact idempotence, causal CAS, targeted amendment and
       release-status reads, release barriers, and redacted responses. The local
-      integration remains bound to unmerged State contract `fa4fe8f`; see
-      `docs/result-amendment-owner-api.md` for the mandatory landing rebind.
+      integration is bound to protected State contract `163e931`; see
+      `docs/result-amendment-owner-api.md` for the exact closed blob proof.
 - [ ] Add model-alias, rename, consolidation, and new-canonical-identity
       request events, authorization, materialization, collision tests, and
       lifecycle-aware public projection behavior.

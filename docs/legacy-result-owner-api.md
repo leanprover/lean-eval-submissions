@@ -6,7 +6,7 @@ production metadata. It never rewrites a Results record, changes its stable
 result ID, or reinterprets its grandfathered solution-publication policy.
 
 The implementation is bound to private State contract commit
-`fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f`. Before an owner operation, the
+`163e9314c881493e08d23baf35ff40456f9c2331`. Before an owner operation, the
 Worker resolves protected State `main`, proves that it equals or descends from
 that commit, and checks the exact reviewed event schema, targeted-index
 schemas, materializer, result-owner index builder, validator, and contract
@@ -23,7 +23,7 @@ Both environments track these non-secret variables:
 
 ```text
 LEGACY_RESULT_OWNER_API_ENABLED=false
-RESULT_OWNER_STATE_CONTRACT_COMMIT=fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f
+RESULT_OWNER_STATE_CONTRACT_COMMIT=163e9314c881493e08d23baf35ff40456f9c2331
 ```
 
 The route exists only when the enable flag is exactly `true` and the contract
@@ -33,15 +33,12 @@ production `INTAKE_ENABLED` remains independently false. OAuth start/callback
 may operate while intake is disabled only when the owner API gate is enabled;
 submission routes remain disabled.
 
-Local integration sequencing note: commit
-`fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f` is the unmerged State contract
-anchor. The local rollback qualification temporarily uses that same value as
-`state_main_commit` so this branch is internally testable. Before this branch
-is pushed, rebind that qualification field to the actual protected State
-`main` commit produced when the contract lands. The runtime contract anchor may
-remain `fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f` only if that exact commit lands
-unchanged and every pinned blob remains exact; otherwise refresh every contract
-pin and proof listed below.
+The protected binding commit above contains the reviewed owner/amendment
+contract plus later append-authority and targeted release-status validation.
+Runtime checks all fifteen exact documentation, schema, materializer, index,
+and validator blobs before using the protected-main head as a compare-and-swap
+base. The rollback qualification binds the same protected commit and callback
+implementation.
 
 ## Authentication and requests
 

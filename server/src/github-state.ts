@@ -76,7 +76,7 @@ const RESULT_OWNER_CONTRACT_BLOBS = {
   "scripts/result_amendments.py": "61b44743c73d152fa92c489ac9228d16f0b694fd",
   "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
   "scripts/result_release_status.py": "27bae3e6faa9275463a1440483512e23bfda2f6e",
-  "scripts/validate_state.py": "23f9fdf8bffb4c24c4e0d67255c514ad8b2ebfbe",
+  "scripts/validate_state.py": "0b4c876475fcc9c9d5cf6269c800509530673bb4",
 } as const;
 const RESULT_OWNER_CONTRACT_PROOF_CACHE_LIMIT = 64;
 const RESULT_OWNER_CONTRACT_PROOF_ID = Object.entries(RESULT_OWNER_CONTRACT_BLOBS)

@@ -2,13 +2,13 @@
 
 The submission Worker contains an authenticated, feature-disabled owner API for
 the append-only result amendment contract at State commit
-`fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f`.
+`163e9314c881493e08d23baf35ff40456f9c2331`.
 
 Both staging and production keep:
 
 ```text
 RESULT_AMENDMENT_OWNER_API_ENABLED=false
-RESULT_OWNER_STATE_CONTRACT_COMMIT=fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f
+RESULT_OWNER_STATE_CONTRACT_COMMIT=163e9314c881493e08d23baf35ff40456f9c2331
 ```
 
 The gate is independent of submission intake and the legacy claim/backfill
@@ -92,34 +92,16 @@ This route only records the owner's proposal. Applied/rejected repair decisions
 still require a separately reviewed maintainer identity boundary and the exact
 comparator evidence described by State.
 
-## Temporary State binding and final rebind
+## Protected State binding
 
-`fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f` is a local, unmerged State
-contract anchor. Before any push or deployment, bind this branch to the landed
-protected State commit and re-run qualification. The complete rebind surface is:
-
-- `server/src/result-owner.ts`: `RESULT_OWNER_STATE_CONTRACT_COMMIT`;
-- `server/src/github-state.ts`: every path/blob pair in
-  `RESULT_OWNER_CONTRACT_BLOBS`, including the release-status schema and
-  materializer;
-- `server/wrangler.jsonc` for both environments and the generated
-  `server/worker-configuration.d.ts`;
-- both exact contract checks in `.github/workflows/deploy-worker.yml`;
-- `.audit/cloudflare-rollback-qualification-v1.json`, including
-  `state_main_commit` and the regenerated callback-contract digest;
-- `docs/legacy-result-owner-api.md`, this document, and every exact fixture in
-  `server/test/{api-v1,github-state,index}.test.ts`,
-  `tests/test_validate_cloudflare_rollback.py`, and
-  `tests/test_worker_deployment_workflow.py`.
-
-Use
-`rg --hidden --glob '!.git/**' -l 'fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f'`
-to prove that no temporary anchor remains, including the deployment workflow
-and audit qualification. Separately compare every contract blob in the Worker
-and its two proof tests against `git ls-tree` at the landed State commit. A
-merge commit may retain the `fa4fe8f...` ancestor only when every pinned blob
-is still exact; otherwise both the commit anchor and affected blob IDs must
-change together.
+The final binding is protected production State `main`
+`163e9314c881493e08d23baf35ff40456f9c2331`. Every amendment, owner-index,
+release-status, materializer, and schema blob introduced by the reviewed
+amendment contract is unchanged at that commit. The later append-authority and
+status-view work expanded only the validator used by this proof; its exact blob
+is `0b4c876475fcc9c9d5cf6269c800509530673bb4`. Runtime, deployment, rollback,
+and test fixtures bind that same commit and closed blob set. Any future State
+advance must refresh them together and requalify before an owner write.
 
 ## Operational invariants
 

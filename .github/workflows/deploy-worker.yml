@@ -511,7 +511,7 @@ jobs:
               or proof["intake_lease_expires_at"] is not None
               or proof["state_branch_protected"] is not True
               or proof["state_contract_verified"] is not True
-              or proof["state_contract_commit"] != "fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f"
+              or proof["state_contract_commit"] != "163e9314c881493e08d23baf35ff40456f9c2331"
               or proof["state_event_schema_sha256"] != "af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb"
               or re.fullmatch(r"[0-9a-f]{40}", proof["state_commit"]) is None
           ):
@@ -674,7 +674,7 @@ jobs:
               or proof["intake_lease_expires_at"] != int(os.environ["INTAKE_LEASE_EXPIRES_AT"])
               or proof["state_branch_protected"] is not True
               or proof["state_commit"] != os.environ["STATE_COMMIT"]
-              or proof["state_contract_commit"] != "fa4fe8f0e74d66130e5f8671b05cc708e77c4b1f"
+              or proof["state_contract_commit"] != "163e9314c881493e08d23baf35ff40456f9c2331"
               or proof["state_contract_verified"] is not True
               or proof["state_event_schema_sha256"] != "af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb"
           ):
