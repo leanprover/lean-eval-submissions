@@ -23,7 +23,7 @@ class StagingPromotionCanaryTests(unittest.TestCase):
     def test_accepts_only_the_source_free_exact_success_contract(self) -> None:
         commit = "c" * 40
         dispatch_ref = f"lean-eval-dispatch/{commit}"
-        submission_id = "0198abcd-1111-7000-8000-000000000001"
+        submission_id = "0198abcd-1111-7000-8000-0000000000ca"
         response = {
             "status": "passed",
             "environment": "staging",
@@ -34,7 +34,7 @@ class StagingPromotionCanaryTests(unittest.TestCase):
             "submission_id": submission_id,
             "github_connectivity": "verified",
             "synthetic_intake": "idempotent",
-            "cas_contention": "collision_observed_and_retry_applied",
+            "cas_contention": "idempotent_prior_collision_and_retry_proof",
             "dispatch_state": "succeeded",
             "scheduled_reconciliation": "completed",
             "workflow_dispatch": "accepted_by_github",
@@ -72,7 +72,7 @@ class StagingPromotionCanaryTests(unittest.TestCase):
             "dispatch_ref": dispatch_ref,
             "controller_run_id": "32712345678",
             "controller_run_attempt": "1",
-            "submission_id": "0198abcd-1111-7000-8000-000000000001",
+            "submission_id": "0198abcd-1111-7000-8000-0000000000ca",
             "github_connectivity": "verified",
             "synthetic_intake": "created",
             "cas_contention": "collision_observed_and_retry_applied",
@@ -89,7 +89,7 @@ class StagingPromotionCanaryTests(unittest.TestCase):
         with self.assertRaises(CANARY.CanaryFailure):
             CANARY.validate_canary(
                 202,
-                {**response, "submission_id": "0198abcd-1111-7000-8000-000000000002"},
+                {**response, "submission_id": "0198abcd-1111-7000-8000-0000000001ca"},
                 commit,
                 dispatch_ref,
                 "32712345678",

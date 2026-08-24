@@ -17,7 +17,7 @@ import urllib.request
 STAGING_ORIGIN = "https://lean-eval-submission-server-staging.lean-eval.workers.dev"
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 UUID_V7 = re.compile(
-    r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z"
+    r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{10}ca\Z"
 )
 CANARY_FIELDS = {
     "cas_contention",
@@ -143,10 +143,15 @@ def validate_canary(
         or body["cas_contention"]
         not in {
             "collision_observed_and_retry_applied",
-            "idempotent_collision_and_retry_proof",
+            "idempotent_prior_collision_and_retry_proof",
         }
     ):
         raise CanaryFailure("promotion canary did not prove every exact staging boundary")
+    if (
+        (body["synthetic_intake"] == "created")
+        != (body["cas_contention"] == "collision_observed_and_retry_applied")
+    ):
+        raise CanaryFailure("promotion canary intake and contention proof disagree")
     complete = (
         status == 200
         and body["status"] == "passed"

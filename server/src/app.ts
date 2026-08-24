@@ -143,8 +143,7 @@ export type StateAccess = Readonly<{
   ): Promise<{ view: SubmissionView }>;
   listDispatchOutbox(shard: string): Promise<readonly DispatchOutbox[]>;
   provePromotionCanaryContention?(event: WritableStateEvent): Promise<{
-    collisionObserved: boolean;
-    retryApplied: boolean;
+    proofRecorded: boolean;
     idempotent: boolean;
     created: boolean;
   }>;
@@ -912,8 +911,7 @@ async function promotionCanary(
     () => proveContention(material.evidenceEvent),
   );
   if (
-    !contention.collisionObserved ||
-    !contention.retryApplied ||
+    !contention.proofRecorded ||
     contention.created === contention.idempotent
   ) {
     throw new GitHubStateError(502, "promotion canary CAS adapter did not prove collision and retry");
@@ -934,7 +932,7 @@ async function promotionCanary(
     github_connectivity: "verified",
     synthetic_intake: outcome.created ? "created" : "idempotent",
     cas_contention: contention.idempotent
-      ? "idempotent_collision_and_retry_proof"
+      ? "idempotent_prior_collision_and_retry_proof"
       : "collision_observed_and_retry_applied",
     dispatch_state: current.dispatch.status,
     workflow_dispatch: complete ? "accepted_by_github" : failed ? "retry_pending" : "pending",
@@ -1678,19 +1676,15 @@ type PromotionCanaryClassification =
 
 function classifyPromotionCanary(entry: DispatchOutbox): PromotionCanaryClassification {
   const claimed =
-    entry.submission.declared_model.startsWith("lean-eval automatic staging promotion canary ") ||
-    (
-      entry.owner_login === PROMOTION_CANARY_LOGIN &&
-      entry.submission.source_repository === PROMOTION_CANARY_REPOSITORY &&
-      entry.submission.source_commit === PROMOTION_CANARY_SOURCE_COMMIT &&
-      entry.submission.source_visibility === "private" &&
-      entry.submission.publication_choice === "withheld" &&
-      entry.submission_id.endsWith("ca")
-    );
+    entry.owner_login === PROMOTION_CANARY_LOGIN &&
+    entry.submission.source_repository === PROMOTION_CANARY_REPOSITORY &&
+    entry.submission.source_commit === PROMOTION_CANARY_SOURCE_COMMIT &&
+    entry.submission.source_visibility === "private" &&
+    entry.submission.publication_choice === "withheld" &&
+    entry.submission_id.endsWith("ca");
   if (!claimed) return { kind: "ordinary" };
   const identity = promotionCanaryIdentity(entry.submission);
   if (
-    entry.owner_login !== PROMOTION_CANARY_LOGIN ||
     identity === null ||
     entry.workflow_ref !== `lean-eval-dispatch/${identity.commit}` ||
     !/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{10}ca$/.test(entry.submission_id)
@@ -1795,7 +1789,9 @@ export async function handleScheduled(
   const shard = shardNumber.toString(16).padStart(2, "0");
   const entries = await ledger.listDispatchOutbox(shard);
   const due = entries
-    .filter((entry) => classifyPromotionCanary(entry).kind === "ordinary")
+    .filter((entry) =>
+      !promotionCanaryEnabled(env) ||
+      classifyPromotionCanary(entry).kind === "ordinary")
     .filter((entry) => Date.parse(entry.next_attempt_at) <= scheduledTime)
     .sort((left, right) => left.next_attempt_at.localeCompare(right.next_attempt_at) || left.submission_id.localeCompare(right.submission_id))
     .slice(0, 20);

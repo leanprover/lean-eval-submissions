@@ -496,8 +496,7 @@ export class GitHubStateRepository {
   }
 
   async provePromotionCanaryContention(event: WritableStateEvent): Promise<{
-    collisionObserved: boolean;
-    retryApplied: boolean;
+    proofRecorded: boolean;
     idempotent: boolean;
     commit: string;
     created: boolean;
@@ -519,8 +518,7 @@ export class GitHubStateRepository {
         throw new StateEventConflictError(path);
       }
       return {
-        collisionObserved: true,
-        retryApplied: true,
+        proofRecorded: true,
         idempotent: true,
         commit: snapshot.headSha,
         created: false,
@@ -559,8 +557,7 @@ export class GitHubStateRepository {
       }
       const outcome = await this.appendEvent(event);
       return {
-        collisionObserved: true,
-        retryApplied: true,
+        proofRecorded: true,
         idempotent: !outcome.created,
         commit: outcome.commit,
         created: outcome.created,

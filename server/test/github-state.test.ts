@@ -266,8 +266,7 @@ describe("atomic Git State append", () => {
     ]);
     await expect(repository(fetcher).provePromotionCanaryContention(CANARY_EVIDENCE))
       .resolves.toEqual({
-        collisionObserved: true,
-        retryApplied: true,
+        proofRecorded: true,
         idempotent: false,
         commit: evidenceCommit,
         created: true,
@@ -337,8 +336,7 @@ describe("atomic Git State append", () => {
     ]);
     await expect(repository(fetcher).provePromotionCanaryContention(CANARY_EVIDENCE))
       .resolves.toEqual({
-        collisionObserved: true,
-        retryApplied: true,
+        proofRecorded: true,
         idempotent: true,
         commit: HEAD,
         created: false,

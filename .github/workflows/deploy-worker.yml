@@ -98,6 +98,8 @@ jobs:
           fi
           gh api "repos/$REPOSITORY/contents/.github/workflows/submission.yml?ref=$WORKFLOW_COMMIT" \
             --jq .sha >/dev/null
+          gh api "repos/$REPOSITORY/contents/.github/workflows/promotion-canary.yml?ref=$WORKFLOW_COMMIT" \
+            --jq .sha >/dev/null
 
           tag="lean-eval-dispatch/$WORKFLOW_COMMIT"
           if existing=$(gh api "repos/$REPOSITORY/git/ref/tags/$tag" --jq .object.sha 2>/dev/null); then
@@ -234,7 +236,7 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     needs: [deploy-staging, promote-dispatch-ref]
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 12
     environment: cloudflare-staging
     permissions:
       contents: read

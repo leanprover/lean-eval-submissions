@@ -183,6 +183,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('tag="lean-eval-dispatch/$WORKFLOW_COMMIT"', block)
         self.assertIn("compare/$WORKFLOW_COMMIT...main", block)
         self.assertIn("contents/.github/workflows/submission.yml?ref=$WORKFLOW_COMMIT", block)
+        self.assertIn("contents/.github/workflows/promotion-canary.yml?ref=$WORKFLOW_COMMIT", block)
 
     def test_promotion_is_idempotent_and_collision_safe(self) -> None:
         self.assertIn('if [ "$existing" != "$WORKFLOW_COMMIT" ]; then', DEPLOY)
@@ -218,6 +219,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('--run-attempt "$GITHUB_RUN_ATTEMPT"', canary)
         self.assertIn("actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97", canary)
         self.assertIn("python-version: '3.11.10'", canary)
+        self.assertIn("timeout-minutes: 12", canary)
         self.assertIn("--timeout-seconds 480", canary)
         self.assertNotIn("GITHUB_STATE_TOKEN", canary)
         self.assertNotIn("GITHUB_DISPATCH_TOKEN", canary)

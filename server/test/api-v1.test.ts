@@ -160,8 +160,7 @@ class MemoryState implements StateAccess {
   }
 
   provePromotionCanaryContention(event: WritableStateEvent): Promise<{
-    collisionObserved: boolean;
-    retryApplied: boolean;
+    proofRecorded: boolean;
     idempotent: boolean;
     created: boolean;
   }> {
@@ -169,8 +168,7 @@ class MemoryState implements StateAccess {
     const existing = this.events.find((candidate) => candidate.event_id === event.event_id);
     if (existing === undefined) this.events.push(event);
     return Promise.resolve({
-      collisionObserved: true,
-      retryApplied: true,
+      proofRecorded: true,
       idempotent: existing !== undefined,
       created: existing === undefined,
     });
@@ -893,6 +891,38 @@ describe("scheduled dispatch reconciliation in workerd", () => {
     expect(state.views.get(submissionId)?.dispatch).toMatchObject({ status: "succeeded", attempts: 2 });
     expect(state.outbox).toHaveLength(0);
   });
+
+  it("does not let a canary-looking model label bypass production reconciliation", async () => {
+    const state = new MemoryState();
+    const scheduledTime = (Math.floor(NOW_MS / (256 * 60_000)) * 256 + 1) * 60_000;
+    const submissionId = "0198abcd-1111-7000-8000-000000000001";
+    const submission = {
+      ...SUBMISSION,
+      declared_model: "lean-eval automatic staging promotion canary v3",
+    };
+    const view = {
+      ...pendingView(submissionId, new Date(scheduledTime - 60_000).toISOString(), 1, "failed"),
+      submission,
+    } satisfies SubmissionView;
+    state.views.set(submissionId, view);
+    state.outbox.set(submissionId, {
+      schema_version: 1,
+      submission_id: submissionId,
+      owner_login: "alice",
+      submission,
+      attempts: 1,
+      next_attempt_at: new Date(scheduledTime - 1).toISOString(),
+      workflow_ref: view.dispatch.workflow_ref,
+    });
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    await handleScheduled({
+      ...ENV,
+      DEPLOYMENT_ENVIRONMENT: "production",
+      STATE_REPOSITORY: "leanprover/lean-eval-state",
+    }, scheduledTime, { state, dispatch });
+    expect(dispatch).toHaveBeenCalledOnce();
+    expect(state.outbox).toHaveLength(0);
+  });
 });
 
 describe("automatic staging promotion canary in workerd", () => {
@@ -999,7 +1029,7 @@ describe("automatic staging promotion canary in workerd", () => {
       status: "passed",
       submission_id: firstBody.submission_id,
       synthetic_intake: "idempotent",
-      cas_contention: "idempotent_collision_and_retry_proof",
+      cas_contention: "idempotent_prior_collision_and_retry_proof",
       dispatch_state: "succeeded",
       workflow_dispatch: "accepted_by_github",
       scheduled_reconciliation: "completed",
