@@ -35,7 +35,16 @@ semantically:
    attempt, terminal evidence tuple, and replay/export input. Recomputing the
    plan rejects changed configurations, inventories, attempts, shard counts,
    omissions, and duplicates.
-4. `kernel-corpus-observations-v1` must match one plan position for position.
+4. The reviewed runner receives one regular raw input named
+   `<attempt_id>.input` for each planned `run`; its raw SHA-256 must be the
+   plan's `replay_export_input_sha256`. It emits one closed
+   `kernel-corpus-runner-records-v1` bundle. The bundle binds the exact series,
+   inventory, shard, ordered attempt and input identities, all measurements,
+   resource disposition, transcript digest, and runner-attestation digest.
+   The `source_free: true` field is an assertion made by that attested runner;
+   the record-only adapter binds and preserves it but cannot independently
+   prove that the opaque input or omitted transcript contained no source.
+5. `kernel-corpus-observations-v1` must match one plan position for position.
    No submission source, source path, URL, repository, or ref belongs in this
    artifact. The evidence digest for an inherited unavailable result must be
    exactly the digest recorded by the inventory. Every action that executes the
@@ -44,7 +53,7 @@ semantically:
    statistics, resource-limit disposition, transcript digest, and runner
    attestation digest. Pending or unavailable rows that did not execute cannot
    claim a receipt.
-5. `kernel-corpus-report-v1` is a deterministic aggregate of every ordered
+6. `kernel-corpus-report-v1` is a deterministic aggregate of every ordered
    shard. It binds the exact plan and observation sets, requires exactly-once
    full inventory coverage, records closed counters and performance summaries,
    and lists every terminal disagreement for adjudication.
@@ -101,8 +110,42 @@ python scripts/kernel_corpus_report.py prepare-shards \
   --output-dir plans
 ```
 
-After a separately reviewed runner has produced one observation file for each
-plan file, aggregate them in deterministic filename order:
+After a separately reviewed runner has produced the exact raw input files and
+one runner-record bundle for a shard, materialize the observation file:
+
+```bash
+python scripts/kernel_corpus_runner_adapter.py \
+  --series series.json \
+  --inventory inventory.json \
+  --plan plans/shard-0000.json \
+  --inputs-dir inputs/shard-0000 \
+  --records runner-records/shard-0000.json \
+  --output observations/shard-0000.json
+```
+
+Input-directory membership must be exact: inherited unavailable or pending
+attempts have no input file, while each `run` attempt has exactly its one
+content-addressed file. This is an operator-side precondition proving that the
+reviewed bytes are present at materialization time; it is not independent proof
+that the separately attested runner consumed those bytes, and it is not a new
+field in the observation receipt. The runner-record list must contain exactly
+the `run` attempts in plan order. Missing, extra, reordered, mixed-pin,
+over-limit, or contradictory records fail closed. The adapter synthesizes inherited
+`source_unavailable`, `replay_unavailable`, and `replay_pending` observations
+from the inventory without adding statistics or receipts. It maps a reviewed
+runner record only to one of the five checker outcomes, `export_unavailable`,
+or `export_format_unsupported`, then validates the completed observation shard
+against the existing semantic and JSON Schema contracts.
+
+The adapter does not execute any process and has no network, credential,
+repository-write, Results, State, or promotion interface. The raw-input and
+record JSON reads are regular-file, no-follow, count-, byte-, depth-, and
+node-bounded. Observation publication is exclusive, no-follow, atomic, and
+never overwrites an existing path. The input directory itself must exist and
+must not be a symlink, including for a shard with no planned `run` attempts.
+
+After every separately reviewed shard has been materialized, aggregate them in
+deterministic filename order:
 
 ```bash
 python scripts/kernel_corpus_report.py aggregate \
@@ -126,9 +169,13 @@ performs no network access and has no credential or repository-write interface.
 
 ## Current rollout status
 
-This repository currently provides only the preparatory contract, deterministic
-aggregator, schemas, fixtures, and hostile tests. An actual corpus report is
-blocked on completion and review of the historical replay inventory, execution
-of the corpus with exact pins, and the separately reviewed credentialed replay
-lane. AWS-backed private archive execution is not provisioned by this change.
+This repository now provides the preparatory contract, a fail-closed offline
+runner-record adapter, deterministic aggregator, schemas, fixtures, and hostile
+tests. It does not provide or claim a corpus execution. An actual corpus report
+is still blocked on completion and review of the historical replay inventory;
+production of each ready row's real source-free replay/export input artifact;
+and a separately reviewed exact-image runner that executes the pinned exporter,
+checker, and candidate and produces the attested record bundle. Those missing
+artifacts are the execution dependency: synthetic fixtures cannot satisfy it.
+AWS-backed private archive execution is not provisioned by this change.
 Production intake and automatic publication remain outside this contract.

@@ -147,6 +147,7 @@ SCHEMA_FILES = {
     "series": "kernel-checker-series-v1.schema.json",
     "inventory": "kernel-corpus-inventory-v1.schema.json",
     "plan": "kernel-corpus-shard-plan-v1.schema.json",
+    "runner_records": "kernel-corpus-runner-records-v1.schema.json",
     "observations": "kernel-corpus-observations-v1.schema.json",
     "report": "kernel-corpus-report-v1.schema.json",
 }
