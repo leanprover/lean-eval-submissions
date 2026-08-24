@@ -545,8 +545,10 @@ def _shard_index(result_id: str, shard_count: int) -> int:
 
 
 def _plan_without_id(
-    series: dict[str, Any],
-    inventory: dict[str, Any],
+    configuration_id: str,
+    configuration_sha256: str,
+    inventory_id: str,
+    inventory_sha256: str,
     shard_index: int,
     shard_count: int,
     attempts: list[dict[str, Any]],
@@ -554,10 +556,10 @@ def _plan_without_id(
     return {
         "schema_version": 1,
         "kind": "kernel_corpus_shard_plan",
-        "configuration_id": series["configuration_id"],
-        "configuration_sha256": _digest(series),
-        "inventory_id": inventory["inventory_id"],
-        "inventory_sha256": _digest(inventory),
+        "configuration_id": configuration_id,
+        "configuration_sha256": configuration_sha256,
+        "inventory_id": inventory_id,
+        "inventory_sha256": inventory_sha256,
         "shard_index": shard_index,
         "shard_count": shard_count,
         "attempts": attempts,
@@ -574,6 +576,8 @@ def build_shard_plans(
         raise KernelCorpusError(f"shard_count cannot exceed {MAX_SHARDS}")
     if shard_count > len(inventory["results"]):
         raise KernelCorpusError("shard_count cannot exceed inventory result count")
+    configuration_sha256 = _digest(series)
+    inventory_sha256 = _digest(inventory)
     assigned: list[list[dict[str, Any]]] = [[] for _ in range(shard_count)]
     for result in inventory["results"]:
         action = {
@@ -597,7 +601,15 @@ def build_shard_plans(
         )
     plans = []
     for index, attempts in enumerate(assigned):
-        body = _plan_without_id(series, inventory, index, shard_count, attempts)
+        body = _plan_without_id(
+            series["configuration_id"],
+            configuration_sha256,
+            inventory["inventory_id"],
+            inventory_sha256,
+            index,
+            shard_count,
+            attempts,
+        )
         plans.append({**body, "shard_id": _identity("ksh1_", body)})
     for plan in plans:
         _validate_schema(plan, "plan")
@@ -729,7 +741,7 @@ def _validate_observation_shard_against(
     value: Any,
     plan: dict[str, Any],
     series: dict[str, Any],
-    inventory: dict[str, Any],
+    by_result: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     shard = _object(value, "observation shard")
     _fields(shard, OBSERVATION_SHARD_FIELDS, "observation shard")
@@ -745,7 +757,6 @@ def _validate_observation_shard_against(
         raise KernelCorpusError(
             "observation shard does not cover every planned attempt"
         )
-    by_result = {result["result_id"]: result for result in inventory["results"]}
     for index, (raw, expected) in enumerate(
         zip(observations, plan["attempts"], strict=True)
     ):
@@ -848,7 +859,8 @@ def validate_observation_shard(
     series = validate_series(series_value)
     inventory = validate_inventory(inventory_value)
     plan = validate_plan(plan_value, series, inventory)
-    return _validate_observation_shard_against(value, plan, series, inventory)
+    by_result = {result["result_id"]: result for result in inventory["results"]}
+    return _validate_observation_shard_against(value, plan, series, by_result)
 
 
 def _quantile(values: list[int], numerator: int, denominator: int) -> int | None:
@@ -919,8 +931,9 @@ def aggregate_report(
         plans.append(_validate_plan_against(value, expected_plans[index]))
     if len(observation_values) != shard_count:
         raise KernelCorpusError("observation set does not contain every shard")
+    by_result = {result["result_id"]: result for result in inventory["results"]}
     shards = [
-        _validate_observation_shard_against(value, plan, series, inventory)
+        _validate_observation_shard_against(value, plan, series, by_result)
         for value, plan in zip(observation_values, plans, strict=True)
     ]
     observations = [item for shard in shards for item in shard["observations"]]
@@ -1111,11 +1124,25 @@ def _write_json(path: pathlib.Path, value: Any) -> None:
             dir_fd=directory,
         )
         position = 0
-        while position < len(data):
-            position += os.write(temporary_descriptor, data[position:])
-        os.fsync(temporary_descriptor)
-        os.close(temporary_descriptor)
-        temporary_descriptor = None
+        try:
+            while position < len(data):
+                position += os.write(temporary_descriptor, data[position:])
+            os.fsync(temporary_descriptor)
+        except OSError as error:
+            try:
+                os.close(temporary_descriptor)
+            except OSError:
+                pass
+            temporary_descriptor = None
+            try:
+                os.unlink(temporary_name, dir_fd=directory)
+            except OSError:
+                pass
+            raise KernelCorpusError(
+                f"{path}: could not durably write the temporary output: {error}"
+            ) from error
+        descriptor, temporary_descriptor = temporary_descriptor, None
+        os.close(descriptor)
         os.link(
             temporary_name,
             path.name,

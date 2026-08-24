@@ -12,6 +12,7 @@ from unittest import mock
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+import kernel_corpus_report as corpus
 from kernel_corpus_report import (
     MAX_CHECKER_INVOCATIONS,
     MAX_JSON_BYTES,
@@ -560,6 +561,20 @@ class KernelCorpusReportTests(unittest.TestCase):
         ) as build:
             aggregate_report(series(), inventory(), plans, shards)
         build.assert_called_once()
+
+    def test_plan_set_digests_series_and_inventory_once(self) -> None:
+        selected_series = series()
+        selected_inventory = inventory()
+        with mock.patch("kernel_corpus_report._digest", wraps=corpus._digest) as digest:
+            build_shard_plans(selected_series, selected_inventory, 7)
+        self.assertEqual(
+            sum(call.args[0] is selected_series for call in digest.call_args_list),
+            1,
+        )
+        self.assertEqual(
+            sum(call.args[0] is selected_inventory for call in digest.call_args_list),
+            1,
+        )
 
     def test_report_is_complete_blocking_and_performance_deterministic(self) -> None:
         plans = build_shard_plans(series(), inventory(), 3)
