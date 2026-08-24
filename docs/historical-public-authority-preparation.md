@@ -54,7 +54,10 @@ append preparation. Profile and measurement digests use the ordinary replay
 orchestrator's domain-separated compact canonical JSON algorithm. The append
 preparation contains the exact historical authorization payload, the profile
 qualification payload except for its not-yet-known commit, and the ordinary
-`replay.enqueued` payload/task identity.
+`replay.enqueued` payload/task identity. The version-2 preparation binds
+explicit public visibility plus the same benchmark commit, measurement digest,
+execution-profile digest, and closed `nanoda` checker across qualification and
+enqueue.
 
 It remains explicitly blocked on all five steps recorded in the artifact:
 
@@ -65,15 +68,19 @@ It remains explicitly blocked on all five steps recorded in the artifact:
 5. Separately authorize the State append and replay enqueue.
 
 The offline `finalize` command enforces those conditions mechanically. It
-requires clean exact checkouts of the qualification commit and pinned
-production State `501d237d46c7b3466a37554c1c2ceb310245a619`. It proves the
+requires clean exact checkouts of the qualification commit and hardened
+production State commit `a53c658a2de2188675134dc2890285fbaa17cf5a`, after
+State PRs `#19` and `#20`. The command proves the
 qualification blob with `git show`, reconstructs the State event and script
 inputs from exact commit objects, validates the authority → qualification →
 enqueue chain with the pinned State validator, and requires the materializer to
 emit exactly one queued historical-public task. UUIDv7 embedded milliseconds
 must equal `occurred_at`, and the candidate must follow the pinned State time
-window. Even then the output remains a local append candidate: the command does
-not commit, push, append, enqueue, deploy, or enable anything.
+window. Final State event files use State's exact ASCII-escaped canonical bytes,
+while Unicode-preserving canonicalization remains unchanged for evidence and
+digest-bearing profile objects. Even then the output remains a local append
+candidate: the command does not commit, push, append, enqueue, deploy, or enable
+anything.
 
 The finalized command is intentionally not called by the preparation workflow.
 It becomes usable only after the profile-review PR lands:
@@ -84,7 +91,7 @@ python scripts/prepare_historical_public_authority.py finalize \
   --profile /path/evidence/public-replay/profiles/<digest>.json \
   --qualification-commit <exact-commit> \
   --qualification-repository-root /clean/exact/submissions-checkout \
-  --state-root /clean/exact/state-501d-checkout \
+  --state-root /clean/exact/state-contract-checkout \
   --authority-event-id <uuid7> \
   --authority-occurred-at <utc-milliseconds> \
   --qualification-event-id <uuid7> \
