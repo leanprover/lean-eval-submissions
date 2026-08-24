@@ -1,0 +1,57 @@
+{
+  "configuration_id": "kcc1_7c628a869a8d2794af0992dba12a6b616c2c03c47788b4daaa0b0dfecfa86528",
+  "configuration_sha256": "1e8eed6839e182a140e7951074cc7466507cd4f2ea0cc1f4fa4ff9d792f0ae85",
+  "inventory_id": "kci1_e95aa7449750fe408e1f131f98bae4d70c173fc9732cad2c38ee0b2ef7c0fc3f",
+  "inventory_sha256": "caa2bd21c267b8d4a0b6c462276ee62c53f8e806e0d6bbbd0b473e22763aee59",
+  "kind": "kernel_corpus_observations",
+  "observations": [
+    {
+      "attempt_id": "kca1_289edb4191290d2635f33e96aa3a13708aec9721530400196be06e3d898235b8",
+      "evidence_sha256": null,
+      "outcome": "accepted",
+      "replay_attempt_id": "rt1_0000000000000000000000000000000000000000000000000000000000000001",
+      "result_id": "r2_0000000000000000000000000000000000000000000000000000000000000000",
+      "statistics": {
+        "checker_invocations": 1,
+        "peak_memory_bytes": 1000,
+        "wall_time_ms": 100
+      },
+      "status": "completed"
+    },
+    {
+      "attempt_id": "kca1_0a837fb0b3f941bbb8f509b766c1db5d70de259b62c1e719de51123bdbc4d6c7",
+      "evidence_sha256": null,
+      "outcome": "rejected",
+      "replay_attempt_id": "rt1_0000000000000000000000000000000000000000000000000000000000000002",
+      "result_id": "r2_1111111111111111111111111111111111111111111111111111111111111111",
+      "statistics": {
+        "checker_invocations": 1,
+        "peak_memory_bytes": 1001,
+        "wall_time_ms": 101
+      },
+      "status": "completed"
+    },
+    {
+      "attempt_id": "kca1_9ea3a0e683515a13cc55b3d7ed3bf1e3c68b7fe36940072279150ac2ddf325b1",
+      "evidence_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "outcome": "source_unavailable",
+      "replay_attempt_id": "rt1_0000000000000000000000000000000000000000000000000000000000000008",
+      "result_id": "r2_7777777777777777777777777777777777777777777777777777777777777777",
+      "statistics": null,
+      "status": "unavailable"
+    },
+    {
+      "attempt_id": "kca1_a70dba4657204c890fb0e3bd3c856cdc350b31e46bcd89e228f2619e56e2fd83",
+      "evidence_sha256": null,
+      "outcome": "replay_pending",
+      "replay_attempt_id": "rt1_000000000000000000000000000000000000000000000000000000000000000a",
+      "result_id": "r2_9999999999999999999999999999999999999999999999999999999999999999",
+      "statistics": null,
+      "status": "pending"
+    }
+  ],
+  "schema_version": 1,
+  "shard_count": 1,
+  "shard_id": "ksh1_61b506318f543e450b14d2322f0aea1e5efd33534849a08cdfe3fbf188e75eea",
+  "shard_index": 0
+}

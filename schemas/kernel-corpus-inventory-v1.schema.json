@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/kernel-corpus-inventory-v1.schema.json",
+  "title": "Independent-kernel historical corpus inventory version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "inventory_id", "cutoff_at", "results_store", "historical_replay_report_sha256", "results"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "inventory_id": {"type": "string", "pattern": "^kci1_[0-9a-f]{64}$"},
+    "cutoff_at": {"type": "string", "pattern": "^(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$"},
+    "results_store": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "tree_sha256"],
+      "properties": {
+        "repository": {"$ref": "#/$defs/repository"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "tree_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "historical_replay_report_sha256": {"$ref": "#/$defs/digest"},
+    "results": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["result_id", "replay_attempt_id", "authoritative_outcome", "availability", "unavailability_evidence_sha256"],
+        "properties": {
+          "result_id": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
+          "replay_attempt_id": {"type": "string", "pattern": "^rt1_[0-9a-f]{64}$"},
+          "authoritative_outcome": {"type": ["string", "null"], "enum": ["accepted", "rejected", "declined", "crashed", "timed_out", null]},
+          "availability": {"enum": ["ready", "replay_pending", "source_unavailable", "replay_unavailable"]},
+          "unavailability_evidence_sha256": {"oneOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]}
+        },
+        "allOf": [
+          {"if": {"properties": {"availability": {"const": "ready"}}}, "then": {"properties": {"authoritative_outcome": {"enum": ["accepted", "rejected", "declined", "crashed", "timed_out"]}, "unavailability_evidence_sha256": {"type": "null"}}}},
+          {"if": {"properties": {"availability": {"const": "replay_pending"}}}, "then": {"properties": {"authoritative_outcome": {"type": "null"}, "unavailability_evidence_sha256": {"type": "null"}}}},
+          {"if": {"properties": {"availability": {"enum": ["source_unavailable", "replay_unavailable"]}}}, "then": {"properties": {"authoritative_outcome": {"type": "null"}, "unavailability_evidence_sha256": {"$ref": "#/$defs/digest"}}}}
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "repository": {"type": "string", "pattern": "^(?!\\.{1,2}/)(?![^/]+/\\.{1,2}$)[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"}
+  }
+}

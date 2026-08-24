@@ -225,6 +225,12 @@ the already implemented owner status, metadata, and publication routes.
       a checker-series/corpus report with separately recorded
       accept/reject/decline/crash/timeout outcomes and an explicit promotion
       decision.
+      The source-free version-1 preparation/report contract now specifies exact
+      series, inventory, attempt, and shard bindings; unavailable and pending
+      states; deterministic full-coverage aggregation; hostile validation; and
+      human-only promotion. This item stays open until an approved series runs
+      over the complete reviewed historical corpus and disagreements are
+      adjudicated; the fixture and one-result smoke are non-authoritative.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
       window.
 - [x] Complete leaderboard preview review and cut over with rollback retained

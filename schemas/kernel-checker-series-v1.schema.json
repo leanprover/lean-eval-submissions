@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/kernel-checker-series-v1.schema.json",
+  "title": "Independent-kernel checker series version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "series_name", "configuration_id", "candidate", "exporter", "checker", "runner"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "series_name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,127}$"},
+    "configuration_id": {"type": "string", "pattern": "^kcc1_[0-9a-f]{64}$"},
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "name", "binary_sha256", "protocol"],
+      "properties": {
+        "repository": {"$ref": "#/$defs/repository"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "name": {"$ref": "#/$defs/safe_name"},
+        "binary_sha256": {"$ref": "#/$defs/digest"},
+        "protocol": {"$ref": "#/$defs/safe_name"}
+      }
+    },
+    "exporter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "artifact_sha256"],
+      "properties": {
+        "repository": {"$ref": "#/$defs/repository"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "artifact_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "checker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "protocol", "configuration_sha256"],
+      "properties": {
+        "repository": {"$ref": "#/$defs/repository"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "protocol": {"$ref": "#/$defs/safe_name"},
+        "configuration_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "image_digest", "architecture", "operating_system", "resource_limits"],
+      "properties": {
+        "repository": {"$ref": "#/$defs/repository"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "image_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "architecture": {"$ref": "#/$defs/safe_name"},
+        "operating_system": {"$ref": "#/$defs/safe_name"},
+        "resource_limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["wall_timeout_seconds", "max_memory_bytes"],
+          "properties": {
+            "wall_timeout_seconds": {"$ref": "#/$defs/positive_integer"},
+            "max_memory_bytes": {"$ref": "#/$defs/positive_integer"}
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "repository": {"type": "string", "pattern": "^(?!\\.{1,2}/)(?![^/]+/\\.{1,2}$)[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+    "safe_name": {"type": "string", "pattern": "^[A-Za-z0-9_.+-]{1,128}$"},
+    "positive_integer": {"type": "integer", "minimum": 1, "maximum": 9007199254740991}
+  }
+}

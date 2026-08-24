@@ -111,6 +111,12 @@ reject/decline/crash/timeout, and acceptable profile-pinned runtime. The
 workflow is fixed to public source and must not be generalized to private
 archives; private replay uses the distinct encrypted-archive controller path.
 
+The downstream source-free checker-series and full-corpus reporting contract is
+documented in [`kernel-corpus-report.md`](kernel-corpus-report.md). Its
+preparation and aggregation foundations do not turn this one-result smoke into
+authoritative corpus evidence, and actual corpus execution remains gated on the
+reviewed historical replay inventory and credentialed replay lane.
+
 ### Authoritative queue path
 
 Run locally against reviewed files:
