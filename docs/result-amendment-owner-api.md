@@ -2,8 +2,8 @@
 
 The submission Worker contains an authenticated, feature-disabled owner API for
 the append-only result amendment contract at production State commit
-`501d237d46c7b3466a37554c1c2ceb310245a619` and the independently migrated
-staging State commit `6a386bb4362b10dd8d7743e826c82f1a0011c0c3`.
+`a53c658a2de2188675134dc2890285fbaa17cf5a` and the independently reviewed
+staging State contract `48f8c975d725a9ac18df545653fdb2f8371c3293`.
 
 Both staging and production keep:
 
@@ -11,7 +11,7 @@ Both staging and production keep:
 RESULT_AMENDMENT_OWNER_API_ENABLED=false
 RESULT_AMENDMENT_MAINTAINER_API_ENABLED=false
 RESULT_AMENDMENT_MAINTAINERS=[]
-RESULT_OWNER_STATE_CONTRACT_COMMIT=<6a386bb… in staging; 501d237d… in production>
+RESULT_OWNER_STATE_CONTRACT_COMMIT=<48f8c975… in staging; a53c658a… in production>
 ```
 
 The gate is independent of submission intake and the legacy claim/backfill
@@ -199,8 +199,8 @@ State event as required review evidence but is not returned by the API.
 ## Protected State binding
 
 The production binding is protected State `main`
-`501d237d46c7b3466a37554c1c2ceb310245a619`; staging is independently bound to
-its reviewed migration commit `6a386bb4362b10dd8d7743e826c82f1a0011c0c3`.
+`a53c658a2de2188675134dc2890285fbaa17cf5a`; staging is independently bound to
+its reviewed contract commit `48f8c975d725a9ac18df545653fdb2f8371c3293`.
 Both contracts contain release-status schema version 2 and permanent
 effective-result reservations, but their repository-specific migration
 evidence and current graphs make their root subtree IDs intentionally

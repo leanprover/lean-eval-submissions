@@ -2160,7 +2160,7 @@ describe("authenticated legacy result owner routes", () => {
     ...ENV,
     INTAKE_ENABLED: "false",
     LEGACY_RESULT_OWNER_API_ENABLED: "true",
-    RESULT_OWNER_STATE_CONTRACT_COMMIT: "6a386bb4362b10dd8d7743e826c82f1a0011c0c3",
+    RESULT_OWNER_STATE_CONTRACT_COMMIT: "48f8c975d725a9ac18df545653fdb2f8371c3293",
   };
 
   async function ownerAuthorization(login = "alice"): Promise<string> {
