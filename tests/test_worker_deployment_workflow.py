@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import pathlib
-import re
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -429,8 +428,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('arguments+=(--var "$name:$value")', production)
         self.assertIn("intake-lease-smoke.json", production)
         self.assertIn("intake_lease", production)
-        self.assertIn("4b8dcdf0a3d03749f51bef23807eeb1d00c43b72", production)
-        self.assertIn("06d2798d4d584be3137af53d08d99e45e81a7e23e99b087e976acfef2989282e", production)
+        self.assertIn("82a036df052b4bd66f358b50925e939c862ee6f3", production)
+        self.assertIn("af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb", production)
         self.assertIn("state_contract_verified", production)
         self.assertIn("timeout --signal=TERM --kill-after=10s 150s", production)
         self.assertNotIn("\n      - name:", production[final:].split("run: |", 1)[1])
@@ -587,7 +586,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],
-                    "4b8dcdf0a3d03749f51bef23807eeb1d00c43b72",
+                    "82a036df052b4bd66f358b50925e939c862ee6f3",
                 )
                 self.assertEqual(
                     configuration["vars"]["OAUTH_CALLBACK_URL"],

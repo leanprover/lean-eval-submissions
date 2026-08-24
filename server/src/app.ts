@@ -328,7 +328,7 @@ async function readiness(
         response.state_contract_commit = RESULT_OWNER_STATE_CONTRACT_COMMIT;
         response.state_contract_verified = true;
         response.state_event_schema_sha256 =
-          "06d2798d4d584be3137af53d08d99e45e81a7e23e99b087e976acfef2989282e";
+          "af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb";
       }
       return json(response);
     }

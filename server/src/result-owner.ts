@@ -1,7 +1,7 @@
 import { decodeProductionMetadata, type ProductionMetadata } from "./api-contract";
 
 export const RESULT_OWNER_STATE_CONTRACT_COMMIT =
-  "4b8dcdf0a3d03749f51bef23807eeb1d00c43b72" as const;
+  "82a036df052b4bd66f358b50925e939c862ee6f3" as const;
 export const RESULTS_REPOSITORY = "leanprover/lean-eval-submissions" as const;
 
 const RESULT_ID_DOMAIN = "lean-eval-result-v2\0";
