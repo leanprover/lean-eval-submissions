@@ -447,6 +447,38 @@ repository settings, reach `lean-eval-submissions`, or reach the other
 environment's State. State writes use the Git Data API and a non-forced update
 of `refs/heads/main`; repository administration is not needed at runtime.
 
+## Operational monitoring and response
+
+[`lifecycle-readiness-monitor.yml`](.github/workflows/lifecycle-readiness-monitor.yml)
+runs every 15 minutes and on demand without deployment, State, AWS, archive,
+release, or source credentials. It requires all four public intake/replay
+health endpoints to match their tracked environment configuration, frozen
+replay digests, and one full deployed commit. The commit must have its exact
+immutable `lean-eval-dispatch/<commit>` tag and remain reachable from protected
+main. Transient sequential deployment differences are retried for one minute;
+the workflow otherwise fails.
+
+The alert destination and support channel are the bot-owned issue titled
+`[monitor] LeanEval lifecycle readiness failure` in
+`leanprover/lean-eval-submissions`. The workflow creates or reopens that one
+marker-bound issue on failure and closes it only after a later complete pass;
+it never copies raw endpoint bodies, source bytes, or secrets into the issue.
+Subscribe to that repository's issue and Actions notifications before enabling
+production intake.
+
+Temporary severity owner, support owner, and emergency intake-pause owner:
+Kim Morrison (`@kim-em`). A readiness failure while production intake is
+enabled is severity 1; a failure while production intake is disabled is
+severity 2 unless confidentiality, credential, or unexpected execution evidence
+raises it to severity 1. For severity 1, stop accepting new work first by
+returning the tracked production `INTAKE_ENABLED` value to `false` through the
+protected deployment path (admin-merge the minimal reviewed change when normal
+review latency is unsafe), verify public health reports intake disabled, and
+preserve the failed run and State/ref evidence. Then finish the exact reviewed
+rollback unit or forward-deploy a coherent fix. State remains append-only;
+correct it only with a legal forward event. Record transfer of any of these
+temporary ownership roles here before changing the GitHub alert destination.
+
 ## State repository controls
 
 Both state repositories are private operational ledgers. Each immutable event
