@@ -352,6 +352,7 @@ Each Worker environment has a distinct Wrangler secret:
 | `GITHUB_STATE_TOKEN` | production | Atomically append production events | `lean-eval-state`, Contents write and Metadata read |
 | `READINESS_TOKEN` | staging | Authenticate operational readiness probes | No GitHub access |
 | `READINESS_TOKEN` | production | Authenticate operational readiness probes | No GitHub access |
+| `STAGING_AMENDMENT_CANARY_TOKEN` | staging only | Authenticate the closed one-shot apply/reject fixture canary | **NOT INSTALLED**; no direct GitHub access; install the same fresh value only in the staging Worker and `cloudflare-staging` before the canary rollout, then remove it after evidence |
 | `AUTH_TOKEN_SECRET` | staging | HMAC-sign OAuth state, sessions, grants, and agent challenges | No GitHub access; random >=32-byte value |
 | `AUTH_TOKEN_SECRET` | production | HMAC-sign OAuth state, sessions, grants, and agent challenges | No GitHub access; distinct from staging |
 | `LIFECYCLE_CALLBACK_TOKEN` | staging | Authenticate the source-free post-archive State callback job | No GitHub access; distinct random value also stored only in `cloudflare-staging` |
@@ -359,6 +360,10 @@ Each Worker environment has a distinct Wrangler secret:
 | `GITHUB_OAUTH_CLIENT_ID` / `GITHUB_OAUTH_CLIENT_SECRET` | each | Environment-specific GitHub OAuth application | `read:user` only; callback listed below; **SET 2026-08-21** |
 | `GITHUB_VERIFICATION_TOKEN` | each | **LOCAL CONTRACT ONLY; not approved for production** source visibility/tag/gist verification | Intentionally absent; source broker provisioned |
 | `GITHUB_DISPATCH_TOKEN` | each | **LOCAL CONTRACT ONLY; not approved for production** exact-ref workflow dispatch | Intentionally absent; dispatch broker provisioned |
+
+The staging amendment canary never accepts `READINESS_TOKEN`. Its dedicated
+credential delegates only the compiled, immutable four-event staging intent;
+the production Wrangler environment neither requires nor receives it.
 
 Each private broker environment instead receives four Wrangler secrets:
 

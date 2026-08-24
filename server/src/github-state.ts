@@ -1387,6 +1387,34 @@ export class GitHubStateRepository {
     };
   }
 
+  async readResultAmendmentCanaryAtHead(
+    resultId: string,
+    candidateIdentityId: string,
+    expectedHead: string,
+  ): Promise<Readonly<{
+    commit: string;
+    view: ResultAmendmentView;
+    reservation: EffectiveResultIdentityReservation | null;
+  }>> {
+    if (!LOWER_SHA.test(expectedHead)) {
+      throw new TypeError("expected State head must be a lowercase commit SHA");
+    }
+    const snapshot = await this.#resultOwnerSnapshot();
+    if (snapshot.headSha !== expectedHead) {
+      throw new GitHubStateError(409, "State moved before the amendment canary read");
+    }
+    const path = effectiveResultIdentityPath(candidateIdentityId);
+    const [{ view }, entry] = await Promise.all([
+      this.#resultAmendmentAt(resultId, snapshot),
+      readPathAt(this.#config, this.#fetcher, path, snapshot.headSha),
+    ]);
+    return {
+      commit: snapshot.headSha,
+      view,
+      reservation: entry.found ? decodeEffectiveResultIdentityReservation(entry.value) : null,
+    };
+  }
+
   async assertAvailable(): Promise<void> {
     await this.#authorizedSnapshot();
   }
@@ -2110,7 +2138,10 @@ export class GitHubStateRepository {
     return { view, mutationEvent, overlay, releaseStatus };
   }
 
-  async requestResultProblemRepair(request: ResultProblemRepairRequest): Promise<{
+  async requestResultProblemRepair(
+    request: ResultProblemRepairRequest,
+    expectedHead?: string,
+  ): Promise<{
     commit: string;
     created: boolean;
     resultId: string;
@@ -2154,6 +2185,9 @@ export class GitHubStateRepository {
           mutationEventId: request.eventId,
           repairRevision: existing.payload.repair_revision,
         };
+      }
+      if (expectedHead !== undefined && snapshot.headSha !== expectedHead) {
+        throw new GitHubStateError(409, "State moved before the bound problem repair request");
       }
       if (
         view.problem_repair?.status === "pending" ||
@@ -2229,7 +2263,10 @@ export class GitHubStateRepository {
     throw new Error("unreachable result problem repair request attempt");
   }
 
-  async decideResultProblemRepair(request: ResultProblemRepairDecisionRequest): Promise<{
+  async decideResultProblemRepair(
+    request: ResultProblemRepairDecisionRequest,
+    expectedHead?: string,
+  ): Promise<{
     commit: string;
     created: boolean;
     resultId: string;
@@ -2324,6 +2361,9 @@ export class GitHubStateRepository {
           mutationEventId: request.eventId,
           repairRevision: existing.payload.repair_revision as number,
         };
+      }
+      if (expectedHead !== undefined && snapshot.headSha !== expectedHead) {
+        throw new GitHubStateError(409, "State moved before the bound problem repair decision");
       }
       const pending = view.problem_repair;
       if (pending?.status !== "pending" || view.mutation_event_id !== pending.request_event_id) {

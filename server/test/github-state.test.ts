@@ -2940,7 +2940,7 @@ describe("atomic Git State append", () => {
       correctedProblemId: "two_plus_three",
       correctedStatementRevision: 2,
       reasonCode: "wrong_problem_revision",
-    })).resolves.toEqual({
+    }, HEAD)).resolves.toEqual({
       commit: NEW_COMMIT,
       created: true,
       resultId: LEGACY_RESULT.resultId,
@@ -2976,6 +2976,82 @@ describe("atomic Git State append", () => {
         request_event_id: requestId,
       },
     });
+  });
+
+  it("never rebases an absent canary problem-repair event onto a changed head", async () => {
+    const authority = legacyClaimEvent("2026-08-20T06:07:08.000Z");
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID)),
+      contents(LEGACY_AMENDMENT_VIEW),
+      contents(claimedOverlay(LEGACY_RESULT, CLAIM_EVENT_ID, authority.occurred_at)),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      new Response(null, { status: 404 }),
+      contents(authority),
+      contents(authority),
+    ]);
+    await expect(repository(fetcher).requestResultProblemRepair({
+      eventId: "0198abcd-2222-7000-8000-000000000003",
+      occurredAt: "2026-08-20T06:07:09.000Z",
+      resultId: LEGACY_RESULT.resultId,
+      ownerLogin: "alice",
+      correctedProblemId: "two_plus_three",
+      correctedStatementRevision: 2,
+      reasonCode: "wrong_problem_revision",
+    }, "9".repeat(40))).rejects.toMatchObject({ status: 409 });
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("reads the canary amendment and reservation from one exact head", async () => {
+    const authority = legacyClaimEvent("2026-08-20T06:07:08.000Z");
+    const reservation = await effectiveResultIdentityReservation({
+      ownerLogin: "alice",
+      declaredModel: LEGACY_RESULT.baseResult.declared_model,
+      problemId: "two_plus_three",
+      statementRevision: 2,
+      resultId: LEGACY_RESULT.resultId,
+      reservationEventId: "0198abcd-2222-7000-8000-000000000003",
+      reservationKind: "problem_repair",
+    });
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID)),
+      contents(LEGACY_AMENDMENT_VIEW),
+      contents(claimedOverlay(LEGACY_RESULT, CLAIM_EVENT_ID, authority.occurred_at)),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      contents(reservation),
+      contents(authority),
+      contents(authority),
+    ]);
+    await expect(repository(fetcher).readResultAmendmentCanaryAtHead(
+      LEGACY_RESULT.resultId,
+      reservation.effective_result_identity_id,
+      HEAD,
+    )).resolves.toEqual({
+      commit: HEAD,
+      view: LEGACY_AMENDMENT_VIEW,
+      reservation,
+    });
+    for (const [input] of fetcher.mock.calls) {
+      const url = fetchUrl(input);
+      if (url.includes("/contents/")) expect(url).toContain(`ref=${HEAD}`);
+    }
+
+    clearResultOwnerContractProofCacheForTest();
+    const moved = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+    ]);
+    await expect(repository(moved).readResultAmendmentCanaryAtHead(
+      LEGACY_RESULT.resultId,
+      reservation.effective_result_identity_id,
+      "9".repeat(40),
+    )).rejects.toMatchObject({ status: 409 });
   });
 
   it("rejects an unregistered removed event smuggled in as a release predecessor", async () => {
@@ -3404,7 +3480,7 @@ describe("atomic Git State append", () => {
       correctedProblemId: "two_plus_three",
       correctedStatementRevision: 2,
       reasonCode: "wrong_problem_revision",
-    })).resolves.toMatchObject({ created: false, repairRevision: 1 });
+    }, "9".repeat(40))).resolves.toMatchObject({ created: false, repairRevision: 1 });
     expect(exact.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
 
     clearResultOwnerContractProofCacheForTest();
@@ -3457,7 +3533,7 @@ describe("atomic Git State append", () => {
       reasonCode: null,
       comparatorEvidence: evidence,
     };
-    await expect(repository(fetcher).decideResultProblemRepair(decision)).resolves.toEqual({
+    await expect(repository(fetcher).decideResultProblemRepair(decision, HEAD)).resolves.toEqual({
       commit: NEW_COMMIT,
       created: true,
       resultId: LEGACY_RESULT.resultId,
@@ -3514,7 +3590,10 @@ describe("atomic Git State append", () => {
       contents(reservation),
       contents(event),
     ]);
-    await expect(repository(replay).decideResultProblemRepair(decision)).resolves.toMatchObject({
+    await expect(repository(replay).decideResultProblemRepair(
+      decision,
+      "9".repeat(40),
+    )).resolves.toMatchObject({
       created: false,
       repairRevision: 1,
     });
@@ -3539,6 +3618,40 @@ describe("atomic Git State append", () => {
       comparatorEvidence: { ...evidence, blob_sha256: "e".repeat(64) },
     })).rejects.toBeInstanceOf(StateEventConflictError);
     expect(changed.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+  });
+
+  it("never rebases an absent canary decision onto a changed head", async () => {
+    const guard = claimedGuard(LEGACY_RESULT.resultId, CLAIM_EVENT_ID);
+    const overlay = claimedOverlay(
+      LEGACY_RESULT,
+      CLAIM_EVENT_ID,
+      "2026-08-20T06:07:08.000Z",
+    );
+    const pending = pendingLegacyProblemRepair();
+    const requestEvent = legacyProblemRepairRequestEvent();
+    const authority = legacyClaimEvent("2026-08-20T06:07:08.000Z");
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(guard),
+      contents(pending),
+      contents(overlay),
+      contents(LEGACY_RELEASE_STATUS_VIEW),
+      new Response(null, { status: 404 }),
+      contents(authority),
+      contents(requestEvent),
+    ]);
+    await expect(repository(fetcher).decideResultProblemRepair({
+      eventId: REPAIR_DECISION_ID,
+      occurredAt: REPAIR_DECIDED_AT,
+      resultId: LEGACY_RESULT.resultId,
+      reviewerLogin: "maintainer",
+      decision: "apply",
+      reasonCode: null,
+      comparatorEvidence: await legacyComparatorEvidence(),
+    }, "9".repeat(40))).rejects.toMatchObject({ status: 409 });
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
   });
 
   it("allows a same-result historical identity revisit without rewriting its reservation", async () => {

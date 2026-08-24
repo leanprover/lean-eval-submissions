@@ -49,11 +49,16 @@ import {
   ScheduledSubrequestBudgetError,
 } from "../src/scheduled-subrequest-budget";
 import {
+  decidedProblemRepairView,
   initialResultAmendmentView,
   requestedProblemRepairView,
   type ComparatorEvidence,
   type ResultAmendmentView,
 } from "../src/result-amendment";
+import {
+  STAGING_CANARY_INTENTS,
+  STAGING_CANARY_TARGETS,
+} from "../src/staging-amendment-canary";
 import {
   validateStateEvent,
   type WritableResultLifecycleEvent,
@@ -159,6 +164,28 @@ class MemoryState implements StateAccess {
     return Promise.resolve({
       commit: "f".repeat(40),
       reservation: this.effectiveResultReservations.get(identifier) ?? null,
+    });
+  }
+
+  readResultAmendmentCanaryAtHead(
+    _resultId: string,
+    candidateIdentityId: string,
+    expectedHead: string,
+  ): Promise<Readonly<{
+    commit: string;
+    view: ResultAmendmentView;
+    reservation: import("../src/result-owner").EffectiveResultIdentityReservation | null;
+  }>> {
+    if (this.maintainerAmendment === null) {
+      return Promise.reject(new ResultOwnerStateError(404, "result amendment was not found"));
+    }
+    if (expectedHead !== this.head) {
+      return Promise.reject(new GitHubStateError(409, "State moved"));
+    }
+    return Promise.resolve({
+      commit: this.head,
+      view: this.maintainerAmendment,
+      reservation: this.effectiveResultReservations.get(candidateIdentityId) ?? null,
     });
   }
 
@@ -331,14 +358,19 @@ class MemoryState implements StateAccess {
     });
   }
 
-  requestResultProblemRepair(request: ResultProblemRepairRequest): Promise<{
+  requestResultProblemRepair(request: ResultProblemRepairRequest, expectedHead?: string): Promise<{
+    commit: string;
     created: boolean;
     resultId: string;
     mutationEventId: string;
     repairRevision: number;
   }> {
+    if (expectedHead !== undefined && expectedHead !== this.head) {
+      return Promise.reject(new GitHubStateError(409, "State moved"));
+    }
     this.problemRepairRequests.push(request);
     return Promise.resolve({
+      commit: this.head,
       created: this.created,
       resultId: request.resultId,
       mutationEventId: request.eventId,
@@ -346,14 +378,19 @@ class MemoryState implements StateAccess {
     });
   }
 
-  decideResultProblemRepair(request: ResultProblemRepairDecisionRequest): Promise<{
+  decideResultProblemRepair(request: ResultProblemRepairDecisionRequest, expectedHead?: string): Promise<{
+    commit: string;
     created: boolean;
     resultId: string;
     mutationEventId: string;
     repairRevision: number;
   }> {
+    if (expectedHead !== undefined && expectedHead !== this.head) {
+      return Promise.reject(new GitHubStateError(409, "State moved"));
+    }
     this.problemRepairDecisions.push(request);
     return Promise.resolve({
+      commit: this.head,
       created: this.created,
       resultId: request.resultId,
       mutationEventId: request.eventId,
@@ -1011,13 +1048,68 @@ describe("staging amendment canary route boundary", () => {
     DEPLOYED_COMMIT: "a".repeat(40),
     DEPLOYMENT_ENVIRONMENT: "staging",
     INTAKE_ENABLED: "false",
+    INTAKE_ENABLEMENT_MODE: "disabled",
     PROMOTION_CANARY_ENABLED: "true",
-    READINESS_TOKEN: SECRET,
+    STAGING_AMENDMENT_CANARY_TOKEN: SECRET,
+    LEGACY_RESULT_OWNER_API_ENABLED: "false",
     RESULT_AMENDMENT_OWNER_API_ENABLED: "false",
     RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "false",
     RESULT_AMENDMENT_MAINTAINERS: "[]",
     STATE_REPOSITORY: "leanprover/lean-eval-state-staging",
   };
+
+  const canaryRequest = (
+    operation: keyof typeof STAGING_CANARY_INTENTS,
+    expectedStateCommit = "d".repeat(40),
+    token = SECRET,
+  ) => new Request(
+    "https://submit.test/internal/v1/staging-amendment-canary",
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        schema_version: 1,
+        operation,
+        deployed_commit: "a".repeat(40),
+        expected_state_commit: expectedStateCommit,
+      }),
+    },
+  );
+
+  const initialCanaryView = (lane: "apply" | "reject") => initialResultAmendmentView({
+    resultId: STAGING_CANARY_TARGETS[lane].resultId,
+    ownerLogin: "kim-em",
+    declaredModel: STAGING_CANARY_TARGETS[lane].declaredModel,
+    authorityEventId: STAGING_CANARY_TARGETS[lane].authorityEventId,
+    mutationEventId: STAGING_CANARY_TARGETS[lane].authorityEventId,
+    problemId: "two_plus_two",
+    statementRevision: 1,
+  });
+
+  const canaryEvidence = (lane: "apply" | "reject"): ComparatorEvidence => ({
+    repository: "leanprover/lean-eval-submissions",
+    commit: "972178d59e2b3c5300baa728a1356f0d49dafb87",
+    path: "results/kim-em.json",
+    blob_oid: "a".repeat(40),
+    blob_sha256: "b".repeat(64),
+    record_sha256: "c".repeat(64),
+    binding_sha256: "d".repeat(64),
+    verification_method: "github_commit_blob_v1",
+    evidence_result_id: STAGING_CANARY_TARGETS[lane].resultId,
+    evidence_owner_login: "kim-em",
+    evidence_declared_model: STAGING_CANARY_TARGETS[lane].declaredModel,
+    evidence_base_problem_group: "formalization-evaluation",
+    evidence_base_problem_id: "two_plus_two",
+    evidence_base_statement_revision: 1,
+    evidence_base_challenge_id: `ch1_${"e".repeat(64)}`,
+    evidence_corrected_problem_group: "formalization-evaluation",
+    evidence_corrected_problem_id: "list_append_singleton_length",
+    evidence_corrected_statement_revision: 1,
+    evidence_corrected_challenge_id: `ch1_${"f".repeat(64)}`,
+  });
 
   it("conceals the staging-only route without readiness authentication", async () => {
     const response = await handleRequest(new Request(
@@ -1026,6 +1118,18 @@ describe("staging amendment canary route boundary", () => {
     ), canaryEnv, LIFECYCLE);
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "not_found" });
+  });
+
+  it("does not accept the general readiness credential", async () => {
+    const response = await handleRequest(canaryRequest(
+      "request_apply",
+      "d".repeat(40),
+      "general-readiness-secret-with-thirty-two-bytes",
+    ), {
+      ...canaryEnv,
+      READINESS_TOKEN: "general-readiness-secret-with-thirty-two-bytes",
+    }, LIFECYCLE);
+    expect(response.status).toBe(404);
   });
 
   it("keeps production unreachable even with the matching readiness token", async () => {
@@ -1039,6 +1143,295 @@ describe("staging amendment canary route boundary", () => {
     }, LIFECYCLE);
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "not_found" });
+  });
+
+  it("requires every public mutation gate and exact disabled mode", async () => {
+    for (const override of [
+      { LEGACY_RESULT_OWNER_API_ENABLED: "true" },
+      { RESULT_AMENDMENT_OWNER_API_ENABLED: "true" },
+      { RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true" },
+      { INTAKE_ENABLEMENT_MODE: "invalid" },
+    ]) {
+      const state = new MemoryState();
+      const response = await handleRequest(
+        canaryRequest("request_apply"),
+        { ...canaryEnv, ...override },
+        LIFECYCLE,
+        { state },
+      );
+      expect(response.status).toBe(404);
+      expect(state.problemRepairRequests).toHaveLength(0);
+    }
+  });
+
+  it("binds a request mutation and its postcondition to one exact State head", async () => {
+    const state = new MemoryState();
+    const initial = initialCanaryView("apply");
+    const intent = STAGING_CANARY_INTENTS.request_apply;
+    const pending = requestedProblemRepairView(
+      initial,
+      intent.eventId,
+      intent.occurredAt,
+      "list_append_singleton_length",
+      1,
+      "wrong_problem_revision",
+    );
+    const read = vi.spyOn(state, "readResultAmendmentCanaryAtHead")
+      .mockResolvedValueOnce({ commit: state.head, view: initial, reservation: null })
+      .mockResolvedValueOnce({ commit: state.head, view: pending, reservation: null });
+    const response = await handleRequest(
+      canaryRequest("request_apply"), canaryEnv, LIFECYCLE, { state },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      operation: "request_apply",
+      event_id: intent.eventId,
+      state_commit: state.head,
+      candidate_reserved: false,
+    });
+    expect(state.problemRepairRequests).toEqual([{
+      eventId: intent.eventId,
+      occurredAt: intent.occurredAt,
+      resultId: STAGING_CANARY_TARGETS.apply.resultId,
+      ownerLogin: "kim-em",
+      correctedProblemId: "list_append_singleton_length",
+      correctedStatementRevision: 1,
+      reasonCode: "wrong_problem_revision",
+    }]);
+    expect(read).toHaveBeenNthCalledWith(
+      2,
+      STAGING_CANARY_TARGETS.apply.resultId,
+      STAGING_CANARY_TARGETS.apply.candidateIdentityId,
+      state.head,
+    );
+  });
+
+  it("applies with exact comparator evidence and one-snapshot reservation proof", async () => {
+    const state = new MemoryState();
+    const requestIntent = STAGING_CANARY_INTENTS.request_apply;
+    const decisionIntent = STAGING_CANARY_INTENTS.apply;
+    const requested = requestedProblemRepairView(
+      initialCanaryView("apply"),
+      requestIntent.eventId,
+      requestIntent.occurredAt,
+      "list_append_singleton_length",
+      1,
+      "wrong_problem_revision",
+    );
+    const evidence = canaryEvidence("apply");
+    const applied = decidedProblemRepairView(
+      requested,
+      decisionIntent.eventId,
+      decisionIntent.occurredAt,
+      "kim-em",
+      "apply",
+      null,
+      evidence,
+    );
+    const reservation = {
+      schema_version: 1 as const,
+      effective_result_identity_id: STAGING_CANARY_TARGETS.apply.candidateIdentityId,
+      owner_login: "kim-em",
+      declared_model: STAGING_CANARY_TARGETS.apply.declaredModel,
+      problem_id: "list_append_singleton_length",
+      statement_revision: 1,
+      result_id: STAGING_CANARY_TARGETS.apply.resultId,
+      reservation_event_id: decisionIntent.eventId,
+      reservation_kind: "problem_repair" as const,
+    };
+    vi.spyOn(state, "readResultAmendmentCanaryAtHead")
+      .mockResolvedValueOnce({ commit: state.head, view: requested, reservation: null })
+      .mockResolvedValueOnce({ commit: state.head, view: applied, reservation });
+    const provider = new GitHubProvider();
+    const verify = vi.spyOn(provider, "verifyProblemRepairComparator").mockResolvedValue(evidence);
+    const response = await handleRequest(
+      canaryRequest("apply"), canaryEnv, LIFECYCLE, { provider, state },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      operation: "apply",
+      event_id: decisionIntent.eventId,
+      candidate_reserved: true,
+    });
+    expect(verify).toHaveBeenCalledOnce();
+    expect(state.problemRepairDecisions[0]).toMatchObject({
+      eventId: decisionIntent.eventId,
+      reviewerLogin: "kim-em",
+      decision: "apply",
+      comparatorEvidence: evidence,
+    });
+  });
+
+  it("rejects without comparator evidence and exact-event reruns stay read-only", async () => {
+    const state = new MemoryState();
+    const requestIntent = STAGING_CANARY_INTENTS.request_reject;
+    const decisionIntent = STAGING_CANARY_INTENTS.reject;
+    const requested = requestedProblemRepairView(
+      initialCanaryView("reject"),
+      requestIntent.eventId,
+      requestIntent.occurredAt,
+      "list_append_singleton_length",
+      1,
+      "wrong_problem_revision",
+    );
+    const rejected = decidedProblemRepairView(
+      requested,
+      decisionIntent.eventId,
+      decisionIntent.occurredAt,
+      "kim-em",
+      "reject",
+      "insufficient_comparator_evidence",
+      null,
+    );
+    vi.spyOn(state, "readResultAmendmentCanaryAtHead")
+      .mockResolvedValue({ commit: state.head, view: rejected, reservation: null });
+    state.created = false;
+    const provider = new GitHubProvider();
+    const verify = vi.spyOn(provider, "verifyProblemRepairComparator");
+    const response = await handleRequest(
+      canaryRequest("reject"), canaryEnv, LIFECYCLE, { provider, state },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      operation: "reject",
+      event_id: decisionIntent.eventId,
+      candidate_reserved: false,
+    });
+    expect(verify).not.toHaveBeenCalled();
+    expect(state.problemRepairDecisions[0]).toMatchObject({
+      eventId: decisionIntent.eventId,
+      decision: "reject",
+      comparatorEvidence: null,
+    });
+
+    const replay = await handleRequest(
+      canaryRequest("reject"), canaryEnv, LIFECYCLE, { state },
+    );
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({
+      operation: "reject",
+      event_id: decisionIntent.eventId,
+      candidate_reserved: false,
+    });
+  });
+
+  it("requires the applied lane before opening the reject lane", async () => {
+    const state = new MemoryState();
+    const applyRequest = STAGING_CANARY_INTENTS.request_apply;
+    const applyDecision = STAGING_CANARY_INTENTS.apply;
+    const applyPending = requestedProblemRepairView(
+      initialCanaryView("apply"),
+      applyRequest.eventId,
+      applyRequest.occurredAt,
+      "list_append_singleton_length",
+      1,
+      "wrong_problem_revision",
+    );
+    const evidence = canaryEvidence("apply");
+    const applied = decidedProblemRepairView(
+      applyPending,
+      applyDecision.eventId,
+      applyDecision.occurredAt,
+      "kim-em",
+      "apply",
+      null,
+      evidence,
+    );
+    const applyReservation = {
+      schema_version: 1 as const,
+      effective_result_identity_id: STAGING_CANARY_TARGETS.apply.candidateIdentityId,
+      owner_login: "kim-em",
+      declared_model: STAGING_CANARY_TARGETS.apply.declaredModel,
+      problem_id: "list_append_singleton_length",
+      statement_revision: 1,
+      result_id: STAGING_CANARY_TARGETS.apply.resultId,
+      reservation_event_id: applyDecision.eventId,
+      reservation_kind: "problem_repair" as const,
+    };
+    const rejectInitial = initialCanaryView("reject");
+    const rejectRequest = STAGING_CANARY_INTENTS.request_reject;
+    const rejectPending = requestedProblemRepairView(
+      rejectInitial,
+      rejectRequest.eventId,
+      rejectRequest.occurredAt,
+      "list_append_singleton_length",
+      1,
+      "wrong_problem_revision",
+    );
+    vi.spyOn(state, "readResultAmendmentCanaryAtHead")
+      .mockResolvedValueOnce({
+        commit: state.head,
+        view: applied,
+        reservation: applyReservation,
+      })
+      .mockResolvedValueOnce({ commit: state.head, view: rejectInitial, reservation: null })
+      .mockResolvedValueOnce({ commit: state.head, view: rejectPending, reservation: null });
+    const response = await handleRequest(
+      canaryRequest("request_reject"), canaryEnv, LIFECYCLE, { state },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      operation: "request_reject",
+      event_id: rejectRequest.eventId,
+      candidate_reserved: false,
+    });
+
+    const blocked = new MemoryState();
+    vi.spyOn(blocked, "readResultAmendmentCanaryAtHead").mockResolvedValueOnce({
+      commit: blocked.head,
+      view: initialCanaryView("apply"),
+      reservation: null,
+    });
+    const premature = await handleRequest(
+      canaryRequest("request_reject"), canaryEnv, LIFECYCLE, { state: blocked },
+    );
+    expect(premature.status).toBe(409);
+    expect(blocked.problemRepairRequests).toHaveLength(0);
+  });
+
+  it("fails closed on a CAS race, comparator failure, or postcondition head move", async () => {
+    const state = new MemoryState();
+    const initial = initialCanaryView("apply");
+    vi.spyOn(state, "readResultAmendmentCanaryAtHead")
+      .mockResolvedValueOnce({ commit: state.head, view: initial, reservation: null });
+    vi.spyOn(state, "requestResultProblemRepair").mockRejectedValue(
+      new GitHubStateError(409, "State moved before the bound request"),
+    );
+    const raced = await handleRequest(
+      canaryRequest("request_apply"), canaryEnv, LIFECYCLE, { state },
+    );
+    expect(raced.status).toBe(503);
+
+    const requested = requestedProblemRepairView(
+      initial,
+      STAGING_CANARY_INTENTS.request_apply.eventId,
+      STAGING_CANARY_INTENTS.request_apply.occurredAt,
+      "list_append_singleton_length",
+      1,
+      "wrong_problem_revision",
+    );
+    const comparatorState = new MemoryState();
+    vi.spyOn(comparatorState, "readResultAmendmentCanaryAtHead")
+      .mockResolvedValueOnce({ commit: comparatorState.head, view: requested, reservation: null });
+    const provider = new GitHubProvider();
+    vi.spyOn(provider, "verifyProblemRepairComparator").mockRejectedValue(
+      new Error("comparator unavailable"),
+    );
+    const comparator = await handleRequest(
+      canaryRequest("apply"), canaryEnv, LIFECYCLE, { provider, state: comparatorState },
+    );
+    expect(comparator.status).toBe(500);
+    expect(comparatorState.problemRepairDecisions).toHaveLength(0);
+
+    const movedState = new MemoryState();
+    const movedRead = vi.spyOn(movedState, "readResultAmendmentCanaryAtHead")
+      .mockResolvedValueOnce({ commit: movedState.head, view: initial, reservation: null })
+      .mockRejectedValueOnce(new GitHubStateError(409, "State moved before postcondition"));
+    const moved = await handleRequest(
+      canaryRequest("request_apply"), canaryEnv, LIFECYCLE, { state: movedState },
+    );
+    expect(moved.status).toBe(503);
+    expect(movedRead).toHaveBeenCalledTimes(2);
   });
 });
 

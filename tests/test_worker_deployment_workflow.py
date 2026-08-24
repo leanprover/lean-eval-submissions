@@ -749,9 +749,12 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "SOURCE_APP_PRIVATE_KEY",
         }
         for environment in ("staging", "production"):
+            expected_intake_secrets = set(intake_secrets)
+            if environment == "staging":
+                expected_intake_secrets.add("STAGING_AMENDMENT_CANARY_TOKEN")
             self.assertEqual(
                 set(WRANGLER["env"][environment]["secrets"]["required"]),
-                intake_secrets,
+                expected_intake_secrets,
             )
             self.assertEqual(
                 set(BROKER_WRANGLER["env"][environment]["secrets"]["required"]),

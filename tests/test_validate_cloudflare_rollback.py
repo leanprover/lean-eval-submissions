@@ -66,6 +66,44 @@ class RollbackContractCoverageTests(unittest.TestCase):
         for relative in rollback.CALLBACK_CONTRACT_FILES:
             self.assertGreater((ROOT / relative).stat().st_size, 0)
 
+    def test_historical_qualified_file_set_remains_supported(self) -> None:
+        self.assertNotIn(
+            "server/src/staging-amendment-canary.ts",
+            rollback.HISTORICAL_CALLBACK_CONTRACT_FILES,
+        )
+        self.assertIn(
+            rollback.HISTORICAL_CALLBACK_CONTRACT_FILES,
+            rollback.SUPPORTED_CALLBACK_CONTRACT_FILE_SETS,
+        )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            target = pathlib.Path(temporary)
+            for relative in [
+                *rollback.HISTORICAL_CALLBACK_CONTRACT_FILES,
+                "server/package.json",
+                "server/package-lock.json",
+            ]:
+                destination = target / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, destination)
+            qualification = json.loads(
+                (ROOT / ".audit" / "cloudflare-rollback-qualification-v1.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            qualification["lifecycle_callback_contract_files"] = (
+                rollback.HISTORICAL_CALLBACK_CONTRACT_FILES
+            )
+            qualification["lifecycle_callback_contract_sha256"] = (
+                rollback._callback_contract_digest(
+                    target, rollback.HISTORICAL_CALLBACK_CONTRACT_FILES
+                )
+            )
+            self.assertEqual(
+                rollback._validate_qualification_header(qualification, target),
+                qualification["lifecycle_callback_contract_sha256"],
+            )
+
 
 class CloudflareRollbackValidationTests(unittest.TestCase):
     def test_repository_qualification_matches_runtime_schema_and_pause_guard(

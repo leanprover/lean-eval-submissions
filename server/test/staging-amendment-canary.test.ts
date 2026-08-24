@@ -2,12 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   decodeStagingAmendmentCanaryRequest,
+  STAGING_CANARY_INTENTS,
   STAGING_CANARY_RESULTS_COMMIT,
   STAGING_CANARY_STATE_REPOSITORY,
   STAGING_CANARY_TARGETS,
 } from "../src/staging-amendment-canary";
-
-const EVENT = "01993a80-1234-7abc-8def-0123456789ab";
 
 function request(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -15,9 +14,6 @@ function request(overrides: Record<string, unknown> = {}): Record<string, unknow
     operation: "request_apply",
     deployed_commit: "a".repeat(40),
     expected_state_commit: "b".repeat(40),
-    event_id: EVENT,
-    occurred_at: "2026-09-12T00:00:00.000Z",
-    expected_request_event_id: null,
     ...overrides,
   };
 }
@@ -41,19 +37,34 @@ describe("staging amendment canary contract", () => {
     expect(decodeStagingAmendmentCanaryRequest(request()).operation).toBe("request_apply");
     expect(decodeStagingAmendmentCanaryRequest(request({
       operation: "apply",
-      expected_request_event_id: "01993a80-1235-7abc-8def-0123456789ab",
     })).operation).toBe("apply");
   });
 
-  it("rejects extra fields and inconsistent request linkage", () => {
+  it("rejects caller-supplied event material and other extra fields", () => {
     expect(() => decodeStagingAmendmentCanaryRequest(request({ extra: false }))).toThrow();
     expect(() => decodeStagingAmendmentCanaryRequest(request({
-      operation: "reject",
-      expected_request_event_id: null,
+      event_id: STAGING_CANARY_INTENTS.reject.eventId,
     }))).toThrow();
     expect(() => decodeStagingAmendmentCanaryRequest(request({
-      operation: "request_reject",
-      expected_request_event_id: EVENT,
+      occurred_at: STAGING_CANARY_INTENTS.reject.occurredAt,
     }))).toThrow();
+  });
+
+  it("binds ordered UUIDv7 identities to their exact millisecond timestamps", () => {
+    const intents = Object.values(STAGING_CANARY_INTENTS);
+    expect(intents.map(({ eventId }) => eventId)).toEqual(
+      [...intents].map(({ eventId }) => eventId).sort(),
+    );
+    for (const intent of intents) {
+      expect(Number.parseInt(intent.eventId.replaceAll("-", "").slice(0, 12), 16)).toBe(
+        Date.parse(intent.occurredAt),
+      );
+    }
+    expect(STAGING_CANARY_INTENTS.apply.expectedRequestEventId).toBe(
+      STAGING_CANARY_INTENTS.request_apply.eventId,
+    );
+    expect(STAGING_CANARY_INTENTS.reject.expectedRequestEventId).toBe(
+      STAGING_CANARY_INTENTS.request_reject.eventId,
+    );
   });
 });
