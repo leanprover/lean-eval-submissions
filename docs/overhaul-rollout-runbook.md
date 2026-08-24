@@ -610,8 +610,8 @@ tokens. Custom domains can be added later without changing the API contracts.
 4. Create the `submission-dispatch-promotion` GitHub environment, require a
    maintainer reviewer, and restrict it to protected `main`. In repository
    Actions settings, permit workflows to request read/write `GITHUB_TOKEN`
-   access; the promotion job itself narrows that token to only
-   `contents: write`. Add a distinct 32-byte lowercase-hex
+   access; each promotion job narrows that token to `contents: write` and
+   `actions: read`. Add a distinct 32-byte lowercase-hex
    `DISPATCH_PROMOTION_APPROVAL_GUARD` secret to this environment only (never
    at repository or organization scope). The value grants no API access; its
    sole purpose is to make a missing or accidentally auto-created unprotected
@@ -623,15 +623,23 @@ tokens. Custom domains can be added later without changing the API contracts.
    ordinary maintainers a bypass. Record the ruleset ID and required-reviewer
    owners in `INFRASTRUCTURE.md`.
 
-   After `check` succeeds, `deploy-worker.yml` enters that environment and uses
-   its least-privilege `GITHUB_TOKEN` to create
-   `lean-eval-dispatch/<GITHUB_SHA>`. It first proves the commit is reachable
-   from `main` and contains `submission.yml`. If the tag already exists, the
-   job succeeds only when it resolves to the same commit; a collision fails the
-   deployment. The tag is read back and passed as `DISPATCH_WORKFLOW_REF` to
-   both Wrangler deployments. Missing approval, insufficient token policy,
-   missing ruleset setup, collision, or read-back mismatch stops deployment;
-   intake remains false.
+   Two path-partitioned minters enter that environment. `deploy-worker.yml`
+   handles runtime-bound changes, including the staging intake and replay
+   workflows whose exact-commit preconditions must match the live staging
+   deployment. Shipping any of those workflow changes therefore performs the
+   ordinary disabled staging/canary/production rollout and resets staging
+   intake to the tracked disabled default.
+   `promote-workflow-dispatch-ref.yml` handles the remaining tag-consuming
+   operational workflows without invoking Wrangler. Each proves the commit is
+   reachable from `main`, waits for the exact protected-main CI run, confirms
+   that the commit contains the required dispatch workflows, then creates
+   `lean-eval-dispatch/<GITHUB_SHA>`. If the tag already exists, the job succeeds
+   only when it resolves to the same commit; this makes a same-SHA race harmless
+   while a collision fails closed. The runtime minter passes the read-back tag
+   as `DISPATCH_WORKFLOW_REF` to both Wrangler deployments. Missing approval,
+   failed exact-main CI, insufficient token policy, missing ruleset setup,
+   collision, or read-back mismatch stops promotion or deployment; intake
+   remains false.
 
 5. Add `CLOUDFLARE_ACCOUNT_ID` and the environment-specific
    `CLOUDFLARE_API_TOKEN` as GitHub **environment secrets**. Enter values from a
