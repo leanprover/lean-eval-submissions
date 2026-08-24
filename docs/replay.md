@@ -33,6 +33,12 @@ VM operator sequence are documented in
 selected initial private execution backend; the stable controller contract is
 provider-neutral.
 
+Resolved legacy public evidence advances through the blocked, source-free seed
+contract in
+[`historical-public-replay-plan.md`](historical-public-replay-plan.md). It is
+not queue authority and cannot be handed to a replay runner until the separate
+legacy-result State contract is reviewed.
+
 ## Trust boundary
 
 The orchestrator is a Lean-Eval-owned controller behind a provider-neutral

@@ -78,6 +78,8 @@ jobs:
           tests.test_resolve_public_replay_github_evidence
           tests.test_public_replay_github_evidence_workflow
           tests.test_aggregate_public_replay_github_evidence
+          tests.test_prepare_public_replay_plan
+          tests.test_historical_public_replay_plan_workflow
           tests.test_worker_intake_configuration
 
       - name: Submission intake tests

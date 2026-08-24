@@ -231,6 +231,21 @@ the already implemented owner status, metadata, and publication routes.
       original pins, recording terminal verdicts/statistics or explicit
       unavailability; the isolated staging proofs above do not satisfy this
       corpus gate.
+      Resolved public evidence now has a deterministic source-free seed-plan
+      contract that binds the exact source, benchmark/toolchain, evaluator,
+      workflow, issue, Results snapshot, and aggregate identities. Activation
+      remains fail-closed on `legacy_public_result_replay_authority_v1` because
+      current State replay materialization admits only modern
+      `result.recorded` submission lifecycles, not historical
+      `result.claimed` records; no synthetic submission/archive authority was
+      created. Production State has no historical claim anchors, so the
+      required follow-up is a system-owned
+      `historical_result.replay_authorized` event over one exact seed
+      result/evidence tuple, followed by the ordinary replay lifecycle without
+      changing acceptance, publication, credit, or owner metadata.
+      Authorization remains separate from the unresolved historical-toolchain
+      execution-profile gate; it does not claim the current v4.33 profile can
+      execute older or prerelease toolchains.
 - [ ] Expand independent-kernel validation from the one-result shadow smoke to
       a checker-series/corpus report with separately recorded
       accept/reject/decline/crash/timeout outcomes and an explicit promotion
