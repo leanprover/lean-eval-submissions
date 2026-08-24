@@ -36,14 +36,14 @@ PLAN_SHA256 = "2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942"
 MATRIX_SHA256 = "aad9132f729ef9f429532900d1e50b665330721fa9360699328c47bdfb2aedfc"
 RUNNER_CONTRACT_SHA256 = "6d341a642dfd6aa9092228269da6761000bf0818128ce3f35cb259bd8fb2303f"
 QUALIFICATION_CONTRACT_SHA256 = "afac0306192c63c7a6d1e2fc83f179180b695e009f869d14cc6a1eb5028afb85"
-STATE_COMMIT = "501d237d46c7b3466a37554c1c2ceb310245a619"
-STATE_TREE = "9181efc7d88e99a40a6f5d255076db651a8b8883"
-STATE_EVENT_SCHEMA_SHA256 = "af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb"
+STATE_COMMIT = "04e205a4a010b9e5f9718a9488fe78d6171e09b8"
+STATE_TREE = "bc3e48586844fd2059788cedb1abec78c8893710"
+STATE_EVENT_SCHEMA_SHA256 = "7ee83581b6e7bb7769afe130a394b41613e9cf24b8643777e63990c448da7cc0"
 STATE_HISTORICAL_QUEUE_SCHEMA_SHA256 = (
-    "f3fa147f2ad15cef5103ece61f75ebc161cd65eef483d41f5397238eca9831c8"
+    "a3b23b21f85370161892d4adc3c4170e35f864556da4339c53b404e5477077ab"
 )
-STATE_VALIDATOR_SHA256 = "964c532d89ba31573fe42411bebae456945b24b63fa0d88f3d08cb9bdeb8d220"
-STATE_MATERIALIZER_SHA256 = "e48186dc9c4907352a4c3c2b1da6c7d771c43d484ee818e67409a16a50ffbb6e"
+STATE_VALIDATOR_SHA256 = "c0919fc342ff6a785749c004c4d2631db2d4c4034fe8f64fdce656ce2cd11db9"
+STATE_MATERIALIZER_SHA256 = "4fa2bfa89c434b5cdbec27ea433a34ea0d247afa74ca8f2f65b9dbf2d9b5b092"
 WORKFLOW_PATH = ".github/workflows/historical-public-image-qualification.yml"
 SUBMISSIONS_REPOSITORY = "leanprover/lean-eval-submissions"
 BENCHMARK_REPOSITORY = "leanprover/lean-eval"
@@ -80,6 +80,11 @@ class PreparationError(ValueError):
 
 def canonical(value: Any) -> bytes:
     return (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode()
+
+
+def canonical_state_event(value: Any) -> bytes:
+    """Match lean-eval-state's exact append-byte contract."""
+    return (json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True) + "\n").encode()
 
 
 def sha256_bytes(raw: bytes) -> str:
@@ -181,7 +186,13 @@ def create_output_root(path: pathlib.Path) -> None:
         raise PreparationError("refusing to overwrite preparation directory") from error
 
 
-def write_relative(root: pathlib.Path, relative: str, value: dict[str, Any]) -> None:
+def write_relative(
+    root: pathlib.Path,
+    relative: str,
+    value: dict[str, Any],
+    *,
+    state_event: bool = False,
+) -> None:
     path = pathlib.PurePosixPath(relative)
     if path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
         raise PreparationError("output path is not a safe relative path")
@@ -204,7 +215,9 @@ def write_relative(root: pathlib.Path, relative: str, value: dict[str, Any]) -> 
                 dir_fd=descriptor,
             )
             with os.fdopen(file_descriptor, "wb") as output:
-                output.write(canonical(value))
+                output.write(
+                    canonical_state_event(value) if state_event else canonical(value)
+                )
         finally:
             os.close(descriptor)
     except OSError as error:
@@ -353,7 +366,7 @@ def load_and_validate_pinned_state(
     )
     expected_files = {
         "schema/state-event-v1.schema.json": STATE_EVENT_SCHEMA_SHA256,
-        "schema/historical-public-replay-queue-v1.schema.json": STATE_HISTORICAL_QUEUE_SCHEMA_SHA256,
+        "schema/historical-public-replay-queue-v2.schema.json": STATE_HISTORICAL_QUEUE_SCHEMA_SHA256,
         "scripts/validate_state.py": STATE_VALIDATOR_SHA256,
         "scripts/materialize_state.py": STATE_MATERIALIZER_SHA256,
     }
@@ -427,7 +440,7 @@ def load_and_validate_pinned_state(
             try:
                 queue_schema = json.loads(
                     exact_blobs[
-                        "schema/historical-public-replay-queue-v1.schema.json"
+                        "schema/historical-public-replay-queue-v2.schema.json"
                     ].decode("utf-8")
                 )
                 jsonschema.Draft202012Validator(queue_schema).validate(
@@ -474,7 +487,7 @@ def validate_finalization_inputs(
     schema_paths = (
         ROOT / "schemas/replay-execution-profile-v1.schema.json",
         ROOT / "schemas/historical-public-profile-qualification-v1.schema.json",
-        ROOT / "schemas/historical-public-authority-preparation-v1.schema.json",
+        ROOT / "schemas/historical-public-authority-preparation-v2.schema.json",
     )
     schemas = []
     for path in schema_paths:
@@ -530,6 +543,7 @@ def validate_finalization_inputs(
         or authority_payload["authority_path"] != PLAN_PATH
         or authority_payload["authority_sha256"] != PLAN_SHA256
         or authority_payload["authority_repository"] != SUBMISSIONS_REPOSITORY
+        or authority_payload["source_visibility"] != "public"
         or authority_payload["results_path"]
         != f"results/{authority_payload['owner_login']}.json"
         or selection["result_id"] != derived_result
@@ -548,7 +562,10 @@ def validate_finalization_inputs(
         != measurement_digest
         or qualification_payload != {
             "toolchain": authority_payload["toolchain"],
+            "benchmark_commit": authority_payload["benchmark_commit"],
+            "measurement_config_digest": measurement_digest,
             "execution_profile_digest": profile_digest,
+            "checker": "nanoda",
             "qualification_repository": SUBMISSIONS_REPOSITORY,
             "qualification_path": expected_profile_path,
             "qualification_sha256": binding["sha256"],
@@ -558,6 +575,7 @@ def validate_finalization_inputs(
             "measurement_config_digest": measurement_digest,
             "execution_profile_digest": profile_digest,
             "checker": "nanoda",
+            "benchmark_commit": authority_payload["benchmark_commit"],
         }
         or enqueue["replay_task_id"] != replay_task_id(selection["result_id"], measurement_digest)
     ):
@@ -1196,6 +1214,7 @@ def prepare(args: argparse.Namespace) -> None:
         "source_kind": request["source"]["kind"],
         "source_repository": request["source"]["repository"],
         "source_commit": request["source"]["commit"],
+        "source_visibility": "public",
         "benchmark_repository": request["benchmark"]["repository"],
         "benchmark_commit": request["benchmark"]["commit"],
         "toolchain": request["benchmark"]["toolchain"],
@@ -1208,7 +1227,10 @@ def prepare(args: argparse.Namespace) -> None:
     }
     qualification_without_commit = {
         "toolchain": entry["toolchain"],
+        "benchmark_commit": entry["benchmark_commit"],
+        "measurement_config_digest": measurement_digest,
         "execution_profile_digest": execution_profile_digest,
+        "checker": "nanoda",
         "qualification_repository": SUBMISSIONS_REPOSITORY,
         "qualification_path": profile_path,
         "qualification_sha256": profile_sha256,
@@ -1218,10 +1240,11 @@ def prepare(args: argparse.Namespace) -> None:
         "measurement_config_digest": measurement_digest,
         "execution_profile_digest": execution_profile_digest,
         "checker": "nanoda",
+        "benchmark_commit": entry["benchmark_commit"],
     }
     task_id = replay_task_id(result["result_id"], measurement_digest)
     preparation = {
-        "schema_version": 1,
+        "schema_version": 2,
         "kind": "historical_public_authority_preparation",
         "activation_status": "blocked",
         "activation_blockers": [
@@ -1352,6 +1375,7 @@ def finalize(args: argparse.Namespace) -> None:
             output_root,
             f"events/{event_id.replace('-', '')[:2]}/{event_id}.json",
             event,
+            state_event=True,
         )
     manifest = {
         "schema_version": 1,

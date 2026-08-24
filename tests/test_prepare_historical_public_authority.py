@@ -59,6 +59,19 @@ def zip_members(path: pathlib.Path, members: dict[str, pathlib.Path]) -> None:
 
 
 class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
+    def test_state_event_canonical_bytes_escape_non_ascii(self) -> None:
+        value = {"declared_model": "λ-model", "schema_version": 1}
+        self.assertEqual(
+            authority.canonical_state_event(value),
+            (
+                b'{\n  "declared_model": "\\u03bb-model",\n'
+                b'  "schema_version": 1\n}\n'
+            ),
+        )
+        self.assertNotEqual(
+            authority.canonical(value), authority.canonical_state_event(value)
+        )
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.plan = json.loads(PLAN.read_text())
@@ -710,7 +723,7 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
             for name in (
                 "replay-execution-profile-v1.schema.json",
                 "historical-public-profile-qualification-v1.schema.json",
-                "historical-public-authority-preparation-v1.schema.json",
+                "historical-public-authority-preparation-v2.schema.json",
             )
         }
         registry = Registry().with_resources(
@@ -728,7 +741,7 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
                 registry=registry,
             )
             preparation_validator = jsonschema.Draft202012Validator(
-                schemas["historical-public-authority-preparation-v1.schema.json"],
+                schemas["historical-public-authority-preparation-v2.schema.json"],
                 registry=registry,
             )
             profile_validator.validate(profile)
