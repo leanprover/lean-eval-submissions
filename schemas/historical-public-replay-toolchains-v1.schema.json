@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/historical-public-replay-toolchains-v1.schema.json",
+  "title": "Historical public replay benchmark toolchains v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "benchmark_repository", "commit_count", "commits"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_public_replay_toolchain_registry"},
+    "benchmark_repository": {"const": "leanprover/lean-eval"},
+    "commit_count": {"type": "integer", "minimum": 1},
+    "commits": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/entry"}
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "toolchain": {
+      "type": "string",
+      "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+(?:-(?:rc|beta)[0-9]+)?$"
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["benchmark_commit", "lean_toolchain", "lean_toolchain_blob_sha256"],
+      "properties": {
+        "benchmark_commit": {"$ref": "#/$defs/commit"},
+        "lean_toolchain": {"$ref": "#/$defs/toolchain"},
+        "lean_toolchain_blob_sha256": {"$ref": "#/$defs/digest"}
+      }
+    }
+  }
+}

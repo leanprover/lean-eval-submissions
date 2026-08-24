@@ -156,6 +156,12 @@ does not disappear when the 30-day Actions shard artifacts expire. A later
 probe or adjudication creates a new aggregate; it never rewrites this evidence
 object.
 
+That deterministic, source-free bridge is specified in
+[`historical-public-replay-plan.md`](historical-public-replay-plan.md). Its seed
+plan remains explicitly blocked until State has a reviewed replay-authority
+contract for legacy public Results records; it never invents a modern
+submission ID or archive receipt.
+
 Exact model mismatches remain pending for explicit adjudication. For example,
 an issue description that adds a context-window qualifier to the accepted
 record's model name is not silently normalized into a match.

@@ -1,0 +1,196 @@
+name: Build historical public replay seed plan
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Full protected-main controller commit selected through its immutable dispatch tag
+        required: true
+        type: string
+      evidence_path:
+        description: Reviewed source-free aggregate under evidence/public-replay
+        required: true
+        type: string
+      expected_evidence_sha256:
+        description: Reviewed exact aggregate file digest
+        required: true
+        type: string
+      expected_resolved_request_count:
+        description: Reviewed count of resolved submission groups
+        required: true
+        type: string
+      expected_resolved_result_count:
+        description: Reviewed count of resolved accepted results
+        required: true
+        type: string
+      expected_pending_request_count:
+        description: Reviewed unresolved submission-group count
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: historical-public-replay-plan
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Require the exact immutable protected dispatch tag
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "leanprover/lean-eval-submissions"
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_COMMIT"
+          test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
+          tag_ref="refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
+          mapfile -t tag_lines < <(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            "$tag_ref" "$tag_ref^{}")
+          test "${#tag_lines[@]}" -ge 1
+          test "${#tag_lines[@]}" -le 2
+          tag_object=""
+          remote_commit=""
+          for line in "${tag_lines[@]}"; do
+            read -r object ref extra <<< "$line"
+            test -z "${extra:-}"
+            [[ "$object" =~ ^[0-9a-f]{40}$ ]]
+            if [ "$ref" = "$tag_ref" ]; then
+              test -z "$tag_object"
+              tag_object="$object"
+            elif [ "$ref" = "$tag_ref^{}" ]; then
+              test -z "$remote_commit"
+              remote_commit="$object"
+            else
+              exit 1
+            fi
+          done
+          test -n "$tag_object"
+          if [ -z "$remote_commit" ]; then remote_commit="$tag_object"; fi
+          test "$remote_commit" = "$EXPECTED_COMMIT"
+
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require protected main and the exact source-free aggregate
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          EVIDENCE_PATH: ${{ inputs.evidence_path }}
+          EXPECTED_EVIDENCE_SHA256: ${{ inputs.expected_evidence_sha256 }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$EVIDENCE_PATH" =~ ^evidence/public-replay/[a-z0-9][a-z0-9._-]*\.json$ ]]
+          [[ "$EXPECTED_EVIDENCE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test -f "$EVIDENCE_PATH"
+          test ! -L "$EVIDENCE_PATH"
+          test "$(sha256sum "$EVIDENCE_PATH" | cut -d' ' -f1)" = "$EXPECTED_EVIDENCE_SHA256"
+          remote_main=$(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            refs/heads/main | cut -f1)
+          branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.name, .commit.sha, .protected] | @tsv')
+          test "$branch" = $'main\t'"$remote_main"$'\ttrue'
+          git merge-base --is-ancestor "$EXPECTED_COMMIT" "$remote_main"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      # actions/setup-python pinned to v7.0.0.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      # actions/checkout pinned to v7.0.1. This checkout supplies public benchmark
+      # Git objects only; the generated registry contains just commit/toolchain hashes.
+      - name: Fetch public benchmark history without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval
+          path: benchmark-history
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Recompute exact source-free inputs and seed plan twice
+        env:
+          EVIDENCE_PATH: ${{ inputs.evidence_path }}
+          EXPECTED_EVIDENCE_SHA256: ${{ inputs.expected_evidence_sha256 }}
+          EXPECTED_REQUESTS: ${{ inputs.expected_resolved_request_count }}
+          EXPECTED_RESULTS: ${{ inputs.expected_resolved_result_count }}
+          EXPECTED_PENDING: ${{ inputs.expected_pending_request_count }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_REQUESTS" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXPECTED_RESULTS" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXPECTED_PENDING" =~ ^[0-9]+$ ]]
+          source_commit=$(python -c \
+            'import json,os; print(json.load(open(os.environ["EVIDENCE_PATH"]))["source_commit"])')
+          [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]]
+          source_tree="$RUNNER_TEMP/results-source"
+          git worktree add --detach "$source_tree" "$source_commit"
+          test "$(git -C "$source_tree" rev-parse HEAD)" = "$source_commit"
+          test -z "$(git -C "$source_tree" status --porcelain=v1 --untracked-files=all)"
+          inventory="$RUNNER_TEMP/historical-replay-inventory.json"
+          requests="$RUNNER_TEMP/public-replay-resolution-requests.json"
+          toolchains="$RUNNER_TEMP/public-replay-toolchains.json"
+          plan="$RUNNER_TEMP/historical-public-replay-plan.json"
+          recomputed="$RUNNER_TEMP/historical-public-replay-plan.recomputed.json"
+          python scripts/inventory_historical_replay.py \
+            --results-root "$source_tree/results" \
+            --source-commit "$source_commit" \
+            --output "$inventory"
+          python scripts/prepare_public_replay_resolution.py \
+            --inventory "$inventory" \
+            --results-root "$source_tree/results" \
+            --output "$requests"
+          python scripts/build_public_replay_toolchain_registry.py \
+            --requests "$requests" \
+            --evidence-aggregate "$EVIDENCE_PATH" \
+            --workflow-registry configuration/public-replay-workflow-definitions-v1.json \
+            --benchmark-repository benchmark-history \
+            --output "$toolchains"
+          for output in "$plan" "$recomputed"; do
+            python scripts/prepare_public_replay_plan.py \
+              --inventory "$inventory" \
+              --requests "$requests" \
+              --evidence-aggregate "$EVIDENCE_PATH" \
+              --workflow-registry configuration/public-replay-workflow-definitions-v1.json \
+              --toolchain-registry "$toolchains" \
+              --results-root "$source_tree/results" \
+              --output "$output"
+          done
+          cmp "$plan" "$recomputed"
+          PLAN="$plan" python - <<'PY'
+          import json
+          import os
+
+          value = json.load(open(os.environ["PLAN"], encoding="utf-8"))
+          assert value["activation_status"] == "blocked"
+          assert value["activation_requirement"] == "legacy_public_result_replay_authority_v1"
+          assert value["resolved_request_count"] == int(os.environ["EXPECTED_REQUESTS"])
+          assert value["resolved_result_count"] == int(os.environ["EXPECTED_RESULTS"])
+          assert value["pending_request_count"] == int(os.environ["EXPECTED_PENDING"])
+          assert len(value["requests"]) == value["resolved_request_count"]
+          assert sum(len(item["results"]) for item in value["requests"]) == value["resolved_result_count"]
+          PY
+          echo "plan_path=$plan" >> "$GITHUB_ENV"
+          echo "toolchain_path=$toolchains" >> "$GITHUB_ENV"
+
+      # actions/upload-artifact pinned to v7.0.0.
+      - name: Upload source-free blocked replay seed plan
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-public-replay-plan-${{ inputs.expected_commit }}
+          path: |
+            ${{ env.plan_path }}
+            ${{ env.toolchain_path }}
+          if-no-files-found: error
+          retention-days: 30
