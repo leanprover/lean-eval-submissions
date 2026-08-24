@@ -428,7 +428,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('arguments+=(--var "$name:$value")', production)
         self.assertIn("intake-lease-smoke.json", production)
         self.assertIn("intake_lease", production)
-        self.assertIn("82a036df052b4bd66f358b50925e939c862ee6f3", production)
+        self.assertIn("163e9314c881493e08d23baf35ff40456f9c2331", production)
         self.assertIn("af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb", production)
         self.assertIn("state_contract_verified", production)
         self.assertIn("timeout --signal=TERM --kill-after=10s 150s", production)
@@ -586,7 +586,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],
-                    "82a036df052b4bd66f358b50925e939c862ee6f3",
+                    "163e9314c881493e08d23baf35ff40456f9c2331",
                 )
                 self.assertEqual(
                     configuration["vars"]["OAUTH_CALLBACK_URL"],
