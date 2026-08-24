@@ -30,10 +30,10 @@
     "rust_toolchain": "rustc-1.89.0",
     "schema_version": 1,
     "toolchain": "leanprover/lean4:v4.33.0",
-    "vm_image_digest": "sha256:f09248ec7cf33887acfaf56430bd9e410189ce63e1f1b85b94804498de4e9ef2"
+    "vm_image_digest": "sha256:3b573d8ffdab712afba46a13f7f05e844b0365f00f7e7b7f734b5211f4ef9624"
   },
-  "execution_profile_digest": "271b407bad361b969ffb0fab42d8bf3615377b08adbcedb825d6e6ac1d905c06",
-  "image_source_commit": "f1e398e6ce15eea09a5b9c5289c2cbd56003aef4",
+  "execution_profile_digest": "96457c9d23674faafea669103ac6336b3945999df54d67446c2cc6cc479a9f44",
+  "image_source_commit": "b069186599b79a52f1282e8ddb3eb3c8f7d3fc64",
   "measurement_config": {
     "memory_limit_bytes": 12884901888,
     "retired_instructions": {
@@ -44,10 +44,10 @@
     "wall_time_limit_ms": 19800000
   },
   "measurement_config_digest": "2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945",
-  "registry_manifest_digest": "sha256:f09248ec7cf33887acfaf56430bd9e410189ce63e1f1b85b94804498de4e9ef2",
+  "registry_manifest_digest": "sha256:3b573d8ffdab712afba46a13f7f05e844b0365f00f7e7b7f734b5211f4ef9624",
   "registry_repository": "lean-eval-authoritative",
-  "registry_tag": "f1e398e6ce15eea09a5b9c5289c2cbd56003aef4",
-  "runtime_evidence_sha256": "7184ee32fc39ac4e98faeedf1bc907379afe1268dc778c3813bf331a7862e892",
+  "registry_tag": "b069186599b79a52f1282e8ddb3eb3c8f7d3fc64",
+  "runtime_evidence_sha256": "47b3e18f1e41295b7a118bde2e398f67a2171c25af313fa8701feaa5ab832eba",
   "schema_version": 1,
-  "worker_deployed_commit": "6f7cf2222d39f4b1add5af94e8f0fe25eb0dbb99"
+  "worker_deployed_commit": "b54ce2db3664dd267fe0a906ea568ba933e5a82e"
 }
