@@ -115,7 +115,7 @@ jobs:
           import json, os
           body = json.loads(os.environ["RESPONSE"])
           assert set(body) == {
-              "candidate_effective_result_identity_id", "candidate_reserved",
+              "amendment_status", "candidate_effective_result_identity_id", "candidate_reserved",
               "deployed_commit", "event_id", "maintainer_api_enabled", "operation",
               "owner_api_enabled", "result_id", "state_commit", "status",
           }
@@ -145,7 +145,14 @@ jobs:
           assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
           assert body["owner_api_enabled"] is False
           assert body["maintainer_api_enabled"] is False
-          if os.environ["OPERATION"] == "apply":
+          allowed_statuses = {
+              "request_apply": {"pending", "applied"},
+              "apply": {"applied"},
+              "request_reject": {"pending", "rejected"},
+              "reject": {"rejected"},
+          }
+          assert body["amendment_status"] in allowed_statuses[os.environ["OPERATION"]]
+          if body["amendment_status"] == "applied":
               assert body["candidate_reserved"] is True
           else:
               assert body["candidate_reserved"] is False

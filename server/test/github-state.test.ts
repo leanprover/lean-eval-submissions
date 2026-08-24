@@ -3035,6 +3035,8 @@ describe("atomic Git State append", () => {
       commit: HEAD,
       view: LEGACY_AMENDMENT_VIEW,
       reservation,
+      requestEvent: null,
+      decisionEvent: null,
     });
     for (const [input] of fetcher.mock.calls) {
       const url = fetchUrl(input);

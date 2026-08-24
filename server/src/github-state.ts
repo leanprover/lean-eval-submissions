@@ -1387,6 +1387,38 @@ export class GitHubStateRepository {
     };
   }
 
+  async readResultAmendmentCanary(
+    resultId: string,
+    candidateIdentityId: string,
+  ): Promise<Readonly<{
+    commit: string;
+    view: ResultAmendmentView;
+    reservation: EffectiveResultIdentityReservation | null;
+    requestEvent: StateEvent | null;
+    decisionEvent: StateEvent | null;
+  }>> {
+    const snapshot = await this.#resultOwnerSnapshot();
+    const path = effectiveResultIdentityPath(candidateIdentityId);
+    const [{ view }, entry] = await Promise.all([
+      this.#resultAmendmentAt(resultId, snapshot),
+      readPathAt(this.#config, this.#fetcher, path, snapshot.headSha),
+    ]);
+    const repair = view.problem_repair;
+    const [requestEvent, decisionEvent] = await Promise.all([
+      repair === null ? null : readEventAt(this.#config, this.#fetcher, repair.request_event_id, snapshot.headSha),
+      repair?.decision_event_id === null || repair?.decision_event_id === undefined
+        ? null
+        : readEventAt(this.#config, this.#fetcher, repair.decision_event_id, snapshot.headSha),
+    ]);
+    return {
+      commit: snapshot.headSha,
+      view,
+      reservation: entry.found ? decodeEffectiveResultIdentityReservation(entry.value) : null,
+      requestEvent,
+      decisionEvent,
+    };
+  }
+
   async readResultAmendmentCanaryAtHead(
     resultId: string,
     candidateIdentityId: string,
@@ -1395,6 +1427,8 @@ export class GitHubStateRepository {
     commit: string;
     view: ResultAmendmentView;
     reservation: EffectiveResultIdentityReservation | null;
+    requestEvent: StateEvent | null;
+    decisionEvent: StateEvent | null;
   }>> {
     if (!LOWER_SHA.test(expectedHead)) {
       throw new TypeError("expected State head must be a lowercase commit SHA");
@@ -1408,10 +1442,19 @@ export class GitHubStateRepository {
       this.#resultAmendmentAt(resultId, snapshot),
       readPathAt(this.#config, this.#fetcher, path, snapshot.headSha),
     ]);
+    const repair = view.problem_repair;
+    const [requestEvent, decisionEvent] = await Promise.all([
+      repair === null ? null : readEventAt(this.#config, this.#fetcher, repair.request_event_id, snapshot.headSha),
+      repair?.decision_event_id === null || repair?.decision_event_id === undefined
+        ? null
+        : readEventAt(this.#config, this.#fetcher, repair.decision_event_id, snapshot.headSha),
+    ]);
     return {
       commit: snapshot.headSha,
       view,
       reservation: entry.found ? decodeEffectiveResultIdentityReservation(entry.value) : null,
+      requestEvent,
+      decisionEvent,
     };
   }
 

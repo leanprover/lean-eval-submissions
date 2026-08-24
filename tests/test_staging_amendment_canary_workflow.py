@@ -88,6 +88,16 @@ class StagingAmendmentCanaryWorkflowTests(unittest.TestCase):
         self.assertIn('env.INTAKE_ENABLEMENT_MODE === "disabled"', APP)
         self.assertIn('env.RESULT_AMENDMENT_MAINTAINERS === "[]"', APP)
 
+    def test_workflow_accepts_only_exact_resumable_operation_states(self) -> None:
+        self.assertIn('"amendment_status"', WORKFLOW)
+        self.assertIn('"request_apply": {"pending", "applied"}', WORKFLOW)
+        self.assertIn('"apply": {"applied"}', WORKFLOW)
+        self.assertIn('"request_reject": {"pending", "rejected"}', WORKFLOW)
+        self.assertIn('"reject": {"rejected"}', WORKFLOW)
+        self.assertIn('if body["amendment_status"] == "applied"', WORKFLOW)
+        self.assertIn("stale supplied head is accepted only when", DOCUMENTATION)
+        self.assertIn("absent or changed event never rebases", DOCUMENTATION)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -40,13 +40,17 @@ The workflow binds the dispatch actor to `kim-em`, the reviewer recorded in the
 two canary decisions. The exact four UUIDv7 event IDs, their matching
 millisecond timestamps, request/decision links, targets, and outcomes are
 compiled into the Worker; the caller supplies only the exact deployed commit,
-initial staging State head, operation name, and confirmation. Each mutation is
-bound to the supplied State head. An exact already-written event is a read-only
-success after ambiguous response loss, but an absent event never rebases onto a
-different head. The final amendment view and candidate reservation are read
-from one exact post-mutation snapshot, whose commit is chained into the next
-operation. Retrying a partial run requires the refreshed current State head;
-the immutable already-written operations remain read-only.
+initial staging State head, operation name, and confirmation. Each absent
+mutation is bound to the supplied State head. The route first reads one
+validated current snapshot: a stale supplied head is accepted only when that
+snapshot proves the exact compiled request or decision event, its complete
+target and linkage, its immutable outcome, and the matching reservation state.
+That makes an already-written event a read-only success after ambiguous response
+loss, while an absent or changed event never rebases onto a different head. The
+exact post-mutation snapshot commit is chained into the next operation. A
+partial workflow can be rerun with the refreshed current State head; request
+steps accept their exact pending state or the exact compiled terminal decision,
+so every already-written operation remains read-only.
 
 After merge, install the same fresh random `STAGING_AMENDMENT_CANARY_TOKEN` as
 a staging Worker secret and a `cloudflare-staging` environment secret. Then

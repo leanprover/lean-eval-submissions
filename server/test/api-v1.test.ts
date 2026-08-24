@@ -61,6 +61,7 @@ import {
 } from "../src/staging-amendment-canary";
 import {
   validateStateEvent,
+  type StateEvent,
   type WritableResultLifecycleEvent,
   type WritableStateEvent,
   type WritableSubmissionLifecycleEvent,
@@ -167,6 +168,26 @@ class MemoryState implements StateAccess {
     });
   }
 
+  readResultAmendmentCanary(
+    _resultId: string,
+    candidateIdentityId: string,
+  ): Promise<Readonly<{
+    commit: string;
+    view: ResultAmendmentView;
+    reservation: import("../src/result-owner").EffectiveResultIdentityReservation | null;
+    requestEvent?: StateEvent | null;
+    decisionEvent?: StateEvent | null;
+  }>> {
+    if (this.maintainerAmendment === null) {
+      return Promise.reject(new ResultOwnerStateError(404, "result amendment was not found"));
+    }
+    return Promise.resolve({
+      commit: this.head,
+      view: this.maintainerAmendment,
+      reservation: this.effectiveResultReservations.get(candidateIdentityId) ?? null,
+    });
+  }
+
   readResultAmendmentCanaryAtHead(
     _resultId: string,
     candidateIdentityId: string,
@@ -175,6 +196,8 @@ class MemoryState implements StateAccess {
     commit: string;
     view: ResultAmendmentView;
     reservation: import("../src/result-owner").EffectiveResultIdentityReservation | null;
+    requestEvent?: StateEvent | null;
+    decisionEvent?: StateEvent | null;
   }>> {
     if (this.maintainerAmendment === null) {
       return Promise.reject(new ResultOwnerStateError(404, "result amendment was not found"));
@@ -1111,6 +1134,104 @@ describe("staging amendment canary route boundary", () => {
     evidence_corrected_challenge_id: `ch1_${"f".repeat(64)}`,
   });
 
+  const canaryReservation = (lane: "apply" | "reject") => ({
+    schema_version: 1 as const,
+    effective_result_identity_id: STAGING_CANARY_TARGETS[lane].candidateIdentityId,
+    owner_login: "kim-em",
+    declared_model: STAGING_CANARY_TARGETS[lane].declaredModel,
+    problem_id: "list_append_singleton_length",
+    statement_revision: 1,
+    result_id: STAGING_CANARY_TARGETS[lane].resultId,
+    reservation_event_id: STAGING_CANARY_INTENTS[lane].eventId,
+    reservation_kind: "problem_repair" as const,
+  });
+
+  const canaryEvents = (
+    lane: "apply" | "reject",
+    view: ResultAmendmentView,
+  ): Readonly<{ requestEvent: StateEvent; decisionEvent: StateEvent | null }> => {
+    const target = STAGING_CANARY_TARGETS[lane];
+    const requestOperation = lane === "apply" ? "request_apply" : "request_reject";
+    const requestIntent = STAGING_CANARY_INTENTS[requestOperation];
+    const requestEvent: StateEvent = {
+      schema_version: 1,
+      event_id: requestIntent.eventId,
+      event_type: "result.problem_repair_requested",
+      occurred_at: requestIntent.occurredAt,
+      subject_id: target.resultId,
+      causation_event_id: target.authorityEventId,
+      actor: { kind: "github", login: "kim-em" },
+      payload: {
+        repair_revision: 1,
+        corrected_problem_id: "list_append_singleton_length",
+        corrected_statement_revision: 1,
+        reason_code: "wrong_problem_revision",
+      },
+    };
+    const repair = view.problem_repair;
+    if (repair?.status === "pending") return { requestEvent, decisionEvent: null };
+    if (repair === null) throw new TypeError("canary event fixture requires a repair");
+    const decisionIntent = STAGING_CANARY_INTENTS[lane];
+    if (lane === "reject") {
+      return {
+        requestEvent,
+        decisionEvent: {
+          schema_version: 1,
+          event_id: decisionIntent.eventId,
+          event_type: "result.problem_repair_rejected",
+          occurred_at: decisionIntent.occurredAt,
+          subject_id: target.resultId,
+          causation_event_id: requestIntent.eventId,
+          actor: { kind: "system" },
+          payload: {
+            repair_revision: 1,
+            reviewer_login: "kim-em",
+            reason_code: "insufficient_comparator_evidence",
+          },
+        },
+      };
+    }
+    const evidence = repair.comparator_evidence;
+    if (evidence === null) throw new TypeError("applied canary fixture requires evidence");
+    return {
+      requestEvent,
+      decisionEvent: {
+        schema_version: 1,
+        event_id: decisionIntent.eventId,
+        event_type: "result.problem_repaired",
+        occurred_at: decisionIntent.occurredAt,
+        subject_id: target.resultId,
+        causation_event_id: requestIntent.eventId,
+        actor: { kind: "system" },
+        payload: {
+          repair_revision: 1,
+          corrected_problem_id: "list_append_singleton_length",
+          corrected_statement_revision: 1,
+          reviewer_login: "kim-em",
+          comparator_repository: evidence.repository,
+          comparator_commit: evidence.commit,
+          comparator_path: evidence.path,
+          comparator_blob_oid: evidence.blob_oid,
+          comparator_blob_sha256: evidence.blob_sha256,
+          comparator_record_sha256: evidence.record_sha256,
+          comparator_binding_sha256: evidence.binding_sha256,
+          comparator_verification_method: evidence.verification_method,
+          evidence_result_id: evidence.evidence_result_id,
+          evidence_owner_login: evidence.evidence_owner_login,
+          evidence_declared_model: evidence.evidence_declared_model,
+          evidence_base_problem_group: evidence.evidence_base_problem_group,
+          evidence_base_problem_id: evidence.evidence_base_problem_id,
+          evidence_base_statement_revision: evidence.evidence_base_statement_revision,
+          evidence_base_challenge_id: evidence.evidence_base_challenge_id,
+          evidence_corrected_problem_group: evidence.evidence_corrected_problem_group,
+          evidence_corrected_problem_id: evidence.evidence_corrected_problem_id,
+          evidence_corrected_statement_revision: evidence.evidence_corrected_statement_revision,
+          evidence_corrected_challenge_id: evidence.evidence_corrected_challenge_id,
+        },
+      },
+    };
+  };
+
   it("conceals the staging-only route without readiness authentication", async () => {
     const response = await handleRequest(new Request(
       "https://submit.test/internal/v1/staging-amendment-canary",
@@ -1130,6 +1251,135 @@ describe("staging amendment canary route boundary", () => {
       READINESS_TOKEN: "general-readiness-secret-with-thirty-two-bytes",
     }, LIFECYCLE);
     expect(response.status).toBe(404);
+  });
+
+  it("accepts a stale-head retry only after the exact compiled request exists", async () => {
+    const state = new MemoryState();
+    state.head = "e".repeat(40);
+    const intent = STAGING_CANARY_INTENTS.request_apply;
+    const pending = requestedProblemRepairView(
+      initialCanaryView("apply"),
+      intent.eventId,
+      intent.occurredAt,
+      "list_append_singleton_length",
+      1,
+      "wrong_problem_revision",
+    );
+    vi.spyOn(state, "readResultAmendmentCanary").mockResolvedValue({
+      commit: state.head,
+      view: pending,
+      reservation: null,
+      ...canaryEvents("apply", pending),
+    });
+    const response = await handleRequest(
+      canaryRequest("request_apply", "d".repeat(40)),
+      canaryEnv,
+      LIFECYCLE,
+      { state },
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      operation: "request_apply",
+      amendment_status: "pending",
+      state_commit: state.head,
+      candidate_reserved: false,
+    });
+    expect(state.problemRepairRequests).toHaveLength(0);
+
+    const absent = new MemoryState();
+    absent.head = "e".repeat(40);
+    vi.spyOn(absent, "readResultAmendmentCanary").mockResolvedValue({
+      commit: absent.head,
+      view: initialCanaryView("apply"),
+      reservation: null,
+    });
+    const rejected = await handleRequest(
+      canaryRequest("request_apply", "d".repeat(40)),
+      canaryEnv,
+      LIFECYCLE,
+      { state: absent },
+    );
+    expect(rejected.status).toBe(503);
+    expect(absent.problemRepairRequests).toHaveLength(0);
+  });
+
+  it("rejects stale retries whose event, timestamp, or reservation binding changed", async () => {
+    const requestIntent = STAGING_CANARY_INTENTS.request_apply;
+    const decisionIntent = STAGING_CANARY_INTENTS.apply;
+    const exactPending = requestedProblemRepairView(
+      initialCanaryView("apply"),
+      requestIntent.eventId,
+      requestIntent.occurredAt,
+      "list_append_singleton_length",
+      1,
+      "wrong_problem_revision",
+    );
+    const applied = decidedProblemRepairView(
+      exactPending,
+      decisionIntent.eventId,
+      decisionIntent.occurredAt,
+      "kim-em",
+      "apply",
+      null,
+      canaryEvidence("apply"),
+    );
+    const wrongPending = requestedProblemRepairView(
+      initialCanaryView("apply"),
+      "01a035b4-d6ce-7213-8dc6-6e140474e02f",
+      "2026-08-24T21:37:19.055Z",
+      "list_append_singleton_length",
+      1,
+      "wrong_problem_revision",
+    );
+    const wrongReservation = {
+      ...canaryReservation("apply"),
+      reservation_event_id: STAGING_CANARY_INTENTS.request_apply.eventId,
+    };
+    const exactPendingEvents = canaryEvents("apply", exactPending);
+    const changedRequestEvent: StateEvent = {
+      ...exactPendingEvents.requestEvent,
+      occurred_at: "2026-08-24T21:37:19.055Z",
+    };
+    for (const [view, reservation, events] of [
+      [wrongPending, null, canaryEvents("apply", wrongPending)],
+      [exactPending, null, { ...exactPendingEvents, requestEvent: changedRequestEvent }],
+      [applied, wrongReservation, canaryEvents("apply", applied)],
+    ] as const) {
+      const state = new MemoryState();
+      state.head = "e".repeat(40);
+      vi.spyOn(state, "readResultAmendmentCanary").mockResolvedValue({
+        commit: state.head,
+        view,
+        reservation,
+        ...events,
+      });
+      const response = await handleRequest(
+        canaryRequest("request_apply", "d".repeat(40)),
+        canaryEnv,
+        LIFECYCLE,
+        { state },
+      );
+      expect(response.status).toBe(503);
+      expect(state.problemRepairRequests).toHaveLength(0);
+    }
+
+    const currentHeadChangedEvent = new MemoryState();
+    currentHeadChangedEvent.head = "e".repeat(40);
+    vi.spyOn(currentHeadChangedEvent, "readResultAmendmentCanary").mockResolvedValue({
+      commit: currentHeadChangedEvent.head,
+      view: exactPending,
+      reservation: null,
+      ...exactPendingEvents,
+      requestEvent: changedRequestEvent,
+    });
+    const currentHeadResponse = await handleRequest(
+      canaryRequest("request_apply", currentHeadChangedEvent.head),
+      canaryEnv,
+      LIFECYCLE,
+      { state: currentHeadChangedEvent },
+    );
+    expect(currentHeadResponse.status).toBe(503);
+    expect(currentHeadChangedEvent.problemRepairRequests).toHaveLength(0);
   });
 
   it("keeps production unreachable even with the matching readiness token", async () => {
@@ -1176,9 +1426,15 @@ describe("staging amendment canary route boundary", () => {
       1,
       "wrong_problem_revision",
     );
+    vi.spyOn(state, "readResultAmendmentCanary")
+      .mockResolvedValueOnce({ commit: state.head, view: initial, reservation: null });
     const read = vi.spyOn(state, "readResultAmendmentCanaryAtHead")
-      .mockResolvedValueOnce({ commit: state.head, view: initial, reservation: null })
-      .mockResolvedValueOnce({ commit: state.head, view: pending, reservation: null });
+      .mockResolvedValueOnce({
+        commit: state.head,
+        view: pending,
+        reservation: null,
+        ...canaryEvents("apply", pending),
+      });
     const response = await handleRequest(
       canaryRequest("request_apply"), canaryEnv, LIFECYCLE, { state },
     );
@@ -1198,8 +1454,7 @@ describe("staging amendment canary route boundary", () => {
       correctedStatementRevision: 1,
       reasonCode: "wrong_problem_revision",
     }]);
-    expect(read).toHaveBeenNthCalledWith(
-      2,
+    expect(read).toHaveBeenCalledWith(
       STAGING_CANARY_TARGETS.apply.resultId,
       STAGING_CANARY_TARGETS.apply.candidateIdentityId,
       state.head,
@@ -1239,9 +1494,15 @@ describe("staging amendment canary route boundary", () => {
       reservation_event_id: decisionIntent.eventId,
       reservation_kind: "problem_repair" as const,
     };
+    vi.spyOn(state, "readResultAmendmentCanary")
+      .mockResolvedValueOnce({ commit: state.head, view: requested, reservation: null });
     vi.spyOn(state, "readResultAmendmentCanaryAtHead")
-      .mockResolvedValueOnce({ commit: state.head, view: requested, reservation: null })
-      .mockResolvedValueOnce({ commit: state.head, view: applied, reservation });
+      .mockResolvedValueOnce({
+        commit: state.head,
+        view: applied,
+        reservation,
+        ...canaryEvents("apply", applied),
+      });
     const provider = new GitHubProvider();
     const verify = vi.spyOn(provider, "verifyProblemRepairComparator").mockResolvedValue(evidence);
     const response = await handleRequest(
@@ -1260,6 +1521,199 @@ describe("staging amendment canary route boundary", () => {
       decision: "apply",
       comparatorEvidence: evidence,
     });
+  });
+
+  it("resumes from an already-written request and chains the applied State head", async () => {
+    const state = new MemoryState();
+    state.head = "e".repeat(40);
+    const requestIntent = STAGING_CANARY_INTENTS.request_apply;
+    const decisionIntent = STAGING_CANARY_INTENTS.apply;
+    const pending = requestedProblemRepairView(
+      initialCanaryView("apply"),
+      requestIntent.eventId,
+      requestIntent.occurredAt,
+      "list_append_singleton_length",
+      1,
+      "wrong_problem_revision",
+    );
+    const evidence = canaryEvidence("apply");
+    const applied = decidedProblemRepairView(
+      pending,
+      decisionIntent.eventId,
+      decisionIntent.occurredAt,
+      "kim-em",
+      "apply",
+      null,
+      evidence,
+    );
+    const reservation = canaryReservation("apply");
+    vi.spyOn(state, "readResultAmendmentCanary")
+      .mockResolvedValueOnce({
+        commit: state.head,
+        view: pending,
+        reservation: null,
+        ...canaryEvents("apply", pending),
+      })
+      .mockResolvedValueOnce({
+        commit: state.head,
+        view: pending,
+        reservation: null,
+        ...canaryEvents("apply", pending),
+      });
+    vi.spyOn(state, "decideResultProblemRepair").mockResolvedValue({
+      commit: "f".repeat(40),
+      created: true,
+      resultId: STAGING_CANARY_TARGETS.apply.resultId,
+      mutationEventId: decisionIntent.eventId,
+      repairRevision: 1,
+    });
+    vi.spyOn(state, "readResultAmendmentCanaryAtHead").mockResolvedValue({
+      commit: "f".repeat(40),
+      view: applied,
+      reservation,
+      ...canaryEvents("apply", applied),
+    });
+    const provider = new GitHubProvider();
+    vi.spyOn(provider, "verifyProblemRepairComparator").mockResolvedValue(evidence);
+
+    const resumedRequest = await handleRequest(
+      canaryRequest("request_apply", state.head), canaryEnv, LIFECYCLE, { state },
+    );
+    expect(resumedRequest.status).toBe(200);
+    expect(await resumedRequest.json()).toMatchObject({
+      amendment_status: "pending",
+      state_commit: "e".repeat(40),
+      candidate_reserved: false,
+    });
+    expect(state.problemRepairRequests).toHaveLength(0);
+
+    const appliedResponse = await handleRequest(
+      canaryRequest("apply", state.head), canaryEnv, LIFECYCLE, { provider, state },
+    );
+    expect(appliedResponse.status).toBe(200);
+    expect(await appliedResponse.json()).toMatchObject({
+      amendment_status: "applied",
+      state_commit: "f".repeat(40),
+      candidate_reserved: true,
+    });
+  });
+
+  it("resumes after apply without rewriting it and completes the chained reject lane", async () => {
+    const state = new MemoryState();
+    const applyHead = "e".repeat(40);
+    const rejectRequestHead = "f".repeat(40);
+    const rejectHead = "a".repeat(40);
+    state.head = applyHead;
+    const applyRequest = STAGING_CANARY_INTENTS.request_apply;
+    const applyDecision = STAGING_CANARY_INTENTS.apply;
+    const applyPending = requestedProblemRepairView(
+      initialCanaryView("apply"),
+      applyRequest.eventId,
+      applyRequest.occurredAt,
+      "list_append_singleton_length",
+      1,
+      "wrong_problem_revision",
+    );
+    const applied = decidedProblemRepairView(
+      applyPending,
+      applyDecision.eventId,
+      applyDecision.occurredAt,
+      "kim-em",
+      "apply",
+      null,
+      canaryEvidence("apply"),
+    );
+    const applyReservation = canaryReservation("apply");
+    const rejectRequest = STAGING_CANARY_INTENTS.request_reject;
+    const rejectDecision = STAGING_CANARY_INTENTS.reject;
+    const rejectInitial = initialCanaryView("reject");
+    const rejectPending = requestedProblemRepairView(
+      rejectInitial,
+      rejectRequest.eventId,
+      rejectRequest.occurredAt,
+      "list_append_singleton_length",
+      1,
+      "wrong_problem_revision",
+    );
+    const rejected = decidedProblemRepairView(
+      rejectPending,
+      rejectDecision.eventId,
+      rejectDecision.occurredAt,
+      "kim-em",
+      "reject",
+      "insufficient_comparator_evidence",
+      null,
+    );
+    vi.spyOn(state, "readResultAmendmentCanary")
+      .mockResolvedValueOnce({
+        commit: applyHead,
+        view: applied,
+        reservation: applyReservation,
+        ...canaryEvents("apply", applied),
+      })
+      .mockResolvedValueOnce({
+        commit: applyHead,
+        view: applied,
+        reservation: applyReservation,
+        ...canaryEvents("apply", applied),
+      })
+      .mockResolvedValueOnce({ commit: applyHead, view: rejectInitial, reservation: null })
+      .mockResolvedValueOnce({ commit: rejectRequestHead, view: rejectPending, reservation: null });
+    vi.spyOn(state, "readResultAmendmentCanaryAtHead")
+      .mockResolvedValueOnce({
+        commit: applyHead,
+        view: applied,
+        reservation: applyReservation,
+        ...canaryEvents("apply", applied),
+      })
+      .mockResolvedValueOnce({
+        commit: rejectRequestHead,
+        view: rejectPending,
+        reservation: null,
+        ...canaryEvents("reject", rejectPending),
+      })
+      .mockResolvedValueOnce({
+        commit: rejectHead,
+        view: rejected,
+        reservation: null,
+        ...canaryEvents("reject", rejected),
+      });
+    const requestMutation = vi.spyOn(state, "requestResultProblemRepair").mockResolvedValue({
+      commit: rejectRequestHead,
+      created: true,
+      resultId: STAGING_CANARY_TARGETS.reject.resultId,
+      mutationEventId: rejectRequest.eventId,
+      repairRevision: 1,
+    });
+    const decisionMutation = vi.spyOn(state, "decideResultProblemRepair").mockResolvedValue({
+      commit: rejectHead,
+      created: true,
+      resultId: STAGING_CANARY_TARGETS.reject.resultId,
+      mutationEventId: rejectDecision.eventId,
+      repairRevision: 1,
+    });
+
+    const responses = [];
+    let chainedHead = applyHead;
+    for (const operation of ["request_apply", "apply", "request_reject", "reject"] as const) {
+      const response = await handleRequest(
+        canaryRequest(operation, chainedHead), canaryEnv, LIFECYCLE, { state },
+      );
+      expect(response.status).toBe(200);
+      const body: { state_commit: string } = await response.json();
+      responses.push(body);
+      chainedHead = body.state_commit;
+    }
+    expect(responses.map((body) => body.state_commit)).toEqual([
+      applyHead,
+      applyHead,
+      rejectRequestHead,
+      rejectHead,
+    ]);
+    expect(requestMutation).toHaveBeenCalledOnce();
+    expect(requestMutation.mock.calls[0]?.[0].eventId).toBe(rejectRequest.eventId);
+    expect(decisionMutation).toHaveBeenCalledOnce();
+    expect(decisionMutation.mock.calls[0]?.[0].eventId).toBe(rejectDecision.eventId);
   });
 
   it("rejects without comparator evidence and exact-event reruns stay read-only", async () => {
@@ -1283,8 +1737,21 @@ describe("staging amendment canary route boundary", () => {
       "insufficient_comparator_evidence",
       null,
     );
+    vi.spyOn(state, "readResultAmendmentCanary")
+      .mockResolvedValueOnce({ commit: state.head, view: requested, reservation: null })
+      .mockResolvedValueOnce({
+        commit: state.head,
+        view: rejected,
+        reservation: null,
+        ...canaryEvents("reject", rejected),
+      });
     vi.spyOn(state, "readResultAmendmentCanaryAtHead")
-      .mockResolvedValue({ commit: state.head, view: rejected, reservation: null });
+      .mockResolvedValueOnce({
+        commit: state.head,
+        view: rejected,
+        reservation: null,
+        ...canaryEvents("reject", rejected),
+      });
     state.created = false;
     const provider = new GitHubProvider();
     const verify = vi.spyOn(provider, "verifyProblemRepairComparator");
@@ -1358,14 +1825,21 @@ describe("staging amendment canary route boundary", () => {
       1,
       "wrong_problem_revision",
     );
+    vi.spyOn(state, "readResultAmendmentCanary")
+      .mockResolvedValueOnce({ commit: state.head, view: rejectInitial, reservation: null });
     vi.spyOn(state, "readResultAmendmentCanaryAtHead")
       .mockResolvedValueOnce({
         commit: state.head,
         view: applied,
         reservation: applyReservation,
+        ...canaryEvents("apply", applied),
       })
-      .mockResolvedValueOnce({ commit: state.head, view: rejectInitial, reservation: null })
-      .mockResolvedValueOnce({ commit: state.head, view: rejectPending, reservation: null });
+      .mockResolvedValueOnce({
+        commit: state.head,
+        view: rejectPending,
+        reservation: null,
+        ...canaryEvents("reject", rejectPending),
+      });
     const response = await handleRequest(
       canaryRequest("request_reject"), canaryEnv, LIFECYCLE, { state },
     );
@@ -1377,6 +1851,11 @@ describe("staging amendment canary route boundary", () => {
     });
 
     const blocked = new MemoryState();
+    vi.spyOn(blocked, "readResultAmendmentCanary").mockResolvedValueOnce({
+      commit: blocked.head,
+      view: rejectInitial,
+      reservation: null,
+    });
     vi.spyOn(blocked, "readResultAmendmentCanaryAtHead").mockResolvedValueOnce({
       commit: blocked.head,
       view: initialCanaryView("apply"),
@@ -1392,7 +1871,7 @@ describe("staging amendment canary route boundary", () => {
   it("fails closed on a CAS race, comparator failure, or postcondition head move", async () => {
     const state = new MemoryState();
     const initial = initialCanaryView("apply");
-    vi.spyOn(state, "readResultAmendmentCanaryAtHead")
+    vi.spyOn(state, "readResultAmendmentCanary")
       .mockResolvedValueOnce({ commit: state.head, view: initial, reservation: null });
     vi.spyOn(state, "requestResultProblemRepair").mockRejectedValue(
       new GitHubStateError(409, "State moved before the bound request"),
@@ -1411,7 +1890,7 @@ describe("staging amendment canary route boundary", () => {
       "wrong_problem_revision",
     );
     const comparatorState = new MemoryState();
-    vi.spyOn(comparatorState, "readResultAmendmentCanaryAtHead")
+    vi.spyOn(comparatorState, "readResultAmendmentCanary")
       .mockResolvedValueOnce({ commit: comparatorState.head, view: requested, reservation: null });
     const provider = new GitHubProvider();
     vi.spyOn(provider, "verifyProblemRepairComparator").mockRejectedValue(
@@ -1424,14 +1903,15 @@ describe("staging amendment canary route boundary", () => {
     expect(comparatorState.problemRepairDecisions).toHaveLength(0);
 
     const movedState = new MemoryState();
+    vi.spyOn(movedState, "readResultAmendmentCanary")
+      .mockResolvedValueOnce({ commit: movedState.head, view: initial, reservation: null });
     const movedRead = vi.spyOn(movedState, "readResultAmendmentCanaryAtHead")
-      .mockResolvedValueOnce({ commit: movedState.head, view: initial, reservation: null })
       .mockRejectedValueOnce(new GitHubStateError(409, "State moved before postcondition"));
     const moved = await handleRequest(
       canaryRequest("request_apply"), canaryEnv, LIFECYCLE, { state: movedState },
     );
     expect(moved.status).toBe(503);
-    expect(movedRead).toHaveBeenCalledTimes(2);
+    expect(movedRead).toHaveBeenCalledOnce();
   });
 });
 
