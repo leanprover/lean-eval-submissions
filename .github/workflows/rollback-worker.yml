@@ -66,6 +66,7 @@ jobs:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           GH_TOKEN: ${{ github.token }}
           INTAKE_VERSION: ${{ inputs.intake_version_id }}
+          READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
           REPLAY_VERSION: ${{ inputs.replay_version_id }}
           REPOSITORY: ${{ github.repository }}
         run: |
@@ -137,13 +138,12 @@ jobs:
           npx wrangler versions view "$REPLAY_VERSION" \
             --config wrangler.replay.jsonc --env production --json > "$plan_dir/replay-version.json"
 
-          gh api repos/leanprover/lean-eval-state/branches/main \
-            --jq '{commit: .commit.sha, protected: .protected}' \
-            > "$plan_dir/state-main.json"
-          state_commit=$(jq -er .commit "$plan_dir/state-main.json")
-          gh api -H 'Accept: application/vnd.github.v3.raw' \
-            "repos/leanprover/lean-eval-state/contents/schema/state-event-v1.schema.json?ref=$state_commit" \
-            > "$plan_dir/state-event-schema.json"
+          curl --fail-with-body --silent --show-error --proto '=https' \
+            --max-redirs 0 --max-time 30 \
+            --request POST \
+            --header "Authorization: Bearer ${READINESS_TOKEN}" \
+            --output "$plan_dir/state-proof.json" \
+            https://lean-eval-submission-server.lean-eval.workers.dev/readyz
 
           python ../scripts/validate_cloudflare_rollback.py plan \
             --expected-commit "$EXPECTED_COMMIT" \
@@ -161,8 +161,7 @@ jobs:
             --qualification \
             "$plan_dir/target/.audit/cloudflare-rollback-qualification-v1.json" \
             --target-root "$plan_dir/target" \
-            --state-main "$plan_dir/state-main.json" \
-            --state-schema "$plan_dir/state-event-schema.json" \
+            --state-proof "$plan_dir/state-proof.json" \
             --require-replay-disabled \
             --output "$plan_dir/plan.json"
 
@@ -215,16 +214,30 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
-          GH_TOKEN: ${{ github.token }}
+          READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
         run: |
+          set -euo pipefail
           plan_dir="$RUNNER_TEMP/lean-eval-rollback"
           qualified_state=$(jq -er .state_contract.commit "$plan_dir/plan.json")
-          live_state=$(gh api repos/leanprover/lean-eval-state/branches/main \
-            --jq '[.commit.sha, .protected] | @tsv')
-          if [ "$live_state" != "$qualified_state"$'\ttrue' ]; then
-            echo "protected State main moved after rollback qualification" >&2
-            exit 1
-          fi
+          curl --fail-with-body --silent --show-error --proto '=https' \
+            --max-redirs 0 --max-time 30 \
+            --request POST \
+            --header "Authorization: Bearer ${READINESS_TOKEN}" \
+            --output "$plan_dir/state-proof-before-mutation.json" \
+            https://lean-eval-submission-server.lean-eval.workers.dev/readyz
+          QUALIFIED_STATE="$qualified_state" PLAN_DIR="$plan_dir" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["PLAN_DIR"])
+          with (root / "state-proof.json").open(encoding="utf-8") as stream:
+              qualified = json.load(stream)
+          with (root / "state-proof-before-mutation.json").open(encoding="utf-8") as stream:
+              current = json.load(stream)
+          if current != qualified or current.get("state_commit") != os.environ["QUALIFIED_STATE"]:
+              raise SystemExit("protected State main moved after rollback qualification")
+          PY
           target="$RUNNER_TEMP/lean-eval-rollback/target/server"
           # The validated secrets.required allowlist inherits live secrets while
           # a full variable deploy clears every residual INTAKE_LEASE_* binding.
@@ -358,7 +371,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
-          GH_TOKEN: ${{ github.token }}
+          READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
         run: |
           set -euo pipefail
           plan_dir="$RUNNER_TEMP/lean-eval-rollback"
@@ -382,14 +395,25 @@ jobs:
           python ../scripts/validate_cloudflare_rollback.py health \
             --plan "$plan_dir/plan.json" --component intake \
             --health "$plan_dir/final-intake-health.json" --require-intake-disabled
-          final_state=$(gh api repos/leanprover/lean-eval-state/branches/main \
-            --jq '[.commit.sha, .protected] | @tsv')
-          IFS=$'\t' read -r final_state_commit final_state_protected <<< "$final_state"
-          if [[ ! "$final_state_commit" =~ ^[0-9a-f]{40}$ ]] ||
-             [ "$final_state_protected" != true ]; then
-            echo "disabled rollback cannot prove protected State" >&2
-            exit 1
-          fi
+          curl --fail-with-body --silent --show-error --proto '=https' \
+            --max-redirs 0 --max-time 30 \
+            --request POST \
+            --header "Authorization: Bearer ${READINESS_TOKEN}" \
+            --output "$plan_dir/final-state-proof.json" \
+            https://lean-eval-submission-server.lean-eval.workers.dev/readyz
+          PLAN_DIR="$plan_dir" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["PLAN_DIR"])
+          with (root / "state-proof.json").open(encoding="utf-8") as stream:
+              qualified = json.load(stream)
+          with (root / "final-state-proof.json").open(encoding="utf-8") as stream:
+              current = json.load(stream)
+          if current != qualified:
+              raise SystemExit("disabled rollback cannot prove unchanged protected State")
+          PY
           echo "Restored intake version: $deployed_version" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove rollback scratch

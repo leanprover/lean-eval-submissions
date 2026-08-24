@@ -121,12 +121,10 @@ def _callback_contract_digest(root: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
-def _validate_qualification(
+def _validate_qualification_header(
     qualification: dict[str, Any],
     target_root: pathlib.Path,
-    state_main: dict[str, Any],
-    state_schema_path: pathlib.Path,
-) -> dict[str, Any]:
+) -> str:
     if set(qualification) != QUALIFICATION_FIELDS:
         raise RollbackValidationError(
             "target commit does not carry a closed rollback qualification"
@@ -156,6 +154,16 @@ def _validate_qualification(
         raise RollbackValidationError(
             "target deployment toolchain differs from its reviewed qualification"
         )
+    return callback_digest
+
+
+def _validate_qualification(
+    qualification: dict[str, Any],
+    target_root: pathlib.Path,
+    state_main: dict[str, Any],
+    state_schema_path: pathlib.Path,
+) -> dict[str, Any]:
+    callback_digest = _validate_qualification_header(qualification, target_root)
     if set(state_main) != {"commit", "protected"}:
         raise RollbackValidationError("live State main proof is not closed")
     state_commit = state_main.get("commit")
@@ -183,6 +191,63 @@ def _validate_qualification(
         "commit": state_commit,
         "path": qualification["state_event_schema_path"],
         "sha256": state_digest,
+        "callback_contract_sha256": callback_digest,
+    }
+
+
+def _validate_qualification_proof(
+    qualification: dict[str, Any],
+    target_root: pathlib.Path,
+    proof: dict[str, Any],
+) -> dict[str, Any]:
+    callback_digest = _validate_qualification_header(qualification, target_root)
+    expected_fields = {
+        "environment",
+        "intake_configured_enabled",
+        "intake_effective_enabled",
+        "intake_enabled",
+        "intake_enablement_mode",
+        "intake_lease_expires_at",
+        "state_branch_protected",
+        "state_commit",
+        "state_contract_commit",
+        "state_contract_verified",
+        "state_event_schema_sha256",
+        "status",
+    }
+    if set(proof) != expected_fields:
+        raise RollbackValidationError("live State readiness proof is not closed")
+    state_commit = proof.get("state_commit")
+    if (
+        proof.get("status") != "state_writer_ready"
+        or proof.get("environment") != "production"
+        or proof.get("intake_configured_enabled") is not False
+        or proof.get("intake_effective_enabled") is not False
+        or proof.get("intake_enabled") is not False
+        or proof.get("intake_enablement_mode") != "disabled"
+        or proof.get("intake_lease_expires_at") is not None
+        or proof.get("state_branch_protected") is not True
+        or proof.get("state_contract_verified") is not True
+        or not isinstance(state_commit, str)
+        or COMMIT.fullmatch(state_commit) is None
+    ):
+        raise RollbackValidationError(
+            "live State readiness did not prove the disabled protected boundary"
+        )
+    if (
+        proof.get("state_contract_commit") != qualification["state_main_commit"]
+        or state_commit != qualification["state_main_commit"]
+        or proof.get("state_event_schema_sha256")
+        != qualification["state_event_schema_sha256"]
+    ):
+        raise RollbackValidationError(
+            "target qualification is not bound to the live State readiness proof"
+        )
+    return {
+        "repository": qualification["state_repository"],
+        "commit": state_commit,
+        "path": qualification["state_event_schema_path"],
+        "sha256": qualification["state_event_schema_sha256"],
         "callback_contract_sha256": callback_digest,
     }
 
@@ -507,12 +572,27 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     intake_config = _object(args.intake_config)
     broker_config = _object(args.broker_config)
     replay_config = _object(args.replay_config)
-    state_contract = _validate_qualification(
-        _object(args.qualification),
-        args.target_root,
-        _object(args.state_main),
-        args.state_schema,
-    )
+    qualification = _object(args.qualification)
+    state_proof = getattr(args, "state_proof", None)
+    state_main = getattr(args, "state_main", None)
+    state_schema = getattr(args, "state_schema", None)
+    if state_proof is not None:
+        state_contract = _validate_qualification_proof(
+            qualification,
+            args.target_root,
+            _object(state_proof),
+        )
+    elif state_main is not None and state_schema is not None:
+        state_contract = _validate_qualification(
+            qualification,
+            args.target_root,
+            _object(state_main),
+            state_schema,
+        )
+    else:
+        raise RollbackValidationError(
+            "rollback plan requires one closed State qualification proof"
+        )
     intake_selected = _environment(intake_config, args.environment, "intake config")
     broker_selected = _environment(broker_config, args.environment, "broker config")
     replay_selected = _environment(replay_config, args.environment, "replay config")
@@ -1048,8 +1128,9 @@ def parser() -> argparse.ArgumentParser:
     plan.add_argument("--current-replay-config", type=pathlib.Path, required=True)
     plan.add_argument("--qualification", type=pathlib.Path, required=True)
     plan.add_argument("--target-root", type=pathlib.Path, required=True)
-    plan.add_argument("--state-main", type=pathlib.Path, required=True)
-    plan.add_argument("--state-schema", type=pathlib.Path, required=True)
+    plan.add_argument("--state-main", type=pathlib.Path)
+    plan.add_argument("--state-schema", type=pathlib.Path)
+    plan.add_argument("--state-proof", type=pathlib.Path)
 
     component = commands.add_parser("component")
     component.add_argument(

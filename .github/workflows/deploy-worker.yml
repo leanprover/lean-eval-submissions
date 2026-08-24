@@ -468,36 +468,57 @@ jobs:
       - name: Verify exact protected State before production finalization
         id: production-state
         env:
-          GH_TOKEN: ${{ github.token }}
+          READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
         run: |
           set -euo pipefail
-          metadata=$(timeout 30s gh api repos/leanprover/lean-eval-state/branches/main \
-            --jq '[.commit.sha, .protected] | @tsv')
-          IFS=$'\t' read -r commit protected <<< "$metadata"
-          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]] || [ "$protected" != true ]; then
-            echo "production finalization cannot prove exact protected State" >&2
-            exit 1
-          fi
-          ancestry=$(timeout 30s gh api \
-            "repos/leanprover/lean-eval-state/compare/889e07e3b8cf38ad147d8a23b7d1b35826de740f...$commit" \
-            --jq .status)
-          if [ "$ancestry" != ahead ] && [ "$ancestry" != identical ]; then
-            echo "production State does not descend from the reviewed intake lease contract" >&2
-            exit 1
-          fi
-          schema="$RUNNER_TEMP/lean-eval-production-finalization/state-event-schema.json"
-          timeout 30s gh api -H 'Accept: application/vnd.github.v3.raw' \
-            "repos/leanprover/lean-eval-state/contents/schema/state-event-v1.schema.json?ref=$commit" \
-            > "$schema"
-          if [ "$(sha256sum "$schema" | cut -d' ' -f1)" != "891d6da2d80fa68d67bc44f08b6cc4b42639917b5bf420af9bcd9654eb153fdf" ]; then
-            echo "live protected State schema does not match the reviewed intake lease contract" >&2
-            exit 1
-          fi
-          if ! jq -e '.. | objects | select(.properties?.purpose?.enum?) | .properties.purpose.enum | index("intake_lease") != null' \
-            "$schema" >/dev/null; then
-            echo "protected State does not register the intake lease nonce purpose" >&2
-            exit 1
-          fi
+          proof="$RUNNER_TEMP/lean-eval-production-finalization/state-proof.json"
+          curl --fail-with-body --silent --show-error --proto '=https' \
+            --max-redirs 0 --max-time 30 \
+            --request POST \
+            --header "Authorization: Bearer ${READINESS_TOKEN}" \
+            --output "$proof" \
+            https://lean-eval-submission-server.lean-eval.workers.dev/readyz
+          commit=$(STATE_PROOF="$proof" python - <<'PY'
+          import json
+          import os
+          import re
+
+          with open(os.environ["STATE_PROOF"], encoding="utf-8") as stream:
+              proof = json.load(stream)
+          expected = {
+              "environment",
+              "intake_configured_enabled",
+              "intake_effective_enabled",
+              "intake_enabled",
+              "intake_enablement_mode",
+              "intake_lease_expires_at",
+              "state_branch_protected",
+              "state_commit",
+              "state_contract_commit",
+              "state_contract_verified",
+              "state_event_schema_sha256",
+              "status",
+          }
+          if set(proof) != expected:
+              raise SystemExit("production State readiness proof is not closed")
+          if (
+              proof["status"] != "state_writer_ready"
+              or proof["environment"] != "production"
+              or proof["intake_configured_enabled"] is not False
+              or proof["intake_effective_enabled"] is not False
+              or proof["intake_enabled"] is not False
+              or proof["intake_enablement_mode"] != "disabled"
+              or proof["intake_lease_expires_at"] is not None
+              or proof["state_branch_protected"] is not True
+              or proof["state_contract_verified"] is not True
+              or proof["state_contract_commit"] != "4b8dcdf0a3d03749f51bef23807eeb1d00c43b72"
+              or proof["state_event_schema_sha256"] != "06d2798d4d584be3137af53d08d99e45e81a7e23e99b087e976acfef2989282e"
+              or re.fullmatch(r"[0-9a-f]{40}", proof["state_commit"]) is None
+          ):
+              raise SystemExit("production State readiness proof did not bind the reviewed contract")
+          print(proof["state_commit"])
+          PY
+          )
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
 
       - name: Prepare the exact Worker-enforced intake lease
@@ -558,7 +579,6 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_COMMIT: ${{ github.sha }}
           INTAKE_LEASE_EXPIRES_AT: ${{ steps.intake-lease.outputs.expires_at }}
-          GH_TOKEN: ${{ github.token }}
           QUALIFIED_STATE_COMMIT: ${{ steps.production-state.outputs.commit }}
           READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
         run: |
@@ -625,18 +645,47 @@ jobs:
             echo "leased smoke did not return an exact post-consumption State commit" >&2
             exit 1
           fi
-          live_state=$(timeout 30s gh api repos/leanprover/lean-eval-state/branches/main \
-            --jq '[.commit.sha, .protected] | @tsv')
-          if [ "$live_state" != "$state_commit"$'\ttrue' ]; then
-            echo "protected State moved after the leased smoke proof" >&2
-            exit 1
-          fi
+          curl --fail-with-body --silent --show-error --proto '=https' \
+            --max-redirs 0 --max-time 30 \
+            --request POST \
+            --header "Authorization: Bearer ${READINESS_TOKEN}" \
+            --output "$plan_dir/post-smoke-state-proof.json" \
+            https://lean-eval-submission-server.lean-eval.workers.dev/readyz
+          STATE_COMMIT="$state_commit" STATE_PROOF="$plan_dir/post-smoke-state-proof.json" python - <<'PY'
+          import json
+          import os
+
+          with open(os.environ["STATE_PROOF"], encoding="utf-8") as stream:
+              proof = json.load(stream)
+          expected = {
+              "environment", "intake_configured_enabled", "intake_effective_enabled",
+              "intake_enabled", "intake_enablement_mode", "intake_lease_expires_at",
+              "state_branch_protected", "state_commit", "state_contract_commit",
+              "state_contract_verified", "state_event_schema_sha256", "status",
+          }
+          if (
+              set(proof) != expected
+              or proof["status"] != "state_writer_ready"
+              or proof["environment"] != "production"
+              or proof["intake_configured_enabled"] is not True
+              or proof["intake_effective_enabled"] is not True
+              or proof["intake_enabled"] is not True
+              or proof["intake_enablement_mode"] != "leased"
+              or proof["intake_lease_expires_at"] != int(os.environ["INTAKE_LEASE_EXPIRES_AT"])
+              or proof["state_branch_protected"] is not True
+              or proof["state_commit"] != os.environ["STATE_COMMIT"]
+              or proof["state_contract_commit"] != "4b8dcdf0a3d03749f51bef23807eeb1d00c43b72"
+              or proof["state_contract_verified"] is not True
+              or proof["state_event_schema_sha256"] != "06d2798d4d584be3137af53d08d99e45e81a7e23e99b087e976acfef2989282e"
+          ):
+              raise SystemExit("protected State moved after the leased smoke proof")
+          PY
 
       - name: Verify final disabled intake and protected State
         if: steps.production-intake.outputs.enabled == 'false'
         env:
           EXPECTED_COMMIT: ${{ github.sha }}
-          GH_TOKEN: ${{ github.token }}
+          READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
         run: |
           set -euo pipefail
           body=$(curl --fail --silent --show-error --proto '=https' --max-redirs 0 \
@@ -653,8 +702,26 @@ jobs:
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY
-          timeout 30s gh api repos/leanprover/lean-eval-state/branches/main --jq \
-            'select(.protected == true and (.commit.sha | test("^[0-9a-f]{40}$"))) | .commit.sha' >/dev/null
+          plan_dir="$RUNNER_TEMP/lean-eval-production-finalization"
+          curl --fail-with-body --silent --show-error --proto '=https' \
+            --max-redirs 0 --max-time 30 \
+            --request POST \
+            --header "Authorization: Bearer ${READINESS_TOKEN}" \
+            --output "$plan_dir/final-state-proof.json" \
+            https://lean-eval-submission-server.lean-eval.workers.dev/readyz
+          PLAN_DIR="$plan_dir" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path(os.environ["PLAN_DIR"])
+          with (root / "state-proof.json").open(encoding="utf-8") as stream:
+              qualified = json.load(stream)
+          with (root / "final-state-proof.json").open(encoding="utf-8") as stream:
+              current = json.load(stream)
+          if current != qualified:
+              raise SystemExit("protected State moved after disabled finalization")
+          PY
 
       # This must remain the last production mutation and the last step. All
       # exact-version, request-path, nonce, and State proofs happen on the
