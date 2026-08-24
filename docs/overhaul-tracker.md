@@ -126,9 +126,15 @@ the already implemented owner status, metadata, and publication routes.
       explicit owner-operation subrequest ceiling. The current dark runtime
       proves the named immutable release marker and all amendment history but
       does not global-scan for a later unindexed release event.
-- [ ] Add model-alias, rename, consolidation, and new-canonical-identity
-      request events, authorization, materialization, collision tests, and
-      lifecycle-aware public projection behavior.
+- [x] Add model-alias, rename, consolidation, and new-canonical-identity
+      request events, authorization, deterministic materialization, collision,
+      hostile-input, causal, and idempotence tests, and lifecycle-aware public
+      projection behavior. The private State contracts are merged in
+      production (`lean-eval-state#12`, merge `889e07e3`) and staging
+      (`lean-eval-state-staging#15`, merge `494a6746`, portable identity commit
+      `61385eee`). The consumer is merged and live as
+      `lean-eval-leaderboard#75` (merge `89be802f`); production Pages run
+      `32747172862` published the redacted schema-v4 projection successfully.
 - [x] Add State problem-repair request and maintainer decision events with
       explicit revision/causation rules without rewriting accepted records
       (`lean-eval-state#13`, merge `0c875994`) and the targeted private
