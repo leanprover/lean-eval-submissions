@@ -551,6 +551,8 @@ jobs:
               sleep 30
             fi
             curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --max-time 15 --retry 3 --retry-max-time 60 \
+              --retry-all-errors --retry-delay 2 \
               --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
               "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-public-qualification-staging" \
               --output "$RUNNER_TEMP/oidc.json"
