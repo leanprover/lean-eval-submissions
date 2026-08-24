@@ -52,19 +52,19 @@ const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
 const NEW_TREE = "3".repeat(40);
 const NEW_COMMIT = "4".repeat(40);
-const RESULT_OWNER_CONTRACT_COMMIT = "501d237d46c7b3466a37554c1c2ceb310245a619";
+const RESULT_OWNER_CONTRACT_COMMIT = "a53c658a2de2188675134dc2890285fbaa17cf5a";
 const RESULT_OWNER_CONTRACT_ROOT_ENTRIES = {
-  "README.md": { mode: "100644", type: "blob", sha: "069cc546e53d4ec2a109010f9e02dfffd8fdce06" },
-  docs: { mode: "040000", type: "tree", sha: "76e48513a1284d5945a4e1d0a45dbfa84f127325" },
-  schema: { mode: "040000", type: "tree", sha: "473e694e0d40026a7ec0ad33430ea622e3e03b66" },
-  scripts: { mode: "040000", type: "tree", sha: "ab90d1a997e3bfc7292dbf1a515db1abb4278c01" },
+  "README.md": { mode: "100644", type: "blob", sha: "fa70bf42f98d3a33cd6d419cd08eb3e96dfd9540" },
+  docs: { mode: "040000", type: "tree", sha: "7cc621002711682e6876bcfb6663f4c2e5c16336" },
+  schema: { mode: "040000", type: "tree", sha: "3111bf02bd9983a8712425923de8fca6ba696469" },
+  scripts: { mode: "040000", type: "tree", sha: "f9fe278ef1ea062bc21a3fafc7ddea7ab758a099" },
 } as const;
-const STAGING_RESULT_OWNER_CONTRACT_COMMIT = "6a386bb4362b10dd8d7743e826c82f1a0011c0c3";
+const STAGING_RESULT_OWNER_CONTRACT_COMMIT = "48f8c975d725a9ac18df545653fdb2f8371c3293";
 const STAGING_RESULT_OWNER_CONTRACT_ROOT_ENTRIES = {
-  "README.md": { mode: "100644", type: "blob", sha: "a302e9611c7c32dda7462828b6f02ab919ea39a9" },
-  docs: { mode: "040000", type: "tree", sha: "defb2fc26f37703008e49cb968c8971266bfb5e5" },
-  schema: { mode: "040000", type: "tree", sha: "95a264fb61bffcec21ae91055675baf9c9ed78fc" },
-  scripts: { mode: "040000", type: "tree", sha: "41962d05ebc32821a342ae6bc9cd6c2fa88db3eb" },
+  "README.md": { mode: "100644", type: "blob", sha: "f3f1820e7781c724e649762f184c16206675d7ac" },
+  docs: { mode: "040000", type: "tree", sha: "b335dc9232956201c8ec99e732e05a1b388d2617" },
+  schema: { mode: "040000", type: "tree", sha: "730d44520c70fdd6da4d27e381d4e6593c5c77fe" },
+  scripts: { mode: "040000", type: "tree", sha: "438693aed415474802beae32a5398fb436a4ac71" },
 } as const;
 
 const EVENT: StateEvent = {

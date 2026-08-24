@@ -51,6 +51,9 @@ REPLAY_DOCKERFILE = (ROOT / "server/Dockerfile.replay").read_text(encoding="utf-
 ROLLBACK_VALIDATOR = (ROOT / "scripts/validate_cloudflare_rollback.py").read_text(
     encoding="utf-8"
 )
+HISTORICAL_AUTHORITY_PREPARATION = (
+    ROOT / "scripts/prepare_historical_public_authority.py"
+).read_text(encoding="utf-8")
 
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
@@ -609,8 +612,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('arguments+=(--var "$name:$value")', production)
         self.assertIn("intake-lease-smoke.json", production)
         self.assertIn("intake_lease", production)
-        self.assertIn("501d237d46c7b3466a37554c1c2ceb310245a619", production)
-        self.assertIn("af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb", production)
+        self.assertIn(QUALIFICATION["state_main_commit"], production)
+        self.assertIn(QUALIFICATION["state_event_schema_sha256"], production)
         self.assertIn("state_contract_verified", production)
         self.assertIn("timeout --signal=TERM --kill-after=10s 150s", production)
         self.assertNotIn("\n      - name:", production[final:].split("run: |", 1)[1])
@@ -630,6 +633,15 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("/readyz", state_gate)
         self.assertNotIn("lean-eval-state/", state_gate)
         self.assertNotIn("github.token", state_gate)
+
+    def test_state_schema_digest_is_cross_bound_across_runtime_and_controllers(self) -> None:
+        digest = QUALIFICATION["state_event_schema_sha256"]
+        self.assertEqual(WORKER_APP.count(f'"{digest}"'), 1)
+        self.assertEqual(DEPLOY.count(f'"{digest}"'), 2)
+        self.assertIn(
+            f'STATE_EVENT_SCHEMA_SHA256 = "{digest}"',
+            HISTORICAL_AUTHORITY_PREPARATION,
+        )
 
     def test_disable_recovery_is_derived_protected_and_can_never_enable(self) -> None:
         self.assertIn("workflow_run:", RECOVERY)
@@ -774,9 +786,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                     "false",
                 )
                 expected_contract = (
-                    "6a386bb4362b10dd8d7743e826c82f1a0011c0c3"
+                    "48f8c975d725a9ac18df545653fdb2f8371c3293"
                     if environment == "staging"
-                    else "501d237d46c7b3466a37554c1c2ceb310245a619"
+                    else "a53c658a2de2188675134dc2890285fbaa17cf5a"
                 )
                 self.assertEqual(
                     configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],

@@ -450,7 +450,7 @@ async function readiness(
         response.state_contract_commit = PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT;
         response.state_contract_verified = true;
         response.state_event_schema_sha256 =
-          "af753eb3aba7a82c6c5d7b153ea0a0e411df9aa94768772aa8b99d985b6d57cb";
+          "7ee83581b6e7bb7769afe130a394b41613e9cf24b8643777e63990c448da7cc0";
       }
       return json(response);
     }

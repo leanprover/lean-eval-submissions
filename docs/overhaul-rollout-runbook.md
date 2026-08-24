@@ -25,16 +25,16 @@ primary checkout is not the integration workspace.
 | Repository / lane | Published commit or pull request |
 | --- | --- |
 | `lean-eval-generator` | `77373a539b31f8f304c852f288d7d8469cceebff` on `main`; fixes `#1` / `#2` and synchronization `#3` are merged and green; merged LeanEval consumer `#553` pins this exact commit and removes the embedded core |
-| production State | `501d237d46c7b3466a37554c1c2ceb310245a619` on private `main`; release-status v2 and permanent effective-result reservation contracts are merged over the earlier reviewed lifecycle contracts, and the graph still contains only `system.initialized`, with no accepted submission, reservation, or due release work |
-| staging State | `6a386bb4362b10dd8d7743e826c82f1a0011c0c3` on private `main`; the two existing result authorities have exact release-status v2 views and permanent base-tuple reservations; exact-main validator run `32747670842` passed |
+| production State | `a53c658a2de2188675134dc2890285fbaa17cf5a` on private protected `main`; hardened historical-public validation, release-status v2, and permanent effective-result reservation contracts are merged, and the graph still contains only `system.initialized`, with no accepted submission, reservation, or due release work; exact-main validator run `32772040095` passed |
+| staging State | reviewed contract `48f8c975d725a9ac18df545653fdb2f8371c3293`; current private protected `main` is `dbe3a323efdc51c08079d75ef826ff1a936e9946` after the `08bf2c8e` promotion canary and preserves the exact reviewed README/docs/schema/scripts proof entries; contract validation run `32772193134` passed |
 | `lean-eval-releases` | `57ab36341ccf653b45366c32d4472b9ee670890b` on `main`; source-free recovery `#8`, State-bound removal planning `#9`, and the deterministic automatic controller `#10` are merged; exact-main validation `32719159678` and publication-disabled Git credential preflight `32723471497` passed; credentialed staging unwrap and publication remain disabled |
 | catalog, generator consumer, software verification | v1 freeze merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; terminology rule merged in `#554`; standalone-generator consumer merged in `#553`; current main `b91d4757aa0d7776c02540c9089df54fa0d0658a` |
-| results schema version 2, intake server, replay contracts | schema-version-3 per-submission archive lane `#1250`, accepted result lifecycle `#1251`, guarded historical migration `#1252`, private replay planning/schema alignment `#1253` / `#1254`, accepted-archive staging boundary `#1255`, and immutable release OIDC trust `#1256` are merged; exact runtime `71650c9d579e269d6a48a6563d3cd0110e41e9c6` is deployed intake- and replay-disabled after protected State-pin recovery run `32728324814` |
+| results schema version 2, intake server, replay contracts | schema-version-3 per-submission archive lane `#1250`, accepted result lifecycle `#1251`, guarded historical migration `#1252`, private replay planning/schema alignment `#1253` / `#1254`, accepted-archive staging boundary `#1255`, and immutable release OIDC trust `#1256` are merged; exact runtime `08bf2c8ef2a9fbbb4f10dc0432969ba11c29bc40` is deployed intake- and replay-disabled after fail-closed rollout `32772828260`; its State-contract repin is qualified but not yet deployed |
 | AWS archive-key custody | dedicated account `lean-eval` (`161072922960`) and isolated stacks are provisioned; accepted-archive staging run `32618166048` passed. Release OIDC template correction is merged but the live stacks still require an authenticated operator update: release staging runs `32617539355` and `32624640050` failed at STS before Lambda or decrypt. Production intake archive/replay roles remain disconnected |
 | lifecycle-aware leaderboard | preview foundation merged as `lean-eval-leaderboard#69`; UI terminology merged in `#73`; deeper schema terminology merged in `#74`; cutover `#72` is merged and live at `https://lean-lang.org/eval/`, with `/legacy/` retained and read-only State deploy key `160968617` provisioned; owner-scoped State v4 model-identity consumption merged as `#75` (`89be802f`) after exact-head run `32741897578`, and production Pages run `32747172862` deployed it successfully |
 
-The private broker and intake Workers are deployed in staging and production
-from exact commit `71650c9d579e269d6a48a6563d3cd0110e41e9c6`.
+The private broker, replay, and intake Workers are deployed in staging and
+production from exact commit `08bf2c8ef2a9fbbb4f10dc0432969ba11c29bc40`.
 Deployment, OAuth,
 readiness, authentication, State-writer, and broker App secrets are installed.
 Both State-writer tokens are organization-approved and preflighted, and both
@@ -365,10 +365,10 @@ one closed reservation under `views/effective-result-identities/`. Once a tuple
 belongs to a stable result it is never deleted or rebound to another result;
 the same result may revisit it.
 
-Production contract `501d237d46c7b3466a37554c1c2ceb310245a619` validates the
-empty production authority/reservation set. Staging migration
-`6a386bb4362b10dd8d7743e826c82f1a0011c0c3` materializes the two existing
-base-tuple reservations and passed exact-main validation run `32747670842`.
+Production contract `a53c658a2de2188675134dc2890285fbaa17cf5a` validates the
+empty production authority/reservation set. Staging contract
+`48f8c975d725a9ac18df545653fdb2f8371c3293` materializes the two existing
+base-tuple reservations and passed exact-contract validation run `32772193134`.
 Recording or claiming creates/confirms the base reservation in the same CAS
 transaction as authority and lifecycle views. Repair application target-reads
 only the corrected reservation: absence creates it atomically with the event
