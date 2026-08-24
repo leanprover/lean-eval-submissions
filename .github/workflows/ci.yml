@@ -12,6 +12,8 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -42,6 +44,11 @@ jobs:
       - name: Python syntax checks
         run: python -m py_compile scripts/*.py tests/*.py
 
+      - name: Install pinned JSON Schema validator
+        run: >-
+          python -m pip install --disable-pip-version-check --only-binary=:all:
+          --require-hashes -r requirements-jsonschema-workflow.txt
+
       - name: Audit workflow action pins
         run: python scripts/action_pin_audit.py
 
@@ -61,6 +68,12 @@ jobs:
           tests.test_worker_deployment_workflow
           tests.test_validate_cloudflare_rollback
           tests.test_monitor_cloudflare_health
+          tests.test_historical_replay_inventory
+          tests.test_historical_replay_inventory_workflow
+          tests.test_prepare_public_replay_resolution
+          tests.test_resolve_public_replay_github_evidence
+          tests.test_public_replay_github_evidence_workflow
+          tests.test_aggregate_public_replay_github_evidence
 
       - name: Submission intake tests
         run: python -m unittest tests.test_validate_submission_intake
@@ -98,6 +111,7 @@ jobs:
           tests.test_authoritative_replay_image
           tests.test_public_replay_smoke
           tests.test_public_replay_workflow
+          tests.test_public_replay_json_schemas
 
   artifact-upload:
     runs-on: ubuntu-latest

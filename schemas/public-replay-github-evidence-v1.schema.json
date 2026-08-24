@@ -1,0 +1,334 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/public-replay-github-evidence-v1.schema.json",
+  "title": "Historical public replay GitHub evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "source_repository",
+    "source_commit",
+    "inventory_sha256",
+    "resolution_requests_sha256",
+    "workflow_definition_registry_sha256",
+    "request_count",
+    "result_count",
+    "shard_index",
+    "shard_count",
+    "shard_request_count",
+    "shard_result_count",
+    "resolved_count",
+    "source_unavailable_count",
+    "source_indeterminate_count",
+    "probe_indeterminate_count",
+    "timing_indeterminate_count",
+    "workflow_contract_unreviewed_count",
+    "pending_count",
+    "resolutions"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "kind": { "const": "historical_public_replay_github_evidence" },
+    "source_repository": { "const": "leanprover/lean-eval-submissions" },
+    "source_commit": { "$ref": "#/$defs/commit" },
+    "inventory_sha256": { "$ref": "#/$defs/digest" },
+    "resolution_requests_sha256": { "$ref": "#/$defs/digest" },
+    "workflow_definition_registry_sha256": { "$ref": "#/$defs/digest" },
+    "request_count": { "type": "integer", "minimum": 1 },
+    "result_count": { "type": "integer", "minimum": 1 },
+    "shard_index": { "type": "integer", "minimum": 0, "maximum": 63 },
+    "shard_count": { "type": "integer", "minimum": 1, "maximum": 64 },
+    "shard_request_count": { "type": "integer", "minimum": 0 },
+    "shard_result_count": { "type": "integer", "minimum": 0 },
+    "resolved_count": { "type": "integer", "minimum": 0 },
+    "source_unavailable_count": { "type": "integer", "minimum": 0 },
+    "source_indeterminate_count": { "type": "integer", "minimum": 0 },
+    "probe_indeterminate_count": { "type": "integer", "minimum": 0 },
+    "timing_indeterminate_count": { "type": "integer", "minimum": 0 },
+    "workflow_contract_unreviewed_count": { "type": "integer", "minimum": 0 },
+    "pending_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of non-resolved entries in resolutions; no separate pending array exists."
+    },
+    "resolutions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/resolution" }
+    }
+  },
+  "$defs": {
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "timestamp": {
+      "type": "string",
+      "pattern": "^(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://(?:github\\.com|gist\\.github\\.com)/"
+    },
+    "resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "request_id",
+        "status",
+        "selected_issue_repository",
+        "candidates"
+      ],
+      "properties": {
+        "request_id": { "type": "string", "pattern": "^prr_[0-9a-f]{64}$" },
+        "status": {
+          "enum": [
+            "resolved", "source_unavailable", "source_probe_indeterminate",
+            "probe_indeterminate", "timing_indeterminate",
+            "workflow_contract_unreviewed", "ambiguous", "evidence_missing"
+          ]
+        },
+        "selected_issue_repository": {
+          "type": ["string", "null"],
+          "enum": [
+            "leanprover/lean-eval",
+            "leanprover/lean-eval-submissions",
+            null
+          ]
+        },
+        "candidates": {
+          "type": "array",
+          "uniqueItems": true,
+          "prefixItems": [
+            { "$ref": "#/$defs/candidate" },
+            { "$ref": "#/$defs/candidate" }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "candidate": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["issue_repository", "status"],
+          "properties": {
+            "issue_repository": {
+              "enum": ["leanprover/lean-eval", "leanprover/lean-eval-submissions"]
+            },
+            "status": {
+              "enum": [
+                "issue_not_found",
+                "model_mismatch",
+                "owner_mismatch",
+                "source_mismatch",
+                "acceptance_time_mismatch",
+                "workflow_run_missing",
+                "workflow_run_ambiguous",
+                "workflow_contract_mismatch",
+                "result_comment_missing",
+                "result_comment_ambiguous",
+                "result_comment_projection_too_large"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["issue_repository", "status", "reason_code"],
+          "properties": {
+            "issue_repository": {
+              "enum": ["leanprover/lean-eval", "leanprover/lean-eval-submissions"]
+            },
+            "status": {"const": "probe_indeterminate"},
+            "reason_code": {
+              "enum": [
+                "github_redirect_refused", "github_legal_restriction",
+                "github_rate_or_permission_boundary", "github_http_error",
+                "github_request_failed", "github_response_too_large",
+                "github_response_invalid", "github_identity_changed",
+                "evidence_repository_not_readable",
+                "evidence_repository_identity_changed",
+                "evidence_repository_not_public"
+              ]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "issue_repository", "status", "reason_code", "issue_url",
+            "issue_created_at", "issue_closed_at", "issue_title_sha256",
+            "issue_body_sha256", "evidence_url", "evidence_created_at",
+            "evidence_updated_at", "evidence_identity_sha256"
+          ],
+          "properties": {
+            "issue_repository": {
+              "enum": ["leanprover/lean-eval", "leanprover/lean-eval-submissions"]
+            },
+            "status": {"const": "timing_indeterminate"},
+            "reason_code": {
+              "enum": ["workflow_run_outside_window", "result_comment_outside_window"]
+            },
+            "issue_url": {"$ref": "#/$defs/url"},
+            "issue_created_at": {"$ref": "#/$defs/timestamp"},
+            "issue_closed_at": {"$ref": "#/$defs/timestamp"},
+            "issue_title_sha256": {"$ref": "#/$defs/digest"},
+            "issue_body_sha256": {"$ref": "#/$defs/digest"},
+            "evidence_url": {"$ref": "#/$defs/url"},
+            "evidence_created_at": {"$ref": "#/$defs/timestamp"},
+            "evidence_updated_at": {
+              "oneOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]
+            },
+            "evidence_identity_sha256": {"$ref": "#/$defs/digest"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "issue_repository", "status", "workflow_repository_commit",
+            "workflow_definition_sha256"
+          ],
+          "properties": {
+            "issue_repository": {
+              "enum": ["leanprover/lean-eval", "leanprover/lean-eval-submissions"]
+            },
+            "status": {"const": "workflow_contract_unreviewed"},
+            "workflow_repository_commit": {"$ref": "#/$defs/commit"},
+            "workflow_definition_sha256": {"$ref": "#/$defs/digest"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["issue_repository", "status", "reason_code"],
+          "properties": {
+            "issue_repository": {
+              "enum": ["leanprover/lean-eval", "leanprover/lean-eval-submissions"]
+            },
+            "status": { "const": "issue_invalid" },
+            "reason_code": {
+              "enum": ["candidate_not_issue", "issue_body_invalid", "issue_not_closed"]
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "issue_repository",
+            "status",
+            "issue_url",
+            "issue_author",
+            "issue_created_at",
+            "issue_closed_at",
+            "issue_title_sha256",
+            "issue_body_sha256",
+            "issue_identity_sha256",
+            "issue_source_ref_sha256",
+            "issue_source_reference_binding",
+            "workflow_run_id",
+            "workflow_run_url",
+            "workflow_run_created_at",
+            "workflow_run_updated_at",
+            "workflow_run_attempt",
+            "workflow_run_actor",
+            "workflow_run_display_title_sha256",
+            "workflow_run_identity_sha256",
+            "workflow_contract",
+            "workflow_repository_commit",
+            "workflow_definition_sha256",
+            "result_comment_url",
+            "result_comment_created_at",
+            "result_comment_author",
+            "result_comment_body_sha256",
+            "reported_pass_problem_ids",
+            "source_commit_url"
+          ],
+          "properties": {
+            "issue_repository": {
+              "enum": ["leanprover/lean-eval", "leanprover/lean-eval-submissions"]
+            },
+            "status": {
+              "enum": [
+                "matched_source_available", "matched_source_unavailable",
+                "matched_source_indeterminate"
+              ]
+            },
+            "issue_url": { "$ref": "#/$defs/url" },
+            "issue_author": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
+            },
+            "issue_created_at": { "$ref": "#/$defs/timestamp" },
+            "issue_closed_at": { "$ref": "#/$defs/timestamp" },
+            "issue_title_sha256": { "$ref": "#/$defs/digest" },
+            "issue_body_sha256": { "$ref": "#/$defs/digest" },
+            "issue_identity_sha256": { "$ref": "#/$defs/digest" },
+            "issue_source_ref_sha256": { "$ref": "#/$defs/digest" },
+            "issue_source_reference_binding": {
+              "enum": ["exact_commit", "unpinned"]
+            },
+            "workflow_run_id": { "type": "integer", "minimum": 1 },
+            "workflow_run_url": { "$ref": "#/$defs/url" },
+            "workflow_run_created_at": { "$ref": "#/$defs/timestamp" },
+            "workflow_run_updated_at": { "$ref": "#/$defs/timestamp" },
+            "workflow_run_attempt": { "type": "integer", "minimum": 1 },
+            "workflow_run_actor": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
+            },
+            "workflow_run_display_title_sha256": { "$ref": "#/$defs/digest" },
+            "workflow_run_identity_sha256": { "$ref": "#/$defs/digest" },
+            "workflow_contract": {
+              "enum": [
+                "benchmark_repository_head",
+                "split_repository_recorded_benchmark_v1"
+              ]
+            },
+            "workflow_repository_commit": { "$ref": "#/$defs/commit" },
+            "workflow_definition_sha256": {
+              "$ref": "#/$defs/digest"
+            },
+            "result_comment_url": { "$ref": "#/$defs/url" },
+            "result_comment_created_at": { "$ref": "#/$defs/timestamp" },
+            "result_comment_author": { "const": "github-actions[bot]" },
+            "result_comment_body_sha256": { "$ref": "#/$defs/digest" },
+            "reported_pass_problem_ids": {
+              "type": "array",
+              "maxItems": 4096,
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"
+              }
+            },
+            "source_commit_url": { "$ref": "#/$defs/url" },
+            "source_probe_reason_code": {
+              "enum": [
+                "source_probe_response_too_large",
+                "source_repository_identity_changed", "github_redirect_refused",
+                "github_legal_restriction", "github_rate_or_permission_boundary",
+                "github_http_error", "github_request_failed"
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": { "status": { "const": "matched_source_indeterminate" } }
+              },
+              "then": { "required": ["source_probe_reason_code"] },
+              "else": { "not": { "required": ["source_probe_reason_code"] } }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
