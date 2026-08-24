@@ -66,6 +66,13 @@ be committed at
 State qualification events and enqueue events remains a later, separately
 reviewed action.
 
+The fail-closed preparation and post-commit finalization boundary for that
+later action is specified in
+[`historical-public-authority-preparation.md`](historical-public-authority-preparation.md).
+It consumes the exact version-2 qualification artifact ZIPs and remains blocked
+until the frozen profile is reviewed and committed; it never writes State or
+enqueues replay.
+
 ## Known contract work before execution
 
 The shared replay request models a modern result and requires a UUID submission

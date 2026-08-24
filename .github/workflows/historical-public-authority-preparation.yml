@@ -1,0 +1,253 @@
+name: Prepare one historical public authority append
+
+on:
+  workflow_dispatch:
+    inputs:
+      qualification_run_id:
+        description: Exact successful historical image qualification workflow run ID
+        required: true
+        type: string
+      qualification_run_attempt:
+        description: Exact successful workflow run attempt
+        required: true
+        type: string
+      candidate_artifact_id:
+        description: Exact historical-public-image-candidate artifact ID from that run
+        required: true
+        type: string
+      staging_artifact_id:
+        description: Exact historical-public-staging-qualification artifact ID from that run
+        required: true
+        type: string
+      controller_source_commit:
+        description: Exact qualification controller commit bound by the successful run
+        required: true
+        type: string
+      image_source_commit:
+        description: Exact immutable image source commit bound by the successful run
+        required: true
+        type: string
+      benchmark_commit:
+        description: Exact benchmark commit qualified by the successful run
+        required: true
+        type: string
+        default: 11081d345a580a0f3c46699240f28e4f41fbf9fe
+      request_id:
+        description: Exact source-free seed-plan request to prepare
+        required: true
+        type: string
+        default: prr_9927609e2e68eb0fbd8c2b599571321a4923b2a180642668203894514d5675af
+      result_id:
+        description: Exact accepted result within the selected request
+        required: true
+        type: string
+        default: r2_70b509d79a3787270b020128e4050ce0a9c6bf4cfe50a722013de43967e106b4
+      confirm_preparation_only:
+        description: Produce blocked review inputs without State append, enqueue, deploy, or enablement
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: historical-public-authority-preparation
+  cancel-in-progress: false
+
+jobs:
+  prepare-source-free-review-inputs:
+    if: inputs.confirm_preparation_only == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+    env:
+      CONTROLLER: scripts/prepare_historical_public_authority.py
+      PLAN: evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json
+      MATRIX: configuration/historical-public-replay-profile-matrix-v1.json
+      RUNNER_CONTRACT: configuration/historical-public-runner-v1.json
+      QUALIFICATION_CONTRACT: historical-public-qualification/contract-v1.json
+      RUN_ID: ${{ inputs.qualification_run_id }}
+      RUN_ATTEMPT: ${{ inputs.qualification_run_attempt }}
+      CANDIDATE_ARTIFACT_ID: ${{ inputs.candidate_artifact_id }}
+      STAGING_ARTIFACT_ID: ${{ inputs.staging_artifact_id }}
+      CONTROLLER_SOURCE_COMMIT: ${{ inputs.controller_source_commit }}
+      IMAGE_SOURCE_COMMIT: ${{ inputs.image_source_commit }}
+      BENCHMARK_COMMIT: ${{ inputs.benchmark_commit }}
+      REQUEST_ID: ${{ inputs.request_id }}
+      RESULT_ID: ${{ inputs.result_id }}
+    steps:
+      - name: Require an immutable protected preparation source
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_TYPE" = tag
+          test "${#GITHUB_SHA}" = 40
+          test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$GITHUB_SHA"
+          [[ "$RUN_ID" =~ ^[1-9][0-9]{0,15}$ ]]
+          [[ "$RUN_ATTEMPT" =~ ^[1-9][0-9]{0,6}$ ]]
+          [[ "$CANDIDATE_ARTIFACT_ID" =~ ^[1-9][0-9]{0,15}$ ]]
+          [[ "$STAGING_ARTIFACT_ID" =~ ^[1-9][0-9]{0,15}$ ]]
+          [[ "$CONTROLLER_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$IMAGE_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$BENCHMARK_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$REQUEST_ID" =~ ^prr_[0-9a-f]{64}$ ]]
+          [[ "$RESULT_ID" =~ ^r2_[0-9a-f]{64}$ ]]
+          mapfile -t tag_lines < <(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            "$GITHUB_REF" "$GITHUB_REF^{}")
+          test "${#tag_lines[@]}" -ge 1
+          test "${#tag_lines[@]}" -le 2
+          remote_commit=""
+          tag_object=""
+          for line in "${tag_lines[@]}"; do
+            read -r object ref extra <<< "$line"
+            test -z "${extra:-}"
+            [[ "$object" =~ ^[0-9a-f]{40}$ ]]
+            if [ "$ref" = "$GITHUB_REF" ]; then
+              test -z "$tag_object"
+              tag_object="$object"
+            elif [ "$ref" = "$GITHUB_REF^{}" ]; then
+              test -z "$remote_commit"
+              remote_commit="$object"
+            else
+              exit 1
+            fi
+          done
+          test -n "$tag_object"
+          if [ -z "$remote_commit" ]; then remote_commit="$tag_object"; fi
+          test "$remote_commit" = "$GITHUB_SHA"
+
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # actions/setup-python pinned to v7.0.0.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Install the pinned JSON Schema validator
+        run: >-
+          python -m pip install --disable-pip-version-check --only-binary=:all:
+          --require-hashes -r requirements-jsonschema-workflow.txt
+
+      - name: Prove protected-main ancestry and exact source objects
+        run: |
+          set -euo pipefail
+          remote_main=$(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git refs/heads/main | cut -f1)
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --no-tags origin "$remote_main" "$CONTROLLER_SOURCE_COMMIT" "$IMAGE_SOURCE_COMMIT"
+          git merge-base --is-ancestor "$GITHUB_SHA" "$remote_main"
+          git merge-base --is-ancestor "$CONTROLLER_SOURCE_COMMIT" "$remote_main"
+          git merge-base --is-ancestor "$IMAGE_SOURCE_COMMIT" "$remote_main"
+          test "$(git status --short)" = ""
+
+      - name: Prepare a clean exact image-source checkout outside the workspace
+        run: |
+          set -euo pipefail
+          git clone --no-checkout --filter=blob:none \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            "$RUNNER_TEMP/image-source"
+          git -C "$RUNNER_TEMP/image-source" checkout --detach "$IMAGE_SOURCE_COMMIT"
+          test "$(git -C "$RUNNER_TEMP/image-source" rev-parse HEAD)" = "$IMAGE_SOURCE_COMMIT"
+          test "$(git -C "$RUNNER_TEMP/image-source" status --short)" = ""
+
+      - name: Read exact successful run and artifact metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          api="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 30 \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$api/actions/runs/$RUN_ID/attempts/$RUN_ATTEMPT" \
+            --output "$RUNNER_TEMP/run.json"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 30 \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$api/actions/artifacts/$CANDIDATE_ARTIFACT_ID" \
+            --output "$RUNNER_TEMP/candidate-artifact.json"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 30 \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$api/actions/artifacts/$STAGING_ARTIFACT_ID" \
+            --output "$RUNNER_TEMP/staging-artifact.json"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --max-time 60 --max-filesize 4194304 \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$api/actions/artifacts/$CANDIDATE_ARTIFACT_ID/zip" \
+            --output "$RUNNER_TEMP/candidate-artifact.zip"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --max-time 60 --max-filesize 4194304 \
+            --header 'Accept: application/vnd.github+json' \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$api/actions/artifacts/$STAGING_ARTIFACT_ID/zip" \
+            --output "$RUNNER_TEMP/staging-artifact.zip"
+          unset GH_TOKEN
+          python "$CONTROLLER" provenance \
+            --run-metadata "$RUNNER_TEMP/run.json" \
+            --candidate-artifact-metadata "$RUNNER_TEMP/candidate-artifact.json" \
+            --staging-artifact-metadata "$RUNNER_TEMP/staging-artifact.json" \
+            --run-id "$RUN_ID" --run-attempt "$RUN_ATTEMPT" \
+            --candidate-artifact-id "$CANDIDATE_ARTIFACT_ID" \
+            --staging-artifact-id "$STAGING_ARTIFACT_ID" \
+            --controller-source-commit "$CONTROLLER_SOURCE_COMMIT" \
+            --image-source-commit "$IMAGE_SOURCE_COMMIT" \
+            --output "$RUNNER_TEMP/qualification-provenance.json"
+          rm -f "$RUNNER_TEMP/run.json" "$RUNNER_TEMP/candidate-artifact.json" \
+            "$RUNNER_TEMP/staging-artifact.json"
+
+      - name: Freeze qualification and blocked State append inputs
+        run: |
+          set -euo pipefail
+          python "$CONTROLLER" prepare \
+            --plan "$PLAN" --matrix "$MATRIX" \
+            --runner-contract "$RUNNER_CONTRACT" \
+            --qualification-contract "$QUALIFICATION_CONTRACT" \
+            --provenance "$RUNNER_TEMP/qualification-provenance.json" \
+            --candidate-artifact-zip "$RUNNER_TEMP/candidate-artifact.zip" \
+            --staging-artifact-zip "$RUNNER_TEMP/staging-artifact.zip" \
+            --preparation-source-root . \
+            --image-source-root "$RUNNER_TEMP/image-source" \
+            --plan-commit "$GITHUB_SHA" \
+            --benchmark-commit "$BENCHMARK_COMMIT" --request-id "$REQUEST_ID" \
+            --result-id "$RESULT_ID" --output-directory prepared
+          cp "$RUNNER_TEMP/qualification-provenance.json" prepared/
+          test "$(jq -r .activation_status prepared/historical-public-authority-preparation.json)" = blocked
+          profile_path=$(jq -er .qualification_profile.path \
+            prepared/historical-public-authority-preparation.json)
+          test -f "prepared/$profile_path"
+          test "$(jq -r .qualification_status "prepared/$profile_path")" = qualified
+          test "$(git status --short --untracked-files=no)" = ""
+
+      # actions/upload-artifact pinned to v7.0.1.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-public-authority-preparation
+          path: prepared
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove downloaded qualification scratch
+        if: always()
+        run: |
+          rm -rf prepared "$RUNNER_TEMP/image-source"
+          rm -f "$RUNNER_TEMP/qualification-provenance.json" \
+            "$RUNNER_TEMP/run.json" "$RUNNER_TEMP/candidate-artifact.json" \
+            "$RUNNER_TEMP/staging-artifact.json" \
+            "$RUNNER_TEMP/candidate-artifact.zip" \
+            "$RUNNER_TEMP/staging-artifact.zip"

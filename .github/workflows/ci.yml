@@ -123,6 +123,7 @@ jobs:
           tests.test_historical_replay_profile_matrix
           tests.test_historical_public_runner
           tests.test_historical_public_image_qualification
+          tests.test_prepare_historical_public_authority
           tests.test_kernel_corpus_report
           tests.test_kernel_corpus_runner_adapter
           tests.test_kernel_corpus_json_schemas
