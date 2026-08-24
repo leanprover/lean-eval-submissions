@@ -100,7 +100,11 @@ def validate_readiness(status: int, value: object) -> None:
     body = require_object(value, "readiness response")
     if status != 200 or set(body) != {
         "environment",
+        "intake_configured_enabled",
+        "intake_effective_enabled",
         "intake_enabled",
+        "intake_enablement_mode",
+        "intake_lease_expires_at",
         "state_commit",
         "status",
     }:
@@ -108,7 +112,11 @@ def validate_readiness(status: int, value: object) -> None:
     if (
         body["status"] != "state_writer_ready"
         or body["environment"] != "staging"
+        or body["intake_configured_enabled"] is not False
+        or body["intake_effective_enabled"] is not False
         or body["intake_enabled"] is not False
+        or body["intake_enablement_mode"] != "disabled"
+        or body["intake_lease_expires_at"] is not None
         or not isinstance(body["state_commit"], str)
         or SHA.fullmatch(body["state_commit"]) is None
     ):

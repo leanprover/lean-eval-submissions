@@ -141,7 +141,7 @@ jobs:
             --jq '{commit: .commit.sha, protected: .protected}' \
             > "$plan_dir/state-main.json"
           state_commit=$(jq -er .commit "$plan_dir/state-main.json")
-          gh api -H 'Accept: application/vnd.github.raw+json' \
+          gh api -H 'Accept: application/vnd.github.v3.raw' \
             "repos/leanprover/lean-eval-state/contents/schema/state-event-v1.schema.json?ref=$state_commit" \
             > "$plan_dir/state-event-schema.json"
 
