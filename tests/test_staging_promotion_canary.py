@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
+import types
 import unittest
 import urllib.request
 from unittest import mock
@@ -58,6 +59,55 @@ class StagingPromotionCanaryReadinessTests(unittest.TestCase):
 
 
 class StagingPromotionCanaryTests(unittest.TestCase):
+    def test_main_retries_a_bounded_canary_transport_timeout(self) -> None:
+        commit = "c" * 40
+        args = types.SimpleNamespace(
+            commit=commit,
+            dispatch_ref=f"lean-eval-dispatch/{commit}",
+            run_id="32712345678",
+            run_attempt="1",
+            timeout_seconds=480,
+            poll_seconds=5,
+        )
+        readiness = {
+            "environment": "staging",
+            "intake_configured_enabled": False,
+            "intake_effective_enabled": False,
+            "intake_enabled": False,
+            "intake_enablement_mode": "disabled",
+            "intake_lease_expires_at": None,
+            "state_commit": "a" * 40,
+            "status": "state_writer_ready",
+        }
+        request_json = mock.Mock(
+            side_effect=[
+                (200, readiness),
+                CANARY.CanaryConnectivityFailure("timed out"),
+                (200, {}),
+            ]
+        )
+        with (
+            mock.patch.object(CANARY, "parse_args", return_value=args),
+            mock.patch.object(CANARY, "opener", return_value=mock.sentinel.client),
+            mock.patch.object(CANARY, "request_json", request_json),
+            mock.patch.object(
+                CANARY,
+                "validate_canary",
+                return_value=("0198abcd-1111-7000-8000-0000000000ca", True),
+            ),
+            mock.patch.object(CANARY.time, "monotonic", side_effect=[100, 101]),
+            mock.patch.object(CANARY.time, "sleep") as sleep,
+            mock.patch("builtins.print"),
+            mock.patch.dict(CANARY.os.environ, {"READINESS_TOKEN": "x" * 32}),
+        ):
+            self.assertEqual(CANARY.main(), 0)
+        self.assertEqual(request_json.call_count, 3)
+        self.assertEqual(
+            request_json.call_args_list[1].kwargs,
+            {"timeout_seconds": 30},
+        )
+        sleep.assert_called_once_with(5)
+
     def test_accepts_only_the_source_free_exact_success_contract(self) -> None:
         commit = "c" * 40
         dispatch_ref = f"lean-eval-dispatch/{commit}"

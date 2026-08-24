@@ -40,6 +40,10 @@ class CanaryFailure(RuntimeError):
     """A source-free promotion-gate failure."""
 
 
+class CanaryConnectivityFailure(CanaryFailure):
+    """A retryable bounded transport failure."""
+
+
 class RejectRedirects(urllib.request.HTTPRedirectHandler):
     """Reject redirects before urllib can forward the readiness credential."""
 
@@ -59,6 +63,8 @@ def request_json(
     path: str,
     token: str,
     payload: dict[str, object] | None,
+    *,
+    timeout_seconds: int = 10,
 ) -> tuple[int, object]:
     body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode()
     request = urllib.request.Request(
@@ -74,14 +80,16 @@ def request_json(
     try:
         with client.open(
             request,
-            timeout=10,
+            timeout=timeout_seconds,
         ) as response:
             status = response.status
             encoded = response.read(16 * 1024 + 1)
     except urllib.error.HTTPError as error:
         raise CanaryFailure(f"{path} returned HTTP {error.code}") from None
     except (OSError, TimeoutError, urllib.error.URLError) as error:
-        raise CanaryFailure(f"{path} connectivity failed ({type(error).__name__})") from None
+        raise CanaryConnectivityFailure(
+            f"{path} connectivity failed ({type(error).__name__})"
+        ) from None
     if len(encoded) > 16 * 1024:
         raise CanaryFailure(f"{path} response exceeded its hard bound")
     try:
@@ -223,12 +231,21 @@ def main() -> int:
     deadline = time.monotonic() + args.timeout_seconds
     submission_id: str | None = None
     while True:
-        status, response = request_json(
-            client,
-            "/internal/v1/promotion-canary",
-            token,
-            request,
-        )
+        try:
+            status, response = request_json(
+                client,
+                "/internal/v1/promotion-canary",
+                token,
+                request,
+                timeout_seconds=30,
+            )
+        except CanaryConnectivityFailure:
+            if time.monotonic() + args.poll_seconds > deadline:
+                raise CanaryFailure(
+                    "promotion transport did not recover before the promotion deadline"
+                ) from None
+            time.sleep(args.poll_seconds)
+            continue
         submission_id, complete = validate_canary(
             status,
             response,
