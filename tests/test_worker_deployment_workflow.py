@@ -113,6 +113,29 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("'!server/*.md'", push)
         self.assertIn("'!server/**/*.md'", push)
 
+    def test_offline_public_evidence_scripts_do_not_redeploy_workers(self) -> None:
+        pull_request = DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0]
+        push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
+        offline_public_evidence = {
+            "scripts/aggregate_public_replay_github_evidence.py",
+            "scripts/resolve_public_replay_github_evidence.py",
+        }
+        runtime_scripts = {
+            "scripts/prepare_intake_enablement_lease.py",
+            "scripts/validate_cloudflare_rollback.py",
+            "scripts/wait_replay_container_rollout.py",
+            "scripts/worker_intake_configuration.py",
+        }
+        for trigger in (pull_request, push):
+            self.assertIn("'scripts/**'", trigger)
+            for path in offline_public_evidence:
+                with self.subTest(trigger=trigger[:20], path=path):
+                    self.assertIn(f"'!{path}'", trigger)
+            for path in runtime_scripts:
+                with self.subTest(trigger=trigger[:20], path=path):
+                    self.assertTrue((ROOT / path).is_file())
+                    self.assertNotIn(f"'!{path}'", trigger)
+
     def test_dispatch_dependencies_are_promoted_without_unearned_deploys(self) -> None:
         pull_request = DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0]
         push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
