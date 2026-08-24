@@ -20,6 +20,9 @@ COMMIT = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"[0-9a-f]{64}")
 PROBLEM = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}")
 TOOLCHAIN = re.compile(r"leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+")
+HISTORICAL_TOOLCHAIN = re.compile(
+    r"leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:rc|beta)[0-9]+)?"
+)
 TIMESTAMP = re.compile(
     r"(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T"
     r"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z"
@@ -256,7 +259,7 @@ def validate_execution_profile(value: Any) -> dict[str, Any]:
     vm_digest = _string(profile["vm_image_digest"], "vm_image_digest")
     if re.fullmatch(r"sha256:[0-9a-f]{64}", vm_digest) is None:
         raise ReplayError("vm_image_digest is not canonical")
-    _match(TOOLCHAIN, profile["toolchain"], "toolchain")
+    _match(HISTORICAL_TOOLCHAIN, profile["toolchain"], "toolchain")
     go_toolchain = _string(profile["go_toolchain"], "go_toolchain")
     if re.fullmatch(r"go[0-9]+\.[0-9]+\.[0-9]+", go_toolchain) is None:
         raise ReplayError("go_toolchain is not an exact version")
@@ -542,7 +545,7 @@ def validate_execution_request(value: Any) -> dict[str, Any]:
     if request["schema_version"] != 1 or isinstance(request["schema_version"], bool):
         raise ReplayError("request schema_version must be integer 1")
     task_identity = _match(REPLAY_ID, request["replay_task_id"], "request.replay_task_id")
-    attempt = _integer(request["attempt"], "request.attempt", 1)
+    _integer(request["attempt"], "request.attempt", 1)
     source = _object(request["source"], "request.source")
     if source.get("visibility") == "public":
         _fields(source, {"repository", "commit", "visibility"}, "request.source")
@@ -559,7 +562,11 @@ def validate_execution_request(value: Any) -> dict[str, Any]:
     _fields(benchmark, {"repository", "commit", "toolchain"}, "request.benchmark")
     _match(REPOSITORY, benchmark["repository"], "request.benchmark.repository")
     _match(COMMIT, benchmark["commit"], "request.benchmark.commit")
-    _match(TOOLCHAIN, benchmark["toolchain"], "request.benchmark.toolchain")
+    _match(
+        HISTORICAL_TOOLCHAIN,
+        benchmark["toolchain"],
+        "request.benchmark.toolchain",
+    )
     result = _object(request["result"], "request.result")
     _fields(
         result,

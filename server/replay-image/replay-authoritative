@@ -630,7 +630,11 @@ def main() -> None:
                 "--generated-root",
                 str(BENCHMARK / "generated"),
                 "--manifest-dir",
-                str(BENCHMARK / "manifests" / "problems"),
+                str(
+                    BENCHMARK / "manifests" / "problems"
+                    if (BENCHMARK / "manifests" / "problems").is_dir()
+                    else BENCHMARK / "manifests" / "problems.toml"
+                ),
                 "--output-dir",
                 str(output),
                 "--repo-root",

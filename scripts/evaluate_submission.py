@@ -48,23 +48,41 @@ class WorkspaceMatch:
     skip_reason: str | None = None
 
 
-def _load_manifest_revisions(manifest_dir: pathlib.Path) -> dict[str, int]:
+def _load_manifest_revisions(manifest_path: pathlib.Path) -> dict[str, int]:
     """Read problem ids and statement revisions from manifests.
 
-    Each problem lives in its own top-level-key TOML file at
-    `manifests/problems/<id>.toml`. Legacy manifests without the lifecycle
-    field are revision 1.  Full validation (filename↔id, schema,
-    uniqueness) lives in `lake exe lean-eval validate-manifest`.
+    Current benchmarks store one top-level-key TOML file per problem under
+    `manifests/problems/`. Historical snapshots before the manifest split use
+    a single `manifests/problems.toml` document with `[[problem]]` records.
+    Legacy records without the lifecycle field are revision 1. Full current
+    validation (filename↔id, schema, uniqueness) lives in
+    `lake exe lean-eval validate-manifest`.
     """
-    if not manifest_dir.is_dir():
-        raise EvaluateError(f"Manifest directory not found: {manifest_dir}")
+    if manifest_path.is_dir():
+        records: list[tuple[pathlib.Path, object]] = []
+        for path in sorted(manifest_path.glob("*.toml")):
+            with path.open("rb") as handle:
+                records.append((path, tomllib.load(handle)))
+    elif manifest_path.is_file():
+        with manifest_path.open("rb") as handle:
+            document = tomllib.load(handle)
+        legacy = document.get("problem")
+        if not isinstance(legacy, list):
+            raise EvaluateError(
+                f"Legacy manifest has no [[problem]] records: {manifest_path}"
+            )
+        records = [(manifest_path, record) for record in legacy]
+    else:
+        raise EvaluateError(f"Manifest path not found: {manifest_path}")
     revisions: dict[str, int] = {}
-    for path in sorted(manifest_dir.glob("*.toml")):
-        with path.open("rb") as handle:
-            data = tomllib.load(handle)
+    for path, data in records:
+        if not isinstance(data, dict):
+            raise EvaluateError(f"Manifest {path} contains a non-object problem")
         problem_id = data.get("id")
         if isinstance(problem_id, str) and problem_id.strip():
             problem_id = problem_id.strip()
+            if problem_id in revisions:
+                raise EvaluateError(f"Manifest {path} duplicates problem {problem_id}")
             revision = data.get("statement_revision", 1)
             if (
                 not isinstance(revision, int)
@@ -76,7 +94,7 @@ def _load_manifest_revisions(manifest_dir: pathlib.Path) -> dict[str, int]:
                 )
             revisions[problem_id] = revision
     if not revisions:
-        raise EvaluateError(f"No problems found in {manifest_dir}")
+        raise EvaluateError(f"No problems found in {manifest_path}")
     return revisions
 
 

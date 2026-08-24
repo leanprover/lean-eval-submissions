@@ -15,7 +15,7 @@
     "vm_image_digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "toolchain": {
       "type": "string",
-      "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+$"
+      "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+(?:-(?:rc|beta)[0-9]+)?$"
     },
     "go_toolchain": { "type": "string", "pattern": "^go[0-9]+\\.[0-9]+\\.[0-9]+$" },
     "rust_toolchain": {

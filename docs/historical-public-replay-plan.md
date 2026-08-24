@@ -78,7 +78,9 @@ plan remains `execution_profile_status: unresolved` under
 does not claim that the current v4.33 runner can execute its historical
 toolchain. In the reviewed local corpus, 101 of 135 results are not v4.33 and
 91 use prerelease toolchains. Each exact historical toolchain needs a reviewed
-compatible execution profile before its ordinary enqueue event.
+compatible execution profile before its ordinary enqueue event. The
+source-free per-benchmark build matrix and the remaining qualification boundary
+are specified in `docs/historical-public-replay-profiles.md`.
 
 The machine-readable contracts are:
 
