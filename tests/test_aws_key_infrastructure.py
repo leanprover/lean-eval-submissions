@@ -26,6 +26,7 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
             "ArchiveIdentityKeyAlias",
             "CapabilityConsumption",
             "WrapRole",
+            "MigrationWrapRole",
             "UnwrapFunctionRole",
             "UnwrapFunction",
             "ReplayInvokerRole",
@@ -60,7 +61,7 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
         self.assertIn("Enabled: true", table)
 
     def test_wrap_role_has_only_encrypt_and_exact_oidc_subject(self) -> None:
-        role = _section(self.template, "  WrapRole:\n", "  UnwrapFunctionRole:\n")
+        role = _section(self.template, "  WrapRole:\n", "  MigrationWrapRole:\n")
         self.assertIn("token.actions.githubusercontent.com:aud: sts.amazonaws.com", role)
         self.assertIn(
             "token.actions.githubusercontent.com:sub: !Sub "
@@ -79,6 +80,28 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
         ):
             self.assertIn(f"- {name}", role)
             self.assertIn(f"kms:EncryptionContext:{name}: false", role)
+
+    def test_migration_role_exists_only_in_production_and_has_exact_subject(self) -> None:
+        conditions = _section(self.template, "Conditions:\n", "Resources:\n")
+        self.assertIn("IsProduction: !Equals [!Ref EnvironmentName, production]", conditions)
+        role = _section(
+            self.template,
+            "  MigrationWrapRole:\n",
+            "  UnwrapFunctionRole:\n",
+        )
+        self.assertIn("Condition: IsProduction", role)
+        self.assertIn("RoleName: lean-eval-archive-migration-wrap-production", role)
+        self.assertIn(
+            "repo:${SubmissionGitHubSubjectPrefix}:environment:archive-migration-production",
+            role,
+        )
+        self.assertNotIn("environment:archive-production", role)
+        self.assertIn("Action: kms:Encrypt", role)
+        self.assertNotIn("kms:Decrypt", role)
+        self.assertNotIn('Resource: "*"', role)
+        outputs = self.template.split("Outputs:\n", 1)[1]
+        self.assertIn("MigrationWrapRoleArn:\n    Condition: IsProduction", outputs)
+        self.assertIn("Value: !GetAtt MigrationWrapRole.Arn", outputs)
 
     def test_oidc_subject_prefixes_match_github_repository_configuration(self) -> None:
         parameters = _section(self.template, "Parameters:\n", "Resources:\n")

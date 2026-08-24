@@ -105,12 +105,19 @@ The six GitHub environment shells already exist:
 - `release-staging` and `release-production` in
   `leanprover/lean-eval-releases`, each restricted to protected branches.
 
+The separate `archive-migration-production` environment is restricted to
+protected branches. It must use the production-only
+`MigrationWrapRoleArn` output: the ordinary production archive role trusts
+only `archive-production` and deliberately cannot be assumed by a migration
+job.
+
 Before provisioning they are intentionally empty. After a reviewed staging
 deployment, only the two staging role variables below are installed. Do not
 recreate or broaden the environments, and do not connect production merely
 because its dormant stack exists.
 
-For each stack, copy the seven non-secret outputs into `INFRASTRUCTURE.md`:
+For each stack, copy the seven common non-secret outputs into
+`INFRASTRUCTURE.md`:
 
 - KMS key ARN;
 - one-use DynamoDB table name;
@@ -119,6 +126,11 @@ For each stack, copy the seven non-secret outputs into `INFRASTRUCTURE.md`:
 - replay Unwrap controller role ARN;
 - release Unwrap controller role ARN; and
 - adapter name (`aws-kms-v1`).
+
+The production stack has an eighth output, `MigrationWrapRoleArn`. It is an
+Encrypt-only role bound exactly to the `archive-migration-production` OIDC
+subject. Store that ARN as `AWS_WRAP_ROLE_ARN` only in the migration
+environment; do not reuse the ordinary `WrapRoleArn` there.
 
 After the outputs exist, store each corresponding role ARN as a non-secret
 variable in its existing environment. Recheck rather than change the recorded
