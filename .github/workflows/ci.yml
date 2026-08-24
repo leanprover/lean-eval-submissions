@@ -117,6 +117,7 @@ jobs:
           tests.test_public_replay_smoke
           tests.test_public_replay_workflow
           tests.test_public_replay_json_schemas
+          tests.test_committed_public_replay_evidence
           tests.test_kernel_corpus_report
           tests.test_kernel_corpus_json_schemas
 

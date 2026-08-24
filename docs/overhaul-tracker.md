@@ -213,10 +213,20 @@ the already implemented owner status, metadata, and publication routes.
       both environments by `lean-eval-submissions#1299` at `ffd9a473`, deploy
       run `32700136536` passed, both live health endpoints report disabled, and
       Cloudflare reports zero active or assigned replay containers.
+- [x] Complete and durably retain the first full historical public GitHub
+      evidence pass after workflow-contract review. Sixteen successful runs
+      `32718053904`–`32719340876` at exact source `5746f90e` covered all 315
+      requests / 633 public results. The reviewed aggregate resolves 69
+      requests / 135 results and leaves 246 / 498 explicitly pending; it has
+      SHA-256 `13a0d95b…` and is checked in with complete shard provenance in
+      [`historical-public-evidence-rerun.md`](historical-public-evidence-rerun.md).
 - [ ] Inventory every historical accepted result at the migration cutoff and
       deterministically classify it as public-source replayable,
       private-archive replayable, or explicitly unavailable with a reviewed
-      reason.
+      reason. The public evidence pass removes all unreviewed workflow-contract
+      classifications, but 498 public results still require retry or
+      adjudication and all 668 private results still require the separately
+      credentialed archive-migration lane.
 - [ ] Enqueue and execute the complete historical replay corpus under exact
       original pins, recording terminal verdicts/statistics or explicit
       unavailability; the isolated staging proofs above do not satisfy this
