@@ -210,10 +210,20 @@ def validate_runtime(value: Any, manifest: str) -> tuple[dict[str, Any], dict[st
     return health, probe
 
 
-def freeze(publication_value: Any, runtime_value: Any, lock_value: Any) -> dict[str, Any]:
+def freeze(
+    publication_value: Any,
+    runtime_value: Any,
+    lock_value: Any,
+    runtime_evidence_sha256: str,
+) -> dict[str, Any]:
     lock = object_value(lock_value, "profile lock")
     publication = validate_publication(publication_value, lock)
     health, probe = validate_runtime(runtime_value, publication["registry_manifest_digest"])
+    runtime_digest = canonical_sha256(
+        runtime_evidence_sha256,
+        DIGEST,
+        "runtime evidence SHA-256",
+    )
     profile = {
         "schema_version": 1,
         "runner_profile": lock["runner_profile"],
@@ -246,9 +256,7 @@ def freeze(publication_value: Any, runtime_value: Any, lock_value: Any) -> dict[
         "registry_repository": publication["registry_repository"],
         "registry_tag": publication["registry_tag"],
         "registry_manifest_digest": publication["registry_manifest_digest"],
-        "runtime_evidence_sha256": hashlib.sha256(
-            json.dumps(runtime_value, ensure_ascii=True, separators=(",", ":"), sort_keys=True).encode()
-        ).hexdigest(),
+        "runtime_evidence_sha256": runtime_digest,
         "execution_profile_digest": config_digest(
             "lean-eval-replay-execution-profile-v1", profile
         ),
@@ -278,6 +286,7 @@ def main() -> int:
             load(args.publication, "publication evidence"),
             load(args.runtime, "runtime evidence"),
             load(PROFILE_LOCK, "profile lock"),
+            file_sha256(args.runtime),
         )
         write_exclusive(args.output, result)
     except (FreezeError, OSError, ValueError) as error:

@@ -213,8 +213,8 @@ jobs:
               "staging_acceptance_enabled": True,
               "staging_memory_limit_bytes": 12 * 1024**3,
               "production_memory_gate_bytes": 12 * 1024**3,
-              "reviewed_execution_profile_digest": "0000000000000000000000000000000000000000000000000000000000000000",
-              "reviewed_measurement_config_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+              "reviewed_execution_profile_digest": "fabd804359adbe7737e1db206d1877d3b923385cf2e8e95ec2b3be69a0d4c651",
+              "reviewed_measurement_config_digest": "2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945",
               "reviewed_vm_image_digest": "sha256:f61b6be446c3bc355c2eefddc3b376226acee89ca562e66f3b283576a32bb20b",
           }
           PY
@@ -322,8 +322,8 @@ jobs:
               "staging_acceptance_enabled": False,
               "staging_memory_limit_bytes": 12 * 1024**3,
               "production_memory_gate_bytes": 12 * 1024**3,
-              "reviewed_execution_profile_digest": "0000000000000000000000000000000000000000000000000000000000000000",
-              "reviewed_measurement_config_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+              "reviewed_execution_profile_digest": "fabd804359adbe7737e1db206d1877d3b923385cf2e8e95ec2b3be69a0d4c651",
+              "reviewed_measurement_config_digest": "2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945",
               "reviewed_vm_image_digest": "sha256:f61b6be446c3bc355c2eefddc3b376226acee89ca562e66f3b283576a32bb20b",
           }
           PY

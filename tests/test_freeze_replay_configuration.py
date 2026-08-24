@@ -21,6 +21,7 @@ ROOT = pathlib.Path(__file__).parents[1]
 IMAGE_DIGEST = "sha256:" + "9" * 64
 SOURCE_COMMIT = "a" * 40
 WORKER_COMMIT = "b" * 40
+RUNTIME_EVIDENCE_SHA256 = "c" * 64
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -85,8 +86,17 @@ def runtime() -> dict:
 class FreezeReplayConfigurationTests(unittest.TestCase):
     def test_freezes_exact_profile_and_domain_separated_digests(self) -> None:
         lock = json.loads(PROFILE_LOCK.read_text(encoding="utf-8"))
-        result = freeze(publication(), runtime(), lock)
+        result = freeze(
+            publication(),
+            runtime(),
+            lock,
+            RUNTIME_EVIDENCE_SHA256,
+        )
         self.assertEqual(result["registry_manifest_digest"], IMAGE_DIGEST)
+        self.assertEqual(
+            result["runtime_evidence_sha256"],
+            RUNTIME_EVIDENCE_SHA256,
+        )
         self.assertEqual(result["execution_profile"]["components"], lock["components"])
         self.assertEqual(result["execution_profile"]["cpu_model"], "AMD EPYC")
         self.assertEqual(
@@ -119,14 +129,29 @@ class FreezeReplayConfigurationTests(unittest.TestCase):
                 else:
                     published["dockerfile_sha256"] = "7" * 64
                 with self.assertRaises(FreezeError):
-                    freeze(published, observed, lock)
+                    freeze(
+                        published,
+                        observed,
+                        lock,
+                        RUNTIME_EVIDENCE_SHA256,
+                    )
 
     def test_rejects_runtime_evidence_with_unknown_fields(self) -> None:
         lock = json.loads(PROFILE_LOCK.read_text(encoding="utf-8"))
         observed = copy.deepcopy(runtime())
         observed["probe"]["untrusted_output"] = "must not be accepted"
         with self.assertRaisesRegex(FreezeError, "fields are not canonical"):
-            freeze(publication(), observed, lock)
+            freeze(
+                publication(),
+                observed,
+                lock,
+                RUNTIME_EVIDENCE_SHA256,
+            )
+
+    def test_rejects_noncanonical_runtime_evidence_digest(self) -> None:
+        lock = json.loads(PROFILE_LOCK.read_text(encoding="utf-8"))
+        with self.assertRaisesRegex(FreezeError, "runtime evidence SHA-256"):
+            freeze(publication(), runtime(), lock, "sha256:" + "c" * 64)
 
 
 if __name__ == "__main__":

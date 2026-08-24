@@ -68,8 +68,8 @@ jobs:
             .staging_acceptance_enabled == true and
             .staging_memory_limit_bytes == 12884901888 and
             .production_memory_gate_bytes == 12884901888 and
-            .reviewed_execution_profile_digest == ("0" * 64) and
-            .reviewed_measurement_config_digest == ("0" * 64) and
+            .reviewed_execution_profile_digest == "fabd804359adbe7737e1db206d1877d3b923385cf2e8e95ec2b3be69a0d4c651" and
+            .reviewed_measurement_config_digest == "2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945" and
             (.reviewed_vm_image_digest | test("^sha256:[0-9a-f]{64}$")) and
             .reviewed_vm_image_digest != ("sha256:" + ("0" * 64))
           ' "$RUNNER_TEMP/replay-health.json" >/dev/null

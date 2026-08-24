@@ -63,11 +63,13 @@ class ReplayArchiveStagingWorkflowTests(unittest.TestCase):
         self.assertIn('.deployed_commit == $commit', WORKFLOW)
         self.assertIn('.replay_enabled == false', WORKFLOW)
         self.assertIn(
-            '.reviewed_execution_profile_digest == ("0" * 64)',
+            '.reviewed_execution_profile_digest == '
+            '"fabd804359adbe7737e1db206d1877d3b923385cf2e8e95ec2b3be69a0d4c651"',
             WORKFLOW,
         )
         self.assertIn(
-            '.reviewed_measurement_config_digest == ("0" * 64)',
+            '.reviewed_measurement_config_digest == '
+            '"2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945"',
             WORKFLOW,
         )
         self.assertIn('.reviewed_vm_image_digest | test(', WORKFLOW)
