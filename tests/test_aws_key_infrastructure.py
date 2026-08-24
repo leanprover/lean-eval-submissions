@@ -91,14 +91,74 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
         )
         self.assertIn("Condition: IsProduction", role)
         self.assertIn("RoleName: lean-eval-archive-migration-wrap-production", role)
-        self.assertIn(
-            "repo:${SubmissionGitHubSubjectPrefix}:environment:archive-migration-production",
+        trust = _section(
             role,
+            "      AssumeRolePolicyDocument:\n",
+            "      Policies:\n",
         )
-        self.assertNotIn("environment:archive-production", role)
-        self.assertIn("Action: kms:Encrypt", role)
-        self.assertNotIn("kms:Decrypt", role)
-        self.assertNotIn('Resource: "*"', role)
+        self.assertEqual(
+            re.findall(r"^\s+Action: (\S+)$", trust, re.MULTILINE),
+            ["sts:AssumeRoleWithWebIdentity"],
+        )
+        self.assertEqual(
+            re.findall(
+                r"^\s+token\.actions\.githubusercontent\.com:(aud|sub): (.+)$",
+                trust,
+                re.MULTILINE,
+            ),
+            [
+                ("aud", "sts.amazonaws.com"),
+                (
+                    "sub",
+                    "!Sub repo:${SubmissionGitHubSubjectPrefix}:environment:"
+                    "archive-migration-production",
+                ),
+            ],
+        )
+        self.assertEqual(trust.count("StringEquals:"), 1)
+        self.assertNotIn("StringLike", role)
+        policy = role.split("      Policies:\n", 1)[1]
+        self.assertEqual(
+            re.findall(r"^\s+Action: (\S+)$", policy, re.MULTILINE),
+            ["kms:Encrypt"],
+        )
+        self.assertEqual(
+            re.findall(r"^\s+Resource: (.+)$", policy, re.MULTILINE),
+            ["!GetAtt ArchiveIdentityKey.Arn"],
+        )
+        self.assertIn(
+            "kms:EncryptionContext:contract: lean-eval-archive-key-v1",
+            policy,
+        )
+        context_keys = _section(
+            policy,
+            "                    kms:EncryptionContextKeys:\n",
+            '                  "Null":\n',
+        )
+        expected_context_keys = [
+            "contract",
+            "submission_id",
+            "archive_ciphertext_sha256",
+            "data_key_id",
+            "age_recipient_sha256",
+        ]
+        self.assertEqual(
+            re.findall(r"^\s+- ([a-z0-9_]+)$", context_keys, re.MULTILINE),
+            expected_context_keys,
+        )
+        self.assertEqual(
+            re.findall(
+                r"^\s+kms:EncryptionContext:([a-z0-9_]+): false$",
+                policy,
+                re.MULTILINE,
+            ),
+            expected_context_keys,
+        )
+        self.assertNotIn('Resource: "*"', policy)
+        self.assertEqual(
+            re.findall(r"^\s+Action: (\S+)$", role, re.MULTILINE),
+            ["sts:AssumeRoleWithWebIdentity", "kms:Encrypt"],
+        )
         outputs = self.template.split("Outputs:\n", 1)[1]
         self.assertIn("MigrationWrapRoleArn:\n    Condition: IsProduction", outputs)
         self.assertIn("Value: !GetAtt MigrationWrapRole.Arn", outputs)

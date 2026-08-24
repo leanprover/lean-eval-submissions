@@ -12,8 +12,10 @@ intake-disabled in both environments; deployment tokens exercise Workers and
 Containers; accepted-archive staging replay run `32618166048` passed;
 State-writer tokens, browser OAuth Apps, and both broker GitHub Apps remain
 provisioned and preflighted; the dedicated AWS key-custody account and isolated
-staging and production stacks are provisioned; archive/replay staging,
-historical migration, and both release role variables are connected; the
+staging and production stacks are provisioned; archive/replay staging and both
+release role variables are connected; the historical migration environment's
+current ordinary production Wrap role is incompatible with its exact OIDC
+subject and awaits a dedicated role/output/variable replacement; the
 lifecycle-aware leaderboard cutover is live; D7
 migrated all 44 results files and 1,298 records to schema version 2 at commit
 `c3491661`; automatic release tooling is merged at `a0caa968`, with
@@ -48,7 +50,7 @@ administrators. Service code:
 | GitHub Environment | `archive-production` (`EN_kwDOSh7OzM8AAAAEu8r25w`) | production archive | **CREATED 2026-08-21; TAG POLICY SET; ROLE ARN NOT SET** |
 | GitHub Environment | `replay-staging` (`EN_kwDOSh7OzM8AAAAEu8r21Q`) | staging replay | **CREATED; MAIN + DISPATCH TAG POLICIES + INVOKER ROLE ARN SET** |
 | GitHub Environment | `replay-production` (`EN_kwDOSh7OzM8AAAAEu8r3MQ`) | production replay | **CREATED 2026-08-21; PROTECTED BRANCHES ONLY; ROLE ARN NOT SET** |
-| GitHub Environment | `archive-migration-production` (`EN_kwDOSh7OzM8AAAAEwLDSMQ`) | historical migration | **CREATED 2026-08-23; READ KEY + PRODUCTION WRAP ROLE SET; LEGACY IDENTITY ABSENT** |
+| GitHub Environment | `archive-migration-production` (`EN_kwDOSh7OzM8AAAAEwLDSMQ`) | historical migration | **CREATED 2026-08-23; READ KEY SET; CURRENT ORDINARY PRODUCTION WRAP ROLE CANNOT TRUST THIS ENVIRONMENT; DEDICATED ROLE/VARIABLE REPLACEMENT + LEGACY IDENTITY PENDING** |
 | GitHub Environment | `release-staging` (`EN_kwDOT-oWes8AAAAEu8r3Mw`) | staging release | **ROLE + READ KEYS SET; LIVE OIDC TRUST UPDATE PENDING** |
 | GitHub Environment | `release-production` (`EN_kwDOT-oWes8AAAAEu8r3KQ`) | production release | **ROLE + CONTROLLER/PUBLISH KEYS SET; PUBLICATION VARIABLE ABSENT** |
 | AWS account | `lean-eval` (`161072922960`) | dedicated key custody | **CREATED; ROOT MFA ENABLED; NO ACCESS KEYS** |
@@ -523,6 +525,7 @@ Recorded stack outputs:
 | One-use table | `lean-eval-capability-consumption-staging` | `lean-eval-capability-consumption-production` |
 | Versioned unwrap alias ARN | `arn:aws:lambda:us-east-1:161072922960:function:lean-eval-archive-unwrap-staging:live` | `arn:aws:lambda:us-east-1:161072922960:function:lean-eval-archive-unwrap-production:live` |
 | Archive Wrap role ARN | `arn:aws:iam::161072922960:role/lean-eval-archive-wrap-staging` | `arn:aws:iam::161072922960:role/lean-eval-archive-wrap-production` |
+| Historical migration Wrap role ARN | not applicable | **NOT PROVISIONED**; planned output `MigrationWrapRoleArn` for `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production` |
 | Replay invoker role ARN | `arn:aws:iam::161072922960:role/lean-eval-replay-unwrap-invoker-staging` | `arn:aws:iam::161072922960:role/lean-eval-replay-unwrap-invoker-production` |
 | Release invoker role ARN | `arn:aws:iam::161072922960:role/lean-eval-release-unwrap-invoker-staging` | `arn:aws:iam::161072922960:role/lean-eval-release-unwrap-invoker-production` |
 | Function role | `lean-eval-archive-unwrap-function-staging` | `lean-eval-archive-unwrap-function-production` |
@@ -556,9 +559,14 @@ and has no corresponding log group.
 
 The GitHub environment shells were created before the AWS account so their ref
 boundaries could be verified without granting AWS authority. Archive and replay
-staging, the guarded historical migration, and both release environments now
-contain the non-secret role variables shown below. Production archive and
-production replay remain unconnected; release publication remains disabled:
+staging and both release environments contain compatible non-secret role
+variables. The guarded historical migration environment currently contains the
+ordinary production Wrap role ARN, but that role trusts only
+`archive-production`; it cannot be assumed from `archive-migration-production`.
+The dedicated migration role, `MigrationWrapRoleArn` stack output, and variable
+replacement are reviewed configuration only and have not been provisioned or
+applied. Production archive and production replay remain unconnected; release
+publication remains disabled:
 
 | Repository | Environment | Environment node | Protection rule | Ref policy | Policy ID |
 | --- | --- | --- | --- | --- | --- |
@@ -577,6 +585,12 @@ production replay remain unconnected; release publication remains disabled:
 | `leanprover/lean-eval-submissions` / `archive-migration-production` | `AWS_WRAP_ROLE_ARN` | `arn:aws:iam::161072922960:role/lean-eval-archive-wrap-production` |
 | `leanprover/lean-eval-releases` / `release-staging` | `AWS_RELEASE_UNWRAP_ROLE_ARN` | `arn:aws:iam::161072922960:role/lean-eval-release-unwrap-invoker-staging` |
 | `leanprover/lean-eval-releases` / `release-production` | `AWS_RELEASE_UNWRAP_ROLE_ARN` | `arn:aws:iam::161072922960:role/lean-eval-release-unwrap-invoker-production` |
+
+The historical migration row records incompatible current state, not usable
+authority. After the production stack creates `MigrationWrapRoleArn`, replace
+that environment variable with the dedicated output and record the applied
+stack and GitHub evidence here. Do not claim the migration lane is connected
+before both changes are verified.
 
 Read/write deploy-key inventory: release staging uses audit key `161041215`
 and State key `161041214`; release production uses audit key `161041000`,
