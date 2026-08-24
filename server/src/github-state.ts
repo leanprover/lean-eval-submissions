@@ -68,18 +68,32 @@ import {
   type DispatchOutbox,
   type SubmissionView,
 } from "./submission-view";
+import { ScheduledSubrequestBudgetError } from "./scheduled-subrequest-budget";
 
 const API = "https://api.github.com";
 const STATE_BRANCH = "main";
 const PRODUCTION_STATE_REPOSITORY = "leanprover/lean-eval-state";
 const STAGING_STATE_REPOSITORY = "leanprover/lean-eval-state-staging";
 const MAX_WRITE_ATTEMPTS = 8;
+// updateDispatch has nine attempts. One maximal attempt is 2 snapshot reads +
+// (1 view + 6 directly referenced events + 1 terminal evaluation cause) +
+// 2 tree/commit writes + (PATCH + retry + ref + comparison) = 16.
+const BRANCH_SNAPSHOT_SUBREQUESTS = 2;
+const SUBMISSION_GRAPH_MAX_SUBREQUESTS = 8;
+const CREATE_DISPATCH_COMMIT_SUBREQUESTS = 2;
+const REFERENCE_UPDATE_MAX_SUBREQUESTS = 4;
+export const DISPATCH_UPDATE_MAX_SUBREQUESTS =
+  (MAX_WRITE_ATTEMPTS + 1) *
+  (BRANCH_SNAPSHOT_SUBREQUESTS + SUBMISSION_GRAPH_MAX_SUBREQUESTS +
+    CREATE_DISPATCH_COMMIT_SUBREQUESTS + REFERENCE_UPDATE_MAX_SUBREQUESTS);
 const NEW_EVENT_CLOCK_WINDOW_MS = 5 * 60 * 1000;
 const SHA = /^[0-9a-f]{40}$/i;
 const LOWER_SHA = /^[0-9a-f]{40}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
 const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const GITHUB_TIMEOUT_MS = 5000;
+export const DISPATCH_OUTBOX_SCAN_LIMIT = 32;
+const DISPATCH_OUTBOX_READ_CONCURRENCY = 6;
 type ResultOwnerContract = Readonly<{
   commit: string;
   rootEntries: Readonly<Record<string, Readonly<{
@@ -871,14 +885,16 @@ async function updateReference(
   let uncertain = false;
   try {
     response = await fetcher(repoPath(config, `/git/refs/heads/${STATE_BRANCH}`), request);
-  } catch {
+  } catch (error) {
+    if (error instanceof ScheduledSubrequestBudgetError) throw error;
     uncertain = true;
   }
   if (response !== null && response.status >= 500) uncertain = true;
   if (uncertain) {
     try {
       response = await fetcher(repoPath(config, `/git/refs/heads/${STATE_BRANCH}`), request);
-    } catch {
+    } catch (error) {
+      if (error instanceof ScheduledSubrequestBudgetError) throw error;
       response = null;
     }
   }
@@ -886,7 +902,8 @@ async function updateReference(
   if (uncertain) {
     try {
       if (await isCommitReachable(config, fetcher, commit)) return "applied";
-    } catch {
+    } catch (error) {
+      if (error instanceof ScheduledSubrequestBudgetError) throw error;
       throw new StateUpdateOutcomeUnknownError();
     }
   }
@@ -1591,8 +1608,18 @@ export class GitHubStateRepository {
     throw new Error("unreachable dispatch update attempt");
   }
 
-  async listDispatchOutbox(shard: string): Promise<readonly DispatchOutbox[]> {
+  async listDispatchOutbox(
+    shard: string,
+    scanOffset: number,
+    scanLimit: number,
+  ): Promise<readonly DispatchOutbox[]> {
     if (!/^[0-9a-f]{2}$/.test(shard)) throw new TypeError("dispatch outbox shard must be two lowercase hexadecimal digits");
+    if (!Number.isSafeInteger(scanOffset) || scanOffset < 0) {
+      throw new TypeError("dispatch outbox scan offset must be a non-negative safe integer");
+    }
+    if (!Number.isSafeInteger(scanLimit) || scanLimit < 1 || scanLimit > DISPATCH_OUTBOX_SCAN_LIMIT) {
+      throw new TypeError(`dispatch outbox scan limit must be between 1 and ${String(DISPATCH_OUTBOX_SCAN_LIMIT)}`);
+    }
     const snapshot = await branchSnapshot(this.#config, this.#fetcher);
     const directory = `views/dispatch-outbox/${shard}`;
     const query = new URLSearchParams({ ref: snapshot.headSha });
@@ -1607,19 +1634,33 @@ export class GitHubStateRepository {
         throw new GitHubStateError(502, "dispatch outbox directory contains an unexpected entry");
       }
       return entry.path;
-    });
-    return Promise.all(paths.map(async (path) => {
-      const entry = await readPathAt(this.#config, this.#fetcher, path, snapshot.headSha);
-      if (!entry.found) throw new GitHubStateError(502, `${path} disappeared from the pinned State snapshot`);
-      let outbox: DispatchOutbox;
-      try {
-        outbox = decodeDispatchOutbox(entry.value);
-      } catch (error) {
-        throw new GitHubStateError(502, `${path} is invalid: ${String(error)}`);
-      }
-      if (dispatchOutboxPath(outbox.submission_id) !== path) throw new GitHubStateError(502, `${path} has the wrong submission identity`);
-      return outbox;
-    }));
+    }).sort();
+    if (new Set(paths).size !== paths.length) {
+      throw new GitHubStateError(502, "dispatch outbox directory contains duplicate entries");
+    }
+    const start = paths.length === 0 ? 0 : scanOffset % paths.length;
+    const selected = paths.length <= scanLimit
+      ? paths
+      : [...paths.slice(start, start + scanLimit), ...paths.slice(0, Math.max(0, start + scanLimit - paths.length))];
+    const outboxes: DispatchOutbox[] = [];
+    for (let offset = 0; offset < selected.length; offset += DISPATCH_OUTBOX_READ_CONCURRENCY) {
+      const batch = await Promise.all(
+        selected.slice(offset, offset + DISPATCH_OUTBOX_READ_CONCURRENCY).map(async (path) => {
+          const entry = await readPathAt(this.#config, this.#fetcher, path, snapshot.headSha);
+          if (!entry.found) throw new GitHubStateError(502, `${path} disappeared from the pinned State snapshot`);
+          let outbox: DispatchOutbox;
+          try {
+            outbox = decodeDispatchOutbox(entry.value);
+          } catch (error) {
+            throw new GitHubStateError(502, `${path} is invalid: ${String(error)}`);
+          }
+          if (dispatchOutboxPath(outbox.submission_id) !== path) throw new GitHubStateError(502, `${path} has the wrong submission identity`);
+          return outbox;
+        }),
+      );
+      outboxes.push(...batch);
+    }
+    return outboxes;
   }
 
   async appendSubmissionLifecycle(

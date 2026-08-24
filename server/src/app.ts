@@ -50,6 +50,8 @@ import {
   type ResultRetractionOverrideRequest,
   type ResultRetractionRequest,
   type GitHubFetch,
+  DISPATCH_OUTBOX_SCAN_LIMIT,
+  DISPATCH_UPDATE_MAX_SUBREQUESTS,
   GitHubStateError,
   GitHubStateRepository,
   ResultIdentityCollisionError,
@@ -57,6 +59,9 @@ import {
   StateEventConflictError,
   StateUpdateOutcomeUnknownError,
 } from "./github-state";
+import {
+  ScheduledSubrequestBudget,
+} from "./scheduled-subrequest-budget";
 import {
   authenticateMaintainer,
   decodeMaintainerIdentities,
@@ -206,7 +211,11 @@ export type StateAccess = Readonly<{
     expectedAttempts: number,
     nextOutbox: DispatchOutbox | null,
   ): Promise<{ view: SubmissionView }>;
-  listDispatchOutbox(shard: string): Promise<readonly DispatchOutbox[]>;
+  listDispatchOutbox(
+    shard: string,
+    scanOffset: number,
+    scanLimit: number,
+  ): Promise<readonly DispatchOutbox[]>;
   provePromotionCanaryContention?(event: WritableStateEvent): Promise<{
     proofRecorded: boolean;
     idempotent: boolean;
@@ -263,8 +272,10 @@ export type ApiDependencies = Readonly<{
   now?: () => number;
   provider?: GitHubProvider;
   state?: StateAccess;
+  stateFetch?: GitHubFetch;
   dispatch?: (request: Request) => Promise<void>;
   rateLimit?: (key: string) => Promise<Readonly<{ success: boolean }>>;
+  scheduledSubrequestBudget?: ScheduledSubrequestBudget;
 }>;
 
 const JSON_HEADERS = {
@@ -285,6 +296,7 @@ const PROMOTION_CANARY_EPOCH_MS = Date.UTC(2026, 7, 21);
 const PROMOTION_CANARY_OUTBOX_SHARD = "ca";
 const PROMOTION_CANARY_MODEL = /^lean-eval automatic staging promotion canary commit ([0-9a-f]{40}) run ([1-9][0-9]{0,19}) attempt ([1-9][0-9]{0,5})$/;
 const PROMOTION_CANARY_NOTES = "Synthetic staging-only promotion canary using a deliberately rejected fixture; never a benchmark or publication claim.";
+const SCHEDULED_DISPATCH_ITEM_RESERVE = 10 + 1 + DISPATCH_UPDATE_MAX_SUBREQUESTS;
 
 function json(body: unknown, status = 200, additionalHeaders?: HeadersInit): Response {
   const headers = new Headers(JSON_HEADERS);
@@ -388,11 +400,14 @@ function cacheReadiness(env: RuntimeEnv, response: Response, lifecycle: Lifecycl
 const timedGitHubFetch: GitHubFetch = (input, init) =>
   fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(5000) });
 
-function stateRepository(env: RuntimeEnv): GitHubStateRepository {
+function stateRepository(
+  env: RuntimeEnv,
+  githubFetch: GitHubFetch = timedGitHubFetch,
+): GitHubStateRepository {
   if (!env.GITHUB_STATE_TOKEN) throw new GitHubStateError(503, "State credential missing");
   return new GitHubStateRepository(
     { repository: env.STATE_REPOSITORY, token: env.GITHUB_STATE_TOKEN, userAgent: "lean-eval-submission-worker" },
-    timedGitHubFetch,
+    githubFetch,
   );
 }
 
@@ -528,8 +543,12 @@ function provider(env: RuntimeEnv, dependencies: ApiDependencies): GitHubProvide
   );
 }
 
-function state(env: RuntimeEnv, dependencies: ApiDependencies): StateAccess {
-  return dependencies.state ?? stateRepository(env);
+function state(
+  env: RuntimeEnv,
+  dependencies: ApiDependencies,
+  githubFetch?: GitHubFetch,
+): StateAccess {
+  return dependencies.state ?? stateRepository(env, githubFetch);
 }
 
 async function submissionStage<T>(stage: string, operation: () => Promise<T>): Promise<T> {
@@ -961,10 +980,13 @@ async function reconcileDispatch(
   view: SubmissionView,
   nowMilliseconds: number,
   target: "submission" | "promotion_canary" = "submission",
+  subrequests?: ScheduledSubrequestBudget,
 ): Promise<SubmissionView> {
   if (view.dispatch.status === "succeeded") return view;
   const attempt = view.dispatch.attempts + 1;
   if (attempt > 32) return view;
+  subrequests?.requireRemaining(DISPATCH_UPDATE_MAX_SUBREQUESTS + 1);
+  subrequests?.take();
   try {
     await dispatchSubmission(
       env,
@@ -975,17 +997,6 @@ async function reconcileDispatch(
       view.dispatch.workflow_ref,
       target,
     );
-    const succeeded: SubmissionView = {
-      ...view,
-      dispatch: {
-        ...view.dispatch,
-        status: "succeeded",
-        attempts: attempt,
-        updated_at: canonicalMilliseconds(nowMilliseconds),
-        last_error_code: null,
-      },
-    };
-    return (await ledger.updateDispatch(succeeded, view.dispatch.attempts, null)).view;
   } catch (error) {
     const failed: SubmissionView = {
       ...view,
@@ -1008,6 +1019,17 @@ async function reconcileDispatch(
     };
     return (await ledger.updateDispatch(failed, view.dispatch.attempts, outbox)).view;
   }
+  const succeeded: SubmissionView = {
+    ...view,
+    dispatch: {
+      ...view.dispatch,
+      status: "succeeded",
+      attempts: attempt,
+      updated_at: canonicalMilliseconds(nowMilliseconds),
+      last_error_code: null,
+    },
+  };
+  return (await ledger.updateDispatch(succeeded, view.dispatch.attempts, null)).view;
 }
 
 async function acceptSubmission(
@@ -2207,25 +2229,51 @@ function classifyPromotionCanary(entry: DispatchOutbox): PromotionCanaryClassifi
   return { kind: "canary", identity };
 }
 
+function logScheduledBudgetDeferral(
+  target: "submission" | "promotion_canary",
+  subrequests: ScheduledSubrequestBudget,
+): void {
+  console.error(JSON.stringify({
+    event: "scheduled_dispatch_budget_deferred",
+    target,
+    remaining_subrequests: subrequests.remaining,
+    required_subrequests: SCHEDULED_DISPATCH_ITEM_RESERVE,
+  }));
+}
+
 async function reconcilePromotionCanariesScheduled(
   env: RuntimeEnv,
   scheduledTime: number,
   dependencies: ApiDependencies,
+  subrequests: ScheduledSubrequestBudget,
+  intake: IntakeEnablement,
 ): Promise<void> {
   requirePromotionCanaryConfiguration(env, dependencies);
-  if (currentIntake(env, dependencies).effective) {
+  if (intake.effective) {
     throw new GitHubStateError(503, "promotion canary scheduling requires ordinary intake disabled");
   }
-  const ledger = state(env, dependencies);
-  const entries = await ledger.listDispatchOutbox(PROMOTION_CANARY_OUTBOX_SHARD);
+  const ledger = state(
+    env,
+    dependencies,
+    subrequests.wrap(dependencies.stateFetch ?? timedGitHubFetch),
+  );
+  const scanOffset = Math.floor(scheduledTime / 60_000) * DISPATCH_OUTBOX_SCAN_LIMIT;
+  const entries = await ledger.listDispatchOutbox(
+    PROMOTION_CANARY_OUTBOX_SHARD,
+    scanOffset,
+    DISPATCH_OUTBOX_SCAN_LIMIT,
+  );
   const due = entries
     .filter((entry) => classifyPromotionCanary(entry).kind !== "ordinary")
     .filter((entry) => Date.parse(entry.next_attempt_at) <= scheduledTime)
     .sort((left, right) =>
       left.next_attempt_at.localeCompare(right.next_attempt_at) ||
-      left.submission_id.localeCompare(right.submission_id))
-    .slice(0, 20);
+      left.submission_id.localeCompare(right.submission_id));
   for (const entry of due) {
+    if (subrequests.remaining < SCHEDULED_DISPATCH_ITEM_RESERVE) {
+      logScheduledBudgetDeferral("promotion_canary", subrequests);
+      break;
+    }
     try {
       const classification = classifyPromotionCanary(entry);
       if (classification.kind !== "canary") {
@@ -2256,6 +2304,7 @@ async function reconcilePromotionCanariesScheduled(
         throw new GitHubStateError(502, "promotion canary outbox attempt does not match State");
       }
       if (view.dispatch.status === "failed" && view.dispatch.attempts >= 32) {
+        subrequests.requireRemaining(DISPATCH_UPDATE_MAX_SUBREQUESTS);
         await ledger.updateDispatch(view, view.dispatch.attempts, null);
         console.error(JSON.stringify({
           event: "promotion_canary_terminal_retry_exhausted",
@@ -2270,6 +2319,7 @@ async function reconcilePromotionCanariesScheduled(
         view,
         scheduledTime,
         "promotion_canary",
+        subrequests,
       );
     } catch (error) {
       console.error(JSON.stringify({
@@ -2285,9 +2335,18 @@ export async function handleScheduled(
   scheduledTime: number,
   dependencies: ApiDependencies = {},
 ): Promise<void> {
+  const subrequests = dependencies.scheduledSubrequestBudget ?? new ScheduledSubrequestBudget();
+  const githubFetch = dependencies.stateFetch ?? timedGitHubFetch;
+  const intake = currentIntake(env, dependencies);
   if (promotionCanaryEnabled(env)) {
     try {
-      await reconcilePromotionCanariesScheduled(env, scheduledTime, dependencies);
+      await reconcilePromotionCanariesScheduled(
+        env,
+        scheduledTime,
+        dependencies,
+        subrequests,
+        intake,
+      );
     } catch (error) {
       console.error(JSON.stringify({
         event: "promotion_canary_scheduled_scan_failed",
@@ -2295,20 +2354,24 @@ export async function handleScheduled(
       }));
     }
   }
-  if (!currentIntake(env, dependencies).effective) return;
+  if (!intake.effective) return;
   requireDispatchConfiguration(env, dependencies);
-  const ledger = state(env, dependencies);
+  const ledger = state(env, dependencies, subrequests.wrap(githubFetch));
   const shardNumber = Math.floor(scheduledTime / 60_000) % 256;
   const shard = shardNumber.toString(16).padStart(2, "0");
-  const entries = await ledger.listDispatchOutbox(shard);
+  const scanOffset = Math.floor(scheduledTime / (256 * 60_000)) * DISPATCH_OUTBOX_SCAN_LIMIT;
+  const entries = await ledger.listDispatchOutbox(shard, scanOffset, DISPATCH_OUTBOX_SCAN_LIMIT);
   const due = entries
     .filter((entry) =>
       !promotionCanaryEnabled(env) ||
       classifyPromotionCanary(entry).kind === "ordinary")
     .filter((entry) => Date.parse(entry.next_attempt_at) <= scheduledTime)
-    .sort((left, right) => left.next_attempt_at.localeCompare(right.next_attempt_at) || left.submission_id.localeCompare(right.submission_id))
-    .slice(0, 20);
+    .sort((left, right) => left.next_attempt_at.localeCompare(right.next_attempt_at) || left.submission_id.localeCompare(right.submission_id));
   for (const entry of due) {
+    if (subrequests.remaining < SCHEDULED_DISPATCH_ITEM_RESERVE) {
+      logScheduledBudgetDeferral("submission", subrequests);
+      break;
+    }
     const view = await ledger.readSubmission(entry.submission_id);
     if (
       view?.owner_login !== entry.owner_login ||
@@ -2318,6 +2381,15 @@ export async function handleScheduled(
     ) {
       throw new GitHubStateError(502, `dispatch outbox ${entry.submission_id} does not match its targeted submission view`);
     }
-    await reconcileDispatch(env, dependencies, ledger, view, scheduledTime);
+    if (view.dispatch.status === "failed" && view.dispatch.attempts >= 32) {
+      subrequests.requireRemaining(DISPATCH_UPDATE_MAX_SUBREQUESTS);
+      await ledger.updateDispatch(view, view.dispatch.attempts, null);
+      console.error(JSON.stringify({
+        event: "submission_dispatch_terminal_retry_exhausted",
+        error_name: "retry_limit_reached",
+      }));
+      continue;
+    }
+    await reconcileDispatch(env, dependencies, ledger, view, scheduledTime, "submission", subrequests);
   }
 }

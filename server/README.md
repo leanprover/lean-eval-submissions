@@ -208,6 +208,25 @@ contract before intake is enabled. Submission-view schema version 1 remains
 readable for pre-lifecycle records; any lifecycle append upgrades the same
 canonical path to the strict lifecycle-aware schema.
 
+Each Cron invocation has its own application-level external-subrequest budget;
+there is no Worker-global `limits.subrequests` setting that could unexpectedly
+constrain owner or maintainer routes. A scheduled scan reads at most 32 outbox
+blobs from one alphabetically ordered shard window and rotates that window on
+the next visit. Before starting each due item, the handler requires 155
+requests of remaining capacity, including all 144 requests needed by the existing nine
+attempt State CAS loop in its largest valid submission-graph and ambiguous-ref
+path. State reads and every CAS retry use a strict 400-request guard, while the
+single broker dispatch is charged explicitly against the same budget. In the
+worst case the 35-request scan leaves room for two complete 155-request items
+(ten for the authenticated view graph, one for dispatch, and 144 for State
+persistence), with 55 requests left; typical first-attempt items continue while
+the next full reserve remains available. Outbox reads use batches of at most
+six to bound in-flight connections. A State write error after
+an accepted provider dispatch is propagated as State failure and is never
+reclassified into a second provider-failure write. A 32-attempt terminal
+outbox is removed without another provider call so it cannot permanently occupy
+a rotating window.
+
 Automatic protected-main deployment has one staging-only promotion exception
 while ordinary intake remains disabled. Authenticated `POST
 /internal/v1/promotion-canary` accepts a deterministic, withheld synthetic
