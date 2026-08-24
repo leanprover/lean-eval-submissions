@@ -248,6 +248,12 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             },
         )
         self.assertIs(plan["intake_enabled"], False)
+        self.assertIs(plan["legacy_result_owner_api_contract_supported"], True)
+        self.assertIs(plan["legacy_result_owner_api_enabled"], False)
+        self.assertEqual(
+            plan["result_owner_state_contract_commit"],
+            "889e07e3b8cf38ad147d8a23b7d1b35826de740f",
+        )
         self.assertIs(plan["promotion_canary_enabled"], False)
         self.assertIs(plan["replay_enabled"], False)
 
@@ -261,9 +267,61 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 binding["text"] = "true"
         self._write(self.paths["intake_version"], self.versions["intake"])
         with self.assertRaisesRegex(
-            rollback.RollbackValidationError, "must disable promotion canary and replay"
+            rollback.RollbackValidationError,
+            "must disable legacy result owner API, promotion canary",
         ):
             rollback.build_plan(self._arguments())
+
+    def test_rejects_production_rollback_with_owner_api_enabled(self) -> None:
+        self.configs["intake"]["env"]["production"]["vars"][
+            "LEGACY_RESULT_OWNER_API_ENABLED"
+        ] = "true"
+        self.configs["intake"]["env"]["production"]["vars"][
+            "RESULT_OWNER_STATE_CONTRACT_COMMIT"
+        ] = "d" * 40
+        self._write(self.paths["intake_config"], self.configs["intake"])
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "LEGACY_RESULT_OWNER_API_ENABLED":
+                binding["text"] = "true"
+            if binding.get("name") == "RESULT_OWNER_STATE_CONTRACT_COMMIT":
+                binding["text"] = "d" * 40
+        self._write(self.paths["intake_version"], self.versions["intake"])
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "must disable intake, legacy result owner API"
+        ):
+            rollback.build_plan(self._arguments())
+
+    def test_older_target_without_owner_gate_is_safely_disabled(self) -> None:
+        for name in (
+            "LEGACY_RESULT_OWNER_API_ENABLED",
+            "RESULT_OWNER_STATE_CONTRACT_COMMIT",
+        ):
+            del self.configs["intake"]["env"]["production"]["vars"][name]
+        self._write(self.paths["intake_config"], self.configs["intake"])
+        self.versions["intake"]["resources"]["bindings"] = [
+            binding
+            for binding in self.versions["intake"]["resources"]["bindings"]
+            if binding.get("name")
+            not in {
+                "LEGACY_RESULT_OWNER_API_ENABLED",
+                "RESULT_OWNER_STATE_CONTRACT_COMMIT",
+            }
+        ]
+        self._write(self.paths["intake_version"], self.versions["intake"])
+        plan = rollback.build_plan(self._arguments())
+        self.assertIs(plan["legacy_result_owner_api_contract_supported"], False)
+        self.assertIs(plan["legacy_result_owner_api_enabled"], False)
+        self.assertIsNone(plan["result_owner_state_contract_commit"])
+        rollback.validate_health(
+            plan,
+            "intake",
+            {
+                "status": "ok",
+                "environment": "production",
+                "deployed_commit": COMMIT,
+                "intake_enabled": False,
+            },
+        )
 
     def test_older_target_without_canary_binding_is_safely_disabled(self) -> None:
         del self.configs["intake"]["env"]["production"]["vars"][
@@ -526,7 +584,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 binding["text"] = "true"
         self._write(self.paths["replay_version"], self.versions["replay"])
         with self.assertRaisesRegex(
-            rollback.RollbackValidationError, "must disable promotion canary and replay"
+            rollback.RollbackValidationError,
+            "must disable legacy result owner API, promotion canary",
         ):
             rollback.build_plan(arguments)
 
@@ -631,6 +690,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "intake_lease_expires_at": None,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
+                "legacy_result_owner_api_enabled": False,
             },
         )
         with self.assertRaisesRegex(rollback.RollbackValidationError, "health differs"):
@@ -646,6 +706,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                     "intake_enabled": True,
                     "intake_enablement_mode": "durable",
                     "intake_lease_expires_at": None,
+                    "legacy_result_owner_api_enabled": False,
                 },
             )
 
@@ -741,6 +802,20 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             prestate["original_version_ids"]["intake"], INTAKE_VERSION
         )
         self.assertEqual(prestate["original_replay_migration_tag"], "v2")
+        self.assertEqual(
+            prestate["rollback_feature_gates"],
+            {
+                "intake_enabled": False,
+                "legacy_result_owner_api_contract_supported": True,
+                "legacy_result_owner_api_enabled": False,
+                "promotion_canary_enabled": False,
+                "replay_enabled": False,
+                "staging_acceptance_enabled": False,
+                "result_owner_state_contract_commit": (
+                    "889e07e3b8cf38ad147d8a23b7d1b35826de740f"
+                ),
+            },
+        )
         self.assertNotIn("provider_future", encoded)
         self.assertNotIn("secret_text", encoded)
         self.assertIs(prestate["contains_secret_values"], False)

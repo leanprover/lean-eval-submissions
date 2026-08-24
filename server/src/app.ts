@@ -1800,6 +1800,7 @@ export async function handleRequest(
       intake_enabled: intake.effective,
       intake_enablement_mode: intake.mode,
       intake_lease_expires_at: intake.leaseExpiresAt,
+      legacy_result_owner_api_enabled: resultOwnerApiEnabled(env),
       promotion_canary_configured_enabled: env.PROMOTION_CANARY_ENABLED === "true",
       promotion_canary_enabled: promotionCanaryEnabled(env),
     });

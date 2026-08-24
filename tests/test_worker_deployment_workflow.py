@@ -310,6 +310,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('"PROMOTION_CANARY_ENABLED"', ROLLBACK_VALIDATOR)
         self.assertIn("--require-replay-disabled", ROLLBACK)
         self.assertIn("--require-intake-disabled", ROLLBACK)
+        self.assertIn('"LEGACY_RESULT_OWNER_API_ENABLED"', ROLLBACK_VALIDATOR)
+        self.assertIn('"RESULT_OWNER_STATE_CONTRACT_COMMIT"', ROLLBACK_VALIDATOR)
         self.assertIn("cloudflare-rollback-qualification-v1.json", ROLLBACK)
         self.assertEqual(ROLLBACK.count("compatible-capabilities"), 1)
         self.assertIn("Preserve source-free pre-mutation recovery state", ROLLBACK)

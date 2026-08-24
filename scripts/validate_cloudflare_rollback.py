@@ -659,16 +659,47 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         name in intake_expected for name in INTAKE_LEASE_BINDINGS - {"INTAKE_ENABLED", "INTAKE_ENABLEMENT_MODE"}
     ):
         raise RollbackValidationError("tracked intake enablement state is not closed")
+    owner_gate_fields = {
+        "LEGACY_RESULT_OWNER_API_ENABLED",
+        "RESULT_OWNER_STATE_CONTRACT_COMMIT",
+    }
+    present_owner_gate_fields = owner_gate_fields & set(intake_expected)
+    if present_owner_gate_fields and present_owner_gate_fields != owner_gate_fields:
+        raise RollbackValidationError(
+            "legacy result owner API gate and State contract pin must appear together"
+        )
+    owner_contract_supported = present_owner_gate_fields == owner_gate_fields
+    plan["legacy_result_owner_api_contract_supported"] = owner_contract_supported
+    plan["legacy_result_owner_api_enabled"] = (
+        enabled(intake_expected, "LEGACY_RESULT_OWNER_API_ENABLED")
+        if owner_contract_supported
+        else False
+    )
+    owner_state_commit = (
+        intake_expected["RESULT_OWNER_STATE_CONTRACT_COMMIT"]
+        if owner_contract_supported
+        else None
+    )
+    if owner_state_commit is not None and COMMIT.fullmatch(owner_state_commit) is None:
+        raise RollbackValidationError(
+            "RESULT_OWNER_STATE_CONTRACT_COMMIT is not a full lowercase commit"
+        )
+    if plan["legacy_result_owner_api_enabled"] and owner_state_commit != state_contract["commit"]:
+        raise RollbackValidationError(
+            "enabled legacy result owner API is not bound to current protected State"
+        )
+    plan["result_owner_state_contract_commit"] = owner_state_commit
     if args.require_replay_disabled and any(
         plan[name]
         for name in (
+            "legacy_result_owner_api_enabled",
             "promotion_canary_enabled",
             "replay_enabled",
             "staging_acceptance_enabled",
         )
     ):
         raise RollbackValidationError(
-            "an emergency production rollback target must disable promotion canary and replay"
+            "an emergency production rollback target must disable legacy result owner API, promotion canary, and replay"
         )
     if getattr(args, "require_intake_disabled", False) and plan["intake_enabled"]:
         raise RollbackValidationError(
@@ -817,6 +848,10 @@ def validate_health(
                     "intake_lease_expires_at": None,
                 }
             )
+        if plan["legacy_result_owner_api_contract_supported"]:
+            expected["legacy_result_owner_api_enabled"] = plan[
+                "legacy_result_owner_api_enabled"
+            ]
         if plan["promotion_canary_contract_supported"]:
             expected.update(
                 {
@@ -879,6 +914,8 @@ def build_prestate(args: argparse.Namespace) -> dict[str, Any]:
         "intake_enabled", "intake_enablement_contract_supported",
         "intake_enablement_mode", "promotion_canary_enabled",
         "promotion_canary_contract_supported",
+        "legacy_result_owner_api_contract_supported",
+        "legacy_result_owner_api_enabled", "result_owner_state_contract_commit",
         "replay_enabled", "staging_acceptance_enabled",
         "staging_memory_limit_bytes", "production_memory_gate_bytes",
         "reviewed_execution_profile_digest",
@@ -950,6 +987,28 @@ def build_prestate(args: argparse.Namespace) -> dict[str, Any]:
         "kind": "cloudflare_rollback_prestate",
         "environment": plan["environment"],
         "rollback_expected_commit": plan["expected_commit"],
+        "rollback_feature_gates": {
+            "intake_enabled": plan["intake_enabled"],
+            "intake_enablement_contract_supported": plan[
+                "intake_enablement_contract_supported"
+            ],
+            "intake_enablement_mode": plan["intake_enablement_mode"],
+            "legacy_result_owner_api_contract_supported": plan[
+                "legacy_result_owner_api_contract_supported"
+            ],
+            "legacy_result_owner_api_enabled": plan[
+                "legacy_result_owner_api_enabled"
+            ],
+            "promotion_canary_enabled": plan["promotion_canary_enabled"],
+            "promotion_canary_contract_supported": plan[
+                "promotion_canary_contract_supported"
+            ],
+            "replay_enabled": plan["replay_enabled"],
+            "staging_acceptance_enabled": plan["staging_acceptance_enabled"],
+            "result_owner_state_contract_commit": plan[
+                "result_owner_state_contract_commit"
+            ],
+        },
         "original_version_ids": active_ids,
         "original_capability_contract_sha256": capability_digests,
         "original_replay_migration_tag": replay_runtime["migration_tag"],
