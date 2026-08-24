@@ -69,8 +69,8 @@ It remains explicitly blocked on all five steps recorded in the artifact:
 
 The offline `finalize` command enforces those conditions mechanically. It
 requires clean exact checkouts of the qualification commit and hardened
-production State commit `b179a88d9c2ad829726e3b21ea04d4ce6fcb68c4`, merged by
-State PR `#19`. The command proves the
+production State commit `a53c658a2de2188675134dc2890285fbaa17cf5a`, after
+State PRs `#19` and `#20`. The command proves the
 qualification blob with `git show`, reconstructs the State event and script
 inputs from exact commit objects, validates the authority → qualification →
 enqueue chain with the pinned State validator, and requires the materializer to
