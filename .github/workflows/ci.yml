@@ -122,6 +122,7 @@ jobs:
           tests.test_committed_public_replay_evidence
           tests.test_historical_replay_profile_matrix
           tests.test_historical_public_runner
+          tests.test_historical_public_image_qualification
           tests.test_kernel_corpus_report
           tests.test_kernel_corpus_json_schemas
 
