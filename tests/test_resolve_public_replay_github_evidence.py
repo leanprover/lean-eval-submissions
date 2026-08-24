@@ -13,23 +13,26 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from resolve_public_replay_github_evidence import (  # noqa: E402
+    MAX_PUBLIC_GIST_API_REQUESTS_PER_SHARD,
     EvidenceError,
     GitHubClient,
-    MAX_PUBLIC_GIST_API_REQUESTS_PER_SHARD,
     ProbeIndeterminate,
-    _require_public_gist_probe_budget,
-    _RejectRedirects,
     _read_bounded,
+    _RejectRedirects,
+    _require_public_gist_probe_budget,
+    _validate_historical_results,
     _workflow_binding,
     _write_exclusive,
     canonical_bytes,
-    resolve as _resolve,
     shard_requests,
-    validate_evidence as _validate_evidence,
+    validate_legacy_adjudication_registry,
     validate_requests,
     validate_workflow_registry,
 )
-
+from resolve_public_replay_github_evidence import resolve as _resolve  # noqa: E402
+from resolve_public_replay_github_evidence import (  # noqa: E402
+    validate_evidence as _validate_evidence,
+)
 
 BENCHMARK = "1" * 40
 SOURCE = "2" * 40
@@ -38,6 +41,16 @@ SOURCE = "2" * 40
 def registry_bytes(value: dict | None = None) -> tuple[dict, str]:
     if value is None:
         path = ROOT / "configuration/public-replay-workflow-definitions-v1.json"
+        raw = path.read_bytes()
+        value = json.loads(raw)
+    else:
+        raw = (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
+    return value, hashlib.sha256(raw).hexdigest()
+
+
+def adjudication_bytes(value: dict | None = None) -> tuple[dict, str]:
+    if value is None:
+        path = ROOT / "configuration/public-replay-legacy-adjudications-v1.json"
         raw = path.read_bytes()
         value = json.loads(raw)
     else:
@@ -60,7 +73,10 @@ def resolve(value, digest, client, workflow_registry=None, registry_digest=None,
 def validate_evidence(value, requests, workflow_registry=None, registry_digest=None):
     workflow_registry, computed = registry_bytes(workflow_registry)
     return _validate_evidence(
-        value, requests, workflow_registry, registry_digest or computed
+        value,
+        requests,
+        workflow_registry,
+        registry_digest or computed,
     )
 
 
@@ -1132,14 +1148,14 @@ GPT-5.5 Codex
         registry_raw = registry_path.read_bytes()
         registry = json.loads(registry_raw)
         reviewed = validate_workflow_registry(registry)
-        self.assertEqual(len(reviewed), 119)
+        self.assertEqual(len(reviewed), 120)
         self.assertEqual(
             len({entry["definition_sha256"] for entry in reviewed.values()}),
             12,
         )
         self.assertEqual(
             hashlib.sha256(registry_raw).hexdigest(),
-            "82eff4dce70c2fcb7f480522f4de1fb16884534ce5f9452032908bb299c12196",
+            "b9004ee87f0ff032e78198e251b87fe1bb1d0baaf77d6ea853335dd1f5487108",
         )
         schema = json.loads(
             (
@@ -1148,6 +1164,93 @@ GPT-5.5 Codex
         )
         self.assertIs(schema["additionalProperties"], False)
         self.assertIs(schema["properties"]["contracts"]["items"]["additionalProperties"], False)
+
+    def test_legacy_adjudication_registry_is_exact_closed_and_schema_valid(self) -> None:
+        path = ROOT / "configuration/public-replay-legacy-adjudications-v1.json"
+        raw = path.read_bytes()
+        value = json.loads(raw)
+        reviewed = validate_legacy_adjudication_registry(value)
+        self.assertEqual(len(reviewed), 5)
+        self.assertEqual(
+            hashlib.sha256(raw).hexdigest(),
+            "1bd9e0cf0859650cbe55c382d8af5d0b9468c39d8f44a22f36afa85a3af55d92",
+        )
+        schema = json.loads(
+            (ROOT / "schemas/public-replay-legacy-adjudications-v1.schema.json").read_text()
+        )
+        self.assertIs(schema["additionalProperties"], False)
+        self.assertIs(
+            schema["$defs"]["adjudication"]["additionalProperties"], False
+        )
+        changed = copy.deepcopy(value)
+        changed["adjudications"][0]["record_job"]["completed_at"] = (
+            "2026-07-28T15:22:40Z"
+        )
+        with self.assertRaisesRegex(EvidenceError, "outside its record job"):
+            validate_legacy_adjudication_registry(changed)
+        changed = copy.deepcopy(value)
+        changed["adjudications"][0]["unexpected"] = True
+        with self.assertRaisesRegex(EvidenceError, "fields are not closed"):
+            validate_legacy_adjudication_registry(changed)
+        changed = copy.deepcopy(value)
+        changed["adjudications"].pop()
+        with self.assertRaisesRegex(EvidenceError, "request set is not exact"):
+            validate_legacy_adjudication_registry(changed)
+
+    def test_legacy_candidate_digest_cannot_be_attached_to_another_request(self) -> None:
+        requests = request_value()
+        output = resolve(requests, "8" * 64, FakeClient())
+        adjudications, adjudication_digest = adjudication_bytes()
+        output["legacy_adjudication_registry_sha256"] = adjudication_digest
+        output["resolutions"][0]["candidates"][0][
+            "legacy_adjudication_sha256"
+        ] = hashlib.sha256(
+            canonical_bytes(adjudications["adjudications"][0])
+        ).hexdigest()
+        with self.assertRaisesRegex(EvidenceError, "legacy adjudication is invalid"):
+            workflow_registry, workflow_digest = registry_bytes()
+            _validate_evidence(
+                output,
+                requests,
+                workflow_registry,
+                workflow_digest,
+                adjudications,
+                adjudication_digest,
+            )
+
+    def test_historical_result_binding_rejects_extra_or_changed_records(self) -> None:
+        request = request_value()["requests"][0]
+        record = {
+            "benchmark_commit": request["benchmark"]["commit"],
+            "issue_number": request["issue_number"],
+            "model": request["declared_model"],
+            "solved_at": request["accepted_at"],
+            "submission_public": True,
+            "submission_ref": request["source"]["commit"],
+            "submission_repo": request["source"]["repository"],
+        }
+        document = {
+            "schema_version": 1,
+            "solved": {
+                item["problem_id"]: dict(record) for item in request["results"]
+            },
+            "user": request["owner"],
+        }
+        _validate_historical_results(document, request, request["declared_model"])
+        changed = copy.deepcopy(document)
+        changed["solved"]["decoy_problem"] = dict(record)
+        with self.assertRaisesRegex(EvidenceError, "problem set"):
+            _validate_historical_results(
+                changed, request, request["declared_model"]
+            )
+        changed = copy.deepcopy(document)
+        changed["solved"][request["results"][0]["problem_id"]][
+            "submission_ref"
+        ] = "f" * 40
+        with self.assertRaisesRegex(EvidenceError, "not cross-bound"):
+            _validate_historical_results(
+                changed, request, request["declared_model"]
+            )
 
 
 if __name__ == "__main__":

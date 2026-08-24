@@ -219,13 +219,16 @@ jobs:
           set -euo pipefail
           evidence="$RUNNER_TEMP/public-replay-github-evidence.json"
           registry="configuration/public-replay-workflow-definitions-v1.json"
+          adjudications="configuration/public-replay-legacy-adjudications-v1.json"
           python scripts/resolve_public_replay_github_evidence.py \
             --requests "$REQUESTS" \
             --workflow-registry "$registry" \
+            --legacy-adjudication-registry "$adjudications" \
             --output "$evidence" \
             --shard-index "$EXPECTED_SHARD_INDEX" \
             --shard-count "$EXPECTED_SHARD_COUNT"
-          EVIDENCE="$evidence" REGISTRY="$registry" python - <<'PY'
+          EVIDENCE="$evidence" REGISTRY="$registry" \
+            ADJUDICATIONS="$adjudications" python - <<'PY'
           import hashlib
           import json
           import os
@@ -242,8 +245,16 @@ jobs:
           registry_path = pathlib.Path(os.environ["REGISTRY"])
           registry_raw = registry_path.read_bytes()
           registry = json.loads(registry_raw)
+          adjudication_path = pathlib.Path(os.environ["ADJUDICATIONS"])
+          adjudication_raw = adjudication_path.read_bytes()
+          adjudications = json.loads(adjudication_raw)
           validate_evidence(
-              value, requests, registry, hashlib.sha256(registry_raw).hexdigest()
+              value,
+              requests,
+              registry,
+              hashlib.sha256(registry_raw).hexdigest(),
+              adjudications,
+              hashlib.sha256(adjudication_raw).hexdigest(),
           )
           expected = {
               "source_commit": os.environ["EXPECTED_COMMIT"],
@@ -251,6 +262,9 @@ jobs:
               "resolution_requests_sha256": os.environ["EXPECTED_REQUESTS_SHA256"],
               "workflow_definition_registry_sha256": hashlib.sha256(
                   registry_raw
+              ).hexdigest(),
+              "legacy_adjudication_registry_sha256": hashlib.sha256(
+                  adjudication_raw
               ).hexdigest(),
               "request_count": int(os.environ["EXPECTED_REQUEST_COUNT"]),
               "result_count": int(os.environ["EXPECTED_PUBLIC_RESULT_COUNT"]),

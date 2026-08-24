@@ -502,6 +502,11 @@
     },
     {
       "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "f851886da7ca7caf8616355531e0aedf99dee9bb5e262f18e4cce751e8df1a7a",
+      "evaluator_commit": "d9294fd407c5694afe50512d0911eadee185515f"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
       "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
       "evaluator_commit": "daa0a74ef1d8c755b0f12cdbd419bd8455d62e25"
     },

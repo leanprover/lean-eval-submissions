@@ -19,10 +19,10 @@ from resolve_public_replay_github_evidence import (
     _write_exclusive,
     shard_requests,
     validate_evidence,
+    validate_legacy_adjudication_registry,
     validate_requests,
     validate_workflow_registry,
 )
-
 
 MAX_EVIDENCE_BYTES = 32 * 1024 * 1024
 MAX_REGISTRY_BYTES = 512 * 1024
@@ -48,10 +48,14 @@ def aggregate(
     workflow_registry: dict[str, Any],
     workflow_registry_sha256: str,
     evidence: list[tuple[str, dict[str, Any]]],
+    legacy_adjudication_registry: dict[str, Any] | None = None,
+    legacy_adjudication_registry_sha256: str | None = None,
 ) -> dict[str, Any]:
     try:
         validate_requests(requests)
         validate_workflow_registry(workflow_registry)
+        if legacy_adjudication_registry is not None:
+            validate_legacy_adjudication_registry(legacy_adjudication_registry)
     except EvidenceError as error:
         raise AggregationError(str(error)) from error
     if DIGEST.fullmatch(requests_sha256) is None or DIGEST.fullmatch(
@@ -67,6 +71,17 @@ def aggregate(
         raise AggregationError("workflow registry is not canonical or digest-bound")
     if not evidence:
         raise AggregationError("no evidence shards were supplied")
+    has_adjudications = any(
+        "legacy_adjudication_registry_sha256" in value for _, value in evidence
+    )
+    if has_adjudications and (
+        legacy_adjudication_registry is None
+        or legacy_adjudication_registry_sha256 is None
+        or DIGEST.fullmatch(legacy_adjudication_registry_sha256) is None
+    ):
+        raise AggregationError(
+            "legacy adjudication registry is not canonical or digest-bound"
+        )
 
     shard_count: int | None = None
     by_index: dict[int, tuple[str, dict[str, Any]]] = {}
@@ -81,6 +96,8 @@ def aggregate(
                 requests,
                 workflow_registry,
                 workflow_registry_sha256,
+                legacy_adjudication_registry,
+                legacy_adjudication_registry_sha256,
             )
         except EvidenceError as error:
             raise AggregationError(str(error)) from error
@@ -93,6 +110,10 @@ def aggregate(
             "request_count": requests["request_count"],
             "result_count": requests["result_count"],
         }
+        if has_adjudications:
+            expected_identity["legacy_adjudication_registry_sha256"] = (
+                legacy_adjudication_registry_sha256
+            )
         if any(value.get(field) != wanted for field, wanted in expected_identity.items()):
             raise AggregationError("evidence shard identity differs from the request set")
         if shard_count is None:
@@ -143,6 +164,15 @@ def aggregate(
         "inventory_sha256": requests["inventory_sha256"],
         "resolution_requests_sha256": requests_sha256,
         "workflow_definition_registry_sha256": workflow_registry_sha256,
+        **(
+            {
+                "legacy_adjudication_registry_sha256": (
+                    legacy_adjudication_registry_sha256
+                )
+            }
+            if has_adjudications
+            else {}
+        ),
         "request_count": requests["request_count"],
         "result_count": requests["result_count"],
         "shard_count": shard_count,
@@ -166,6 +196,8 @@ def aggregate(
         requests_sha256,
         workflow_registry,
         workflow_registry_sha256,
+        legacy_adjudication_registry,
+        legacy_adjudication_registry_sha256,
     )
     return output
 
@@ -176,6 +208,8 @@ def validate_aggregate(
     requests_sha256: str,
     workflow_registry: dict[str, Any],
     workflow_registry_sha256: str,
+    legacy_adjudication_registry: dict[str, Any] | None = None,
+    legacy_adjudication_registry_sha256: str | None = None,
 ) -> None:
     expected_fields = {
         "schema_version",
@@ -200,7 +234,10 @@ def validate_aggregate(
         "shards",
         "resolutions",
     }
-    if not isinstance(value, dict) or set(value) != expected_fields:
+    has_adjudications = "legacy_adjudication_registry_sha256" in value
+    if not isinstance(value, dict) or set(value) != expected_fields | (
+        {"legacy_adjudication_registry_sha256"} if has_adjudications else set()
+    ):
         raise AggregationError("aggregate fields are not closed")
     if (
         type(value["schema_version"]) is not int
@@ -218,7 +255,28 @@ def validate_aggregate(
         or not 1 <= value["shard_count"] <= 64
     ):
         raise AggregationError("aggregate identity is invalid")
-    for field in ("resolution_requests_sha256", "workflow_definition_registry_sha256"):
+    if has_adjudications:
+        if (
+            legacy_adjudication_registry is None
+            or legacy_adjudication_registry_sha256 is None
+        ):
+            raise AggregationError("aggregate legacy registry is required")
+        try:
+            validate_legacy_adjudication_registry(legacy_adjudication_registry)
+        except EvidenceError as error:
+            raise AggregationError(str(error)) from error
+        if (
+            value["legacy_adjudication_registry_sha256"]
+            != legacy_adjudication_registry_sha256
+        ):
+            raise AggregationError("aggregate legacy registry identity is invalid")
+    digest_fields = [
+        "resolution_requests_sha256",
+        "workflow_definition_registry_sha256",
+    ]
+    if has_adjudications:
+        digest_fields.append("legacy_adjudication_registry_sha256")
+    for field in digest_fields:
         if not isinstance(value[field], str) or DIGEST.fullmatch(value[field]) is None:
             raise AggregationError(f"aggregate {field} is invalid")
 
@@ -279,6 +337,15 @@ def validate_aggregate(
             "workflow_definition_registry_sha256": value[
                 "workflow_definition_registry_sha256"
             ],
+            **(
+                {
+                    "legacy_adjudication_registry_sha256": value[
+                        "legacy_adjudication_registry_sha256"
+                    ]
+                }
+                if has_adjudications
+                else {}
+            ),
             "request_count": value["request_count"],
             "result_count": value["result_count"],
             "shard_index": shard["shard_index"],
@@ -302,6 +369,8 @@ def validate_aggregate(
                 requests,
                 workflow_registry,
                 workflow_registry_sha256,
+                legacy_adjudication_registry if has_adjudications else None,
+                legacy_adjudication_registry_sha256 if has_adjudications else None,
             )
         except EvidenceError as error:
             raise AggregationError(str(error)) from error
@@ -339,6 +408,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--requests", required=True, type=pathlib.Path)
     parser.add_argument("--workflow-registry", required=True, type=pathlib.Path)
+    parser.add_argument(
+        "--legacy-adjudication-registry", required=True, type=pathlib.Path
+    )
     parser.add_argument("--evidence", required=True, action="append", type=pathlib.Path)
     parser.add_argument("--output", required=True, type=pathlib.Path)
     args = parser.parse_args()
@@ -351,6 +423,12 @@ def main() -> int:
             args.workflow_registry, MAX_REGISTRY_BYTES, "workflow definition registry"
         )
         registry = json.loads(registry_raw)
+        adjudication_raw = _read_bounded(
+            args.legacy_adjudication_registry,
+            MAX_REGISTRY_BYTES,
+            "legacy adjudication registry",
+        )
+        adjudications = json.loads(adjudication_raw)
         shards = []
         for path in args.evidence:
             raw = _read_bounded(path, MAX_EVIDENCE_BYTES, "evidence shard")
@@ -361,6 +439,8 @@ def main() -> int:
             registry,
             hashlib.sha256(registry_raw).hexdigest(),
             shards,
+            adjudications,
+            hashlib.sha256(adjudication_raw).hexdigest(),
         )
         _write_exclusive(args.output, output)
     except (

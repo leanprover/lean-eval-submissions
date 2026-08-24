@@ -131,13 +131,14 @@ commit:
 python scripts/aggregate_public_replay_github_evidence.py \
   --requests /reviewed/public-replay-resolution-requests.json \
   --workflow-registry configuration/public-replay-workflow-definitions-v1.json \
+  --legacy-adjudication-registry configuration/public-replay-legacy-adjudications-v1.json \
   --evidence /reviewed/shard-0.json \
   --evidence /reviewed/shard-1.json \
   --output /reviewed/public-replay-github-evidence-aggregate.json
 ```
 
 Supply every shard exactly once. The aggregator binds one source commit,
-inventory digest, request byte digest, exact registry-file byte digest, and shard count;
+inventory digest, request byte digest, both exact registry-file byte digests, and shard count;
 requires every index and request ID exactly once; revalidates every candidate;
 recomputes result coverage and counters; and records every shard SHA-256. Its
 schema is `schemas/public-replay-github-evidence-aggregate-v1.schema.json`.

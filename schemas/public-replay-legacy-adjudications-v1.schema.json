@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/public-replay-legacy-adjudications-v1.schema.json",
+  "title": "Historical public replay legacy adjudications v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "source_repository", "adjudications"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_public_replay_legacy_adjudication_registry"},
+    "source_repository": {"const": "leanprover/lean-eval-submissions"},
+    "adjudications": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/adjudication"}
+    }
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "timestamp": {"type": "string", "pattern": "^(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "repository", "commit"],
+      "properties": {
+        "kind": {"enum": ["github_repo", "gist"]},
+        "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+        "commit": {"$ref": "#/$defs/commit"}
+      }
+    },
+    "body_binding": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "accepted_body_sha256"],
+          "properties": {"kind": {"const": "current"}, "accepted_body_sha256": {"$ref": "#/$defs/digest"}}
+        },
+        {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "accepted_body_sha256", "current_body_sha256", "edit_count", "edits"],
+          "properties": {
+            "kind": {"const": "historical_edit"}, "accepted_body_sha256": {"$ref": "#/$defs/digest"},
+            "current_body_sha256": {"$ref": "#/$defs/digest"}, "edit_count": {"type": "integer", "minimum": 1, "maximum": 20},
+            "edits": {"type": "array", "minItems": 1, "maxItems": 20, "items": {
+              "type": "object", "additionalProperties": false, "required": ["edited_at", "editor", "body_sha256"],
+              "properties": {"edited_at": {"$ref": "#/$defs/timestamp"}, "editor": {"type": "string"}, "body_sha256": {"$ref": "#/$defs/digest"}}
+            }}
+          }
+        }
+      ]
+    },
+    "adjudication": {
+      "type": "object", "additionalProperties": false,
+      "required": ["request_id", "reason_code", "source", "issue", "comment", "workflow_run", "record_job", "result_commit", "model_rename"],
+      "properties": {
+        "request_id": {"type": "string", "pattern": "^prr_[0-9a-f]{64}$"},
+        "reason_code": {"enum": ["historical_issue_body_edit", "historical_model_rename", "legacy_delayed_workflow", "truncated_result_comment"]},
+        "source": {"$ref": "#/$defs/source"},
+        "issue": {
+          "type": "object", "additionalProperties": false,
+          "required": ["repository", "number", "author", "created_at", "closed_at", "title_sha256", "body_binding"],
+          "properties": {"repository": {"enum": ["leanprover/lean-eval", "leanprover/lean-eval-submissions"]}, "number": {"type": "integer", "minimum": 1}, "author": {"type": "string"}, "created_at": {"$ref": "#/$defs/timestamp"}, "closed_at": {"$ref": "#/$defs/timestamp"}, "title_sha256": {"$ref": "#/$defs/digest"}, "body_binding": {"$ref": "#/$defs/body_binding"}}
+        },
+        "comment": {
+          "type": "object", "additionalProperties": false, "required": ["id", "author", "created_at", "body_sha256", "projection"],
+          "properties": {"id": {"type": "integer", "minimum": 1}, "author": {"const": "github-actions[bot]"}, "created_at": {"$ref": "#/$defs/timestamp"}, "body_sha256": {"$ref": "#/$defs/digest"}, "projection": {"enum": ["newly_solved", "pass_lines"]}}
+        },
+        "workflow_run": {
+          "type": "object", "additionalProperties": false, "required": ["id", "name", "event", "attempt", "actor", "triggering_actor", "head_sha", "head_branch", "path", "created_at", "updated_at", "display_title_sha256"],
+          "properties": {"id": {"type": "integer", "minimum": 1}, "name": {"const": "Submission"}, "event": {"const": "issues"}, "attempt": {"type": "integer", "minimum": 1}, "actor": {"type": "string"}, "triggering_actor": {"type": "string"}, "head_sha": {"$ref": "#/$defs/commit"}, "head_branch": {"const": "main"}, "path": {"const": ".github/workflows/submission.yml"}, "created_at": {"$ref": "#/$defs/timestamp"}, "updated_at": {"$ref": "#/$defs/timestamp"}, "display_title_sha256": {"$ref": "#/$defs/digest"}}
+        },
+        "record_job": {
+          "type": "object", "additionalProperties": false, "required": ["id", "name", "started_at", "completed_at"],
+          "properties": {"id": {"type": "integer", "minimum": 1}, "name": {"const": "record"}, "started_at": {"$ref": "#/$defs/timestamp"}, "completed_at": {"$ref": "#/$defs/timestamp"}}
+        },
+        "result_commit": {"$ref": "#/$defs/result_commit"},
+        "model_rename": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/model_rename"}]}
+      }
+    },
+    "result_commit": {
+      "type": "object", "additionalProperties": false, "required": ["repository", "commit", "parent", "path", "blob_sha", "committed_at"],
+      "properties": {"repository": {"const": "leanprover/lean-eval-submissions"}, "commit": {"$ref": "#/$defs/commit"}, "parent": {"$ref": "#/$defs/commit"}, "path": {"type": "string", "pattern": "^results/[A-Za-z0-9_.-]+\\.json$"}, "blob_sha": {"$ref": "#/$defs/commit"}, "committed_at": {"$ref": "#/$defs/timestamp"}}
+    },
+    "model_rename": {
+      "type": "object", "additionalProperties": false, "required": ["repository", "commit", "parent", "path", "before_blob_sha", "after_blob_sha", "renamed_from", "renamed_to"],
+      "properties": {"repository": {"const": "leanprover/lean-eval-submissions"}, "commit": {"$ref": "#/$defs/commit"}, "parent": {"$ref": "#/$defs/commit"}, "path": {"type": "string"}, "before_blob_sha": {"$ref": "#/$defs/commit"}, "after_blob_sha": {"$ref": "#/$defs/commit"}, "renamed_from": {"type": "string", "minLength": 1}, "renamed_to": {"type": "string", "minLength": 1}}
+    }
+  }
+}

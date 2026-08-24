@@ -35,6 +35,7 @@
     "inventory_sha256": { "$ref": "#/$defs/digest" },
     "resolution_requests_sha256": { "$ref": "#/$defs/digest" },
     "workflow_definition_registry_sha256": { "$ref": "#/$defs/digest" },
+    "legacy_adjudication_registry_sha256": { "$ref": "#/$defs/digest" },
     "request_count": { "type": "integer", "minimum": 1 },
     "result_count": { "type": "integer", "minimum": 1 },
     "shard_index": { "type": "integer", "minimum": 0, "maximum": 63 },
@@ -309,6 +310,7 @@
               }
             },
             "source_commit_url": { "$ref": "#/$defs/url" },
+            "legacy_adjudication_sha256": { "$ref": "#/$defs/digest" },
             "source_probe_reason_code": {
               "enum": [
                 "source_probe_response_too_large",

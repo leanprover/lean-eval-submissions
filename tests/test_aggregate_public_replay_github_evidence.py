@@ -18,8 +18,10 @@ from resolve_public_replay_github_evidence import (  # noqa: E402
     resolve,
     shard_requests,
 )
+
 from tests.test_resolve_public_replay_github_evidence import (  # noqa: E402
     FakeClient,
+    adjudication_bytes,
     refresh_request_id,
     request_value,
 )
@@ -200,6 +202,47 @@ class AggregatePublicReplayEvidenceTests(unittest.TestCase):
         self.assertEqual(output["source_unavailable_count"], 1)
         self.assertEqual(output["resolved_count"], 0)
         self.assertEqual(output["pending_count"], 1)
+
+    def test_aggregate_binds_the_exact_legacy_registry(self) -> None:
+        requests = request_value()
+        raw = (json.dumps(requests, indent=2, sort_keys=True) + "\n").encode()
+        digest = hashlib.sha256(raw).hexdigest()
+        adjudications, adjudication_digest = adjudication_bytes()
+        evidence = resolve(
+            requests,
+            digest,
+            FakeClient(),
+            self.registry,
+            self.registry_digest,
+            adjudications,
+            adjudication_digest,
+        )
+        shard = (
+            hashlib.sha256(canonical_document_bytes(evidence)).hexdigest(),
+            evidence,
+        )
+        output = aggregate(
+            requests,
+            digest,
+            self.registry,
+            self.registry_digest,
+            [shard],
+            adjudications,
+            adjudication_digest,
+        )
+        self.assertEqual(
+            output["legacy_adjudication_registry_sha256"], adjudication_digest
+        )
+        with self.assertRaisesRegex(AggregationError, "does not bind"):
+            aggregate(
+                requests,
+                digest,
+                self.registry,
+                self.registry_digest,
+                [shard],
+                adjudications,
+                "f" * 64,
+            )
 
     def test_published_aggregate_schema_is_closed(self) -> None:
         schema = json.loads(
