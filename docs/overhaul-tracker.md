@@ -233,7 +233,11 @@ the already implemented owner status, metadata, and publication routes.
       corpus gate.
       Resolved public evidence now has a deterministic source-free seed-plan
       contract that binds the exact source, benchmark/toolchain, evaluator,
-      workflow, issue, Results snapshot, and aggregate identities. Activation
+      workflow, issue, Results snapshot, and aggregate identities. Protected
+      run `32722572097` reproduced it twice from immutable tag `d0807084…`;
+      the exact plan (`2b00c965…`) and toolchain registry (`5144fc19…`) are
+      permanently checked in under their digest-derived evidence paths.
+      Activation
       remains fail-closed on `legacy_public_result_replay_authority_v1` because
       current State replay materialization admits only modern
       `result.recorded` submission lifecycles, not historical
