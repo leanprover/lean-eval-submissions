@@ -25,7 +25,7 @@ concurrency:
 jobs:
   set-staging-intake:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: cloudflare-staging
     defaults:
@@ -43,6 +43,10 @@ jobs:
           node-version: '24.6.0'
           cache: npm
           cache-dependency-path: server/package-lock.json
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
 
       - name: Verify exact reviewed deployment
         env:
@@ -70,14 +74,15 @@ jobs:
         run: |
           set -euo pipefail
           case "$DESIRED_STATE" in
-            enabled) intake_enabled=true ;;
-            disabled) intake_enabled=false ;;
+            enabled) intake_enabled=true; intake_mode=durable ;;
+            disabled) intake_enabled=false; intake_mode=disabled ;;
             *) echo "unsupported intake state" >&2; exit 1 ;;
           esac
           npx wrangler deploy --env staging \
             --var "DEPLOYED_COMMIT:$GITHUB_SHA" \
             --var "DISPATCH_WORKFLOW_REF:$DISPATCH_WORKFLOW_REF" \
-            --var "INTAKE_ENABLED:$intake_enabled"
+            --var "INTAKE_ENABLED:$intake_enabled" \
+            --var "INTAKE_ENABLEMENT_MODE:$intake_mode"
 
       - name: Verify staging state
         env:
@@ -95,6 +100,10 @@ jobs:
           assert body["environment"] == "staging"
           assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
           assert body["intake_enabled"] is (os.environ["DESIRED_STATE"] == "enabled")
+          assert body["intake_configured_enabled"] is (os.environ["DESIRED_STATE"] == "enabled")
+          assert body["intake_effective_enabled"] is (os.environ["DESIRED_STATE"] == "enabled")
+          assert body["intake_enablement_mode"] == ("durable" if os.environ["DESIRED_STATE"] == "enabled" else "disabled")
+          assert body["intake_lease_expires_at"] is None
           PY
             then
               exit 0

@@ -956,4 +956,40 @@ export class GitHubStateRepository {
     if (!path) throw new Error("unreachable empty State append outcome");
     return { commit: outcome.commit, path, created: outcome.created };
   }
+
+  async appendEventAtHead(
+    event: WritableStateEvent,
+    expectedHead: string,
+  ): Promise<{ commit: string; path: string; created: boolean }> {
+    validateStateEvent(event);
+    if (!SHA.test(expectedHead)) throw new TypeError("expected State head must be a commit SHA");
+    const path = stateEventPath(event);
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+      const existing = await readPathAt(this.#config, this.#fetcher, path, snapshot.headSha);
+      if (existing.found) {
+        try {
+          validateStateEvent(existing.value);
+        } catch {
+          throw new StateEventConflictError(path);
+        }
+        if (canonicalJson(existing.value) !== canonicalJson(event)) {
+          throw new StateEventConflictError(path);
+        }
+        return { commit: snapshot.headSha, path, created: false };
+      }
+      if (snapshot.headSha !== expectedHead) {
+        throw new GitHubStateError(409, "State moved before the bound event append");
+      }
+      const commit = await createCommit(this.#config, this.#fetcher, snapshot, [event]);
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return { commit, path, created: true };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) {
+        throw new GitHubStateError(409, "State branch kept changing underneath the bound append");
+      }
+      await pause(attempt);
+    }
+    throw new Error("unreachable bound State append attempt");
+  }
 }

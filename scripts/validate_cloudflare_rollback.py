@@ -12,7 +12,6 @@ import re
 import sys
 from typing import Any
 
-
 FULL_COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 VERSION_ID = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\Z"
@@ -59,6 +58,19 @@ COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 MAX_CONTRACT_FILE_BYTES = 2 * 1024 * 1024
 MAX_JSON_BYTES = 4 * 1024 * 1024
+INTAKE_LEASE_BINDINGS = {
+    "INTAKE_ENABLED",
+    "INTAKE_ENABLEMENT_MODE",
+    "INTAKE_LEASE_CONTROLLER_COMMIT",
+    "INTAKE_LEASE_CONTROLLER_RUN_ATTEMPT",
+    "INTAKE_LEASE_CONTROLLER_RUN_ID",
+    "INTAKE_LEASE_EVENT_ID",
+    "INTAKE_LEASE_EXPIRES_AT",
+    "INTAKE_LEASE_ISSUED_AT",
+    "INTAKE_LEASE_NONCE_DIGEST",
+    "INTAKE_LEASE_STATE_COMMIT",
+    "INTAKE_LEASE_TARGET_COMMIT",
+}
 
 
 class RollbackValidationError(ValueError):
@@ -212,6 +224,52 @@ def _expected_vars(
     return result
 
 
+def _lease_bindings(path: pathlib.Path) -> dict[str, str]:
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as error:
+        raise RollbackValidationError("cannot read intake lease bindings") from error
+    if not raw or len(raw.encode("utf-8")) > 8192 or not raw.endswith("\n"):
+        raise RollbackValidationError("intake lease bindings are empty or oversized")
+    result: dict[str, str] = {}
+    for line in raw.splitlines():
+        name, separator, value = line.partition("=")
+        if not separator or name in result:
+            raise RollbackValidationError("intake lease bindings are malformed")
+        result[name] = value
+    if set(result) != INTAKE_LEASE_BINDINGS:
+        raise RollbackValidationError("intake lease bindings are not closed")
+    if result["INTAKE_ENABLED"] != "true" or result["INTAKE_ENABLEMENT_MODE"] != "leased":
+        raise RollbackValidationError("intake lease does not request leased enablement")
+    for name in (
+        "INTAKE_LEASE_CONTROLLER_COMMIT", "INTAKE_LEASE_STATE_COMMIT",
+        "INTAKE_LEASE_TARGET_COMMIT",
+    ):
+        if COMMIT.fullmatch(result[name]) is None:
+            raise RollbackValidationError(f"{name} is not canonical")
+    if result["INTAKE_LEASE_CONTROLLER_COMMIT"] != result["INTAKE_LEASE_TARGET_COMMIT"]:
+        raise RollbackValidationError("intake lease target/controller commits differ")
+    for name in ("INTAKE_LEASE_CONTROLLER_RUN_ATTEMPT", "INTAKE_LEASE_CONTROLLER_RUN_ID"):
+        if re.fullmatch(r"[1-9][0-9]*", result[name]) is None:
+            raise RollbackValidationError(f"{name} is not canonical")
+    issued = result["INTAKE_LEASE_ISSUED_AT"]
+    expires = result["INTAKE_LEASE_EXPIRES_AT"]
+    if re.fullmatch(r"[1-8][0-9]{9}", issued) is None or re.fullmatch(r"[1-8][0-9]{9}", expires) is None:
+        raise RollbackValidationError("intake lease times are not canonical")
+    if not 0 < int(expires) - int(issued) <= 900:
+        raise RollbackValidationError("intake lease duration is invalid")
+    if DIGEST.fullmatch(result["INTAKE_LEASE_NONCE_DIGEST"]) is None:
+        raise RollbackValidationError("intake lease nonce digest is invalid")
+    event_id = result["INTAKE_LEASE_EVENT_ID"]
+    if (
+        VERSION_ID.fullmatch(event_id) is None
+        or event_id[14] != "7"
+        or event_id[19] not in "89ab"
+    ):
+        raise RollbackValidationError("intake lease event ID is not UUIDv7")
+    return result
+
+
 def _validate_version(
     *,
     label: str,
@@ -234,6 +292,16 @@ def _validate_version(
         )
         raise RollbackValidationError(
             f"{label} plain-text bindings differ (missing={missing}, extra={extra}, wrong={wrong})"
+        )
+
+
+def validate_lease_bindings(path: pathlib.Path, expected_commit: str) -> None:
+    if FULL_COMMIT.fullmatch(expected_commit) is None:
+        raise RollbackValidationError("expected commit must be a full lowercase Git SHA")
+    lease = _lease_bindings(path)
+    if lease["INTAKE_LEASE_TARGET_COMMIT"] != expected_commit:
+        raise RollbackValidationError(
+            "intake lease does not bind the exact deployed commit"
         )
 
 
@@ -531,6 +599,17 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             "REVIEWED_VM_IMAGE_DIGEST is not a canonical registry digest"
         )
 
+    promotion_canary_supported = "PROMOTION_CANARY_ENABLED" in intake_expected
+    intake_enablement_supported = "INTAKE_ENABLEMENT_MODE" in intake_expected
+    intake_enabled = enabled(intake_expected, "INTAKE_ENABLED")
+    intake_mode = intake_expected.get("INTAKE_ENABLEMENT_MODE")
+    if not intake_enablement_supported:
+        if intake_enabled:
+            raise RollbackValidationError(
+                "a legacy intake target cannot be tracked enabled"
+            )
+        intake_mode = "disabled"
+
     plan = {
         "schema_version": 1,
         "environment": args.environment,
@@ -540,13 +619,16 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             "replay": args.replay_version_id,
             "intake": args.intake_version_id,
         },
-        "intake_enabled": enabled(intake_expected, "INTAKE_ENABLED"),
+        "intake_enabled": intake_enabled,
+        "intake_enablement_contract_supported": intake_enablement_supported,
         # Rollback targets predating the canary binding had no canary route and
         # are therefore safely equivalent to explicit false. A present value
         # remains strict and malformed values still fail closed.
         "promotion_canary_enabled": False
-        if "PROMOTION_CANARY_ENABLED" not in intake_expected
+        if not promotion_canary_supported
         else enabled(intake_expected, "PROMOTION_CANARY_ENABLED"),
+        "promotion_canary_contract_supported": promotion_canary_supported,
+        "intake_enablement_mode": intake_mode,
         "replay_enabled": enabled(replay_expected, "REPLAY_ENABLED"),
         "staging_acceptance_enabled": enabled(
             replay_expected, "STAGING_ACCEPTANCE_ENABLED"
@@ -566,17 +648,25 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         "reviewed_vm_image_digest": replay_expected["REVIEWED_VM_IMAGE_DIGEST"],
         "state_contract": state_contract,
     }
-    if args.require_disabled and any(
+    expected_mode = "durable" if plan["intake_enabled"] else "disabled"
+    if plan["intake_enablement_mode"] != expected_mode or any(
+        name in intake_expected for name in INTAKE_LEASE_BINDINGS - {"INTAKE_ENABLED", "INTAKE_ENABLEMENT_MODE"}
+    ):
+        raise RollbackValidationError("tracked intake enablement state is not closed")
+    if args.require_replay_disabled and any(
         plan[name]
         for name in (
-            "intake_enabled",
             "promotion_canary_enabled",
             "replay_enabled",
             "staging_acceptance_enabled",
         )
     ):
         raise RollbackValidationError(
-            "an emergency production rollback target must disable intake, promotion canary, and replay"
+            "an emergency production rollback target must disable promotion canary and replay"
+        )
+    if getattr(args, "require_intake_disabled", False) and plan["intake_enabled"]:
+        raise RollbackValidationError(
+            "an emergency production rollback target must disable intake"
         )
     return plan
 
@@ -592,6 +682,23 @@ def validate_component(args: argparse.Namespace) -> None:
     if args.component == "intake":
         expected["DISPATCH_WORKFLOW_REF"] = (
             f"lean-eval-dispatch/{args.expected_commit}"
+        )
+        if args.require_intake_disabled:
+            expected["INTAKE_ENABLED"] = "false"
+            expected["INTAKE_ENABLEMENT_MODE"] = "disabled"
+        intake_lease_bindings = getattr(args, "intake_lease_bindings", None)
+        if intake_lease_bindings is not None:
+            if args.require_intake_disabled:
+                raise RollbackValidationError("leased intake cannot also require disabled intake")
+            lease = _lease_bindings(intake_lease_bindings)
+            if lease["INTAKE_LEASE_TARGET_COMMIT"] != args.expected_commit:
+                raise RollbackValidationError(
+                    "intake lease does not bind the exact deployed commit"
+                )
+            expected.update(lease)
+    elif args.require_intake_disabled:
+        raise RollbackValidationError(
+            "only the intake component can require a disabled binding"
         )
     version = _object(args.version)
     _validate_version(
@@ -675,7 +782,13 @@ def active_version(status: dict[str, Any]) -> str:
     return version_id
 
 
-def validate_health(plan: dict[str, Any], component: str, health: dict[str, Any]) -> None:
+def validate_health(
+    plan: dict[str, Any],
+    component: str,
+    health: dict[str, Any],
+    *,
+    require_intake_disabled: bool = False,
+) -> None:
     common = {
         "status": "ok",
         "environment": plan["environment"],
@@ -683,7 +796,37 @@ def validate_health(plan: dict[str, Any], component: str, health: dict[str, Any]
     }
     expected = dict(common)
     if component == "intake":
-        expected["intake_enabled"] = plan["intake_enabled"]
+        intake_enabled = False if require_intake_disabled else plan["intake_enabled"]
+        expected.update({"intake_enabled": intake_enabled})
+        if plan["intake_enablement_contract_supported"]:
+            expected.update(
+                {
+                    "intake_configured_enabled": intake_enabled,
+                    "intake_effective_enabled": intake_enabled,
+                    "intake_enablement_mode": (
+                        "disabled"
+                        if not intake_enabled
+                        else plan["intake_enablement_mode"]
+                    ),
+                    "intake_lease_expires_at": None,
+                }
+            )
+        if plan["promotion_canary_contract_supported"]:
+            expected.update(
+                {
+                    "promotion_canary_configured_enabled": plan[
+                        "promotion_canary_enabled"
+                    ],
+                    "promotion_canary_enabled": (
+                        plan["environment"] == "staging"
+                        and plan["promotion_canary_enabled"]
+                    ),
+                }
+            )
+    elif require_intake_disabled:
+        raise RollbackValidationError(
+            "only intake health can require a disabled state"
+        )
     elif component == "replay":
         expected.update(
             {
@@ -727,8 +870,10 @@ def build_prestate(args: argparse.Namespace) -> dict[str, Any]:
     plan = _object(args.plan)
     if set(plan) != {
         "schema_version", "environment", "expected_commit", "version_ids",
-        "intake_enabled", "promotion_canary_enabled", "replay_enabled",
-        "staging_acceptance_enabled",
+        "intake_enabled", "intake_enablement_contract_supported",
+        "intake_enablement_mode", "promotion_canary_enabled",
+        "promotion_canary_contract_supported",
+        "replay_enabled", "staging_acceptance_enabled",
         "staging_memory_limit_bytes", "production_memory_gate_bytes",
         "reviewed_execution_profile_digest",
         "reviewed_measurement_config_digest", "reviewed_vm_image_digest",
@@ -833,7 +978,8 @@ def parser() -> argparse.ArgumentParser:
         plan.add_argument(f"--{component}-version", type=pathlib.Path, required=True)
         plan.add_argument(f"--{component}-version-id", required=True)
     plan.add_argument("--output", type=pathlib.Path, required=True)
-    plan.add_argument("--require-disabled", action="store_true")
+    plan.add_argument("--require-replay-disabled", action="store_true")
+    plan.add_argument("--require-intake-disabled", action="store_true")
     plan.add_argument("--current-replay-config", type=pathlib.Path, required=True)
     plan.add_argument("--qualification", type=pathlib.Path, required=True)
     plan.add_argument("--target-root", type=pathlib.Path, required=True)
@@ -851,6 +997,12 @@ def parser() -> argparse.ArgumentParser:
     component.add_argument("--config", type=pathlib.Path, required=True)
     component.add_argument("--version", type=pathlib.Path, required=True)
     component.add_argument("--version-id", required=True)
+    component.add_argument("--require-intake-disabled", action="store_true")
+    component.add_argument("--intake-lease-bindings", type=pathlib.Path)
+
+    lease = commands.add_parser("lease-bindings")
+    lease.add_argument("--bindings", type=pathlib.Path, required=True)
+    lease.add_argument("--expected-commit", required=True)
 
     status = commands.add_parser("status")
     status.add_argument("--status", type=pathlib.Path, required=True)
@@ -874,6 +1026,7 @@ def parser() -> argparse.ArgumentParser:
     health.add_argument("--plan", type=pathlib.Path, required=True)
     health.add_argument("--component", choices=("intake", "replay"), required=True)
     health.add_argument("--health", type=pathlib.Path, required=True)
+    health.add_argument("--require-intake-disabled", action="store_true")
 
     prestate = commands.add_parser("prestate")
     prestate.add_argument("--plan", type=pathlib.Path, required=True)
@@ -899,6 +1052,8 @@ def main() -> int:
             )
         elif args.command == "component":
             validate_component(args)
+        elif args.command == "lease-bindings":
+            validate_lease_bindings(args.bindings, args.expected_commit)
         elif args.command == "status":
             validate_status(_object(args.status), args.target_version)
         elif args.command == "active-version":
@@ -918,7 +1073,12 @@ def main() -> int:
                 encoding="utf-8",
             )
         else:
-            validate_health(_object(args.plan), args.component, _object(args.health))
+            validate_health(
+                _object(args.plan),
+                args.component,
+                _object(args.health),
+                require_intake_disabled=args.require_intake_disabled,
+            )
     except RollbackValidationError as error:
         print(f"rollback validation failed: {error}", file=sys.stderr)
         return 1

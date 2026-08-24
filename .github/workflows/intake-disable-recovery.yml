@@ -1,0 +1,215 @@
+name: Force production intake disabled
+
+on:
+  workflow_run:
+    workflows: [Check and deploy submission Worker]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: submission-worker-main
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: server
+
+jobs:
+  disable-production-intake:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event.workflow_run.conclusion != 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      (github.event.workflow_run.event == 'push' ||
+      github.event.workflow_run.event == 'workflow_dispatch') &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: cloudflare-production
+    steps:
+      # Recovery logic always comes from protected main, never the failed run.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: main
+
+      # actions/setup-node pinned to v6.5.0.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.6.0'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Derive the exact eligible controller without operator pairing
+        id: controller
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          EVENT_COMMIT: ${{ github.event.workflow_run.head_sha }}
+          EVENT_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            controller=$(timeout 30s gh api \
+              "repos/$REPOSITORY/actions/workflows/deploy-worker.yml/runs?branch=main&per_page=100" \
+              --jq '.workflow_runs | max_by(.run_number) | [.id, .run_attempt, .head_sha, .status, (.conclusion // "")] | @tsv')
+            IFS=$'\t' read -r run_id run_attempt commit status conclusion <<< "$controller"
+            if [ "$status" != completed ]; then
+              echo "latest protected deploy controller is not completed" >&2
+              exit 1
+            fi
+            allowed_conclusion='^(success|cancelled|failure|startup_failure|timed_out)$'
+          else
+            run_id="$EVENT_RUN_ID"
+            run_attempt="$EVENT_ATTEMPT"
+            commit="$EVENT_COMMIT"
+            conclusion="$EVENT_CONCLUSION"
+            allowed_conclusion='^(cancelled|failure|startup_failure|timed_out)$'
+          fi
+          if [[ ! "$run_id" =~ ^[1-9][0-9]*$ ]] ||
+             [[ ! "$run_attempt" =~ ^[1-9][0-9]*$ ]] ||
+             [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]] ||
+             [[ ! "$conclusion" =~ $allowed_conclusion ]]; then
+            echo "recovery controller identity is not an exact eligible deploy" >&2
+            exit 1
+          fi
+          run=$(timeout 30s gh api "repos/$REPOSITORY/actions/runs/$run_id" \
+            --jq '[.id, .run_attempt, .head_sha, .path, .event, .status, (.conclusion // "")] | @tsv')
+          if [ "$run" != "$run_id"$'\t'"$run_attempt"$'\t'"$commit"$'\t.github/workflows/deploy-worker.yml\tpush\tcompleted\t'"$conclusion" ] &&
+             [ "$run" != "$run_id"$'\t'"$run_attempt"$'\t'"$commit"$'\t.github/workflows/deploy-worker.yml\tworkflow_dispatch\tcompleted\t'"$conclusion" ]; then
+            echo "recovery controller read-back differs" >&2
+            exit 1
+          fi
+          main=$(timeout 30s gh api "repos/$REPOSITORY/branches/main" \
+            --jq '[.commit.sha, .protected] | @tsv')
+          IFS=$'\t' read -r main_commit protected <<< "$main"
+          if [[ ! "$main_commit" =~ ^[0-9a-f]{40}$ ]] || [ "$protected" != true ]; then
+            echo "recovery cannot prove protected main" >&2
+            exit 1
+          fi
+          ancestry=$(timeout 30s gh api "repos/$REPOSITORY/compare/$commit...$main_commit" --jq .status)
+          if [ "$ancestry" != ahead ] && [ "$ancestry" != identical ]; then
+            echo "controller commit is not reachable from protected main" >&2
+            exit 1
+          fi
+          tag=$(timeout 30s gh api \
+            "repos/$REPOSITORY/git/ref/tags/lean-eval-dispatch/$commit" --jq .object.sha)
+          if [ "$tag" != "$commit" ]; then
+            echo "controller dispatch tag does not resolve exactly" >&2
+            exit 1
+          fi
+          {
+            echo "commit=$commit"
+            echo "run_attempt=$run_attempt"
+            echo "run_id=$run_id"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Prepare only the controller's exact Worker code
+        id: target
+        env:
+          TARGET_COMMIT: ${{ steps.controller.outputs.commit }}
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/intake-disable-recovery"
+          if [ -e "$target" ]; then exit 1; fi
+          git worktree add --detach "$target" "$TARGET_COMMIT"
+          npm ci --ignore-scripts --prefix "$target/server"
+          enabled=$(python ../scripts/worker_intake_configuration.py \
+            --config "$target/server/wrangler.jsonc" --environment production)
+          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+
+      - name: Prove production currently runs this controller's enabled code
+        if: steps.target.outputs.enabled == 'true'
+        id: live
+        env:
+          TARGET_COMMIT: ${{ steps.controller.outputs.commit }}
+        run: |
+          set -euo pipefail
+          body=$(curl --fail --silent --show-error --proto '=https' --max-redirs 0 \
+            --max-time 10 --retry 2 --retry-all-errors --retry-max-time 30 \
+            https://lean-eval-submission-server.lean-eval.workers.dev/healthz)
+          needed=$(HEALTH_BODY="$body" python - <<'PY'
+          import json, os, re
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["status"] == "ok"
+          assert body["service"] == "lean-eval-submission"
+          assert body["environment"] == "production"
+          assert re.fullmatch(r"[0-9a-f]{40}", body["deployed_commit"])
+          assert type(body["intake_configured_enabled"]) is bool
+          assert type(body["intake_effective_enabled"]) is bool
+          assert body["intake_enabled"] is body["intake_effective_enabled"]
+          assert body["promotion_canary_configured_enabled"] is False
+          assert body["promotion_canary_enabled"] is False
+          assert body["intake_enablement_mode"] in {"disabled", "durable", "invalid", "leased"}
+          expiry = body["intake_lease_expires_at"]
+          assert expiry is None or type(expiry) is int
+          print(str(
+              body["deployed_commit"] == os.environ["TARGET_COMMIT"]
+              and body["intake_configured_enabled"]
+          ).lower())
+          PY
+          )
+          echo "needed=$needed" >> "$GITHUB_OUTPUT"
+
+      - name: Force the exact controller code to disabled mode
+        if: steps.target.outputs.enabled == 'true' && steps.live.outputs.needed == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TARGET_COMMIT: ${{ steps.controller.outputs.commit }}
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/intake-disable-recovery/server"
+          timeout --signal=TERM --kill-after=10s 150s \
+            "$target/node_modules/.bin/wrangler" deploy \
+            --config "$target/wrangler.jsonc" --env production \
+            --var "DEPLOYED_COMMIT:$TARGET_COMMIT" \
+            --var "DISPATCH_WORKFLOW_REF:lean-eval-dispatch/$TARGET_COMMIT" \
+            --var "INTAKE_ENABLED:false" \
+            --var "INTAKE_ENABLEMENT_MODE:disabled"
+
+      - name: Verify the exact disabled recovery version
+        if: steps.target.outputs.enabled == 'true' && steps.live.outputs.needed == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TARGET_COMMIT: ${{ steps.controller.outputs.commit }}
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/intake-disable-recovery/server"
+          "$target/node_modules/.bin/wrangler" deployments status \
+            --config "$target/wrangler.jsonc" --env production --json > "$RUNNER_TEMP/recovery-status.json"
+          version=$(python ../scripts/validate_cloudflare_rollback.py active-version \
+            --status "$RUNNER_TEMP/recovery-status.json")
+          "$target/node_modules/.bin/wrangler" versions view "$version" \
+            --config "$target/wrangler.jsonc" --env production --json > "$RUNNER_TEMP/recovery-version.json"
+          python ../scripts/validate_cloudflare_rollback.py component \
+            --component intake --expected-commit "$TARGET_COMMIT" --environment production \
+            --config "$target/wrangler.jsonc" --version "$RUNNER_TEMP/recovery-version.json" \
+            --version-id "$version" --require-intake-disabled
+          body=$(curl --fail --silent --show-error --proto '=https' --max-redirs 0 \
+            --max-time 10 --retry 12 --retry-all-errors --retry-max-time 120 \
+            https://lean-eval-submission-server.lean-eval.workers.dev/healthz)
+          HEALTH_BODY="$body" python - <<'PY'
+          import json, os
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["deployed_commit"] == os.environ["TARGET_COMMIT"]
+          assert body["intake_configured_enabled"] is False
+          assert body["intake_effective_enabled"] is False
+          assert body["intake_enablement_mode"] == "disabled"
+          assert body["intake_lease_expires_at"] is None
+          assert body["promotion_canary_configured_enabled"] is False
+          assert body["promotion_canary_enabled"] is False
+          PY

@@ -45,7 +45,10 @@ signed grant preallocates UUIDv7 identities, while the first accepted request
 records its actual acceptance time. The targeted view preserves that batch;
 retries read it instead of fabricating issuance-time occurrences. A partial or
 colliding batch fails closed. OAuth-state consumption records the actual
-callback time and a byte-identical existing event is replay, not success.
+callback time and a byte-identical existing event is replay, not success. The
+lease-smoke nonce is the exception: its event time is the lease issuance time so
+a lost State compare-and-swap response can be retried byte-identically; the
+event payload separately binds the absolute expiry.
 
 Metadata amendments require the GitHub identity that owns the base record.
 Maintainer repairs and retractions use a separate privileged path and become
@@ -98,6 +101,17 @@ Before `INTAKE_ENABLED` changes to `true`, reviewers must have evidence for:
 4. the combined per-submission replay/release key design;
 5. State validation and CAS-contention tests; and
 6. an operational owner recorded in `INFRASTRUCTURE.md`.
+
+The production controller cannot rely on an Actions cleanup job surviving
+cancellation. It first deploys `true` only with a Worker-enforced finite lease,
+whose exact controller commit/run/attempt, target commit, State commit, event,
+expiry, and nonce digest are closed bindings. Every intake request recomputes
+effective state, and the exact expiry boundary fails closed independently of
+Actions. The controller must smoke that exact active version, consume the
+one-use nonce by exact-head State CAS, and re-prove protected State before its
+final operation deploys the same reviewed code in durable mode without lease
+bindings. The separate recovery workflow is disable-only cleanup, not the
+lease safety boundary.
 
 Issue intake remains available throughout the shadow period. Enabling the
 Worker does not authorize closing the issue form; the four-week and adoption

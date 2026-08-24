@@ -254,6 +254,57 @@ deployment returns staging to the tracked safe default `INTAKE_ENABLED=false`;
 rerun the manual workflow after reviewing the newly deployed commit if staging
 testing should continue.
 
+Production has no manual intake-state workflow. Its only launch toggle is the
+reviewed `server/wrangler.jsonc` production `INTAKE_ENABLED` value, which
+remains `false`. After every production launch gate is recorded, the launch PR
+must set that tracked production value to `true`, regenerate the checked-in
+Wrangler types, and update the focused production expectation in
+`tests/test_worker_intake_configuration.py`; it must make no other semantic
+change. Staging stays at its tracked `false` default and keeps using the
+protected manual workflow above.
+The ordinary production deployment derives its expected state from the same
+reviewed configuration, but never exposes a tracked enabled intake before its
+dependencies are qualified. It first deploys the reviewed production intake
+code with a forced `INTAKE_ENABLED=false`, verifies that exact 100%-active
+version and disabled health, verifies the exact broker and disabled replay
+versions and replay health, and snapshots the exact protected State commit.
+Only when the tracked value is `true` does it create an authenticated,
+one-use request bound to the exact controller commit, run ID and attempt,
+target commit, production environment, and reviewed State commit. It deploys
+the target code in `leased` mode for at most fifteen minutes. The Worker checks the
+lease on every intake request and becomes effectively disabled at the exact
+expiry second even if GitHub Actions is cancelled, times out, or never starts
+again. The controller verifies the exact 100%-active leased version and public
+configured/effective health, consumes the bound nonce with an exact-head State
+CAS, and proves protected State did not move. Only then is the same reviewed
+code deployed in `durable` mode. That durable deployment is the final atomic
+step: it carries no lease variables and has no risky follow-up work.
+
+GitHub cancels in-job cleanup on force-cancel and can leave a separate workflow
+queued forever, so Actions is not the safety boundary. The finite Worker lease
+is. A failed or abandoned controller can leave at most a self-expiring leased
+version; it cannot create durable enablement because durable deployment follows
+all smoke and State proofs and is the last operation. The protected
+[`intake-disable-recovery.yml`](.github/workflows/intake-disable-recovery.yml)
+is defense-in-depth cleanup only. It automatically follows failed protected-main
+deployments and can also be dispatched manually without user-supplied run
+pairing. It derives and verifies the exact controller identity and tag (the
+automatic path accepts only a failed controller; manual emergency disable may
+also target the latest successful controller),
+can deploy only `INTAKE_ENABLED=false`/`disabled`, and verifies the exact active
+version and public disabled health. Before mutation it requires public health
+to prove production still runs that exact controller commit with intake
+configured on; a staging-only failure or superseded controller is a no-op. It
+contains no enable path.
+
+Operational prerequisites remain important for prompt cleanup: the recovery
+workflow must stay enabled on protected `main`, `cloudflare-production` must
+admit its disable-only job, and the job needs the existing production
+Cloudflare environment secrets. A queued, cancelled, or failed cleanup never
+extends the lease; the Worker independently fails closed at expiry. Verify
+public health and run the disable-only recovery before any later production
+change if a controller does not complete.
+
 The security boundary and evidence required before intake is enabled are in
 [`docs/intake-threat-model.md`](docs/intake-threat-model.md).
 The decision register and copy/pasteable bootstrap sequence are in
@@ -325,10 +376,14 @@ are approved and preflighted. `GITHUB_VERIFICATION_TOKEN` and
 enabled only for the fixture exercise; production intake remains disabled.
 
 The authenticated `POST /readyz` State-writer preflight is the exception to
-that last sentence: it is an operator-only credential check that works while
-intake remains disabled. It reads the State branch and submits a non-forced
+that last sentence: it is an operator-only credential check that works before
+or after intake launch. It reads the State branch and submits a non-forced
 same-commit ref update, proving both Contents-write authority and the configured
-ruleset bypass without changing the branch, commit graph, or State tree.
+ruleset bypass without changing the branch, commit graph, or State tree. The
+protected workflow still requires the exact ready status, selected environment,
+and canonical State commit, accepts only a JSON boolean intake state, and
+reports whether the live Worker was enabled or disabled instead of requiring a
+particular state.
 
 The authenticated staging-only `POST /internal/v1/source-reader-preflight`
 performs one repository-metadata read through the private Source Reader broker.
@@ -831,8 +886,10 @@ the reviewed broker, replay Worker/container, and intake Worker version IDs,
 plus the one full commit recorded by all three versions. The historical version
 IDs prove the target unit, but they are never activated directly: Cloudflare
 rollback can force old secret values after a rotation. Instead, the workflow
-builds and fully deploys exact target code/configuration with `--keep-vars`,
-which preserves the current secret values. Before any mutation,
+builds and fully deploys exact target code/configuration. For the intake Worker,
+the exact reviewed `secrets.required` bindings make Wrangler inherit the current
+secret values while allowing rollback to clear residual lease variables; the
+other components use `--keep-vars`. Before any mutation,
 the protected production job proves the immutable dispatch tag, protected-main
 reachability, every tracked plain-text binding from that exact commit, the
 exact allowed secret/resource capability names and types, unchanged live
@@ -843,34 +900,47 @@ exact schema blob on the current protected production State `main`. Any State
 commit/schema movement invalidates an old qualification until it is reviewed
 again. This matters even with intake disabled because authenticated archive,
 evaluation, and result callbacks can still append State. The target must make
-scheduled reconciliation a no-op while intake is disabled by retaining
-`PROMOTION_CANARY_ENABLED=false`, and must track both production intake and
-replay as disabled. The pre-mutation recovery artifact records the
+scheduled ordinary-intake reconciliation a no-op while intake is disabled,
+retain `PROMOTION_CANARY_ENABLED=false` in production, and track production
+replay as disabled. Its reviewed production intake state may be enabled or
+disabled. The pre-mutation recovery artifact records the
 original three active version IDs, hashed capability contracts, live replay
 migration tag, and a closed allowlist of effective container recovery fields.
 Raw provider version/status/container responses are not uploaded; the artifact
 contains no secret values or Worker/submission source bytes.
 
-The workflow first deploys and verifies the disabled target intake code while
-retaining current secret values, so no new submission or scheduled
-reconciliation can cross the non-atomic window. It
-then deploys the matching private broker code with the same secret-preserving
-rule. A Worker-version rollback does not change a connected Cloudflare
-Container application, so replay is restored by
+The workflow first deploys and verifies the exact target intake code with an
+explicit temporary `INTAKE_ENABLED=false` override while retaining current
+secret values, so no new submission or scheduled reconciliation can cross the
+non-atomic window. It then deploys the matching private broker code with the
+same secret-preserving rule. A Worker-version rollback does not change a
+connected Cloudflare Container application, so replay is restored by
 a full deploy from the exact detached target commit with an immediate container
 rollout—not by `wrangler rollback`. Before mutation, the exact registry tag is
 resolved to the frozen manifest digest. Afterward, the workflow verifies the
 new replay Worker version plus the effective image, instance size, one-instance
-limit, SSH-off state, private network, health, and frozen review digests. Every
-Worker must report 100% of traffic on its selected version; public health must
-agree with the qualified target commit.
+limit, SSH-off state, private network, health, and frozen review digests. Only
+after those dependencies are exact does it re-check protected State. Rollback
+is deliberately disable-only: it never restores a target's enabled intake
+state. It leaves the target intake code forced to
+`INTAKE_ENABLED=false`/`disabled` and verifies that exact 100%-active version
+and public health. A later ordinary protected-main rollout must repeat the
+finite-lease smoke before durable enablement. Every Worker must report 100% of
+traffic on its selected version; public health must agree with the qualified
+target commit and effective disabled state.
 
 Cloudflare cannot atomically change three Workers and a Container application,
 and a full Container deploy activates Worker code before its rollout completes.
-A failure after the first mutation is therefore an incident, but intake remains
-paused. Preserve the automatically uploaded pre-state artifact, record the
-exact completed and pending version IDs, and either finish the reviewed unit or
-forward-deploy the captured last known coherent commit and container target.
+A failure after the first mutation is therefore an incident. Intake remains
+paused throughout rollback. If recovery is interrupted, rerun the protected
+disable-only recovery to deploy the reviewed target code with intake forced
+off and verify the exact active version, disabled health, and protected State
+ancestry. A disabled target has no enabled mutation and is verified directly.
+Preserve the automatically uploaded pre-state artifact, confirm the controller
+and any disable-only recovery conclusions and
+public intake health, record the exact completed and pending version IDs, and
+either finish the reviewed unit or forward-deploy the captured last known
+coherent commit and container target.
 Never mix target commits to complete a partial rollback. Never rewrite State to
 match an older Worker; deploy a compatibility fix or append a corrective event.
 Record the incident, workflow run, commit, three selected version IDs, and the

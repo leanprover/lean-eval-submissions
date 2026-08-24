@@ -706,3 +706,76 @@ After the results schema version 2 tooling PR is merged:
     writer/State locator, and complete replay implementation in staging;
     do not enable production intake or releases until D6 and the documented
     implementation gates are complete.
+
+## Production intake toggle
+
+Production intake has no out-of-band or manual toggle. After all launch gates
+are complete and their exact evidence is recorded, prepare one reviewed PR that
+changes only `env.production.vars.INTAKE_ENABLED` in
+`server/wrangler.jsonc` from the tracked string `"false"` to `"true"`.
+Regenerate the checked-in Wrangler types and update the focused production
+expectation in `tests/test_worker_intake_configuration.py`, but make no other
+semantic change.
+Do not change staging's tracked `"false"` value or the staging-only manual
+workflow. The protected main deployment must deploy that exact configuration
+through staging and production. Production is first provisioned and verified at
+the exact merge commit with intake forced false; the exact broker, disabled
+replay, and protected State dependencies are then qualified. Before any
+effective enabled mutation, the controller creates a one-use request bound to
+its exact commit, run ID and attempt, target commit, production environment,
+and reviewed State commit. The first enabled deployment is a Worker-enforced
+lease of at most fifteen minutes. Every intake request checks the lease at
+admission and again immediately before State acceptance, failing closed once
+the lease expires even if every Actions runner disappears. The
+controller must observe 100% traffic, exact merge-commit configured/effective
+leased health, consume the request nonce by exact-head State CAS, and prove
+protected State is unchanged. Only then may it deploy the same code in durable
+mode; that durable deployment is the final workflow step and no risky
+verification follows it. Begin the four-week issue-intake overlap only after
+this controller succeeds. The ordinary health monitor compares against tracked
+durable configuration and will therefore alert during the intentional leased
+window; correlate that alert with the protected controller run. If recovery is
+needed, inspect the dispatch outbox for an accepted request whose inline
+dispatch failed. If public health is unreadable, recovery refuses to change an
+unproven deployment and an operator must investigate or invoke the reviewed
+manual disable path.
+An ordinary deployment also restores staging to its tracked disabled state, so
+review whether any temporary staging intake window must be resumed afterward.
+
+For rollback, select reviewed intake, broker, and replay versions from one exact
+immutable dispatch-tag commit. The rollback workflow checks the selected
+intake version's `INTAKE_ENABLED` binding against that commit before mutation.
+It deploys the target intake code with a temporary disabled override, restores
+and verifies the private broker and replay/container dependencies while intake
+is paused, and re-checks protected State. Rollback is disable-only, including
+when the target commit tracks durable intake: it leaves the exact target code
+forced to `INTAKE_ENABLED=false`/`disabled` and verifies the active version and
+health. Durable enablement can return only through a later ordinary
+protected-main rollout that repeats the finite-lease proof. Do not edit State
+to imitate the rolled-back Cloudflare unit.
+
+Before launch, confirm `intake-disable-recovery.yml` is enabled on protected
+`main` and `cloudflare-production` admits its disable-only job. This workflow is
+cleanup, not the safety boundary: it derives the exact protected controller
+identity (failed automatically, or latest completed for a manual emergency
+disable), accepts no manual pairing fields, contains no enabled deployment, and
+requires live public health to prove production still runs that exact
+controller commit with intake configured on before it mutates anything. A
+staging-only failure or superseded controller is therefore a no-op. It verifies
+the exact disabled version and health. GitHub may cancel an older pending run in
+the shared serialization group; a queued, cancelled, or failed recovery cannot
+extend the Worker lease. Investigate or rerun recovery before a later
+production change, but never treat Actions availability as the expiry
+mechanism.
+If the terminal durable deploy succeeds at Cloudflare but its controller loses
+the response or is cancelled before GitHub records success, the automatic
+disable-only recovery deliberately returns intake to disabled. Treat that as a
+safe interrupted launch, confirm the recovery run and public health, and rerun
+the ordinary protected-main controller rather than enabling out of band.
+
+Credential rotation and ruleset-bypass verification remain available after
+launch through the protected `Verify State writer` workflow. Its authenticated
+preflight requires the exact ready status, selected environment, and canonical
+State commit, then accepts and reports only a boolean live intake state. It does
+not require intake to be disabled, so it also remains valid while staging is
+temporarily enabled through its manual workflow.

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   type GitHubFetch,
+  GitHubStateError,
   GitHubStateRepository,
   StateEventConflictError,
   StateUpdateOutcomeUnknownError,
@@ -423,6 +424,53 @@ describe("atomic Git State append", () => {
     const updateRequestBody = calls[5]?.[1]?.body;
     if (typeof updateRequestBody !== "string") throw new TypeError("update body was not text");
     expect(JSON.parse(updateRequestBody)).toEqual({ sha: NEW_COMMIT, force: false });
+  });
+
+  it("publishes a bound event only at the exact expected State head", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      new Response(null, { status: 404 }),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    await expect(repository(fetcher).appendEventAtHead(EVENT, HEAD)).resolves.toEqual({
+      commit: NEW_COMMIT,
+      created: true,
+      path: `events/01/${EVENT.event_id}.json`,
+    });
+  });
+
+  it("rejects a bound event when State moved before its first append", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      new Response(null, { status: 404 }),
+    ]);
+    await expect(repository(fetcher).appendEventAtHead(EVENT, "9".repeat(40)))
+      .rejects.toBeInstanceOf(GitHubStateError);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
+  it("recovers a bound append after a collision committed the exact event", async () => {
+    const movedHead = "5".repeat(40);
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      new Response(null, { status: 404 }),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ message: "conflict" }, 409),
+      json({ object: { sha: movedHead } }),
+      json({ tree: { sha: "6".repeat(40) } }),
+      contents(EVENT),
+    ]);
+    await expect(repository(fetcher).appendEventAtHead(EVENT, HEAD)).resolves.toEqual({
+      commit: movedHead,
+      created: false,
+      path: `events/01/${EVENT.event_id}.json`,
+    });
   });
 
   it("atomically appends lifecycle events with the matching lifecycle-aware submission view", async () => {

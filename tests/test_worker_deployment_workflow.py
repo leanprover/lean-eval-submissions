@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import pathlib
+import re
 import unittest
-
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 DEPLOY = (ROOT / ".github/workflows/deploy-worker.yml").read_text(encoding="utf-8")
@@ -14,6 +14,9 @@ PROMOTION_CANARY = (ROOT / ".github/workflows/promotion-canary.yml").read_text(
 )
 
 ROLLBACK = (ROOT / ".github/workflows/rollback-worker.yml").read_text(encoding="utf-8")
+RECOVERY = (
+    ROOT / ".github/workflows/intake-disable-recovery.yml"
+).read_text(encoding="utf-8")
 STATE_WRITER_PREFLIGHT = (
     ROOT / ".github/workflows/verify-state-writer.yml"
 ).read_text(encoding="utf-8")
@@ -25,6 +28,11 @@ REPLAY_WRANGLER = json.loads(
     (ROOT / "server/wrangler.replay.jsonc").read_text(encoding="utf-8")
 )
 PACKAGE = json.loads((ROOT / "server/package.json").read_text(encoding="utf-8"))
+QUALIFICATION = json.loads(
+    (ROOT / ".audit/cloudflare-rollback-qualification-v1.json").read_text(
+        encoding="utf-8"
+    )
+)
 WORKER_APP = (ROOT / "server/src/app.ts").read_text(encoding="utf-8")
 WORKER_ENTRYPOINT = (ROOT / "server/src/index.ts").read_text(encoding="utf-8")
 REPLAY_ENTRYPOINT = (ROOT / "server/src/replay-entry.ts").read_text(encoding="utf-8")
@@ -44,12 +52,28 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertEqual(DEPLOY.count('"production_memory_gate_bytes": 12 * 1024**3'), 2)
         self.assertNotIn('"production_memory_gate_bytes": 16 * 1024**3', DEPLOY)
 
-    def test_state_writer_preflight_is_protected_and_intake_safe(self) -> None:
+    def test_state_writer_preflight_is_protected_and_reports_intake_state(self) -> None:
         self.assertIn("environment: cloudflare-${{ inputs.target_environment }}", STATE_WRITER_PREFLIGHT)
         self.assertIn("READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}", STATE_WRITER_PREFLIGHT)
         self.assertIn("--request POST", STATE_WRITER_PREFLIGHT)
         self.assertIn('payload["status"] != "state_writer_ready"', STATE_WRITER_PREFLIGHT)
-        self.assertIn('payload["intake_enabled"] is not False', STATE_WRITER_PREFLIGHT)
+        self.assertIn(
+            'payload["environment"] != os.environ["TARGET_ENVIRONMENT"]',
+            STATE_WRITER_PREFLIGHT,
+        )
+        self.assertIn(
+            're.fullmatch(r"[0-9a-f]{40}", payload["state_commit"]) is None',
+            STATE_WRITER_PREFLIGHT,
+        )
+        self.assertIn(
+            'type(payload["intake_enabled"]) is not bool',
+            STATE_WRITER_PREFLIGHT,
+        )
+        self.assertIn(
+            '"enabled" if payload["intake_enabled"] else "disabled"',
+            STATE_WRITER_PREFLIGHT,
+        )
+        self.assertNotIn("requires intake to remain disabled", STATE_WRITER_PREFLIGHT)
         self.assertNotIn("GITHUB_STATE_TOKEN", STATE_WRITER_PREFLIGHT)
 
     def test_infrastructure_only_merge_does_not_redeploy(self) -> None:
@@ -74,10 +98,10 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             self.assertIn("'scripts/**'", trigger)
 
     def test_smoke_retries_structured_payload_propagation(self) -> None:
-        self.assertEqual(DEPLOY.count("for attempt in $(seq 1 13); do"), 2)
+        self.assertEqual(DEPLOY.count("for attempt in $(seq 1 13); do"), 3)
         self.assertEqual(DEPLOY.count("for attempt in $(seq 1 25); do"), 2)
-        self.assertEqual(DEPLOY.count('echo "health payload did not converge'), 2)
-        self.assertEqual(DEPLOY.count('echo "replay health payload did not converge'), 2)
+        self.assertEqual(DEPLOY.count('echo "health payload did not converge'), 1)
+        self.assertEqual(DEPLOY.count('echo "replay health payload did not converge'), 1)
         self.assertNotIn("curl --fail --retry", DEPLOY)
 
     def test_replay_executor_is_isolated_capacity_bounded_and_disabled(self) -> None:
@@ -161,9 +185,12 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 f"wrangler deploy --config wrangler.replay.jsonc --env {environment}"
             )
             wait = DEPLOY.index(f"--application {application}")
-            smoke = DEPLOY.index(
+            smoke_name = (
                 f"Smoke-test disabled {environment} replay executor"
+                if environment == "staging"
+                else "Verify exact disabled production replay dependency"
             )
+            smoke = DEPLOY.index(smoke_name)
             self.assertLess(deployment, wait)
             self.assertLess(wait, smoke)
 
@@ -195,11 +222,11 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
     def test_both_deployments_receive_promoted_ref(self) -> None:
         self.assertEqual(
             DEPLOY.count("DISPATCH_WORKFLOW_REF: ${{ needs.promote-dispatch-ref.outputs.ref }}"),
-            3,
+            5,
         )
         self.assertEqual(
             DEPLOY.count('--var "DISPATCH_WORKFLOW_REF:$DISPATCH_WORKFLOW_REF"'),
-            2,
+            4,
         )
         self.assertIn("needs: promote-dispatch-ref", DEPLOY)
         self.assertIn("needs: [staging-promotion-canary, promote-dispatch-ref]", DEPLOY)
@@ -263,9 +290,11 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             validation,
             ROLLBACK.index("Pause intake by deploying exact target code with current secrets"),
         )
-        self.assertIn("--require-disabled", ROLLBACK)
+        self.assertNotIn("--require-disabled", ROLLBACK)
         self.assertIn('"promotion_canary_enabled"', ROLLBACK_VALIDATOR)
         self.assertIn('"PROMOTION_CANARY_ENABLED"', ROLLBACK_VALIDATOR)
+        self.assertIn("--require-replay-disabled", ROLLBACK)
+        self.assertIn("--require-intake-disabled", ROLLBACK)
         self.assertIn("cloudflare-rollback-qualification-v1.json", ROLLBACK)
         self.assertEqual(ROLLBACK.count("compatible-capabilities"), 1)
         self.assertIn("Preserve source-free pre-mutation recovery state", ROLLBACK)
@@ -285,23 +314,162 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         broker = ROLLBACK.index("Deploy exact target broker code with current secrets")
         replay = ROLLBACK.index("Deploy the exact target replay Worker and container")
         wait = ROLLBACK.index("Wait for the exact production replay container")
+        final_intake = ROLLBACK.index(
+            "Verify intake remains disabled and protected State remains valid"
+        )
         self.assertLess(intake, broker)
         self.assertLess(broker, replay)
         self.assertLess(replay, wait)
-        self.assertEqual(ROLLBACK.count("deployments status"), 6)
+        self.assertLess(wait, final_intake)
+        self.assertEqual(ROLLBACK.count("deployments status"), 7)
         self.assertEqual(ROLLBACK.count("validate_cloudflare_rollback.py status"), 0)
-        self.assertEqual(ROLLBACK.count("active-version"), 6)
-        self.assertEqual(ROLLBACK.count("validate_cloudflare_rollback.py health"), 2)
+        self.assertEqual(ROLLBACK.count("active-version"), 7)
+        self.assertEqual(ROLLBACK.count("validate_cloudflare_rollback.py health"), 3)
         self.assertNotIn("wrangler rollback", ROLLBACK)
         self.assertNotIn("--yes", ROLLBACK)
         self.assertNotIn("--secrets-file", ROLLBACK)
-        self.assertGreaterEqual(ROLLBACK.count("--keep-vars"), 6)
+        self.assertGreaterEqual(ROLLBACK.count("--keep-vars"), 4)
         self.assertIn("--containers-rollout=immediate", ROLLBACK)
         self.assertIn("verify_authoritative_replay_image_reference", ROLLBACK)
         self.assertIn("deploy --dry-run", ROLLBACK)
         self.assertIn("--command-timeout-seconds 15", ROLLBACK)
-        self.assertEqual(ROLLBACK.count("--max-time 10"), 2)
+        self.assertEqual(ROLLBACK.count("--max-time 10"), 3)
         self.assertIn("if: always()", ROLLBACK)
+        pause = ROLLBACK.split(
+            "Pause intake by deploying exact target code with current secrets", 1
+        )[1].split("Verify disabled intake before dependency mutation", 1)[0]
+        self.assertIn('--var "INTAKE_ENABLED:false"', pause)
+        self.assertNotIn("--keep-vars", pause)
+        paused_verification = ROLLBACK.split(
+            "Verify disabled intake before dependency mutation", 1
+        )[1].split("Deploy exact target broker code", 1)[0]
+        self.assertEqual(paused_verification.count("--require-intake-disabled"), 2)
+        self.assertNotIn("INTAKE_ENABLED:true", ROLLBACK)
+        self.assertNotIn("intake-finalization-failsafe", ROLLBACK)
+        self.assertIn("--require-intake-disabled", ROLLBACK[final_intake:])
+        plan_step = ROLLBACK.split(
+            "Validate and prepare the complete replay-disabled rollback unit", 1
+        )[1].split("Preserve source-free pre-mutation recovery state", 1)[0]
+        self.assertNotIn("--require-intake-disabled", plan_step)
+
+    def test_production_smoke_uses_the_reviewed_intake_configuration(self) -> None:
+        production = DEPLOY.split("\n  deploy-production:", 1)[1]
+        staging = DEPLOY.split("\n  deploy-staging:", 1)[1].split(
+            "\n  deploy-production:", 1
+        )[0]
+        state_step = production.split(
+            "- name: Read reviewed production intake state", 1
+        )[1].split("\n      - name:", 1)[0]
+        self.assertIn("python ../scripts/worker_intake_configuration.py", state_step)
+        self.assertIn("--config wrangler.jsonc", state_step)
+        self.assertIn("--environment production", state_step)
+        self.assertIn("intake_configured_enabled", production)
+        self.assertIn("intake_effective_enabled", production)
+        provisional = production.split(
+            "Provisionally deploy production intake disabled", 1
+        )[1].split("Verify exact production broker version", 1)[0]
+        self.assertIn('--var "INTAKE_ENABLED:false"', provisional)
+        self.assertIn('body["intake_enabled"] is False', provisional)
+        self.assertIn('body["intake_enabled"] is False', staging)
+
+    def test_production_enablement_is_provisional_and_fail_closed(self) -> None:
+        production = DEPLOY.split("\n  deploy-production:", 1)[1]
+        provisional = production.index("Provisionally deploy production intake disabled")
+        provisional_health = production.index(
+            "Verify exact disabled provisional production intake"
+        )
+        replay_deploy = production.index(
+            "Deploy disabled production replay executor and container"
+        )
+        broker_deploy = production.index("Deploy production GitHub broker")
+        broker = production.index("Verify exact production broker version")
+        replay = production.index("Verify exact disabled production replay dependency")
+        state = production.index("Verify exact protected State before production finalization")
+        lease = production.index("Prepare the exact Worker-enforced intake lease")
+        validate_lease = production.index("Validate the closed lease before any enabled mutation")
+        enabled = production.index(
+            "Deploy the exact self-expiring production intake lease"
+        )
+        smoke = production.index("Verify and consume the exact leased intake smoke")
+        final = production.index("Atomically make the reviewed production intake durable")
+        self.assertLess(provisional, provisional_health)
+        self.assertLess(provisional_health, replay_deploy)
+        self.assertLess(replay_deploy, broker_deploy)
+        self.assertLess(broker_deploy, broker)
+        self.assertLess(broker, replay)
+        self.assertLess(replay, state)
+        self.assertLess(state, lease)
+        self.assertLess(lease, validate_lease)
+        self.assertLess(validate_lease, enabled)
+        self.assertLess(enabled, smoke)
+        self.assertLess(smoke, final)
+        self.assertIn('if: steps.production-intake.outputs.enabled == \'true\'', production)
+        self.assertNotIn("actions: write", production)
+        self.assertIn("INTAKE_LEASE_EXPIRES_AT", production)
+        self.assertIn("intake-lease-bindings.env", production)
+        self.assertIn('arguments+=(--var "$name:$value")', production)
+        self.assertIn("intake-lease-smoke.json", production)
+        self.assertIn("intake_lease", production)
+        self.assertIn("34ec7aa43496027b9ea3faa268a53410d773706d", production)
+        self.assertIn("445510b038bacd36cbf974bfa72dedf1b8bdc345234539d0c6e9964ceccd7eee", production)
+        self.assertIn("does not descend from the reviewed intake lease contract", production)
+        self.assertIn("timeout --signal=TERM --kill-after=10s 150s", production)
+        self.assertNotIn("\n      - name:", production[final:].split("run: |", 1)[1])
+        self.assertIn('--var "INTAKE_ENABLEMENT_MODE:durable"', production[final:])
+
+    def test_production_state_gate_matches_the_reviewed_qualification(self) -> None:
+        production = DEPLOY.split("\n  deploy-production:", 1)[1]
+        ancestor = re.search(
+            r"lean-eval-state/compare/([0-9a-f]{40})\.\.\.\$commit", production
+        )
+        schema = re.search(
+            r'sha256sum "\$schema" \| cut -d\' \' -f1\)" != "([0-9a-f]{64})"',
+            production,
+        )
+        self.assertIsNotNone(ancestor)
+        self.assertIsNotNone(schema)
+        self.assertEqual(ancestor.group(1), QUALIFICATION["state_main_commit"])
+        self.assertEqual(schema.group(1), QUALIFICATION["state_event_schema_sha256"])
+
+    def test_disable_recovery_is_derived_protected_and_can_never_enable(self) -> None:
+        self.assertIn("workflow_run:", RECOVERY)
+        self.assertIn("workflow_dispatch:", RECOVERY)
+        self.assertIn("github.ref == 'refs/heads/main'", RECOVERY)
+        self.assertIn("github.event.workflow_run.event == 'push'", RECOVERY)
+        self.assertIn("github.event.workflow_run.event == 'workflow_dispatch'", RECOVERY)
+        self.assertIn(
+            "github.event.workflow_run.head_repository.full_name == github.repository",
+            RECOVERY,
+        )
+        self.assertIn("environment: cloudflare-production", RECOVERY)
+        self.assertIn("runs-on: ubuntu-24.04", RECOVERY)
+        self.assertIn("actions: read", RECOVERY)
+        self.assertIn("contents: read", RECOVERY)
+        self.assertNotIn("actions: write", RECOVERY)
+        self.assertNotIn("contents: write", RECOVERY)
+        self.assertIn("max_by(.run_number)", RECOVERY)
+        self.assertIn("github.event.workflow_run.run_attempt", RECOVERY)
+        self.assertIn("github.event.workflow_run.head_sha", RECOVERY)
+        self.assertIn("branches/main", RECOVERY)
+        self.assertIn("protected main", RECOVERY)
+        self.assertIn("controller dispatch tag does not resolve exactly", RECOVERY)
+        live = RECOVERY.index("Prove production currently runs this controller's enabled code")
+        mutation = RECOVERY.index("Force the exact controller code to disabled mode")
+        self.assertLess(live, mutation)
+        self.assertIn('body["deployed_commit"] == os.environ["TARGET_COMMIT"]', RECOVERY)
+        self.assertIn('body["intake_configured_enabled"]', RECOVERY)
+        self.assertIn("steps.live.outputs.needed == 'true'", RECOVERY[mutation:])
+        self.assertIn("success|cancelled|failure|startup_failure|timed_out", RECOVERY)
+        self.assertIn("cancelled|failure|startup_failure|timed_out", RECOVERY)
+        self.assertIn('--var "INTAKE_ENABLED:false"', RECOVERY)
+        self.assertIn('--var "INTAKE_ENABLEMENT_MODE:disabled"', RECOVERY)
+        self.assertIn("--require-intake-disabled", RECOVERY)
+        self.assertNotIn("INTAKE_ENABLED:true", RECOVERY)
+        self.assertNotIn("intake-finalization-failsafe", RECOVERY)
+
+    def test_old_actions_watchdog_is_fully_retired(self) -> None:
+        for workflow in (DEPLOY, ROLLBACK, RECOVERY):
+            self.assertNotIn("intake-finalization-failsafe", workflow)
 
     def test_rate_limits_and_reconciliation_are_distinct_and_declarative(self) -> None:
         staging = WRANGLER["env"]["staging"]
@@ -319,7 +487,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertEqual(production["vars"]["PROMOTION_CANARY_ENABLED"], "false")
         self.assertIn("env.API_RATE_LIMITER.limit({ key })", WORKER_APP)
         self.assertIn("handleScheduled(env, controller.scheduledTime)", WORKER_ENTRYPOINT)
-        self.assertIn("if (!intakeEnabled(env)) return;", WORKER_APP)
+        self.assertIn("if (!currentIntake(env, dependencies).effective) return;", WORKER_APP)
         self.assertIn("reconcilePromotionCanariesScheduled", WORKER_APP)
         self.assertIn('env.DEPLOYMENT_ENVIRONMENT === "staging"', WORKER_APP)
         self.assertEqual(production["vars"]["PROMOTION_CANARY_ENABLED"], "false")
