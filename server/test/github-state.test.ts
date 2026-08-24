@@ -29,17 +29,17 @@ const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
 const NEW_TREE = "3".repeat(40);
 const NEW_COMMIT = "4".repeat(40);
-const RESULT_OWNER_CONTRACT_COMMIT = "0c8759946df0da1338a0c73bf5bd75d182038286";
+const RESULT_OWNER_CONTRACT_COMMIT = "4b8dcdf0a3d03749f51bef23807eeb1d00c43b72";
 const RESULT_OWNER_CONTRACT_BLOBS = {
   "docs/result-owner-operational-indexes.md": "2f784609f9117caf74cb7042e9ea45732925d77b",
   "schema/result-identity-guard-v1.schema.json": "1620b6d8aed37f652958ac86e311c00578edc8b4",
   "schema/result-overlay-view-v1.schema.json": "1b50a92a76891bd21e0b67f7f40ab9c86d50beed",
   "schema/result-overlays-v1.schema.json": "41d4078133d6854bf8de839873a3f58e9ba1afd1",
   "schema/result-source-record-index-v1.schema.json": "4543225e0833af00913e436185532a769debebc1",
-  "schema/state-event-v1.schema.json": "fcb267369516ce4ff5344ca75529c1d280970b0a",
-  "scripts/materialize_state.py": "24c0569ef69c4f7e24283d8d39b88f2055a33b77",
+  "schema/state-event-v1.schema.json": "6d6adb8c6cb7a2ea8649730593c8a32470b60d80",
+  "scripts/materialize_state.py": "ac906e34a4c1bcf21bbc50e1650d0db075cc44cf",
   "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
-  "scripts/validate_state.py": "b23380497da0b3b85d555b92af9eb350441e1977",
+  "scripts/validate_state.py": "004a79b43c58d3c95a84ea604b8586d1524fcf71",
 } as const;
 
 const EVENT: StateEvent = {

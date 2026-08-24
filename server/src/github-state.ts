@@ -52,10 +52,10 @@ const RESULT_OWNER_CONTRACT_BLOBS = {
   "schema/result-overlay-view-v1.schema.json": "1b50a92a76891bd21e0b67f7f40ab9c86d50beed",
   "schema/result-overlays-v1.schema.json": "41d4078133d6854bf8de839873a3f58e9ba1afd1",
   "schema/result-source-record-index-v1.schema.json": "4543225e0833af00913e436185532a769debebc1",
-  "schema/state-event-v1.schema.json": "fcb267369516ce4ff5344ca75529c1d280970b0a",
-  "scripts/materialize_state.py": "24c0569ef69c4f7e24283d8d39b88f2055a33b77",
+  "schema/state-event-v1.schema.json": "6d6adb8c6cb7a2ea8649730593c8a32470b60d80",
+  "scripts/materialize_state.py": "ac906e34a4c1bcf21bbc50e1650d0db075cc44cf",
   "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
-  "scripts/validate_state.py": "b23380497da0b3b85d555b92af9eb350441e1977",
+  "scripts/validate_state.py": "004a79b43c58d3c95a84ea604b8586d1524fcf71",
 } as const;
 const RESULT_OWNER_CONTRACT_PROOF_CACHE_LIMIT = 64;
 const RESULT_OWNER_CONTRACT_PROOF_ID = Object.entries(RESULT_OWNER_CONTRACT_BLOBS)
