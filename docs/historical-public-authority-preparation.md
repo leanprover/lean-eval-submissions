@@ -94,6 +94,11 @@ python scripts/prepare_historical_public_authority.py finalize \
   --output-directory /new/review-directory
 ```
 
+The qualification and State roots must set `origin` to exactly
+`https://github.com/leanprover/lean-eval-submissions.git` and
+`https://github.com/leanprover/lean-eval-state.git`, respectively. SSH remotes
+and HTTPS remotes without the `.git` suffix are rejected.
+
 The first workflow defaults select benchmark `11081d34…`, request
 `prr_9927609e…`, and result `r2_70b509d7…`. Those defaults are a deterministic
 first candidate, not an authorization. Until an exact successful qualification

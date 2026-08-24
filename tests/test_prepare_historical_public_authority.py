@@ -502,6 +502,84 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
             output = self.prepare(root, paths)
             self.assertTrue((output / "historical-public-authority-preparation.json").is_file())
 
+    def test_checkout_remote_and_cleanliness_proofs_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            paths = self.fixture(root)
+            preparation_source = paths["preparation_source"]
+            image_source = paths["image_source"]
+
+            subprocess.run(
+                [
+                    "git", "-C", str(preparation_source), "remote", "set-url", "origin",
+                    "https://github.com/leanprover/lean-eval-submissions",
+                ],
+                check=True,
+            )
+            with self.assertRaisesRegex(
+                authority.PreparationError, "preparation source Git checkout remote"
+            ):
+                self.prepare(root, paths)
+            subprocess.run(
+                [
+                    "git", "-C", str(preparation_source), "remote", "set-url", "origin",
+                    "https://github.com/leanprover/lean-eval-submissions.git",
+                ],
+                check=True,
+            )
+
+            hostile = preparation_source / "hostile-untracked-input"
+            hostile.write_text("must be rejected\n")
+            with self.assertRaisesRegex(
+                authority.PreparationError, "preparation source Git checkout cleanliness"
+            ):
+                self.prepare(root, paths)
+            hostile.unlink()
+
+            subprocess.run(
+                [
+                    "git", "-C", str(image_source), "remote", "set-url", "origin",
+                    "https://example.invalid/lean-eval-submissions.git",
+                ],
+                check=True,
+            )
+            with self.assertRaisesRegex(
+                authority.PreparationError, "image source Git checkout remote"
+            ):
+                self.prepare(root, paths)
+
+    def test_checkout_commit_and_tree_proofs_are_distinct_and_labelled(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            paths = self.fixture(root)
+            preparation_source = paths["preparation_source"]
+            with self.assertRaisesRegex(
+                authority.PreparationError, "preparation source Git checkout commit"
+            ):
+                authority.verify_checkout(
+                    preparation_source,
+                    authority.SUBMISSIONS_REPOSITORY,
+                    "f" * 40,
+                    label="preparation source",
+                )
+            subprocess.run(
+                [
+                    "git", "-C", str(preparation_source), "remote", "set-url", "origin",
+                    "https://github.com/leanprover/lean-eval-state.git",
+                ],
+                check=True,
+            )
+            with self.assertRaisesRegex(
+                authority.PreparationError, "State source Git checkout tree"
+            ):
+                authority.verify_checkout(
+                    preparation_source,
+                    "leanprover/lean-eval-state",
+                    CONTROLLER_COMMIT,
+                    "f" * 40,
+                    label="State source",
+                )
+
     def test_provenance_accepts_only_exact_successful_run_and_artifact_ids(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
@@ -758,6 +836,15 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
         self.assertIn('--staging-artifact-zip "$RUNNER_TEMP/staging-artifact.zip"', workflow)
         self.assertIn('--preparation-source-root .', workflow)
         self.assertIn('--image-source-root "$RUNNER_TEMP/image-source"', workflow)
+        canonical_remote = (
+            "git remote set-url origin \\\n"
+            "            https://github.com/leanprover/lean-eval-submissions.git"
+        )
+        observed_remote = "observed_origin=$(git config --get-all remote.origin.url)"
+        self.assertIn(observed_remote, workflow)
+        self.assertIn(canonical_remote, workflow)
+        self.assertLess(workflow.index(observed_remote), workflow.index(canonical_remote))
+        self.assertLess(workflow.index(canonical_remote), workflow.index('python "$CONTROLLER" prepare'))
         self.assertNotIn(" download-artifact@", workflow)
         self.assertNotIn(" finalize ", workflow)
         for forbidden in (
