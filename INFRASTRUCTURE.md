@@ -450,21 +450,39 @@ of `refs/heads/main`; repository administration is not needed at runtime.
 ## Operational monitoring and response
 
 [`lifecycle-readiness-monitor.yml`](.github/workflows/lifecycle-readiness-monitor.yml)
-runs every 15 minutes and on demand without deployment, State, AWS, archive,
-release, or source credentials. It requires all four public intake/replay
-health endpoints to match their tracked environment configuration, frozen
-replay digests, and one full deployed commit. The commit must have its exact
-immutable `lean-eval-dispatch/<commit>` tag and remain reachable from protected
-main. Transient sequential deployment differences are retried for one minute;
-the workflow otherwise fails.
+runs on GitHub's best-effort 15-minute schedule and on main-branch manual
+dispatch without deployment, State, AWS, archive, release, or source
+credentials. The token-free endpoint step derives all four public URLs from the
+tracked Wrangler environment names and requires exact environment, service,
+enablement, positive safe-integer memory gates, frozen digest formats, and one
+full deployed commit. A separate contents-read step requires that commit to be
+the uniquely latest-completing successful main-branch protected deployment,
+have its exact lightweight `lean-eval-dispatch/<commit>` tag, and remain
+reachable from the explicitly protected `main` branch. GitHub reads and issue
+mutations use bounded retries within a
+four-minute process budget; endpoint response bodies and GitHub error bodies
+are never copied into the alert.
+
+Sequential Cloudflare deployment differences are retried locally and then
+suppressed only while every queued or running protected deployment is at most
+45 minutes old. Suppression neither creates nor closes an incident. Any older
+active deployment fails as `deployment_rollout_stuck`, even when the previous
+successful deployment remains coherent, and a partial failed rollout with no
+active deployment fails immediately. This bound covers observed healthy
+container rollouts without allowing a stuck run or a series queued behind one
+to mask readiness indefinitely.
 
 The alert destination and support channel are the bot-owned issue titled
 `[monitor] LeanEval lifecycle readiness failure` in
 `leanprover/lean-eval-submissions`. The workflow creates or reopens that one
 marker-bound issue on failure and closes it only after a later complete pass;
-it never copies raw endpoint bodies, source bytes, or secrets into the issue.
-Subscribe to that repository's issue and Actions notifications before enabling
-production intake.
+it paginates bot-owned issue history to a documented bound (and fails closed if
+that bound is exhausted), chooses the oldest exact bot-owned marker as
+canonical, and closes any later exact duplicates with a pointer to it. It
+never copies raw endpoint bodies, GitHub response bodies, source bytes, or
+secrets into the issue. Non-main manual runs are skipped, monitor runs are
+serialized without cancellation, and the endpoint process never receives the
+issue-write token.
 
 Temporary severity owner, support owner, and emergency intake-pause owner:
 Kim Morrison (`@kim-em`). A readiness failure while production intake is
@@ -478,6 +496,15 @@ preserve the failed run and State/ref evidence. Then finish the exact reviewed
 rollback unit or forward-deploy a coherent fix. State remains append-only;
 correct it only with a legal forward event. Record transfer of any of these
 temporary ownership roles here before changing the GitHub alert destination.
+
+Operational prerequisites not enforced by repository code: `@kim-em` must
+explicitly acknowledge these temporary roles and subscribe to both the
+canonical issue and Actions failures before production intake is enabled.
+Because GitHub schedules may be delayed, dropped, or disabled and cannot alert
+when GitHub Actions itself is unavailable, configure an independent dead-man
+check for recent successful monitor runs before treating this workflow as the
+production availability pager. Record that check and the ownership
+acknowledgement in this ledger.
 
 ## State repository controls
 

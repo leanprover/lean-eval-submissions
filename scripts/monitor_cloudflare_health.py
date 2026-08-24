@@ -12,25 +12,34 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Callable
-
+from collections.abc import Callable
+from typing import Any
 
 MAX_RESPONSE_BYTES = 64 * 1024
 FULL_COMMIT = re.compile(r"[0-9a-f]{40}\Z")
-ENDPOINTS = {
-    "staging": {
-        "intake": "https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz",
-        "replay": "https://lean-eval-replay-executor-staging.lean-eval.workers.dev/healthz",
-    },
-    "production": {
-        "intake": "https://lean-eval-submission-server.lean-eval.workers.dev/healthz",
-        "replay": "https://lean-eval-replay-executor.lean-eval.workers.dev/healthz",
-    },
-}
+FULL_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
+VM_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+WORKER_NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
+POSITIVE_DECIMAL = re.compile(r"[1-9][0-9]{0,15}\Z")
+WORKERS_DEV_DOMAIN = "lean-eval.workers.dev"
+MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
 
 class MonitorError(ValueError):
     """The public deployment is unavailable or not commit-coherent."""
+
+
+class _RejectRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        request: urllib.request.Request,
+        file_pointer: Any,
+        code: int,
+        message: str,
+        headers: Any,
+        new_url: str,
+    ) -> None:
+        return None
 
 
 def load_object(path: pathlib.Path) -> dict[str, Any]:
@@ -54,7 +63,8 @@ def fetch_health(url: str, timeout: float = 10) -> dict[str, Any]:
         headers={"User-Agent": "lean-eval-lifecycle-readiness-monitor/1"},
     )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        opener = urllib.request.build_opener(_RejectRedirects)
+        with opener.open(request, timeout=timeout) as response:
             length = response.headers.get("Content-Length")
             if length is not None and int(length) > MAX_RESPONSE_BYTES:
                 raise MonitorError("health response exceeds its size limit")
@@ -72,43 +82,133 @@ def fetch_health(url: str, timeout: float = 10) -> dict[str, Any]:
     return value
 
 
+def _environment_config(
+    config: dict[str, Any], environment: str, label: str
+) -> tuple[dict[str, Any], str, str]:
+    try:
+        service = config["name"]
+        selected = config["env"][environment]
+        worker = selected["name"]
+        workers_dev = selected["workers_dev"]
+        variables = selected["vars"]
+    except (KeyError, TypeError) as error:
+        raise MonitorError(f"tracked {environment} {label} endpoint is invalid") from error
+    if (
+        not isinstance(service, str)
+        or WORKER_NAME.fullmatch(service) is None
+        or not isinstance(worker, str)
+        or WORKER_NAME.fullmatch(worker) is None
+        or workers_dev is not True
+        or not isinstance(variables, dict)
+        or variables.get("DEPLOYMENT_ENVIRONMENT") != environment
+    ):
+        raise MonitorError(f"tracked {environment} {label} endpoint is invalid")
+    return variables, service, f"https://{worker}.{WORKERS_DEV_DOMAIN}/healthz"
+
+
+def _boolean_variable(variables: dict[str, Any], name: str, label: str) -> bool:
+    value = variables.get(name)
+    if not isinstance(value, str) or value not in {"true", "false"}:
+        raise MonitorError(f"tracked {label} {name} is not canonical boolean text")
+    return value == "true"
+
+
+def _positive_integer_variable(
+    variables: dict[str, Any], name: str, label: str
+) -> int:
+    value = variables.get(name)
+    if not isinstance(value, str) or POSITIVE_DECIMAL.fullmatch(value) is None:
+        raise MonitorError(f"tracked {label} {name} is not a positive decimal")
+    number = int(value)
+    if number > MAX_SAFE_INTEGER:
+        raise MonitorError(f"tracked {label} {name} exceeds the safe integer range")
+    return number
+
+
+def _digest_variable(
+    variables: dict[str, Any], name: str, pattern: re.Pattern[str], label: str
+) -> str:
+    value = variables.get(name)
+    if not isinstance(value, str) or pattern.fullmatch(value) is None:
+        raise MonitorError(f"tracked {label} {name} is not a canonical digest")
+    return value
+
+
 def expected_health(
     intake_config: dict[str, Any], replay_config: dict[str, Any], environment: str
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     try:
-        intake_vars = intake_config["env"][environment]["vars"]
-        replay_vars = replay_config["env"][environment]["vars"]
-        intake_enabled = json.loads(intake_vars["INTAKE_ENABLED"])
-        replay_enabled = json.loads(replay_vars["REPLAY_ENABLED"])
-        staging_enabled = json.loads(replay_vars["STAGING_ACCEPTANCE_ENABLED"])
-        memory = int(replay_vars["STAGING_MEMORY_LIMIT_BYTES"])
-        gate = int(replay_vars["PRODUCTION_MEMORY_GATE_BYTES"])
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        intake_vars, intake_service, _ = _environment_config(
+            intake_config, environment, "intake"
+        )
+        replay_vars, replay_service, _ = _environment_config(
+            replay_config, environment, "replay"
+        )
+    except MonitorError:
+        raise
+    except (KeyError, TypeError, ValueError) as error:
         raise MonitorError(f"tracked {environment} health contract is invalid") from error
-    if not all(type(value) is bool for value in (intake_enabled, replay_enabled, staging_enabled)):
-        raise MonitorError(f"tracked {environment} enablement is not boolean")
+    intake_enabled = _boolean_variable(intake_vars, "INTAKE_ENABLED", environment)
+    replay_enabled = _boolean_variable(replay_vars, "REPLAY_ENABLED", environment)
+    staging_enabled = _boolean_variable(
+        replay_vars, "STAGING_ACCEPTANCE_ENABLED", environment
+    )
+    memory = _positive_integer_variable(
+        replay_vars, "STAGING_MEMORY_LIMIT_BYTES", environment
+    )
+    gate = _positive_integer_variable(
+        replay_vars, "PRODUCTION_MEMORY_GATE_BYTES", environment
+    )
     intake = {
         "status": "ok",
+        "service": intake_service,
         "environment": environment,
         "intake_enabled": intake_enabled,
     }
     replay = {
         "status": "ok",
-        "service": "lean-eval-replay-executor",
+        "service": replay_service,
         "environment": environment,
         "replay_enabled": replay_enabled,
         "staging_acceptance_enabled": staging_enabled,
         "staging_memory_limit_bytes": memory,
         "production_memory_gate_bytes": gate,
-        "reviewed_execution_profile_digest": replay_vars[
-            "REVIEWED_EXECUTION_PROFILE_DIGEST"
-        ],
-        "reviewed_measurement_config_digest": replay_vars[
-            "REVIEWED_MEASUREMENT_CONFIG_DIGEST"
-        ],
-        "reviewed_vm_image_digest": replay_vars["REVIEWED_VM_IMAGE_DIGEST"],
+        "reviewed_execution_profile_digest": _digest_variable(
+            replay_vars,
+            "REVIEWED_EXECUTION_PROFILE_DIGEST",
+            FULL_DIGEST,
+            environment,
+        ),
+        "reviewed_measurement_config_digest": _digest_variable(
+            replay_vars,
+            "REVIEWED_MEASUREMENT_CONFIG_DIGEST",
+            FULL_DIGEST,
+            environment,
+        ),
+        "reviewed_vm_image_digest": _digest_variable(
+            replay_vars, "REVIEWED_VM_IMAGE_DIGEST", VM_DIGEST, environment
+        ),
     }
     return intake, replay
+
+
+def tracked_endpoints(
+    intake_config: dict[str, Any], replay_config: dict[str, Any]
+) -> dict[str, dict[str, str]]:
+    endpoints: dict[str, dict[str, str]] = {}
+    seen: set[str] = set()
+    for environment in ("staging", "production"):
+        _, _, intake_url = _environment_config(
+            intake_config, environment, "intake"
+        )
+        _, _, replay_url = _environment_config(
+            replay_config, environment, "replay"
+        )
+        endpoints[environment] = {"intake": intake_url, "replay": replay_url}
+        seen.update((intake_url, replay_url))
+    if len(seen) != 4:
+        raise MonitorError("tracked Worker health endpoints are not unique")
+    return endpoints
 
 
 def verify_snapshot(
@@ -118,6 +218,7 @@ def verify_snapshot(
 ) -> dict[str, Any]:
     observations: dict[str, Any] = {}
     commits: set[str] = set()
+    endpoints = tracked_endpoints(intake_config, replay_config)
     for environment in ("staging", "production"):
         expected_intake, expected_replay = expected_health(
             intake_config, replay_config, environment
@@ -127,7 +228,7 @@ def verify_snapshot(
             ("intake", expected_intake),
             ("replay", expected_replay),
         ):
-            health = fetcher(ENDPOINTS[environment][component])
+            health = fetcher(endpoints[environment][component])
             wrong = {
                 key: {"expected": value, "actual": health.get(key)}
                 for key, value in expected.items()
