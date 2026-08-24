@@ -715,6 +715,7 @@ export class GitHubStateRepository {
     if ((await updateReference(this.#config, this.#fetcher, snapshot.headSha)) !== "applied") {
       throw new GitHubStateError(409, "State branch rejected a same-commit write probe");
     }
+    await assertProtectedBranchAt(this.#config, this.#fetcher, snapshot.headSha);
     return snapshot.headSha;
   }
 

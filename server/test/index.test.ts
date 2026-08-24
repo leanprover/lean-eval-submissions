@@ -177,6 +177,7 @@ describe("Worker routing", () => {
       Response.json({ name: "main", protected: true, commit: { sha: contract } }),
       ...blobs.map(([path, sha]) => Response.json({ type: "file", path, sha })),
       Response.json({ ref: "refs/heads/main", object: { sha: contract } }),
+      Response.json({ name: "main", protected: true, commit: { sha: contract } }),
     ];
     const upstream = vi.spyOn(globalThis, "fetch").mockImplementation(() => {
       const reply = replies.shift();
@@ -213,7 +214,7 @@ describe("Worker routing", () => {
       state_event_schema_sha256:
         "bfacfb44083c60372cef6b82637ff523a9454d49dc3e731fe97056f7402a6e4a",
     });
-    expect(upstream).toHaveBeenCalledTimes(14);
+    expect(upstream).toHaveBeenCalledTimes(15);
     upstream.mockRestore();
   });
 

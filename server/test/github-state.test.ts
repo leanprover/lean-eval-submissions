@@ -405,12 +405,45 @@ describe("atomic Git State append", () => {
         ref: "refs/heads/main",
         object: { sha: RESULT_OWNER_CONTRACT_COMMIT },
       }),
+      json({
+        name: "main",
+        protected: true,
+        commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
+      }),
     ]);
     await expect(
       productionRepository(fetcher).assertProductionQualifiedWritable(),
     ).resolves.toBe(RESULT_OWNER_CONTRACT_COMMIT);
-    const [, init] = fetcher.mock.calls.at(-1) ?? [];
+    const [, init] = fetcher.mock.calls.find(([, request]) => request?.method === "PATCH") ?? [];
     expect(init?.method).toBe("PATCH");
+  });
+
+  it("rejects protection or head drift after the production write probe", async () => {
+    const fetcher = sequence([
+      json({ permissions: { push: true } }),
+      json({ object: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
+      json({ tree: { sha: TREE } }),
+      json({
+        name: "main",
+        protected: true,
+        commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
+      }),
+      ...Object.entries(RESULT_OWNER_CONTRACT_BLOBS).map(([path, sha]) =>
+        json({ type: "file", path, sha })),
+      json({
+        ref: "refs/heads/main",
+        object: { sha: RESULT_OWNER_CONTRACT_COMMIT },
+      }),
+      json({
+        name: "main",
+        protected: false,
+        commit: { sha: "f".repeat(40) },
+      }),
+    ]);
+    await expect(
+      productionRepository(fetcher).assertProductionQualifiedWritable(),
+    ).rejects.toMatchObject({ status: 503 });
+    expect(fetcher.mock.calls.some(([, request]) => request?.method === "PATCH")).toBe(true);
   });
 
   it("refuses unprotected, stale, or wrong-repository production proofs", async () => {
