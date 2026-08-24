@@ -1,0 +1,290 @@
+name: Resolve historical public replay GitHub evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Full protected-main commit selected through its immutable dispatch tag
+        required: true
+        type: string
+      expected_results_store_sha256:
+        description: Reviewed canonical results-store digest
+        required: true
+        type: string
+      expected_result_count:
+        description: Reviewed total accepted-result count
+        required: true
+        type: string
+      expected_inventory_sha256:
+        description: Reviewed historical inventory artifact digest
+        required: true
+        type: string
+      expected_requests_sha256:
+        description: Reviewed public resolution requests artifact digest
+        required: true
+        type: string
+      expected_request_count:
+        description: Reviewed grouped public evidence request count
+        required: true
+        type: string
+      expected_public_result_count:
+        description: Reviewed public accepted-result count
+        required: true
+        type: string
+      shard_index:
+        description: Zero-based deterministic evidence shard index
+        required: true
+        type: string
+      shard_count:
+        description: Reviewed total shard count (run shards across rate-limit windows)
+        required: true
+        type: string
+      expected_shard_request_count:
+        description: Reviewed request count in this deterministic shard
+        required: true
+        type: string
+      expected_shard_result_count:
+        description: Reviewed result count in this deterministic shard
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+  issues: read
+
+concurrency:
+  group: public-replay-github-evidence
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Require the exact immutable protected dispatch tag
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "leanprover/lean-eval-submissions"
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_COMMIT"
+          test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
+          remote_commit=$(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT" | cut -f1)
+          test "$remote_commit" = "$EXPECTED_COMMIT"
+
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.expected_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Require the selected commit to be reachable from protected main
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          remote_main=$(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            refs/heads/main | cut -f1)
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          branch=$(timeout 30s gh api \
+            "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.name, .commit.sha, .protected] | @tsv')
+          test "$branch" = $'main\t'"$remote_main"$'\ttrue'
+          test "$(git rev-parse origin/main)" = "$remote_main"
+          git merge-base --is-ancestor "$EXPECTED_COMMIT" origin/main
+
+      # actions/setup-python pinned to v7.0.0.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Recompute and bind the exact source-free request set
+        id: requests
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          EXPECTED_INVENTORY_SHA256: ${{ inputs.expected_inventory_sha256 }}
+          EXPECTED_REQUEST_COUNT: ${{ inputs.expected_request_count }}
+          EXPECTED_REQUESTS_SHA256: ${{ inputs.expected_requests_sha256 }}
+          EXPECTED_PUBLIC_RESULT_COUNT: ${{ inputs.expected_public_result_count }}
+          EXPECTED_RESULT_COUNT: ${{ inputs.expected_result_count }}
+          EXPECTED_RESULTS_STORE_SHA256: ${{ inputs.expected_results_store_sha256 }}
+          EXPECTED_SHARD_COUNT: ${{ inputs.shard_count }}
+          EXPECTED_SHARD_INDEX: ${{ inputs.shard_index }}
+          EXPECTED_SHARD_REQUEST_COUNT: ${{ inputs.expected_shard_request_count }}
+          EXPECTED_SHARD_RESULT_COUNT: ${{ inputs.expected_shard_result_count }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_INVENTORY_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_REQUESTS_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_REQUEST_COUNT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXPECTED_PUBLIC_RESULT_COUNT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXPECTED_RESULT_COUNT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXPECTED_RESULTS_STORE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          [[ "$EXPECTED_SHARD_COUNT" =~ ^([1-9]|[1-5][0-9]|6[0-4])$ ]]
+          [[ "$EXPECTED_SHARD_INDEX" =~ ^(0|[1-9][0-9]?)$ ]]
+          [[ "$EXPECTED_SHARD_REQUEST_COUNT" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXPECTED_SHARD_RESULT_COUNT" =~ ^[1-9][0-9]*$ ]]
+          test "$EXPECTED_SHARD_INDEX" -lt "$EXPECTED_SHARD_COUNT"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          inventory="$RUNNER_TEMP/historical-replay-inventory.json"
+          requests="$RUNNER_TEMP/public-replay-resolution-requests.json"
+          recomputed="$RUNNER_TEMP/public-replay-resolution-requests.recomputed.json"
+          python scripts/inventory_historical_replay.py \
+            --results-root results \
+            --source-commit "$EXPECTED_COMMIT" \
+            --output "$inventory"
+          test "$(sha256sum "$inventory" | cut -d' ' -f1)" = \
+            "$EXPECTED_INVENTORY_SHA256"
+          test "$(jq -er .results_store_sha256 "$inventory")" = \
+            "$EXPECTED_RESULTS_STORE_SHA256"
+          test "$(jq -er .result_count "$inventory")" = "$EXPECTED_RESULT_COUNT"
+          python scripts/prepare_public_replay_resolution.py \
+            --inventory "$inventory" \
+            --results-root results \
+            --output "$requests"
+          python scripts/prepare_public_replay_resolution.py \
+            --inventory "$inventory" \
+            --results-root results \
+            --output "$recomputed"
+          cmp "$requests" "$recomputed"
+          test "$(sha256sum "$requests" | cut -d' ' -f1)" = \
+            "$EXPECTED_REQUESTS_SHA256"
+          REQUESTS="$requests" python - <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          sys.path.insert(0, "scripts")
+          from resolve_public_replay_github_evidence import validate_requests
+
+          value = json.loads(pathlib.Path(os.environ["REQUESTS"]).read_bytes())
+          validate_requests(value)
+          expected = {
+              "source_commit": os.environ["EXPECTED_COMMIT"],
+              "inventory_sha256": os.environ["EXPECTED_INVENTORY_SHA256"],
+              "request_count": int(os.environ["EXPECTED_REQUEST_COUNT"]),
+              "result_count": int(os.environ["EXPECTED_PUBLIC_RESULT_COUNT"]),
+          }
+          if any(value[field] != wanted for field, wanted in expected.items()):
+              raise SystemExit("recomputed request identity does not match reviewed inputs")
+          PY
+          echo "requests=$requests" >> "$GITHUB_OUTPUT"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Resolve only bounded public GitHub evidence
+        id: evidence
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          EXPECTED_INVENTORY_SHA256: ${{ inputs.expected_inventory_sha256 }}
+          EXPECTED_PUBLIC_RESULT_COUNT: ${{ inputs.expected_public_result_count }}
+          EXPECTED_REQUEST_COUNT: ${{ inputs.expected_request_count }}
+          EXPECTED_REQUESTS_SHA256: ${{ inputs.expected_requests_sha256 }}
+          EXPECTED_SHARD_COUNT: ${{ inputs.shard_count }}
+          EXPECTED_SHARD_INDEX: ${{ inputs.shard_index }}
+          EXPECTED_SHARD_REQUEST_COUNT: ${{ inputs.expected_shard_request_count }}
+          EXPECTED_SHARD_RESULT_COUNT: ${{ inputs.expected_shard_result_count }}
+          REQUESTS: ${{ steps.requests.outputs.requests }}
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/public-replay-github-evidence.json"
+          registry="configuration/public-replay-workflow-definitions-v1.json"
+          python scripts/resolve_public_replay_github_evidence.py \
+            --requests "$REQUESTS" \
+            --workflow-registry "$registry" \
+            --output "$evidence" \
+            --shard-index "$EXPECTED_SHARD_INDEX" \
+            --shard-count "$EXPECTED_SHARD_COUNT"
+          EVIDENCE="$evidence" REGISTRY="$registry" python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import sys
+
+          sys.path.insert(0, "scripts")
+          from resolve_public_replay_github_evidence import validate_evidence
+
+          path = pathlib.Path(os.environ["EVIDENCE"])
+          raw = path.read_bytes()
+          value = json.loads(raw)
+          requests = json.loads(pathlib.Path(os.environ["REQUESTS"]).read_bytes())
+          registry_path = pathlib.Path(os.environ["REGISTRY"])
+          registry_raw = registry_path.read_bytes()
+          registry = json.loads(registry_raw)
+          validate_evidence(
+              value, requests, registry, hashlib.sha256(registry_raw).hexdigest()
+          )
+          expected = {
+              "source_commit": os.environ["EXPECTED_COMMIT"],
+              "inventory_sha256": os.environ["EXPECTED_INVENTORY_SHA256"],
+              "resolution_requests_sha256": os.environ["EXPECTED_REQUESTS_SHA256"],
+              "workflow_definition_registry_sha256": hashlib.sha256(
+                  registry_raw
+              ).hexdigest(),
+              "request_count": int(os.environ["EXPECTED_REQUEST_COUNT"]),
+              "result_count": int(os.environ["EXPECTED_PUBLIC_RESULT_COUNT"]),
+              "shard_index": int(os.environ["EXPECTED_SHARD_INDEX"]),
+              "shard_count": int(os.environ["EXPECTED_SHARD_COUNT"]),
+              "shard_request_count": int(os.environ["EXPECTED_SHARD_REQUEST_COUNT"]),
+              "shard_result_count": int(os.environ["EXPECTED_SHARD_RESULT_COUNT"]),
+          }
+          if any(value[field] != wanted for field, wanted in expected.items()):
+              raise SystemExit("evidence identity does not match reviewed inputs")
+          canonical = (
+              json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+          ).encode("utf-8")
+          if raw != canonical:
+              raise SystemExit("evidence is not canonical JSON")
+          print(hashlib.sha256(raw).hexdigest())
+          PY
+          evidence_sha256=$(sha256sum "$evidence" | cut -d' ' -f1)
+          resolved_count=$(jq -er .resolved_count "$evidence")
+          pending_count=$(jq -er .pending_count "$evidence")
+          source_unavailable_count=$(jq -er .source_unavailable_count "$evidence")
+          source_indeterminate_count=$(jq -er .source_indeterminate_count "$evidence")
+          {
+            echo "evidence=$evidence"
+            echo "evidence_sha256=$evidence_sha256"
+            echo "resolved_count=$resolved_count"
+            echo "pending_count=$pending_count"
+            echo "source_unavailable_count=$source_unavailable_count"
+            echo "source_indeterminate_count=$source_indeterminate_count"
+          } >> "$GITHUB_OUTPUT"
+
+      # actions/upload-artifact pinned to v7.0.1.
+      - name: Upload only the sanitized public evidence projection
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: public-replay-github-evidence-${{ inputs.expected_commit }}-shard-${{ inputs.shard_index }}-of-${{ inputs.shard_count }}
+          path: ${{ steps.evidence.outputs.evidence }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record public evidence resolution counts
+        env:
+          EVIDENCE_SHA256: ${{ steps.evidence.outputs.evidence_sha256 }}
+          PENDING_COUNT: ${{ steps.evidence.outputs.pending_count }}
+          RESOLVED_COUNT: ${{ steps.evidence.outputs.resolved_count }}
+          SOURCE_UNAVAILABLE_COUNT: ${{ steps.evidence.outputs.source_unavailable_count }}
+          SOURCE_INDETERMINATE_COUNT: ${{ steps.evidence.outputs.source_indeterminate_count }}
+        run: |
+          {
+            echo '### Historical public replay GitHub evidence'
+            echo
+            echo "- resolved requests: \`$RESOLVED_COUNT\`"
+            echo "- pending requests: \`$PENDING_COUNT\`"
+            echo "- currently source-unavailable requests: \`$SOURCE_UNAVAILABLE_COUNT\`"
+            echo "- indeterminate bounded source probes: \`$SOURCE_INDETERMINATE_COUNT\`"
+            echo "- sanitized evidence SHA-256: \`$EVIDENCE_SHA256\`"
+            echo '- missing evidence remains pending and is not an unavailability verdict'
+          } >> "$GITHUB_STEP_SUMMARY"

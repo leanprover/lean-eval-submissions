@@ -1,0 +1,7 @@
+{
+  "contracts": [],
+  "kind": "historical_public_replay_workflow_definition_registry",
+  "repository": "leanprover/lean-eval-submissions",
+  "schema_version": 1,
+  "workflow_path": ".github/workflows/submission.yml"
+}

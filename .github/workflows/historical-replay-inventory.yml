@@ -33,10 +33,11 @@ jobs:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
         run: |
           set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "leanprover/lean-eval-submissions"
           [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           test "$GITHUB_SHA" = "$EXPECTED_COMMIT"
           test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT"
-          remote_commit=$(git ls-remote \
+          remote_commit=$(timeout 30s git ls-remote \
             https://github.com/leanprover/lean-eval-submissions.git \
             "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT" | cut -f1)
           test "$remote_commit" = "$EXPECTED_COMMIT"
@@ -45,8 +46,25 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.expected_commit }}
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Require the selected commit to be reachable from protected main
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          remote_main=$(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            refs/heads/main | cut -f1)
+          [[ "$remote_main" =~ ^[0-9a-f]{40}$ ]]
+          branch=$(timeout 30s gh api \
+            "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.name, .commit.sha, .protected] | @tsv')
+          test "$branch" = $'main\t'"$remote_main"$'\ttrue'
+          test "$(git rev-parse origin/main)" = "$remote_main"
+          git merge-base --is-ancestor "$EXPECTED_COMMIT" origin/main
 
       # actions/setup-python pinned to v7.0.0.
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97

@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval/schemas/public-replay-github-evidence-aggregate-v1.schema.json",
+  "title": "Complete historical public replay GitHub evidence aggregate v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "source_repository", "source_commit",
+    "inventory_sha256", "resolution_requests_sha256",
+    "workflow_definition_registry_sha256", "request_count", "result_count",
+    "shard_count", "resolved_count", "source_unavailable_count",
+    "source_indeterminate_count", "ambiguous_count", "evidence_missing_count",
+    "pending_count", "shards", "resolutions"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_public_replay_github_evidence_aggregate"},
+    "source_repository": {"const": "leanprover/lean-eval-submissions"},
+    "source_commit": {"$ref": "#/$defs/commit"},
+    "inventory_sha256": {"$ref": "#/$defs/digest"},
+    "resolution_requests_sha256": {"$ref": "#/$defs/digest"},
+    "workflow_definition_registry_sha256": {"$ref": "#/$defs/digest"},
+    "request_count": {"type": "integer", "minimum": 1},
+    "result_count": {"type": "integer", "minimum": 1},
+    "shard_count": {"type": "integer", "minimum": 1, "maximum": 64},
+    "resolved_count": {"type": "integer", "minimum": 0},
+    "source_unavailable_count": {"type": "integer", "minimum": 0},
+    "source_indeterminate_count": {"type": "integer", "minimum": 0},
+    "ambiguous_count": {"type": "integer", "minimum": 0},
+    "evidence_missing_count": {"type": "integer", "minimum": 0},
+    "pending_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Every non-resolved request, including currently source-unavailable requests."
+    },
+    "shards": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/shard"}
+    },
+    "resolutions": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "public-replay-github-evidence-v1.schema.json#/$defs/resolution"
+      }
+    }
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "shard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shard_index", "evidence_sha256", "request_count", "result_count",
+        "resolved_count", "pending_count"
+      ],
+      "properties": {
+        "shard_index": {"type": "integer", "minimum": 0, "maximum": 63},
+        "evidence_sha256": {"$ref": "#/$defs/digest"},
+        "request_count": {"type": "integer", "minimum": 1},
+        "result_count": {"type": "integer", "minimum": 1},
+        "resolved_count": {"type": "integer", "minimum": 0},
+        "pending_count": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

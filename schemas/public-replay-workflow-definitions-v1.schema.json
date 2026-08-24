@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval/schemas/public-replay-workflow-definitions-v1.schema.json",
+  "title": "Reviewed historical public replay workflow definitions v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "repository", "workflow_path", "contracts"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_public_replay_workflow_definition_registry"},
+    "repository": {"const": "leanprover/lean-eval-submissions"},
+    "workflow_path": {"const": ".github/workflows/submission.yml"},
+    "contracts": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["evaluator_commit", "definition_sha256", "contract"],
+        "properties": {
+          "evaluator_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "definition_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "contract": {"const": "split_repository_recorded_benchmark_v1"}
+        }
+      }
+    }
+  }
+}

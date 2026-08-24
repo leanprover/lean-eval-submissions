@@ -63,6 +63,9 @@ jobs:
           tests.test_historical_replay_inventory
           tests.test_historical_replay_inventory_workflow
           tests.test_prepare_public_replay_resolution
+          tests.test_resolve_public_replay_github_evidence
+          tests.test_public_replay_github_evidence_workflow
+          tests.test_aggregate_public_replay_github_evidence
 
       - name: Submission intake tests
         run: python -m unittest tests.test_validate_submission_intake

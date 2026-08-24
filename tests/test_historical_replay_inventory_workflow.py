@@ -12,7 +12,7 @@ WORKFLOW = (
 
 
 class HistoricalReplayInventoryWorkflowTests(unittest.TestCase):
-    def test_is_manual_read_only_and_credential_free(self) -> None:
+    def test_is_manual_read_only_and_has_no_external_credentials(self) -> None:
         self.assertIn("  workflow_dispatch:", WORKFLOW)
         self.assertNotIn("schedule:", WORKFLOW)
         self.assertNotIn("\n  push:", WORKFLOW)
@@ -25,6 +25,10 @@ class HistoricalReplayInventoryWorkflowTests(unittest.TestCase):
     def test_requires_the_exact_protected_dispatch_tag_and_clean_checkout(self) -> None:
         self.assertIn(
             'test "$GITHUB_SHA" = "$EXPECTED_COMMIT"',
+            WORKFLOW,
+        )
+        self.assertIn(
+            'test "$GITHUB_REPOSITORY" = "leanprover/lean-eval-submissions"',
             WORKFLOW,
         )
         self.assertIn(
