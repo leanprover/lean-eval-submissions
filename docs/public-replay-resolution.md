@@ -142,6 +142,11 @@ inventory digest, request byte digest, both exact registry-file byte digests, an
 requires every index and request ID exactly once; revalidates every candidate;
 recomputes result coverage and counters; and records every shard SHA-256. Its
 schema is `schemas/public-replay-github-evidence-aggregate-v1.schema.json`.
+New registry-bound aggregates must be consumed with the same canonical
+`public-replay-legacy-adjudications-v1.json` bytes. Downstream CLIs accept
+`--legacy-adjudication-registry` for that purpose. Omitting it for a bound
+aggregate, or supplying it for an older unbound aggregate, fails closed; the
+unbound path is retained only for already-reviewed immutable evidence.
 Aggregation does not mutate State or promote a classification:
 `source_unavailable`, all indeterminate classes, unreviewed workflow contracts,
 ambiguous matches, and missing evidence remain pending with separate counters.

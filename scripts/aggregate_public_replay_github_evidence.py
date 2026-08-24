@@ -17,6 +17,7 @@ from resolve_public_replay_github_evidence import (
     EvidenceError,
     _read_bounded,
     _write_exclusive,
+    canonical_document_bytes,
     shard_requests,
     validate_evidence,
     validate_legacy_adjudication_registry,
@@ -30,12 +31,6 @@ MAX_REGISTRY_BYTES = 512 * 1024
 
 class AggregationError(ValueError):
     """Evidence shards do not form one exact, complete corpus."""
-
-
-def canonical_document_bytes(value: Any) -> bytes:
-    return (
-        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    ).encode("utf-8")
 
 
 def _status_counts(resolutions: list[dict[str, Any]]) -> collections.Counter[str]:
@@ -71,13 +66,18 @@ def aggregate(
         raise AggregationError("workflow registry is not canonical or digest-bound")
     if not evidence:
         raise AggregationError("no evidence shards were supplied")
-    has_adjudications = any(
-        "legacy_adjudication_registry_sha256" in value for _, value in evidence
+    has_adjudications = (
+        legacy_adjudication_registry is not None
+        or legacy_adjudication_registry_sha256 is not None
     )
     if has_adjudications and (
         legacy_adjudication_registry is None
         or legacy_adjudication_registry_sha256 is None
         or DIGEST.fullmatch(legacy_adjudication_registry_sha256) is None
+        or hashlib.sha256(
+            canonical_document_bytes(legacy_adjudication_registry)
+        ).hexdigest()
+        != legacy_adjudication_registry_sha256
     ):
         raise AggregationError(
             "legacy adjudication registry is not canonical or digest-bound"
@@ -211,6 +211,8 @@ def validate_aggregate(
     legacy_adjudication_registry: dict[str, Any] | None = None,
     legacy_adjudication_registry_sha256: str | None = None,
 ) -> None:
+    if not isinstance(value, dict):
+        raise AggregationError("aggregate is not an object")
     expected_fields = {
         "schema_version",
         "kind",
@@ -235,7 +237,15 @@ def validate_aggregate(
         "resolutions",
     }
     has_adjudications = "legacy_adjudication_registry_sha256" in value
-    if not isinstance(value, dict) or set(value) != expected_fields | (
+    registry_supplied = (
+        legacy_adjudication_registry is not None
+        or legacy_adjudication_registry_sha256 is not None
+    )
+    if has_adjudications != registry_supplied:
+        raise AggregationError(
+            "aggregate legacy registry mode does not match the validator"
+        )
+    if set(value) != expected_fields | (
         {"legacy_adjudication_registry_sha256"} if has_adjudications else set()
     ):
         raise AggregationError("aggregate fields are not closed")
@@ -255,7 +265,7 @@ def validate_aggregate(
         or not 1 <= value["shard_count"] <= 64
     ):
         raise AggregationError("aggregate identity is invalid")
-    if has_adjudications:
+    if registry_supplied:
         if (
             legacy_adjudication_registry is None
             or legacy_adjudication_registry_sha256 is None
@@ -267,6 +277,10 @@ def validate_aggregate(
             raise AggregationError(str(error)) from error
         if (
             value["legacy_adjudication_registry_sha256"]
+            != legacy_adjudication_registry_sha256
+            or hashlib.sha256(
+                canonical_document_bytes(legacy_adjudication_registry)
+            ).hexdigest()
             != legacy_adjudication_registry_sha256
         ):
             raise AggregationError("aggregate legacy registry identity is invalid")

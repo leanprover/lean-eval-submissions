@@ -233,7 +233,7 @@ class AggregatePublicReplayEvidenceTests(unittest.TestCase):
         self.assertEqual(
             output["legacy_adjudication_registry_sha256"], adjudication_digest
         )
-        with self.assertRaisesRegex(AggregationError, "does not bind"):
+        with self.assertRaisesRegex(AggregationError, "not canonical or digest-bound"):
             aggregate(
                 requests,
                 digest,
@@ -242,6 +242,42 @@ class AggregatePublicReplayEvidenceTests(unittest.TestCase):
                 [shard],
                 adjudications,
                 "f" * 64,
+            )
+        changed_registry = copy.deepcopy(adjudications)
+        changed_registry["adjudications"][0]["comment"]["body_sha256"] = "f" * 64
+        with self.assertRaisesRegex(AggregationError, "not canonical or digest-bound"):
+            aggregate(
+                requests,
+                digest,
+                self.registry,
+                self.registry_digest,
+                [shard],
+                changed_registry,
+                adjudication_digest,
+            )
+        stripped = copy.deepcopy(evidence)
+        stripped.pop("legacy_adjudication_registry_sha256")
+        stripped_shard = (
+            hashlib.sha256(canonical_document_bytes(stripped)).hexdigest(),
+            stripped,
+        )
+        with self.assertRaisesRegex(AggregationError, "mode does not match"):
+            aggregate(
+                requests,
+                digest,
+                self.registry,
+                self.registry_digest,
+                [stripped_shard],
+                adjudications,
+                adjudication_digest,
+            )
+        with self.assertRaisesRegex(AggregationError, "mode does not match"):
+            validate_aggregate(
+                output,
+                requests,
+                digest,
+                self.registry,
+                self.registry_digest,
             )
 
     def test_published_aggregate_schema_is_closed(self) -> None:
@@ -256,6 +292,14 @@ class AggregatePublicReplayEvidenceTests(unittest.TestCase):
         self.assertIs(schema["$defs"]["shard"]["additionalProperties"], False)
 
     def test_validator_rejects_nonobject_resolution_cleanly(self) -> None:
+        with self.assertRaisesRegex(AggregationError, "not an object"):
+            validate_aggregate(
+                1,
+                self.requests,
+                self.requests_digest,
+                self.registry,
+                self.registry_digest,
+            )
         output = aggregate(
             self.requests,
             self.requests_digest,

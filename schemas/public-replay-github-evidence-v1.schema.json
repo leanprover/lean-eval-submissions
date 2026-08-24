@@ -347,6 +347,34 @@
               },
               "then": { "required": ["source_probe_reason_code"] },
               "else": { "not": { "required": ["source_probe_reason_code"] } }
+            },
+            {
+              "oneOf": [
+                {
+                  "required": [
+                    "legacy_adjudication_sha256", "legacy_reason_code",
+                    "workflow_run_triggering_actor", "record_job_id",
+                    "record_job_started_at", "record_job_completed_at",
+                    "result_commit_sha", "result_blob_sha",
+                    "model_rename_sha256"
+                  ]
+                },
+                {
+                  "not": {
+                    "anyOf": [
+                      { "required": ["legacy_adjudication_sha256"] },
+                      { "required": ["legacy_reason_code"] },
+                      { "required": ["workflow_run_triggering_actor"] },
+                      { "required": ["record_job_id"] },
+                      { "required": ["record_job_started_at"] },
+                      { "required": ["record_job_completed_at"] },
+                      { "required": ["result_commit_sha"] },
+                      { "required": ["result_blob_sha"] },
+                      { "required": ["model_rename_sha256"] }
+                    ]
+                  }
+                }
+              ]
             }
           ]
         }

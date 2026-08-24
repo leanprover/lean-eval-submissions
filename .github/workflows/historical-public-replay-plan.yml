@@ -143,6 +143,14 @@ jobs:
           toolchains="$RUNNER_TEMP/public-replay-toolchains.json"
           plan="$RUNNER_TEMP/historical-public-replay-plan.json"
           recomputed="$RUNNER_TEMP/historical-public-replay-plan.recomputed.json"
+          legacy_registry_args=()
+          if jq -e 'has("legacy_adjudication_registry_sha256")' \
+            "$EVIDENCE_PATH" >/dev/null; then
+            legacy_registry_args=(
+              --legacy-adjudication-registry
+              configuration/public-replay-legacy-adjudications-v1.json
+            )
+          fi
           python scripts/inventory_historical_replay.py \
             --results-root "$source_tree/results" \
             --source-commit "$source_commit" \
@@ -155,6 +163,7 @@ jobs:
             --requests "$requests" \
             --evidence-aggregate "$EVIDENCE_PATH" \
             --workflow-registry configuration/public-replay-workflow-definitions-v1.json \
+            "${legacy_registry_args[@]}" \
             --benchmark-repository benchmark-history \
             --output "$toolchains"
           for output in "$plan" "$recomputed"; do
@@ -163,6 +172,7 @@ jobs:
               --requests "$requests" \
               --evidence-aggregate "$EVIDENCE_PATH" \
               --workflow-registry configuration/public-replay-workflow-definitions-v1.json \
+              "${legacy_registry_args[@]}" \
               --toolchain-registry "$toolchains" \
               --results-root "$source_tree/results" \
               --output "$output"

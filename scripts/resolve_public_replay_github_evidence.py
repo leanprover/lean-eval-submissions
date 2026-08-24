@@ -107,6 +107,12 @@ def canonical_bytes(value: Any) -> bytes:
     ).encode("utf-8")
 
 
+def canonical_document_bytes(value: Any) -> bytes:
+    return (
+        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+
+
 def text_digest(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
@@ -2055,6 +2061,15 @@ def resolve(
         adjudications = validate_legacy_adjudication_registry(
             legacy_adjudication_registry
         )
+        if (
+            hashlib.sha256(
+                canonical_document_bytes(legacy_adjudication_registry)
+            ).hexdigest()
+            != legacy_adjudication_registry_sha256
+        ):
+            raise EvidenceError(
+                "legacy adjudication registry is not canonical or digest-bound"
+            )
     if not isinstance(raw_sha256, str) or DIGEST.fullmatch(raw_sha256) is None:
         raise EvidenceError("resolution request digest is invalid")
     if (
@@ -2256,8 +2271,16 @@ def validate_evidence(
         raise EvidenceError("workflow registry raw digest is invalid")
     if value["workflow_definition_registry_sha256"] != workflow_registry_sha256:
         raise EvidenceError("GitHub evidence does not bind its workflow registry")
+    registry_supplied = (
+        legacy_adjudication_registry is not None
+        or legacy_adjudication_registry_sha256 is not None
+    )
+    if has_adjudications != registry_supplied:
+        raise EvidenceError(
+            "GitHub evidence legacy registry mode does not match the validator"
+        )
     adjudications: dict[str, dict[str, Any]] = {}
-    if has_adjudications:
+    if registry_supplied:
         if (
             legacy_adjudication_registry is None
             or legacy_adjudication_registry_sha256 is None
@@ -2270,6 +2293,10 @@ def validate_evidence(
             not isinstance(legacy_adjudication_registry_sha256, str)
             or DIGEST.fullmatch(legacy_adjudication_registry_sha256) is None
             or value["legacy_adjudication_registry_sha256"]
+            != legacy_adjudication_registry_sha256
+            or hashlib.sha256(
+                canonical_document_bytes(legacy_adjudication_registry)
+            ).hexdigest()
             != legacy_adjudication_registry_sha256
         ):
             raise EvidenceError("GitHub evidence does not bind its legacy registry")
@@ -2547,6 +2574,15 @@ def validate_evidence(
                 raise EvidenceError(f"{candidate_label} fields are not closed")
             legacy_entry = adjudications.get(request_id)
             is_legacy = legacy_digest is not None
+            legacy_repository = (
+                legacy_entry is not None
+                and candidate["issue_repository"]
+                == legacy_entry["issue"]["repository"]
+            )
+            if is_legacy != legacy_repository:
+                raise EvidenceError(
+                    f"{candidate_label} legacy adjudication mode is invalid"
+                )
             if is_legacy:
                 if legacy_entry is None:
                     raise EvidenceError(

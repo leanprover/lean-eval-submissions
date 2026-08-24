@@ -141,6 +141,7 @@ def main() -> int:
     parser.add_argument("--requests", required=True, type=pathlib.Path)
     parser.add_argument("--evidence-aggregate", required=True, type=pathlib.Path)
     parser.add_argument("--workflow-registry", required=True, type=pathlib.Path)
+    parser.add_argument("--legacy-adjudication-registry", type=pathlib.Path)
     parser.add_argument("--benchmark-repository", required=True, type=pathlib.Path)
     parser.add_argument("--output", required=True, type=pathlib.Path)
     args = parser.parse_args()
@@ -154,6 +155,14 @@ def main() -> int:
         workflow_registry, workflow_raw = _canonical_input(
             args.workflow_registry, MAX_REGISTRY_BYTES, "workflow registry"
         )
+        legacy_registry = None
+        legacy_registry_raw = None
+        if args.legacy_adjudication_registry is not None:
+            legacy_registry, legacy_registry_raw = _canonical_input(
+                args.legacy_adjudication_registry,
+                MAX_REGISTRY_BYTES,
+                "legacy adjudication registry",
+            )
         validate_workflow_registry(workflow_registry)
         validate_aggregate(
             aggregate,
@@ -161,6 +170,12 @@ def main() -> int:
             hashlib.sha256(requests_raw).hexdigest(),
             workflow_registry,
             hashlib.sha256(workflow_raw).hexdigest(),
+            legacy_registry,
+            (
+                hashlib.sha256(legacy_registry_raw).hexdigest()
+                if legacy_registry_raw is not None
+                else None
+            ),
         )
         if (
             not args.benchmark_repository.is_dir()

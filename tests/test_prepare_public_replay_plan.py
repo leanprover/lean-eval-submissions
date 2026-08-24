@@ -5,6 +5,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -16,6 +17,7 @@ from aggregate_public_replay_github_evidence import (
 from build_public_replay_toolchain_registry import (
     ToolchainRegistryError,
     build_registry,
+    main as build_toolchain_main,
     resolved_benchmark_commits,
 )
 from inventory_historical_replay import inventory
@@ -31,6 +33,7 @@ from tests.test_resolve_public_replay_github_evidence import (
     BENCHMARK,
     SOURCE,
     FakeClient,
+    adjudication_bytes,
     registry_bytes,
 )
 
@@ -99,6 +102,33 @@ class PublicReplayPlanTests(unittest.TestCase):
             [(hashlib.sha256(evidence_raw).hexdigest(), evidence)],
         )
         self.aggregate_raw = canonical(self.aggregate)
+        self.legacy_registry, self.legacy_digest = adjudication_bytes()
+        self.legacy_raw = canonical(self.legacy_registry)
+        legacy_evidence = resolve(
+            self.requests,
+            hashlib.sha256(self.requests_raw).hexdigest(),
+            FakeClient(),
+            self.workflow_registry,
+            self.workflow_digest,
+            self.legacy_registry,
+            self.legacy_digest,
+        )
+        legacy_evidence_raw = canonical(legacy_evidence)
+        self.legacy_aggregate = aggregate(
+            self.requests,
+            hashlib.sha256(self.requests_raw).hexdigest(),
+            self.workflow_registry,
+            self.workflow_digest,
+            [
+                (
+                    hashlib.sha256(legacy_evidence_raw).hexdigest(),
+                    legacy_evidence,
+                )
+            ],
+            self.legacy_registry,
+            self.legacy_digest,
+        )
+        self.legacy_aggregate_raw = canonical(self.legacy_aggregate)
         self.toolchains = build_registry(
             resolved_benchmark_commits(self.requests, self.aggregate),
             lambda _commit: b"leanprover/lean4:v4.30.0-rc2\n\n",
@@ -159,6 +189,73 @@ class PublicReplayPlanTests(unittest.TestCase):
 
     def test_output_is_byte_deterministic(self) -> None:
         self.assertEqual(canonical(self.build()), canonical(self.build()))
+
+    def test_new_aggregate_requires_and_binds_the_exact_legacy_registry(self) -> None:
+        changes = {
+            "aggregate": self.legacy_aggregate,
+            "aggregate_raw": self.legacy_aggregate_raw,
+        }
+        with self.assertRaisesRegex(PublicReplayPlanError, "mode does not match"):
+            self.build(**changes)
+        output = self.build(
+            **changes,
+            legacy_adjudication_registry=self.legacy_registry,
+            legacy_adjudication_registry_raw=self.legacy_raw,
+        )
+        self.assertEqual(output["resolved_request_count"], 1)
+        changed_raw = self.legacy_raw + b"\n"
+        with self.assertRaisesRegex(PublicReplayPlanError, "identity is invalid"):
+            self.build(
+                **changes,
+                legacy_adjudication_registry=self.legacy_registry,
+                legacy_adjudication_registry_raw=changed_raw,
+            )
+
+    def test_toolchain_cli_requires_registry_for_new_aggregate(self) -> None:
+        inputs = {
+            "requests.json": self.requests_raw,
+            "aggregate.json": self.legacy_aggregate_raw,
+            "workflow.json": self.workflow_raw,
+            "legacy.json": self.legacy_raw,
+        }
+        for name, raw in inputs.items():
+            (self.root / name).write_bytes(raw)
+        common = [
+            "build_public_replay_toolchain_registry.py",
+            "--requests",
+            str(self.root / "requests.json"),
+            "--evidence-aggregate",
+            str(self.root / "aggregate.json"),
+            "--workflow-registry",
+            str(self.root / "workflow.json"),
+            "--benchmark-repository",
+            str(self.root),
+        ]
+        with mock.patch(
+            "build_public_replay_toolchain_registry._git_reader",
+            return_value=lambda _commit: b"leanprover/lean4:v4.30.0-rc2\n",
+        ), mock.patch.object(
+            sys,
+            "argv",
+            common + ["--output", str(self.root / "missing-registry.json")],
+        ):
+            self.assertEqual(build_toolchain_main(), 1)
+        with mock.patch(
+            "build_public_replay_toolchain_registry._git_reader",
+            return_value=lambda _commit: b"leanprover/lean4:v4.30.0-rc2\n",
+        ), mock.patch.object(
+            sys,
+            "argv",
+            common
+            + [
+                "--legacy-adjudication-registry",
+                str(self.root / "legacy.json"),
+                "--output",
+                str(self.root / "toolchains-cli.json"),
+            ],
+        ):
+            self.assertEqual(build_toolchain_main(), 0)
+        self.assertTrue((self.root / "toolchains-cli.json").is_file())
 
     def test_changed_snapshot_or_evidence_binding_fails_closed(self) -> None:
         changed = json.loads((self.results_root / "a-m-berns.json").read_text())
