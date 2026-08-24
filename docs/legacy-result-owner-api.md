@@ -6,7 +6,7 @@ production metadata. It never rewrites a Results record, changes its stable
 result ID, or reinterprets its grandfathered solution-publication policy.
 
 The implementation is bound to private State contract commit
-`889e07e3b8cf38ad147d8a23b7d1b35826de740f`. Before an owner operation, the
+`0c8759946df0da1338a0c73bf5bd75d182038286`. Before an owner operation, the
 Worker resolves protected State `main`, proves that it equals or descends from
 that commit, and checks the exact reviewed event schema, targeted-index
 schemas, materializer, result-owner index builder, validator, and contract
@@ -23,7 +23,7 @@ Both environments track these non-secret variables:
 
 ```text
 LEGACY_RESULT_OWNER_API_ENABLED=false
-RESULT_OWNER_STATE_CONTRACT_COMMIT=889e07e3b8cf38ad147d8a23b7d1b35826de740f
+RESULT_OWNER_STATE_CONTRACT_COMMIT=0c8759946df0da1338a0c73bf5bd75d182038286
 ```
 
 The route exists only when the enable flag is exactly `true` and the contract
@@ -151,7 +151,7 @@ logs contain stage and error class only.
 ## Enable and rollback gate
 
 The first enablement has a zero-event migration precondition. At exact private
-State `main` commit `889e07e3b8cf38ad147d8a23b7d1b35826de740f`, inspected on
+State `main` commit `0c8759946df0da1338a0c73bf5bd75d182038286`, inspected on
 2026-08-24, the repository contained zero `result.recorded` events, zero
 `result.claimed` events, and zero files under `views/result-identities/` (the
 only event was `system.initialized`). Consequently no historical result guard

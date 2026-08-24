@@ -47,11 +47,11 @@ ROLLBACK_VALIDATOR = (ROOT / "scripts/validate_cloudflare_rollback.py").read_tex
 
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
-    def test_state_schema_fetch_preserves_canonical_blob_bytes(self) -> None:
-        self.assertNotIn("application/vnd.github.raw+json", DEPLOY)
-        self.assertNotIn("application/vnd.github.raw+json", ROLLBACK)
-        self.assertIn("application/vnd.github.v3.raw", DEPLOY)
-        self.assertIn("application/vnd.github.v3.raw", ROLLBACK)
+    def test_private_state_proofs_use_the_single_repository_worker_credential(self) -> None:
+        self.assertNotIn("repos/leanprover/lean-eval-state", DEPLOY)
+        self.assertNotIn("repos/leanprover/lean-eval-state", ROLLBACK)
+        self.assertIn("state_contract_verified", DEPLOY)
+        self.assertIn("state-proof.json", ROLLBACK)
 
     def test_staging_deploy_proves_the_results_branch_is_protected(self) -> None:
         staging = DEPLOY.split("  deploy-staging:", 1)[1].split(
@@ -315,8 +315,10 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("cloudflare-rollback-qualification-v1.json", ROLLBACK)
         self.assertEqual(ROLLBACK.count("compatible-capabilities"), 1)
         self.assertIn("Preserve source-free pre-mutation recovery state", ROLLBACK)
-        self.assertIn("--state-main", ROLLBACK)
-        self.assertIn("--state-schema", ROLLBACK)
+        self.assertIn("--state-proof", ROLLBACK)
+        self.assertNotIn("--state-main", ROLLBACK)
+        self.assertNotIn("--state-schema", ROLLBACK)
+        self.assertNotIn("lean-eval-state/contents", ROLLBACK)
         self.assertIn("protected State main moved after rollback qualification", ROLLBACK)
         self.assertIn("validate_cloudflare_rollback.py prestate", ROLLBACK)
         artifact = ROLLBACK.split(
@@ -427,26 +429,27 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('arguments+=(--var "$name:$value")', production)
         self.assertIn("intake-lease-smoke.json", production)
         self.assertIn("intake_lease", production)
-        self.assertIn("889e07e3b8cf38ad147d8a23b7d1b35826de740f", production)
-        self.assertIn("891d6da2d80fa68d67bc44f08b6cc4b42639917b5bf420af9bcd9654eb153fdf", production)
-        self.assertIn("does not descend from the reviewed intake lease contract", production)
+        self.assertIn("0c8759946df0da1338a0c73bf5bd75d182038286", production)
+        self.assertIn("bfacfb44083c60372cef6b82637ff523a9454d49dc3e731fe97056f7402a6e4a", production)
+        self.assertIn("state_contract_verified", production)
         self.assertIn("timeout --signal=TERM --kill-after=10s 150s", production)
         self.assertNotIn("\n      - name:", production[final:].split("run: |", 1)[1])
         self.assertIn('--var "INTAKE_ENABLEMENT_MODE:durable"', production[final:])
 
     def test_production_state_gate_matches_the_reviewed_qualification(self) -> None:
         production = DEPLOY.split("\n  deploy-production:", 1)[1]
-        ancestor = re.search(
-            r"lean-eval-state/compare/([0-9a-f]{40})\.\.\.\$commit", production
-        )
-        schema = re.search(
-            r'sha256sum "\$schema" \| cut -d\' \' -f1\)" != "([0-9a-f]{64})"',
-            production,
-        )
-        self.assertIsNotNone(ancestor)
-        self.assertIsNotNone(schema)
-        self.assertEqual(ancestor.group(1), QUALIFICATION["state_main_commit"])
-        self.assertEqual(schema.group(1), QUALIFICATION["state_event_schema_sha256"])
+        state_gate = production.split(
+            "- name: Verify exact protected State before production finalization",
+            1,
+        )[1].split("- name: Prepare the exact Worker-enforced intake lease", 1)[0]
+        self.assertIn(QUALIFICATION["state_main_commit"], state_gate)
+        self.assertIn(QUALIFICATION["state_event_schema_sha256"], state_gate)
+        self.assertIn("state_branch_protected", state_gate)
+        self.assertIn("state_contract_verified", state_gate)
+        self.assertIn("--request POST", state_gate)
+        self.assertIn("/readyz", state_gate)
+        self.assertNotIn("lean-eval-state/", state_gate)
+        self.assertNotIn("github.token", state_gate)
 
     def test_disable_recovery_is_derived_protected_and_can_never_enable(self) -> None:
         self.assertIn("workflow_run:", RECOVERY)
@@ -584,7 +587,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],
-                    "889e07e3b8cf38ad147d8a23b7d1b35826de740f",
+                    "0c8759946df0da1338a0c73bf5bd75d182038286",
                 )
                 self.assertEqual(
                     configuration["vars"]["OAUTH_CALLBACK_URL"],

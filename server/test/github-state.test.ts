@@ -29,17 +29,17 @@ const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
 const NEW_TREE = "3".repeat(40);
 const NEW_COMMIT = "4".repeat(40);
-const RESULT_OWNER_CONTRACT_COMMIT = "889e07e3b8cf38ad147d8a23b7d1b35826de740f";
+const RESULT_OWNER_CONTRACT_COMMIT = "0c8759946df0da1338a0c73bf5bd75d182038286";
 const RESULT_OWNER_CONTRACT_BLOBS = {
   "docs/result-owner-operational-indexes.md": "2f784609f9117caf74cb7042e9ea45732925d77b",
   "schema/result-identity-guard-v1.schema.json": "1620b6d8aed37f652958ac86e311c00578edc8b4",
   "schema/result-overlay-view-v1.schema.json": "1b50a92a76891bd21e0b67f7f40ab9c86d50beed",
   "schema/result-overlays-v1.schema.json": "41d4078133d6854bf8de839873a3f58e9ba1afd1",
   "schema/result-source-record-index-v1.schema.json": "4543225e0833af00913e436185532a769debebc1",
-  "schema/state-event-v1.schema.json": "609f186c386867254dc0dc1e58b77ebcf74ef15c",
-  "scripts/materialize_state.py": "68b88d24d501751d18108bdb26494fa172dc4ec7",
+  "schema/state-event-v1.schema.json": "fcb267369516ce4ff5344ca75529c1d280970b0a",
+  "scripts/materialize_state.py": "24c0569ef69c4f7e24283d8d39b88f2055a33b77",
   "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
-  "scripts/validate_state.py": "bc77bc9c75f0985bb38aa5487cf4c1a48089f0ce",
+  "scripts/validate_state.py": "b23380497da0b3b85d555b92af9eb350441e1977",
 } as const;
 
 const EVENT: StateEvent = {
@@ -279,6 +279,13 @@ function repository(fetcher: GitHubFetch): GitHubStateRepository {
   );
 }
 
+function productionRepository(fetcher: GitHubFetch): GitHubStateRepository {
+  return new GitHubStateRepository(
+    { repository: "leanprover/lean-eval-state", token: "secret", userAgent: "test" },
+    fetcher,
+  );
+}
+
 describe("atomic Git State append", () => {
   beforeEach(() => clearResultOwnerContractProofCacheForTest());
 
@@ -380,6 +387,68 @@ describe("atomic Git State append", () => {
     expect(init?.method).toBe("PATCH");
     if (typeof init?.body !== "string") throw new TypeError("write probe body must be JSON");
     expect(JSON.parse(init.body)).toEqual({ force: false, sha: HEAD });
+  });
+
+  it("binds production write authority to protected main and exact contract blobs", async () => {
+    const fetcher = sequence([
+      json({ permissions: { push: true } }),
+      json({ object: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
+      json({ tree: { sha: TREE } }),
+      json({
+        name: "main",
+        protected: true,
+        commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
+      }),
+      ...Object.entries(RESULT_OWNER_CONTRACT_BLOBS).map(([path, sha]) =>
+        json({ type: "file", path, sha })),
+      json({
+        ref: "refs/heads/main",
+        object: { sha: RESULT_OWNER_CONTRACT_COMMIT },
+      }),
+    ]);
+    await expect(
+      productionRepository(fetcher).assertProductionQualifiedWritable(),
+    ).resolves.toBe(RESULT_OWNER_CONTRACT_COMMIT);
+    const [, init] = fetcher.mock.calls.at(-1) ?? [];
+    expect(init?.method).toBe("PATCH");
+  });
+
+  it("refuses unprotected, stale, or wrong-repository production proofs", async () => {
+    const unprotected = sequence([
+      json({ permissions: { push: true } }),
+      json({ object: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
+      json({ tree: { sha: TREE } }),
+      json({
+        name: "main",
+        protected: false,
+        commit: { sha: RESULT_OWNER_CONTRACT_COMMIT },
+      }),
+      ...Object.entries(RESULT_OWNER_CONTRACT_BLOBS).map(([path, sha]) =>
+        json({ type: "file", path, sha })),
+    ]);
+    await expect(
+      productionRepository(unprotected).assertProductionQualifiedWritable(),
+    ).rejects.toMatchObject({ status: 503 });
+
+    const stale = sequence([
+      json({ permissions: { push: true } }),
+      json({ object: { sha: RESULT_OWNER_CONTRACT_COMMIT } }),
+      json({ tree: { sha: TREE } }),
+      json({
+        name: "main",
+        protected: true,
+        commit: { sha: "f".repeat(40) },
+      }),
+      ...Object.entries(RESULT_OWNER_CONTRACT_BLOBS).map(([path, sha]) =>
+        json({ type: "file", path, sha })),
+    ]);
+    await expect(
+      productionRepository(stale).assertProductionQualifiedWritable(),
+    ).rejects.toMatchObject({ status: 503 });
+
+    await expect(
+      repository(sequence([])).assertProductionQualifiedWritable(),
+    ).rejects.toMatchObject({ status: 503 });
   });
 
   it("proves real CAS contention before appending durable canary evidence through the retrying writer", async () => {

@@ -121,6 +121,27 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         state_schema = self.directory / "state-event-schema.json"
         state_schema.write_bytes(state_schema_raw)
         self.paths["state_schema"] = state_schema
+        state_proof = self.directory / "state-proof.json"
+        self._write(
+            state_proof,
+            {
+                "environment": "production",
+                "intake_configured_enabled": False,
+                "intake_effective_enabled": False,
+                "intake_enabled": False,
+                "intake_enablement_mode": "disabled",
+                "intake_lease_expires_at": None,
+                "state_branch_protected": True,
+                "state_commit": state_commit,
+                "state_contract_commit": state_commit,
+                "state_contract_verified": True,
+                "state_event_schema_sha256": qualification_value[
+                    "state_event_schema_sha256"
+                ],
+                "status": "state_writer_ready",
+            },
+        )
+        self.paths["state_proof"] = state_proof
 
         intake_bindings = self._variable_bindings("intake")
         intake_bindings.append(
@@ -234,7 +255,15 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             target_root=ROOT,
             state_main=self.paths["state_main"],
             state_schema=self.paths["state_schema"],
+            state_proof=None,
         )
+
+    def _proof_arguments(self) -> argparse.Namespace:
+        arguments = self._arguments()
+        arguments.state_main = None
+        arguments.state_schema = None
+        arguments.state_proof = self.paths["state_proof"]
+        return arguments
 
     def test_builds_exact_commit_coherent_plan(self) -> None:
         plan = rollback.build_plan(self._arguments())
@@ -252,10 +281,32 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         self.assertIs(plan["legacy_result_owner_api_enabled"], False)
         self.assertEqual(
             plan["result_owner_state_contract_commit"],
-            "889e07e3b8cf38ad147d8a23b7d1b35826de740f",
+            "0c8759946df0da1338a0c73bf5bd75d182038286",
         )
         self.assertIs(plan["promotion_canary_enabled"], False)
         self.assertIs(plan["replay_enabled"], False)
+
+    def test_builds_the_same_plan_from_a_closed_worker_state_proof(self) -> None:
+        legacy = rollback.build_plan(self._arguments())
+        proof = rollback.build_plan(self._proof_arguments())
+        self.assertEqual(proof, legacy)
+
+    def test_worker_state_proof_rejects_drift_enablement_and_extra_fields(self) -> None:
+        original = rollback._object(self.paths["state_proof"])
+        hostile = [
+            {**original, "state_branch_protected": False},
+            {**original, "state_contract_verified": False},
+            {**original, "state_commit": "e" * 40},
+            {**original, "state_event_schema_sha256": "e" * 64},
+            {**original, "intake_effective_enabled": True},
+            {**original, "private_detail": "must not be accepted"},
+        ]
+        for proof in hostile:
+            with self.subTest(proof=proof):
+                self._write(self.paths["state_proof"], proof)
+                with self.assertRaises(rollback.RollbackValidationError):
+                    rollback.build_plan(self._proof_arguments())
+        self._write(self.paths["state_proof"], original)
 
     def test_rejects_production_rollback_with_promotion_canary_enabled(self) -> None:
         self.configs["intake"]["env"]["production"]["vars"][
@@ -825,7 +876,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "replay_enabled": False,
                 "staging_acceptance_enabled": False,
                 "result_owner_state_contract_commit": (
-                    "889e07e3b8cf38ad147d8a23b7d1b35826de740f"
+                    "0c8759946df0da1338a0c73bf5bd75d182038286"
                 ),
             },
         )

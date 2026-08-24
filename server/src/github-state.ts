@@ -42,6 +42,7 @@ import {
 
 const API = "https://api.github.com";
 const STATE_BRANCH = "main";
+const PRODUCTION_STATE_REPOSITORY = "leanprover/lean-eval-state";
 const MAX_WRITE_ATTEMPTS = 8;
 const SHA = /^[0-9a-f]{40}$/i;
 const GITHUB_TIMEOUT_MS = 5000;
@@ -51,10 +52,10 @@ const RESULT_OWNER_CONTRACT_BLOBS = {
   "schema/result-overlay-view-v1.schema.json": "1b50a92a76891bd21e0b67f7f40ab9c86d50beed",
   "schema/result-overlays-v1.schema.json": "41d4078133d6854bf8de839873a3f58e9ba1afd1",
   "schema/result-source-record-index-v1.schema.json": "4543225e0833af00913e436185532a769debebc1",
-  "schema/state-event-v1.schema.json": "609f186c386867254dc0dc1e58b77ebcf74ef15c",
-  "scripts/materialize_state.py": "68b88d24d501751d18108bdb26494fa172dc4ec7",
+  "schema/state-event-v1.schema.json": "fcb267369516ce4ff5344ca75529c1d280970b0a",
+  "scripts/materialize_state.py": "24c0569ef69c4f7e24283d8d39b88f2055a33b77",
   "scripts/result_owner_indexes.py": "c07c29a81eb2ca5058563a8411c26f9358bde3e4",
-  "scripts/validate_state.py": "bc77bc9c75f0985bb38aa5487cf4c1a48089f0ce",
+  "scripts/validate_state.py": "b23380497da0b3b85d555b92af9eb350441e1977",
 } as const;
 const RESULT_OWNER_CONTRACT_PROOF_CACHE_LIMIT = 64;
 const RESULT_OWNER_CONTRACT_PROOF_ID = Object.entries(RESULT_OWNER_CONTRACT_BLOBS)
@@ -226,6 +227,27 @@ async function branchSnapshot(
   const commit = await jsonCall(config, fetcher, `/git/commits/${headSha}`);
   const treeSha = requiredSha(nested(commit, ["tree", "sha"]), "State commit tree");
   return { headSha, treeSha };
+}
+
+async function assertProtectedBranchAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  expectedCommit: string,
+): Promise<void> {
+  const branch = object(
+    await jsonCall(config, fetcher, `/branches/${STATE_BRANCH}`),
+    "protected State branch",
+  );
+  if (
+    branch.name !== STATE_BRANCH ||
+    branch.protected !== true ||
+    nested(branch, ["commit", "sha"]) !== expectedCommit
+  ) {
+    throw new GitHubStateError(
+      503,
+      "protected State branch does not bind the exact qualified commit",
+    );
+  }
 }
 
 async function assertResultOwnerContractAt(
@@ -675,6 +697,21 @@ export class GitHubStateRepository {
 
   async assertWritable(): Promise<string> {
     const snapshot = await this.#authorizedSnapshot();
+    if ((await updateReference(this.#config, this.#fetcher, snapshot.headSha)) !== "applied") {
+      throw new GitHubStateError(409, "State branch rejected a same-commit write probe");
+    }
+    return snapshot.headSha;
+  }
+
+  async assertProductionQualifiedWritable(): Promise<string> {
+    if (this.#config.repository.toLowerCase() !== PRODUCTION_STATE_REPOSITORY) {
+      throw new GitHubStateError(503, "production State qualification targeted the wrong repository");
+    }
+    const snapshot = await this.#authorizedSnapshot();
+    await Promise.all([
+      assertProtectedBranchAt(this.#config, this.#fetcher, snapshot.headSha),
+      assertResultOwnerContractAt(this.#config, this.#fetcher, snapshot.headSha),
+    ]);
     if ((await updateReference(this.#config, this.#fetcher, snapshot.headSha)) !== "applied") {
       throw new GitHubStateError(409, "State branch rejected a same-commit write probe");
     }

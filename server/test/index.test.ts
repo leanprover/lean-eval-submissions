@@ -157,6 +157,66 @@ describe("Worker routing", () => {
     upstream.mockRestore();
   });
 
+  it("returns a closed protected-contract proof for production readiness", async () => {
+    const contract = "0c8759946df0da1338a0c73bf5bd75d182038286";
+    const blobs = [
+      ["docs/result-owner-operational-indexes.md", "2f784609f9117caf74cb7042e9ea45732925d77b"],
+      ["schema/result-identity-guard-v1.schema.json", "1620b6d8aed37f652958ac86e311c00578edc8b4"],
+      ["schema/result-overlay-view-v1.schema.json", "1b50a92a76891bd21e0b67f7f40ab9c86d50beed"],
+      ["schema/result-overlays-v1.schema.json", "41d4078133d6854bf8de839873a3f58e9ba1afd1"],
+      ["schema/result-source-record-index-v1.schema.json", "4543225e0833af00913e436185532a769debebc1"],
+      ["schema/state-event-v1.schema.json", "fcb267369516ce4ff5344ca75529c1d280970b0a"],
+      ["scripts/materialize_state.py", "24c0569ef69c4f7e24283d8d39b88f2055a33b77"],
+      ["scripts/result_owner_indexes.py", "c07c29a81eb2ca5058563a8411c26f9358bde3e4"],
+      ["scripts/validate_state.py", "b23380497da0b3b85d555b92af9eb350441e1977"],
+    ] as const;
+    const replies = [
+      Response.json({ permissions: { push: true } }),
+      Response.json({ object: { sha: contract } }),
+      Response.json({ tree: { sha: "2".repeat(40) } }),
+      Response.json({ name: "main", protected: true, commit: { sha: contract } }),
+      ...blobs.map(([path, sha]) => Response.json({ type: "file", path, sha })),
+      Response.json({ ref: "refs/heads/main", object: { sha: contract } }),
+    ];
+    const upstream = vi.spyOn(globalThis, "fetch").mockImplementation(() => {
+      const reply = replies.shift();
+      if (!reply) return Promise.reject(new Error("unexpected GitHub request"));
+      return Promise.resolve(reply);
+    });
+    const response = await handleRequest(
+      new Request("https://example.test/readyz", {
+        method: "POST",
+        headers: { authorization: "Bearer readiness-secret" },
+      }),
+      {
+        ...ENV,
+        DEPLOYMENT_ENVIRONMENT: "production",
+        STATE_REPOSITORY: "leanprover/lean-eval-state",
+        GITHUB_STATE_TOKEN: "state-secret",
+        READINESS_TOKEN: "readiness-secret",
+      },
+      LIFECYCLE,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      status: "state_writer_ready",
+      environment: "production",
+      intake_configured_enabled: false,
+      intake_effective_enabled: false,
+      intake_enabled: false,
+      intake_enablement_mode: "disabled",
+      intake_lease_expires_at: null,
+      state_branch_protected: true,
+      state_commit: contract,
+      state_contract_commit: contract,
+      state_contract_verified: true,
+      state_event_schema_sha256:
+        "bfacfb44083c60372cef6b82637ff523a9454d49dc3e731fe97056f7402a6e4a",
+    });
+    expect(upstream).toHaveBeenCalledTimes(14);
+    upstream.mockRestore();
+  });
+
   it("returns JSON 404s", async () => {
     const response = await handleRequest(new Request("https://example.test/nope"), ENV, LIFECYCLE);
     expect(response.status).toBe(404);

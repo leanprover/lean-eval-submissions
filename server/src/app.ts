@@ -307,8 +307,11 @@ async function readiness(
   try {
     const repository = stateRepository(env);
     if (verifyWrite) {
-      const stateCommit = await repository.assertWritable();
-      return json({
+      const production = env.DEPLOYMENT_ENVIRONMENT === "production";
+      const stateCommit = production
+        ? await repository.assertProductionQualifiedWritable()
+        : await repository.assertWritable();
+      const response: Record<string, unknown> = {
         status: "state_writer_ready",
         environment: env.DEPLOYMENT_ENVIRONMENT,
         intake_configured_enabled: intake.configured,
@@ -317,7 +320,15 @@ async function readiness(
         intake_enablement_mode: intake.mode,
         intake_lease_expires_at: intake.leaseExpiresAt,
         state_commit: stateCommit,
-      });
+      };
+      if (production) {
+        response.state_branch_protected = true;
+        response.state_contract_commit = RESULT_OWNER_STATE_CONTRACT_COMMIT;
+        response.state_contract_verified = true;
+        response.state_event_schema_sha256 =
+          "bfacfb44083c60372cef6b82637ff523a9454d49dc3e731fe97056f7402a6e4a";
+      }
+      return json(response);
     }
     await repository.assertAvailable();
     const response = json({ status: "ready", environment: env.DEPLOYMENT_ENVIRONMENT });
