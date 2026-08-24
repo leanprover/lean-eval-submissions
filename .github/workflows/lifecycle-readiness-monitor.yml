@@ -12,8 +12,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  authorize-manual:
+    if: github.event_name == 'workflow_dispatch'
+    permissions: {}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+    steps:
+      - name: Require an upstream protected-main dispatch
+        env:
+          EVENT_REF: ${{ github.ref }}
+          EVENT_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$EVENT_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$EVENT_REF" = refs/heads/main
+
   verify:
-    if: github.ref == 'refs/heads/main'
+    needs: authorize-manual
+    if: >-
+      always() &&
+      ((github.event_name == 'workflow_dispatch' &&
+      needs.authorize-manual.result == 'success') ||
+      (github.event_name == 'schedule' &&
+      github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -156,8 +177,13 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   alert:
-    if: always() && github.ref == 'refs/heads/main'
-    needs: verify
+    needs: [authorize-manual, verify]
+    if: >-
+      always() &&
+      ((github.event_name == 'workflow_dispatch' &&
+      needs.authorize-manual.result == 'success') ||
+      (github.event_name == 'schedule' &&
+      github.ref == 'refs/heads/main'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
