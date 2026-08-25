@@ -20,6 +20,8 @@
           "GITHUB_OAUTH_CLIENT_SECRET",
           "GITHUB_STATE_TOKEN",
           "LIFECYCLE_CALLBACK_TOKEN",
+          "MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET",
+          "MODEL_IDENTITY_QUALIFICATION_TOKEN",
           "READINESS_TOKEN"
         ]
       },
@@ -48,6 +50,10 @@
         {
           "binding": "GITHUB_BROKER",
           "service": "lean-eval-github-broker-staging"
+        },
+        {
+          "binding": "MODEL_IDENTITY_QUALIFICATION_EXECUTOR",
+          "service": "lean-eval-model-identity-qualification-executor-staging"
         }
       ],
       "triggers": { "crons": ["* * * * *"] },

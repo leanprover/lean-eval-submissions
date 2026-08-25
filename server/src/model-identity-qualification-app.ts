@@ -1,8 +1,17 @@
 import type {
   ModelIdentityQualificationJournal,
+  QualificationApiRequestPlan,
   QualificationJournalStatus,
+  QualificationOperation,
   QualificationRecoveryPlan,
+  QualificationStepPlan,
 } from "./model-identity-qualification-journal";
+import {
+  canonicalQualificationValue,
+  qualificationApiRequestDigest,
+  QUALIFICATION_OPERATIONS,
+} from "./model-identity-qualification-journal";
+import { signQualificationExecutorCapability } from "./model-identity-qualification-capability";
 import {
   qualificationStateMutation,
   qualificationStateSnapshot,
@@ -16,11 +25,7 @@ import {
   type AgentSession,
   type BrowserSession,
 } from "./auth";
-import { isUuidV7 } from "./api-contract";
-import {
-  modelIdentityId,
-  STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
-} from "./model-identity";
+import { STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT } from "./model-identity";
 
 const CONFIRM_QUALIFICATION = "QUALIFY_AND_RESTORE_MODEL_IDENTITY_STAGING";
 const CONFIRM_RESTORATION = "RESTORE_MODEL_IDENTITY_STAGING_JOURNAL";
@@ -45,6 +50,8 @@ export type ModelIdentityQualificationEnv = Readonly<{
   GITHUB_STATE_TOKEN?: string;
   AUTH_TOKEN_SECRET?: string;
   MODEL_IDENTITY_QUALIFICATION_TOKEN?: string;
+  MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET?: string;
+  MODEL_IDENTITY_QUALIFICATION_EXECUTOR?: Fetcher;
   MODEL_IDENTITY_QUALIFICATION_JOURNAL?: DurableObjectNamespace<ModelIdentityQualificationJournal>;
 }>;
 
@@ -53,7 +60,20 @@ export type ModelIdentityQualificationDependencies = Readonly<{
   modelApiRequest?: (
     request: Request,
     maintainer: QualificationIdentity,
+    occurredAtMilliseconds: number,
+    context: QualificationExecutionContext,
   ) => Promise<Response>;
+}>;
+
+type QualificationExecutionContext = Readonly<{
+  deployed_commit: string;
+  run_id: string;
+  run_attempt: 1;
+  journal_id: string;
+  journal_revision: number;
+  operation: QualificationOperation;
+  plan_digest: string;
+  request_index: number;
 }>;
 
 export type QualificationIdentity = Readonly<{ github_id: number; login: string }>;
@@ -71,10 +91,7 @@ type RestoreRequest = Readonly<{
   expected_state_tree: string;
 }>;
 
-type StepOperation =
-  | "oauth_session_identity"
-  | "agent_session_identity"
-  | "owner_request";
+type StepOperation = QualificationOperation;
 
 type StepRequest = Readonly<{
   schema_version: 2;
@@ -88,7 +105,6 @@ type StepRequest = Readonly<{
   expected_state_commit: string;
   expected_state_tree: string;
   intent: unknown;
-  request: unknown;
 }>;
 
 function json(body: unknown, status = 200): Response {
@@ -165,7 +181,11 @@ function exactDarkStaging(env: ModelIdentityQualificationEnv): boolean {
     new TextEncoder().encode(env.GITHUB_STATE_TOKEN).byteLength >= 32 &&
     env.AUTH_TOKEN_SECRET !== undefined &&
     new TextEncoder().encode(env.AUTH_TOKEN_SECRET).byteLength >= 32 &&
-    env.MODEL_IDENTITY_QUALIFICATION_JOURNAL !== undefined;
+    env.MODEL_IDENTITY_QUALIFICATION_JOURNAL !== undefined &&
+    env.MODEL_IDENTITY_QUALIFICATION_EXECUTOR !== undefined &&
+    env.MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET !== undefined &&
+    new TextEncoder().encode(env.MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET)
+      .byteLength >= 32;
 }
 
 function positiveRevision(value: unknown): value is number {
@@ -246,15 +266,66 @@ async function acquire(
 async function journalStatus(
   body: Record<string, unknown>,
   env: ModelIdentityQualificationEnv,
+  dependencies: ModelIdentityQualificationDependencies,
 ): Promise<Response> {
   exactFields(body, ["run_attempt", "run_id", "schema_version"]);
   const { runId } = runIdentity(body);
   if (body.schema_version !== 2) throw new TypeError("qualification status request is invalid");
-  const journal = await stub(env).readStatus(runId);
+  const journal = await reconcilePendingJournal(runId, env, dependencies);
   if (journal.deployed_commit !== env.DEPLOYED_COMMIT) {
     throw new QualificationStateError("foreign_state_movement");
   }
   return json(journal);
+}
+
+async function reconcilePendingJournal(
+  runId: string,
+  env: ModelIdentityQualificationEnv,
+  dependencies: ModelIdentityQualificationDependencies,
+): Promise<QualificationJournalStatus> {
+  const journal = await stub(env).readStatus(runId);
+  if (journal.lease_status !== "active") return journal;
+  const recovery = JSON.parse(
+    await stub(env).readRecoveryPlan(runId),
+  ) as QualificationRecoveryPlan;
+  const pending = recovery.pending_step;
+  if (pending === null) return journal;
+  const snapshot = await qualificationStateSnapshot(
+    stateConfig(env),
+    stateFetch(dependencies),
+  );
+  if (
+    snapshot.head_commit === pending.expected_state_commit &&
+    snapshot.head_tree === pending.expected_state_tree
+  ) {
+    return stub(env).abandonNonMutatingStep(
+      runId,
+      recovery.journal_id,
+      recovery.journal_revision,
+    );
+  }
+  const message = pending.plan.expected_commit_messages[0];
+  if (
+    !pending.plan.mutation_expected ||
+    pending.plan.expected_commit_messages.length !== 1 ||
+    message === undefined
+  ) throw new QualificationStateError("foreign_state_movement");
+  const mutation = await qualificationStateMutation(
+    stateConfig(env),
+    stateFetch(dependencies),
+    {
+      expectedParent: pending.expected_state_commit,
+      expectedMessage: message,
+      expectedDocuments: pending.plan.expected_documents,
+    },
+  );
+  return stub(env).reconcilePendingMutation(
+    runId,
+    recovery.journal_id,
+    recovery.journal_revision,
+    mutation.state_commit,
+    mutation.state_tree,
+  );
 }
 
 function restoreRequest(body: Record<string, unknown>, env: ModelIdentityQualificationEnv): RestoreRequest {
@@ -295,16 +366,13 @@ function stepRequest(body: Record<string, unknown>, env: ModelIdentityQualificat
   exactFields(body, [
     "confirmation", "deployed_commit", "expected_journal_revision",
     "expected_state_commit", "expected_state_tree", "intent", "journal_id",
-    "operation", "request", "run_attempt", "run_id", "schema_version",
+    "operation", "run_attempt", "run_id", "schema_version",
   ]);
   const { runId, runAttempt } = runIdentity(body);
   if (
     body.schema_version !== 2 ||
-    (
-      body.operation !== "oauth_session_identity" &&
-      body.operation !== "agent_session_identity" &&
-      body.operation !== "owner_request"
-    ) ||
+    typeof body.operation !== "string" ||
+    !QUALIFICATION_OPERATIONS.includes(body.operation as QualificationOperation) ||
     body.confirmation !== CONFIRM_QUALIFICATION ||
     body.deployed_commit !== env.DEPLOYED_COMMIT ||
     typeof body.journal_id !== "string" ||
@@ -317,7 +385,7 @@ function stepRequest(body: Record<string, unknown>, env: ModelIdentityQualificat
   ) throw new TypeError("qualification step request is invalid");
   return {
     schema_version: 2,
-    operation: body.operation,
+    operation: body.operation as QualificationOperation,
     confirmation: CONFIRM_QUALIFICATION,
     deployed_commit: env.DEPLOYED_COMMIT,
     run_id: runId,
@@ -327,7 +395,6 @@ function stepRequest(body: Record<string, unknown>, env: ModelIdentityQualificat
     expected_state_commit: body.expected_state_commit,
     expected_state_tree: body.expected_state_tree,
     intent: body.intent,
-    request: body.request,
   };
 }
 
@@ -335,6 +402,17 @@ const SESSION_HEADERS = {
   oauth_session_identity: "x-lean-eval-oauth-session",
   agent_session_identity: "x-lean-eval-agent-session",
   owner_request: "x-lean-eval-oauth-session",
+  maintainer_approve: "x-lean-eval-maintainer-session",
+  maintainer_reject: "x-lean-eval-maintainer-session",
+  alias_assignment: "x-lean-eval-agent-session",
+  identity_rename: "x-lean-eval-oauth-session",
+  complete_graph_consolidation: "x-lean-eval-agent-session",
+  chained_terminal_retry: "x-lean-eval-agent-session",
+  component_cap_refusal: "x-lean-eval-oauth-session",
+  idempotent_retry: "x-lean-eval-oauth-session",
+  cross_route_event_collision: "x-lean-eval-oauth-session",
+  cross_owner_denial: "x-lean-eval-cross-owner-session",
+  maximal_contention_measurement: "x-lean-eval-agent-session",
 } as const;
 
 function stepCredential(request: Request, operation: StepOperation): string {
@@ -369,21 +447,12 @@ function identity(value: unknown): QualificationIdentity {
   return { github_id: input.github_id, login: input.login };
 }
 
-function emptyStepRequest(value: unknown): void {
-  exactFields(object(value), []);
-}
-
-function ownerRequest(value: unknown): { event_id: string; display_name: string } {
-  const input = object(value);
-  exactFields(input, ["display_name", "event_id"]);
-  if (
-    typeof input.event_id !== "string" ||
-    !isUuidV7(input.event_id) ||
-    typeof input.display_name !== "string" ||
-    input.display_name.length < 1 ||
-    new TextEncoder().encode(input.display_name).byteLength > 200
-  ) throw new TypeError("qualification owner request is invalid");
-  return { event_id: input.event_id, display_name: input.display_name };
+function exactIntent(left: unknown, right: unknown): boolean {
+  try {
+    return canonicalQualificationValue(left) === canonicalQualificationValue(right);
+  } catch {
+    return false;
+  }
 }
 
 async function responseBody(response: Response): Promise<Record<string, unknown>> {
@@ -399,15 +468,62 @@ async function responseBody(response: Response): Promise<Record<string, unknown>
   }
 }
 
+async function invokeQualificationKernel(
+  env: ModelIdentityQualificationEnv,
+  dependencies: ModelIdentityQualificationDependencies,
+  operation: QualificationApiRequestPlan,
+  session: string,
+  maintainer: QualificationIdentity,
+  context: QualificationExecutionContext,
+): Promise<Response> {
+  if (dependencies.modelApiRequest !== undefined) {
+    return dependencies.modelApiRequest(
+      new Request(`https://qualification.invalid${operation.path}`, {
+        method: operation.method,
+        headers: {
+          authorization: `Bearer ${session}`,
+          "content-type": "application/json",
+          "idempotency-key": operation.event_id,
+        },
+        body: JSON.stringify(operation.body),
+      }),
+      maintainer,
+      Date.parse(operation.occurred_at),
+      context,
+    );
+  }
+  const executor = env.MODEL_IDENTITY_QUALIFICATION_EXECUTOR;
+  const secret = env.MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET;
+  if (executor === undefined || secret === undefined) {
+    throw new QualificationStateError("provider_unavailable");
+  }
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const capability = await signQualificationExecutorCapability(secret, {
+    schema_version: 1,
+    kind: "model_identity_qualification_executor",
+    ...context,
+    request_digest: await qualificationApiRequestDigest(operation),
+    issued_at: issuedAt,
+    expires_at: issuedAt + 60,
+  });
+  return executor.fetch("https://qualification-executor.invalid/internal/v1/execute", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ capability, maintainer, request: operation, session }),
+  });
+}
+
 async function proveSession(
   request: Request,
   step: StepRequest,
   env: ModelIdentityQualificationEnv,
 ): Promise<Response> {
-  if (step.operation === "owner_request") {
+  if (
+    step.operation !== "oauth_session_identity" &&
+    step.operation !== "agent_session_identity"
+  ) {
     throw new TypeError("qualification session operation is invalid");
   }
-  emptyStepRequest(step.request);
   const journal = await stub(env).readStatus(step.run_id);
   const plan = JSON.parse(await stub(env).readRecoveryPlan(step.run_id)) as QualificationRecoveryPlan;
   if (
@@ -416,7 +532,7 @@ async function proveSession(
     journal.journal_revision !== step.expected_journal_revision ||
     journal.current_state_commit !== step.expected_state_commit ||
     journal.current_state_tree !== step.expected_state_tree ||
-    JSON.stringify(plan.intent) !== JSON.stringify(step.intent)
+    !exactIntent(plan.intent, step.intent)
   ) throw new QualificationStateError("foreign_state_movement");
   const owner = identity(object(step.intent).owner);
   const secret = env.AUTH_TOKEN_SECRET;
@@ -428,23 +544,6 @@ async function proveSession(
   if (authenticated.github_id !== owner.github_id || authenticated.login !== owner.login) {
     throw new AuthError("qualification session identity changed");
   }
-  const route = step.operation === "oauth_session_identity"
-    ? "session/oauth-owner"
-    : "session/agent-owner";
-  const credentialRole = step.operation === "oauth_session_identity"
-    ? "oauth_owner"
-    : "agent_owner";
-  const assertions = step.operation === "oauth_session_identity"
-    ? {
-        browser_session_signature_verified: true,
-        exact_identity_verified: true,
-        session_unexpired: true,
-      }
-    : {
-        agent_source_commit_bound: true,
-        browser_session_signature_verified: true,
-        exact_identity_verified: true,
-      };
   const reservation = {
     run_id: step.run_id,
     run_attempt: step.run_attempt,
@@ -453,12 +552,17 @@ async function proveSession(
     expected_state_commit: step.expected_state_commit,
     expected_state_tree: step.expected_state_tree,
     operation: step.operation,
-    operation_request: step,
   };
   const reserved = await stub(env).reserveStep(reservation);
   if (reserved.kind === "completed") {
     return json(JSON.parse(reserved.receipt_json) as unknown);
   }
+  const durablePlan = JSON.parse(reserved.plan_json) as QualificationStepPlan;
+  if (
+    durablePlan.operation !== step.operation ||
+    !exactIntent(durablePlan.actor, owner) ||
+    durablePlan.api_requests.length !== 0
+  ) throw new QualificationStateError("foreign_state_movement");
   const receipt = {
     schema_version: 2,
     status: "model_identity_qualification_step_verified",
@@ -478,14 +582,14 @@ async function proveSession(
     cas_attempts: null,
     proof: {
       operation: step.operation,
-      route,
-      credential_roles: [credentialRole],
-      actor: owner,
-      http_status: 200,
-      event_ids: [],
-      model_ids: [],
-      alias_keys: [],
-      assertions,
+      route: durablePlan.route,
+      credential_roles: durablePlan.credential_roles,
+      actor: durablePlan.actor,
+      http_status: durablePlan.expected_http_status,
+      event_ids: durablePlan.event_ids,
+      model_ids: durablePlan.model_ids,
+      alias_keys: durablePlan.alias_keys,
+      assertions: durablePlan.assertions,
     },
   };
   const receiptJson = await stub(env).completeStep({
@@ -507,19 +611,19 @@ async function requestOwnerIdentity(
     throw new TypeError("qualification owner operation is invalid");
   }
   const journal = await stub(env).readStatus(step.run_id);
-  const plan = JSON.parse(await stub(env).readRecoveryPlan(step.run_id)) as QualificationRecoveryPlan;
+  const recovery = JSON.parse(
+    await stub(env).readRecoveryPlan(step.run_id),
+  ) as QualificationRecoveryPlan;
   if (
     journal.deployed_commit !== env.DEPLOYED_COMMIT ||
     journal.journal_id !== step.journal_id ||
     journal.journal_revision !== step.expected_journal_revision ||
     journal.current_state_commit !== step.expected_state_commit ||
     journal.current_state_tree !== step.expected_state_tree ||
-    JSON.stringify(plan.intent) !== JSON.stringify(step.intent)
+    !exactIntent(recovery.intent, step.intent)
   ) throw new QualificationStateError("foreign_state_movement");
   const owner = identity(object(step.intent).owner);
   const maintainer = identity(object(step.intent).maintainer);
-  const operation = ownerRequest(step.request);
-  const expectedModelId = await modelIdentityId(operation.event_id);
   const secret = env.AUTH_TOKEN_SECRET;
   if (secret === undefined) throw new AuthError("qualification session verifier is unavailable");
   const credential = stepCredential(request, step.operation);
@@ -531,13 +635,6 @@ async function requestOwnerIdentity(
   if (authenticated.github_id !== owner.github_id || authenticated.login !== owner.login) {
     throw new AuthError("qualification session identity changed");
   }
-  const operationRequest = {
-    actor: owner,
-    body: { display_name: operation.display_name },
-    idempotency_key: operation.event_id,
-    method: "POST",
-    path: "/api/v1/model-identities",
-  };
   const reservation = {
     run_id: step.run_id,
     run_attempt: step.run_attempt,
@@ -546,53 +643,74 @@ async function requestOwnerIdentity(
     expected_state_commit: step.expected_state_commit,
     expected_state_tree: step.expected_state_tree,
     operation: step.operation,
-    operation_request: operationRequest,
   };
   const reserved = await stub(env).reserveStep(reservation);
   if (reserved.kind === "completed") {
     return json(JSON.parse(reserved.receipt_json) as unknown);
   }
-  if (plan.pending_step === null) {
-    const before = await qualificationStateSnapshot(
-      stateConfig(env),
-      stateFetch(dependencies),
-    );
-    if (
-      before.head_commit !== step.expected_state_commit ||
-      before.head_tree !== step.expected_state_tree
-    ) throw new QualificationStateError("foreign_state_movement");
+  const plan = JSON.parse(reserved.plan_json) as QualificationStepPlan;
+  const operationRequest = plan.api_requests[0];
+  if (
+    plan.operation !== "owner_request" ||
+    operationRequest === undefined ||
+    plan.api_requests.length !== 1 ||
+    operationRequest.credential_role !== "oauth_owner" ||
+    !exactIntent(operationRequest.actor, owner) ||
+    plan.expected_commit_messages.length !== 1
+  ) {
+    throw new QualificationStateError("foreign_state_movement");
   }
-  const invoke = dependencies.modelApiRequest;
-  if (invoke === undefined) throw new QualificationStateError("provider_unavailable");
-  const apiResponse = await invoke(new Request(
-    `https://qualification.invalid${operationRequest.path}`,
-    {
-      method: operationRequest.method,
-      headers: {
-        authorization: `Bearer ${credential}`,
-        "content-type": "application/json",
-        "idempotency-key": operationRequest.idempotency_key,
-      },
-      body: JSON.stringify(operationRequest.body),
-    },
-  ), maintainer);
-  if (apiResponse.status !== 200 && apiResponse.status !== 201) {
-    throw new QualificationStateError("provider_unavailable");
-  }
-  const outcome = await responseBody(apiResponse);
-  exactFields(outcome, ["model_id", "status"]);
-  const expectedStatus = apiResponse.status === 201
-    ? "identity_requested"
-    : "identity_already_requested";
-  if (outcome.model_id !== expectedModelId || outcome.status !== expectedStatus) {
-    throw new QualificationStateError("provider_unavailable");
+  const before = await qualificationStateSnapshot(
+    stateConfig(env),
+    stateFetch(dependencies),
+  );
+  let apiStatus = plan.expected_http_status;
+  if (
+    before.head_commit === step.expected_state_commit &&
+    before.head_tree === step.expected_state_tree
+  ) {
+    let apiResponse: Response;
+    try {
+      apiResponse = await invokeQualificationKernel(
+        env,
+        dependencies,
+        operationRequest,
+        credential,
+        maintainer,
+        {
+          deployed_commit: env.DEPLOYED_COMMIT,
+          run_id: step.run_id,
+          run_attempt: step.run_attempt,
+          journal_id: step.journal_id,
+          journal_revision: step.expected_journal_revision,
+          operation: step.operation,
+          plan_digest: reserved.plan_digest,
+          request_index: 0,
+        },
+      );
+    } catch {
+      apiResponse = new Response(null, { status: plan.expected_http_status });
+    }
+    apiStatus = apiResponse.status;
+    if (apiStatus !== plan.expected_http_status) {
+      throw new QualificationStateError("provider_unavailable");
+    }
+    if (apiResponse.body !== null) {
+      const outcome = await responseBody(apiResponse);
+      exactFields(outcome, ["model_id", "status"]);
+      if (
+        outcome.model_id !== plan.model_ids[0] ||
+        outcome.status !== "identity_requested"
+      ) throw new QualificationStateError("provider_unavailable");
+    }
   }
   const mutation = await qualificationStateMutation(
     stateConfig(env),
     stateFetch(dependencies),
     {
       expectedParent: step.expected_state_commit,
-      expectedMessage: `Request model identity ${expectedModelId}`,
+      expectedMessage: plan.expected_commit_messages[0] ?? "",
+      expectedDocuments: plan.expected_documents,
     },
   );
   const receipt = {
@@ -614,20 +732,14 @@ async function requestOwnerIdentity(
     cas_attempts: null,
     proof: {
       operation: step.operation,
-      route: operationRequest.path,
-      credential_roles: ["oauth_owner"],
-      actor: owner,
-      http_status: apiResponse.status,
-      event_ids: [operation.event_id],
-      model_ids: [expectedModelId],
-      alias_keys: [],
-      assertions: {
-        exact_idempotency_key_verified: true,
-        exact_identity_verified: true,
-        fixed_public_api_kernel_invoked: true,
-        idempotent_response: apiResponse.status === 200,
-        single_parent_state_commit_verified: true,
-      },
+      route: plan.route,
+      credential_roles: plan.credential_roles,
+      actor: plan.actor,
+      http_status: apiStatus,
+      event_ids: plan.event_ids,
+      model_ids: plan.model_ids,
+      alias_keys: plan.alias_keys,
+      assertions: plan.assertions,
     },
   };
   const receiptJson = await stub(env).completeStep({
@@ -758,7 +870,9 @@ export async function handleModelIdentityQualificationRequest(
         dependencies,
       );
     }
-    if (!("operation" in body)) return await journalStatus(body, env);
+    if (!("operation" in body)) {
+      return await journalStatus(body, env, dependencies);
+    }
     return json({ error: "not_found" }, 404);
   } catch (error) {
     if (error instanceof TypeError) return json({ error: "invalid_request" }, 400);

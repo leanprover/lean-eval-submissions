@@ -204,6 +204,8 @@ export type RuntimeEnv = Omit<
     MODEL_IDENTITY_MAINTAINERS?: string;
     MODEL_IDENTITY_STATE_CONTRACT_COMMIT?: string;
     MODEL_IDENTITY_QUALIFICATION_TOKEN?: string;
+    MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET?: string;
+    MODEL_IDENTITY_QUALIFICATION_EXECUTOR?: Fetcher;
     STATE_REPOSITORY: string;
   }>;
 
@@ -2236,6 +2238,39 @@ function errorResponse(error: unknown): Response {
   return json({ error: "internal_error" }, 500);
 }
 
+export async function executeModelIdentityQualificationKernel(
+  request: Request,
+  env: RuntimeEnv,
+  dependencies: ApiDependencies,
+  maintainer: MaintainerIdentity,
+  occurredAtMilliseconds: number,
+): Promise<Response> {
+  const path = new URL(request.url).pathname;
+  const isOwnerRoute = path === "/api/v1/model-identities" ||
+    /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/(?:aliases|consolidations|name)$/.test(path);
+  const isMaintainerRoute =
+    /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/decisions$/.test(path);
+  if (
+    (!isOwnerRoute && !isMaintainerRoute) ||
+    !Number.isSafeInteger(occurredAtMilliseconds) ||
+    occurredAtMilliseconds < 0
+  ) return json({ error: "not_found" }, 404);
+  try {
+    return await apiRequest(
+      request,
+      {
+        ...env,
+        MODEL_IDENTITY_OWNER_API_ENABLED: "true",
+        MODEL_IDENTITY_MAINTAINER_API_ENABLED: "true",
+        MODEL_IDENTITY_MAINTAINERS: JSON.stringify([maintainer]),
+      },
+      { ...dependencies, now: () => occurredAtMilliseconds },
+    );
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
 export async function handleRequest(
   request: Request,
   env: RuntimeEnv,
@@ -2291,16 +2326,6 @@ export async function handleRequest(
         ...(dependencies.qualificationStateFetch === undefined
           ? {}
           : { stateFetch: dependencies.qualificationStateFetch }),
-        modelApiRequest: async (modelRequest, maintainer) => apiRequest(
-          modelRequest,
-          {
-            ...env,
-            MODEL_IDENTITY_OWNER_API_ENABLED: "true",
-            MODEL_IDENTITY_MAINTAINER_API_ENABLED: "true",
-            MODEL_IDENTITY_MAINTAINERS: JSON.stringify([maintainer]),
-          },
-          dependencies,
-        ),
       },
     );
   }

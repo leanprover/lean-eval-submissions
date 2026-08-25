@@ -92,19 +92,21 @@ describe("model identity qualification durable journal", () => {
       expected_journal_revision: 1,
       expected_state_commit: COMMIT,
       expected_state_tree: TREE,
-      operation: "owner_request",
-      operation_request: { event_id: "0198abcd-0000-7000-8000-000000000001" },
+      operation: "oauth_session_identity",
     };
-    await expect(stub.reserveStep(reservation)).resolves.toEqual({
+    const reserved = await stub.reserveStep(reservation);
+    expect(reserved).toMatchObject({
       kind: "reserved",
       journal: acquired,
     });
+    if (reserved.kind !== "reserved") throw new Error("step was not reserved");
+    expect(reserved.plan_digest).toMatch(/^[0-9a-f]{64}$/);
     await runInDurableObject(stub, async (instance) => {
-      await expect(instance.reserveStep({ ...reservation, operation: "identity_rename" }))
-        .rejects.toThrow("another pending step");
+      await expect(instance.reserveStep({ ...reservation, operation: "agent_session_identity" }))
+        .rejects.toThrow("outside the exact ordered proof sequence");
     });
 
-    const receipt = { operation: "owner_request", status: "verified" };
+    const receipt = { operation: "oauth_session_identity", status: "verified" };
     await expect(stub.completeStep({
       reservation,
       state_commit: NEXT_COMMIT,
@@ -130,6 +132,73 @@ describe("model identity qualification durable journal", () => {
     });
   });
 
+  it("allocates one credential-free immutable owner plan in the exact proof order", async () => {
+    const stub = journal(`owner-plan-${crypto.randomUUID()}`);
+    const acquired = await stub.acquire(acquisition("2501"));
+    let revision = 1;
+    for (const operation of [
+      "oauth_session_identity",
+      "agent_session_identity",
+    ] as const) {
+      const reservation: QualificationStepReservation = {
+        run_id: "2501",
+        run_attempt: 1,
+        journal_id: acquired.journal_id,
+        expected_journal_revision: revision,
+        expected_state_commit: COMMIT,
+        expected_state_tree: TREE,
+        operation,
+      };
+      const reserved = await stub.reserveStep(reservation);
+      if (reserved.kind !== "reserved") throw new Error("session step was not reserved");
+      await stub.completeStep({
+        reservation,
+        state_commit: COMMIT,
+        state_tree: TREE,
+        receipt: { operation },
+      });
+      revision += 1;
+    }
+    const reservation: QualificationStepReservation = {
+      run_id: "2501",
+      run_attempt: 1,
+      journal_id: acquired.journal_id,
+      expected_journal_revision: revision,
+      expected_state_commit: COMMIT,
+      expected_state_tree: TREE,
+      operation: "owner_request",
+    };
+    const first = await stub.reserveStep(reservation);
+    const retry = await stub.reserveStep(reservation);
+    if (first.kind !== "reserved" || retry.kind !== "reserved") {
+      throw new Error("owner step was not reserved");
+    }
+    expect(retry.plan_digest).toBe(first.plan_digest);
+    expect(retry.plan_json).toBe(first.plan_json);
+    const plan = JSON.parse(first.plan_json) as {
+      api_requests: {
+        actor: { github_id: number; login: string };
+        credential_role: string;
+        event_id: string;
+        occurred_at: string;
+      }[];
+      expected_documents: Record<string, unknown>;
+    };
+    expect(plan.api_requests).toHaveLength(1);
+    expect(plan.api_requests[0]).toMatchObject({
+      actor: { github_id: 1, login: "owner" },
+      credential_role: "oauth_owner",
+    });
+    expect(plan.api_requests[0]?.event_id)
+      .toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+    expect(new Date(plan.api_requests[0]?.occurred_at ?? "").toISOString())
+      .toBe(plan.api_requests[0]?.occurred_at);
+    expect(Object.keys(plan.expected_documents)).toHaveLength(2);
+    expect(first.plan_json).not.toContain('"session":');
+    expect(first.plan_json).not.toContain("authorization");
+    expect(first.plan_json).not.toContain("token");
+  });
+
   it("rejects foreign State movement and records only an exact fast-forward restoration", async () => {
     const stub = journal(`restore-${crypto.randomUUID()}`);
     const acquired = await stub.acquire(acquisition("3001"));
@@ -141,7 +210,6 @@ describe("model identity qualification durable journal", () => {
       expected_state_commit: "f".repeat(40),
       expected_state_tree: TREE,
       operation: "owner_request",
-      operation_request: {},
     };
     await runInDurableObject(stub, async (instance) => {
       await expect(instance.reserveStep(reservation))
