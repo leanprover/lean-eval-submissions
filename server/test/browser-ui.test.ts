@@ -14,6 +14,9 @@ describe("browser intake page", () => {
     expect(body).not.toContain("open-conjectures");
     expect(body).not.toContain('id="source_visibility"');
     expect(body).not.toContain('<option value="public">');
+    expect(body).toContain('<option value="scheduled">scheduled release (default)</option>');
+    expect(body.indexOf('value="scheduled"')).toBeLessThan(body.indexOf('value="withheld"'));
+    expect(body).toContain("release after two calendar months unless you opt out");
     expect(body).not.toContain("<script>");
   });
 
