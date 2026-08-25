@@ -1,33 +1,32 @@
-name: Plan one historical authoritative replay (dark)
+name: Consume one historical authoritative replay (dark)
 
 on:
   workflow_dispatch:
     inputs:
-      confirm_read_only_plan:
-        description: Read production State and produce only a transport-blocked plan
+      confirm_authoritative_replay:
+        description: Deploy the exact qualified executor and consume one public replay task
         required: true
         type: boolean
         default: false
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: lean-eval-historical-authoritative-replay-controller
   cancel-in-progress: false
 
 jobs:
-  read-only-plan:
+  replay-one:
     if: >-
-      inputs.confirm_read_only_plan == true &&
+      inputs.confirm_authoritative_replay == true &&
       vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED == 'true'
     environment: replay-production
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    permissions:
-      contents: read
+    timeout-minutes: 360
     steps:
-      - name: Require exact protected main and the explicit dark gate
+      - name: Require exact protected main and the explicit controller gate
         env:
           GH_TOKEN: ${{ github.token }}
           HISTORICAL_CONTROLLER_ENABLED: ${{ vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED }}
@@ -41,26 +40,11 @@ jobs:
             --jq '[.commit.sha, .protected] | @tsv')
           test "$branch" = "$GITHUB_SHA"$'\ttrue'
 
-      # actions/checkout pinned to v7.0.1.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Normalize the exact submissions remote identity
-        run: |
-          set -euo pipefail
-          observed=$(git config --get-all remote.origin.url)
-          if [ "$observed" != https://github.com/leanprover/lean-eval-submissions ] && \
-             [ "$observed" != https://github.com/leanprover/lean-eval-submissions.git ]; then
-            exit 1
-          fi
-          git remote set-url origin https://github.com/leanprover/lean-eval-submissions.git
-          test "$(git config --get-all remote.origin.url)" = \
-            https://github.com/leanprover/lean-eval-submissions.git
-
-      # The read-only key is intentionally not provisioned in this repository
-      # while the controller variable is dark. It is a separate launch gate.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval-state
@@ -70,17 +54,25 @@ jobs:
           persist-credentials: false
           ssh-key: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
 
-      # actions/setup-python pinned to v7.0.0.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: 22.22.0
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.11.10'
 
-      - name: Install the pinned JSON Schema validator
-        run: >-
-          python -m pip install --disable-pip-version-check --only-binary=:all:
-          --require-hashes -r requirements-jsonschema-workflow.txt
+      - name: Install exact controller dependencies
+        run: |
+          set -euo pipefail
+          npm --prefix server ci
+          python -m pip install --disable-pip-version-check --only-binary=:all: \
+            --require-hashes -r requirements-jsonschema-workflow.txt
 
-      - name: Validate and materialize exact production State
+      - name: Validate State and recover only one stale running attempt
+        id: preflight
         run: |
           set -euo pipefail
           test "$(jq -r .environment state/state.json)" = production
@@ -90,72 +82,277 @@ jobs:
           python state/scripts/state.py --root state validate
           python state/scripts/state.py --root state materialize \
             --output "$RUNNER_TEMP/state-views"
-
-      - name: Refuse to plan around a running historical attempt
-        id: recovery
-        run: |
-          set -euo pipefail
           python scripts/historical_replay_controller.py recover \
-            --events-root state/events \
-            --state-validated \
+            --events-root state/events --state-validated \
             --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
             --output "$RUNNER_TEMP/recovery.json"
-          kind=$(jq -er .kind "$RUNNER_TEMP/recovery.json")
-          echo "kind=$kind" >> "$GITHUB_OUTPUT"
-          if [ "$kind" != busy ] && [ "$kind" != failed ]; then
-            test "$kind" = none
-          fi
+          echo "kind=$(jq -er .kind "$RUNNER_TEMP/recovery.json")" >> "$GITHUB_OUTPUT"
+          echo "state_head=$(git -C state rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Produce only the source-free transport-blocked plan
+      - name: Publish one stale-runner recovery and stop
+        if: steps.preflight.outputs.kind == 'failed'
+        env:
+          STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
+          EXPECTED_STATE_HEAD: ${{ steps.preflight.outputs.state_head }}
+        run: |
+          set -euo pipefail
+          jq .event "$RUNNER_TEMP/recovery.json" > "$RUNNER_TEMP/recovery-event.json"
+          scripts/publish_replay_state_event --environment production \
+            --root state --event "$RUNNER_TEMP/recovery-event.json" \
+            --expected-head "$EXPECTED_STATE_HEAD" \
+            --message "Recover stale historical authoritative replay runner"
+
+      - name: Report a still-running controller and stop
+        if: steps.preflight.outputs.kind == 'busy'
+        run: echo 'A non-stale historical replay is already running; no mutation occurred.' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Plan the exact next qualified public task
         id: plan
-        if: steps.recovery.outputs.kind == 'none'
+        if: steps.preflight.outputs.kind == 'none'
         run: |
           set -euo pipefail
           queue="$RUNNER_TEMP/state-views/historical-public-replay-queue.json"
           test "$(jq -r .schema_version "$queue")" = 2
           test "$(jq -r .environment "$queue")" = production
-          python scripts/historical_replay_controller.py \
-            plan \
-            --queue "$queue" \
-            --repository-root . \
-            --output "$RUNNER_TEMP/historical-authoritative-replay-plan.json"
-          kind=$(jq -er .kind "$RUNNER_TEMP/historical-authoritative-replay-plan.json")
-          if [ "$kind" != empty ] && [ "$kind" != execution ] && [ "$kind" != blocked ]; then
-            exit 1
-          fi
-          test "$(jq -r .transport.status "$RUNNER_TEMP/historical-authoritative-replay-plan.json")" = blocked
-          test "$(jq -r .transport.reason "$RUNNER_TEMP/historical-authoritative-replay-plan.json")" = \
-            historical_public_executor_not_implemented
-          if [ "$kind" = blocked ]; then
-            test "$(jq -r .blocker.status "$RUNNER_TEMP/historical-authoritative-replay-plan.json")" = blocked
-          fi
+          python scripts/historical_replay_controller.py plan \
+            --queue "$queue" --repository-root . \
+            --output "$RUNNER_TEMP/historical-replay-plan.json"
+          kind=$(jq -er .kind "$RUNNER_TEMP/historical-replay-plan.json")
+          case "$kind" in
+            execution)
+              test "$(jq -r .transport.status "$RUNNER_TEMP/historical-replay-plan.json")" = ready
+              test "$(jq -r .transport.contract "$RUNNER_TEMP/historical-replay-plan.json")" = historical_public_executor_v1
+              ;;
+            empty) echo 'The historical replay queue is empty.' >> "$GITHUB_STEP_SUMMARY" ;;
+            blocked) test "$(jq -r .blocker.status "$RUNNER_TEMP/historical-replay-plan.json")" = blocked ;;
+            *) exit 1 ;;
+          esac
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
 
-      - name: Confirm the lane remained read-only and transport-blocked
+      - name: Render and deploy only the exact qualified historical executor
+        id: deploy
+        if: steps.plan.outputs.kind == 'execution'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          config=server/historical-production-wrangler.json
+          python scripts/historical_replay_controller.py render-executor-config \
+            --plan "$RUNNER_TEMP/historical-replay-plan.json" --repository-root . \
+            --account-id "$CLOUDFLARE_ACCOUNT_ID" --source-commit "$GITHUB_SHA" \
+            --output "$config"
+          trap 'rm -f "$config"' EXIT
+          (cd server && npx wrangler deploy \
+            --config historical-production-wrangler.json --env production)
+          (cd server && python ../historical-public-qualification/wait_rollout.py \
+            --config historical-production-wrangler.json \
+            --application lean-eval-historical-public-replay-replaysandbox-production \
+            --output "$RUNNER_TEMP/historical-production-rollout.json")
+          rm -f "$config"
+          trap - EXIT
+          echo 'deployed=true' >> "$GITHUB_OUTPUT"
+
+      - name: Require the exact enabled historical executor before State mutation
+        if: steps.deploy.outputs.deployed == 'true'
+        run: |
+          set -euo pipefail
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 30 --retry 3 --retry-all-errors \
+            https://lean-eval-historical-public-replay.lean-eval.workers.dev/healthz \
+            --output "$RUNNER_TEMP/historical-health.json"
+          python - "$RUNNER_TEMP/historical-health.json" "$RUNNER_TEMP/historical-replay-plan.json" <<'PY'
+          import json, os, pathlib, sys
+          health = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          plan = json.loads(pathlib.Path(sys.argv[2]).read_text())
+          expected = {
+              "status": "ok", "service": "lean-eval-replay-executor",
+              "environment": "production", "deployed_commit": os.environ["GITHUB_SHA"],
+              "replay_enabled": False, "historical_public_replay_enabled": True,
+              "staging_acceptance_enabled": False,
+              "staging_memory_limit_bytes": 12 * 1024**3,
+              "production_memory_gate_bytes": 12 * 1024**3,
+              "reviewed_execution_profile_digest": plan["task"]["execution_profile_digest"],
+              "reviewed_measurement_config_digest": plan["task"]["measurement_config_digest"],
+              "reviewed_vm_image_digest": plan["execution_profile"]["vm_image_digest"],
+          }
+          if health != expected:
+              raise SystemExit("historical executor health differs from the exact plan")
+          PY
+
+      - name: Append replay.started before fetching public source or invoking the executor
+        id: started
+        if: steps.deploy.outputs.deployed == 'true'
+        env:
+          STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
+          EXPECTED_STATE_HEAD: ${{ steps.preflight.outputs.state_head }}
+        run: |
+          set -euo pipefail
+          test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          python scripts/historical_replay_controller.py state-event started \
+            --plan "$RUNNER_TEMP/historical-replay-plan.json" \
+            --queue "$RUNNER_TEMP/state-views/historical-public-replay-queue.json" \
+            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+            --output "$RUNNER_TEMP/started-event.json"
+          state_head=$(scripts/publish_replay_state_event --environment production \
+            --root state --event "$RUNNER_TEMP/started-event.json" \
+            --expected-head "$EXPECTED_STATE_HEAD" \
+            --message "Start one historical authoritative replay")
+          echo source_fetch_failed > "$RUNNER_TEMP/failure-reason"
+          echo 'appended=true' >> "$GITHUB_OUTPUT"
+          echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch exact public source and benchmark and build the runner handoff
+        if: steps.started.outputs.appended == 'true'
+        run: |
+          set -euo pipefail
+          umask 077
+          plan="$RUNNER_TEMP/historical-replay-plan.json"
+          source_kind=$(jq -er .task.source_kind "$plan")
+          source_repository=$(jq -er .task.source_repository "$plan")
+          source_commit=$(jq -er .task.source_commit "$plan")
+          benchmark_commit=$(jq -er .task.benchmark_commit "$plan")
+          authority_commit=$(jq -er .task.authority_commit "$plan")
+          authority_path=$(jq -er .task.authority_path "$plan")
+          qualification_commit=$(jq -er .task.qualification_commit "$plan")
+          qualification_path=$(jq -er .task.qualification_path "$plan")
+          git show "$authority_commit:$authority_path" > "$RUNNER_TEMP/authority-plan.json"
+          git show "$qualification_commit:$qualification_path" > "$RUNNER_TEMP/qualification.json"
+          matrix_path=$(jq -er .profile_matrix_path "$RUNNER_TEMP/qualification.json")
+          contract_path=$(jq -er .runner_contract_path "$RUNNER_TEMP/qualification.json")
+          git show "$qualification_commit:$matrix_path" > "$RUNNER_TEMP/profile-matrix.json"
+          git show "$qualification_commit:$contract_path" > "$RUNNER_TEMP/runner-contract.json"
+
+          git init "$RUNNER_TEMP/source"
+          case "$source_kind" in
+            github_repo) source_url="https://github.com/$source_repository.git" ;;
+            gist)
+              owner=${source_repository%%/*}; gist_id=${source_repository#*/}
+              test "$owner/$gist_id" = "$source_repository"
+              source_url="https://gist.github.com/$owner/$gist_id.git"
+              ;;
+            *) exit 1 ;;
+          esac
+          git -C "$RUNNER_TEMP/source" remote add origin "$source_url"
+          git -C "$RUNNER_TEMP/source" fetch --depth=1 origin "$source_commit"
+          git -C "$RUNNER_TEMP/source" checkout --detach "$source_commit"
+          test "$(git -C "$RUNNER_TEMP/source" rev-parse HEAD)" = "$source_commit"
+          git init "$RUNNER_TEMP/benchmark"
+          git -C "$RUNNER_TEMP/benchmark" remote add origin https://github.com/leanprover/lean-eval.git
+          git -C "$RUNNER_TEMP/benchmark" fetch --depth=1 origin "$benchmark_commit"
+          git -C "$RUNNER_TEMP/benchmark" checkout --detach "$benchmark_commit"
+          test "$(git -C "$RUNNER_TEMP/benchmark" rev-parse HEAD)" = "$benchmark_commit"
+
+          common=(
+            --plan "$RUNNER_TEMP/authority-plan.json"
+            --profile-matrix "$RUNNER_TEMP/profile-matrix.json"
+            --contract "$RUNNER_TEMP/runner-contract.json"
+            --expected-plan-sha256 "$(jq -er .task.authority_sha256 "$plan")"
+            --expected-profile-matrix-sha256 "$(jq -er .profile_matrix_sha256 "$RUNNER_TEMP/qualification.json")"
+            --expected-contract-sha256 "$(jq -er .runner_contract_sha256 "$RUNNER_TEMP/qualification.json")"
+            --request-id "$(jq -er .task.request_id "$plan")"
+            --result-id "$(jq -er .task.result_id "$plan")"
+            --benchmark-repository "$RUNNER_TEMP/benchmark"
+            --source-archive "$RUNNER_TEMP/historical-public-source.tar.gz"
+          )
+          if [ "$source_kind" = github_repo ]; then
+            python scripts/historical_public_runner.py prepare "${common[@]}" \
+              --source-repository "$RUNNER_TEMP/source" \
+              --output "$RUNNER_TEMP/historical-public-request.json"
+          else
+            python scripts/historical_public_gist_source_adapter.py prepare "${common[@]}" \
+              --gist-checkout "$RUNNER_TEMP/source" \
+              --handoff "$RUNNER_TEMP/historical-public-request.json" \
+              --output "$RUNNER_TEMP/gist-adapter-receipt.json"
+          fi
+          rm -rf "$RUNNER_TEMP/source" "$RUNNER_TEMP/benchmark"
+          echo runner_start_failed > "$RUNNER_TEMP/failure-reason"
+
+      - name: Invoke the exact executor without Cloudflare or State write authority
+        id: execute
+        if: steps.started.outputs.appended == 'true'
+        env:
+          HISTORICAL_EXECUTOR_URL: https://lean-eval-historical-public-replay.lean-eval.workers.dev/api/v1/historical-public-replay
+        run: |
+          set -euo pipefail
+          umask 077
+          test -z "${STATE_WRITE_KEY:-}"
+          test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          python scripts/historical_replay_controller.py build-executor-request \
+            --plan "$RUNNER_TEMP/historical-replay-plan.json" \
+            --handoff "$RUNNER_TEMP/historical-public-request.json" \
+            --source-archive "$RUNNER_TEMP/historical-public-source.tar.gz" \
+            --repository-root . --runner-nonce "$(openssl rand -hex 32)" \
+            --output "$RUNNER_TEMP/executor-request.json"
+          echo runner_lost > "$RUNNER_TEMP/failure-reason"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 30 \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-public-replay-production" \
+            --output "$RUNNER_TEMP/oidc.json"
+          token=$(jq -er .value "$RUNNER_TEMP/oidc.json")
+          rm -f "$RUNNER_TEMP/oidc.json"
+          status=$(curl --proto '=https' --tlsv1.2 --silent --show-error --max-time 20400 \
+            --header "Authorization: Bearer $token" --header 'Content-Type: application/json' \
+            --request POST --data-binary "@$RUNNER_TEMP/executor-request.json" \
+            "$HISTORICAL_EXECUTOR_URL" --output "$RUNNER_TEMP/executor-response.json" \
+            --write-out '%{http_code}')
+          unset token
+          test "$status" = 200
+          echo verdict_invalid > "$RUNNER_TEMP/failure-reason"
+          python scripts/historical_replay_controller.py terminal-event \
+            --plan "$RUNNER_TEMP/historical-replay-plan.json" \
+            --started "$RUNNER_TEMP/started-event.json" \
+            --executor-request "$RUNNER_TEMP/executor-request.json" \
+            --verdict "$RUNNER_TEMP/executor-response.json" \
+            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+            --output "$RUNNER_TEMP/terminal-event.json"
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+
+      - name: Append the exact reported historical terminal outcome
+        id: terminal
+        if: steps.execute.outputs.ready == 'true'
+        env:
+          STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
+          EXPECTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
+        run: |
+          set -euo pipefail
+          state_head=$(scripts/publish_replay_state_event --environment production \
+            --root state --event "$RUNNER_TEMP/terminal-event.json" \
+            --expected-head "$EXPECTED_STATE_HEAD" \
+            --message "Record historical authoritative replay outcome")
+          echo 'appended=true' >> "$GITHUB_OUTPUT"
+          echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
+
+      - name: Fail a started attempt explicitly if orchestration did not finish
+        if: always() && steps.started.outputs.appended == 'true' && steps.terminal.outputs.appended != 'true'
+        env:
+          STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
+          EXPECTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
+        run: |
+          set -euo pipefail
+          python scripts/historical_replay_controller.py terminal-event \
+            --plan "$RUNNER_TEMP/historical-replay-plan.json" \
+            --started "$RUNNER_TEMP/started-event.json" \
+            --failure-reason "$(cat "$RUNNER_TEMP/failure-reason")" \
+            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+            --output "$RUNNER_TEMP/failure-event.json"
+          scripts/publish_replay_state_event --environment production \
+            --root state --event "$RUNNER_TEMP/failure-event.json" \
+            --expected-head "$EXPECTED_STATE_HEAD" \
+            --message "Record historical authoritative replay failure"
+
+      - name: Confirm credentials remained separated and remove scratch
         if: always()
         run: |
           set -euo pipefail
-          test "$(git status --short --untracked-files=normal)" = '?? state/'
-          if [ -d state ]; then
-            test -z "$(git -C state status --short)"
-          fi
-          {
-            echo '### Historical authoritative replay remains dark'
-            echo
-            echo '- no State write credential was requested'
-            echo '- no replay.started or recovery event was appended'
-            echo '- no executor, Cloudflare, AWS, intake, release, or publication operation ran'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Remove State and planning scratch
-        if: always()
-        run: |
-          find "$RUNNER_TEMP/state-views" -type f -delete 2>/dev/null || true
-          find "$RUNNER_TEMP/state-views" -depth -type d -empty -delete 2>/dev/null || true
-          if [ -d state ]; then
-            find state -type f -delete
-            find state -depth -type d -empty -delete 2>/dev/null || true
-          fi
+          test -z "${STATE_WRITE_KEY:-}"
+          test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          rm -rf state "$RUNNER_TEMP/state-views" "$RUNNER_TEMP/source" "$RUNNER_TEMP/benchmark"
           find "$RUNNER_TEMP" -maxdepth 1 -type f \
-            \( -name 'recovery.json' -o -name 'historical-authoritative-replay-plan.json' \) \
-            -delete
+            \( -name '*historical*' -o -name '*executor*' -o -name '*event.json' \
+               -o -name 'failure-reason' -o -name 'qualification.json' \
+               -o -name 'profile-matrix.json' -o -name 'runner-contract.json' \) -delete
+          echo 'No AWS credential or encrypted private archive was used.' >> "$GITHUB_STEP_SUMMARY"

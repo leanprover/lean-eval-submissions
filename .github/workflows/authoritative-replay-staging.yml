@@ -71,6 +71,7 @@ jobs:
           set -euo pipefail
           jq .event "$RUNNER_TEMP/recovery.json" > "$RUNNER_TEMP/recovery-event.json"
           scripts/publish_replay_state_event \
+            --environment staging \
             --root state \
             --event "$RUNNER_TEMP/recovery-event.json" \
             --expected-head "$EXPECTED_STATE_HEAD" \
@@ -159,6 +160,7 @@ jobs:
             --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
             --output "$RUNNER_TEMP/started-event.json"
           state_head=$(scripts/publish_replay_state_event \
+            --environment staging \
             --root state \
             --event "$RUNNER_TEMP/started-event.json" \
             --expected-head "$EXPECTED_STATE_HEAD" \
@@ -392,6 +394,7 @@ jobs:
           set -euo pipefail
           test -z "${AWS_ACCESS_KEY_ID:-}"
           state_head=$(scripts/publish_replay_state_event \
+            --environment staging \
             --root state \
             --event "$RUNNER_TEMP/terminal-event.json" \
             --expected-head "$EXPECTED_STATE_HEAD" \
@@ -426,6 +429,7 @@ jobs:
             --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
             --output "$RUNNER_TEMP/failure-event.json"
           state_head=$(scripts/publish_replay_state_event \
+            --environment staging \
             --root state \
             --event "$RUNNER_TEMP/failure-event.json" \
             --expected-head "$EXPECTED_STATE_HEAD" \

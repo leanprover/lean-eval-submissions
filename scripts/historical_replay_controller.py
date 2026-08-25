@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Plan historical public replay without inventing a submission or archive.
 
-This source-free controller is deliberately transport-blocked.  It validates
-State's distinct historical-public queue, the exact authority plan and
-qualified execution profile, prepares ordinary replay State events, and binds
-the existing public runner handoff.  It performs no network, Git write, State
-write, Cloudflare, AWS, or executor operation.
+This source-free controller validates State's distinct historical-public queue,
+the exact authority plan and qualified execution profile, prepares ordinary
+replay State events, and binds the public runner handoff to the dedicated
+executor transport. It performs no network, Git write, State write,
+Cloudflare, AWS, or executor operation.
 """
 
 from __future__ import annotations
@@ -57,15 +57,13 @@ RECOVERY_AFTER = dt.timedelta(hours=7)
 QUALIFICATION_WORKFLOW_PATH = ".github/workflows/historical-public-image-qualification.yml"
 QUALIFICATION_CONTROLLER_PATH = "historical-public-qualification/qualification.py"
 QUALIFICATION_CONTRACT_PATH = "historical-public-qualification/contract-v1.json"
-TRANSPORT_REASON = "historical_public_executor_not_implemented"
 TRANSPORT_CONTRACT = "historical_public_executor_v1"
-GIST_ADAPTER_REASON = "historical_public_gist_source_adapter_not_implemented"
-GIST_ADAPTER_CONTRACT = "historical_public_gist_source_adapter_v1"
 ATTEMPT_LIMIT_REASON = "historical_public_attempt_limit_reached"
-ATTEMPT_BINDING_REASON = "historical_public_attempt_binding_not_implemented"
+ATTEMPT_BINDING_REASON = "historical_public_attempt_binding_required"
 
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
+ACCOUNT_ID = re.compile(r"[0-9a-f]{32}\Z")
 REPLAY_ID = re.compile(r"rt1_[0-9a-f]{64}\Z")
 RESULT_ID = re.compile(r"r2_[0-9a-f]{64}\Z")
 REQUEST_ID = re.compile(r"prr_[0-9a-f]{64}\Z")
@@ -794,9 +792,8 @@ def _validate_cross_bindings(
 
 def _transport() -> dict[str, Any]:
     return {
-        "status": "blocked",
-        "reason": TRANSPORT_REASON,
-        "required_contract": TRANSPORT_CONTRACT,
+        "status": "ready",
+        "contract": TRANSPORT_CONTRACT,
     }
 
 
@@ -820,8 +817,6 @@ def _blocked_plan(
 
 
 def _task_blocker(task: dict[str, Any]) -> tuple[str, str] | None:
-    if task["source_kind"] == "gist":
-        return GIST_ADAPTER_REASON, GIST_ADAPTER_CONTRACT
     if task["attempt"] >= MAX_REPLAY_ATTEMPTS:
         return ATTEMPT_LIMIT_REASON, "historical_public_retry_policy_v1"
     return None
@@ -944,7 +939,7 @@ def validate_execution_plan(value: Any) -> dict[str, Any]:
     if plan["schema_version"] != 1 or plan["kind"] != "execution" or plan["transport"] != _transport():
         raise HistoricalReplayControllerError("historical execution plan identity changed")
     task = _validate_task(plan["task"], 0)
-    if task["source_kind"] != "github_repo":
+    if task["source_kind"] not in {"github_repo", "gist"}:
         raise HistoricalReplayControllerError("historical execution plan lacks a source adapter")
     if task["attempt"] >= MAX_REPLAY_ATTEMPTS:
         raise HistoricalReplayControllerError("historical execution plan exceeds attempt limit")
@@ -1084,9 +1079,9 @@ def _terminal_transition(
     plan: dict[str, Any], verdict_value: Any | None, failure_reason: str | None
 ) -> dict[str, Any]:
     task = plan["task"]
-    if task["source_kind"] != "github_repo":
+    if task["source_kind"] not in {"github_repo", "gist"}:
         raise HistoricalReplayControllerError(
-            "historical public runner handoff requires a github_repo source"
+            "historical public runner handoff lacks a reviewed source adapter"
         )
     attempt = plan["started_transition"]["payload"]["attempt"]
     if failure_reason is not None:
@@ -1231,6 +1226,121 @@ def build_executor_request(
         "vm_image_digest": plan["execution_profile"]["vm_image_digest"],
         "handoff": handoff_value,
         "source_archive_base64": base64.b64encode(archive_raw).decode("ascii"),
+    }
+
+
+def render_executor_config(
+    plan_value: Any,
+    qualification_value: Any,
+    account_id: str,
+    source_commit: str,
+) -> dict[str, Any]:
+    """Render one exact production executor for a reviewed historical task."""
+    plan = validate_execution_plan(plan_value)
+    qualification_object = _object(
+        qualification_value, "historical executor qualification"
+    )
+    qualification = validate_qualification(
+        qualification_object,
+        canonical_bytes(qualification_object),
+    )
+    _match(ACCOUNT_ID, account_id, "Cloudflare account id")
+    _match(COMMIT, source_commit, "historical executor source commit")
+    task = plan["task"]
+    if (
+        qualification.get("execution_profile_digest")
+        != task["execution_profile_digest"]
+        or qualification.get("measurement_config_digest")
+        != task["measurement_config_digest"]
+        or qualification.get("registry_manifest_digest")
+        != plan["execution_profile"]["vm_image_digest"]
+        or qualification.get("benchmark_commit") != task["benchmark_commit"]
+        or qualification.get("qualification_status") != "qualified"
+    ):
+        raise HistoricalReplayControllerError(
+            "historical executor qualification differs from the plan"
+        )
+    registry_repository = qualification.get("registry_repository")
+    registry_tag = qualification.get("registry_tag")
+    if (
+        registry_repository != "lean-eval-historical-public-v1"
+        or not isinstance(registry_tag, str)
+        or registry_tag
+        != f"{task['benchmark_commit']}-{qualification.get('image_source_commit')}"
+    ):
+        raise HistoricalReplayControllerError(
+            "historical executor registry identity is invalid"
+        )
+    manifest = plan["execution_profile"]["vm_image_digest"]
+    image = (
+        f"registry.cloudflare.com/{account_id}/{registry_repository}:"
+        f"{registry_tag}@{manifest}"
+    )
+    return {
+        "$schema": "node_modules/wrangler/config-schema.json",
+        "name": "lean-eval-historical-public-replay",
+        "main": "src/replay-entry.ts",
+        "compatibility_date": "2026-08-22",
+        "compatibility_flags": ["nodejs_compat"],
+        "workers_dev": False,
+        "preview_urls": False,
+        "observability": {"enabled": True, "head_sampling_rate": 1},
+        "env": {
+            "production": {
+                "name": "lean-eval-historical-public-replay",
+                "workers_dev": True,
+                "preview_urls": False,
+                "containers": [
+                    {
+                        "class_name": "ReplaySandbox",
+                        "image": image,
+                        "instance_type": "standard-4",
+                        "max_instances": 1,
+                        "ssh": {"enabled": False},
+                    }
+                ],
+                "durable_objects": {
+                    "bindings": [
+                        {
+                            "name": "REPLAY_SANDBOX",
+                            "class_name": "ReplaySandbox",
+                        },
+                        {
+                            "name": "REPLAY_TERMINAL_RECEIPT",
+                            "class_name": "ReplayTerminalReceipt",
+                        },
+                    ]
+                },
+                "migrations": [
+                    {"tag": "v1", "new_sqlite_classes": ["ReplaySandbox"]},
+                    {
+                        "tag": "v2",
+                        "new_sqlite_classes": ["ReplayTerminalReceipt"],
+                    },
+                ],
+                "vars": {
+                    "DEPLOYED_COMMIT": source_commit,
+                    "DEPLOYMENT_ENVIRONMENT": "production",
+                    "REPLAY_ENABLED": "false",
+                    "HISTORICAL_PUBLIC_REPLAY_ENABLED": "true",
+                    "STAGING_ACCEPTANCE_ENABLED": "false",
+                    "GITHUB_OIDC_AUDIENCE": (
+                        "lean-eval-historical-public-replay-production"
+                    ),
+                    "GITHUB_OIDC_ENVIRONMENT": "replay-production",
+                    "STAGING_MEMORY_LIMIT_BYTES": str(12 * 1024**3),
+                    "PRODUCTION_MEMORY_GATE_BYTES": str(12 * 1024**3),
+                    "REVIEWED_EXECUTION_PROFILE_DIGEST": task[
+                        "execution_profile_digest"
+                    ],
+                    "REVIEWED_MEASUREMENT_CONFIG_DIGEST": task[
+                        "measurement_config_digest"
+                    ],
+                    "REVIEWED_VM_IMAGE_DIGEST": manifest,
+                    "SANDBOX_TRANSPORT": "rpc",
+                },
+            }
+        },
     }
 
 
@@ -1464,7 +1574,7 @@ def bind_handoff(
         raise HistoricalReplayControllerError("historical runner handoff differs from plan")
     return {
         "schema_version": 1,
-        "kind": "historical_public_executor_transport_blocker",
+        "kind": "historical_public_executor_binding",
         "transport": _transport(),
         "replay_task_id": task["replay_task_id"],
         "attempt": task["attempt"] + 1,
@@ -2009,6 +2119,12 @@ def parser() -> argparse.ArgumentParser:
     for name in ("plan", "handoff", "source-archive", "repository-root", "output"):
         executor.add_argument(f"--{name}", required=True, type=pathlib.Path)
     executor.add_argument("--runner-nonce", required=True)
+    render = commands.add_parser("render-executor-config")
+    render.add_argument("--plan", required=True, type=pathlib.Path)
+    render.add_argument("--repository-root", required=True, type=pathlib.Path)
+    render.add_argument("--account-id", required=True)
+    render.add_argument("--source-commit", required=True)
+    render.add_argument("--output", required=True, type=pathlib.Path)
     event = commands.add_parser("state-event")
     event.add_argument("kind", choices=("started",))
     event.add_argument("--plan", required=True, type=pathlib.Path)
@@ -2088,6 +2204,18 @@ def main() -> int:
                     matrix,
                     contract,
                     args.runner_nonce,
+                ),
+            )
+        elif args.command == "render-executor-config":
+            plan, _ = _load_canonical(args.plan, "historical execution plan")
+            reviewed = load_reviewed_inputs(args.repository_root, plan.get("task"))
+            _write(
+                args.output,
+                render_executor_config(
+                    plan,
+                    reviewed[2],
+                    args.account_id,
+                    args.source_commit,
                 ),
             )
         elif args.command == "state-event":

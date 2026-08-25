@@ -1,112 +1,87 @@
 # Historical authoritative replay controller
 
 Historical accepted public results have no modern submission UUID or encrypted
-archive. State therefore materializes them in the distinct
-`historical-public-replay-queue.json` version-2 view. They must never be passed
-through the ordinary private replay queue by synthesizing either identity.
+archive. State materializes them in the distinct version-2
+`historical-public-replay-queue.json`; the controller never invents a private
+submission or archive identity for them.
 
-`scripts/historical_replay_controller.py` is the source-free controller
-foundation for that separate queue. It:
+`scripts/historical_replay_controller.py` validates the complete queue task and
+loads the authority plan, qualification profile, profile matrix, and runner
+contract from their exact ancestor Git commits. It selects the first eligible
+task, preserves its retry count, constructs a causally ordered `replay.started`,
+binds the exact source archive and attempt into
+`historical_public_executor_v1`, and accepts a terminal verdict only when the
+executor confirms sandbox destruction. All controller outputs are create-only;
+the controller itself performs no network, Git write, State write, Cloudflare,
+AWS, release, or publication operation.
 
-- validates the complete closed queue task, stable task identity, ordering,
-  retry state, optional profile-reconfiguration provenance, and explicit public
-  source authority;
-- loads the authority plan, qualification profile, profile matrix, and runner
-  contract from their exact ancestor Git commits rather than trusting the HEAD
-  worktree paths, validates the qualification schema, requires the qualified
-  image source to exist in the controller source's ancestry, verifies its
-  exact matrix and runner-contract blobs, and binds the selected matrix entry
-  semantically;
-- selects the lexicographically first eligible queue task, deterministically
-  stepping over typed Gist-adapter and exhausted-attempt blockers without
-  mutating or silently disposing of them, and carries the selected task's
-  attempt forward without resetting it;
-- prepares the ordinary `replay.started` shape without a submission or archive
-  field, while refusing terminal-event construction until an executor result
-  can bind the exact attempt;
-- binds the existing `historical_public_runner_v1` handoff and exact public
-  source archive; and
-- requires the caller to complete authoritative State validation before it
-  reads State's distinct ASCII-escaped canonical JSON, then defensively
-  rechecks the historical transition subset it consumes in authoritative
-  `(occurred_at, event_id)` order; this local reducer is not a replacement for
-  State's complete schema or materialized-view validation;
-- prepares a `runner_lost` recovery only after the seven-hour lease and only
-  with an event ID that can causally follow the started event.
+## Source adapters and executor boundary
 
-All outputs are create-only. The controller performs no network, Git write,
-State write, Cloudflare, AWS, release, or publication operation.
+Both reviewed public source forms are implemented without changing the runner
+handoff:
+
+- `github_repo` uses a detached exact-commit GitHub checkout and the repository
+  identity validator in `historical_public_runner.py`.
+- `gist` uses `historical_public_gist_source_adapter.py`, which verifies the
+  exact reviewed owner, Gist ID, commit, tree, and remote before emitting the
+  same deterministic archive and `historical_public_runner_v1` handoff.
 
 The recovery fixtures include the required `system.initialized` root and full
 authority, qualification, enqueue, retry/reconfiguration, unavailable, and
 ordinary modern-replay histories. They were validated against the production
 State contract at `6799522f7fe57263de4a66499e52ce4bfda69baa`; positive reducer
 histories pass both State schema and semantic validation. The workflow still
-validates the live protected State checkout before invoking the narrower
-projection, so the fixture coverage is evidence rather than a substitute for
-that runtime precondition.
+validates live protected State before invoking the narrower projection, so the
+fixtures are evidence rather than a substitute for that runtime precondition.
 
-## Explicit transport blocker
+The executor request closes over the runner nonce, replay task, attempt,
+handoff and archive digests, reviewed execution and measurement digests, and
+qualified image digest. The dedicated Worker route is independently gated by
+`HISTORICAL_PUBLIC_REPLAY_ENABLED`; ordinary private replay remains disabled in
+the generated historical executor. A terminal State event requires the exact
+request/verdict pair and `destruction: confirmed`.
 
-The deployed authoritative executor accepts the modern encrypted-archive
-request. The qualified historical image instead accepts the distinct public
-runner handoff. Reusing the private endpoint would erase this authority
-boundary, so every nonempty controller plan contains:
+The only remaining typed planning blocker is the reviewed three-attempt limit.
+An exhausted task remains in State and cannot starve a later eligible task.
 
-```json
-{
-  "status": "blocked",
-  "reason": "historical_public_executor_not_implemented",
-  "required_contract": "historical_public_executor_v1"
-}
-```
+## Serialized production workflow
 
-The handoff binder emits the same blocker after validating the exact source
-archive. A later implementation must add and qualify that distinct executor
-transport before any workflow may append `replay.started`. Removing the string
-or merely setting a repository variable is not enablement evidence.
+`.github/workflows/historical-authoritative-replay.yml` is manual, serialized,
+and dark while repository variable
+`HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED` is absent. When deliberately
+enabled with the separately reviewed environment credentials, one invocation:
 
-Two additional typed blockers expose unsupported queue work before a
-`replay.started` event can be prepared:
+1. validates and materializes protected production State;
+2. appends one stale `runner_lost` recovery and stops, stops on a live attempt,
+   or plans the next exact eligible task;
+3. renders and deploys only the task's qualified immutable image, then proves
+   exact health while ordinary replay and staging acceptance remain disabled;
+4. appends `replay.started` by exact-head compare-and-swap before fetching
+   public source or invoking the executor;
+5. fetches the exact public repository or Gist commit and benchmark commit,
+   builds the deterministic handoff, and invokes the executor without a State
+   writer or Cloudflare deployment credential in scope; and
+6. appends exactly one attempt-bound terminal event, or a typed orchestration
+   failure. Cancellation after start converges through the seven-hour stale
+   recovery on the next serialized invocation.
 
-- a selected Gist source produces `kind: blocked` with reason
-  `historical_public_gist_source_adapter_not_implemented`; the v1 runner accepts
-  only `github_repo`, and the resolved historical evidence includes 59
-  Gist-backed groups that cannot be silently treated as repositories;
-- a task that has already consumed three attempts produces `kind: blocked`
-  with reason `historical_public_attempt_limit_reached`.
+Cloudflare deployment, State reads, State writes, public source fetching, and
+executor OIDC are kept in separate steps. The lane has no AWS permission and
+never reads an encrypted private archive. It uploads no State-derived plan,
+source, request, or verdict artifact.
 
-These blockers do not provide terminal-disposition semantics. The controller
-scans the already sorted, State-validated queue and selects the first task with
-neither blocker, so a Gist-backed or attempt-exhausted task cannot starve later
-eligible work. Blocked tasks remain untouched in State. When every remaining
-task is blocked, the controller emits `kind: blocked` for the first task rather
-than pretending the queue is empty. Live queue revalidation repeats the same
-eligibility selection before a `replay.started` event can be constructed.
+## Activation gate
 
-The existing v1 handoff and verdict omit attempt. Consequently the controller
-does not expose terminal/failed State-event CLI modes, and its terminal-event
-builder fails with `historical_public_attempt_binding_not_implemented`. A
-future executor contract must bind replay task, attempt, handoff, and verdict
-end to end before terminal construction can be enabled.
+Implementation is not activation. Before creating the repository variable:
 
-## Dark read-only workflow
+- commit and authorize every required qualification profile and State enqueue;
+- provision the production State read/write keys and Cloudflare deployment
+  credentials only in the protected `replay-production` environment;
+- deploy and qualify the exact historical executor code and receipt protocol;
+- run one accepted staging/public canary through the complete State lifecycle;
+- verify stale recovery, terminal idempotency, and fail-closed health; and
+- record exact run, deployment, image, State, and terminal evidence in the
+  infrastructure ledger.
 
-`historical-authoritative-replay.yml` is manual, serialized, and gated on the
-absent `HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED` variable. Even if the gate
-is deliberately set later, the current workflow checks out production State
-with a separately provisioned read-only key, validates and materializes it,
-passes the explicit State-validated precondition to the narrower recovery
-projection, checks for a running attempt, and produces only an ephemeral
-source-free blocked plan in runner scratch. The plan is not uploaded because it
-retains State-derived provenance. Public step summaries report only that the
-lane remained dark; they do not reveal queue or recovery disposition. The
-workflow requests no State write, OIDC, Cloudflare, AWS, registry, Results,
-release, intake, or publication credential.
-
-Cancellation before planning changes nothing. A future mutating controller
-must append `replay.started` by exact-head compare-and-swap before execution,
-use an attempt-bound executor result to append one terminal event afterward,
-and on a lost or cancelled runner allow
-the next serialized invocation to prepare the stale `runner_lost` recovery.
-The current read-only workflow deliberately stops before all three writes.
+Production intake, ordinary private replay, and release publication are
+independent gates and do not become enabled by this controller.

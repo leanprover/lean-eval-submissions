@@ -11,59 +11,80 @@ WORKFLOW = (
 
 
 class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
-    def test_lane_is_manual_serialized_and_explicitly_dark(self) -> None:
+    def test_lane_is_manual_serialized_and_still_dark(self) -> None:
         self.assertIn("workflow_dispatch:", WORKFLOW)
         self.assertIn("cancel-in-progress: false", WORKFLOW)
         self.assertIn("environment: replay-production", WORKFLOW)
         self.assertIn(
-            "vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED == 'true'", WORKFLOW
+            "vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED == 'true'",
+            WORKFLOW,
         )
         self.assertNotIn("schedule:", WORKFLOW)
 
-    def test_lane_has_only_read_permissions_and_no_external_authority(self) -> None:
-        self.assertNotIn("contents: write", WORKFLOW)
-        self.assertNotIn("id-token: write", WORKFLOW)
-        self.assertNotIn("AWS_", WORKFLOW)
-        self.assertNotIn("CLOUDFLARE_", WORKFLOW)
-        self.assertNotIn("STATE_WRITE", WORKFLOW)
-        self.assertNotIn("publish_replay_state_event", WORKFLOW)
-        self.assertIn("PRODUCTION_STATE_READ_KEY", WORKFLOW)
-
-    def test_recovery_precedes_planning_and_never_appends(self) -> None:
+    def test_recovery_and_exact_state_cas_precede_execution(self) -> None:
         validation = WORKFLOW.index("state/scripts/state.py --root state validate")
-        recovery = WORKFLOW.index("Refuse to plan around a running historical attempt")
-        planning = WORKFLOW.index("Produce only the source-free transport-blocked plan")
+        recovery = WORKFLOW.index("historical_replay_controller.py recover")
+        planning = WORKFLOW.index("Plan the exact next qualified public task")
+        started = WORKFLOW.index("state-event started")
+        executor = WORKFLOW.index("build-executor-request")
+        terminal = WORKFLOW.index("terminal-event")
         self.assertLess(validation, recovery)
         self.assertLess(recovery, planning)
-        self.assertIn("historical_replay_controller.py recover", WORKFLOW)
-        self.assertIn("--state-validated", WORKFLOW)
-        self.assertIn("steps.recovery.outputs.kind == 'none'", WORKFLOW)
-        self.assertNotIn("runner_lost", WORKFLOW)
-        self.assertNotIn("already running", WORKFLOW)
+        self.assertLess(planning, started)
+        self.assertLess(started, executor)
+        self.assertLess(executor, terminal)
+        self.assertIn("--environment production", WORKFLOW)
+        self.assertIn("--expected-head", WORKFLOW)
+        self.assertIn("PRODUCTION_STATE_READ_KEY", WORKFLOW)
+        self.assertIn("PRODUCTION_STATE_WRITE_KEY", WORKFLOW)
 
-    def test_exact_production_state_and_reviewed_blobs_are_bound(self) -> None:
-        self.assertIn("repository: leanprover/lean-eval-state", WORKFLOW)
-        self.assertIn("state/scripts/state.py --root state validate", WORKFLOW)
-        self.assertIn("historical-public-replay-queue.json", WORKFLOW)
-        self.assertIn("--repository-root .", WORKFLOW)
-        self.assertNotIn(".tasks[0].authority_path", WORKFLOW)
-        self.assertNotIn(".tasks[0].qualification_path", WORKFLOW)
-        self.assertNotIn("--authority-plan", WORKFLOW)
-        self.assertNotIn("--qualification-profile", WORKFLOW)
+    def test_exact_profile_image_and_health_are_required_before_started(self) -> None:
+        deploy = WORKFLOW.index("render-executor-config")
+        health = WORKFLOW.index("historical executor health differs from the exact plan")
+        started = WORKFLOW.index("state-event started")
+        self.assertLess(deploy, health)
+        self.assertLess(health, started)
+        self.assertIn("historical_public_replay_enabled\": True", WORKFLOW)
+        self.assertIn("replay_enabled\": False", WORKFLOW)
+        self.assertIn("reviewed_execution_profile_digest", WORKFLOW)
+        self.assertIn("reviewed_measurement_config_digest", WORKFLOW)
+        self.assertIn("reviewed_vm_image_digest", WORKFLOW)
 
-    def test_transport_blocker_is_required_and_no_plan_is_uploaded(self) -> None:
-        blocker = WORKFLOW.index("historical_public_executor_not_implemented")
-        confirmation = WORKFLOW.index(
-            "Confirm the lane remained read-only and transport-blocked"
-        )
-        self.assertLess(blocker, confirmation)
-        self.assertIn(".transport.status", WORKFLOW)
-        self.assertIn('"$kind" != blocked', WORKFLOW)
-        self.assertIn(".blocker.status", WORKFLOW)
+    def test_repository_and_gist_sources_use_distinct_exact_adapters(self) -> None:
+        self.assertIn("https://github.com/$source_repository.git", WORKFLOW)
+        self.assertIn("https://gist.github.com/$owner/$gist_id.git", WORKFLOW)
+        self.assertIn("historical_public_runner.py prepare", WORKFLOW)
+        self.assertIn("historical_public_gist_source_adapter.py prepare", WORKFLOW)
+        self.assertIn("git show \"$authority_commit:$authority_path\"", WORKFLOW)
+        self.assertIn("git show \"$qualification_commit:$qualification_path\"", WORKFLOW)
+
+    def test_credential_scopes_are_separated_and_aws_is_absent(self) -> None:
+        deployment = WORKFLOW.split(
+            "Render and deploy only the exact qualified historical executor", 1
+        )[1].split("Require the exact enabled historical executor", 1)[0]
+        started = WORKFLOW.split(
+            "Append replay.started before fetching public source", 1
+        )[1].split("Fetch exact public source", 1)[0]
+        executor = WORKFLOW.split(
+            "Invoke the exact executor without Cloudflare or State write authority", 1
+        )[1].split("Append the exact reported historical terminal outcome", 1)[0]
+        self.assertIn("CLOUDFLARE_API_TOKEN", deployment)
+        self.assertNotIn("STATE_WRITE_KEY", deployment)
+        self.assertIn("STATE_WRITE_KEY", started)
+        self.assertNotIn("CLOUDFLARE_API_TOKEN: ${{ secrets", started)
+        self.assertIn('test -z "${STATE_WRITE_KEY:-}"', executor)
+        self.assertIn('test -z "${CLOUDFLARE_API_TOKEN:-}"', executor)
+        self.assertIn("id-token: write", WORKFLOW)
+        self.assertNotIn("AWS_", WORKFLOW)
+
+    def test_failure_and_cancellation_paths_are_bounded(self) -> None:
+        self.assertIn("source_fetch_failed", WORKFLOW)
+        self.assertIn("runner_start_failed", WORKFLOW)
+        self.assertIn("runner_lost", WORKFLOW)
+        self.assertIn("verdict_invalid", WORKFLOW)
+        self.assertIn("always() && steps.started.outputs.appended == 'true'", WORKFLOW)
+        self.assertIn("timeout-minutes: 360", WORKFLOW)
         self.assertNotIn("actions/upload-artifact", WORKFLOW)
-        self.assertNotIn("state-event started", WORKFLOW)
-        self.assertNotIn("state-event terminal", WORKFLOW)
-        self.assertNotIn("/api/v1/", WORKFLOW)
 
     def test_actions_are_commit_pinned(self) -> None:
         pins = re.findall(r"uses:\s*[^\s@]+@([^\s#]+)", WORKFLOW)
