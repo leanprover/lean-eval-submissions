@@ -186,14 +186,10 @@ logs contain stage and error class only.
 
 ## Enable and rollback gate
 
-The first production enablement has a zero-event migration precondition. At the
-protected binding commit `b0a30e3a64aa5c05660040405b32135dea4b7f1d`, inspected on
-2026-08-25, production State contained zero `result.recorded` events, zero
-`result.claimed` events, and zero files under `views/result-identities/`; its
-only event was `system.initialized`. Consequently no historical result guard
-backfill is required. Missing guards are not repaired at runtime: an apparent
-replay whose result event/view exists without its recorded guard fails closed
-as State inconsistency. The live result-completion callback always enters this
+The first production enablement has a zero-event migration precondition.
+Missing guards are not repaired at runtime: an apparent replay whose result
+event/view exists without its recorded guard fails closed as State
+inconsistency. The live result-completion callback always enters this
 repository replay check even when its submission view already names a result;
 it never returns `already_recorded` solely from the view.
 
@@ -201,8 +197,10 @@ Immediately before changing either tracked enable flag to `true`, repeat these
 read-only gates against the exact intended deployment inputs:
 
 1. Validate production State and prove its protected `main` still descends from
-   the pinned contract. If the three zero counts above changed before the first
-   compatible deployment, stop and perform an explicit State migration/review.
+   the pinned contract. Before the first compatible deployment, require zero
+   `result.recorded` events, zero `result.claimed` events, and zero files under
+   `views/result-identities/`; otherwise stop and perform an explicit State
+   migration/review.
 2. Use the GitHub branch endpoint to prove `staging-results` exists, reports
    `protected: true`, and resolves to a full commit. The protected deployment
    workflow performs this read-only check before every staging Worker deploy;
@@ -211,8 +209,9 @@ read-only gates against the exact intended deployment inputs:
    modern-record collision, duplicate-modern-tuple collision, and unknown State
    update recovery in staging while intake and production owner routes remain
    disabled.
-4. Enable staging only, record the first accepted owner mutation, and preserve
-   its exact State commit as rollout evidence before considering production.
+4. Enable staging only, exercise one accepted owner mutation, and validate the
+   resulting State head and exact expected event and guard before considering
+   production.
 
 After the first result-owner event or guard exists, never roll back the Worker
 to a commit that lacks these event decoders and identity-path reservations.

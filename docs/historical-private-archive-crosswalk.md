@@ -86,21 +86,3 @@ JSON schema, exact counts, ordering, canonical bytes, source commits, input
 digests, output SHA-256, and absence of private locator keys. The workflow must
 not upload the audit checkout, migration plan, sidecars, ciphertext, or logs
 containing join values.
-
-## Current diagnostic result
-
-A local read-only run over submissions commit
-`ae1a9714c5433b4c195b8fdfb5643893ecac8019` and audit commit
-`92b95c162ad9bf38d027e11193683ca61ed2a994` reproduced results-store digest
-`14e8c8682e5183d85fee32aafcf06eedb20d7cd8aa91d666d50753d516da7d43`
-and archive inventory digest
-`48f55807f430d8754e4a7b79cb391d582028df6abce347d037bd810a0e3decfa`.
-It classified all 668 private accepted results as 639 `bound` and 29
-`archive_not_found`, with zero ambiguous identities and zero metadata
-conflicts. The source-free canonical bytes had SHA-256
-`64a93054ac28379a7d5d5c5e4b00b2b14a7a99ccf6f6c294130a5b910499ea29`.
-
-This local run is diagnostic evidence only. The output was not committed,
-uploaded, written to State, used to decrypt an archive, or used to authorize a
-replay. The 29 unmatched results remain pending archive recovery or a separate
-reviewed unavailability policy.

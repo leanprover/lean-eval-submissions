@@ -1,9 +1,9 @@
 # Dedicated AWS key-adapter setup
 
-This procedure was completed on 2026-08-22. It creates no replay VM and does
-not enable intake or release. The same template creates isolated staging and
-production resources in one dedicated Lean Eval AWS account; exact live
-identifiers and the latest smoke evidence belong in `INFRASTRUCTURE.md`.
+This procedure creates no replay VM and does not enable intake or release. The
+same template creates isolated staging and production resources in one
+dedicated Lean Eval AWS account; exact live identifiers, credential boundaries,
+and rotation ownership belong in `INFRASTRUCTURE.md`.
 
 ## 1. Create the account
 
