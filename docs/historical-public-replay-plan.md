@@ -127,7 +127,16 @@ its filename is its SHA-256. Its exact toolchain-registry input is retained at
 under the same rule. The plan remains explicitly blocked on authority and
 execution-profile qualification; retaining it does not enqueue work.
 
-The later token-free Gist probe aggregate `8122b4ee…` resolves 126 request
-groups. This retained 69-group seed remains valid for its exact inputs but is
-not the complete current public corpus plan; generate a new digest-bound plan
-from the newer aggregate before corpus execution.
+Protected run `32799633419` at immutable tag
+`lean-eval-dispatch/2e7239e768ae2f84d102386264d39a440edbabea`
+then reconstructed the final adjudicated aggregate `ba816b52…` twice. Its
+source-free plan covers all 128 replayable request groups and 194 accepted
+results, including 69 repository and 59 Gist sources, while retaining 187
+unavailable request groups outside the plan. The exact 317,768-byte plan is
+retained at
+`evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json`;
+its 35-commit, five-toolchain registry is retained at
+`evidence/public-replay/toolchains/4f2f3737d79e6abd6c169ebdde3f2218157d8f6c482a85ad2026821a4b8e81a0.json`.
+Both remain blocked: recording these artifacts does not qualify execution
+profiles, enqueue State work, or decide that the unavailable sources are
+permanently unrecoverable.
