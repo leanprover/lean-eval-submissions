@@ -10,10 +10,6 @@ DOCKERFILE = ROOT / "Dockerfile.replay-authoritative"
 WORKFLOW = ROOT / ".github" / "workflows" / "authoritative-replay-image.yml"
 PROFILE = ROOT / "server" / "replay-image" / "replay-profile-lock-v433.json"
 RUNNER = ROOT / "server" / "replay-image" / "replay-authoritative"
-MEASUREMENT = ROOT / "server" / "replay-image" / "replay-measure"
-COMPARATOR_PATCH = (
-    ROOT / "server" / "replay-image" / "comparator-71b52-phase-metrics.patch"
-)
 
 
 class AuthoritativeReplayImageTests(unittest.TestCase):
@@ -83,25 +79,6 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
         self.assertIn("sys.executable", runner)
         self.assertNotIn('"/usr/bin/python3"', runner)
         self.assertRegex(runner, r'"--authoritative-checker",\s*"nanoda"')
-
-    def test_exact_solution_export_capture_is_prepared_but_not_claimed(self) -> None:
-        patch = COMPARATOR_PATCH.read_text(encoding="utf-8")
-        measurement = MEASUREMENT.read_text(encoding="utf-8")
-        runner = RUNNER.read_text(encoding="utf-8")
-        self.assertIn(
-            'safeExport solutionModule exportTargets (some "solution-export")',
-            patch,
-        )
-        self.assertEqual(patch.count('(some "solution-export")'), 1)
-        self.assertIn(
-            'SOLUTION_EXPORT_PATH = pathlib.Path("/run/lean-eval/solution-export.ndjson")',
-            measurement,
-        )
-        self.assertIn("os.O_EXCL", measurement)
-        self.assertIn("os.O_NOFOLLOW", measurement)
-        self.assertIn("MAX_SOLUTION_EXPORT_BYTES", measurement)
-        self.assertIn("def scrub_solution_export()", runner)
-        self.assertEqual(runner.count("scrub_solution_export()"), 3)
 
     def test_image_gates_the_authoritative_python_imports(self) -> None:
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")

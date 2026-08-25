@@ -177,21 +177,6 @@ etc.).
   [`docs/replay-orchestrator.md`](docs/replay-orchestrator.md).
 - Source-minimized historical public replay evidence and its read-only token
   boundary: [`docs/public-replay-resolution.md`](docs/public-replay-resolution.md).
-- Source-free independent-kernel corpus preparation and report contract:
-  [`docs/kernel-corpus-report.md`](docs/kernel-corpus-report.md).
-  Its offline record adapter verifies possession of the planned replay/export
-  bytes and binds attested runner records into observation receipts; it does
-  not prove which bytes the runner consumed or execute the corpus.
-- Closed raw-export, fixed Mathgraph invocation, transcript, and attestation
-  schemas plus their offline wire-to-record adapter:
-  [`docs/kernel-runner-wire-contract.md`](docs/kernel-runner-wire-contract.md).
-  The authoritative and historical-public image sources now have an exclusive
-  exact-byte export capture hook. The authoritative PR source-build preflight
-  does not qualify an image, the historical image remains unbuilt, and neither
-  is qualified, deployed, selected, or connected to a source-free artifact
-  handoff. The semantic validator and
-  adapter refuse the candidate's ambiguous exit `1`; no runner or real
-  replay/export evidence is supplied.
 - Provider-neutral archive-key envelope and single-use capability claims:
   [`docs/key-capability-contract.md`](docs/key-capability-contract.md).
 - Trusted provider-neutral archive writer (not yet wired into production):

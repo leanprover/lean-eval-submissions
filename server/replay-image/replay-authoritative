@@ -19,7 +19,6 @@ WORKSPACE = pathlib.Path("/workspace")
 INSTALL = pathlib.Path("/opt/lean-eval")
 BENCHMARK = INSTALL / "benchmark"
 METRICS = pathlib.Path("/run/lean-eval/metrics.json")
-SOLUTION_EXPORT = pathlib.Path("/run/lean-eval/solution-export.ndjson")
 MAX_JSON = 256 * 1024
 MAX_CIPHERTEXT = 11 * 1024 * 1024
 MAX_PLAINTEXT = 10 * 1024 * 1024
@@ -31,15 +30,6 @@ WALL_TIME_LIMIT_MS = 19_800_000
 
 class AuthoritativeReplayError(ValueError):
     """An authoritative replay input or execution result is invalid."""
-
-
-def scrub_solution_export() -> None:
-    """Best-effort cleanup that cannot change the replay verdict."""
-
-    try:
-        SOLUTION_EXPORT.unlink(missing_ok=True)
-    except OSError:
-        pass
 
 
 def object_value(value: Any, label: str) -> dict[str, Any]:
@@ -631,7 +621,6 @@ def main() -> None:
         revision = request["result"]["statement_revision"]
         file_count, lines_of_code = source_statistics(source_root, problem_id)
         METRICS.unlink(missing_ok=True)
-        scrub_solution_export()
         returncode, timed_out = run_process_group(
             [
                 sys.executable,
@@ -698,7 +687,6 @@ def main() -> None:
         plaintext.unlink(missing_ok=True)
         ciphertext.unlink(missing_ok=True)
         METRICS.unlink(missing_ok=True)
-        scrub_solution_export()
         shutil.rmtree(scratch, ignore_errors=True)
         shutil.rmtree(output, ignore_errors=True)
 

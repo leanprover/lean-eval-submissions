@@ -413,28 +413,6 @@ session issuance, exact maintainer numeric-ID/login drift denial, and dark
 staging end-to-end qualification are recorded. Source completion alone does not
 authorize one State write or enable either route family.
 
-PR `#1371` merged the source-only staging qualification/recovery scaffold as
-`029b69ce6852fd9a0ee6e9f33aa7adb58474887f` after independent exact-head review
-and green CI `32815289877` / `32815289745`. Every job is still guarded by an
-intentionally impossible source ref. The follow-up persistent harness now
-exists in source: its Durable Object stores immutable per-step plans and
-receipts without sessions; its coordinator verifies exact State transitions;
-its staging-only private executor calls the real API kernel; its private
-collision Worker supplies seven genuine same-tree contenders; and its
-operation-only runner requires the exact ordered fourteen-proof contract.
-Acquisition additionally requires an independently verified, source-pinned live
-fixture manifest. That manifest and digest remain deliberately absent, so the
-harness fails closed before acquiring a journal or reading or writing State.
-The source remains neither a live staging qualification nor State authority.
-
-Protected rollout `32815495847` subsequently deployed that exact merge to
-staging and production after immutable dispatch promotion and a successful
-staging canary; follow-up canary `32815898527` also passed. Direct health reads
-reported exact commit `029b69ce`, ordinary intake disabled, every result/model
-owner and maintainer API disabled, the tracked 400-subrequest limit, and the
-promotion canary effective only in staging. The impossible workflow source ref
-remains unchanged, so this rollout did not execute or authorize qualification.
-
 PR `#1383` subsequently repinned the Worker to protected production State
 `b0a30e3a64aa5c05660040405b32135dea4b7f1d` and merged as
 `0d52fb663d6fe09ae56caf5b007a12e2c5e2c5b5`. Protected rollout `32831767076`
@@ -442,49 +420,8 @@ deployed and smoke-tested that exact commit in staging, passed the promotion
 canary, and deployed production provisionally with intake and replay disabled.
 Every intake-lease and durable-enablement step was skipped, and finalization
 reverified the protected State and disabled health. Credential-free readiness
-run `32832326810` then passed and closed monitor incident `#1310`. The
-source-disabled persistent fourteen-proof harness is implemented, but it is
-intentionally unarmed and has not been deployed or executed. Before replacing
-the impossible source gate, independently review and pin the exact live fixture;
-obtain explicit participation for the distinct owner, cross-owner, and
-maintainer identities; configure protected-environment reviewers with
-self-review prevention; install five distinct ephemeral credentials; verify the
-paid 400-subrequest allowance; deploy and inspect both private service bindings;
-prove an idle mutation window; and complete the exact fourteen-step E2E, the
-full before/after-write and receipt failure-injection matrix, automatic and
-manual recovery, non-force restoration, credential rotation, and rollback
-qualification. Neither prior rollout executed the harness or authorized a
-model-identity State write.
-
-The first ordinary post-merge rollout attempt for the unarmed source,
-`32841958939` at `cd50d22085a4179d473fc3be6fc636ff5e35fa98`, exposed and
-failed closed on an incorrect deployment dependency. Staging replay and the
-staging GitHub broker advanced to that commit, but Cloudflare refused to create
-the collision Worker because its intentionally absent `GITHUB_STATE_TOKEN` and
-`MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET` had not been supplied. The
-executor and coordinator deployments never ran: the staging intake Worker
-therefore remained at `0d52fb663d6fe09ae56caf5b007a12e2c5e2c5b5`, and the
-promotion canary and every production job were skipped. Direct health retained
-ordinary intake and both public model-identity gates as false in both
-environments. The corrected source-disabled deployment contract removes every
-qualification secret, Durable Object, service binding, and private-service
-deployment from the ordinary Worker rollout; arming must introduce all of them
-together only after the live prerequisites above have passed.
-
-The corrected ordinary rollout then completed coherently in run
-`32843022949` at `3ae8e6f190c6b0709d0864eed203b6d945580179`; post-merge CI
-`32843022931` also passed. Staging deployment
-`20fda098-6586-4137-98be-5c6a92e2b3f8` made version
-`7fdb4062-72ec-4ea8-b181-f4e7b88b5a1c` 100% active, its promotion canary
-passed, and production deployment `2a70ad71-b156-407c-b652-642e8fa03c09`
-made version `c7c8c7b0-26a5-46bd-a458-9cd380940836` 100% active. Direct
-health in both environments reported that exact commit, configured and
-effective intake false, and both public model-identity gates false. The active
-binding inventories contained no qualification secret, service, or Durable
-Object binding. Direct Cloudflare deployment reads returned `10007` (Worker
-does not exist) for both private qualification services, so they also have no
-route or preview deployment. This recovery deployed no qualification runtime
-capability and did not execute or arm the harness.
+run `32832326810` then passed and closed monitor incident `#1310`. Neither
+rollout authorized a model-identity State write.
 
 This gate closed on 2026-08-25 against disabled deployed commit
 `d34aab279dd99380530b9d77c3aa199559849209`. Retry `32792905120` started at
@@ -909,46 +846,22 @@ planning, not as replay execution or a permanent-unavailability decision.
    results-store digest.
 3. Dispatch every shard for one exact shard count from that immutable tag.
    Schedule shards across rate-limit windows rather than using a parallel
-   matrix. Confirm each run's head commit, attempt, success conclusion, artifact
-   name, artifact ID, and package digest with the Actions API.
+   matrix.
 4. Download every sanitized shard artifact before retention expires and run
    `scripts/aggregate_public_replay_github_evidence.py` offline from the same
    clean source commit. Supply every shard exactly once and validate the output
    against both the runtime validator and the published aggregate schema.
-5. Commit the sub-1-MiB source-free aggregate as a new immutable evidence
-   object. Record its exact byte digest, all shard JSON digests, run and artifact
-   IDs, input digests, classification counts, and artifact expiry date in a
-   linked evidence note and `INFRASTRUCTURE.md`. Do not rely on the 30-day
-   Actions artifacts as the durable record, and do not overwrite an older
-   aggregate when a probe or adjudication is rerun.
+5. Commit the canonical source-free aggregate used by replay planning. Replace
+   superseded aggregates once no active plan or execution profile references
+   them.
 6. Join classifications to the exact request artifact to report both request
    and accepted-result counts. Only `resolved` groups may advance to exact-pin
    replay. Keep `source_unavailable`, indeterminate, ambiguous, unreviewed, and
    missing-evidence groups pending until their separately reviewed next action.
 
-The first complete post-registry pass followed this procedure at source
-`5746f90e72e863d96d992938aea0609978d1560c`. Runs `32718053904` through
-`32719340876` covered 315 requests / 633 results; 69 / 135 resolved and 246 /
-498 remain pending. The exact digests, classifications, artifact IDs, expiry,
-and permanent aggregate are recorded in
-[`historical-public-evidence-rerun.md`](historical-public-evidence-rerun.md).
-
-The token-free public-Gist rerun followed the same procedure at source
-`6c13c245d17a1e25a59846769e533265e8ac9ba8`. Sixteen sequential retained runs
-`32768996061` through `32770548866` covered the same 315 requests / 633 results;
-126 / 192 are resolved and 189 / 441 remain pending, with zero source-probe or
-generic-probe indeterminacy. Exact inputs, classifications, artifact IDs,
-digests, expiry, and the permanent aggregate are recorded in
-[`historical-public-gist-probe-rerun.md`](historical-public-gist-probe-rerun.md).
-
-The legacy-adjudicated rerun followed the same procedure at source
-`ba5f5784427621f8b9be7396dd45a0938792707d`. Sixteen sequential retained runs
-`32794597497` through `32795629591` covered the same 315 requests / 633 results;
-128 / 194 are resolved and 187 / 439 remain `source_unavailable`, with every
-indeterminate, ambiguous, unreviewed, and missing-evidence bucket at zero.
-Exact registry/input bindings, classifications, artifact provenance, and the
-permanent aggregate are recorded in
-[`historical-public-adjudicated-evidence-rerun.md`](historical-public-adjudicated-evidence-rerun.md).
+The current canonical aggregate covers all 315 requests / 633 results: 128 /
+194 are resolved and 187 / 439 remain `source_unavailable`, with every
+indeterminate, ambiguous, unreviewed, and missing bucket at zero.
 
 ## Historical public image qualification walkthrough
 

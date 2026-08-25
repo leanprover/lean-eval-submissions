@@ -8,9 +8,6 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = (
     ROOT / ".github" / "workflows" / "historical-replay-inventory.yml"
 ).read_text(encoding="utf-8")
-DOCUMENTATION = (ROOT / "docs" / "historical-replay-inventory.md").read_text(
-    encoding="utf-8"
-)
 
 
 class HistoricalReplayInventoryWorkflowTests(unittest.TestCase):
@@ -124,14 +121,6 @@ class HistoricalReplayInventoryWorkflowTests(unittest.TestCase):
         self.assertIn("if: inputs.confirm_append_only_delta == true", WORKFLOW)
         self.assertNotIn("contents: write", WORKFLOW)
         self.assertNotIn("id-token: write", WORKFLOW)
-
-    def test_transient_run_requires_followup_durable_evidence(self) -> None:
-        self.assertIn("transient transport, not durable", DOCUMENTATION)
-        self.assertIn("run ID and attempt", DOCUMENTATION)
-        self.assertIn("inventory SHA-256", DOCUMENTATION)
-        self.assertIn("inventory workflow deliberately has no", DOCUMENTATION)
-        self.assertIn("write credential", DOCUMENTATION)
-
 
 if __name__ == "__main__":
     unittest.main()

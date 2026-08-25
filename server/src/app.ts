@@ -120,11 +120,6 @@ import {
   PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
   STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
 } from "./model-identity";
-import {
-  handleModelIdentityQualificationRequest,
-  type ModelIdentityQualificationEnv,
-} from "./model-identity-qualification-app";
-
 export type RuntimeEnv = Omit<
   CloudflareEnv,
   | "API_RATE_LIMITER"
@@ -206,11 +201,6 @@ export type RuntimeEnv = Omit<
     MODEL_IDENTITY_MAINTAINER_API_ENABLED?: string;
     MODEL_IDENTITY_MAINTAINERS?: string;
     MODEL_IDENTITY_STATE_CONTRACT_COMMIT?: string;
-    MODEL_IDENTITY_QUALIFICATION_TOKEN?: string;
-    MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET?: string;
-    MODEL_IDENTITY_QUALIFICATION_EXECUTOR?: Fetcher;
-    MODEL_IDENTITY_QUALIFICATION_JOURNAL?:
-      NonNullable<ModelIdentityQualificationEnv["MODEL_IDENTITY_QUALIFICATION_JOURNAL"]>;
     STATE_REPOSITORY: string;
   }>;
 
@@ -325,7 +315,6 @@ export type ApiDependencies = Readonly<{
   dispatch?: (request: Request) => Promise<void>;
   rateLimit?: (key: string) => Promise<Readonly<{ success: boolean }>>;
   scheduledSubrequestBudget?: ScheduledSubrequestBudget;
-  qualificationStateFetch?: GitHubFetch;
 }>;
 
 const JSON_HEADERS = {
@@ -2246,39 +2235,6 @@ function errorResponse(error: unknown): Response {
   return json({ error: "internal_error" }, 500);
 }
 
-export async function executeModelIdentityQualificationKernel(
-  request: Request,
-  env: RuntimeEnv,
-  dependencies: ApiDependencies,
-  maintainer: MaintainerIdentity,
-  occurredAtMilliseconds: number,
-): Promise<Response> {
-  const path = new URL(request.url).pathname;
-  const isOwnerRoute = path === "/api/v1/model-identities" ||
-    /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/(?:aliases|consolidations|name)$/.test(path);
-  const isMaintainerRoute =
-    /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/decisions$/.test(path);
-  if (
-    (!isOwnerRoute && !isMaintainerRoute) ||
-    !Number.isSafeInteger(occurredAtMilliseconds) ||
-    occurredAtMilliseconds < 0
-  ) return json({ error: "not_found" }, 404);
-  try {
-    return await apiRequest(
-      request,
-      {
-        ...env,
-        MODEL_IDENTITY_OWNER_API_ENABLED: "true",
-        MODEL_IDENTITY_MAINTAINER_API_ENABLED: "true",
-        MODEL_IDENTITY_MAINTAINERS: JSON.stringify([maintainer]),
-      },
-      { ...dependencies, now: () => occurredAtMilliseconds },
-    );
-  } catch (error) {
-    return errorResponse(error);
-  }
-}
-
 export async function handleRequest(
   request: Request,
   env: RuntimeEnv,
@@ -2325,17 +2281,6 @@ export async function handleRequest(
     } catch (error) {
       return errorResponse(error);
     }
-  }
-  if (request.method === "POST" && url.pathname === "/internal/v1/model-identity-qualification") {
-    return handleModelIdentityQualificationRequest(
-      request,
-      env,
-      {
-        ...(dependencies.qualificationStateFetch === undefined
-          ? {}
-          : { stateFetch: dependencies.qualificationStateFetch }),
-      },
-    );
   }
   if (request.method === "POST" && url.pathname === "/internal/v1/archive-completed") {
     try {

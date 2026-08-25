@@ -76,47 +76,6 @@ an accepted `two_plus_two` revision 1 replay on Ubuntu 24.04 image
 counter. This evidence completes only the credential-free historical smoke,
 not isolated private replay.
 
-### Independent-kernel compatibility smoke
-
-`kernel-shadow-smoke.yml` is a separate manual, credential-free preflight for
-candidate checkers. It does not alter the required checker set, submission
-acceptance, Results, State, replay queues, or releases. The first v1 fixture
-uses the already-accepted public `two_plus_two` solution and pins:
-
-- LeanEval `21c6c02178e14cccc54b6e90e4836d1ca0e9c7e6`, Lean 4.33.0, and Mathlib
-  `6f1ef4e5dd604a435bddba4747b13970cd65d2a1`;
-- lean4export `15f6055e299ad5b89345e533cc2192f4cc00f659`;
-- comparator `19e111e2141cf333c7daff0f64c5f24acc91dd2e`, whose multi-kernel interface
-  is used only for this post-acceptance shadow invocation; and
-- MathGraph `3d7585c21242f29fdaa48ae9a16e16c6afe42238`, selected because its pinned
-  Arena declaration had 121/121 expected acceptances, 66/66 expected
-  rejections, and zero declines. The experimental checker is not trusted merely
-  because the Arena result is clean.
-
-The workflow independently restores those commits, confirms that the source is
-still anonymously public, verifies the Arena declaration, builds every
-component from source, strips checkout credentials and nondependency Git
-metadata, runs the standard sandbox/environment probes, overlays only
-`Submission.lean` and `Submission/**/*.lean`, and invokes the candidate through
-comparator's sandboxed external-kernel protocol. Only strict JSON evidence is
-uploaded. The candidate is labeled `mathgraph-noda` internally so comparator
-uses the candidate's documented nanoda-compatible configuration-file protocol;
-the public checker identity remains `mathgraph`.
-
-This smoke proves one real LeanEval/exporter compatibility point. It is not a
-corpus backtest, a performance measurement, or promotion evidence by itself.
-Promotion still requires no incorrect Arena verdicts, full current-corpus
-support, agreement with adjudicated historical results, distinct recording of
-reject/decline/crash/timeout, and acceptable profile-pinned runtime. The
-workflow is fixed to public source and must not be generalized to private
-archives; private replay uses the distinct encrypted-archive controller path.
-
-The downstream source-free checker-series and full-corpus reporting contract is
-documented in [`kernel-corpus-report.md`](kernel-corpus-report.md). Its
-preparation and aggregation foundations do not turn this one-result smoke into
-authoritative corpus evidence, and actual corpus execution remains gated on the
-reviewed historical replay inventory and credentialed replay lane.
-
 ### Authoritative queue path
 
 Run locally against reviewed files:

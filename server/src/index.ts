@@ -1,5 +1,4 @@
 import { handleRequest, handleScheduled, type RuntimeEnv } from "./app";
-export { ModelIdentityQualificationJournal } from "./model-identity-qualification-journal";
 
 export default {
   fetch(request, env, context): Promise<Response> {
