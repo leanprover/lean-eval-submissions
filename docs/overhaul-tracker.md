@@ -56,26 +56,26 @@ not this summary.
 
 ### Disabled-state reconciliation
 
-- [ ] Confirm the latest protected deployment and readiness monitor are both
+- [x] Confirm the latest protected deployment and readiness monitor are both
       green at one exact commit.
-- [ ] Confirm production and staging State heads validate and match the tracked
+- [x] Confirm production and staging State heads validate and match the tracked
       contract pins.
-- [ ] Confirm production State contains no unexpected accepted server result or
+- [x] Confirm production State contains no unexpected accepted server result or
       due release work.
-- [ ] Keep the infrastructure inventory current without adding run narratives.
+- [x] Keep the infrastructure inventory current without adding run narratives.
 
 ### Launch preparation
 
-- [ ] Prepare one success and one authorization/validation denial fixture for
+- [x] Prepare one success and one authorization/validation denial fixture for
       metadata backfill.
-- [ ] Prepare one success and one authorization/validation denial fixture for
+- [x] Prepare one success and one authorization/validation denial fixture for
       repair/retraction requests.
-- [ ] Prepare one success and one authorization/validation denial fixture for
+- [x] Prepare one success and one authorization/validation denial fixture for
       maintainer decisions.
-- [ ] Prepare one success and one authorization/validation denial fixture for
+- [x] Prepare one success and one authorization/validation denial fixture for
       model alias/rename.
-- [ ] Prepare one pre-release opt-out case and verify its scheduling effect.
-- [ ] Prove that each launch gate returns to disabled and public health reports
+- [x] Prepare one pre-release opt-out case and verify its scheduling effect.
+- [x] Prove that each launch gate returns to disabled and public health reports
       the effective state.
 - [ ] Prepare one browser and one source-bound headless staging submission at
       the exact proposed launch commits.
