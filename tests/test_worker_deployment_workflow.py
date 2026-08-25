@@ -142,6 +142,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
         offline_evidence = {
             "scripts/aggregate_public_replay_github_evidence.py",
+            "scripts/build_public_replay_toolchain_registry.py",
+            "scripts/prepare_public_replay_plan.py",
             "scripts/resolve_public_replay_github_evidence.py",
             "scripts/validate_historical_replay_inventory_evidence.py",
         }
@@ -272,6 +274,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "build_public_replay_toolchain_registry.py",
             "prepare_public_replay_plan.py",
             "resolve_public_replay_github_evidence.py",
+            "validate_historical_replay_inventory_evidence.py",
         }
         for trigger in (pull_request, push):
             self.assertEqual(
