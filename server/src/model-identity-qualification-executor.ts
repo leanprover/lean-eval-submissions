@@ -79,10 +79,20 @@ async function requestBody(request: Request): Promise<Record<string, unknown>> {
 
 function exactStaging(env: ExecutorCloudflareEnv): boolean {
   return SHA.test(env.DEPLOYED_COMMIT) &&
+    exactString(env.DEPLOYMENT_ENVIRONMENT, "staging") &&
+    exactString(env.STATE_REPOSITORY, STATE_REPOSITORY) &&
+    exactString(
+      env.MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
+      STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
+    ) &&
     new TextEncoder().encode(env.AUTH_TOKEN_SECRET).byteLength >= 32 &&
     new TextEncoder().encode(env.GITHUB_STATE_TOKEN).byteLength >= 32 &&
     new TextEncoder().encode(env.MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET)
       .byteLength >= 32;
+}
+
+function exactString(value: string, expected: string): boolean {
+  return value === expected;
 }
 
 function runtime(env: ExecutorCloudflareEnv): RuntimeEnv {
