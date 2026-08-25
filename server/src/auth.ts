@@ -9,7 +9,7 @@ const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const GIST_ID = /^[0-9a-f]{5,64}$/;
 
-type TokenKind = "agent_challenge" | "browser_session" | "oauth_state" | "submission_grant";
+type TokenKind = "agent_challenge" | "agent_session" | "browser_session" | "oauth_state" | "submission_grant";
 
 export type OAuthState = Readonly<{
   kind: "oauth_state";
@@ -26,6 +26,19 @@ export type BrowserSession = Readonly<{
   issued_at: number;
   expires_at: number;
 }>;
+
+export type AgentSession = Readonly<{
+  kind: "agent_session";
+  login: string;
+  github_id: number;
+  source_repository: string;
+  source_commit: string;
+  proof_kind: "secret_gist_tag_source_commit_v1";
+  issued_at: number;
+  expires_at: number;
+}>;
+
+export type UserSession = BrowserSession | AgentSession;
 
 export type SubmissionGrant = Readonly<{
   kind: "submission_grant";
@@ -53,7 +66,7 @@ export type AgentChallenge = Readonly<{
   expires_at: number;
 }>;
 
-export type SignedPayload = OAuthState | BrowserSession | SubmissionGrant | AgentChallenge;
+export type SignedPayload = OAuthState | BrowserSession | AgentSession | SubmissionGrant | AgentChallenge;
 
 export class AuthError extends Error {
   constructor(message: string) {
@@ -103,6 +116,16 @@ function exactObject(value: unknown): Record<string, unknown> {
 const FIELDS: Readonly<Record<TokenKind, readonly string[]>> = {
   oauth_state: ["expires_at", "issued_at", "kind", "nonce", "nonce_event_id"],
   browser_session: ["expires_at", "github_id", "issued_at", "kind", "login"],
+  agent_session: [
+    "expires_at",
+    "github_id",
+    "issued_at",
+    "kind",
+    "login",
+    "proof_kind",
+    "source_commit",
+    "source_repository",
+  ],
   submission_grant: [
     "expires_at",
     "issued_at",
@@ -160,10 +183,21 @@ function validatePayload(value: unknown, expectedKind: TokenKind, now: number): 
     throw new AuthError("token login is invalid");
   }
   if (
-    expectedKind === "browser_session" &&
+    (expectedKind === "browser_session" || expectedKind === "agent_session") &&
     (typeof payload.github_id !== "number" || !Number.isSafeInteger(payload.github_id) || payload.github_id < 1)
   ) {
     throw new AuthError("token GitHub identity is invalid");
+  }
+  if (expectedKind === "agent_session") {
+    if (
+      typeof payload.source_repository !== "string" ||
+      !REPOSITORY.test(payload.source_repository) ||
+      typeof payload.source_commit !== "string" ||
+      !COMMIT.test(payload.source_commit) ||
+      payload.proof_kind !== "secret_gist_tag_source_commit_v1"
+    ) {
+      throw new AuthError("agent session source proof is invalid");
+    }
   }
   if (expectedKind === "agent_challenge") {
     if (typeof payload.source_repository !== "string" || !REPOSITORY.test(payload.source_repository)) {
@@ -212,6 +246,52 @@ export async function verifyToken<T extends SignedPayload>(
     throw new AuthError("token payload is invalid");
   }
   return validatePayload(decoded, expectedKind, nowSeconds) as T;
+}
+
+export async function verifyUserSession(
+  secret: string,
+  token: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+): Promise<UserSession> {
+  try {
+    return await verifyToken<BrowserSession>(
+      secret,
+      token,
+      "browser_session",
+      nowSeconds,
+    );
+  } catch (browserError) {
+    try {
+      return await verifyToken<AgentSession>(
+        secret,
+        token,
+        "agent_session",
+        nowSeconds,
+      );
+    } catch {
+      throw browserError;
+    }
+  }
+}
+
+export function makeAgentSession(
+  identity: Readonly<{ id: number; login: string }>,
+  challenge: AgentChallenge,
+  nowSeconds: number,
+): AgentSession {
+  if (identity.login !== challenge.login) {
+    throw new AuthError("agent proof identity does not match its challenge");
+  }
+  return {
+    kind: "agent_session",
+    login: identity.login,
+    github_id: identity.id,
+    source_repository: challenge.source_repository,
+    source_commit: challenge.source_commit,
+    proof_kind: "secret_gist_tag_source_commit_v1",
+    issued_at: nowSeconds,
+    expires_at: nowSeconds + 3600,
+  };
 }
 
 export function randomNonce(bytes = 32): string {
