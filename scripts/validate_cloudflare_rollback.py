@@ -823,6 +823,11 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         "MODEL_IDENTITY_MAINTAINERS",
         "MODEL_IDENTITY_STATE_CONTRACT_COMMIT",
     }
+    model_consolidation_gate_fields = {
+        "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED",
+        "MODEL_IDENTITY_OWNER_API_ENABLED",
+        "MODEL_IDENTITY_STATE_CONTRACT_COMMIT",
+    }
     amendment_maintainer_specific_fields = (
         amendment_maintainer_gate_fields - {"RESULT_OWNER_STATE_CONTRACT_COMMIT"}
     )
@@ -833,6 +838,9 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     )
     present_model_owner_fields = model_owner_gate_fields & set(intake_expected)
     present_model_maintainer_fields = model_maintainer_gate_fields & set(intake_expected)
+    present_model_consolidation_fields = (
+        model_consolidation_gate_fields & set(intake_expected)
+    )
     if (
         "LEGACY_RESULT_OWNER_API_ENABLED" in present_legacy_owner_fields
         and present_legacy_owner_fields != legacy_owner_gate_fields
@@ -873,6 +881,15 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             "model identity maintainer API gate, identities, and State contract pin "
             "must appear together"
         )
+    if (
+        "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED"
+        in present_model_consolidation_fields
+        and present_model_consolidation_fields != model_consolidation_gate_fields
+    ):
+        raise RollbackValidationError(
+            "model identity consolidation API gate, owner gate, and State contract pin "
+            "must appear together"
+        )
     legacy_owner_supported = "LEGACY_RESULT_OWNER_API_ENABLED" in present_legacy_owner_fields
     amendment_owner_supported = "RESULT_AMENDMENT_OWNER_API_ENABLED" in present_amendment_owner_fields
     amendment_maintainer_supported = (
@@ -880,8 +897,16 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     )
     model_owner_supported = present_model_owner_fields == model_owner_gate_fields
     model_maintainer_supported = present_model_maintainer_fields == model_maintainer_gate_fields
+    model_consolidation_supported = (
+        present_model_consolidation_fields == model_consolidation_gate_fields
+    )
+    release_opt_out_supported = "RELEASE_OPT_OUT_API_ENABLED" in intake_expected
     intake_limits = intake_selected.get("limits")
-    if model_owner_supported or model_maintainer_supported:
+    if (
+        model_owner_supported
+        or model_maintainer_supported
+        or model_consolidation_supported
+    ):
         if intake_limits != {"subrequests": 400}:
             raise RollbackValidationError(
                 "model identity API contract requires the exact 400-subrequest Worker limit"
@@ -922,6 +947,21 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     )
     if model_maintainer_supported:
         _validate_maintainer_identities(intake_expected["MODEL_IDENTITY_MAINTAINERS"])
+    plan["model_identity_consolidation_api_contract_supported"] = (
+        model_consolidation_supported
+    )
+    plan["model_identity_consolidation_api_enabled"] = (
+        enabled(intake_expected, "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED")
+        and plan["model_identity_owner_api_enabled"]
+        if model_consolidation_supported
+        else False
+    )
+    plan["release_opt_out_api_contract_supported"] = release_opt_out_supported
+    plan["release_opt_out_api_enabled"] = (
+        enabled(intake_expected, "RELEASE_OPT_OUT_API_ENABLED")
+        if release_opt_out_supported
+        else False
+    )
     owner_state_commit = (
         intake_expected["RESULT_OWNER_STATE_CONTRACT_COMMIT"]
         if (
@@ -942,7 +982,11 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     plan["result_owner_state_contract_commit"] = owner_state_commit
     model_state_commit = (
         intake_expected["MODEL_IDENTITY_STATE_CONTRACT_COMMIT"]
-        if model_owner_supported or model_maintainer_supported
+        if (
+            model_owner_supported
+            or model_maintainer_supported
+            or model_consolidation_supported
+        )
         else None
     )
     if model_state_commit is not None and COMMIT.fullmatch(model_state_commit) is None:
@@ -962,13 +1006,16 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             "result_amendment_maintainer_api_enabled",
             "model_identity_owner_api_enabled",
             "model_identity_maintainer_api_enabled",
+            "model_identity_consolidation_api_enabled",
+            "release_opt_out_api_enabled",
             "promotion_canary_enabled",
             "replay_enabled",
             "staging_acceptance_enabled",
         )
     ):
         raise RollbackValidationError(
-            "an emergency production rollback target must disable result owner APIs, promotion canary, replay, and model identity APIs"
+            "an emergency production rollback target must disable result owner APIs, "
+            "promotion canary, replay, model identity APIs, and release opt-out"
         )
     if getattr(args, "require_intake_disabled", False) and plan["intake_enabled"]:
         raise RollbackValidationError(
@@ -1155,6 +1202,14 @@ def validate_health(
             expected["model_identity_maintainer_api_enabled"] = plan[
                 "model_identity_maintainer_api_enabled"
             ]
+        if plan["model_identity_consolidation_api_contract_supported"]:
+            expected["model_identity_consolidation_api_enabled"] = plan[
+                "model_identity_consolidation_api_enabled"
+            ]
+        if plan["release_opt_out_api_contract_supported"]:
+            expected["release_opt_out_api_enabled"] = plan[
+                "release_opt_out_api_enabled"
+            ]
         if plan["promotion_canary_contract_supported"]:
             expected.update(
                 {
@@ -1227,6 +1282,10 @@ def build_prestate(args: argparse.Namespace) -> dict[str, Any]:
         "model_identity_owner_api_enabled",
         "model_identity_maintainer_api_contract_supported",
         "model_identity_maintainer_api_enabled",
+        "model_identity_consolidation_api_contract_supported",
+        "model_identity_consolidation_api_enabled",
+        "release_opt_out_api_contract_supported",
+        "release_opt_out_api_enabled",
         "model_identity_state_contract_commit",
         "replay_enabled", "staging_acceptance_enabled",
         "staging_memory_limit_bytes", "production_memory_gate_bytes",
@@ -1335,6 +1394,16 @@ def build_prestate(args: argparse.Namespace) -> dict[str, Any]:
             "model_identity_maintainer_api_enabled": plan[
                 "model_identity_maintainer_api_enabled"
             ],
+            "model_identity_consolidation_api_contract_supported": plan[
+                "model_identity_consolidation_api_contract_supported"
+            ],
+            "model_identity_consolidation_api_enabled": plan[
+                "model_identity_consolidation_api_enabled"
+            ],
+            "release_opt_out_api_contract_supported": plan[
+                "release_opt_out_api_contract_supported"
+            ],
+            "release_opt_out_api_enabled": plan["release_opt_out_api_enabled"],
             "promotion_canary_enabled": plan["promotion_canary_enabled"],
             "promotion_canary_contract_supported": plan[
                 "promotion_canary_contract_supported"

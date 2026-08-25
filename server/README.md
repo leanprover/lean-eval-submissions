@@ -125,7 +125,9 @@ contract testing:
   `PATCH /api/v1/submissions/<uuid>/metadata`, and
   `PUT /api/v1/submissions/<uuid>/publication` require the base record's
   owning identity. Mutations also require a canonical UUIDv7
-  `Idempotency-Key`; cookie-authenticated mutations are same-origin.
+  `Idempotency-Key`; cookie-authenticated mutations are same-origin. The
+  publication route has its own exact-`true` `RELEASE_OPT_OUT_API_ENABLED`
+  gate, so an owner can withhold a submission while intake remains disabled.
 - `POST /api/v1/results/claims` and
   `PATCH /api/v1/results/<result-id>/metadata` implement the separately gated
   legacy-result owner flow documented in
@@ -133,8 +135,9 @@ contract testing:
 - The independently gated model-identity producer routes implement owner
   requests, aliases, renames, and exact-pair maintainer decisions as documented in
   [`../docs/model-identity-owner-api.md`](../docs/model-identity-owner-api.md).
-  Consolidation remains an unconditional 404 pending a protected State
-  reverse-impact index and atomic graph rematerialization lane.
+  Consolidation additionally requires the exact-`true`
+  `MODEL_IDENTITY_CONSOLIDATION_API_ENABLED` gate, so the smaller owner surface
+  can be enabled without it.
   Both route families remain dark in staging and production.
   They remain disabled in both tracked environments and do not depend on or
   enable submission intake.

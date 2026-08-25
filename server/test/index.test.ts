@@ -30,8 +30,10 @@ describe("Worker routing", () => {
       result_amendment_maintainer_api_enabled: false,
       model_identity_owner_api_enabled: false,
       model_identity_maintainer_api_enabled: false,
+      model_identity_consolidation_api_enabled: false,
       model_identity_write_max_subrequests: 400,
       model_identity_consolidation_api: "atomic_reverse_impact_v1",
+      release_opt_out_api_enabled: false,
       promotion_canary_configured_enabled: true,
       promotion_canary_enabled: true,
       intake_enablement_mode: "disabled",
@@ -59,14 +61,51 @@ describe("Worker routing", () => {
       result_amendment_maintainer_api_enabled: false,
       model_identity_owner_api_enabled: false,
       model_identity_maintainer_api_enabled: false,
+      model_identity_consolidation_api_enabled: false,
       model_identity_write_max_subrequests: 400,
       model_identity_consolidation_api: "atomic_reverse_impact_v1",
+      release_opt_out_api_enabled: false,
       promotion_canary_configured_enabled: false,
       promotion_canary_enabled: false,
       intake_enablement_mode: "disabled",
       intake_lease_expires_at: null,
     });
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("reports independently effective consolidation and release opt-out gates", async () => {
+    const contract = "9fc7c431a92c678554c65ebac68d3fddf4990d29";
+    const enabled = await handleRequest(
+      new Request("https://example.test/healthz"),
+      {
+        ...ENV,
+        MODEL_IDENTITY_OWNER_API_ENABLED: "true",
+        MODEL_IDENTITY_CONSOLIDATION_API_ENABLED: "true",
+        MODEL_IDENTITY_STATE_CONTRACT_COMMIT: contract,
+        RELEASE_OPT_OUT_API_ENABLED: "true",
+      },
+      LIFECYCLE,
+    );
+    expect(await enabled.json()).toMatchObject({
+      intake_effective_enabled: false,
+      model_identity_owner_api_enabled: true,
+      model_identity_consolidation_api_enabled: true,
+      release_opt_out_api_enabled: true,
+    });
+
+    const missingOwner = await handleRequest(
+      new Request("https://example.test/healthz"),
+      {
+        ...ENV,
+        MODEL_IDENTITY_CONSOLIDATION_API_ENABLED: "true",
+        MODEL_IDENTITY_STATE_CONTRACT_COMMIT: contract,
+      },
+      LIFECYCLE,
+    );
+    expect(await missingOwner.json()).toMatchObject({
+      model_identity_owner_api_enabled: false,
+      model_identity_consolidation_api_enabled: false,
+    });
   });
 
   it("fails the maintainer gate closed and never exposes configured identities", async () => {

@@ -261,8 +261,10 @@ jobs:
           assert body["result_amendment_maintainer_api_enabled"] is False
           assert body["model_identity_owner_api_enabled"] is False
           assert body["model_identity_maintainer_api_enabled"] is False
+          assert body["model_identity_consolidation_api_enabled"] is False
           assert body["model_identity_write_max_subrequests"] == 400
           assert body["model_identity_consolidation_api"] == "atomic_reverse_impact_v1"
+          assert body["release_opt_out_api_enabled"] is False
           assert body["promotion_canary_configured_enabled"] is True
           assert body["promotion_canary_enabled"] is True
           assert body["intake_enablement_mode"] == "disabled"
@@ -421,8 +423,10 @@ jobs:
           assert body["result_amendment_maintainer_api_enabled"] is False
           assert body["model_identity_owner_api_enabled"] is False
           assert body["model_identity_maintainer_api_enabled"] is False
+          assert body["model_identity_consolidation_api_enabled"] is False
           assert body["model_identity_write_max_subrequests"] == 400
           assert body["model_identity_consolidation_api"] == "atomic_reverse_impact_v1"
+          assert body["release_opt_out_api_enabled"] is False
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY
@@ -679,8 +683,10 @@ jobs:
           assert body["result_amendment_maintainer_api_enabled"] is False
           assert body["model_identity_owner_api_enabled"] is False
           assert body["model_identity_maintainer_api_enabled"] is False
+          assert body["model_identity_consolidation_api_enabled"] is False
           assert body["model_identity_write_max_subrequests"] == 400
           assert body["model_identity_consolidation_api"] == "atomic_reverse_impact_v1"
+          assert body["release_opt_out_api_enabled"] is False
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY
@@ -772,8 +778,10 @@ jobs:
           assert body["result_amendment_maintainer_api_enabled"] is False
           assert body["model_identity_owner_api_enabled"] is False
           assert body["model_identity_maintainer_api_enabled"] is False
+          assert body["model_identity_consolidation_api_enabled"] is False
           assert body["model_identity_write_max_subrequests"] == 400
           assert body["model_identity_consolidation_api"] == "atomic_reverse_impact_v1"
+          assert body["release_opt_out_api_enabled"] is False
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY
