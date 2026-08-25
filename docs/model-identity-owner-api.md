@@ -40,6 +40,10 @@ one-hour `browser_session` contract; there is no unsigned actor path.
 The Worker derives `mi1_...` and `ma1_...` with the same domain-separated
 SHA-256 formulas and identifier vectors as protected State. It reads only the
 targeted identity, alias, immutable event, and bounded reverse-impact documents.
+Before creating a model request, it proves that the exact immutable event path is
+absent; an existing path is accepted only as the same fully validated request and
+view, so reusing one UUIDv7 `Idempotency-Key` across route families cannot replace
+an earlier event.
 Every successful CAS commit writes its immutable event, exact operational
 views, and the complete affected reverse-impact component atomically. Approval
 creates the one-member component; alias and rename update it in the same commit.
@@ -50,9 +54,11 @@ Consolidation reads the protected source and target component indexes. It
 rejects self, missing, inactive, cross-owner, overlapping, malformed, or
 greater-than-32-view unions. The source index names every transitive predecessor
 identity and alias whose resolution changes; the Worker reads and cross-checks
-every one, changes all of their `resolved_model_id` values, records the source
-terminal's immutable consolidation event, deletes the old source component,
-and installs the sorted complete union at the target in one non-forced Git CAS.
+every one, including strict timestamp and UUID append-authority ordering for
+each causal predecessor, changes all of their `resolved_model_id` values,
+records the source terminal's immutable consolidation event, deletes the old
+source component, and installs the sorted complete union at the target in one
+non-forced Git CAS.
 The target may later be consolidated again. Exact retries therefore follow the
 source view to its current terminal component instead of assuming the immediate
 target remains terminal. Health records `atomic_reverse_impact_v1`.

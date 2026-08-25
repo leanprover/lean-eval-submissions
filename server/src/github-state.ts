@@ -602,10 +602,7 @@ async function assertStateSourceContractAt(
 
 function decodeInlineJson(value: unknown, path: string): unknown {
   const data = object(value, `${path} contents response`);
-  if (
-    (Object.hasOwn(data, "type") && data.type !== "file") ||
-    (Object.hasOwn(data, "path") && data.path !== path)
-  ) {
+  if (data.type !== "file" || data.path !== path) {
     throw new GitHubStateError(502, `${path} was not the exact regular State file`);
   }
   if (data.encoding !== "base64" || typeof data.content !== "string") {
@@ -1648,6 +1645,7 @@ async function readModelMutationPredecessorAt(
   if (
     predecessor.event_id !== mutation.causation_event_id ||
     predecessor.subject_id !== modelId || mutation.subject_id !== modelId ||
+    predecessor.event_id >= mutation.event_id ||
     Date.parse(predecessor.occurred_at) >= Date.parse(mutation.occurred_at)
   ) throw new StateEventConflictError(path);
   return predecessor;
@@ -1939,16 +1937,43 @@ export class GitHubStateRepository {
   }> {
     const modelId = await modelIdentityId(request.eventId);
     const path = modelIdentityPath(modelId);
+    const eventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
       const snapshot = await this.#modelIdentitySnapshot();
-      const existing = await readModelIdentityAt(this.#config, this.#fetcher, modelId, snapshot.headSha);
-      if (existing !== null) {
+      const existingEvent = await readPathAt(
+        this.#config,
+        this.#fetcher,
+        eventPath,
+        snapshot.headSha,
+      );
+      if (existingEvent.found) {
+        const event = existingModelEvent(existingEvent.value, eventPath);
+        if (
+          event.event_type !== "model_identity.requested" ||
+          event.event_id !== request.eventId || event.subject_id !== modelId ||
+          event.causation_event_id !== null || event.actor.login !== request.ownerLogin ||
+          event.payload.display_name !== request.displayName
+        ) throw new StateEventConflictError(eventPath);
+        const existing = await readModelIdentityAt(
+          this.#config,
+          this.#fetcher,
+          modelId,
+          snapshot.headSha,
+        );
+        if (existing === null) throw new StateEventConflictError(eventPath);
         if (
           existing.view.owner_login !== request.ownerLogin ||
           existing.view.requested_name !== request.displayName
-        ) throw new StateEventConflictError(path);
+        ) throw new StateEventConflictError(eventPath);
         return { commit: snapshot.headSha, created: false, modelId };
       }
+      const existing = await readModelIdentityAt(
+        this.#config,
+        this.#fetcher,
+        modelId,
+        snapshot.headSha,
+      );
+      if (existing !== null) throw new StateEventConflictError(path);
       this.#assertModelEventClock(request.eventId, request.occurredAt);
       const event: ModelIdentityOwnerEvent<"model_identity.requested"> = {
         schema_version: 1,

@@ -402,8 +402,9 @@ consolidation lanes have a conservative 400-request bound at the tracked
 400-request limit. Consolidation uses the hard-32-view protected
 reverse-impact components at production contract `714f7408` and staging mirror
 `9fc7c431`: every write snapshot proves the branch is protected at that exact
-head, every source and target member and causal predecessor is read and
-validated, every affected source identity and alias is rewritten, the source index is deleted, and the
+head, every source and target member and causal predecessor is read and its
+timestamp plus UUID append-authority ordering is validated, every affected
+source identity and alias is rewritten, the source index is deleted, and the
 sorted target union is installed in one CAS.
 Both owner and maintainer gates must remain false until protected deployment,
 paid-plan limit preservation, rollback health, live OAuth and verified-agent
