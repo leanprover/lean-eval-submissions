@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from collections.abc import Callable
 from typing import Any
 
 MAX_JSON_BYTES = 16 * 1024 * 1024
@@ -382,12 +383,25 @@ def _validate_handoff_json_schema(value: Any, root: pathlib.Path) -> None:
         ) from error
 
 
+def _git_environment() -> dict[str, str]:
+    environment = {
+        key: value for key, value in os.environ.items() if not key.startswith("GIT_")
+    }
+    environment.update(
+        GIT_CONFIG_GLOBAL=os.devnull,
+        GIT_CONFIG_NOSYSTEM="1",
+        GIT_NO_REPLACE_OBJECTS="1",
+    )
+    return environment
+
+
 def _git(repository: pathlib.Path, *arguments: str, maximum: int = 4096) -> bytes:
     try:
         result = subprocess.run(
             ["git", "-C", str(repository), *arguments],
             check=True,
             capture_output=True,
+            env=_git_environment(),
         )
     except (OSError, subprocess.CalledProcessError) as error:
         raise HistoricalPublicRunnerError(
@@ -449,6 +463,7 @@ def _write_git_archive(
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            env=_git_environment(),
         )
         if process.stdout is None:
             raise HistoricalPublicRunnerError("git archive did not expose its output")
@@ -535,7 +550,7 @@ def _find_matrix_entry(matrix: dict[str, Any], benchmark_commit: str) -> dict[st
     return entries[0]
 
 
-def build_handoff(
+def _build_handoff_with_source_identity(
     *,
     plan: dict[str, Any],
     plan_raw: bytes,
@@ -548,6 +563,8 @@ def build_handoff(
     source_repository: pathlib.Path,
     benchmark_repository: pathlib.Path,
     source_archive: pathlib.Path,
+    source_kind: str,
+    source_identity_validator: Callable[[pathlib.Path, dict[str, Any]], str],
 ) -> dict[str, Any]:
     validate_contract(contract)
     plan_sha256 = sha256_bytes(plan_raw)
@@ -571,7 +588,7 @@ def build_handoff(
     benchmark = request["benchmark"]
     entry = _find_matrix_entry(matrix, benchmark["commit"])
     if (
-        source["kind"] != "github_repo"
+        source["kind"] != source_kind
         or source["visibility"] != "public"
         or entry["toolchain"] != benchmark["toolchain"]
         or entry["lean_toolchain_blob_sha256"]
@@ -582,9 +599,8 @@ def build_handoff(
         raise HistoricalPublicRunnerError(
             "plan result differs from its profile matrix entry"
         )
-    source_tree = _require_checkout_identity(
-        source_repository, source["repository"], source["commit"], "source"
-    )
+    source_tree = source_identity_validator(source_repository, source)
+    _match(COMMIT, source_tree, "verified historical public source tree")
     benchmark_tree = _require_checkout_identity(
         benchmark_repository,
         benchmark["repository"],
@@ -664,6 +680,46 @@ def build_handoff(
         "network": contract["network"],
         "untrusted_environment": {},
     }
+
+
+def _repository_source_identity(
+    repository: pathlib.Path, source: dict[str, Any]
+) -> str:
+    return _require_checkout_identity(
+        repository, source["repository"], source["commit"], "source"
+    )
+
+
+def build_handoff(
+    *,
+    plan: dict[str, Any],
+    plan_raw: bytes,
+    matrix: dict[str, Any],
+    matrix_raw: bytes,
+    contract: dict[str, Any],
+    contract_raw: bytes,
+    request_id: str,
+    result_id: str,
+    source_repository: pathlib.Path,
+    benchmark_repository: pathlib.Path,
+    source_archive: pathlib.Path,
+) -> dict[str, Any]:
+    """Build the unchanged repository-source runner handoff."""
+    return _build_handoff_with_source_identity(
+        plan=plan,
+        plan_raw=plan_raw,
+        matrix=matrix,
+        matrix_raw=matrix_raw,
+        contract=contract,
+        contract_raw=contract_raw,
+        request_id=request_id,
+        result_id=result_id,
+        source_repository=source_repository,
+        benchmark_repository=benchmark_repository,
+        source_archive=source_archive,
+        source_kind="github_repo",
+        source_identity_validator=_repository_source_identity,
+    )
 
 
 def _write_exclusive_json(path: pathlib.Path, value: dict[str, Any]) -> None:

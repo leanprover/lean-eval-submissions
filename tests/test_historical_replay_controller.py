@@ -21,16 +21,20 @@ from scripts.historical_replay_controller import (
     _terminal_transition,
     _verify_qualification_source_bindings,
     bind_handoff,
+    build_executor_request,
     canonical_bytes,
     load_reviewed_inputs,
     plan_next,
     recover_running,
+    render_executor_config,
     replay_task_id,
     sha256_bytes,
     started_event,
     state_canonical_bytes,
     terminal_event,
     validate_execution_plan,
+    validate_executor_request,
+    validate_executor_verdict,
     validate_plan_against_queue,
     validate_queue,
     verify_repository_bindings,
@@ -325,9 +329,9 @@ class HistoricalReplayPlanTests(unittest.TestCase):
     def test_plans_exact_first_eligible_task_without_modern_or_private_identity(self) -> None:
         plan = self.fixture.plan()
         self.assertEqual(plan["kind"], "execution")
-        self.assertEqual(plan["transport"]["status"], "blocked")
         self.assertEqual(
-            plan["transport"]["reason"], "historical_public_executor_not_implemented"
+            plan["transport"],
+            {"status": "ready", "contract": "historical_public_executor_v1"},
         )
         self.assertEqual(plan["started_transition"]["payload"]["attempt"], 1)
         rendered = json.dumps(plan)
@@ -341,7 +345,7 @@ class HistoricalReplayPlanTests(unittest.TestCase):
             self.assertNotIn(forbidden, rendered)
         self.assertEqual(validate_execution_plan(plan), plan)
 
-    def test_empty_queue_is_bound_and_remains_transport_blocked(self) -> None:
+    def test_empty_queue_is_bound_to_the_ready_transport(self) -> None:
         queue = copy.deepcopy(self.fixture.queue)
         queue["tasks"] = []
         plan = plan_next(queue)
@@ -351,9 +355,8 @@ class HistoricalReplayPlanTests(unittest.TestCase):
                 "schema_version": 1,
                 "kind": "empty",
                 "transport": {
-                    "status": "blocked",
-                    "reason": "historical_public_executor_not_implemented",
-                    "required_contract": "historical_public_executor_v1",
+                    "status": "ready",
+                    "contract": "historical_public_executor_v1",
                 },
                 "queue": {
                     "queue_environment": "production",
@@ -375,7 +378,7 @@ class HistoricalReplayPlanTests(unittest.TestCase):
         plan = self.fixture.plan(queue)
         self.assertEqual(plan["started_transition"]["payload"]["attempt"], 3)
 
-    def test_gist_and_attempt_limit_are_typed_blockers_before_started(self) -> None:
+    def test_gist_adapter_is_eligible_and_attempt_limit_remains_typed(self) -> None:
         fixture = Fixture()
         request = next(
             request
@@ -385,18 +388,10 @@ class HistoricalReplayPlanTests(unittest.TestCase):
         request["source"]["kind"] = "gist"
         fixture.task["source_kind"] = "gist"
         fixture.recanonicalize_reviewed_inputs()
-        blocked = fixture.plan()
-        self.assertEqual(blocked["kind"], "blocked")
-        self.assertEqual(
-            blocked["blocker"]["reason"],
-            "historical_public_gist_source_adapter_not_implemented",
-        )
-        with self.assertRaises(HistoricalReplayControllerError):
-            started_event(
-                blocked,
-                fixture.queue,
-                "2026-08-25T01:00:00.004Z",
-            )
+        planned = fixture.plan()
+        self.assertEqual(planned["kind"], "execution")
+        self.assertEqual(planned["task"]["source_kind"], "gist")
+        self.assertEqual(validate_execution_plan(planned), planned)
 
         queue = copy.deepcopy(self.fixture.queue)
         queue["tasks"][0].update(
@@ -434,6 +429,10 @@ class HistoricalReplayPlanTests(unittest.TestCase):
             replay_task_id=candidate,
             request_id="prr_" + hashlib.sha256(model.encode()).hexdigest(),
             source_kind="gist",
+            status="failed",
+            attempt=3,
+            reason_code="runner_lost",
+            retryable=True,
             authority_event_id="01a035b4-d6ca-7000-8000-000000000001",
             qualification_event_id="01a035b4-d6cb-7000-8000-000000000001",
             event_id="01a035b4-d6cc-7000-8000-000000000001",
@@ -444,7 +443,9 @@ class HistoricalReplayPlanTests(unittest.TestCase):
         self.assertEqual(plan["task"], self.fixture.task)
         self.assertEqual(validate_plan_against_queue(plan, queue), plan)
 
-        queue["tasks"][0]["source_kind"] = "github_repo"
+        queue["tasks"][0].update(status="queued", attempt=0)
+        for field in ("reason_code", "retryable"):
+            queue["tasks"][0].pop(field)
         with self.assertRaisesRegex(HistoricalReplayControllerError, "next live queue task"):
             validate_plan_against_queue(plan, queue)
 
@@ -620,11 +621,11 @@ class HistoricalReplayPlanTests(unittest.TestCase):
         with self.assertRaises(HistoricalReplayControllerError):
             validate_execution_plan(plan)
         plan = self.fixture.plan()
-        plan["task"]["source_kind"] = "gist"
+        plan["task"]["source_kind"] = "private_repo"
         plan["queue"]["task_sha256"] = sha256_bytes(
             state_canonical_bytes(plan["task"])
         )
-        with self.assertRaisesRegex(HistoricalReplayControllerError, "source adapter"):
+        with self.assertRaisesRegex(HistoricalReplayControllerError, "source_kind"):
             validate_execution_plan(plan)
         plan = self.fixture.plan()
         plan["task"].update(
@@ -799,7 +800,7 @@ class HistoricalReplayEventTests(unittest.TestCase):
     def test_terminal_refuses_wrong_verdict_and_wrong_started_identity(self) -> None:
         with self.assertRaisesRegex(
             HistoricalReplayControllerError,
-            "historical_public_attempt_binding_not_implemented",
+            "historical_public_attempt_binding_required",
         ):
             terminal_event(
                 self.plan,
@@ -832,7 +833,7 @@ class HistoricalReplayHandoffTests(unittest.TestCase):
     def setUp(self) -> None:
         self.fixture = Fixture()
 
-    def test_binds_exact_handoff_but_keeps_executor_transport_blocked(self) -> None:
+    def test_binds_exact_handoff_to_ready_executor_transport(self) -> None:
         archive = b"public source archive fixture"
         handoff = self.fixture.handoff(archive)
         with tempfile.TemporaryDirectory() as directory:
@@ -845,9 +846,150 @@ class HistoricalReplayHandoffTests(unittest.TestCase):
                 self.fixture.matrix,
                 self.fixture.contract,
             )
-        self.assertEqual(binding["kind"], "historical_public_executor_transport_blocker")
-        self.assertEqual(binding["transport"]["status"], "blocked")
+        self.assertEqual(binding["kind"], "historical_public_executor_binding")
+        self.assertEqual(binding["transport"]["status"], "ready")
         self.assertEqual(binding["attempt"], 1)
+
+    def test_executor_envelope_binds_attempt_runtime_and_terminal_event(self) -> None:
+        archive = b"public source archive fixture"
+        plan = self.fixture.plan()
+        handoff = self.fixture.handoff(archive)
+        started = started_event(
+            plan,
+            self.fixture.queue,
+            "2026-08-25T01:00:00.000Z",
+            random_bytes=b"\x01" * 10,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "source.tar.gz"
+            path.write_bytes(archive)
+            request = build_executor_request(
+                plan,
+                handoff,
+                path,
+                self.fixture.matrix,
+                self.fixture.contract,
+                "4" * 64,
+            )
+        response = {
+            "schema_version": 1,
+            "contract": "historical_public_executor_v1",
+            **{
+                field: request[field]
+                for field in (
+                    "runner_nonce",
+                    "replay_task_id",
+                    "attempt",
+                    "handoff_sha256",
+                    "source_archive_sha256",
+                    "execution_profile_digest",
+                    "measurement_config_digest",
+                    "vm_image_digest",
+                )
+            },
+            "runner_verdict": self.fixture.verdict(),
+            "destruction": "confirmed",
+        }
+        self.assertEqual(validate_executor_request(plan, started, request), request)
+        self.assertEqual(
+            validate_executor_verdict(request, response),
+            self.fixture.verdict(),
+        )
+        terminal = terminal_event(
+            plan,
+            started,
+            "2026-08-25T01:00:00.004Z",
+            executor_request_value=request,
+            verdict_value=response,
+            random_bytes=b"\x02" * 10,
+        )
+        self.assertEqual(terminal["event_type"], "replay.accepted")
+        self.assertEqual(terminal["subject_id"], request["replay_task_id"])
+        self.assertEqual(terminal["causation_event_id"], started["event_id"])
+        self.assertEqual(terminal["payload"]["attempt"], request["attempt"])
+
+        for field, changed in (
+            ("runner_nonce", "0" * 64),
+            ("replay_task_id", "rt1_" + "0" * 64),
+            ("attempt", 2),
+            ("handoff_sha256", "0" * 64),
+            ("source_archive_sha256", "0" * 64),
+            ("execution_profile_digest", "0" * 64),
+            ("measurement_config_digest", "0" * 64),
+            ("vm_image_digest", "sha256:" + "0" * 64),
+        ):
+            with self.subTest(field=field):
+                drifted = copy.deepcopy(response)
+                drifted[field] = changed
+                with self.assertRaises(HistoricalReplayControllerError):
+                    terminal_event(
+                        plan,
+                        started,
+                        "2026-08-25T01:00:00.004Z",
+                        executor_request_value=request,
+                        verdict_value=drifted,
+                    )
+
+        unconfirmed = copy.deepcopy(response)
+        unconfirmed["destruction"] = "pending"
+        with self.assertRaises(HistoricalReplayControllerError):
+            terminal_event(
+                plan,
+                started,
+                "2026-08-25T01:00:00.004Z",
+                executor_request_value=request,
+                verdict_value=unconfirmed,
+            )
+
+    def test_production_executor_config_is_exact_and_ordinary_replay_stays_dark(self) -> None:
+        plan = self.fixture.plan()
+        rendered = render_executor_config(
+            plan,
+            self.fixture.profile,
+            "a" * 32,
+            "b" * 40,
+        )
+        production = rendered["env"]["production"]
+        variables = production["vars"]
+        self.assertEqual(production["name"], "lean-eval-historical-public-replay")
+        self.assertEqual(production["containers"][0]["max_instances"], 1)
+        self.assertEqual(production["containers"][0]["instance_type"], "standard-4")
+        self.assertEqual(
+            production["containers"][0]["image"],
+            "registry.cloudflare.com/"
+            + "a" * 32
+            + "/lean-eval-historical-public-v1:"
+            + self.fixture.profile["registry_tag"]
+            + "@"
+            + self.fixture.profile["registry_manifest_digest"],
+        )
+        self.assertEqual(variables["REPLAY_ENABLED"], "false")
+        self.assertEqual(variables["HISTORICAL_PUBLIC_REPLAY_ENABLED"], "true")
+        self.assertEqual(variables["STAGING_ACCEPTANCE_ENABLED"], "false")
+        self.assertEqual(variables["DEPLOYED_COMMIT"], "b" * 40)
+        self.assertEqual(variables["DEPLOYMENT_ENVIRONMENT"], "production")
+        self.assertEqual(
+            variables["GITHUB_OIDC_AUDIENCE"],
+            "lean-eval-historical-public-replay-production",
+        )
+        self.assertEqual(variables["GITHUB_OIDC_ENVIRONMENT"], "replay-production")
+        self.assertEqual(
+            variables["REVIEWED_EXECUTION_PROFILE_DIGEST"],
+            plan["task"]["execution_profile_digest"],
+        )
+        self.assertEqual(
+            variables["REVIEWED_MEASUREMENT_CONFIG_DIGEST"],
+            plan["task"]["measurement_config_digest"],
+        )
+        self.assertEqual(
+            variables["REVIEWED_VM_IMAGE_DIGEST"],
+            plan["execution_profile"]["vm_image_digest"],
+        )
+
+        changed = copy.deepcopy(self.fixture.profile)
+        changed["registry_manifest_digest"] = "sha256:" + "0" * 64
+        with self.assertRaises(HistoricalReplayControllerError):
+            render_executor_config(plan, changed, "a" * 32, "b" * 40)
 
     def test_handoff_refuses_source_result_profile_and_archive_drift(self) -> None:
         archive = b"public source archive fixture"
@@ -1114,16 +1256,35 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
             self.write_events(root, events)
             busy = recover_running(root, "2026-08-25T02:00:00.000Z", state_validated=True)
             self.assertEqual(busy["kind"], "busy")
+            stale = recover_running(
+                root,
+                "2026-08-25T08:00:00.004Z",
+                state_validated=True,
+            )
+            self.assertEqual(stale, {
+                "schema_version": 1,
+                "kind": "cleanup_required",
+                "replay_task_id": events[-1]["subject_id"],
+                "attempt": 1,
+            })
+            confirmation = {
+                "schema_version": 1,
+                "replay_task_id": events[-1]["subject_id"],
+                "attempt": 1,
+                "destruction": "confirmed",
+            }
             failed = recover_running(
                 root,
                 "2026-08-25T08:00:00.004Z",
                 state_validated=True,
+                cleanup_confirmation_value=confirmation,
                 random_bytes=b"\x05" * 10,
             )
             repeated = recover_running(
                 root,
                 "2026-08-25T08:00:00.004Z",
                 state_validated=True,
+                cleanup_confirmation_value=confirmation,
                 random_bytes=b"\x05" * 10,
             )
             self.assertEqual(failed, repeated)
@@ -1134,6 +1295,32 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
                 recover_running(root, "2026-08-25T08:00:01.000Z", state_validated=True)["kind"],
                 "none",
             )
+
+    def test_stale_recovery_rejects_unconfirmed_or_mismatched_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            events = self.events()
+            self.write_events(root, events)
+            base = {
+                "schema_version": 1,
+                "replay_task_id": events[-1]["subject_id"],
+                "attempt": 1,
+                "destruction": "confirmed",
+            }
+            mutations = (
+                {**base, "destruction": "pending"},
+                {**base, "replay_task_id": "rt1_" + "f" * 64},
+                {**base, "attempt": 2},
+                {**base, "extra": True},
+            )
+            for confirmation in mutations:
+                with self.assertRaises(HistoricalReplayControllerError):
+                    recover_running(
+                        root,
+                        "2026-08-25T08:00:00.004Z",
+                        state_validated=True,
+                        cleanup_confirmation_value=confirmation,
+                    )
 
     def test_multiple_running_historical_tasks_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1336,6 +1523,12 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
                     root,
                     "2026-08-25T08:00:00.004Z",
                     state_validated=True,
+                    cleanup_confirmation_value={
+                        "schema_version": 1,
+                        "replay_task_id": events[-1]["subject_id"],
+                        "attempt": 1,
+                        "destruction": "confirmed",
+                    },
                     random_bytes=b"\x05" * 10,
                 )
 

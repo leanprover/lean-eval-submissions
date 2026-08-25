@@ -501,6 +501,7 @@ def validate_health(value: Any, binding: dict[str, Any]) -> dict[str, Any]:
     expected = binding["vars"]
     health = exact(value, {
         "status", "service", "environment", "deployed_commit", "replay_enabled",
+        "historical_public_replay_enabled",
         "staging_acceptance_enabled", "staging_memory_limit_bytes",
         "production_memory_gate_bytes", "reviewed_execution_profile_digest",
         "reviewed_measurement_config_digest", "reviewed_vm_image_digest",
@@ -508,6 +509,7 @@ def validate_health(value: Any, binding: dict[str, Any]) -> dict[str, Any]:
     checks = {
         "status": "ok", "service": "lean-eval-replay-executor", "environment": "staging",
         "deployed_commit": expected["DEPLOYED_COMMIT"], "replay_enabled": False,
+        "historical_public_replay_enabled": False,
         "staging_acceptance_enabled": True,
         "staging_memory_limit_bytes": int(expected["STAGING_MEMORY_LIMIT_BYTES"]),
         "production_memory_gate_bytes": int(expected["PRODUCTION_MEMORY_GATE_BYTES"]),

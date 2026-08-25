@@ -786,28 +786,41 @@ and verify all of the following:
    version-2 historical queue and to the exact committed authority plan,
    qualification profile, profile matrix, and runner contract. No submission
    UUID, archive locator, ciphertext digest, or KMS field may appear.
-3. The distinct `historical_public_executor_v1` transport replaces the tracked
-   `historical_public_executor_not_implemented` blocker. Do not remove the
-   blocker based only on image publication or staging qualification evidence.
-4. Add a reviewed Gist source adapter and clear
-   `historical_public_gist_source_adapter_not_implemented`; a repository-only
-   runner must never start a Gist task. Bind the exact replay attempt into the
-   handoff and verdict before clearing
-   `historical_public_attempt_binding_not_implemented` or enabling terminal
-   State-event construction. Retain the three-attempt terminal blocker unless
-   a replacement retry policy is reviewed together with State.
-5. Before the first State write, add and review an exact-head State append lane:
-   recover a stale running task or stop on a current one; append exactly one
-   `replay.started`; execute without State authority; and append exactly one
-   terminal event. Cancellation after start must converge through the same
-   seven-hour `runner_lost` recovery, never by selecting a second task.
-6. Provision only a read credential for the current planning workflow. A State
-   writer and any executor credential are separate launch actions and must not
-   exist in the read-only lane.
+3. Verify the distinct `historical_public_executor_v1` route uses the exact
+   qualified image, binds task, attempt, handoff/archive digests, execution and
+   measurement profiles, and returns a verdict only after confirmed sandbox
+   destruction. Ordinary private replay must remain disabled in this Worker.
+4. Verify repository and Gist tasks select their distinct exact-remote adapter
+   before building the unchanged runner handoff. Retain the three-attempt
+   terminal blocker unless a replacement retry policy is reviewed with State.
+5. Verify the exact-head State lane recovers a stale running task or stops on a
+   current one; durably reserves the exact task/attempt cleanup identity before
+   appending exactly one `replay.started`; executes without State authority; and
+   appends exactly one terminal event. Cancellation after start is excluded
+   from the orchestration-failure append by `!cancelled()` and must converge
+   only through the seven-hour, destruction-confirmed `runner_lost` recovery.
+   Preserve `runner_start_failed` while preparing the request and first token.
+   Immediately before the first executor POST can escape, require the workflow
+   to record `runner_lost` and its attempted-start marker. Any lost, rejected,
+   malformed, or otherwise ambiguous start response must consume the exact
+   durable reservation and validate its attempt-bound `destruction: confirmed`
+   proof before a `replay.failed` State write is permitted.
+6. Provision State read/write keys and Cloudflare deployment credentials only
+   in protected `replay-production`. Confirm the executor step has neither
+   credential and uses only the dedicated historical GitHub OIDC audience. Its
+   protected-main exception must be limited to the four historical start,
+   status, cleanup-reservation, and cleanup routes. All four must bind the exact
+   repository, environment, workflow ref, token SHA, and workflow SHA. Start,
+   status, and cleanup reservation must also bind the exact deployed commit;
+   cleanup alone may accept a later protected-main revision so it can destroy
+   only the sandbox bound to an existing exact task/attempt reservation after
+   `main` advances. Ordinary replay and staging remain immutable-dispatch-tag
+   only. Keep
+   `HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED` absent until a full canary and
+   the resulting State/deployment evidence are reviewed.
 
-The current implementation satisfies only the source/controller contract. It
-does not authorize State mutation or satisfy the historical corpus execution
-gate.
+The implementation remains dark and does not itself authorize production
+State mutation or historical corpus execution.
 
 ## Historical public GitHub evidence walkthrough
 

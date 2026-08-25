@@ -13,10 +13,14 @@ class PublishReplayStateEventTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.text = SCRIPT.read_text(encoding="utf-8")
 
-    def test_writer_is_staging_only_non_force_and_parent_exact(self) -> None:
+    def test_writer_is_environment_exact_non_force_and_parent_exact(self) -> None:
         self.assertIn('!= "$expected_head"', self.text)
-        self.assertIn('!= staging', self.text)
+        self.assertIn('--environment', self.text)
+        self.assertIn('!= "$state_environment"', self.text)
         self.assertIn("lean-eval-state-staging.git", self.text)
+        self.assertIn("lean-eval-state.git", self.text)
+        self.assertIn('staging) remote=', self.text)
+        self.assertIn('production) remote=', self.text)
         self.assertIn("HEAD:refs/heads/main", self.text)
         self.assertNotIn("--force", self.text)
         self.assertNotIn("+HEAD:", self.text)

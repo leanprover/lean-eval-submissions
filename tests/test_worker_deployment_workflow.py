@@ -413,6 +413,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 self.assertIs(configuration["preview_urls"], False)
                 self.assertEqual(variables["REPLAY_ENABLED"], "false")
                 self.assertEqual(
+                    variables["HISTORICAL_PUBLIC_REPLAY_ENABLED"], "false"
+                )
+                self.assertEqual(
                     variables["STAGING_ACCEPTANCE_ENABLED"],
                     "true" if environment == "staging" else "false",
                 )

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 usage() {
-  echo "usage: publish_replay_state_event --root DIR --event FILE --expected-head SHA --message TEXT" >&2
+  echo "usage: publish_replay_state_event --environment staging|production --root DIR --event FILE --expected-head SHA --message TEXT" >&2
   exit 2
 }
 
@@ -10,8 +10,10 @@ state_root=
 event_file=
 expected_head=
 commit_message=
+state_environment=
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --environment) state_environment=${2:-}; shift 2 ;;
     --root) state_root=${2:-}; shift 2 ;;
     --event) event_file=${2:-}; shift 2 ;;
     --expected-head) expected_head=${2:-}; shift 2 ;;
@@ -20,9 +22,14 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-if [ -z "$state_root" ] || [ -z "$event_file" ] || [ -z "$expected_head" ] || [ -z "$commit_message" ]; then
+if [ -z "$state_environment" ] || [ -z "$state_root" ] || [ -z "$event_file" ] || [ -z "$expected_head" ] || [ -z "$commit_message" ]; then
   usage
 fi
+case "$state_environment" in
+  staging) remote=git@github.com:leanprover/lean-eval-state-staging.git ;;
+  production) remote=git@github.com:leanprover/lean-eval-state.git ;;
+  *) usage ;;
+esac
 if ! printf '%s' "$expected_head" | grep -Eq '^[0-9a-f]{40}$'; then
   echo "expected State head is not a lowercase commit SHA" >&2
   exit 1
@@ -39,8 +46,8 @@ if [ -n "$(git -C "$state_root" status --porcelain)" ]; then
   echo "State checkout is not clean before the append" >&2
   exit 1
 fi
-if [ "$(jq -r .environment "$state_root/state.json")" != staging ]; then
-  echo "refusing to write outside staging State" >&2
+if [ "$(jq -r .environment "$state_root/state.json")" != "$state_environment" ]; then
+  echo "State checkout environment does not match the explicit writer target" >&2
   exit 1
 fi
 
@@ -73,7 +80,6 @@ printf '%s\n' \
   'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
   > "$known_hosts"
 ssh_command="ssh -i $key_file -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3"
-remote=git@github.com:leanprover/lean-eval-state-staging.git
 if ! GIT_SSH_COMMAND="$ssh_command" git -C "$state_root" push --porcelain "$remote" HEAD:refs/heads/main >&2; then
   remote_head=$(GIT_SSH_COMMAND="$ssh_command" git ls-remote "$remote" refs/heads/main | cut -f1 || true)
   if [ "$remote_head" != "$new_commit" ]; then
