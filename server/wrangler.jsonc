@@ -26,6 +26,17 @@
       "workers_dev": true,
       "preview_urls": false,
       "limits": { "subrequests": 400 },
+      "durable_objects": {
+        "bindings": [
+          {
+            "name": "MODEL_IDENTITY_QUALIFICATION_JOURNAL",
+            "class_name": "ModelIdentityQualificationJournal"
+          }
+        ]
+      },
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["ModelIdentityQualificationJournal"] }
+      ],
       "ratelimits": [
         {
           "name": "API_RATE_LIMITER",

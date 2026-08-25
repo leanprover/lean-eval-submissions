@@ -29,13 +29,16 @@ import {
   equalToken,
   lifecycleEventId,
   makeAgentChallenge,
+  makeAgentSession,
   makeOAuthState,
   makeSubmissionGrant,
   nonceDigest,
   signToken,
   verifyToken,
+  verifyUserSession,
   type AgentChallenge,
   type BrowserSession,
+  type UserSession,
   type OAuthState,
   type SubmissionGrant,
 } from "./auth";
@@ -117,6 +120,7 @@ import {
   PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
   STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
 } from "./model-identity";
+import { handleModelIdentityQualificationRequest } from "./model-identity-qualification-app";
 
 export type RuntimeEnv = Omit<
   CloudflareEnv,
@@ -199,6 +203,7 @@ export type RuntimeEnv = Omit<
     MODEL_IDENTITY_MAINTAINER_API_ENABLED?: string;
     MODEL_IDENTITY_MAINTAINERS?: string;
     MODEL_IDENTITY_STATE_CONTRACT_COMMIT?: string;
+    MODEL_IDENTITY_QUALIFICATION_TOKEN?: string;
     STATE_REPOSITORY: string;
   }>;
 
@@ -313,6 +318,7 @@ export type ApiDependencies = Readonly<{
   dispatch?: (request: Request) => Promise<void>;
   rateLimit?: (key: string) => Promise<Readonly<{ success: boolean }>>;
   scheduledSubrequestBudget?: ScheduledSubrequestBudget;
+  qualificationStateFetch?: GitHubFetch;
 }>;
 
 const JSON_HEADERS = {
@@ -394,7 +400,7 @@ function requireModelIdentityOwnerApi(env: RuntimeEnv): void {
   if (!modelIdentityOwnerApiEnabled(env)) throw new GitHubProviderError(503, "model identity owner API is not configured");
 }
 
-function requireModelIdentityMaintainer(env: RuntimeEnv, session: BrowserSession): MaintainerIdentity {
+function requireModelIdentityMaintainer(env: RuntimeEnv, session: UserSession): MaintainerIdentity {
   if (!modelIdentityMaintainerApiEnabled(env)) throw new GitHubProviderError(503, "model identity maintainer API is not configured");
   try {
     return authenticateMaintainer(env.MODEL_IDENTITY_MAINTAINERS, session);
@@ -412,7 +418,7 @@ function requireResultAmendmentOwnerApi(env: RuntimeEnv): void {
 
 function requireResultAmendmentMaintainer(
   env: RuntimeEnv,
-  authenticated: BrowserSession,
+  authenticated: UserSession,
 ): MaintainerIdentity {
   if (!resultAmendmentMaintainerApiEnabled(env)) {
     throw new GitHubProviderError(503, "result amendment maintainer API is not configured");
@@ -635,14 +641,14 @@ async function submissionStage<T>(stage: string, operation: () => Promise<T>): P
   }
 }
 
-async function session(request: Request, env: RuntimeEnv, dependencies: ApiDependencies): Promise<BrowserSession> {
+async function session(request: Request, env: RuntimeEnv, dependencies: ApiDependencies): Promise<UserSession> {
   const authorization = request.headers.get("authorization");
   const token = authorization?.startsWith("Bearer ") ? authorization.slice("Bearer ".length) : cookie(request, SESSION_COOKIE);
   if (!token) throw new AuthError("authentication required");
   if (!authorization && !new Set(["GET", "HEAD"]).has(request.method)) {
     if (request.headers.get("origin") !== new URL(request.url).origin) throw new AuthError("same-origin request required");
   }
-  return verifyToken<BrowserSession>(configuredSecret(env), token, "browser_session", nowSeconds(dependencies));
+  return verifyUserSession(configuredSecret(env), token, nowSeconds(dependencies));
 }
 
 function canonicalTimestamp(seconds: number): string {
@@ -1878,7 +1884,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
       () => github.verifyTag(challenge.source_repository, challenge.tag, challenge.source_commit),
     );
     const response = await acceptSubmission(env, dependencies, identity, challenge, body.submission, "agent");
-    const agentSession: BrowserSession = { kind: "browser_session", login: identity.login, github_id: identity.id, issued_at: now, expires_at: now + 3600 };
+    const agentSession = makeAgentSession(identity, challenge, now);
     const responseBody = await response.json<Record<string, unknown>>();
     return json({ ...responseBody, session_token: await signToken(configuredSecret(env), agentSession) }, response.status, {
       location: response.headers.get("location") ?? "",
@@ -2276,6 +2282,27 @@ export async function handleRequest(
     } catch (error) {
       return errorResponse(error);
     }
+  }
+  if (request.method === "POST" && url.pathname === "/internal/v1/model-identity-qualification") {
+    return handleModelIdentityQualificationRequest(
+      request,
+      env,
+      {
+        ...(dependencies.qualificationStateFetch === undefined
+          ? {}
+          : { stateFetch: dependencies.qualificationStateFetch }),
+        modelApiRequest: async (modelRequest, maintainer) => apiRequest(
+          modelRequest,
+          {
+            ...env,
+            MODEL_IDENTITY_OWNER_API_ENABLED: "true",
+            MODEL_IDENTITY_MAINTAINER_API_ENABLED: "true",
+            MODEL_IDENTITY_MAINTAINERS: JSON.stringify([maintainer]),
+          },
+          dependencies,
+        ),
+      },
+    );
   }
   if (request.method === "POST" && url.pathname === "/internal/v1/archive-completed") {
     try {

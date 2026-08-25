@@ -1,4 +1,4 @@
-import { AuthError, type BrowserSession } from "./auth";
+import { AuthError, type UserSession } from "./auth";
 
 const LOGIN = /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/;
 const MAX_MAINTAINERS = 16;
@@ -56,7 +56,7 @@ export function decodeMaintainerIdentities(value: string | undefined): readonly 
 
 export function authenticateMaintainer(
   configured: string | undefined,
-  session: BrowserSession,
+  session: UserSession,
 ): MaintainerIdentity {
   const identities = decodeMaintainerIdentities(configured);
   const identity = identities.find((candidate) => candidate.github_id === session.github_id);
