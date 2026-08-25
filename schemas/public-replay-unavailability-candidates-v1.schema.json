@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/public-replay-unavailability-candidates-v1.schema.json",
+  "title": "Historical public replay unavailability candidate manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "source_repository", "source_commit",
+    "inventory_sha256", "resolution_requests_sha256",
+    "github_evidence_aggregate_sha256",
+    "workflow_definition_registry_sha256",
+    "legacy_adjudication_registry_sha256", "candidate_request_count",
+    "candidate_result_count", "review_status", "claims",
+    "candidate_identity_sha256", "shard_count", "shards"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_public_replay_unavailability_candidate_manifest"},
+    "source_repository": {"const": "leanprover/lean-eval-submissions"},
+    "source_commit": {"$ref": "#/$defs/commit"},
+    "inventory_sha256": {"$ref": "#/$defs/digest"},
+    "resolution_requests_sha256": {"$ref": "#/$defs/digest"},
+    "github_evidence_aggregate_sha256": {"$ref": "#/$defs/digest"},
+    "workflow_definition_registry_sha256": {"$ref": "#/$defs/digest"},
+    "legacy_adjudication_registry_sha256": {"$ref": "#/$defs/digest"},
+    "candidate_request_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "candidate_result_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "review_status": {"const": "required"},
+    "claims": {
+      "const": {
+        "permanent_unavailability_decided": false,
+        "state_append_authorized": false,
+        "replay_executed": false,
+        "corpus_complete": false
+      }
+    },
+    "candidate_identity_sha256": {"$ref": "#/$defs/digest"},
+    "shard_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "shards": {
+      "type": "array", "minItems": 1, "maxItems": 10000,
+      "items": {"$ref": "#/$defs/shard"}
+    }
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "request_id": {"type": "string", "pattern": "^prr_[0-9a-f]{64}$"},
+    "shard": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "shard_index", "sha256", "byte_count", "request_count", "result_count",
+        "first_request_id", "last_request_id"
+      ],
+      "properties": {
+        "shard_index": {"type": "integer", "minimum": 0, "maximum": 9999},
+        "sha256": {"$ref": "#/$defs/digest"},
+        "byte_count": {"type": "integer", "minimum": 1, "maximum": 450000},
+        "request_count": {"type": "integer", "minimum": 1, "maximum": 32},
+        "result_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "first_request_id": {"$ref": "#/$defs/request_id"},
+        "last_request_id": {"$ref": "#/$defs/request_id"}
+      }
+    }
+  }
+}
