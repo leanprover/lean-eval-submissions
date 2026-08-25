@@ -21,6 +21,7 @@ from scripts.historical_replay_controller import (
     _terminal_transition,
     _verify_qualification_source_bindings,
     bind_handoff,
+    build_executor_request,
     canonical_bytes,
     load_reviewed_inputs,
     plan_next,
@@ -31,6 +32,8 @@ from scripts.historical_replay_controller import (
     state_canonical_bytes,
     terminal_event,
     validate_execution_plan,
+    validate_executor_request,
+    validate_executor_verdict,
     validate_plan_against_queue,
     validate_queue,
     verify_repository_bindings,
@@ -848,6 +851,97 @@ class HistoricalReplayHandoffTests(unittest.TestCase):
         self.assertEqual(binding["kind"], "historical_public_executor_transport_blocker")
         self.assertEqual(binding["transport"]["status"], "blocked")
         self.assertEqual(binding["attempt"], 1)
+
+    def test_executor_envelope_binds_attempt_runtime_and_terminal_event(self) -> None:
+        archive = b"public source archive fixture"
+        plan = self.fixture.plan()
+        handoff = self.fixture.handoff(archive)
+        started = started_event(
+            plan,
+            self.fixture.queue,
+            "2026-08-25T01:00:00.000Z",
+            random_bytes=b"\x01" * 10,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "source.tar.gz"
+            path.write_bytes(archive)
+            request = build_executor_request(
+                plan,
+                handoff,
+                path,
+                self.fixture.matrix,
+                self.fixture.contract,
+                "4" * 64,
+            )
+        response = {
+            "schema_version": 1,
+            "contract": "historical_public_executor_v1",
+            **{
+                field: request[field]
+                for field in (
+                    "runner_nonce",
+                    "replay_task_id",
+                    "attempt",
+                    "handoff_sha256",
+                    "source_archive_sha256",
+                    "execution_profile_digest",
+                    "measurement_config_digest",
+                    "vm_image_digest",
+                )
+            },
+            "runner_verdict": self.fixture.verdict(),
+            "destruction": "confirmed",
+        }
+        self.assertEqual(validate_executor_request(plan, started, request), request)
+        self.assertEqual(
+            validate_executor_verdict(request, response),
+            self.fixture.verdict(),
+        )
+        terminal = terminal_event(
+            plan,
+            started,
+            "2026-08-25T01:00:00.004Z",
+            executor_request_value=request,
+            verdict_value=response,
+            random_bytes=b"\x02" * 10,
+        )
+        self.assertEqual(terminal["event_type"], "replay.accepted")
+        self.assertEqual(terminal["subject_id"], request["replay_task_id"])
+        self.assertEqual(terminal["causation_event_id"], started["event_id"])
+        self.assertEqual(terminal["payload"]["attempt"], request["attempt"])
+
+        for field, changed in (
+            ("runner_nonce", "0" * 64),
+            ("replay_task_id", "rt1_" + "0" * 64),
+            ("attempt", 2),
+            ("handoff_sha256", "0" * 64),
+            ("source_archive_sha256", "0" * 64),
+            ("execution_profile_digest", "0" * 64),
+            ("measurement_config_digest", "0" * 64),
+            ("vm_image_digest", "sha256:" + "0" * 64),
+        ):
+            with self.subTest(field=field):
+                drifted = copy.deepcopy(response)
+                drifted[field] = changed
+                with self.assertRaises(HistoricalReplayControllerError):
+                    terminal_event(
+                        plan,
+                        started,
+                        "2026-08-25T01:00:00.004Z",
+                        executor_request_value=request,
+                        verdict_value=drifted,
+                    )
+
+        unconfirmed = copy.deepcopy(response)
+        unconfirmed["destruction"] = "pending"
+        with self.assertRaises(HistoricalReplayControllerError):
+            terminal_event(
+                plan,
+                started,
+                "2026-08-25T01:00:00.004Z",
+                executor_request_value=request,
+                verdict_value=unconfirmed,
+            )
 
     def test_handoff_refuses_source_result_profile_and_archive_drift(self) -> None:
         archive = b"public source archive fixture"

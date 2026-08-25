@@ -11,6 +11,7 @@ write, Cloudflare, AWS, or executor operation.
 from __future__ import annotations
 
 import argparse
+import base64
 import copy
 import datetime as dt
 import hashlib
@@ -50,6 +51,7 @@ from results_schema import result_id as stable_result_id
 MAX_JSON_BYTES = 16 * 1024 * 1024
 MAX_STATE_EVENT_FILES = 1_000_000
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
+MAX_EXECUTOR_SOURCE_ARCHIVE_BYTES = 16 * 1024 * 1024
 MAX_REPLAY_ATTEMPTS = 3
 RECOVERY_AFTER = dt.timedelta(hours=7)
 QUALIFICATION_WORKFLOW_PATH = ".github/workflows/historical-public-image-qualification.yml"
@@ -1149,12 +1151,258 @@ def terminal_event(
     started_value: Any,
     trusted_now: str,
     *,
+    executor_request_value: Any | None = None,
     verdict_value: Any | None = None,
     failure_reason: str | None = None,
     random_bytes: bytes | None = None,
 ) -> dict[str, Any]:
-    validate_execution_plan(plan_value)
-    raise HistoricalReplayControllerError(ATTEMPT_BINDING_REASON)
+    plan = validate_execution_plan(plan_value)
+    started = _validate_started(plan, started_value)
+    if failure_reason is None:
+        if executor_request_value is None or verdict_value is None:
+            raise HistoricalReplayControllerError(ATTEMPT_BINDING_REASON)
+        validate_executor_request(plan, started, executor_request_value)
+        runner_verdict = validate_executor_verdict(
+            executor_request_value,
+            verdict_value,
+        )
+        transition = _terminal_transition(plan, runner_verdict, None)
+    else:
+        if executor_request_value is not None:
+            raise HistoricalReplayControllerError(
+                "historical orchestration failure cannot carry an executor request"
+            )
+        transition = _terminal_transition(plan, verdict_value, failure_reason)
+    started_at = _parse_timestamp(
+        started["occurred_at"], "historical started occurred_at"
+    )
+    occurred = max(
+        _parse_timestamp(trusted_now, "trusted_now"),
+        started_at + dt.timedelta(milliseconds=1),
+    )
+    return {
+        "schema_version": 1,
+        "event_id": _causal_uuid7(occurred, started["event_id"], random_bytes),
+        "event_type": transition["event_type"],
+        "occurred_at": occurred.isoformat(timespec="milliseconds").replace(
+            "+00:00", "Z"
+        ),
+        "subject_id": started["subject_id"],
+        "causation_event_id": started["event_id"],
+        "actor": {"kind": "system"},
+        "payload": transition["payload"],
+    }
+
+
+def build_executor_request(
+    plan_value: Any,
+    handoff_value: Any,
+    source_archive: pathlib.Path,
+    matrix_value: Any,
+    contract_value: Any,
+    runner_nonce: str,
+) -> dict[str, Any]:
+    binding = bind_handoff(
+        plan_value,
+        handoff_value,
+        source_archive,
+        matrix_value,
+        contract_value,
+    )
+    plan = validate_execution_plan(plan_value)
+    _match(DIGEST, runner_nonce, "historical executor runner_nonce")
+    archive_raw = _read_regular(
+        source_archive,
+        min(
+            contract_value["source_archive"]["maximum_compressed_bytes"],
+            MAX_EXECUTOR_SOURCE_ARCHIVE_BYTES,
+        ),
+        "historical source archive",
+    )
+    return {
+        "schema_version": 1,
+        "runner_nonce": runner_nonce,
+        "replay_task_id": binding["replay_task_id"],
+        "attempt": binding["attempt"],
+        "handoff_sha256": binding["handoff_sha256"],
+        "source_archive_sha256": binding["source_archive_sha256"],
+        "execution_profile_digest": plan["task"]["execution_profile_digest"],
+        "measurement_config_digest": plan["task"]["measurement_config_digest"],
+        "vm_image_digest": plan["execution_profile"]["vm_image_digest"],
+        "handoff": handoff_value,
+        "source_archive_base64": base64.b64encode(archive_raw).decode("ascii"),
+    }
+
+
+def validate_executor_verdict(
+    request_value: Any,
+    value: Any,
+) -> dict[str, Any]:
+    request = _object(request_value, "historical executor request")
+    _fields(
+        request,
+        {
+            "schema_version",
+            "runner_nonce",
+            "replay_task_id",
+            "attempt",
+            "handoff_sha256",
+            "source_archive_sha256",
+            "execution_profile_digest",
+            "measurement_config_digest",
+            "vm_image_digest",
+            "handoff",
+            "source_archive_base64",
+        },
+        "historical executor request",
+    )
+    response = _object(value, "historical executor verdict")
+    _fields(
+        response,
+        {
+            "schema_version",
+            "contract",
+            "runner_nonce",
+            "replay_task_id",
+            "attempt",
+            "handoff_sha256",
+            "source_archive_sha256",
+            "execution_profile_digest",
+            "measurement_config_digest",
+            "vm_image_digest",
+            "runner_verdict",
+            "destruction",
+        },
+        "historical executor verdict",
+    )
+    identity_fields = (
+        "runner_nonce",
+        "replay_task_id",
+        "attempt",
+        "handoff_sha256",
+        "source_archive_sha256",
+        "execution_profile_digest",
+        "measurement_config_digest",
+        "vm_image_digest",
+    )
+    if (
+        request["schema_version"] != 1
+        or response["schema_version"] != 1
+        or response["contract"] != TRANSPORT_CONTRACT
+        or response["destruction"] != "confirmed"
+        or any(response[field] != request[field] for field in identity_fields)
+    ):
+        raise HistoricalReplayControllerError(
+            "historical executor verdict differs from its request"
+        )
+    try:
+        from historical_public_runner import validate_historical_verdict
+
+        verdict = validate_historical_verdict(response["runner_verdict"])
+    except HistoricalPublicRunnerError as error:
+        raise HistoricalReplayControllerError(str(error)) from error
+    handoff = _object(request["handoff"], "historical executor handoff")
+    result = _object(handoff.get("result"), "historical executor handoff result")
+    if (
+        verdict["request_id"] != handoff.get("request_id")
+        or verdict["result_id"] != result.get("result_id")
+    ):
+        raise HistoricalReplayControllerError(
+            "historical executor runner verdict differs from its handoff"
+        )
+    return verdict
+
+
+def validate_executor_request(
+    plan_value: Any,
+    started_value: Any,
+    request_value: Any,
+) -> dict[str, Any]:
+    plan = validate_execution_plan(plan_value)
+    started = _validate_started(plan, started_value)
+    request = _object(request_value, "historical executor request")
+    _fields(
+        request,
+        {
+            "schema_version",
+            "runner_nonce",
+            "replay_task_id",
+            "attempt",
+            "handoff_sha256",
+            "source_archive_sha256",
+            "execution_profile_digest",
+            "measurement_config_digest",
+            "vm_image_digest",
+            "handoff",
+            "source_archive_base64",
+        },
+        "historical executor request",
+    )
+    for field in (
+        "runner_nonce",
+        "handoff_sha256",
+        "source_archive_sha256",
+        "execution_profile_digest",
+        "measurement_config_digest",
+    ):
+        _match(DIGEST, request[field], f"historical executor request.{field}")
+    _match(REPLAY_ID, request["replay_task_id"], "historical executor replay_task_id")
+    _integer(request["attempt"], "historical executor attempt", 1)
+    vm_image = request["vm_image_digest"]
+    if not isinstance(vm_image, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", vm_image) is None:
+        raise HistoricalReplayControllerError(
+            "historical executor vm_image_digest is invalid"
+        )
+    task = plan["task"]
+    if (
+        request["schema_version"] != 1
+        or request["replay_task_id"] != started["subject_id"]
+        or request["attempt"] != started["payload"]["attempt"]
+        or request["execution_profile_digest"] != task["execution_profile_digest"]
+        or request["measurement_config_digest"]
+        != task["measurement_config_digest"]
+        or request["vm_image_digest"] != plan["execution_profile"]["vm_image_digest"]
+    ):
+        raise HistoricalReplayControllerError(
+            "historical executor request differs from the started attempt"
+        )
+    handoff = _object(request["handoff"], "historical executor handoff")
+    if (
+        sha256_bytes(canonical_document_bytes(handoff))
+        != request["handoff_sha256"]
+    ):
+        raise HistoricalReplayControllerError(
+            "historical executor handoff digest differs"
+        )
+    encoded = request["source_archive_base64"]
+    if not isinstance(encoded, str):
+        raise HistoricalReplayControllerError(
+            "historical executor source archive encoding is invalid"
+        )
+    try:
+        archive = base64.b64decode(encoded, validate=True)
+    except (ValueError, UnicodeEncodeError) as error:
+        raise HistoricalReplayControllerError(
+            "historical executor source archive encoding is invalid"
+        ) from error
+    if (
+        not archive
+        or len(archive) > MAX_EXECUTOR_SOURCE_ARCHIVE_BYTES
+        or base64.b64encode(archive).decode("ascii") != encoded
+        or hashlib.sha256(archive).hexdigest() != request["source_archive_sha256"]
+    ):
+        raise HistoricalReplayControllerError(
+            "historical executor source archive digest differs"
+        )
+    source = _object(handoff.get("source"), "historical executor handoff source")
+    if (
+        source.get("archive_sha256") != request["source_archive_sha256"]
+        or source.get("archive_size_bytes") != len(archive)
+    ):
+        raise HistoricalReplayControllerError(
+            "historical executor source archive differs from handoff"
+        )
+    return request
 
 
 def bind_handoff(
@@ -1757,6 +2005,10 @@ def parser() -> argparse.ArgumentParser:
     bind = commands.add_parser("bind-handoff")
     for name in ("plan", "handoff", "source-archive", "repository-root", "output"):
         bind.add_argument(f"--{name}", required=True, type=pathlib.Path)
+    executor = commands.add_parser("build-executor-request")
+    for name in ("plan", "handoff", "source-archive", "repository-root", "output"):
+        executor.add_argument(f"--{name}", required=True, type=pathlib.Path)
+    executor.add_argument("--runner-nonce", required=True)
     event = commands.add_parser("state-event")
     event.add_argument("kind", choices=("started",))
     event.add_argument("--plan", required=True, type=pathlib.Path)
@@ -1768,6 +2020,14 @@ def parser() -> argparse.ArgumentParser:
     recover.add_argument("--state-validated", required=True, action="store_true")
     recover.add_argument("--trusted-now", required=True)
     recover.add_argument("--output", required=True, type=pathlib.Path)
+    terminal = commands.add_parser("terminal-event")
+    terminal.add_argument("--plan", required=True, type=pathlib.Path)
+    terminal.add_argument("--started", required=True, type=pathlib.Path)
+    terminal.add_argument("--executor-request", type=pathlib.Path)
+    terminal.add_argument("--verdict", type=pathlib.Path)
+    terminal.add_argument("--failure-reason", choices=sorted(FAILURE_REASONS))
+    terminal.add_argument("--trusted-now", required=True)
+    terminal.add_argument("--output", required=True, type=pathlib.Path)
     return result
 
 
@@ -1814,10 +2074,60 @@ def main() -> int:
                 args.output,
                 bind_handoff(plan, handoff, args.source_archive, matrix, contract),
             )
+        elif args.command == "build-executor-request":
+            plan, _ = _load_canonical(args.plan, "historical execution plan")
+            handoff, _ = _load_canonical(args.handoff, "historical runner handoff")
+            reviewed = load_reviewed_inputs(args.repository_root, plan.get("task"))
+            matrix, contract = reviewed[4], reviewed[6]
+            _write(
+                args.output,
+                build_executor_request(
+                    plan,
+                    handoff,
+                    args.source_archive,
+                    matrix,
+                    contract,
+                    args.runner_nonce,
+                ),
+            )
         elif args.command == "state-event":
             plan, _ = _load_canonical(args.plan, "historical execution plan")
             queue, _ = _load_state_canonical(args.queue, "historical replay queue")
             value = started_event(plan, queue, args.trusted_now)
+            _write(args.output, value, state_canonical_bytes)
+        elif args.command == "terminal-event":
+            plan, _ = _load_canonical(args.plan, "historical execution plan")
+            started, _ = _load_state_canonical(
+                args.started, "historical replay.started event"
+            )
+            if (args.verdict is None) != (args.executor_request is None):
+                raise HistoricalReplayControllerError(
+                    "historical terminal executor request and verdict must be paired"
+                )
+            if args.failure_reason is not None and args.verdict is not None:
+                raise HistoricalReplayControllerError(
+                    "historical terminal result is ambiguous"
+                )
+            request = (
+                None
+                if args.executor_request is None
+                else _load_canonical(
+                    args.executor_request, "historical executor request"
+                )[0]
+            )
+            verdict = (
+                None
+                if args.verdict is None
+                else _load_canonical(args.verdict, "historical executor verdict")[0]
+            )
+            value = terminal_event(
+                plan,
+                started,
+                args.trusted_now,
+                executor_request_value=request,
+                verdict_value=verdict,
+                failure_reason=args.failure_reason,
+            )
             _write(args.output, value, state_canonical_bytes)
         else:
             _write(

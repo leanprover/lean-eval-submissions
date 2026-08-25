@@ -123,6 +123,7 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
         health = {
             "status": "ok", "service": "lean-eval-replay-executor", "environment": "staging",
             "deployed_commit": variables["DEPLOYED_COMMIT"], "replay_enabled": False,
+            "historical_public_replay_enabled": False,
             "staging_acceptance_enabled": True,
             "staging_memory_limit_bytes": 12_884_901_888,
             "production_memory_gate_bytes": 12_884_901_888,

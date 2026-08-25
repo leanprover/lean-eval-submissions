@@ -1,6 +1,12 @@
 import type { Sandbox } from "@cloudflare/sandbox";
 
 import {
+  canonicalHistoricalPublicHandoff,
+  HistoricalPublicExecutorContractError,
+  historicalPublicExecutorVerdict,
+  readHistoricalPublicExecutorRequest,
+} from "./historical-public-executor-contract";
+import {
   AuthoritativeReplayContractError,
   readAuthoritativeReplayRequest,
   readAuthoritativeReplayStatusRequest,
@@ -28,6 +34,7 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
   DEPLOYED_COMMIT: string;
   DEPLOYMENT_ENVIRONMENT: string;
   REPLAY_ENABLED: string;
+  HISTORICAL_PUBLIC_REPLAY_ENABLED: string;
   STAGING_ACCEPTANCE_ENABLED: string;
   STAGING_MEMORY_LIMIT_BYTES: string;
   PRODUCTION_MEMORY_GATE_BYTES: string;
@@ -109,6 +116,11 @@ const ARCHIVE_COMMAND_FAILURES = new Map([
 const AUTHORITATIVE_COMMAND_PREFIX = "replay-authoritative: ";
 const AUTHORITATIVE_PROCESS_ID = "lean-eval-authoritative";
 const AUTHORITATIVE_COMMAND = "/opt/lean-eval/replay-authoritative";
+const HISTORICAL_PUBLIC_COMMAND =
+  "base64 --decode /workspace/historical-public-source.tar.gz.b64 "
+  + "> /workspace/historical-public-source.tar.gz "
+  + "&& rm /workspace/historical-public-source.tar.gz.b64 "
+  + "&& /opt/lean-eval/historical-public-runner";
 const AUTHORITATIVE_TIMEOUT_MS = 20_100_000;
 const AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const AUTHORITATIVE_COMMAND_FAILURES = new Map([
@@ -742,6 +754,7 @@ function health(env: ReplayRuntimeEnv): Response {
     environment: env.DEPLOYMENT_ENVIRONMENT,
     deployed_commit: env.DEPLOYED_COMMIT,
     replay_enabled: env.REPLAY_ENABLED === "true",
+    historical_public_replay_enabled: env.HISTORICAL_PUBLIC_REPLAY_ENABLED === "true",
     staging_acceptance_enabled: env.STAGING_ACCEPTANCE_ENABLED === "true",
     staging_memory_limit_bytes: Number(env.STAGING_MEMORY_LIMIT_BYTES),
     production_memory_gate_bytes: Number(env.PRODUCTION_MEMORY_GATE_BYTES),
@@ -762,14 +775,70 @@ export async function handleReplayRequest(
   const archiveAcceptance = url.pathname === "/api/v1/staging-archive-acceptance";
   const authoritativeReplay = url.pathname === "/api/v1/replay";
   const authoritativeStatus = url.pathname === "/api/v1/replay/status";
+  const historicalPublicReplay = url.pathname === "/api/v1/historical-public-replay";
   if (
-    (!syntheticAcceptance && !archiveAcceptance && !authoritativeReplay && !authoritativeStatus) ||
+    (
+      !syntheticAcceptance
+      && !archiveAcceptance
+      && !authoritativeReplay
+      && !authoritativeStatus
+      && !historicalPublicReplay
+    ) ||
     request.method !== "POST"
   ) {
     return json({ error: "not_found" }, 404);
   }
   if (authoritativeReplay && env.REPLAY_ENABLED !== "true") {
     return json({ error: "replay_disabled" }, 503);
+  }
+  if (historicalPublicReplay && env.HISTORICAL_PUBLIC_REPLAY_ENABLED !== "true") {
+    return json({ error: "historical_public_replay_disabled" }, 503);
+  }
+  if (historicalPublicReplay) {
+    try {
+      await dependencies.authenticate(request, env);
+      const input = await readHistoricalPublicExecutorRequest(
+        request,
+        env.REVIEWED_EXECUTION_PROFILE_DIGEST,
+        env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
+        env.REVIEWED_VM_IMAGE_DIGEST,
+      );
+      const sandbox = dependencies.sandbox(env, input.runner_nonce);
+      const verdict = await withSandboxDestruction(sandbox, async () => {
+        await writeSandboxFile(
+          sandbox,
+          "/workspace/historical-public-request.json",
+          canonicalHistoricalPublicHandoff(input.handoff),
+        );
+        await writeSandboxFile(
+          sandbox,
+          "/workspace/historical-public-source.tar.gz.b64",
+          input.source_archive_base64,
+        );
+        const stdout = await executeSandboxCommand(
+          sandbox,
+          HISTORICAL_PUBLIC_COMMAND,
+          AUTHORITATIVE_TIMEOUT_MS,
+          64 * 1024,
+        );
+        try {
+          return historicalPublicExecutorVerdict(
+            input,
+            JSON.parse(stdout) as unknown,
+          );
+        } catch {
+          throw new ReplayExecutorError("command_output_invalid");
+        }
+      });
+      return json(verdict);
+    } catch (error) {
+      if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
+      if (error instanceof HistoricalPublicExecutorContractError || error instanceof SyntaxError) {
+        return json({ error: "invalid_request" }, 400);
+      }
+      recordExecutorFailure("historical_public_replay", error);
+      return authoritativeExecutorFailure(error);
+    }
   }
   if (authoritativeStatus) {
     let sandbox: SandboxClient | undefined;

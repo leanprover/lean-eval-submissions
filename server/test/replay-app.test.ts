@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { handleReplayRequest, type ReplayRuntimeEnv } from "../src/replay-app";
+import { canonicalHistoricalPublicHandoff } from "../src/historical-public-executor-contract";
 
 const PROFILE_DIGEST = "3".repeat(64);
 const MEASUREMENT_DIGEST = "4".repeat(64);
@@ -77,6 +78,77 @@ async function authoritativeInput(): Promise<Record<string, unknown>> {
   };
 }
 
+async function historicalPublicInput(): Promise<Record<string, unknown>> {
+  const sourceArchive = new TextEncoder().encode("historical public source archive");
+  const archiveHash = await crypto.subtle.digest("SHA-256", sourceArchive);
+  const archiveDigest = [...new Uint8Array(archiveHash)]
+    .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  const handoff = {
+    schema_version: 1,
+    kind: "historical_public_runner_handoff",
+    contract: "historical_public_runner_v1",
+    contract_sha256: "6".repeat(64),
+    plan_sha256: "7".repeat(64),
+    profile_matrix_sha256: "8".repeat(64),
+    request_id: `prr_${"9".repeat(64)}`,
+    source: {
+      repository: "example/source",
+      commit: "a".repeat(40),
+      tree: "b".repeat(40),
+      visibility: "public",
+      archive_format: "git_archive_tar_gzip_v1",
+      archive_member_prefix: "source",
+      archive_sha256: archiveDigest,
+      archive_size_bytes: sourceArchive.byteLength,
+    },
+    benchmark: {},
+    result: { result_id: `r2_${"c".repeat(64)}` },
+    profile: {},
+    checker: "nanoda",
+    network: {},
+    untrusted_environment: {},
+  };
+  const handoffHash = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(canonicalHistoricalPublicHandoff(handoff)),
+  );
+  return {
+    schema_version: 1,
+    runner_nonce: "1".repeat(64),
+    replay_task_id: `rt1_${"2".repeat(64)}`,
+    attempt: 1,
+    handoff_sha256: [...new Uint8Array(handoffHash)]
+      .map((byte) => byte.toString(16).padStart(2, "0")).join(""),
+    source_archive_sha256: archiveDigest,
+    execution_profile_digest: PROFILE_DIGEST,
+    measurement_config_digest: MEASUREMENT_DIGEST,
+    vm_image_digest: VM_IMAGE_DIGEST,
+    handoff,
+    source_archive_base64: btoa(String.fromCharCode(...sourceArchive)),
+  };
+}
+
+function historicalPublicRunnerVerdict(body: Record<string, unknown>): Record<string, unknown> {
+  const handoff = body.handoff as Record<string, unknown>;
+  const result = handoff.result as Record<string, unknown>;
+  return {
+    schema_version: 1,
+    request_id: handoff.request_id,
+    result_id: result.result_id,
+    execution_outcome: "completed",
+    checker_outcome: "accepted",
+    failure_reason: null,
+    statistics: {
+      checker_wall_time_ms: 10,
+      checker_retired_instructions: { status: "measured", value: 20 },
+      build_wall_time_ms: 30,
+      build_retired_instructions: { status: "measured", value: 40 },
+      lines_of_code: 2,
+      file_count: 1,
+    },
+  };
+}
+
 function authoritativeStatusInput(body: Record<string, unknown>): Record<string, unknown> {
   const execution = body.request as Record<string, unknown>;
   const profile = execution.execution_profile as Record<string, unknown>;
@@ -141,6 +213,7 @@ const ENV = {
   DEPLOYED_COMMIT: "a".repeat(40),
   DEPLOYMENT_ENVIRONMENT: "staging",
   REPLAY_ENABLED: "false",
+  HISTORICAL_PUBLIC_REPLAY_ENABLED: "false",
   STAGING_ACCEPTANCE_ENABLED: "true",
   STAGING_MEMORY_LIMIT_BYTES: "12884901888",
   PRODUCTION_MEMORY_GATE_BYTES: "12884901888",
@@ -174,6 +247,81 @@ describe("Cloudflare replay executor", () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: "replay_disabled" });
     expect(authenticated).toBe(false);
+  });
+
+  it("keeps historical public replay separately disabled before authentication", async () => {
+    let authenticated = false;
+    const response = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/historical-public-replay",
+      { method: "POST", body: "{}" },
+    ), REVIEWED_ENV, {
+      authenticate: () => {
+        authenticated = true;
+        return Promise.resolve();
+      },
+      sandbox: () => { throw new Error("sandbox must remain unreachable"); },
+    });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      error: "historical_public_replay_disabled",
+    });
+    expect(authenticated).toBe(false);
+  });
+
+  it("executes one exact historical handoff and confirms destruction", async () => {
+    const body = await historicalPublicInput();
+    const writes = new Map<string, string>();
+    const commands: string[] = [];
+    let destroyed = false;
+    const response = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/historical-public-replay",
+      { method: "POST", body: JSON.stringify(body) },
+    ), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => ({
+        writeFile: (path, contents) => {
+          if (typeof contents !== "string") throw new Error("expected string input");
+          writes.set(path, contents);
+          return Promise.resolve({ success: true, path, timestamp: "fixture" });
+        },
+        exec: (command) => {
+          commands.push(command);
+          return Promise.resolve({
+            success: true,
+            exitCode: 0,
+            stdout: JSON.stringify(historicalPublicRunnerVerdict(body)),
+            stderr: "",
+            command,
+            duration: 1,
+            timestamp: "fixture",
+          });
+        },
+        destroy: () => {
+          destroyed = true;
+          return Promise.resolve();
+        },
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(destroyed).toBe(true);
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toContain("/opt/lean-eval/historical-public-runner");
+    expect(writes.get("/workspace/historical-public-request.json"))
+      .toBe(canonicalHistoricalPublicHandoff(body.handoff));
+    expect(writes.get("/workspace/historical-public-source.tar.gz.b64"))
+      .toBe(body.source_archive_base64);
+    expect(await response.json()).toMatchObject({
+      contract: "historical_public_executor_v1",
+      replay_task_id: body.replay_task_id,
+      attempt: body.attempt,
+      runner_nonce: body.runner_nonce,
+      handoff_sha256: body.handoff_sha256,
+      source_archive_sha256: body.source_archive_sha256,
+      execution_profile_digest: PROFILE_DIGEST,
+      measurement_config_digest: MEASUREMENT_DIGEST,
+      vm_image_digest: VM_IMAGE_DIGEST,
+      destruction: "confirmed",
+    });
   });
 
   it("starts one background command, polls it, and confirms destruction", async () => {
@@ -962,6 +1110,7 @@ describe("Cloudflare replay executor", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
       replay_enabled: false,
+      historical_public_replay_enabled: false,
       staging_acceptance_enabled: true,
       staging_memory_limit_bytes: 12_884_901_888,
       production_memory_gate_bytes: 12_884_901_888,
