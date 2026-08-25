@@ -390,6 +390,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
     def test_smoke_retries_structured_payload_propagation(self) -> None:
         self.assertEqual(DEPLOY.count("for attempt in $(seq 1 13); do"), 3)
         self.assertEqual(DEPLOY.count("for attempt in $(seq 1 25); do"), 2)
+        self.assertEqual(
+            DEPLOY.count('"historical_public_replay_enabled": False'), 2
+        )
         self.assertEqual(DEPLOY.count('echo "health payload did not converge'), 1)
         self.assertEqual(DEPLOY.count('echo "replay health payload did not converge'), 1)
         self.assertNotIn("curl --fail --retry", DEPLOY)
