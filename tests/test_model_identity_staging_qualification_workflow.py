@@ -78,6 +78,12 @@ class ModelIdentityStagingQualificationWorkflowTests(unittest.TestCase):
         self.assertNotIn("MODEL_IDENTITY_OAUTH_SESSION", RECOVERY)
         self.assertNotIn("MODEL_IDENTITY_AGENT_SESSION", RECOVERY)
 
+    def test_qualification_and_recovery_share_the_main_deployment_lock(self) -> None:
+        for text in (WORKFLOW, RECOVERY):
+            self.assertEqual(text.count("group: submission-worker-main"), 1)
+            self.assertIn("cancel-in-progress: false", text)
+        self.assertIn("`submission-worker-main` concurrency lock", DOCUMENTATION)
+
     def test_automatic_recovery_rejects_reruns_and_a_different_operator(self) -> None:
         automatic = RECOVERY.split(
             'if test "$EVENT_NAME" = workflow_run; then', maxsplit=1

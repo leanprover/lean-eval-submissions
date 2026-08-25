@@ -47,7 +47,10 @@ on:
 permissions: {}
 
 concurrency:
-  group: model-identity-staging-qualification
+  # Share the protected-main deployment lock. A staging Worker replacement
+  # would otherwise change DEPLOYED_COMMIT while the durable journal still
+  # requires the old executable to complete or recover its exact mutation.
+  group: submission-worker-main
   cancel-in-progress: false
 
 # IMMUTABLE SOURCE SAFETY GATE: GitHub never emits the deliberately impossible

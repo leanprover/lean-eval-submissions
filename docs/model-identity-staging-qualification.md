@@ -21,6 +21,11 @@ controller rejects redirects. Secrets are step-scoped after checkout. The
 dedicated harness credential authenticates journal operations; each proof gets
 only its required OAuth-owner, agent-owner, distinct-owner, or maintainer
 session, and restoration receives no user session.
+Qualification, automatic/manual recovery, and protected-main Worker deployment
+share the repository-wide `submission-worker-main` concurrency lock. A deploy
+therefore cannot replace the exact `DEPLOYED_COMMIT` executable while its
+durable staging journal remains active, and recovery cannot be overtaken by a
+queued deploy after runner loss or cancellation.
 
 The internal harness response contract has fourteen independent proofs. Each
 response binds the exact numeric-ID/login actor, route, credential role, HTTP
