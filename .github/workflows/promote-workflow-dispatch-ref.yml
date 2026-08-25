@@ -14,6 +14,7 @@ on:
       - '.github/workflows/public-replay-github-evidence.yml'
       - 'configuration/public-replay-legacy-adjudications-v1.json'
       - 'configuration/public-replay-workflow-definitions-v1.json'
+      - 'results/**'
       - 'schemas/historical-replay-inventory-delta-v1.schema.json'
       - 'schemas/historical-replay-inventory-v1.schema.json'
       - 'scripts/aggregate_public_replay_github_evidence.py'

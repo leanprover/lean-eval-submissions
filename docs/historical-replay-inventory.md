@@ -102,10 +102,14 @@ the full current inventory twice and independently build the baseline delta
 twice. The additional artifact is still contract-only transient evidence: it
 does not probe public sources, migrate a private archive, enqueue replay, write
 State or Results, enable intake, or close issue intake. At the final announced
-issue-intake cutoff, commit and review both the full inventory and its delta,
-then feed every delta entry into the same public/private classification and
-terminal replay gates as the baseline corpus. Retain the legacy issue-intake
-decryption authority until that final delta has closed.
+issue-intake cutoff, the Results-only protected-main commit enters the
+reviewer-gated, deployment-free immutable-tag promotion workflow. Approve that
+exact commit only after its protected-main CI succeeds, then dispatch the
+inventory workflow from the resulting `lean-eval-dispatch/<full-commit>` tag.
+Commit and review both the full inventory and its delta, then feed every delta
+entry into the same public/private classification and terminal replay gates as
+the baseline corpus. Retain the legacy issue-intake decryption authority until
+that final delta has closed.
 
 At protected source `7eb77aa8c2ef7f4d598c77240ea9effbb248dce2`,
 the deterministic comparison finds exactly three post-baseline entries, all

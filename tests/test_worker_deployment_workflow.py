@@ -315,6 +315,20 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertNotIn("paths:", ci_push)
         self.assertNotIn("paths-ignore:", ci_push)
 
+    def test_results_only_cutoff_uses_deployment_free_promotion(self) -> None:
+        deploy_pull_request = DEPLOY.split("  pull_request:", 1)[1].split(
+            "  push:", 1
+        )[0]
+        deploy_push = DEPLOY.split("  push:", 1)[1].split(
+            "  workflow_dispatch:", 1
+        )[0]
+        promotion_push = WORKFLOW_PROMOTION.split("  push:", 1)[1].split(
+            "permissions:", 1
+        )[0]
+        self.assertIn("'results/**'", promotion_push)
+        self.assertNotIn("'results/**'", deploy_pull_request)
+        self.assertNotIn("'results/**'", deploy_push)
+
     def test_workflow_only_promotion_is_protected_and_deployment_free(self) -> None:
         self.assertIn("environment: submission-dispatch-promotion", WORKFLOW_PROMOTION)
         self.assertIn(
