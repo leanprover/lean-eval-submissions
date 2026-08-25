@@ -966,6 +966,13 @@ class HistoricalReplayHandoffTests(unittest.TestCase):
         self.assertEqual(variables["REPLAY_ENABLED"], "false")
         self.assertEqual(variables["HISTORICAL_PUBLIC_REPLAY_ENABLED"], "true")
         self.assertEqual(variables["STAGING_ACCEPTANCE_ENABLED"], "false")
+        self.assertEqual(variables["DEPLOYED_COMMIT"], "b" * 40)
+        self.assertEqual(variables["DEPLOYMENT_ENVIRONMENT"], "production")
+        self.assertEqual(
+            variables["GITHUB_OIDC_AUDIENCE"],
+            "lean-eval-historical-public-replay-production",
+        )
+        self.assertEqual(variables["GITHUB_OIDC_ENVIRONMENT"], "replay-production")
         self.assertEqual(
             variables["REVIEWED_EXECUTION_PROFILE_DIGEST"],
             plan["task"]["execution_profile_digest"],

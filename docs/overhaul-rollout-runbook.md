@@ -796,10 +796,17 @@ and verify all of the following:
 5. Verify the exact-head State lane recovers a stale running task or stops on a
    current one; appends exactly one `replay.started`; executes without State
    authority; and appends exactly one terminal event. Cancellation after start
-   must converge through the seven-hour `runner_lost` recovery.
+   is excluded from the orchestration-failure append by `!cancelled()` and must
+   converge only through the seven-hour `runner_lost` recovery. Preserve
+   `runner_start_failed` until the executor returns and the workflow validates
+   an exact `202` running receipt; set `runner_lost` only before status polling.
 6. Provision State read/write keys and Cloudflare deployment credentials only
    in protected `replay-production`. Confirm the executor step has neither
-   credential and uses only the exact GitHub OIDC audience. Keep
+   credential and uses only the dedicated historical GitHub OIDC audience. Its
+   protected-main exception must be limited to the historical start/status
+   routes and bind the exact repository, environment, workflow ref, token and
+   workflow SHA, and deployed commit; ordinary replay and staging remain
+   immutable-dispatch-tag only. Keep
    `HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED` absent until a full canary and
    the resulting State/deployment evidence are reviewed.
 

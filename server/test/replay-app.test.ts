@@ -428,6 +428,166 @@ describe("Cloudflare replay executor", () => {
     expect(commands).toHaveLength(1);
   });
 
+  it("treats a concurrent exact process-start duplicate as the same running handoff", async () => {
+    const body = await historicalPublicInput();
+    let claimedBinding: unknown = null;
+    let initialReads = 0;
+    let startCalls = 0;
+    let destroyCalls = 0;
+    let releaseInitialReads: (() => void) | undefined;
+    const initialReadsComplete = new Promise<void>((resolve) => {
+      releaseInitialReads = resolve;
+    });
+    const process = { getStatus: () => Promise.resolve("running") };
+    const sandbox = {
+      writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+      exec: () => { throw new Error("blocking exec must remain unreachable"); },
+      getProcess: async () => {
+        if (initialReads < 2) {
+          initialReads += 1;
+          if (initialReads === 2) releaseInitialReads?.();
+          await initialReadsComplete;
+          return null;
+        }
+        return process as never;
+      },
+      startProcess: () => {
+        startCalls += 1;
+        if (startCalls === 1) return Promise.resolve(process as never);
+        return Promise.reject(Object.assign(
+          new Error("duplicate process"),
+          { code: "PROCESS_ALREADY_EXISTS" },
+        ));
+      },
+      destroy: () => {
+        destroyCalls += 1;
+        return Promise.resolve();
+      },
+    };
+    const receipts = {
+      readBinding: () => Promise.resolve(claimedBinding),
+      claimBinding: (value: unknown) => {
+        if (claimedBinding === null) claimedBinding = value;
+        return Promise.resolve(claimedBinding);
+      },
+      readReceipt: () => Promise.resolve(null),
+      prepareReceipt: (receipt: unknown) => Promise.resolve(receipt),
+      confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
+    };
+    const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
+    const request = () => new Request(
+      "https://example.test/api/v1/historical-public-replay",
+      { method: "POST", body: JSON.stringify(body) },
+    );
+    const dependencies = {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+      receiptStore: () => receipts,
+    };
+
+    const responses = await Promise.all([
+      handleReplayRequest(request(), enabled, dependencies),
+      handleReplayRequest(request(), enabled, dependencies),
+    ]);
+    expect(responses.map((response) => response.status)).toEqual([202, 202]);
+    expect(await Promise.all(responses.map((response) => response.json()))).toEqual([
+      {
+        schema_version: 1,
+        replay_task_id: body.replay_task_id,
+        attempt: body.attempt,
+        status: "running",
+      },
+      {
+        schema_version: 1,
+        replay_task_id: body.replay_task_id,
+        attempt: body.attempt,
+        status: "running",
+      },
+    ]);
+    expect(startCalls).toBe(2);
+    expect(initialReads).toBe(2);
+    expect(destroyCalls).toBe(0);
+  });
+
+  it("only preserves the sandbox for an exact duplicate code with an ambiguous reread", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const body = await historicalPublicInput();
+      const cases = [
+        {
+          error: new Error("PROCESS_ALREADY_EXISTS"),
+          expectedDestroyCalls: 1,
+          rereadThrows: false,
+        },
+        {
+          error: Object.assign(new Error("different failure"), { code: "DIFFERENT_ERROR" }),
+          expectedDestroyCalls: 1,
+          rereadThrows: false,
+        },
+        {
+          error: Object.assign(new Error("duplicate process"), {
+            code: "PROCESS_ALREADY_EXISTS",
+          }),
+          expectedDestroyCalls: 0,
+          rereadThrows: false,
+        },
+        {
+          error: Object.assign(new Error("duplicate process"), {
+            code: "PROCESS_ALREADY_EXISTS",
+          }),
+          expectedDestroyCalls: 0,
+          rereadThrows: true,
+        },
+      ];
+      for (const testCase of cases) {
+        let claimedBinding: unknown = null;
+        let destroyCalls = 0;
+        let processReads = 0;
+        const response = await handleReplayRequest(new Request(
+          "https://example.test/api/v1/historical-public-replay",
+          { method: "POST", body: JSON.stringify(body) },
+        ), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
+          authenticate: () => Promise.resolve(),
+          sandbox: () => ({
+            writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+            exec: () => { throw new Error("blocking exec must remain unreachable"); },
+            getProcess: () => {
+              processReads += 1;
+              if (testCase.rereadThrows && processReads === 2) {
+                return Promise.reject(new Error("process reread failed"));
+              }
+              return Promise.resolve(null);
+            },
+            startProcess: () => Promise.reject(testCase.error),
+            destroy: () => {
+              destroyCalls += 1;
+              return Promise.resolve();
+            },
+          }),
+          receiptStore: () => ({
+            readBinding: () => Promise.resolve(claimedBinding),
+            claimBinding: (value: unknown) => {
+              if (claimedBinding === null) claimedBinding = value;
+              return Promise.resolve(claimedBinding);
+            },
+            readReceipt: () => Promise.resolve(null),
+            prepareReceipt: (receipt: unknown) => Promise.resolve(receipt),
+            confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
+          }),
+        });
+        expect(response.status).toBe(500);
+        expect(await response.json()).toEqual({
+          error: "executor_failed",
+          reason: "command_rpc_failed",
+        });
+        expect(destroyCalls).toBe(testCase.expectedDestroyCalls);
+        expect(processReads).toBe(testCase.expectedDestroyCalls === 0 ? 2 : 1);
+      }
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
   it("rejects historical active-binding drift before sandbox lookup", async () => {
     const body = await historicalPublicInput();
     const activeBinding = {

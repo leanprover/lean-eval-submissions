@@ -68,13 +68,22 @@ enabled with the separately reviewed environment credentials, one invocation:
    builds the deterministic handoff, and invokes the executor without a State
    writer or Cloudflare deployment credential in scope; and
 6. appends exactly one attempt-bound terminal event, or a typed orchestration
-   failure. Cancellation after start converges through the seven-hour stale
-   recovery on the next serialized invocation.
+   failure. The orchestration-failure append is explicitly guarded by
+   `!cancelled()`: cancellation after start leaves the running attempt untouched
+   and converges only through the seven-hour stale recovery on the next
+   serialized invocation. `runner_start_failed` remains the failure phase until
+   an exact `202` running receipt is validated; only then does polling use
+   `runner_lost`.
 
 Cloudflare deployment, State reads, State writes, public source fetching, and
 executor OIDC are kept in separate steps. The lane has no AWS permission and
 never reads an encrypted private archive. It uploads no State-derived plan,
 source, request, or verdict artifact.
+
+The dedicated historical-production OIDC audience accepts protected `main`
+only on the historical start/status routes and only when the repository,
+environment, workflow ref, token SHA, workflow SHA, and deployed commit all
+match exactly. Ordinary replay and staging remain immutable-dispatch-tag only.
 
 ## Activation gate
 

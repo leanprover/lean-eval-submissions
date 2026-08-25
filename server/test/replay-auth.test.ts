@@ -12,7 +12,10 @@ function jsonPart(value: unknown): string {
   return base64Url(new TextEncoder().encode(JSON.stringify(value)));
 }
 
-async function signedRequest(overrides: Record<string, unknown> = {}): Promise<{
+async function signedRequest(
+  overrides: Record<string, unknown> = {},
+  path = "/api/v1/staging-acceptance",
+): Promise<{
   request: Request;
   fetcher: typeof fetch;
 }> {
@@ -60,7 +63,7 @@ async function signedRequest(overrides: Record<string, unknown> = {}): Promise<{
     }],
   }));
   return {
-    request: new Request("https://example.test/api/v1/staging-acceptance", {
+    request: new Request(`https://example.test${path}`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}` },
     }),
@@ -69,8 +72,29 @@ async function signedRequest(overrides: Record<string, unknown> = {}): Promise<{
 }
 
 const ENV = {
+  DEPLOYED_COMMIT: "b".repeat(40),
+  DEPLOYMENT_ENVIRONMENT: "staging",
   GITHUB_OIDC_AUDIENCE: "lean-eval-replay-staging",
   GITHUB_OIDC_ENVIRONMENT: "replay-staging",
+};
+
+const HISTORICAL_ENV = {
+  DEPLOYED_COMMIT: "a".repeat(40),
+  DEPLOYMENT_ENVIRONMENT: "production",
+  GITHUB_OIDC_AUDIENCE: "lean-eval-historical-public-replay-production",
+  GITHUB_OIDC_ENVIRONMENT: "replay-production",
+};
+
+const HISTORICAL_MAIN_CLAIMS = {
+  aud: HISTORICAL_ENV.GITHUB_OIDC_AUDIENCE,
+  sub: "repo:leanprover/lean-eval-submissions:environment:replay-production",
+  environment: "replay-production",
+  ref: "refs/heads/main",
+  sha: HISTORICAL_ENV.DEPLOYED_COMMIT,
+  workflow_ref: "leanprover/lean-eval-submissions/.github/workflows/"
+    + "historical-authoritative-replay.yml@refs/heads/main",
+  workflow_sha: HISTORICAL_ENV.DEPLOYED_COMMIT,
+  event_name: "workflow_dispatch",
 };
 
 describe("GitHub OIDC replay authentication", () => {
@@ -98,7 +122,7 @@ describe("GitHub OIDC replay authentication", () => {
 
     const mutable = await signedRequest({ ref: "refs/heads/main" });
     await expect(verifyGithubOidc(mutable.request, ENV, mutable.fetcher, 1_787_395_200))
-      .rejects.toThrow("immutable dispatch tag");
+      .rejects.toThrow("immutable execution ref");
 
     const signed = await signedRequest();
     const authorization = signed.request.headers.get("authorization") ?? "";
@@ -109,5 +133,107 @@ describe("GitHub OIDC replay authentication", () => {
     await expect(verifyGithubOidc(new Request(signed.request, {
       headers: { authorization: changed },
     }), ENV, signed.fetcher, 1_787_395_200)).rejects.toThrow("signature");
+  });
+
+  it("accepts protected main only for the exact historical production workflow and routes", async () => {
+    for (const path of [
+      "/api/v1/historical-public-replay",
+      "/api/v1/historical-public-replay/status",
+    ]) {
+      const { request, fetcher } = await signedRequest(HISTORICAL_MAIN_CLAIMS, path);
+      await expect(verifyGithubOidc(request, HISTORICAL_ENV, fetcher, 1_787_395_200))
+        .resolves.toBeUndefined();
+    }
+  });
+
+  it("rejects hostile protected-main claim, route, deployment, and workflow drift", async () => {
+    const cases: {
+      label: string;
+      overrides?: Record<string, unknown>;
+      path?: string;
+      env?: typeof HISTORICAL_ENV;
+    }[] = [
+      { label: "ordinary replay route", path: "/api/v1/replay" },
+      { label: "health route", path: "/healthz" },
+      {
+        label: "ordinary production audience",
+        env: {
+          ...HISTORICAL_ENV,
+          GITHUB_OIDC_AUDIENCE: "lean-eval-replay-production",
+        },
+      },
+      {
+        label: "staging deployment",
+        env: { ...HISTORICAL_ENV, DEPLOYMENT_ENVIRONMENT: "staging" },
+      },
+      {
+        label: "different deployed commit",
+        env: { ...HISTORICAL_ENV, DEPLOYED_COMMIT: "b".repeat(40) },
+      },
+      { label: "different workflow", overrides: { workflow_ref: "other/workflow@refs/heads/main" } },
+      { label: "different workflow sha", overrides: { workflow_sha: "b".repeat(40) } },
+      { label: "non-dispatch event", overrides: { event_name: "push" } },
+      { label: "unprotected ref", overrides: { ref_protected: "false" } },
+      { label: "different repository", overrides: { repository: "leanprover/lean-eval" } },
+    ];
+    for (const item of cases) {
+      const { request, fetcher } = await signedRequest(
+        { ...HISTORICAL_MAIN_CLAIMS, ...item.overrides },
+        item.path ?? "/api/v1/historical-public-replay",
+      );
+      await expect(
+        verifyGithubOidc(request, item.env ?? HISTORICAL_ENV, fetcher, 1_787_395_200),
+        item.label,
+      ).rejects.toThrow();
+    }
+
+    const signedGet = await signedRequest(
+      HISTORICAL_MAIN_CLAIMS,
+      "/api/v1/historical-public-replay",
+    );
+    await expect(verifyGithubOidc(
+      new Request(signedGet.request, { method: "GET" }),
+      HISTORICAL_ENV,
+      signedGet.fetcher,
+      1_787_395_200,
+    )).rejects.toThrow("immutable execution ref");
+  });
+
+  it("requires exact main for historical production while ordinary and staging stay tag-only", async () => {
+    const historicalTag = await signedRequest({
+      aud: HISTORICAL_ENV.GITHUB_OIDC_AUDIENCE,
+      sub: "repo:leanprover/lean-eval-submissions:environment:replay-production",
+      environment: "replay-production",
+    }, "/api/v1/historical-public-replay");
+    await expect(verifyGithubOidc(
+      historicalTag.request,
+      HISTORICAL_ENV,
+      historicalTag.fetcher,
+      1_787_395_200,
+    )).rejects.toThrow("immutable execution ref");
+
+    const ordinaryProduction = {
+      ...HISTORICAL_ENV,
+      GITHUB_OIDC_AUDIENCE: "lean-eval-replay-production",
+    };
+    const production = await signedRequest({
+      ...HISTORICAL_MAIN_CLAIMS,
+      aud: ordinaryProduction.GITHUB_OIDC_AUDIENCE,
+    }, "/api/v1/replay");
+    await expect(verifyGithubOidc(
+      production.request,
+      ordinaryProduction,
+      production.fetcher,
+      1_787_395_200,
+    )).rejects.toThrow("immutable execution ref");
+
+    const staging = await signedRequest({
+      ref: "refs/heads/main",
+      workflow_ref: HISTORICAL_MAIN_CLAIMS.workflow_ref,
+      workflow_sha: "a".repeat(40),
+      event_name: "workflow_dispatch",
+    }, "/api/v1/historical-public-replay");
+    await expect(verifyGithubOidc(staging.request, ENV, staging.fetcher, 1_787_395_200))
+      .rejects.toThrow("immutable execution ref");
   });
 });

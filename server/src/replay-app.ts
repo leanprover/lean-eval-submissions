@@ -37,8 +37,6 @@ import type { ReplayTerminalReceipt } from "./replay-terminal-receipt";
 export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
   REPLAY_SANDBOX: DurableObjectNamespace<Sandbox>;
   REPLAY_TERMINAL_RECEIPT: DurableObjectNamespace<ReplayTerminalReceipt>;
-  DEPLOYED_COMMIT: string;
-  DEPLOYMENT_ENVIRONMENT: string;
   REPLAY_ENABLED: string;
   HISTORICAL_PUBLIC_REPLAY_ENABLED: string;
   STAGING_ACCEPTANCE_ENABLED: string;
@@ -71,6 +69,12 @@ class ReplayExecutorError extends Error {
     readonly detail?: string,
   ) {
     super(reason);
+  }
+}
+
+class ProcessStartConflictError extends ReplayExecutorError {
+  constructor() {
+    super("command_rpc_failed");
   }
 }
 
@@ -264,8 +268,14 @@ function safeCommandFailureDetail(command: string, stderr: string): string | und
   return undefined;
 }
 
-async function startAuthoritativeProcess(
+function processAlreadyExists(error: unknown): boolean {
+  return objectValue(error)?.code === "PROCESS_ALREADY_EXISTS";
+}
+
+async function startBackgroundProcess(
   sandbox: SandboxClient,
+  processId: string,
+  command: string,
   prepare: () => Promise<void>,
 ): Promise<void> {
   if (sandbox.getProcess === undefined || sandbox.startProcess === undefined) {
@@ -273,47 +283,56 @@ async function startAuthoritativeProcess(
   }
   let existing: Awaited<ReturnType<NonNullable<SandboxClient["getProcess"]>>>;
   try {
-    existing = await sandbox.getProcess(AUTHORITATIVE_PROCESS_ID);
+    existing = await sandbox.getProcess(processId);
   } catch {
     throw new ReplayExecutorError("command_rpc_failed");
   }
   if (existing !== null) return;
   await prepare();
   try {
-    await sandbox.startProcess(AUTHORITATIVE_COMMAND, {
+    await sandbox.startProcess(command, {
       timeout: AUTHORITATIVE_TIMEOUT_MS,
-      processId: AUTHORITATIVE_PROCESS_ID,
+      processId,
       autoCleanup: false,
     });
-  } catch {
-    throw new ReplayExecutorError("command_rpc_failed");
+  } catch (error) {
+    if (!processAlreadyExists(error)) {
+      throw new ReplayExecutorError("command_rpc_failed");
+    }
+    // The exact duplicate may be a concurrently started winner; its sandbox must survive ambiguity.
+    try {
+      existing = await sandbox.getProcess(processId);
+    } catch {
+      throw new ProcessStartConflictError();
+    }
+    if (existing === null) {
+      throw new ProcessStartConflictError();
+    }
   }
+}
+
+async function startAuthoritativeProcess(
+  sandbox: SandboxClient,
+  prepare: () => Promise<void>,
+): Promise<void> {
+  await startBackgroundProcess(
+    sandbox,
+    AUTHORITATIVE_PROCESS_ID,
+    AUTHORITATIVE_COMMAND,
+    prepare,
+  );
 }
 
 async function startHistoricalPublicProcess(
   sandbox: SandboxClient,
   prepare: () => Promise<void>,
 ): Promise<void> {
-  if (sandbox.getProcess === undefined || sandbox.startProcess === undefined) {
-    throw new ReplayExecutorError("command_rpc_failed");
-  }
-  let existing: Awaited<ReturnType<NonNullable<SandboxClient["getProcess"]>>>;
-  try {
-    existing = await sandbox.getProcess(HISTORICAL_PUBLIC_PROCESS_ID);
-  } catch {
-    throw new ReplayExecutorError("command_rpc_failed");
-  }
-  if (existing !== null) return;
-  await prepare();
-  try {
-    await sandbox.startProcess(HISTORICAL_PUBLIC_COMMAND, {
-      timeout: AUTHORITATIVE_TIMEOUT_MS,
-      processId: HISTORICAL_PUBLIC_PROCESS_ID,
-      autoCleanup: false,
-    });
-  } catch {
-    throw new ReplayExecutorError("command_rpc_failed");
-  }
+  await startBackgroundProcess(
+    sandbox,
+    HISTORICAL_PUBLIC_PROCESS_ID,
+    HISTORICAL_PUBLIC_COMMAND,
+    prepare,
+  );
 }
 
 function exactObjectFields(
@@ -1414,7 +1433,9 @@ export async function handleReplayRequest(
           );
         });
       } catch (error) {
-        await sandbox.destroy();
+        if (!(error instanceof ProcessStartConflictError)) {
+          await sandbox.destroy();
+        }
         throw error;
       }
       return historicalRunningResponse(historicalStatusBinding(input));
@@ -1484,7 +1505,9 @@ export async function handleReplayRequest(
           await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);
         });
       } catch (error) {
-        await sandbox.destroy();
+        if (!(error instanceof ProcessStartConflictError)) {
+          await sandbox.destroy();
+        }
         throw error;
       }
       return json({

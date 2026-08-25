@@ -303,7 +303,6 @@ jobs:
             measurement_config_digest,
             vm_image_digest
           }' "$RUNNER_TEMP/executor-request.json" > "$RUNNER_TEMP/executor-status-request.json"
-          echo runner_lost > "$RUNNER_TEMP/failure-reason"
           mint_oidc() {
             curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
               --max-time 15 \
@@ -339,6 +338,7 @@ jobs:
             '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, status: "running"}' \
             "$RUNNER_TEMP/executor-start-response.json" >/dev/null
           rm -f "$RUNNER_TEMP/executor-start-response.json"
+          echo runner_lost > "$RUNNER_TEMP/failure-reason"
 
           process_deadline=$(( $(date +%s) + 20100 ))
           job_deadline=$(( HISTORICAL_REPLAY_JOB_STARTED_EPOCH + 20880 ))
@@ -409,7 +409,7 @@ jobs:
           echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
 
       - name: Fail a started attempt explicitly if orchestration did not finish
-        if: always() && steps.started.outputs.appended == 'true' && steps.terminal.outputs.appended != 'true'
+        if: ${{ !cancelled() && steps.started.outputs.appended == 'true' && steps.terminal.outputs.appended != 'true' }}
         env:
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
           EXPECTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}

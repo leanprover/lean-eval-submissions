@@ -82,9 +82,44 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertIn("runner_start_failed", WORKFLOW)
         self.assertIn("runner_lost", WORKFLOW)
         self.assertIn("verdict_invalid", WORKFLOW)
-        self.assertIn("always() && steps.started.outputs.appended == 'true'", WORKFLOW)
+        failure_step = WORKFLOW.split(
+            "Fail a started attempt explicitly if orchestration did not finish", 1
+        )[1].split("Confirm credentials remained separated", 1)[0]
+        self.assertIn(
+            "${{ !cancelled() && steps.started.outputs.appended == 'true' "
+            "&& steps.terminal.outputs.appended != 'true' }}",
+            failure_step,
+        )
+        self.assertNotIn("always()", failure_step)
         self.assertIn("timeout-minutes: 360", WORKFLOW)
         self.assertNotIn("actions/upload-artifact", WORKFLOW)
+
+    def test_start_failure_phase_changes_only_after_exact_running_receipt(self) -> None:
+        start_failed = WORKFLOW.index('echo runner_start_failed > "$RUNNER_TEMP/failure-reason"')
+        status_accepted = WORKFLOW.index('test "$start_status" = 202')
+        receipt_validated = WORKFLOW.index(
+            '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, '
+            'status: "running"}'
+        )
+        runner_lost = WORKFLOW.index('echo runner_lost > "$RUNNER_TEMP/failure-reason"')
+        polling = WORKFLOW.index('while [ "$(date +%s)" -lt "$deadline" ]')
+        self.assertLess(start_failed, status_accepted)
+        self.assertLess(status_accepted, receipt_validated)
+        self.assertLess(receipt_validated, runner_lost)
+        self.assertLess(runner_lost, polling)
+
+    def test_protected_main_oidc_is_bound_to_the_exact_historical_deployment(self) -> None:
+        self.assertIn("test \"$GITHUB_REPOSITORY\" = leanprover/lean-eval-submissions", WORKFLOW)
+        self.assertIn("test \"$GITHUB_REF\" = refs/heads/main", WORKFLOW)
+        self.assertIn("test \"$GITHUB_REF_PROTECTED\" = true", WORKFLOW)
+        self.assertIn('test "$branch" = "$GITHUB_SHA"', WORKFLOW)
+        self.assertIn('--source-commit "$GITHUB_SHA"', WORKFLOW)
+        self.assertIn("environment: replay-production", WORKFLOW)
+        self.assertIn(
+            "audience=lean-eval-historical-public-replay-production",
+            WORKFLOW,
+        )
+        self.assertIn("$HISTORICAL_EXECUTOR_URL/status", WORKFLOW)
 
     def test_executor_uses_idempotent_start_and_status_polling(self) -> None:
         executor = WORKFLOW.split(
