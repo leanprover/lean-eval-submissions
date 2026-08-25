@@ -273,13 +273,20 @@ the already implemented owner status, metadata, and publication routes.
       leaves 189 / 441 pending, has SHA-256 `8122b4ee…`, and is checked in with
       complete shard provenance in
       [`historical-public-gist-probe-rerun.md`](historical-public-gist-probe-rerun.md).
+- [x] Rerun the complete public-evidence corpus with the closed legacy
+      adjudication registry. Sixteen successful runs `32794597497`–`32795629591`
+      at exact source `ba5f5784` resolve 128 requests / 194 results and leave
+      187 / 439 explicitly `source_unavailable`, with every indeterminate,
+      ambiguous, unreviewed, and missing-evidence bucket at zero. The immutable
+      aggregate has SHA-256 `ba816b52…`; complete provenance is in
+      [`historical-public-adjudicated-evidence-rerun.md`](historical-public-adjudicated-evidence-rerun.md).
 - [ ] Inventory every historical accepted result at the migration cutoff and
       deterministically classify it as public-source replayable,
       private-archive replayable, or explicitly unavailable with a reviewed
       reason. The public evidence pass removes all unreviewed workflow-contract
-      classifications, but 441 public results still require adjudication or an
-      explicit unavailability policy, and all 668 private results still require
-      the separately credentialed archive-migration lane.
+      classifications, but 439 public results still require source recovery or
+      an explicit unavailability policy, and all 668 private results still
+      require the separately credentialed archive-migration lane.
       The contract-only cutoff inventory is now complete and durably reviewed:
       protected run `32790927560`, attempt 1, at immutable source `ae1a9714`
       reproduced canonical store digest `14e8c868…` and committed exact inventory
@@ -304,7 +311,7 @@ the already implemented owner status, metadata, and publication routes.
       the exact plan (`2b00c965…`) and toolchain registry (`5144fc19…`) are
       permanently checked in under their digest-derived evidence paths. That
       conservative plan covers the first pass's 69 resolved requests; generate
-      a new plan from aggregate `8122b4ee…` before treating all 126 resolved
+      a new plan from aggregate `ba816b52…` before treating all 128 resolved
       request groups as planned.
       Activation
       remains fail-closed on `legacy_public_result_replay_authority_v1` because

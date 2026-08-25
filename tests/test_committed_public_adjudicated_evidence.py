@@ -15,16 +15,16 @@ from referencing import Registry, Resource
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from tests.frozen_results_tree import materialize_results_tree
 from inventory_historical_replay import canonical_inventory_bytes, inventory
 from prepare_public_replay_resolution import prepare
-from tests.frozen_results_tree import materialize_results_tree
 
-EVIDENCE = ROOT / "evidence" / "historical-public-replay-github-evidence-6c13c24.json"
-EXPECTED_SHA256 = "8122b4ee0a308ce1202f66e94c3cd6bf189c65641a6755f2de95ff1ec78127e2"
-SOURCE_COMMIT = "6c13c245d17a1e25a59846769e533265e8ac9ba8"
+EVIDENCE = ROOT / "evidence" / "historical-public-replay-github-evidence-ba5f578.json"
+EXPECTED_SHA256 = "ba816b52558cf77bd202618f820ffa6294ca2167698c94ab1096a39375c50212"
+SOURCE_COMMIT = "ba5f5784427621f8b9be7396dd45a0938792707d"
 
 
-class CommittedPublicGistProbeEvidenceTests(unittest.TestCase):
+class CommittedPublicAdjudicatedEvidenceTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.raw = EVIDENCE.read_bytes()
@@ -53,34 +53,37 @@ class CommittedPublicGistProbeEvidenceTests(unittest.TestCase):
         self.assertEqual(self.value["source_commit"], SOURCE_COMMIT)
         self.assertEqual(
             self.value["inventory_sha256"],
-            "7c1b393711654741a6d69d5c0e8db02cf89078c4cc5fe3e96002c614d5c0bd22",
+            "1a747133bba3c9ce09852967b4f3b4707bad64506890e4581bbf6f90a9be330c",
         )
         self.assertEqual(
             self.value["resolution_requests_sha256"],
-            "50202e7331a77ed04be04a784315b8ecfad6f593edc6686763d196552df5e2fa",
+            "bf78ab88b8612c3aa1d627eb9efdda4c0989ef4d55451e706f825108e22f37de",
         )
         self.assertEqual(
             self.value["workflow_definition_registry_sha256"],
-            "82eff4dce70c2fcb7f480522f4de1fb16884534ce5f9452032908bb299c12196",
+            "b9004ee87f0ff032e78198e251b87fe1bb1d0baaf77d6ea853335dd1f5487108",
+        )
+        self.assertEqual(
+            self.value["legacy_adjudication_registry_sha256"],
+            "4df6682b0e8b0ff129235c286aebf3322f37b002c846cc9fc8b14c054acf4ed1",
         )
 
-    def test_gist_permission_boundary_is_resolved(self) -> None:
+    def test_all_requests_and_shards_have_final_classifications(self) -> None:
         counts = Counter(item["status"] for item in self.value["resolutions"])
-        self.assertEqual(
-            counts,
-            {
-                "resolved": 126,
-                "source_unavailable": 184,
-                "timing_indeterminate": 2,
-                "evidence_missing": 3,
-            },
-        )
+        self.assertEqual(counts, {"resolved": 128, "source_unavailable": 187})
         self.assertEqual(self.value["request_count"], 315)
         self.assertEqual(self.value["result_count"], 633)
-        self.assertEqual(self.value["pending_count"], 189)
-        self.assertEqual(self.value["source_indeterminate_count"], 0)
-        self.assertEqual(self.value["probe_indeterminate_count"], 0)
-        self.assertEqual(self.value["workflow_contract_unreviewed_count"], 0)
+        self.assertEqual(self.value["resolved_count"], 128)
+        self.assertEqual(self.value["pending_count"], 187)
+        for field in (
+            "ambiguous_count",
+            "evidence_missing_count",
+            "probe_indeterminate_count",
+            "source_indeterminate_count",
+            "timing_indeterminate_count",
+            "workflow_contract_unreviewed_count",
+        ):
+            self.assertEqual(self.value[field], 0)
         self.assertEqual(
             [item["shard_index"] for item in self.value["shards"]],
             list(range(16)),
@@ -116,22 +119,10 @@ class CommittedPublicGistProbeEvidenceTests(unittest.TestCase):
             request_totals[status] += 1
             result_totals[status] += result_counts[resolution["request_id"]]
         self.assertEqual(
-            dict(request_totals),
-            {
-                "resolved": 126,
-                "source_unavailable": 184,
-                "timing_indeterminate": 2,
-                "evidence_missing": 3,
-            },
+            dict(request_totals), {"resolved": 128, "source_unavailable": 187}
         )
         self.assertEqual(
-            dict(result_totals),
-            {
-                "resolved": 192,
-                "source_unavailable": 219,
-                "timing_indeterminate": 2,
-                "evidence_missing": 220,
-            },
+            dict(result_totals), {"resolved": 194, "source_unavailable": 439}
         )
 
 

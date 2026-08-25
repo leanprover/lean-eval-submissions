@@ -800,6 +800,15 @@ generic-probe indeterminacy. Exact inputs, classifications, artifact IDs,
 digests, expiry, and the permanent aggregate are recorded in
 [`historical-public-gist-probe-rerun.md`](historical-public-gist-probe-rerun.md).
 
+The legacy-adjudicated rerun followed the same procedure at source
+`ba5f5784427621f8b9be7396dd45a0938792707d`. Sixteen sequential retained runs
+`32794597497` through `32795629591` covered the same 315 requests / 633 results;
+128 / 194 are resolved and 187 / 439 remain `source_unavailable`, with every
+indeterminate, ambiguous, unreviewed, and missing-evidence bucket at zero.
+Exact registry/input bindings, classifications, artifact provenance, and the
+permanent aggregate are recorded in
+[`historical-public-adjudicated-evidence-rerun.md`](historical-public-adjudicated-evidence-rerun.md).
+
 ## Results migration walkthrough
 
 After the results schema version 2 tooling PR is merged:
