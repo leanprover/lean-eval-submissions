@@ -21,6 +21,9 @@ jobs:
       # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          # Committed historical evidence tests reconstruct the exact Results
+          # tree at their bound source commit, not the growing live tree.
+          fetch-depth: 0
           persist-credentials: false
 
       # actions/setup-python pinned to 5fda3b95 (= refs/tags/v7.0.0 as of 2026-07-30).
