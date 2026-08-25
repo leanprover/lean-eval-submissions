@@ -1,0 +1,161 @@
+name: Plan one historical authoritative replay (dark)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_read_only_plan:
+        description: Read production State and produce only a transport-blocked plan
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lean-eval-historical-authoritative-replay-controller
+  cancel-in-progress: false
+
+jobs:
+  read-only-plan:
+    if: >-
+      inputs.confirm_read_only_plan == true &&
+      vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED == 'true'
+    environment: replay-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Require exact protected main and the explicit dark gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HISTORICAL_CONTROLLER_ENABLED: ${{ vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          test "$HISTORICAL_CONTROLLER_ENABLED" = true
+          branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.commit.sha, .protected] | @tsv')
+          test "$branch" = "$GITHUB_SHA"$'\ttrue'
+
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Normalize the exact submissions remote identity
+        run: |
+          set -euo pipefail
+          observed=$(git config --get-all remote.origin.url)
+          if [ "$observed" != https://github.com/leanprover/lean-eval-submissions ] && \
+             [ "$observed" != https://github.com/leanprover/lean-eval-submissions.git ]; then
+            exit 1
+          fi
+          git remote set-url origin https://github.com/leanprover/lean-eval-submissions.git
+          test "$(git config --get-all remote.origin.url)" = \
+            https://github.com/leanprover/lean-eval-submissions.git
+
+      # The read-only key is intentionally not provisioned in this repository
+      # while the controller variable is dark. It is a separate launch gate.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-state
+          ref: main
+          path: state
+          fetch-depth: 1
+          persist-credentials: false
+          ssh-key: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
+
+      # actions/setup-python pinned to v7.0.0.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Install the pinned JSON Schema validator
+        run: >-
+          python -m pip install --disable-pip-version-check --only-binary=:all:
+          --require-hashes -r requirements-jsonschema-workflow.txt
+
+      - name: Validate and materialize exact production State
+        run: |
+          set -euo pipefail
+          test "$(jq -r .environment state/state.json)" = production
+          test "$(git -C state remote get-url origin)" = \
+            git@github.com:leanprover/lean-eval-state.git
+          test -z "$(git -C state status --short)"
+          python state/scripts/state.py --root state validate
+          python state/scripts/state.py --root state materialize \
+            --output "$RUNNER_TEMP/state-views"
+
+      - name: Refuse to plan around a running historical attempt
+        id: recovery
+        run: |
+          set -euo pipefail
+          python scripts/historical_replay_controller.py recover \
+            --events-root state/events \
+            --state-validated \
+            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+            --output "$RUNNER_TEMP/recovery.json"
+          kind=$(jq -er .kind "$RUNNER_TEMP/recovery.json")
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          if [ "$kind" != busy ] && [ "$kind" != failed ]; then
+            test "$kind" = none
+          fi
+
+      - name: Produce only the source-free transport-blocked plan
+        id: plan
+        if: steps.recovery.outputs.kind == 'none'
+        run: |
+          set -euo pipefail
+          queue="$RUNNER_TEMP/state-views/historical-public-replay-queue.json"
+          test "$(jq -r .schema_version "$queue")" = 2
+          test "$(jq -r .environment "$queue")" = production
+          python scripts/historical_replay_controller.py \
+            plan \
+            --queue "$queue" \
+            --repository-root . \
+            --output "$RUNNER_TEMP/historical-authoritative-replay-plan.json"
+          kind=$(jq -er .kind "$RUNNER_TEMP/historical-authoritative-replay-plan.json")
+          if [ "$kind" != empty ] && [ "$kind" != execution ] && [ "$kind" != blocked ]; then
+            exit 1
+          fi
+          test "$(jq -r .transport.status "$RUNNER_TEMP/historical-authoritative-replay-plan.json")" = blocked
+          test "$(jq -r .transport.reason "$RUNNER_TEMP/historical-authoritative-replay-plan.json")" = \
+            historical_public_executor_not_implemented
+          if [ "$kind" = blocked ]; then
+            test "$(jq -r .blocker.status "$RUNNER_TEMP/historical-authoritative-replay-plan.json")" = blocked
+          fi
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+
+      - name: Confirm the lane remained read-only and transport-blocked
+        if: always()
+        run: |
+          set -euo pipefail
+          test "$(git status --short --untracked-files=normal)" = '?? state/'
+          if [ -d state ]; then
+            test -z "$(git -C state status --short)"
+          fi
+          {
+            echo '### Historical authoritative replay remains dark'
+            echo
+            echo '- no State write credential was requested'
+            echo '- no replay.started or recovery event was appended'
+            echo '- no executor, Cloudflare, AWS, intake, release, or publication operation ran'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove State and planning scratch
+        if: always()
+        run: |
+          find "$RUNNER_TEMP/state-views" -type f -delete 2>/dev/null || true
+          find "$RUNNER_TEMP/state-views" -depth -type d -empty -delete 2>/dev/null || true
+          if [ -d state ]; then
+            find state -type f -delete
+            find state -depth -type d -empty -delete 2>/dev/null || true
+          fi
+          find "$RUNNER_TEMP" -maxdepth 1 -type f \
+            \( -name 'recovery.json' -o -name 'historical-authoritative-replay-plan.json' \) \
+            -delete

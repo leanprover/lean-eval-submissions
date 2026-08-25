@@ -144,6 +144,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "scripts/aggregate_public_replay_github_evidence.py",
             "scripts/build_public_replay_toolchain_registry.py",
             "scripts/classify_historical_private_archives.py",
+            "scripts/historical_replay_controller.py",
             "scripts/prepare_public_replay_plan.py",
             "scripts/resolve_public_replay_github_evidence.py",
             "scripts/validate_historical_replay_inventory_evidence.py",
@@ -274,6 +275,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "aggregate_public_replay_github_evidence.py",
             "build_public_replay_toolchain_registry.py",
             "classify_historical_private_archives.py",
+            "historical_replay_controller.py",
             "prepare_public_replay_plan.py",
             "resolve_public_replay_github_evidence.py",
             "validate_historical_replay_inventory_evidence.py",
@@ -291,6 +293,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             offline_evidence_scripts
             - {
                 "classify_historical_private_archives.py",
+                "historical_replay_controller.py",
                 "validate_historical_replay_inventory_evidence.py",
             },
         )
