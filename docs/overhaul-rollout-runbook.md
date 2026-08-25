@@ -858,6 +858,54 @@ Exact registry/input bindings, classifications, artifact provenance, and the
 permanent aggregate are recorded in
 [`historical-public-adjudicated-evidence-rerun.md`](historical-public-adjudicated-evidence-rerun.md).
 
+## Historical public image qualification walkthrough
+
+Treat create-only registry publication and mutation of the single isolated
+qualification Worker as separate phases. This keeps the expensive independent
+image builds parallel without allowing one probe to observe another profile's
+deployment.
+
+1. Promote one reviewed protected-main commit to its immutable
+   `lean-eval-dispatch/<commit>` tag. Dispatch
+   `historical-public-image-qualification.yml` once per unqualified matrix
+   entry with registry publication confirmed and the isolated staging probe
+   false. Distinct benchmark commits use distinct concurrency groups, so these
+   source-locked builds may run in parallel. A duplicate build for the same
+   benchmark remains serialized and the create-only tag checks refuse an
+   overwrite.
+2. For every successful publication, retain the exact run, attempt, artifact
+   ID, image-source commit, and OCI manifest digest. A publication-only run
+   does not deploy the qualification Worker and cannot qualify the image.
+3. Dispatch the same workflow again with both confirmations true and the exact
+   prior manifest digest and image-source commit as the resume inputs, together
+   with the exact successful create-only run ID, attempt, and candidate artifact
+   ID. The workflow re-reads the exact run and artifact metadata, verifies the
+   API-bound ZIP digest and closed two-member archive, and carries the exact
+   created publication evidence—including the bounded image size and layer diff
+   IDs—into the final candidate artifact. These runs all share
+   `historical-public-image-qualification`, so deployment and both same-nonce
+   destruction/recreation probes remain serialized as one unit. Dispatch
+   exactly one probe run, wait for it to reach a terminal state, and only then
+   dispatch the next; GitHub's default single pending concurrency slot replaces
+   an older pending run rather than retaining an arbitrary queue. Probe mode
+   requires every resume/origin input and refuses a create-mode build; this
+   prevents it from racing a publication-only run for the same immutable tag.
+   Never start a new create-mode build merely to resume a published digest.
+   If a create-only run pushes its immutable tag but fails before uploading a
+   successful closed artifact, that source tag is deliberately ineligible for
+   probe mode and create retry. Land and promote a new reviewed source commit,
+   then rebuild under its new create-only tag; never recover authority from the
+   incomplete run or overwrite the stranded tag.
+4. Retain the candidate, rollout, and source-free probe artifact from each
+   successful resumed run. Run authority preparation against those exact
+   artifacts and commits, validate the derived profile, and commit it at its
+   digest-derived path. Publication-only evidence is intermediate, but its
+   exact created-image bytes must be carried into the final artifact before
+   authority preparation accepts them.
+5. Keep replay, intake, and all public owner/maintainer/model APIs disabled
+   throughout qualification. The dedicated Worker alone has staging
+   acceptance enabled, a single container slot, and no replay route.
+
 ## Results migration walkthrough
 
 After the results schema version 2 tooling PR is merged:
