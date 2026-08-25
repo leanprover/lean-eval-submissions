@@ -144,7 +144,49 @@
         },
         "review_status": {"const": "pending"},
         "candidate_sha256": {"$ref": "#/$defs/digest"}
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "issue": {
+                "properties": {
+                  "repository": {"const": "leanprover/lean-eval"}
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "issue_candidates": {
+                "prefixItems": [
+                  {"properties": {"status": {"const": "matched_source_unavailable"}}},
+                  {"properties": {"status": {"$ref": "#/$defs/non_selected_status"}}}
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "issue_candidates": {
+                "prefixItems": [
+                  {"properties": {"status": {"$ref": "#/$defs/non_selected_status"}}},
+                  {"properties": {"status": {"const": "matched_source_unavailable"}}}
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "non_selected_status": {
+      "enum": [
+        "issue_not_found", "issue_invalid", "model_mismatch", "owner_mismatch",
+        "source_mismatch", "acceptance_time_mismatch", "workflow_run_missing",
+        "workflow_run_ambiguous", "workflow_contract_mismatch",
+        "result_comment_missing", "result_comment_ambiguous",
+        "result_comment_projection_too_large"
+      ]
     },
     "issue_candidate": {
       "type": "object", "additionalProperties": false,

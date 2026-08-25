@@ -127,9 +127,20 @@ python scripts/prepare_public_replay_unavailability.py finalize \
 One deferred request keeps the review incomplete. Even a complete review stays
 `blocked_on_state_contract_and_append_authorization`: a disposition is neither
 a State event, queue item, replay result, nor corpus-completion claim. The
-runtime disposition validator and
+disposition binds the exact manifest and candidate-identity digests, total
+candidate request/result counts, and terminal/deferred request/result counts.
+The runtime disposition validator requires the exact manifest and shards: it
+rejects a truncated or re-authored `complete` artifact, checks every terminal
+entry against its exact candidate digest and ordered result IDs, and recomputes
+the deferred complement. The
 `schemas/public-replay-unavailability-dispositions-v1.schema.json` enforce the
-same status/claim relationships.
+same closed fields and status/claim relationships.
+
+An existing final artifact can be reverified mechanically against the same
+frozen inputs, reviewed candidate bytes, and exact review registry by replacing
+`finalize` above with `verify-disposition`, replacing `--output` with
+`--dispositions`, and otherwise supplying the same arguments. Verification
+requires byte-for-byte equality with a fresh deterministic finalization.
 
 ## Remaining State boundary
 

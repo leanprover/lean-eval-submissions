@@ -5,18 +5,24 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "schema_version", "kind", "candidate_manifest_sha256", "review_registry_sha256",
-    "request_count", "result_count", "deferred_request_count", "review_status",
-    "activation_status", "claims", "dispositions"
+    "schema_version", "kind", "candidate_manifest_sha256",
+    "candidate_identity_sha256", "review_registry_sha256",
+    "candidate_request_count", "candidate_result_count", "request_count",
+    "result_count", "deferred_request_count", "deferred_result_count",
+    "review_status", "activation_status", "claims", "dispositions"
   ],
   "properties": {
     "schema_version": {"const": 1},
     "kind": {"const": "historical_public_replay_unavailability_dispositions"},
     "candidate_manifest_sha256": {"$ref": "#/$defs/digest"},
+    "candidate_identity_sha256": {"$ref": "#/$defs/digest"},
     "review_registry_sha256": {"$ref": "#/$defs/digest"},
+    "candidate_request_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "candidate_result_count": {"type": "integer", "minimum": 1, "maximum": 10000},
     "request_count": {"type": "integer", "minimum": 0, "maximum": 10000},
     "result_count": {"type": "integer", "minimum": 0, "maximum": 10000},
     "deferred_request_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "deferred_result_count": {"type": "integer", "minimum": 0, "maximum": 10000},
     "review_status": {"enum": ["complete", "incomplete"]},
     "activation_status": {"const": "blocked_on_state_contract_and_append_authorization"},
     "claims": {
@@ -44,6 +50,7 @@
       "then": {
         "properties": {
           "deferred_request_count": {"const": 0},
+          "deferred_result_count": {"const": 0},
           "claims": {
             "properties": {"unavailability_review_complete": {"const": true}}
           }
@@ -52,6 +59,7 @@
       "else": {
         "properties": {
           "deferred_request_count": {"type": "integer", "minimum": 1},
+          "deferred_result_count": {"type": "integer", "minimum": 1},
           "claims": {
             "properties": {"unavailability_review_complete": {"const": false}}
           }

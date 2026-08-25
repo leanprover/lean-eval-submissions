@@ -36,6 +36,7 @@ MAX_INVENTORY_BYTES = 16 * 1024 * 1024
 MAX_AGGREGATE_BYTES = 32 * 1024 * 1024
 MAX_REGISTRY_BYTES = 512 * 1024
 MAX_REVIEW_BYTES = 4 * 1024 * 1024
+MAX_DISPOSITION_BYTES = 4 * 1024 * 1024
 MAX_MANIFEST_BYTES = 512 * 1024
 MAX_SHARD_BYTES = 450 * 1000
 SHARD_CANDIDATE_COUNT = 32
@@ -507,10 +508,15 @@ def validate_candidates(candidate_value: dict[str, Any]) -> list[dict[str, Any]]
                     item
                     for item in issue_candidates
                     if item["status"] == "matched_source_unavailable"
-                    and item["repository"] == issue["repository"]
                 ]
             )
             != 1
+            or next(
+                item["repository"]
+                for item in issue_candidates
+                if item["status"] == "matched_source_unavailable"
+            )
+            != issue["repository"]
             or candidate["proposed_reason_code"] != PERMANENT_REASON
             or candidate["proposed_rationale_code"] != RATIONALE
             or candidate["review_status"] != "pending"
@@ -798,15 +804,21 @@ def finalize(
     if set(candidate_by_id) != {review["request_id"] for review in reviews}:
         raise UnavailabilityError("review coverage differs from candidates")
     permanent_results = sum(len(item["result_ids"]) for item in dispositions)
+    candidate_results = sum(len(item["results"]) for item in candidates)
+    deferred_results = candidate_results - permanent_results
     complete = len(dispositions) == len(candidates)
     output = {
         "schema_version": 1,
         "kind": "historical_public_replay_unavailability_dispositions",
         "candidate_manifest_sha256": candidate_digest,
+        "candidate_identity_sha256": manifest["candidate_identity_sha256"],
         "review_registry_sha256": _digest(review_value),
+        "candidate_request_count": len(candidates),
+        "candidate_result_count": candidate_results,
         "request_count": len(dispositions),
         "result_count": permanent_results,
         "deferred_request_count": len(candidates) - len(dispositions),
+        "deferred_result_count": deferred_results,
         "review_status": "complete" if complete else "incomplete",
         "activation_status": "blocked_on_state_contract_and_append_authorization",
         "claims": {
@@ -817,19 +829,37 @@ def finalize(
         },
         "dispositions": dispositions,
     }
-    validate_dispositions(output)
+    validate_dispositions(
+        output,
+        manifest=manifest,
+        manifest_raw=manifest_raw,
+        shard_bytes=shard_bytes,
+    )
     return output
 
 
-def validate_dispositions(value: Any) -> list[dict[str, Any]]:
+def validate_dispositions(
+    value: Any,
+    *,
+    manifest: dict[str, Any],
+    manifest_raw: bytes,
+    shard_bytes: dict[str, bytes],
+) -> list[dict[str, Any]]:
+    if canonical_document_bytes(manifest) != manifest_raw:
+        raise UnavailabilityError("candidate manifest is not canonical JSON")
+    candidates = validate_candidate_bundle(manifest, shard_bytes)
     fields = {
         "schema_version",
         "kind",
         "candidate_manifest_sha256",
+        "candidate_identity_sha256",
         "review_registry_sha256",
+        "candidate_request_count",
+        "candidate_result_count",
         "request_count",
         "result_count",
         "deferred_request_count",
+        "deferred_result_count",
         "review_status",
         "activation_status",
         "claims",
@@ -845,14 +875,22 @@ def validate_dispositions(value: Any) -> list[dict[str, Any]]:
         or value["kind"] != "historical_public_replay_unavailability_dispositions"
         or not isinstance(value["candidate_manifest_sha256"], str)
         or DIGEST.fullmatch(value["candidate_manifest_sha256"]) is None
+        or not isinstance(value["candidate_identity_sha256"], str)
+        or DIGEST.fullmatch(value["candidate_identity_sha256"]) is None
         or not isinstance(value["review_registry_sha256"], str)
         or DIGEST.fullmatch(value["review_registry_sha256"]) is None
+        or type(value["candidate_request_count"]) is not int
+        or value["candidate_request_count"] < 1
+        or type(value["candidate_result_count"]) is not int
+        or value["candidate_result_count"] < 1
         or type(value["request_count"]) is not int
         or value["request_count"] < 0
         or type(value["result_count"]) is not int
         or value["result_count"] < 0
         or type(value["deferred_request_count"]) is not int
         or value["deferred_request_count"] < 0
+        or type(value["deferred_result_count"]) is not int
+        or value["deferred_result_count"] < 0
         or value["review_status"] not in {"complete", "incomplete"}
         or value["activation_status"]
         != "blocked_on_state_contract_and_append_authorization"
@@ -874,16 +912,32 @@ def validate_dispositions(value: Any) -> list[dict[str, Any]]:
         or not isinstance(dispositions, list)
     ):
         raise UnavailabilityError("disposition identity is invalid")
+    candidate_result_count = sum(len(item["results"]) for item in candidates)
+    if (
+        value["candidate_manifest_sha256"] != hashlib.sha256(manifest_raw).hexdigest()
+        or value["candidate_identity_sha256"] != manifest["candidate_identity_sha256"]
+        or value["candidate_request_count"] != len(candidates)
+        or value["candidate_result_count"] != candidate_result_count
+    ):
+        raise UnavailabilityError(
+            "disposition candidate manifest binding is inconsistent"
+        )
     complete = value["deferred_request_count"] == 0
     if (
         (value["review_status"] == "complete") != complete
         or claims["unavailability_review_complete"] != complete
         or value["request_count"] != len(dispositions)
+        or value["request_count"] + value["deferred_request_count"]
+        != value["candidate_request_count"]
+        or value["result_count"] + value["deferred_result_count"]
+        != value["candidate_result_count"]
     ):
         raise UnavailabilityError("disposition review counters are inconsistent")
+    candidate_by_request = {item["request_id"]: item for item in candidates}
     previous_request = ""
     result_count = 0
     all_results: set[str] = set()
+    disposition_request_ids: set[str] = set()
     for disposition in dispositions:
         item_fields = {
             "request_id",
@@ -900,6 +954,7 @@ def validate_dispositions(value: Any) -> list[dict[str, Any]]:
             not isinstance(request_id, str)
             or REQUEST_ID.fullmatch(request_id) is None
             or request_id <= previous_request
+            or request_id not in candidate_by_request
             or not isinstance(disposition["candidate_sha256"], str)
             or DIGEST.fullmatch(disposition["candidate_sha256"]) is None
             or disposition["reason_code"] != PERMANENT_REASON
@@ -916,11 +971,30 @@ def validate_dispositions(value: Any) -> list[dict[str, Any]]:
             or all_results.intersection(result_ids)
         ):
             raise UnavailabilityError("disposition entry is invalid")
+        candidate = candidate_by_request[request_id]
+        if disposition["candidate_sha256"] != candidate[
+            "candidate_sha256"
+        ] or result_ids != [result["result_id"] for result in candidate["results"]]:
+            raise UnavailabilityError(
+                "disposition entry differs from its exact candidate"
+            )
         all_results.update(result_ids)
+        disposition_request_ids.add(request_id)
         result_count += len(result_ids)
         previous_request = request_id
     if value["result_count"] != result_count:
         raise UnavailabilityError("disposition result counter is inconsistent")
+    missing_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate["request_id"] not in disposition_request_ids
+    ]
+    if value["deferred_request_count"] != len(missing_candidates) or value[
+        "deferred_result_count"
+    ] != sum(len(candidate["results"]) for candidate in missing_candidates):
+        raise UnavailabilityError(
+            "disposition deferred coverage differs from exact candidates"
+        )
     return dispositions
 
 
@@ -1056,6 +1130,20 @@ def main() -> int:
     finalize_parser.add_argument("--candidate-shards", required=True, type=pathlib.Path)
     finalize_parser.add_argument("--reviews", required=True, type=pathlib.Path)
     finalize_parser.add_argument("--output", required=True, type=pathlib.Path)
+    verify_disposition_parser = commands.add_parser("verify-disposition")
+    _add_trusted_arguments(verify_disposition_parser)
+    verify_disposition_parser.add_argument(
+        "--candidate-manifest", required=True, type=pathlib.Path
+    )
+    verify_disposition_parser.add_argument(
+        "--candidate-shards", required=True, type=pathlib.Path
+    )
+    verify_disposition_parser.add_argument(
+        "--reviews", required=True, type=pathlib.Path
+    )
+    verify_disposition_parser.add_argument(
+        "--dispositions", required=True, type=pathlib.Path
+    )
     args = parser.parse_args()
     try:
         trusted = _trusted_arguments(args)
@@ -1089,6 +1177,24 @@ def main() -> int:
                 review_value=reviews,
                 trusted_arguments=trusted,
             )
+            if args.command == "verify-disposition":
+                disposition, disposition_raw = _canonical_input(
+                    args.dispositions, MAX_DISPOSITION_BYTES, "dispositions"
+                )
+                if (
+                    disposition != output
+                    or canonical_document_bytes(output) != disposition_raw
+                ):
+                    raise UnavailabilityError(
+                        "dispositions differ from exact candidates and reviews"
+                    )
+                print(
+                    "verified dispositions "
+                    f"{hashlib.sha256(disposition_raw).hexdigest()} "
+                    f"({output['request_count']} terminal requests, "
+                    f"{output['deferred_request_count']} deferred requests)"
+                )
+                return 0
             _write_exclusive(args.output, output)
     except (OSError, UnavailabilityError, ValueError) as error:
         print(f"public-replay-unavailability: {error}", file=sys.stderr)

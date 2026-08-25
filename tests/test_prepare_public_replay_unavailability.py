@@ -270,6 +270,56 @@ class PublicReplayUnavailabilityTests(unittest.TestCase):
             hashlib.sha256(manifest_path.read_bytes()).hexdigest(), completed.stdout
         )
 
+    def test_verify_disposition_cli_rederives_exact_terminal_bytes(self) -> None:
+        manifest, shards = self.bundle()
+        bundle = self.root / "terminal-bundle"
+        manifest_path = _write_candidate_bundle(bundle, manifest, shards)
+        reviews = self.reviews(manifest, shards)
+        review_path = self.root / "reviews.json"
+        review_path.write_bytes(canonical_document_bytes(reviews))
+        disposition_path = self.root / "dispositions.json"
+        disposition_path.write_bytes(
+            canonical_document_bytes(self.finish(manifest, shards, reviews))
+        )
+        input_values = {
+            "inventory": self.inventory,
+            "resolution-requests": self.requests,
+            "aggregate": self.aggregate,
+            "workflow-registry": self.workflow,
+            "legacy-adjudication-registry": self.legacy,
+        }
+        arguments = []
+        for option, value in input_values.items():
+            path = self.root / f"terminal-{option}.json"
+            path.write_bytes(canonical_document_bytes(value))
+            arguments.extend((f"--{option}", str(path)))
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(ROOT / "scripts/prepare_public_replay_unavailability.py"),
+                "verify-disposition",
+                *arguments,
+                "--results-root",
+                str(self.results_root),
+                "--candidate-manifest",
+                str(manifest_path),
+                "--candidate-shards",
+                str(bundle / "shards"),
+                "--reviews",
+                str(review_path),
+                "--dispositions",
+                str(disposition_path),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn(
+            hashlib.sha256(disposition_path.read_bytes()).hexdigest(),
+            completed.stdout,
+        )
+
     def test_exact_results_snapshot_is_required(self) -> None:
         changed = copy.deepcopy(self.inventory)
         changed["entries"][0]["owner"] = "forged"
@@ -285,6 +335,9 @@ class PublicReplayUnavailabilityTests(unittest.TestCase):
         self.assertEqual(output["review_status"], "complete")
         self.assertEqual(output["request_count"], 1)
         self.assertEqual(output["result_count"], 2)
+        self.assertEqual(output["candidate_request_count"], 1)
+        self.assertEqual(output["candidate_result_count"], 2)
+        self.assertEqual(output["deferred_result_count"], 0)
         self.assertFalse(output["claims"]["state_append_authorized"])
         self.assertFalse(output["claims"]["corpus_complete"])
         self.assertTrue(output["claims"]["unavailability_review_complete"])
@@ -296,6 +349,7 @@ class PublicReplayUnavailabilityTests(unittest.TestCase):
         )
         self.assertEqual(output["review_status"], "incomplete")
         self.assertEqual(output["deferred_request_count"], 1)
+        self.assertEqual(output["deferred_result_count"], 2)
         self.assertEqual(output["dispositions"], [])
 
     def test_review_must_bind_every_exact_candidate(self) -> None:
@@ -485,6 +539,39 @@ class PublicReplayUnavailabilityTests(unittest.TestCase):
                 with self.assertRaisesRegex(UnavailabilityError, message):
                     validate_candidates(candidates)
 
+    def test_candidate_validator_rejects_two_selected_issue_repositories(self) -> None:
+        candidates = self.build()
+        candidate = candidates["candidates"][0]
+        candidate["issue_candidates"][0]["status"] = "matched_source_unavailable"
+        candidate["issue_candidates"][1]["status"] = "matched_source_unavailable"
+        candidate["candidate_sha256"] = hashlib.sha256(
+            canonical_document_bytes(
+                {
+                    key: value
+                    for key, value in candidate.items()
+                    if key != "candidate_sha256"
+                }
+            )
+        ).hexdigest()
+        with self.assertRaisesRegex(UnavailabilityError, "binding is invalid"):
+            validate_candidates(candidates)
+        shard_schema = json.loads(
+            (
+                ROOT
+                / "schemas/public-replay-unavailability-candidate-shard-v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        _manifest, shards = self.bundle()
+        shard = json.loads(next(iter(shards.values())))
+        shard["candidates"][0]["issue_candidates"][0]["status"] = (
+            "matched_source_unavailable"
+        )
+        shard["candidates"][0]["issue_candidates"][1]["status"] = (
+            "matched_source_unavailable"
+        )
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.Draft202012Validator(shard_schema).validate(shard)
+
     def test_review_and_disposition_schemas_reject_contradictions(self) -> None:
         manifest, shards = self.bundle()
         reviews = self.reviews(manifest, shards)
@@ -516,26 +603,101 @@ class PublicReplayUnavailabilityTests(unittest.TestCase):
         incomplete_with_true_claim.update(
             review_status="incomplete", deferred_request_count=1
         )
+        incomplete_with_true_claim["deferred_result_count"] = 1
+        complete_with_deferred_results = copy.deepcopy(dispositions)
+        complete_with_deferred_results["deferred_result_count"] = 1
+        empty_complete = copy.deepcopy(dispositions)
+        empty_complete.update(
+            candidate_request_count=0,
+            candidate_result_count=0,
+            request_count=0,
+            result_count=0,
+            dispositions=[],
+        )
         for schema, value in (
             (review_schema, deferred_with_reason),
             (review_schema, permanent_without_reason),
             (disposition_schema, complete_with_false_claim),
             (disposition_schema, incomplete_with_true_claim),
+            (disposition_schema, complete_with_deferred_results),
+            (disposition_schema, empty_complete),
         ):
             with self.assertRaises(jsonschema.ValidationError):
                 jsonschema.Draft202012Validator(schema).validate(value)
         with self.assertRaisesRegex(UnavailabilityError, "inconsistent"):
-            validate_dispositions(complete_with_false_claim)
+            validate_dispositions(
+                complete_with_false_claim,
+                manifest=manifest,
+                manifest_raw=canonical_document_bytes(manifest),
+                shard_bytes=shards,
+            )
 
     def test_runtime_disposition_validator_rejects_counter_drift(self) -> None:
         manifest, shards = self.bundle()
         dispositions = self.finish(manifest, shards)
-        for field in ("request_count", "result_count", "deferred_request_count"):
+        for field in (
+            "candidate_request_count",
+            "candidate_result_count",
+            "request_count",
+            "result_count",
+            "deferred_request_count",
+            "deferred_result_count",
+        ):
             with self.subTest(field=field):
                 changed = copy.deepcopy(dispositions)
                 changed[field] += 1
                 with self.assertRaises(UnavailabilityError):
-                    validate_dispositions(changed)
+                    validate_dispositions(
+                        changed,
+                        manifest=manifest,
+                        manifest_raw=canonical_document_bytes(manifest),
+                        shard_bytes=shards,
+                    )
+
+    def test_runtime_disposition_validator_requires_exact_candidate_coverage(
+        self,
+    ) -> None:
+        manifest, shards = self.bundle()
+        dispositions = self.finish(manifest, shards)
+        mutations = {}
+
+        empty_complete = copy.deepcopy(dispositions)
+        empty_complete.update(request_count=0, result_count=0, dispositions=[])
+        mutations["empty complete"] = empty_complete
+
+        reauthored_totals = copy.deepcopy(empty_complete)
+        reauthored_totals.update(candidate_request_count=0, candidate_result_count=0)
+        mutations["drop one and recount"] = reauthored_totals
+
+        wrong_identity = copy.deepcopy(dispositions)
+        wrong_identity["candidate_identity_sha256"] = "0" * 64
+        mutations["wrong manifest identity"] = wrong_identity
+
+        wrong_candidate = copy.deepcopy(dispositions)
+        wrong_candidate["dispositions"][0]["candidate_sha256"] = "0" * 64
+        mutations["wrong candidate identity"] = wrong_candidate
+
+        wrong_results = copy.deepcopy(dispositions)
+        wrong_results["dispositions"][0]["result_ids"] = ["r2_" + "0" * 64]
+        wrong_results["result_count"] = 1
+        wrong_results["candidate_result_count"] = 1
+        mutations["re-authored result subset"] = wrong_results
+
+        for label, changed in mutations.items():
+            with self.subTest(label=label), self.assertRaises(UnavailabilityError):
+                validate_dispositions(
+                    changed,
+                    manifest=manifest,
+                    manifest_raw=canonical_document_bytes(manifest),
+                    shard_bytes=shards,
+                )
+        with self.assertRaisesRegex(UnavailabilityError, "not canonical"):
+            validate_dispositions(
+                dispositions,
+                manifest=manifest,
+                manifest_raw=canonical_document_bytes(manifest) + b" ",
+                shard_bytes=shards,
+            )
 
 
 if __name__ == "__main__":
