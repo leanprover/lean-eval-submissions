@@ -143,6 +143,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         offline_evidence = {
             "scripts/aggregate_public_replay_github_evidence.py",
             "scripts/build_public_replay_toolchain_registry.py",
+            "scripts/classify_historical_private_archives.py",
             "scripts/prepare_public_replay_plan.py",
             "scripts/resolve_public_replay_github_evidence.py",
             "scripts/validate_historical_replay_inventory_evidence.py",
@@ -272,6 +273,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         offline_evidence_scripts = {
             "aggregate_public_replay_github_evidence.py",
             "build_public_replay_toolchain_registry.py",
+            "classify_historical_private_archives.py",
             "prepare_public_replay_plan.py",
             "resolve_public_replay_github_evidence.py",
             "validate_historical_replay_inventory_evidence.py",
@@ -287,7 +289,10 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertEqual(
             promoted_runtime_scripts,
             offline_evidence_scripts
-            - {"validate_historical_replay_inventory_evidence.py"},
+            - {
+                "classify_historical_private_archives.py",
+                "validate_historical_replay_inventory_evidence.py",
+            },
         )
         self.assertEqual(
             set(re.findall(r"'configuration/([^']+)'", promotion_push)),

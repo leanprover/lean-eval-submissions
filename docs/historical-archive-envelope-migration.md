@@ -31,6 +31,14 @@ decrypt, wrap, and write step skipped. Later schema-version-3 intake changes
 the retained count and source commit but must not change the 1,040-entry
 migration set.
 
+The migration plan alone cannot correlate an accepted private result with an
+archive because it intentionally omits repository and ref metadata. Before
+replay planning, run the deterministic protected-input classifier described in
+[`historical-private-archive-crosswalk.md`](historical-private-archive-crosswalk.md).
+It rederives and verifies this complete plan, joins results to raw sidecar
+metadata only in memory, and emits no source or legacy archive locator. A
+unique source binding is necessary but is not replay authorization.
+
 `Migrate historical archive envelopes` is the protected operator path. A dry
 run is the default and needs no legacy identity. Apply additionally requires:
 
