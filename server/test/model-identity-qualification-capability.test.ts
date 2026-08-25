@@ -84,5 +84,25 @@ describe("model identity qualification executor capability", () => {
     );
     expect(invalid.status).toBe(400);
     expect(await invalid.json()).toEqual({ error: "invalid_request" });
+
+    for (const hostile of [{
+      ...executorEnv(),
+      DEPLOYMENT_ENVIRONMENT: "production" as const,
+    }, {
+      ...executorEnv(),
+      STATE_REPOSITORY: "leanprover/lean-eval-state",
+    }, {
+      ...executorEnv(),
+      MODEL_IDENTITY_STATE_CONTRACT_COMMIT: "f".repeat(40),
+    }]) {
+      const response = await executor.fetch(
+        new Request("https://executor.invalid/internal/v1/execute", {
+          method: "POST",
+          body: "{}",
+        }),
+        hostile as unknown as ExecutorCloudflareEnv,
+      );
+      expect(response.status).toBe(404);
+    }
   });
 });
