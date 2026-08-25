@@ -2158,17 +2158,44 @@ describe("browser OAuth and owner routes in workerd", () => {
       causation_event_id: "019debcf-cb48-7000-8000-000000000002",
     });
 
-    const publication = await handleRequest(
+    const publicationRequest = (authorizationHeader: string) =>
       new Request(`https://submit.test/api/v1/submissions/${submissionId}/publication`, {
         method: "PUT",
         headers: {
-          authorization,
+          authorization: authorizationHeader,
           "content-type": "application/json",
           "idempotency-key": "019debcf-cb48-7000-8000-000000000004",
         },
         body: JSON.stringify({ publication_choice: "withheld" }),
-      }),
+      });
+    const eventCount = state.events.length;
+    const disabled = await handleRequest(
+      publicationRequest(authorization),
       ENV,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(disabled.status).toBe(404);
+    expect(state.events).toHaveLength(eventCount);
+
+    const releaseEnv: RuntimeEnv = {
+      ...ENV,
+      INTAKE_ENABLED: "false",
+      RELEASE_OPT_OUT_API_ENABLED: "true",
+    };
+    const bob = await signToken(SECRET, { ...alice, login: "bob" });
+    const hiddenPublication = await handleRequest(
+      publicationRequest(`Bearer ${bob}`),
+      releaseEnv,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(hiddenPublication.status).toBe(404);
+    expect(state.events).toHaveLength(eventCount);
+
+    const publication = await handleRequest(
+      publicationRequest(authorization),
+      releaseEnv,
       LIFECYCLE,
       { now: () => NOW_MS, state },
     );
@@ -2191,7 +2218,6 @@ describe("browser OAuth and owner routes in workerd", () => {
       publication_choice: "withheld",
     });
 
-    const bob = await signToken(SECRET, { ...alice, login: "bob" });
     const hidden = await handleRequest(
       new Request(`https://submit.test/api/v1/submissions/${submissionId}`, {
         headers: { authorization: `Bearer ${bob}` },
@@ -2212,6 +2238,7 @@ describe("authenticated model identity producer routes", () => {
     INTAKE_ENABLED: "false",
     MODEL_IDENTITY_OWNER_API_ENABLED: "true",
     MODEL_IDENTITY_MAINTAINER_API_ENABLED: "false",
+    MODEL_IDENTITY_CONSOLIDATION_API_ENABLED: "false",
     MODEL_IDENTITY_MAINTAINERS: "[]",
     MODEL_IDENTITY_STATE_CONTRACT_COMMIT: contract,
   };
@@ -2269,7 +2296,7 @@ describe("authenticated model identity producer routes", () => {
     expect(ownerEnv.INTAKE_ENABLED).toBe("false");
   });
 
-  it("keeps consolidation dark without the owner gate and derives its actor from the session", async () => {
+  it("keeps consolidation independently dark and derives its actor from the session", async () => {
     const auth = await authorization();
     const targetModelId = `mi1_${"2".repeat(64)}`;
     const request = () => mutation(
@@ -2277,10 +2304,11 @@ describe("authenticated model identity producer routes", () => {
       { target_model_id: targetModelId },
       "019debd0-1968-7000-8000-000000000024", auth,
     );
-    for (const env of [{ ...ENV, INTAKE_ENABLED: "false" }, {
-      ...ownerEnv,
-      MODEL_IDENTITY_OWNER_API_ENABLED: "false",
-    }]) {
+    for (const env of [
+      { ...ENV, INTAKE_ENABLED: "false" },
+      { ...ownerEnv, MODEL_IDENTITY_OWNER_API_ENABLED: "false", MODEL_IDENTITY_CONSOLIDATION_API_ENABLED: "true" },
+      ownerEnv,
+    ]) {
       const state = new MemoryState();
       const response = await handleRequest(request(), env, LIFECYCLE, {
         now: () => NOW_MS,
@@ -2294,7 +2322,11 @@ describe("authenticated model identity producer routes", () => {
       expect(state.modelIdentityConsolidations).toHaveLength(0);
     }
     const state = new MemoryState();
-    const response = await handleRequest(request(), ownerEnv, LIFECYCLE, {
+    const consolidationEnv: RuntimeEnv = {
+      ...ownerEnv,
+      MODEL_IDENTITY_CONSOLIDATION_API_ENABLED: "true",
+    };
+    const response = await handleRequest(request(), consolidationEnv, LIFECYCLE, {
       now: () => NOW_MS,
       state,
     });

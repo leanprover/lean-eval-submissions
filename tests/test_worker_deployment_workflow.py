@@ -71,6 +71,14 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             ),
             4,
         )
+        self.assertEqual(
+            DEPLOY.count('body["model_identity_consolidation_api_enabled"] is False'),
+            4,
+        )
+        self.assertEqual(
+            DEPLOY.count('body["release_opt_out_api_enabled"] is False'),
+            4,
+        )
         self.assertIn("state-proof.json", ROLLBACK)
         self.assertIn('"RESULT_OWNER_STATE_CONTRACT_COMMIT"', ROLLBACK_VALIDATOR)
 
@@ -916,6 +924,14 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     configuration["vars"]["RESULT_AMENDMENT_OWNER_API_ENABLED"],
+                    "false",
+                )
+                self.assertEqual(
+                    configuration["vars"]["MODEL_IDENTITY_CONSOLIDATION_API_ENABLED"],
+                    "false",
+                )
+                self.assertEqual(
+                    configuration["vars"]["RELEASE_OPT_OUT_API_ENABLED"],
                     "false",
                 )
                 expected_contract = (

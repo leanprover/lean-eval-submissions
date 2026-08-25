@@ -158,8 +158,10 @@ export type RuntimeEnv = Omit<
   | "RESULT_OWNER_STATE_CONTRACT_COMMIT"
   | "MODEL_IDENTITY_OWNER_API_ENABLED"
   | "MODEL_IDENTITY_MAINTAINER_API_ENABLED"
+  | "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED"
   | "MODEL_IDENTITY_MAINTAINERS"
   | "MODEL_IDENTITY_STATE_CONTRACT_COMMIT"
+  | "RELEASE_OPT_OUT_API_ENABLED"
   | "STATE_REPOSITORY"
 > &
   Readonly<{
@@ -199,8 +201,10 @@ export type RuntimeEnv = Omit<
     RESULT_OWNER_STATE_CONTRACT_COMMIT?: string;
     MODEL_IDENTITY_OWNER_API_ENABLED?: string;
     MODEL_IDENTITY_MAINTAINER_API_ENABLED?: string;
+    MODEL_IDENTITY_CONSOLIDATION_API_ENABLED?: string;
     MODEL_IDENTITY_MAINTAINERS?: string;
     MODEL_IDENTITY_STATE_CONTRACT_COMMIT?: string;
+    RELEASE_OPT_OUT_API_ENABLED?: string;
     STATE_REPOSITORY: string;
   }>;
 
@@ -383,6 +387,11 @@ function modelIdentityOwnerApiEnabled(env: RuntimeEnv): boolean {
   return env.MODEL_IDENTITY_OWNER_API_ENABLED === "true" && modelIdentityContractEnabled(env);
 }
 
+function modelIdentityConsolidationApiEnabled(env: RuntimeEnv): boolean {
+  return env.MODEL_IDENTITY_CONSOLIDATION_API_ENABLED === "true" &&
+    modelIdentityOwnerApiEnabled(env);
+}
+
 function modelIdentityMaintainerApiEnabled(env: RuntimeEnv): boolean {
   if (env.MODEL_IDENTITY_MAINTAINER_API_ENABLED !== "true" || !modelIdentityContractEnabled(env)) return false;
   try {
@@ -394,6 +403,22 @@ function modelIdentityMaintainerApiEnabled(env: RuntimeEnv): boolean {
 
 function requireModelIdentityOwnerApi(env: RuntimeEnv): void {
   if (!modelIdentityOwnerApiEnabled(env)) throw new GitHubProviderError(503, "model identity owner API is not configured");
+}
+
+function requireModelIdentityConsolidationApi(env: RuntimeEnv): void {
+  if (!modelIdentityConsolidationApiEnabled(env)) {
+    throw new GitHubProviderError(503, "model identity consolidation API is not configured");
+  }
+}
+
+function releaseOptOutApiEnabled(env: RuntimeEnv): boolean {
+  return env.RELEASE_OPT_OUT_API_ENABLED === "true";
+}
+
+function requireReleaseOptOutApi(env: RuntimeEnv): void {
+  if (!releaseOptOutApiEnabled(env)) {
+    throw new GitHubProviderError(503, "release opt-out API is not configured");
+  }
 }
 
 function requireModelIdentityMaintainer(env: RuntimeEnv, session: UserSession): MaintainerIdentity {
@@ -1950,7 +1975,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
   }
   const modelConsolidationMatch = /^\/api\/v1\/model-identities\/(mi1_[0-9a-f]{64})\/consolidations$/.exec(url.pathname);
   if (request.method === "POST" && modelConsolidationMatch?.[1]) {
-    requireModelIdentityOwnerApi(env);
+    requireModelIdentityConsolidationApi(env);
     const authenticated = await session(request, env, dependencies);
     const body = await readJson(request);
     const input = modelInput(() => decodeModelConsolidation(body));
@@ -2184,6 +2209,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
       return json({ submission_id: match[1], status: "amended" });
     }
     if (request.method === "PUT" && match[2] === "publication") {
+      requireReleaseOptOutApi(env);
       const choice: PublicationChoice = decodePublicationChoice(await readJson(request));
       const event: WritableStateEvent = {
         schema_version: 1, event_id: eventId, event_type: "submission.publication_changed",
@@ -2265,8 +2291,10 @@ export async function handleRequest(
       result_amendment_maintainer_api_enabled: resultAmendmentMaintainerApiEnabled(env),
       model_identity_owner_api_enabled: modelIdentityOwnerApiEnabled(env),
       model_identity_maintainer_api_enabled: modelIdentityMaintainerApiEnabled(env),
+      model_identity_consolidation_api_enabled: modelIdentityConsolidationApiEnabled(env),
       model_identity_write_max_subrequests: MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS,
       model_identity_consolidation_api: MODEL_IDENTITY_CONSOLIDATION_CAPABILITY,
+      release_opt_out_api_enabled: releaseOptOutApiEnabled(env),
       promotion_canary_configured_enabled: env.PROMOTION_CANARY_ENABLED === "true",
       promotion_canary_enabled: promotionCanaryEnabled(env),
     });
@@ -2329,24 +2357,32 @@ export async function handleRequest(
   const amendmentOwnerRoute = /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/(?:problem-repairs|retractions)$/.test(url.pathname);
   const amendmentMaintainerRoute = /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/(?:problem-repairs\/decisions|retractions\/(?:decisions|override|finalize))$/.test(url.pathname);
   const modelIdentityRoute = url.pathname === "/api/v1/model-identities" ||
-    /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/(?:aliases|consolidations|name)$/.test(url.pathname);
+    /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/(?:aliases|name)$/.test(url.pathname);
+  const modelIdentityConsolidationRoute =
+    /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/consolidations$/.test(url.pathname);
   const modelIdentityMaintainerRoute =
     /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/decisions$/.test(url.pathname);
+  const releaseOptOutRoute =
+    /^\/api\/v1\/submissions\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/publication$/.test(url.pathname);
   if (legacyResultOwnerRoute && !resultOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (amendmentOwnerRoute && !resultAmendmentOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (amendmentMaintainerRoute && !resultAmendmentMaintainerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (modelIdentityRoute && !modelIdentityOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
+  if (modelIdentityConsolidationRoute && !modelIdentityConsolidationApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (modelIdentityMaintainerRoute && !modelIdentityMaintainerApiEnabled(env)) return json({ error: "not_found" }, 404);
+  if (releaseOptOutRoute && !releaseOptOutApiEnabled(env)) return json({ error: "not_found" }, 404);
   const oauthRoute = url.pathname === "/api/v1/oauth/start" || url.pathname === "/api/v1/oauth/callback";
   const anyOwnerApiEnabled = resultOwnerApiEnabled(env) || resultAmendmentOwnerApiEnabled(env) ||
     resultAmendmentMaintainerApiEnabled(env);
-  const anyModelIdentityApiEnabled = modelIdentityOwnerApiEnabled(env) || modelIdentityMaintainerApiEnabled(env);
+  const anyModelIdentityApiEnabled = modelIdentityOwnerApiEnabled(env) ||
+    modelIdentityMaintainerApiEnabled(env) || modelIdentityConsolidationApiEnabled(env);
   if (
     url.pathname.startsWith("/api/") &&
     !intake.effective &&
     !(
       ((legacyResultOwnerRoute || amendmentOwnerRoute || amendmentMaintainerRoute || oauthRoute) && anyOwnerApiEnabled) ||
-      ((modelIdentityRoute || modelIdentityMaintainerRoute || oauthRoute) && anyModelIdentityApiEnabled)
+      ((modelIdentityRoute || modelIdentityMaintainerRoute || modelIdentityConsolidationRoute || oauthRoute) && anyModelIdentityApiEnabled) ||
+      ((releaseOptOutRoute || oauthRoute) && releaseOptOutApiEnabled(env))
     )
   ) {
     return json({ error: "intake_disabled" }, 503);

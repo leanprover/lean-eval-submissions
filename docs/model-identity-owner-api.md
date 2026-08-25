@@ -90,16 +90,18 @@ intake is disabled.
 
 ## Independent dark gates and launch work
 
-`MODEL_IDENTITY_OWNER_API_ENABLED` and
-`MODEL_IDENTITY_MAINTAINER_API_ENABLED` are independent exact-`true` gates.
+`MODEL_IDENTITY_OWNER_API_ENABLED`,
+`MODEL_IDENTITY_MAINTAINER_API_ENABLED`, and
+`MODEL_IDENTITY_CONSOLIDATION_API_ENABLED` are exact-`true` gates.
 The maintainer gate additionally requires a nonempty, closed
-`MODEL_IDENTITY_MAINTAINERS` list, and both gates require the exact reviewed
-`MODEL_IDENTITY_STATE_CONTRACT_COMMIT`. Both environments track both gates as
-`false` and the identity list as `[]`. Health and rollback validation expose
-only the two booleans and the public 400-request bound; configured identities
-are never exposed.
+`MODEL_IDENTITY_MAINTAINERS` list. The owner and maintainer gates require the
+exact reviewed `MODEL_IDENTITY_STATE_CONTRACT_COMMIT`; consolidation requires
+that contract through the owner gate as well as its own flag. Both environments
+track all three gates as `false` and the identity list as `[]`. Health and
+rollback validation expose only the effective booleans and the public
+400-request bound; configured identities are never exposed.
 
-Before enabling either gate, operators must separately record all of:
+Before enabling any gate, operators must separately record all of:
 
 1. protected deployment accepts and preserves the tracked 400-subrequest limit
    on the paid Workers plan, and a dark maximal-contention test stays within the
@@ -115,9 +117,11 @@ Before enabling either gate, operators must separately record all of:
    and reject, alias, rename, complete-graph consolidation, later-chain retry,
    component-cap refusal, idempotent retry, collision, and cross-owner denial;
 5. rollback qualification is regenerated for the exact deployed callback
-   contract and both gates remain false throughout the qualification; and
-6. a separate rollout decision explicitly enables the selected route family.
+   contract and all gates remain false throughout the qualification; and
+6. a separate rollout decision explicitly enables the selected route family;
+   consolidation requires its own later decision even when owner alias and
+   rename routes are enabled.
 
 None of those live checks is established merely by merging this source. The
-protected State prerequisite is present, but consolidation remains dark with
-the rest of the owner surface until a separate credentialed rollout decision.
+protected State prerequisite is present, but consolidation remains dark until
+its separate credentialed rollout decision.

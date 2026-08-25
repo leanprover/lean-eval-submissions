@@ -436,6 +436,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         self.assertIs(plan["model_identity_owner_api_enabled"], False)
         self.assertIs(plan["model_identity_maintainer_api_contract_supported"], True)
         self.assertIs(plan["model_identity_maintainer_api_enabled"], False)
+        self.assertIs(plan["model_identity_consolidation_api_contract_supported"], True)
+        self.assertIs(plan["model_identity_consolidation_api_enabled"], False)
+        self.assertIs(plan["release_opt_out_api_contract_supported"], True)
+        self.assertIs(plan["release_opt_out_api_enabled"], False)
         self.assertEqual(plan["model_identity_state_contract_commit"], "b0a30e3a64aa5c05660040405b32135dea4b7f1d")
         self.assertNotIn("MODEL_IDENTITY_MAINTAINERS", plan)
         self.assertNotIn("RESULT_AMENDMENT_MAINTAINERS", plan)
@@ -661,8 +665,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "intake_lease_expires_at": None,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
+                "model_identity_consolidation_api_enabled": False,
                 "model_identity_write_max_subrequests": 400,
                 "model_identity_consolidation_api": "atomic_reverse_impact_v1",
+                "release_opt_out_api_enabled": False,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -699,8 +705,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
+                "model_identity_consolidation_api_enabled": False,
                 "model_identity_write_max_subrequests": 400,
                 "model_identity_consolidation_api": "atomic_reverse_impact_v1",
+                "release_opt_out_api_enabled": False,
             },
             require_intake_disabled=True,
         )
@@ -736,8 +744,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
+                "model_identity_consolidation_api_enabled": False,
                 "model_identity_write_max_subrequests": 400,
                 "model_identity_consolidation_api": "atomic_reverse_impact_v1",
+                "release_opt_out_api_enabled": False,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -1056,8 +1066,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
+                "model_identity_consolidation_api_enabled": False,
                 "model_identity_write_max_subrequests": 400,
                 "model_identity_consolidation_api": "atomic_reverse_impact_v1",
+                "release_opt_out_api_enabled": False,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -1080,8 +1092,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                     "result_amendment_maintainer_api_enabled": False,
                     "model_identity_owner_api_enabled": False,
                     "model_identity_maintainer_api_enabled": False,
+                    "model_identity_consolidation_api_enabled": False,
                     "model_identity_write_max_subrequests": 400,
                     "model_identity_consolidation_api": "atomic_reverse_impact_v1",
+                    "release_opt_out_api_enabled": False,
                     "result_amendment_maintainers": [],
                     "promotion_canary_configured_enabled": False,
                     "promotion_canary_enabled": False,
@@ -1105,8 +1119,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                     "result_amendment_maintainer_api_enabled": False,
                     "model_identity_owner_api_enabled": False,
                     "model_identity_maintainer_api_enabled": False,
+                    "model_identity_consolidation_api_enabled": False,
                     "model_identity_write_max_subrequests": 400,
                     "model_identity_consolidation_api": "atomic_reverse_impact_v1",
+                    "release_opt_out_api_enabled": False,
                 },
             )
 
@@ -1130,8 +1146,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
+                "model_identity_consolidation_api_enabled": False,
                 "model_identity_write_max_subrequests": 400,
                 "model_identity_consolidation_api": "atomic_reverse_impact_v1",
+                "release_opt_out_api_enabled": False,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -1154,8 +1172,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
+                "model_identity_consolidation_api_enabled": False,
                 "model_identity_write_max_subrequests": 400,
                 "model_identity_consolidation_api": "atomic_reverse_impact_v1",
+                "release_opt_out_api_enabled": False,
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -1230,6 +1250,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_contract_supported": True,
                 "model_identity_maintainer_api_enabled": False,
+                "model_identity_consolidation_api_contract_supported": True,
+                "model_identity_consolidation_api_enabled": False,
+                "release_opt_out_api_contract_supported": True,
+                "release_opt_out_api_enabled": False,
                 "promotion_canary_enabled": False,
                 "promotion_canary_contract_supported": True,
                 "replay_enabled": False,
