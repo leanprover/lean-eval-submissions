@@ -54,12 +54,12 @@ const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
 const NEW_TREE = "3".repeat(40);
 const NEW_COMMIT = "4".repeat(40);
-const RESULT_OWNER_CONTRACT_COMMIT = "714f7408cbc591b7166ea6f4d6d19b66ba481f83";
+const RESULT_OWNER_CONTRACT_COMMIT = "6799522f7fe57263de4a66499e52ce4bfda69baa";
 const RESULT_OWNER_CONTRACT_ROOT_ENTRIES = {
-  "README.md": { mode: "100644", type: "blob", sha: "458b076586958f9502918766388beed66733cdd5" },
-  docs: { mode: "040000", type: "tree", sha: "0bf6ad7e7e27e8dae8fcca08f56933fe8a6822fc" },
-  schema: { mode: "040000", type: "tree", sha: "17fdf5bf47ec2689fa9a9beeb46652f2ad4ee451" },
-  scripts: { mode: "040000", type: "tree", sha: "34ca0c7fe31bd5c49606fa3ecd71b4ea9161b0fb" },
+  "README.md": { mode: "100644", type: "blob", sha: "d2487d0330b708e856bdcd79ba114631355225a7" },
+  docs: { mode: "040000", type: "tree", sha: "3e9957ffc1a7b653d940d3b8020b583ea2fae0f3" },
+  schema: { mode: "040000", type: "tree", sha: "3043a7b6afa042577645e0520ee9bd105a15424a" },
+  scripts: { mode: "040000", type: "tree", sha: "4e2c39cac2510716577a7fd6d13abf0f9cf26976" },
 } as const;
 const STAGING_RESULT_OWNER_CONTRACT_COMMIT = "9fc7c431a92c678554c65ebac68d3fddf4990d29";
 const STAGING_RESULT_OWNER_CONTRACT_ROOT_ENTRIES = {
@@ -68,12 +68,12 @@ const STAGING_RESULT_OWNER_CONTRACT_ROOT_ENTRIES = {
   schema: { mode: "040000", type: "tree", sha: "e4b815a07b1634f64c7a5618ad6a5b8fe8a1f09a" },
   scripts: { mode: "040000", type: "tree", sha: "43399faa2c733a956568c225acff0d9a614f1590" },
 } as const;
-const MODEL_IDENTITY_CONTRACT_COMMIT = "714f7408cbc591b7166ea6f4d6d19b66ba481f83";
+const MODEL_IDENTITY_CONTRACT_COMMIT = "6799522f7fe57263de4a66499e52ce4bfda69baa";
 const MODEL_IDENTITY_CONTRACT_ROOT_ENTRIES = {
-  "README.md": { mode: "100644", type: "blob", sha: "458b076586958f9502918766388beed66733cdd5" },
-  docs: { mode: "040000", type: "tree", sha: "0bf6ad7e7e27e8dae8fcca08f56933fe8a6822fc" },
-  schema: { mode: "040000", type: "tree", sha: "17fdf5bf47ec2689fa9a9beeb46652f2ad4ee451" },
-  scripts: { mode: "040000", type: "tree", sha: "34ca0c7fe31bd5c49606fa3ecd71b4ea9161b0fb" },
+  "README.md": { mode: "100644", type: "blob", sha: "d2487d0330b708e856bdcd79ba114631355225a7" },
+  docs: { mode: "040000", type: "tree", sha: "3e9957ffc1a7b653d940d3b8020b583ea2fae0f3" },
+  schema: { mode: "040000", type: "tree", sha: "3043a7b6afa042577645e0520ee9bd105a15424a" },
+  scripts: { mode: "040000", type: "tree", sha: "4e2c39cac2510716577a7fd6d13abf0f9cf26976" },
 } as const;
 const STAGING_MODEL_IDENTITY_CONTRACT_COMMIT = "9fc7c431a92c678554c65ebac68d3fddf4990d29";
 const STAGING_MODEL_IDENTITY_CONTRACT_ROOT_ENTRIES = {

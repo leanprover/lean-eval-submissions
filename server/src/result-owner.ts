@@ -1,7 +1,7 @@
 import { decodeProductionMetadata, type ProductionMetadata } from "./api-contract";
 
 export const PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT =
-  "714f7408cbc591b7166ea6f4d6d19b66ba481f83" as const;
+  "6799522f7fe57263de4a66499e52ce4bfda69baa" as const;
 export const STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT =
   "9fc7c431a92c678554c65ebac68d3fddf4990d29" as const;
 export const RESULT_OWNER_STATE_CONTRACT_COMMIT =

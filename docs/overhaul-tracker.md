@@ -149,7 +149,7 @@ the already implemented owner status, metadata, and publication routes.
       `docs/model-identity-owner-api.md`.
 - [x] Add the protected, hard-32-view reverse-impact index and complete-graph
       atomic State producer for model consolidation. Production State contract
-      `714f7408` and staging mirror `9fc7c431` supply the exact index; the Worker
+      `6799522f` and staging mirror `9fc7c431` supply the exact index; the Worker
       reproves their ancestry and source root entries, reads and validates every
       source and target member, rematerializes every transitive predecessor and alias,
       removes the old component, and creates the sorted target union in one
