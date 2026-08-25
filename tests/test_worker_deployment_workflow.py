@@ -643,6 +643,18 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('body["intake_enabled"] is False', provisional)
         self.assertIn('body["intake_enabled"] is False', staging)
 
+    def test_production_version_reads_wait_for_cloudflare_convergence(self) -> None:
+        production = DEPLOY.split("\n  deploy-production:", 1)[1]
+        self.assertEqual(
+            production.count("../scripts/read_cloudflare_worker_version"),
+            4,
+        )
+        self.assertNotIn("npx wrangler versions view", production)
+        self.assertIn(
+            "'scripts/**'",
+            DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0],
+        )
+
     def test_deployments_require_the_dark_maintainer_gate_without_exposing_allowlist(
         self,
     ) -> None:

@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -ne 5 ]; then
+  echo "usage: read_cloudflare_worker_version WRANGLER CONFIG ENVIRONMENT VERSION OUTPUT" >&2
+  exit 2
+fi
+
+version_wrangler=$1
+version_config=$2
+version_environment=$3
+version_id=$4
+version_output=$5
+
+if [ ! -x "$version_wrangler" ]; then
+  echo "wrangler executable is missing" >&2
+  exit 2
+fi
+if [ ! -f "$version_config" ] || [ -L "$version_config" ]; then
+  echo "wrangler configuration must be a regular file" >&2
+  exit 2
+fi
+if [[ ! "$version_environment" =~ ^[a-z][a-z0-9-]{0,31}$ ]]; then
+  echo "Worker environment is invalid" >&2
+  exit 2
+fi
+if [[ ! "$version_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+  echo "Worker version ID is invalid" >&2
+  exit 2
+fi
+if [ -z "$version_output" ] || [ ! -d "$(dirname "$version_output")" ]; then
+  echo "Worker version output parent is missing" >&2
+  exit 2
+fi
+
+version_scratch=$(mktemp "${version_output}.tmp.XXXXXX")
+trap 'rm -f "$version_scratch"' EXIT
+
+for version_attempt in $(seq 1 13); do
+  if "$version_wrangler" versions view "$version_id" \
+    --config "$version_config" --env "$version_environment" --json \
+    > "$version_scratch"
+  then
+    mv "$version_scratch" "$version_output"
+    trap - EXIT
+    exit 0
+  fi
+  : > "$version_scratch"
+  if [ "$version_attempt" -eq 13 ]; then
+    echo "Worker version detail did not converge after deployment" >&2
+    exit 1
+  fi
+  sleep 5
+done
+
+echo "unreachable Worker version convergence state" >&2
+exit 1
