@@ -177,6 +177,23 @@ class ModelIdentityStagingQualificationWorkflowTests(unittest.TestCase):
                 variables["MODEL_IDENTITY_MAINTAINER_API_ENABLED"], "false"
             )
 
+    def test_ordinary_runtime_has_no_qualification_authority_or_binding(self) -> None:
+        for environment in ("staging", "production"):
+            runtime = WRANGLER["env"][environment]
+            self.assertNotIn("durable_objects", runtime)
+            self.assertNotIn("migrations", runtime)
+            self.assertNotIn(
+                "MODEL_IDENTITY_QUALIFICATION_EXECUTOR",
+                {service["binding"] for service in runtime["services"]},
+            )
+            self.assertFalse(
+                {
+                    "MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET",
+                    "MODEL_IDENTITY_QUALIFICATION_TOKEN",
+                }
+                & set(runtime["secrets"]["required"])
+            )
+
     def test_documentation_keeps_live_arming_as_a_blocker(self) -> None:
         self.assertIn(
             "The persistent harness remains intentionally **unarmed**",

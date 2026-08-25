@@ -20,25 +20,12 @@
           "GITHUB_OAUTH_CLIENT_SECRET",
           "GITHUB_STATE_TOKEN",
           "LIFECYCLE_CALLBACK_TOKEN",
-          "MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET",
-          "MODEL_IDENTITY_QUALIFICATION_TOKEN",
           "READINESS_TOKEN"
         ]
       },
       "workers_dev": true,
       "preview_urls": false,
       "limits": { "subrequests": 400 },
-      "durable_objects": {
-        "bindings": [
-          {
-            "name": "MODEL_IDENTITY_QUALIFICATION_JOURNAL",
-            "class_name": "ModelIdentityQualificationJournal"
-          }
-        ]
-      },
-      "migrations": [
-        { "tag": "v1", "new_sqlite_classes": ["ModelIdentityQualificationJournal"] }
-      ],
       "ratelimits": [
         {
           "name": "API_RATE_LIMITER",
@@ -50,10 +37,6 @@
         {
           "binding": "GITHUB_BROKER",
           "service": "lean-eval-github-broker-staging"
-        },
-        {
-          "binding": "MODEL_IDENTITY_QUALIFICATION_EXECUTOR",
-          "service": "lean-eval-model-identity-qualification-executor-staging"
         }
       ],
       "triggers": { "crons": ["* * * * *"] },

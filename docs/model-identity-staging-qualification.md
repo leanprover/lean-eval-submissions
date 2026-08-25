@@ -13,6 +13,10 @@ are installed, and cannot enable either public API, create a repository gate,
 authorize a deployment, or mutate staging State. Arming requires a later
 reviewed source commit that pins one exact verified fixture manifest after all
 identity, seeding, deployment, and recovery prerequisites below exist.
+The ordinary Worker deployment configuration has no qualification secret,
+Durable Object, executor service binding, or private-service deployment step;
+the two private Wrangler configurations are source-only inputs until that later
+arming change.
 
 The dormant qualification workflow is restricted to the exact protected `main`
 commit in `leanprover/lean-eval-submissions`, the first workflow attempt, the

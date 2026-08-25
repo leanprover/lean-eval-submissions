@@ -19,6 +19,12 @@ export default defineConfig({
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc", environment: "staging" },
       miniflare: {
+        durableObjects: {
+          MODEL_IDENTITY_QUALIFICATION_JOURNAL: {
+            className: "ModelIdentityQualificationJournal",
+            useSQLite: true,
+          },
+        },
         serviceBindings: {
           GITHUB_BROKER: () => Promise.resolve(Response.json({ error: "broker_not_configured_in_main_worker_tests" }, { status: 503 })),
           MODEL_IDENTITY_QUALIFICATION_EXECUTOR: () => Promise.resolve(Response.json({ error: "qualification_executor_not_configured_in_main_worker_tests" }, { status: 503 })),

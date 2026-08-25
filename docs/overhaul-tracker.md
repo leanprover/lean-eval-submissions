@@ -185,7 +185,9 @@ the already implemented owner status, metadata, and publication routes.
       The live fixture manifest and digest are deliberately absent and every
       workflow job still requires the impossible source ref, so this source
       cannot execute the qualification, acquire an active journal, or write
-      State. Any later inert staging deployment remains separate from arming.
+      State. Ordinary Worker deployment has no qualification secret, Durable
+      Object, service binding, or private-service deployment step; adding those
+      runtime capabilities remains part of the later reviewed arming change.
 - [ ] Arm and execute the persistent model-identity qualification only after an
       independently reviewed live fixture exists: configure protected-
       environment reviewers with self-review prevention, obtain explicit

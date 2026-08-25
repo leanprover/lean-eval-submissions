@@ -866,16 +866,6 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                         "service": f"lean-eval-github-broker-{environment}",
                     }
                 ]
-                if environment == "staging":
-                    expected_services.append(
-                        {
-                            "binding": "MODEL_IDENTITY_QUALIFICATION_EXECUTOR",
-                            "service": (
-                                "lean-eval-model-identity-qualification-"
-                                "executor-staging"
-                            ),
-                        }
-                    )
                 self.assertEqual(service, expected_services)
                 broker = BROKER_WRANGLER["env"][environment]
                 self.assertIs(broker["workers_dev"], False)
@@ -889,7 +879,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 self.assertIn("wrangler.broker.jsonc", deploy_block)
                 self.assertIn(f"--env {environment}", deploy_block)
 
-    def test_qualification_executor_is_private_staging_only_and_deployed_first(
+    def test_qualification_services_are_private_source_only_until_arming(
         self,
     ) -> None:
         self.assertEqual(set(QUALIFICATION_EXECUTOR_WRANGLER["env"]), {"staging"})
@@ -916,40 +906,30 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIs(collision["preview_urls"], False)
         self.assertNotIn("routes", collision)
         self.assertEqual(collision["limits"], {"subrequests": 400})
-
-        staging = DEPLOY.split("  deploy-staging:", 1)[1].split(
-            "  deploy-production:", 1
-        )[0]
-        executor_deploy = staging.index(
-            "- name: Deploy staging model identity qualification executor"
-        )
-        collision_deploy = staging.index(
-            "- name: Deploy staging model identity qualification collision service"
-        )
-        intake_deploy = staging.index("- name: Deploy staging submission Worker")
-        self.assertLess(collision_deploy, executor_deploy)
-        self.assertLess(executor_deploy, intake_deploy)
-        collision_block = staging[collision_deploy:executor_deploy]
-        self.assertIn(
-            "--config wrangler.model-identity-qualification-collision.jsonc",
-            collision_block,
-        )
-        self.assertIn("--env staging", collision_block)
-        executor_block = staging[executor_deploy:intake_deploy]
-        self.assertIn(
-            "--config wrangler.model-identity-qualification-executor.jsonc",
-            executor_block,
-        )
-        self.assertIn("--env staging", executor_block)
-
-        production = DEPLOY.split("  deploy-production:", 1)[1]
-        self.assertNotIn("model identity qualification executor", production)
+        self.assertNotIn("model identity qualification executor", DEPLOY)
+        self.assertNotIn("model identity qualification collision", DEPLOY)
         self.assertNotIn(
-            "wrangler.model-identity-qualification-executor.jsonc", production
+            "wrangler.model-identity-qualification-executor.jsonc", DEPLOY
         )
         self.assertNotIn(
-            "wrangler.model-identity-qualification-collision.jsonc", production
+            "wrangler.model-identity-qualification-collision.jsonc", DEPLOY
         )
+        for environment in ("staging", "production"):
+            runtime = WRANGLER["env"][environment]
+            self.assertNotIn("durable_objects", runtime)
+            self.assertNotIn("migrations", runtime)
+            self.assertNotIn(
+                "MODEL_IDENTITY_QUALIFICATION_EXECUTOR",
+                {service["binding"] for service in runtime["services"]},
+            )
+            self.assertNotIn(
+                "MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET",
+                runtime["secrets"]["required"],
+            )
+            self.assertNotIn(
+                "MODEL_IDENTITY_QUALIFICATION_TOKEN",
+                runtime["secrets"]["required"],
+            )
 
     def test_secret_contracts_are_explicit_in_each_deployment_environment(self) -> None:
         intake_secrets = {
@@ -967,17 +947,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "SOURCE_APP_PRIVATE_KEY",
         }
         for environment in ("staging", "production"):
-            expected_intake_secrets = set(intake_secrets)
-            if environment == "staging":
-                expected_intake_secrets.update(
-                    {
-                        "MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET",
-                        "MODEL_IDENTITY_QUALIFICATION_TOKEN",
-                    }
-                )
             self.assertEqual(
                 set(WRANGLER["env"][environment]["secrets"]["required"]),
-                expected_intake_secrets,
+                intake_secrets,
             )
             self.assertEqual(
                 set(BROKER_WRANGLER["env"][environment]["secrets"]["required"]),
