@@ -456,6 +456,21 @@ manual recovery, non-force restoration, credential rotation, and rollback
 qualification. Neither prior rollout executed the harness or authorized a
 model-identity State write.
 
+The first ordinary post-merge rollout attempt for the unarmed source,
+`32841958939` at `cd50d22085a4179d473fc3be6fc636ff5e35fa98`, exposed and
+failed closed on an incorrect deployment dependency. Staging replay and the
+staging GitHub broker advanced to that commit, but Cloudflare refused to create
+the collision Worker because its intentionally absent `GITHUB_STATE_TOKEN` and
+`MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET` had not been supplied. The
+executor and coordinator deployments never ran: the staging intake Worker
+therefore remained at `0d52fb663d6fe09ae56caf5b007a12e2c5e2c5b5`, and the
+promotion canary and every production job were skipped. Direct health retained
+ordinary intake and both public model-identity gates as false in both
+environments. The corrected source-disabled deployment contract removes every
+qualification secret, Durable Object, service binding, and private-service
+deployment from the ordinary Worker rollout; arming must introduce all of them
+together only after the live prerequisites above have passed.
+
 This gate closed on 2026-08-25 against disabled deployed commit
 `d34aab279dd99380530b9d77c3aa199559849209`. Retry `32792905120` started at
 State `2436d631a005b7f2d83e5385c4041c7f05259e0f`, durably applied the repair at

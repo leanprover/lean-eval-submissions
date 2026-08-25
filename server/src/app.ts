@@ -120,7 +120,10 @@ import {
   PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
   STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
 } from "./model-identity";
-import { handleModelIdentityQualificationRequest } from "./model-identity-qualification-app";
+import {
+  handleModelIdentityQualificationRequest,
+  type ModelIdentityQualificationEnv,
+} from "./model-identity-qualification-app";
 
 export type RuntimeEnv = Omit<
   CloudflareEnv,
@@ -206,6 +209,8 @@ export type RuntimeEnv = Omit<
     MODEL_IDENTITY_QUALIFICATION_TOKEN?: string;
     MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET?: string;
     MODEL_IDENTITY_QUALIFICATION_EXECUTOR?: Fetcher;
+    MODEL_IDENTITY_QUALIFICATION_JOURNAL?:
+      NonNullable<ModelIdentityQualificationEnv["MODEL_IDENTITY_QUALIFICATION_JOURNAL"]>;
     STATE_REPOSITORY: string;
   }>;
 
