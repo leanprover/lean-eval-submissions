@@ -44,9 +44,10 @@ export function browserPage(environment: "staging" | "production", intakeEnabled
       <label>Exact source commit <input id="source_commit" name="source_commit" required pattern="[0-9a-f]{40}" minlength="40" maxlength="40"></label>
       <label>Publication choice
         <select id="publication_choice" name="publication_choice">
-          <option value="withheld">withheld</option>
-          <option value="scheduled">scheduled</option>
+          <option value="scheduled">scheduled release (default)</option>
+          <option value="withheld">withheld (opt out)</option>
         </select>
+        <small>Accepted source is scheduled for release after two calendar months unless you opt out.</small>
       </label>
       <label>Production metadata JSON <textarea id="production_metadata" name="production_metadata" rows="5">{}</textarea></label>
       <button type="submit">Submit exact commit</button>
