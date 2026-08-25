@@ -395,18 +395,20 @@ and reachability check. Before any owner or maintainer gate is enabled, confirm
 the deployed Workers plan allows at least 369 external subrequests per request;
 the 50-subrequest free allowance is insufficient.
 
-This gate closed on 2026-08-25. Exact run `32793103590` exercised the authorized
-apply and reject fixtures against disabled deployed commit
-`d34aab279dd99380530b9d77c3aa199559849209`. Staging State advanced from
-`2436d631a005b7f2d83e5385c4041c7f05259e0f` to
-`cc52d7c298450df639a59ca9fff8914438626d12`: the apply reservation exists, the
-reject candidate remains unreserved, and all four fixed events exist. Intake,
-the owner API, and the maintainer API remained disabled. The temporary
-credential was revoked immediately and the one-shot route, workflow, fixture,
-binding, and required-secret declaration were then retired. No full repository
-scan or aggregate may return to online collision admission; enabling the public
-maintainer API remains a separate identity, subrequest-budget, and rollout
-decision.
+This gate closed on 2026-08-25 against disabled deployed commit
+`d34aab279dd99380530b9d77c3aa199559849209`. Retry `32792905120` started at
+State `2436d631a005b7f2d83e5385c4041c7f05259e0f`, durably applied the repair at
+`9844e4b5d515810b90f0bf32bd25aba6aa0a7f9e`, and then failed closed on a
+transient broker response. Exact successful run `32793103590` started at that
+`9844e4b5` head, idempotently reverified the apply, completed request/reject,
+and produced final State `cc52d7c298450df639a59ca9fff8914438626d12`.
+The apply reservation exists, the reject candidate remains unreserved, and all
+four fixed events exist. Intake, the owner API, and the maintainer API remained
+disabled. The temporary credential was revoked immediately and the one-shot
+route, workflow, fixture, binding, and required-secret declaration were then
+retired. No full repository scan or aggregate may return to online collision
+admission; enabling the public maintainer API remains a separate identity,
+subrequest-budget, and rollout decision.
 
 ### D9: GitHub App and token-broker boundary
 

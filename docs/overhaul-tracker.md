@@ -163,12 +163,15 @@ the already implemented owner status, metadata, and publication routes.
       permanent effective-identity reservation contract. The online aggregate
       read is removed; production's empty set and staging's two reservations
       are migrated and validated, and the runtime uses atomic create/confirm
-      semantics. Exact run `32793103590` at deployed commit `d34aab2` advanced
-      staging State from `2436d631` to `cc52d7c2`: the apply candidate is
-      permanently reserved, the reject candidate remains absent, and all four
-      fixed events are present. Intake and both public amendment gates stayed
-      false; the temporary credential was revoked and the one-shot surface is
-      retired. See the rollout runbook's collision-index gate.
+      semantics. Retry `32792905120` durably applied the repair from
+      `2436d631` to `9844e4b5` before failing closed on a transient broker
+      response. Exact successful run `32793103590` started at `9844e4b5`,
+      idempotently reverified the apply, and completed request/reject at final
+      State `cc52d7c2`: the apply candidate is permanently reserved, the reject
+      candidate remains absent, and all four fixed events are present. Intake
+      and both public amendment gates stayed false; the temporary credential
+      was revoked and the one-shot surface is retired. See the rollout
+      runbook's collision-index gate.
 
 ## Cloudflare bootstrap
 
