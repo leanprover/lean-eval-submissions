@@ -10,6 +10,10 @@ The registry does not change the generic discovery windows, issue parser, pass-l
 
 Registry mode is explicit. A newly generated shard set and aggregate must all bind the canonical registry bytes; supplying the registry while omitting its digest from a shard, or supplying a registry-bound aggregate without the registry to a downstream validator, fails closed. The no-registry validation path exists only for immutable evidence and aggregates created before this registry. The replay-plan workflow selects that compatibility path only after checking the reviewed aggregate's exact file digest; it cannot silently downgrade a new aggregate.
 
-Integration dependency: this branch must be rebased after the staging-correction-canary deployment-filter change before it is merged. That earlier change excludes both `scripts/resolve_public_replay_github_evidence.py` and `scripts/aggregate_public_replay_github_evidence.py` from both Worker-deployment path filters. This branch deliberately does not duplicate that filter commit; the post-rebase review must re-run the deployment-workflow tests and verify both exclusions in both trigger blocks.
+The merged deployment filters exclude both
+`scripts/resolve_public_replay_github_evidence.py` and
+`scripts/aggregate_public_replay_github_evidence.py` from both Worker-deployment
+trigger blocks. Deployment-workflow tests preserve those exclusions, so later
+evidence-only changes cannot silently redeploy the runtime.
 
 The historical edit API is the one remaining API-stability dependency: GitHub GraphQL must continue exposing the complete bounded `userContentEdits` list and revision bodies. If that surface changes or the edit count grows beyond 20, the resolver returns indeterminate evidence and requires a new review; it does not fall back to the current issue body.

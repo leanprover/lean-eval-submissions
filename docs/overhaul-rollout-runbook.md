@@ -27,14 +27,14 @@ primary checkout is not the integration workspace.
 | `lean-eval-generator` | `77373a539b31f8f304c852f288d7d8469cceebff` on `main`; fixes `#1` / `#2` and synchronization `#3` are merged and green; merged LeanEval consumer `#553` pins this exact commit and removes the embedded core |
 | production State | `b0a30e3a64aa5c05660040405b32135dea4b7f1d` on private protected `main`; hardened historical-public and historical-private validation, reviewed unavailability disposition, release-status v2, permanent effective-result reservation, and reverse-impact contracts are merged, and the graph still contains only `system.initialized`, with no accepted submission, reservation, or due release work |
 | staging State | reviewed portable contract `9fc7c431a92c678554c65ebac68d3fddf4990d29`; its README/docs/schema/scripts roots are byte-bound independently from production and include the same reverse-impact semantics |
-| `lean-eval-releases` | `57ab36341ccf653b45366c32d4472b9ee670890b` on `main`; source-free recovery `#8`, State-bound removal planning `#9`, and the deterministic automatic controller `#10` are merged; exact-main validation `32719159678` and publication-disabled Git credential preflight `32723471497` passed; credentialed staging unwrap and publication remain disabled |
+| `lean-eval-releases` | `dfd866f1dc5c9bd9f63dabdc0d078f572d7f357b` on `main`; the deterministic controller, source-free recovery, State-bound removal planning, OIDC trust-only and Git credential preflights, and offline removal qualification are merged; credentialed staging unwrap and publication remain disabled |
 | catalog, generator consumer, software verification | v1 freeze merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; terminology rule merged in `#554`; standalone-generator consumer merged in `#553`; current main `b91d4757aa0d7776c02540c9089df54fa0d0658a` |
-| results schema version 2, intake server, replay contracts | schema-version-3 per-submission archive lane `#1250`, accepted result lifecycle `#1251`, guarded historical migration `#1252`, private replay planning/schema alignment `#1253` / `#1254`, accepted-archive staging boundary `#1255`, and immutable release OIDC trust `#1256` are merged; exact runtime `08bf2c8ef2a9fbbb4f10dc0432969ba11c29bc40` is deployed intake- and replay-disabled after fail-closed rollout `32772828260`; its State-contract repin is qualified but not yet deployed |
+| results schema version 2, intake server, replay contracts | current main `029b69ce6852fd9a0ee6e9f33aa7adb58474887f` includes the schema-version-3 per-submission archive lane, accepted lifecycle, private replay controller, hardened historical-private contract, complete dark result/model identity producer, and inert model-identity staging qualification/recovery scaffold. Protected rollout `32815495847` promoted the immutable dispatch ref, deployed staging, passed its canary, and deployed production; follow-up canary `32815898527` passed. Live health binds both intake Workers to that exact commit with intake and every result/model owner or maintainer API disabled |
 | AWS archive-key custody | dedicated account `lean-eval` (`161072922960`) and isolated stacks are provisioned; accepted-archive staging run `32618166048` passed. Release OIDC template correction is merged but the live stacks still require an authenticated operator update: release staging runs `32617539355` and `32624640050` failed at STS before Lambda or decrypt. Production intake archive/replay roles remain disconnected |
 | lifecycle-aware leaderboard | preview foundation merged as `lean-eval-leaderboard#69`; UI terminology merged in `#73`; deeper schema terminology merged in `#74`; cutover `#72` is merged and live at `https://lean-lang.org/eval/`, with `/legacy/` retained and read-only State deploy key `160968617` provisioned; owner-scoped State v4 model-identity consumption merged as `#75` (`89be802f`) after exact-head run `32741897578`, and production Pages run `32747172862` deployed it successfully |
 
 The private broker, replay, and intake Workers are deployed in staging and
-production from exact commit `08bf2c8ef2a9fbbb4f10dc0432969ba11c29bc40`.
+production from exact commit `029b69ce6852fd9a0ee6e9f33aa7adb58474887f`.
 Deployment, OAuth,
 readiness, authentication, State-writer, and broker App secrets are installed.
 Both State-writer tokens are organization-approved and preflighted, and both
@@ -411,6 +411,23 @@ paid-plan limit preservation, rollback health, live OAuth and verified-agent
 session issuance, exact maintainer numeric-ID/login drift denial, and dark
 staging end-to-end qualification are recorded. Source completion alone does not
 authorize one State write or enable either route family.
+
+PR `#1371` merged the source-only staging qualification/recovery scaffold as
+`029b69ce6852fd9a0ee6e9f33aa7adb58474887f` after independent exact-head review
+and green CI `32815289877` / `32815289745`. Every job is still guarded by an
+intentionally impossible source ref. Before replacing that gate, implement and
+review the persistent harness, configure protected-environment reviewers with
+self-review prevention, install five operation-specific ephemeral credentials,
+prove an idle mutation window, and rehearse journal-based restoration. The
+scaffold itself is neither a live staging qualification nor State authority.
+
+Protected rollout `32815495847` subsequently deployed that exact merge to
+staging and production after immutable dispatch promotion and a successful
+staging canary; follow-up canary `32815898527` also passed. Direct health reads
+reported exact commit `029b69ce`, ordinary intake disabled, every result/model
+owner and maintainer API disabled, the tracked 400-subrequest limit, and the
+promotion canary effective only in staging. The impossible workflow source ref
+remains unchanged, so this rollout did not execute or authorize qualification.
 
 This gate closed on 2026-08-25 against disabled deployed commit
 `d34aab279dd99380530b9d77c3aa199559849209`. Retry `32792905120` started at
