@@ -90,9 +90,8 @@ one issue per lane.
 - [x] Open lifecycle-aware leaderboard preview PR.
 - [x] Open software-verification draft PR after D3 review.
 - [x] Open LeanEval generator-consumer PR after the public generator pin exists.
-- [x] Open independent-kernel shadow smoke `lean-eval-submissions#1207` and
-      AWS one-submission key-adapter staging smoke `#1208`; both merged and
-      deployed intake-disabled as exact commit `a34b2053`.
+- [x] Open AWS one-submission key-adapter staging smoke `#1208`; it merged and
+      deployed intake-disabled as part of exact commit `a34b2053`.
 - [x] Provision dedicated AWS account `161072922960`, exact GitHub OIDC
       provider, and isolated staging/production key-adapter stacks. Only the
       staging wrap and replay-invoker role variables are connected; production
@@ -156,18 +155,6 @@ the already implemented owner status, metadata, and publication routes.
       bounded CAS. Health reports `atomic_reverse_impact_v1`. This is source-only:
       all owner/maintainer gates remain false pending paid-plan and dark staging
       qualification.
-- [x] Merge the inert model-identity staging qualification and automatic/manual
-      recovery contract (`lean-eval-submissions#1371`, exact reviewed head
-      `caaae54c`, merge `029b69ce`). Every job retains an impossible source-ref
-      gate; the workflows bind stable/original/triggering actor identity,
-      first attempts, operation-specific credentials, journal/lease recovery,
-      exact State commit/tree transitions, and final disabled health. PR CI
-      `32815289877` and Worker check `32815289745` passed without reaching an
-      environment. Protected rollout `32815495847` then promoted and deployed
-      the exact merge to staging and production, passed its staging canary, and
-      retained every impossible source gate; follow-up canary `32815898527`
-      passed. Live health binds both intake Workers to `029b69ce` with intake
-      and every result/model owner or maintainer API disabled.
 - [x] Repin the disabled Worker coherently to reviewed production State
       `b0a30e3a` (`lean-eval-submissions#1383`, merge `0d52fb66`) and complete
       protected rollout `32831767076`. Exact staging deployment and smoke,
@@ -176,28 +163,6 @@ the already implemented owner status, metadata, and publication routes.
       verification all passed. Every intake lease and enablement step was
       skipped. Credential-free readiness run `32832326810` then passed and
       closed monitor incident `#1310`.
-- [x] Implement the source-disabled persistent model-identity qualification
-      harness. It durably reserves immutable plans and receipt-only recovery,
-      verifies a source-pinned staging fixture before acquisition, calls the
-      real API kernel through a private service-bound executor, creates genuine
-      contention through a second private Worker, checks exact post-write State
-      blobs, and retains the operation-only fourteen-proof runner contract.
-      The live fixture manifest and digest are deliberately absent and every
-      workflow job still requires the impossible source ref, so this source
-      cannot execute the qualification, acquire an active journal, or write
-      State. Ordinary Worker deployment has no qualification secret, Durable
-      Object, service binding, or private-service deployment step; adding those
-      runtime capabilities remains part of the later reviewed arming change.
-- [ ] Arm and execute the persistent model-identity qualification only after an
-      independently reviewed live fixture exists: configure protected-
-      environment reviewers with self-review prevention, obtain explicit
-      participation for three distinct identities, provision and later rotate
-      the five separately scoped ephemeral credentials, deploy the private
-      service bindings, prove paid-plan capacity and quiescence, complete the
-      exact fourteen-step E2E and full failure-injection/recovery matrix, prove
-      rollback, and preserve the live staging evidence. None of these
-      operational gates is supplied or authorized by the source harness, and
-      both public model-identity gates must remain false until they pass.
 - [x] Add State problem-repair request and maintainer decision events with
       explicit revision/causation rules without rewriting accepted records
       (`lean-eval-state#13`, merge `0c875994`) and the targeted private
@@ -320,27 +285,10 @@ the already implemented owner status, metadata, and publication routes.
       both environments by `lean-eval-submissions#1299` at `ffd9a473`, deploy
       run `32700136536` passed, both live health endpoints report disabled, and
       Cloudflare reports zero active or assigned replay containers.
-- [x] Complete and durably retain the first full historical public GitHub
-      evidence pass after workflow-contract review. Sixteen successful runs
-      `32718053904`–`32719340876` at exact source `5746f90e` covered all 315
-      requests / 633 public results. The reviewed aggregate resolves 69
-      requests / 135 results and leaves 246 / 498 explicitly pending; it has
-      SHA-256 `13a0d95b…` and is checked in with complete shard provenance in
-      [`historical-public-evidence-rerun.md`](historical-public-evidence-rerun.md).
-- [x] Rerun the public Gist lane without the repository-scoped installation
-      token. Sixteen sequential successful runs `32768996061`–`32770548866` at
-      exact source `6c13c245` resolved all 57 formerly permission-bound Gist
-      requests. The new aggregate resolves 126 requests / 192 results and
-      leaves 189 / 441 pending, has SHA-256 `8122b4ee…`, and is checked in with
-      complete shard provenance in
-      [`historical-public-gist-probe-rerun.md`](historical-public-gist-probe-rerun.md).
-- [x] Rerun the complete public-evidence corpus with the closed legacy
-      adjudication registry. Sixteen successful runs `32794597497`–`32795629591`
-      at exact source `ba5f5784` resolve 128 requests / 194 results and leave
-      187 / 439 explicitly `source_unavailable`, with every indeterminate,
-      ambiguous, unreviewed, and missing-evidence bucket at zero. The immutable
-      aggregate has SHA-256 `ba816b52…`; complete provenance is in
-      [`historical-public-adjudicated-evidence-rerun.md`](historical-public-adjudicated-evidence-rerun.md).
+- [x] Classify the historical public-source corpus. The canonical aggregate
+      resolves 128 requests / 194 results and classifies 187 / 439 as
+      `source_unavailable`, with every indeterminate, ambiguous, unreviewed,
+      and missing bucket at zero. Its SHA-256 is `ba816b52…`.
 - [ ] Inventory every historical accepted result at the migration cutoff and
       deterministically classify it as public-source replayable,
       private-archive replayable, or explicitly unavailable with a reviewed
@@ -348,13 +296,10 @@ the already implemented owner status, metadata, and publication routes.
       classifications, but 439 public results still require source recovery or
       an explicit unavailability policy, and all 668 private results still
       require the separately credentialed archive-migration lane.
-      The contract-only cutoff inventory is now complete and durably reviewed:
-      protected run `32790927560`, attempt 1, at immutable source `ae1a9714`
-      reproduced canonical store digest `14e8c868…` and committed exact inventory
-      `bb405fba…`, containing all 1,301 accepted results (633 public-probe
-      pending and 668 private-migration pending). This closes only the inventory
-      handoff; none of those pending classifications is replay qualification or
-      a permanent-unavailability decision.
+      The cutoff inventory is committed at digest `bb405fba…` and contains
+      all 1,301 accepted results (633 public-probe pending and 668
+      private-migration pending). Its canonical Results-store digest is
+      `14e8c868…`.
       Because issue intake is still open, the reviewed inventory is now an
       explicit baseline. The append-only delta contract rejects deletion or
       mutation of any baseline entry and source-minimally captures all later
@@ -422,41 +367,6 @@ the already implemented owner status, metadata, and publication routes.
       production credentials are separate launch actions. No historical
       started event, executor invocation, or terminal append has occurred. See
       [`historical-authoritative-replay-controller.md`](historical-authoritative-replay-controller.md).
-- [ ] Expand independent-kernel validation from the one-result shadow smoke to
-      a checker-series/corpus report with separately recorded
-      accept/reject/decline/crash/timeout outcomes and an explicit promotion
-      decision.
-      The source-free version-1 preparation/report contract now specifies exact
-      series, inventory, attempt, and shard bindings; unavailable and pending
-      states; deterministic full-coverage aggregation; hostile validation; and
-      human-only promotion. Its offline runner-record adapter now verifies
-      operator possession of exact raw replay/export inputs, validates attested
-      source-free records, and emits
-      schema-valid observation receipts without executing a process or gaining
-      a credential interface. The `source_free` value remains the reviewed
-      runner's attested assertion, not a fact independently established by the
-      adapter. This item stays open until the real historical input artifacts
-      exist, an approved exact-image runner produces those records, and the series runs
-      over the complete reviewed historical corpus and disagreements are
-      adjudicated; the fixture and one-result smoke are non-authoritative. The
-      proposed closed runner wire contract now specifies raw lean4export 3.1.0
-      NDJSON, canonical Mathgraph config bytes/argv, and structured transcript
-      and attestation objects for a future runner. The new offline integration
-      validates that complete chain against exact series, inventory, and shard
-      identities and emits only existing runner records, closing the formerly
-      unbound attempt/adapter gap. The authoritative and historical-public
-      replay image sources also prepare an exclusive exact-byte solution-export
-      capture at comparator's live checker boundary. The authoritative PR
-      source-build preflight is not qualification; the historical image remains
-      unbuilt, both are unqualified, and the Worker has no
-      durable source-free handoff yet. The semantic validator and adapter
-      deliberately block candidate exit `1`, which the pinned producer uses for
-      both rejection-like errors and internal failure; a structured upstream
-      producer change is still required before a `rejected` corpus outcome can
-      be recorded safely. The current historical profile evidence exercises
-      only the runtime boundary; a probe that actually runs Lean, comparator,
-      and `replay-measure` to an accepted result is a hard prerequisite before
-      any kernel handoff or State append.
 - [ ] Enable production intake and begin the four-week issue-intake adoption
       window.
 - [x] Complete leaderboard preview review and cut over with rollback retained

@@ -121,11 +121,3 @@ Before enabling either gate, operators must separately record all of:
 None of those live checks is established merely by merging this source. The
 protected State prerequisite is present, but consolidation remains dark with
 the rest of the owner surface until a separate credentialed rollout decision.
-
-The [dark staging qualification scaffold](model-identity-staging-qualification.md)
-defines a fail-closed journaled controller and independent recovery workflow for
-those checks. Both are source-disabled and undispatched: their separately
-reviewed staging-only harness, durable journal and lease, short-lived issuer
-sessions, protected environment approval, quiesced State window, live
-400-subrequest measurement, mandatory fast-forward restoration, and credential
-cleanup remain prerequisites.

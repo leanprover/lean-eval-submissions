@@ -31,16 +31,6 @@ BROKER_WRANGLER = json.loads(
 REPLAY_WRANGLER = json.loads(
     (ROOT / "server/wrangler.replay.jsonc").read_text(encoding="utf-8")
 )
-QUALIFICATION_EXECUTOR_WRANGLER = json.loads(
-    (
-        ROOT / "server/wrangler.model-identity-qualification-executor.jsonc"
-    ).read_text(encoding="utf-8")
-)
-QUALIFICATION_COLLISION_WRANGLER = json.loads(
-    (
-        ROOT / "server/wrangler.model-identity-qualification-collision.jsonc"
-    ).read_text(encoding="utf-8")
-)
 PACKAGE = json.loads((ROOT / "server/package.json").read_text(encoding="utf-8"))
 QUALIFICATION = json.loads(
     (ROOT / ".audit/cloudflare-rollback-qualification-v1.json").read_text(
@@ -176,7 +166,6 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "scripts/prepare_public_replay_plan.py",
             "scripts/reconcile_historical_replay_inventory_delta.py",
             "scripts/resolve_public_replay_github_evidence.py",
-            "scripts/validate_historical_replay_inventory_evidence.py",
         }
         runtime_scripts = {
             "scripts/prepare_intake_enablement_lease.py",
@@ -309,7 +298,6 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "prepare_public_replay_plan.py",
             "reconcile_historical_replay_inventory_delta.py",
             "resolve_public_replay_github_evidence.py",
-            "validate_historical_replay_inventory_evidence.py",
         }
         for trigger in (pull_request, push):
             self.assertEqual(
@@ -325,7 +313,6 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             - {
                 "classify_historical_private_archives.py",
                 "historical_replay_controller.py",
-                "validate_historical_replay_inventory_evidence.py",
             },
         )
         self.assertEqual(
@@ -879,58 +866,6 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 self.assertIn("wrangler.broker.jsonc", deploy_block)
                 self.assertIn(f"--env {environment}", deploy_block)
 
-    def test_qualification_services_are_private_source_only_until_arming(
-        self,
-    ) -> None:
-        self.assertEqual(set(QUALIFICATION_EXECUTOR_WRANGLER["env"]), {"staging"})
-        executor = QUALIFICATION_EXECUTOR_WRANGLER["env"]["staging"]
-        self.assertIs(executor["workers_dev"], False)
-        self.assertIs(executor["preview_urls"], False)
-        self.assertNotIn("routes", executor)
-        self.assertEqual(executor["limits"], {"subrequests": 400})
-        self.assertEqual(
-            executor["services"],
-            [
-                {
-                    "binding": "MODEL_IDENTITY_QUALIFICATION_COLLISION",
-                    "service": (
-                        "lean-eval-model-identity-qualification-collision-staging"
-                    ),
-                }
-            ],
-        )
-
-        self.assertEqual(set(QUALIFICATION_COLLISION_WRANGLER["env"]), {"staging"})
-        collision = QUALIFICATION_COLLISION_WRANGLER["env"]["staging"]
-        self.assertIs(collision["workers_dev"], False)
-        self.assertIs(collision["preview_urls"], False)
-        self.assertNotIn("routes", collision)
-        self.assertEqual(collision["limits"], {"subrequests": 400})
-        self.assertNotIn("model identity qualification executor", DEPLOY)
-        self.assertNotIn("model identity qualification collision", DEPLOY)
-        self.assertNotIn(
-            "wrangler.model-identity-qualification-executor.jsonc", DEPLOY
-        )
-        self.assertNotIn(
-            "wrangler.model-identity-qualification-collision.jsonc", DEPLOY
-        )
-        for environment in ("staging", "production"):
-            runtime = WRANGLER["env"][environment]
-            self.assertNotIn("durable_objects", runtime)
-            self.assertNotIn("migrations", runtime)
-            self.assertNotIn(
-                "MODEL_IDENTITY_QUALIFICATION_EXECUTOR",
-                {service["binding"] for service in runtime["services"]},
-            )
-            self.assertNotIn(
-                "MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET",
-                runtime["secrets"]["required"],
-            )
-            self.assertNotIn(
-                "MODEL_IDENTITY_QUALIFICATION_TOKEN",
-                runtime["secrets"]["required"],
-            )
-
     def test_secret_contracts_are_explicit_in_each_deployment_environment(self) -> None:
         intake_secrets = {
             "AUTH_TOKEN_SECRET",
@@ -955,29 +890,6 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 set(BROKER_WRANGLER["env"][environment]["secrets"]["required"]),
                 broker_secrets,
             )
-        self.assertEqual(
-            set(
-                QUALIFICATION_EXECUTOR_WRANGLER["env"]["staging"]["secrets"][
-                    "required"
-                ]
-            ),
-            {
-                "AUTH_TOKEN_SECRET",
-                "GITHUB_STATE_TOKEN",
-                "MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET",
-            },
-        )
-        self.assertEqual(
-            set(
-                QUALIFICATION_COLLISION_WRANGLER["env"]["staging"]["secrets"][
-                    "required"
-                ]
-            ),
-            {
-                "GITHUB_STATE_TOKEN",
-                "MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET",
-            },
-        )
 
     def test_temporary_workers_dev_routes_are_exact_and_intake_disabled(self) -> None:
         staging = WRANGLER["env"]["staging"]

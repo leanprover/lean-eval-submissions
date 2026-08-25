@@ -21,7 +21,6 @@ on:
       - '!scripts/prepare_public_replay_plan.py'
       - '!scripts/reconcile_historical_replay_inventory_delta.py'
       - '!scripts/resolve_public_replay_github_evidence.py'
-      - '!scripts/validate_historical_replay_inventory_evidence.py'
       - 'server/**'
   push:
     branches: [main]
@@ -43,7 +42,6 @@ on:
       - '!scripts/prepare_public_replay_plan.py'
       - '!scripts/reconcile_historical_replay_inventory_delta.py'
       - '!scripts/resolve_public_replay_github_evidence.py'
-      - '!scripts/validate_historical_replay_inventory_evidence.py'
       - 'server/**'
       - '!server/*.md'
       - '!server/**/*.md'

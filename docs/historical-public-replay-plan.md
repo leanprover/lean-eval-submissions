@@ -114,29 +114,19 @@ replay, append State, fetch submission source, assume AWS authority, or invoke
 the replay controller. Publishing a plan therefore does not satisfy the corpus
 execution gate.
 
-Protected run `32722572097` at immutable tag
-`lean-eval-dispatch/d08070843cb6241e2bbeece7da191f435f397db1`
-reconstructed the reviewed aggregate generated from submissions commit
-`5746f90`, producing 69 resolved submission groups, 135 accepted results, 25
-benchmark-commit/toolchain bindings spanning five exact Lean toolchain
-versions, and 246 still-pending groups. The exact source-free plan
-is permanently retained at
+One qualified execution profile still references the earlier source-free plan
+at
 `evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json`;
-its filename is its SHA-256. Its exact toolchain-registry input is retained at
+its toolchain-registry input is
 `evidence/public-replay/toolchains/5144fc19bbbbcf0ef16a1d7c88b163254f96a250cb4a5846fbbb0d465ce16790.json`
-under the same rule. The plan remains explicitly blocked on authority and
-execution-profile qualification; retaining it does not enqueue work.
+and the referencing profile is
+`evidence/public-replay/profiles/0886d3624de67d0ba1cb00657f66c5f7304743773a024509fceda6ae8f4ff660.json`.
+Keep this set only until the final plan has an equivalent qualified profile.
 
-Protected run `32799633419` at immutable tag
-`lean-eval-dispatch/2e7239e768ae2f84d102386264d39a440edbabea`
-then reconstructed the final adjudicated aggregate `ba816b52…` twice. Its
-source-free plan covers all 128 replayable request groups and 194 accepted
-results, including 69 repository and 59 Gist sources, while retaining 187
-unavailable request groups outside the plan. The exact 317,768-byte plan is
-retained at
+The final source-free plan covers all 128 replayable request groups and 194
+accepted results. It is stored at
 `evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json`;
 its 35-commit, five-toolchain registry is retained at
 `evidence/public-replay/toolchains/4f2f3737d79e6abd6c169ebdde3f2218157d8f6c482a85ad2026821a4b8e81a0.json`.
-Both remain blocked: recording these artifacts does not qualify execution
-profiles, enqueue State work, or decide that the unavailable sources are
-permanently unrecoverable.
+These files are replay inputs; they do not qualify execution profiles, enqueue
+State work, or decide that unavailable sources are permanently unrecoverable.
