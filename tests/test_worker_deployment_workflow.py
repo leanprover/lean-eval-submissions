@@ -281,8 +281,21 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 set(re.findall(r"'!scripts/([^']+)'", trigger)),
                 offline_evidence_scripts,
             )
-        resolver = "'scripts/resolve_public_replay_github_evidence.py'"
-        self.assertIn(resolver, promotion_push)
+        promoted_runtime_scripts = set(
+            re.findall(r"'scripts/([^']+)'", promotion_push)
+        )
+        self.assertEqual(
+            promoted_runtime_scripts,
+            offline_evidence_scripts
+            - {"validate_historical_replay_inventory_evidence.py"},
+        )
+        self.assertEqual(
+            set(re.findall(r"'configuration/([^']+)'", promotion_push)),
+            {
+                "public-replay-legacy-adjudications-v1.json",
+                "public-replay-workflow-definitions-v1.json",
+            },
+        )
 
     def test_exact_main_ci_trigger_cannot_be_path_filtered(self) -> None:
         ci_push = CI.split("  push:", 1)[1].split("  pull_request:", 1)[0]
