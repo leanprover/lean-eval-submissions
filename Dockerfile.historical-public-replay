@@ -46,11 +46,11 @@ import re
 
 path = pathlib.Path("/tmp/profile-matrix.json")
 raw = path.read_bytes()
-assert hashlib.sha256(raw).hexdigest() == "aad9132f729ef9f429532900d1e50b665330721fa9360699328c47bdfb2aedfc"
+assert hashlib.sha256(raw).hexdigest() == "a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c"
 matrix = json.loads(raw)
 commit = os.environ["BENCHMARK_COMMIT"]
 assert re.fullmatch(r"[0-9a-f]{40}", commit)
-assert matrix["image_count"] == len(matrix["images"]) == 25
+assert matrix["image_count"] == len(matrix["images"]) == 35
 assert matrix["qualification_status"] == "unqualified"
 assert all(item["qualification_status"] == "unqualified" for item in matrix["images"])
 matches = [item for item in matrix["images"] if item["benchmark_commit"] == commit]
@@ -217,6 +217,6 @@ RUN chmod 0555 /usr/local/bin/landrun /opt/lean-eval/bin/* \
     && python3 -c 'import json, pathlib; overrides = json.loads(pathlib.Path("/opt/lean-eval/benchmark/.lake/package-overrides.json").read_text()); packages = overrides["packages"]; assert packages and all(pathlib.Path(package["dir"]).is_dir() for package in packages)' \
     && test "$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" = 3.11 \
     && python3 -c 'import sys; sys.path.insert(0, "/opt/lean-eval"); from historical_public_runner import execute_fixed_runner; assert callable(execute_fixed_runner)' \
-    && python3 -c 'import hashlib, pathlib; assert hashlib.sha256(pathlib.Path("/opt/lean-eval/historical-public-replay-profile-matrix-v1.json").read_bytes()).hexdigest() == "aad9132f729ef9f429532900d1e50b665330721fa9360699328c47bdfb2aedfc"'
+    && python3 -c 'import hashlib, pathlib; assert hashlib.sha256(pathlib.Path("/opt/lean-eval/historical-public-replay-profile-matrix-v1.json").read_bytes()).hexdigest() == "a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c"'
 
 EXPOSE 3000

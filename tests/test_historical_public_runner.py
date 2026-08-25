@@ -38,7 +38,7 @@ from historical_public_runner import (
 PLAN_PATH = (
     ROOT
     / "evidence/public-replay/plans"
-    / "2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json"
+    / "d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json"
 )
 MATRIX_PATH = ROOT / "configuration/historical-public-replay-profile-matrix-v1.json"
 CONTRACT_PATH = ROOT / "configuration/historical-public-runner-v1.json"

@@ -1,6 +1,6 @@
 # Historical public replay execution profiles
 
-The protected historical replay plan contains 25 exact benchmark commits over
+The final adjudicated historical replay plan contains 35 exact benchmark commits over
 five Lean toolchains. An authoritative image bakes a benchmark commit, its
 generated workspaces, dependency cache, exact Lean toolchain, checker tools,
 and a profile lock. A toolchain-only image would therefore be false authority:
@@ -22,10 +22,15 @@ binding it verifies:
 The output retains hashes, profile locks, counts, manifest layout, and planned
 problem IDs. It contains no submission source, issue body, result source,
 credential, archive locator, Cloudflare account identifier, or image-registry
-credential. The reviewed corpus requires 25 images, not five: 12 v4.30.0-rc2,
-3 v4.30.0, 3 v4.32.0-rc1, 5 v4.32.2, and 2 v4.33.0. Six images need the legacy
-monolithic `manifests/problems.toml` reader; the other 19 use per-problem
+credential. The reviewed corpus requires 35 images, not five: 21 v4.30.0-rc2,
+3 v4.30.0, 3 v4.32.0-rc1, 5 v4.32.2, and 3 v4.33.0. Fifteen images need the legacy
+monolithic `manifests/problems.toml` reader; the other 20 use per-problem
 manifests.
+
+The committed matrix has SHA-256
+`a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c`.
+It binds final plan `d6e81393…`, toolchain registry `4f2f3737…`, and component
+lock `68b5a58c…`; all 35 entries remain explicitly `unqualified`.
 
 ## Qualification boundary
 
@@ -58,8 +63,8 @@ request or endpoint. It also does not make any matrix entry qualified: the
 immutable image publication and staging runtime evidence are still absent.
 
 Only then may the runtime evidence be frozen into an execution profile. The
-profile digest includes the unique image manifest digest, so the 25 benchmark
-images produce 25 independently reviewed execution profiles even where their
+profile digest includes the unique image manifest digest, so the 35 benchmark
+images produce 35 independently reviewed execution profiles even where their
 Lean and checker component versions coincide. Each qualification object must
 be committed at
 `evidence/public-replay/profiles/<execution-profile-digest>.json`; appending
@@ -101,8 +106,8 @@ From a full public `leanprover/lean-eval` Git checkout:
 
 ```console
 python scripts/prepare_historical_replay_profile_matrix.py \
-  --plan evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json \
-  --toolchain-registry evidence/public-replay/toolchains/5144fc19bbbbcf0ef16a1d7c88b163254f96a250cb4a5846fbbb0d465ce16790.json \
+  --plan evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json \
+  --toolchain-registry evidence/public-replay/toolchains/4f2f3737d79e6abd6c169ebdde3f2218157d8f6c482a85ad2026821a4b8e81a0.json \
   --component-lock configuration/historical-public-replay-components-v1.json \
   --benchmark-repository /path/to/lean-eval \
   --output /tmp/historical-public-replay-profile-matrix.json

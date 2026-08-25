@@ -29,10 +29,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PLAN: evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json
-  PLAN_SHA256: 2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942
+  PLAN: evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json
+  PLAN_SHA256: d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e
   PROFILE_MATRIX: configuration/historical-public-replay-profile-matrix-v1.json
-  PROFILE_MATRIX_SHA256: aad9132f729ef9f429532900d1e50b665330721fa9360699328c47bdfb2aedfc
+  PROFILE_MATRIX_SHA256: a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c
   RUNNER_CONTRACT: configuration/historical-public-runner-v1.json
   RUNNER_CONTRACT_SHA256: 6d341a642dfd6aa9092228269da6761000bf0818128ce3f35cb259bd8fb2303f
 

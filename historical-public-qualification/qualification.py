@@ -23,8 +23,8 @@ COMMIT = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"[0-9a-f]{64}")
 OCI_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 MAX_JSON_BYTES = 1024 * 1024
-MATRIX_SHA256 = "aad9132f729ef9f429532900d1e50b665330721fa9360699328c47bdfb2aedfc"
-CONTRACT_SHA256 = "afac0306192c63c7a6d1e2fc83f179180b695e009f869d14cc6a1eb5028afb85"
+MATRIX_SHA256 = "a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c"
+CONTRACT_SHA256 = "937a1ce9800350de47fb2ce0c3d276b6cddc38cd39820727c8b8687bea89dad0"
 UNREVIEWED_DIGEST = "0" * 64
 EXECUTOR_FAILURE_REASONS = {
     "input_transfer_failed",
@@ -136,12 +136,12 @@ def selected(matrix_path: pathlib.Path, benchmark_commit: str) -> tuple[dict[str
     matrix = load(matrix_path, MATRIX_SHA256)
     if (
         not isinstance(matrix, dict)
-        or matrix.get("image_count") != 25
+        or matrix.get("image_count") != 35
         or matrix.get("qualification_status") != "unqualified"
         or not isinstance(matrix.get("images"), list)
-        or len(matrix["images"]) != 25
+        or len(matrix["images"]) != 35
     ):
-        raise QualificationError("profile matrix is not the unqualified 25-image matrix")
+        raise QualificationError("profile matrix is not the unqualified 35-image matrix")
     if any(image.get("qualification_status") != "unqualified" for image in matrix["images"]):
         raise QualificationError("a profile matrix entry is not unqualified")
     matches = [image for image in matrix["images"] if image.get("benchmark_commit") == benchmark_commit]
@@ -157,7 +157,7 @@ def qualification_contract(path: pathlib.Path) -> dict[str, Any]:
         "schema_version": 1,
         "kind": "historical_public_image_qualification_contract",
         "qualification_status": "unqualified",
-        "image_count": 25,
+        "image_count": 35,
         "instance_type": "standard-4",
         "vcpu": 4,
         "memory_limit_bytes": 12_884_901_888,
