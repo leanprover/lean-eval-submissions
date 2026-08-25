@@ -325,9 +325,13 @@ the already implemented owner status, metadata, and publication routes.
       run `32722572097` reproduced it twice from immutable tag `d0807084…`;
       the exact plan (`2b00c965…`) and toolchain registry (`5144fc19…`) are
       permanently checked in under their digest-derived evidence paths. That
-      conservative plan covers the first pass's 69 resolved requests; generate
-      a new plan from aggregate `ba816b52…` before treating all 128 resolved
-      request groups as planned.
+      conservative plan covers the first pass's 69 resolved requests. Protected
+      run `32799633419` at exact immutable source `2e7239e7…` subsequently
+      reproduced the final adjudicated 128-request / 194-result plan twice. Its
+      exact plan (`d6e81393…`) and 35-commit toolchain registry (`4f2f3737…`)
+      are retained under digest-derived evidence paths. All resolved public
+      request groups are now deterministically planned, but none is qualified,
+      enqueued, or executed.
       Activation
       remains fail-closed on `legacy_public_result_replay_authority_v1` because
       current State replay materialization admits only modern
