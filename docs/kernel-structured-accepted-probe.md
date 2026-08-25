@@ -26,7 +26,7 @@ profile-matrix and prior smoke-fixture bytes.
 ## Current hard block
 
 Mathgraph PR #51 is still unmerged. The probe therefore pins its exact
-provisional head `400ab9c1…`, source tree `05ebd1a6…`, schema and vector
+provisional head `04e06b93…`, source tree `0794641b…`, schema and vector
 digests, and records `blocked_on_unmerged_upstream`. The dedicated derived
 Dockerfile may be reviewed and its builder may be tested locally, but the
 manual workflow calls `require-runnable` before fetching target source or

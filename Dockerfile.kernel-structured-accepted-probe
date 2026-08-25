@@ -13,10 +13,10 @@ RUN apt-get update \
     && test "$(rustc --version)" = 'rustc 1.95.0 (59807616e 2026-04-14)' \
     && git init /build/mathgraph \
     && git -C /build/mathgraph remote add origin https://github.com/kim-em/mathgraph-lean-kernel.git \
-    && git -C /build/mathgraph fetch --depth 1 origin 400ab9c1cc4fba03f7a3f95f4604b5cef4e23a44 \
+    && git -C /build/mathgraph fetch --depth 1 origin 04e06b93603232b72b18a8f9793a1f5fa125061d \
     && git -C /build/mathgraph checkout --detach FETCH_HEAD \
-    && test "$(git -C /build/mathgraph rev-parse HEAD)" = 400ab9c1cc4fba03f7a3f95f4604b5cef4e23a44 \
-    && test "$(git -C /build/mathgraph rev-parse 'HEAD^{tree}')" = 05ebd1a6a4bba6d38729e51f38680186288f4ac3 \
+    && test "$(git -C /build/mathgraph rev-parse HEAD)" = 04e06b93603232b72b18a8f9793a1f5fa125061d \
+    && test "$(git -C /build/mathgraph rev-parse 'HEAD^{tree}')" = 0794641beb63834a28bea0d569459f93eb753fd7 \
     && test "$(sha256sum /build/mathgraph/protocol/sokonanoda-result-v1.schema.json | cut -d' ' -f1)" = b96b99526a143ae39a9e8d058f80337f34d3e7c153e9e1878d2c29d9a56767d9 \
     && test "$(sha256sum /build/mathgraph/protocol/sokonanoda-result-v1-vectors.json | cut -d' ' -f1)" = 0712d67d88c65f10742ede70d0697360a0fc22b5ff79197f19050ae5e2812f4d \
     && cargo build --locked --release --manifest-path /build/mathgraph/Cargo.toml \

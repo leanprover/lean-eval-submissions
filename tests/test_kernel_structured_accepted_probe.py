@@ -288,8 +288,8 @@ class StructuredAcceptedWorkflowTests(unittest.TestCase):
         dockerfile = (ROOT / "Dockerfile.kernel-structured-accepted-probe").read_text()
         historical = (ROOT / "Dockerfile.historical-public-replay").read_text()
         for identity in (
-            "400ab9c1cc4fba03f7a3f95f4604b5cef4e23a44",
-            "05ebd1a6a4bba6d38729e51f38680186288f4ac3",
+            "04e06b93603232b72b18a8f9793a1f5fa125061d",
+            "0794641beb63834a28bea0d569459f93eb753fd7",
             "b96b99526a143ae39a9e8d058f80337f34d3e7c153e9e1878d2c29d9a56767d9",
             "0712d67d88c65f10742ede70d0697360a0fc22b5ff79197f19050ae5e2812f4d",
         ):
