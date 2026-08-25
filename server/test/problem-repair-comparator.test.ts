@@ -50,6 +50,10 @@ async function fixture(
     correctedRevision?: number;
     benchmarkStatus?: string;
     benchmarkCompareHead?: string;
+    benchmarkBranchHead?: string;
+    benchmarkAheadBy?: number;
+    benchmarkTotalCommits?: number;
+    benchmarkCommits?: readonly string[];
     benchmarkProtected?: boolean;
   }> = {},
 ): Promise<{
@@ -88,7 +92,10 @@ async function fixture(
         status: "ahead",
         base_commit: { sha: RESULTS_COMMIT },
         merge_base_commit: { sha: RESULTS_COMMIT },
-        head_commit: { sha: PROTECTED_HEAD },
+        ahead_by: 1,
+        behind_by: 0,
+        total_commits: 1,
+        commits: [{ sha: PROTECTED_HEAD }],
       }));
     }
     if (url.includes(`/contents/results/${OWNER}.json?ref=${RESULTS_COMMIT}`)) {
@@ -100,6 +107,17 @@ async function fixture(
     }
     throw new Error(`unexpected result verification request: ${url}`);
   });
+  const benchmarkStatus = options.benchmarkStatus ?? "ahead";
+  const benchmarkBranchHead = options.benchmarkBranchHead ?? PROTECTED_HEAD;
+  const benchmarkCommits = options.benchmarkCommits ?? (
+    benchmarkStatus === "identical"
+      ? []
+      : [options.benchmarkCompareHead ?? PROTECTED_HEAD]
+  );
+  const benchmarkAheadBy = options.benchmarkAheadBy ?? (
+    benchmarkStatus === "identical" ? 0 : benchmarkCommits.length
+  );
+  const benchmarkTotalCommits = options.benchmarkTotalCommits ?? benchmarkAheadBy;
   const benchmarkFetch = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = input instanceof Request ? input.url : input.toString();
     expect(init?.redirect).toBe("manual");
@@ -108,15 +126,18 @@ async function fixture(
       return Promise.resolve(Response.json({
         name: "main",
         protected: options.benchmarkProtected ?? true,
-        commit: { sha: PROTECTED_HEAD },
+        commit: { sha: benchmarkBranchHead },
       }));
     }
     if (url.endsWith(`/compare/${BENCHMARK_COMMIT}...main`)) {
       return Promise.resolve(Response.json({
-        status: options.benchmarkStatus ?? "ahead",
+        status: benchmarkStatus,
         base_commit: { sha: BENCHMARK_COMMIT },
         merge_base_commit: { sha: BENCHMARK_COMMIT },
-        head_commit: { sha: options.benchmarkCompareHead ?? PROTECTED_HEAD },
+        ahead_by: benchmarkAheadBy,
+        behind_by: 0,
+        total_commits: benchmarkTotalCommits,
+        commits: benchmarkCommits.map((sha) => ({ sha })),
       }));
     }
     const path = url.includes("two_plus_two")
@@ -181,6 +202,64 @@ describe("problem repair comparator verification", () => {
     expect(evidence.binding_sha256).toMatch(/^[0-9a-f]{64}$/u);
     expect(resultFetch).toHaveBeenCalledTimes(4);
     expect(benchmarkFetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("accepts the live identical benchmark shape by inferring the base as its terminal head", async () => {
+    const { provider, identifier } = await fixture(
+      "formalization-evaluation",
+      "formalization-evaluation",
+      {
+        benchmarkStatus: "identical",
+        benchmarkBranchHead: BENCHMARK_COMMIT,
+      },
+    );
+    await expect(provider.verifyProblemRepairComparator({
+      resultsCommit: RESULTS_COMMIT,
+      resultId: identifier,
+      ownerLogin: OWNER,
+      declaredModel: "Example Model",
+      baseProblemId: "two_plus_two",
+      baseStatementRevision: 1,
+      correctedProblemId: "three_plus_three",
+      correctedStatementRevision: 2,
+    })).resolves.toMatchObject({ evidence_result_id: identifier });
+  });
+
+  it("rejects empty, count-incoherent, truncated, or branch-mismatched benchmark comparisons", async () => {
+    for (const options of [
+      { benchmarkCommits: [] },
+      {
+        benchmarkAheadBy: 2,
+        benchmarkTotalCommits: 1,
+        benchmarkCommits: [PROTECTED_HEAD],
+      },
+      {
+        benchmarkAheadBy: 251,
+        benchmarkTotalCommits: 251,
+        benchmarkCommits: [PROTECTED_HEAD],
+      },
+      { benchmarkCommits: ["c".repeat(40)] },
+      {
+        benchmarkStatus: "identical",
+        benchmarkBranchHead: PROTECTED_HEAD,
+      },
+    ]) {
+      const { provider, identifier } = await fixture(
+        "formalization-evaluation",
+        "formalization-evaluation",
+        options,
+      );
+      await expect(provider.verifyProblemRepairComparator({
+        resultsCommit: RESULTS_COMMIT,
+        resultId: identifier,
+        ownerLogin: OWNER,
+        declaredModel: "Example Model",
+        baseProblemId: "two_plus_two",
+        baseStatementRevision: 1,
+        correctedProblemId: "three_plus_three",
+        correctedStatementRevision: 2,
+      })).rejects.toBeInstanceOf(Error);
+    }
   });
 
   it("rejects a cross-group correction before producing evidence", async () => {

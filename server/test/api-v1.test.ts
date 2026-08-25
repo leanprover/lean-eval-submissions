@@ -118,7 +118,10 @@ function reachableLegacyResultFetch(contents: typeof fetch): typeof fetch {
         status: "ahead",
         base_commit: { sha: expected },
         merge_base_commit: { sha: expected },
-        head_commit: { sha: "f".repeat(40) },
+        ahead_by: 1,
+        behind_by: 0,
+        total_commits: 1,
+        commits: [{ sha: "f".repeat(40) }],
       }));
     }
     return contents(input, init);
