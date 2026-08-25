@@ -22,6 +22,8 @@ const ACTIVE_LEASE_ALARM_MS = 5 * 60 * 1000;
 const SHA = /^[0-9a-f]{40}$/;
 const RUN_ID = /^[1-9][0-9]{0,19}$/;
 const JOURNAL_ID = /^mqj_[0-9a-f]{64}$/;
+const SHA256 = /^[0-9a-f]{64}$/;
+const UUID_V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 export const QUALIFICATION_OPERATIONS = [
   "oauth_session_identity",
@@ -58,6 +60,12 @@ export type QualificationIntent = Readonly<{
   maintainer: Identity;
 }>;
 
+export type QualificationFixtureEvidence = Readonly<{
+  evidence_class: "reviewed_live_fixture" | "source_test_only";
+  fixture_id: string;
+  manifest_digest: string;
+}>;
+
 export type QualificationAcquisition = Readonly<{
   schema_version: 2;
   run_id: string;
@@ -66,6 +74,7 @@ export type QualificationAcquisition = Readonly<{
   initial_state_commit: string;
   initial_state_tree: string;
   intent: QualificationIntent;
+  fixture_evidence: QualificationFixtureEvidence;
 }>;
 
 export type QualificationStepReservation = Readonly<{
@@ -171,6 +180,7 @@ export type QualificationRecoveryPlan = Readonly<{
   current_state_commit: string;
   current_state_tree: string;
   intent: QualificationIntent;
+  fixture_evidence: QualificationFixtureEvidence;
   pending_step: PendingStep | null;
   completed_plans: readonly QualificationStepPlan[];
   recovery_reconciliations: readonly RecoveryReconciliation[];
@@ -189,6 +199,9 @@ export type QualificationJournalStatus = Readonly<{
   initial_state_tree: string;
   current_state_commit: string;
   current_state_tree: string;
+  fixture_evidence_class: "reviewed_live_fixture" | "source_test_only";
+  fixture_id: string;
+  fixture_manifest_digest: string;
   lease_status: "active" | "restored";
   lease_released: boolean;
   owner_api_enabled: false;
@@ -292,10 +305,19 @@ function canonicalAcquisition(value: unknown): QualificationAcquisition {
   const input = record(value, "qualification acquisition");
   exactFields(input, [
     "schema_version", "run_id", "run_attempt", "deployed_commit",
-    "initial_state_commit", "initial_state_tree", "intent",
+    "initial_state_commit", "initial_state_tree", "intent", "fixture_evidence",
   ], "qualification acquisition");
   const rawIntent = record(input.intent, "qualification intent");
   exactFields(rawIntent, ["owner", "cross_owner", "maintainer"], "qualification intent");
+  const rawFixtureEvidence = record(
+    input.fixture_evidence,
+    "qualification fixture evidence",
+  );
+  exactFields(
+    rawFixtureEvidence,
+    ["evidence_class", "fixture_id", "manifest_digest"],
+    "qualification fixture evidence",
+  );
   if (
     input.schema_version !== SCHEMA_VERSION ||
     typeof input.run_id !== "string" ||
@@ -306,7 +328,15 @@ function canonicalAcquisition(value: unknown): QualificationAcquisition {
     typeof input.initial_state_commit !== "string" ||
     !SHA.test(input.initial_state_commit) ||
     typeof input.initial_state_tree !== "string" ||
-    !SHA.test(input.initial_state_tree)
+    !SHA.test(input.initial_state_tree) ||
+    (
+      rawFixtureEvidence.evidence_class !== "reviewed_live_fixture" &&
+      rawFixtureEvidence.evidence_class !== "source_test_only"
+    ) ||
+    typeof rawFixtureEvidence.fixture_id !== "string" ||
+    !UUID_V7.test(rawFixtureEvidence.fixture_id) ||
+    typeof rawFixtureEvidence.manifest_digest !== "string" ||
+    !SHA256.test(rawFixtureEvidence.manifest_digest)
   ) {
     throw new TypeError("qualification acquisition is invalid");
   }
@@ -330,6 +360,11 @@ function canonicalAcquisition(value: unknown): QualificationAcquisition {
     initial_state_commit: input.initial_state_commit,
     initial_state_tree: input.initial_state_tree,
     intent,
+    fixture_evidence: {
+      evidence_class: rawFixtureEvidence.evidence_class,
+      fixture_id: rawFixtureEvidence.fixture_id,
+      manifest_digest: rawFixtureEvidence.manifest_digest,
+    },
   };
 }
 
@@ -1517,7 +1552,7 @@ async function journalId(acquisition: QualificationAcquisition): Promise<string>
   const digest = await crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(
-      `lean-eval-model-identity-qualification-journal-v2\0${acquisition.run_id}\0${String(acquisition.run_attempt)}\0${acquisition.deployed_commit}`,
+      `lean-eval-model-identity-qualification-journal-v3\0${canonicalQualificationValue(acquisition)}`,
     ),
   );
   return `mqj_${[...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("")}`;
@@ -1543,6 +1578,9 @@ function status(journal: StoredJournal): QualificationJournalStatus {
     initial_state_tree: journal.acquisition.initial_state_tree,
     current_state_commit: journal.current_state_commit,
     current_state_tree: journal.current_state_tree,
+    fixture_evidence_class: journal.acquisition.fixture_evidence.evidence_class,
+    fixture_id: journal.acquisition.fixture_evidence.fixture_id,
+    fixture_manifest_digest: journal.acquisition.fixture_evidence.manifest_digest,
     lease_status: journal.lease_status,
     lease_released: journal.lease_status === "restored",
     owner_api_enabled: false,
@@ -1707,6 +1745,7 @@ export class ModelIdentityQualificationJournal extends DurableObject {
       current_state_commit: journal.current_state_commit,
       current_state_tree: journal.current_state_tree,
       intent: journal.acquisition.intent,
+      fixture_evidence: journal.acquisition.fixture_evidence,
       pending_step: journal.pending_step,
       completed_plans: journal.completed_plans,
       recovery_reconciliations: journal.recovery_reconciliations,

@@ -42,7 +42,14 @@ const CONFIG: QualificationStateConfig = {
 };
 
 const QUALIFICATION_TOKEN = "test-only-model-identity-qualification-token-value";
-const SOURCE_TEST_ONLY_FIXTURE_VERIFICATION = () => Promise.resolve();
+const SOURCE_TEST_ONLY_FIXTURE_VERIFICATION = {
+  evidence: {
+    evidence_class: "source_test_only" as const,
+    fixture_id: "018f47a0-2c39-7b7d-83b0-000000000001",
+    manifest_digest: "f".repeat(64),
+  },
+  verify: () => Promise.resolve(),
+};
 
 function qualificationEnv(): ModelIdentityQualificationEnv {
   const namespace = env.MODEL_IDENTITY_QUALIFICATION_JOURNAL;
@@ -508,6 +515,10 @@ describe("closed model identity qualification HTTP boundary", () => {
       journal_revision: 1,
       current_state_commit: INITIAL_HEAD,
       current_state_tree: MUTATED_TREE,
+      fixture_evidence_class: "source_test_only",
+      fixture_id: SOURCE_TEST_ONLY_FIXTURE_VERIFICATION.evidence.fixture_id,
+      fixture_manifest_digest:
+        SOURCE_TEST_ONLY_FIXTURE_VERIFICATION.evidence.manifest_digest,
     });
 
     const statusResponse = await handleModelIdentityQualificationRequest(

@@ -75,6 +75,9 @@ class FakeHarness:
             "deployed_commit": COMMIT,
             "environment": "staging",
             "foreign_commit_observed": False,
+            "fixture_evidence_class": "reviewed_live_fixture",
+            "fixture_id": "018f47a0-2c39-7b7d-83b0-000000000001",
+            "fixture_manifest_digest": "9" * 64,
             "initial_state_commit": INITIAL,
             "initial_state_tree": INITIAL_TREE,
             "journal_id": JOURNAL_ID,
@@ -342,6 +345,20 @@ class ModelIdentityStagingQualificationTests(unittest.TestCase):
                 expected_revision=1,
                 expected_head=INITIAL,
                 expected_tree=INITIAL_TREE,
+            )
+
+    def test_source_test_fixture_cannot_be_accepted_as_live_evidence(self):
+        body = FakeHarness().journal()
+        body["fixture_evidence_class"] = "source_test_only"
+        with self.assertRaisesRegex(
+            QUALIFICATION.QualificationFailure, "journal boundary was not exact"
+        ):
+            QUALIFICATION.validate_journal(
+                200,
+                body,
+                expected_commit=COMMIT,
+                run_id=RUN_ID,
+                run_attempt=RUN_ATTEMPT,
             )
 
 

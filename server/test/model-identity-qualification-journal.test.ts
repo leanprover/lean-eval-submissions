@@ -20,6 +20,11 @@ function acquisition(runId: string): QualificationAcquisition {
     deployed_commit: "e".repeat(40),
     initial_state_commit: COMMIT,
     initial_state_tree: TREE,
+    fixture_evidence: {
+      evidence_class: "source_test_only",
+      fixture_id: "018f47a0-2c39-7b7d-83b0-000000000001",
+      manifest_digest: "f".repeat(64),
+    },
     intent: {
       owner: { github_id: 1, login: "owner" },
       cross_owner: { github_id: 2, login: "cross-owner" },
@@ -75,6 +80,9 @@ describe("model identity qualification durable journal", () => {
       journal_revision: 1,
       current_state_commit: COMMIT,
       current_state_tree: TREE,
+      fixture_evidence_class: "source_test_only",
+      fixture_id: "018f47a0-2c39-7b7d-83b0-000000000001",
+      fixture_manifest_digest: "f".repeat(64),
       lease_status: "active",
       lease_released: false,
       owner_api_enabled: false,
@@ -88,6 +96,11 @@ describe("model identity qualification durable journal", () => {
       current_state_commit: string;
       current_state_tree: string;
       intent: { owner: { github_id: number; login: string } };
+      fixture_evidence: {
+        evidence_class: string;
+        fixture_id: string;
+        manifest_digest: string;
+      };
       pending_step: null;
     };
     expect(recovery.recovery_nonce).toMatch(/^[0-9a-f]{64}$/);
@@ -96,6 +109,11 @@ describe("model identity qualification durable journal", () => {
       current_state_commit: COMMIT,
       current_state_tree: TREE,
       intent: { owner: { github_id: 1, login: "owner" } },
+      fixture_evidence: {
+        evidence_class: "source_test_only",
+        fixture_id: "018f47a0-2c39-7b7d-83b0-000000000001",
+        manifest_digest: "f".repeat(64),
+      },
       pending_step: null,
     });
 
