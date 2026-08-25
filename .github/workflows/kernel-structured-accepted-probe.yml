@@ -52,7 +52,7 @@ jobs:
     env:
       EXPECTED_COMMIT: ${{ inputs.expected_commit }}
       FIXTURE: tests/fixtures/kernel-structured-accepted-probe-v1.json
-      PLAN: evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json
+      PLAN: evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json
       MATRIX: configuration/historical-public-replay-profile-matrix-v1.json
       SMOKE: tests/fixtures/public-replay-smoke-v1.json
     steps:
@@ -108,15 +108,20 @@ jobs:
           git init "$probe_repository"
           git -C "$probe_repository" remote add origin \
             https://github.com/metalogiclabs/mathgraph-lean-kernel.git
-          main_commit=$(timeout 30s git ls-remote \
-            https://github.com/metalogiclabs/mathgraph-lean-kernel.git refs/heads/main | cut -f1)
-          git -C "$probe_repository" fetch --depth 256 origin "$main_commit"
+          base_commit=$(timeout 30s git ls-remote \
+            https://github.com/metalogiclabs/mathgraph-lean-kernel.git \
+            refs/heads/v2-arena-candidate | cut -f1)
+          [[ "$base_commit" =~ ^[0-9a-f]{40}$ ]]
+          git -C "$probe_repository" fetch --depth 256 origin "$base_commit"
           git -C "$probe_repository" fetch origin "$candidate_commit"
           test "$(git -C "$probe_repository" rev-parse FETCH_HEAD)" = "$candidate_commit"
           test "$(git -C "$probe_repository" rev-parse 'FETCH_HEAD^{tree}')" = "$candidate_tree"
-          git -C "$probe_repository" merge-base --is-ancestor "$candidate_commit" "$main_commit"
+          git -C "$probe_repository" merge-base --is-ancestor "$candidate_commit" "$base_commit"
           pr=$(gh api repos/metalogiclabs/mathgraph-lean-kernel/pulls/51)
           test "$(jq -r .merged_at <<< "$pr")" != null
+          test "$(jq -r .base.repo.full_name <<< "$pr")" = \
+            metalogiclabs/mathgraph-lean-kernel
+          test "$(jq -r .base.ref <<< "$pr")" = v2-arena-candidate
           test "$(jq -r .head.sha <<< "$pr")" = "$pull_request_head_commit"
           test "$(jq -r .merge_commit_sha <<< "$pr")" = "$candidate_commit"
           grep -F \
@@ -139,7 +144,7 @@ jobs:
     env:
       EXPECTED_COMMIT: ${{ inputs.expected_commit }}
       FIXTURE: tests/fixtures/kernel-structured-accepted-probe-v1.json
-      PLAN: evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json
+      PLAN: evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json
       MATRIX: configuration/historical-public-replay-profile-matrix-v1.json
       CONTRACT: configuration/historical-public-runner-v1.json
       SOURCE_REPOSITORY: KitaKen1/lean-eval-two-plus-two
@@ -192,8 +197,8 @@ jobs:
           mkdir -m 0700 "$input"
           python scripts/historical_public_runner.py prepare \
             --plan "$PLAN" --profile-matrix "$MATRIX" --contract "$CONTRACT" \
-            --expected-plan-sha256 2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942 \
-            --expected-profile-matrix-sha256 aad9132f729ef9f429532900d1e50b665330721fa9360699328c47bdfb2aedfc \
+            --expected-plan-sha256 d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e \
+            --expected-profile-matrix-sha256 a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c \
             --expected-contract-sha256 6d341a642dfd6aa9092228269da6761000bf0818128ce3f35cb259bd8fb2303f \
             --request-id "$REQUEST_ID" --result-id "$RESULT_ID" \
             --source-repository public-source --benchmark-repository benchmark \

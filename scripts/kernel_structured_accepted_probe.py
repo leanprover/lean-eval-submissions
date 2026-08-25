@@ -183,8 +183,8 @@ def validate_fixture(value: Any) -> dict[str, Any]:
         "target",
     )
     expected_target = {
-        "historical_plan_sha256": "2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942",
-        "profile_matrix_sha256": "aad9132f729ef9f429532900d1e50b665330721fa9360699328c47bdfb2aedfc",
+        "historical_plan_sha256": "d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e",
+        "profile_matrix_sha256": "a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c",
         "historical_smoke_fixture_sha256": "9568054991db378206e67e92c8094b177f8ef138096357eff7c03f8107c5d72c",
         "request_id": "prr_632ee5cddf6bb19fe0ffd786c0c0985825bc9a01e155a1c7d237946cc405e422",
         "result_id": "r2_c4e178fbb6cdafcb8f2146245adf02a709a60836f022e8a3d75d72c84b472b60",

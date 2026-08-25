@@ -44,8 +44,9 @@ the following together:
 4. `qualification_status` to `ready_for_staging_probe`.
 
 The workflow independently fetches the exact candidate from upstream, proves
-it is an ancestor of upstream main, checks PR #51's merged record and exact
-head, and requires an immutable protected submissions dispatch tag.
+it is an ancestor of the PR's exact upstream `v2-arena-candidate` base branch,
+checks PR #51's upstream repository, base, merged record and exact head, and
+requires an immutable protected submissions dispatch tag.
 
 ## Attempt and execution boundary
 
@@ -99,7 +100,7 @@ Local contract checks are safe while the upstream gate remains blocked:
 ```console
 python scripts/kernel_structured_accepted_probe.py validate-fixture \
   --fixture tests/fixtures/kernel-structured-accepted-probe-v1.json \
-  --plan evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json \
+  --plan evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json \
   --matrix configuration/historical-public-replay-profile-matrix-v1.json \
   --smoke tests/fixtures/public-replay-smoke-v1.json
 python scripts/kernel_structured_accepted_probe.py require-runnable \

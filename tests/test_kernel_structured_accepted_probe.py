@@ -27,7 +27,7 @@ from kernel_structured_accepted_probe import (
 )
 
 FIXTURE = ROOT / "tests/fixtures/kernel-structured-accepted-probe-v1.json"
-PLAN = ROOT / "evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json"
+PLAN = ROOT / "evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json"
 MATRIX = ROOT / "configuration/historical-public-replay-profile-matrix-v1.json"
 SMOKE = ROOT / "tests/fixtures/public-replay-smoke-v1.json"
 
@@ -263,6 +263,12 @@ class StructuredAcceptedWorkflowTests(unittest.TestCase):
         self.assertLess(gate, source_checkout)
         self.assertLess(gate, image_build)
         self.assertIn("environment: replay-staging", workflow)
+        self.assertIn("refs/heads/v2-arena-candidate", workflow)
+        self.assertIn(".base.repo.full_name", workflow)
+        self.assertIn(".base.ref", workflow)
+        self.assertNotIn(
+            "metalogiclabs/mathgraph-lean-kernel.git refs/heads/main", workflow
+        )
         self.assertIn("--network none", workflow)
         self.assertIn("--cap-drop ALL", workflow)
         self.assertIn("--security-opt no-new-privileges", workflow)
