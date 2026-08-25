@@ -794,19 +794,28 @@ and verify all of the following:
    before building the unchanged runner handoff. Retain the three-attempt
    terminal blocker unless a replacement retry policy is reviewed with State.
 5. Verify the exact-head State lane recovers a stale running task or stops on a
-   current one; appends exactly one `replay.started`; executes without State
-   authority; and appends exactly one terminal event. Cancellation after start
-   is excluded from the orchestration-failure append by `!cancelled()` and must
-   converge only through the seven-hour `runner_lost` recovery. Preserve
-   `runner_start_failed` until the executor returns and the workflow validates
-   an exact `202` running receipt; set `runner_lost` only before status polling.
+   current one; durably reserves the exact task/attempt cleanup identity before
+   appending exactly one `replay.started`; executes without State authority; and
+   appends exactly one terminal event. Cancellation after start is excluded
+   from the orchestration-failure append by `!cancelled()` and must converge
+   only through the seven-hour, destruction-confirmed `runner_lost` recovery.
+   Preserve `runner_start_failed` while preparing the request and first token.
+   Immediately before the first executor POST can escape, require the workflow
+   to record `runner_lost` and its attempted-start marker. Any lost, rejected,
+   malformed, or otherwise ambiguous start response must consume the exact
+   durable reservation and validate its attempt-bound `destruction: confirmed`
+   proof before a `replay.failed` State write is permitted.
 6. Provision State read/write keys and Cloudflare deployment credentials only
    in protected `replay-production`. Confirm the executor step has neither
    credential and uses only the dedicated historical GitHub OIDC audience. Its
-   protected-main exception must be limited to the historical start/status
-   routes and bind the exact repository, environment, workflow ref, token and
-   workflow SHA, and deployed commit; ordinary replay and staging remain
-   immutable-dispatch-tag only. Keep
+   protected-main exception must be limited to the four historical start,
+   status, cleanup-reservation, and cleanup routes. All four must bind the exact
+   repository, environment, workflow ref, token SHA, and workflow SHA. Start,
+   status, and cleanup reservation must also bind the exact deployed commit;
+   cleanup alone may accept a later protected-main revision so it can destroy
+   only the sandbox bound to an existing exact task/attempt reservation after
+   `main` advances. Ordinary replay and staging remain immutable-dispatch-tag
+   only. Keep
    `HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED` absent until a full canary and
    the resulting State/deployment evidence are reviewed.
 

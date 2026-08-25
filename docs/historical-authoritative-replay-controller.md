@@ -62,8 +62,9 @@ enabled with the separately reviewed environment credentials, one invocation:
    or plans the next exact eligible task;
 3. renders and deploys only the task's qualified immutable image, then proves
    exact health while ordinary replay and staging acceptance remain disabled;
-4. appends `replay.started` by exact-head compare-and-swap before fetching
-   public source or invoking the executor;
+4. reserves the exact replay-task/attempt cleanup identity in durable storage,
+   without State-write or Cloudflare-deployment authority, before appending
+   `replay.started` by exact-head compare-and-swap;
 5. fetches the exact public repository or Gist commit and benchmark commit,
    builds the deterministic handoff, and invokes the executor without a State
    writer or Cloudflare deployment credential in scope; and
@@ -71,9 +72,14 @@ enabled with the separately reviewed environment credentials, one invocation:
    failure. The orchestration-failure append is explicitly guarded by
    `!cancelled()`: cancellation after start leaves the running attempt untouched
    and converges only through the seven-hour stale recovery on the next
-   serialized invocation. `runner_start_failed` remains the failure phase until
-   an exact `202` running receipt is validated; only then does polling use
-   `runner_lost`.
+   serialized invocation. `runner_start_failed` remains the failure phase while
+   preparing the executor request and minting its first token. Immediately
+   before the first executor POST can escape, the workflow records
+   `runner_lost` and an attempted-start marker. A lost, rejected, malformed, or
+   otherwise ambiguous start response therefore cannot append `replay.failed`
+   until the source-free cleanup route consumes the exact durable reservation
+   and returns an attempt-bound `destruction: confirmed` proof. Polling and
+   cancellation recovery use the same cleanup identity and idempotent proof.
 
 Cloudflare deployment, State reads, State writes, public source fetching, and
 executor OIDC are kept in separate steps. The lane has no AWS permission and
@@ -81,9 +87,14 @@ never reads an encrypted private archive. It uploads no State-derived plan,
 source, request, or verdict artifact.
 
 The dedicated historical-production OIDC audience accepts protected `main`
-only on the historical start/status routes and only when the repository,
-environment, workflow ref, token SHA, workflow SHA, and deployed commit all
-match exactly. Ordinary replay and staging remain immutable-dispatch-tag only.
+only on the four historical routes: start, status, cleanup reservation, and
+cleanup. Every route binds the exact repository, production environment,
+workflow ref, token SHA, and workflow SHA. Start, status, and cleanup
+reservation additionally require the exact deployed commit. Cleanup is the
+sole exception: a later protected-main revision may invoke that destructive,
+source-free route so a cancelled runner can consume its existing exact
+task/attempt reservation after `main` advances. Ordinary replay and staging
+remain immutable-dispatch-tag only.
 
 ## Activation gate
 
