@@ -30,10 +30,13 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertIn("PRODUCTION_STATE_READ_KEY", WORKFLOW)
 
     def test_recovery_precedes_planning_and_never_appends(self) -> None:
+        validation = WORKFLOW.index("state/scripts/state.py --root state validate")
         recovery = WORKFLOW.index("Refuse to plan around a running historical attempt")
         planning = WORKFLOW.index("Produce only the source-free transport-blocked plan")
+        self.assertLess(validation, recovery)
         self.assertLess(recovery, planning)
         self.assertIn("historical_replay_controller.py recover", WORKFLOW)
+        self.assertIn("--state-validated", WORKFLOW)
         self.assertIn("steps.recovery.outputs.kind == 'none'", WORKFLOW)
         self.assertNotIn("runner_lost", WORKFLOW)
         self.assertNotIn("already running", WORKFLOW)

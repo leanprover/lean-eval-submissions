@@ -44,12 +44,17 @@ from replay_orchestrator import (
     validate_execution_profile,
     validate_measurement_config,
 )
+from results_schema import ResultsSchemaError
+from results_schema import result_id as stable_result_id
 
 MAX_JSON_BYTES = 16 * 1024 * 1024
 MAX_STATE_EVENT_FILES = 1_000_000
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 MAX_REPLAY_ATTEMPTS = 3
 RECOVERY_AFTER = dt.timedelta(hours=7)
+QUALIFICATION_WORKFLOW_PATH = ".github/workflows/historical-public-image-qualification.yml"
+QUALIFICATION_CONTROLLER_PATH = "historical-public-qualification/qualification.py"
+QUALIFICATION_CONTRACT_PATH = "historical-public-qualification/contract-v1.json"
 TRANSPORT_REASON = "historical_public_executor_not_implemented"
 TRANSPORT_CONTRACT = "historical_public_executor_v1"
 GIST_ADAPTER_REASON = "historical_public_gist_source_adapter_not_implemented"
@@ -443,15 +448,25 @@ def _validate_task(value: Any, index: int) -> dict[str, Any]:
     _timestamp(task["historical_accepted_at"], f"{label}.historical_accepted_at", milliseconds=False)
     owner = _match(LOGIN, task["owner_login"], f"{label}.owner_login")
     model = task["declared_model"]
+    try:
+        model_size = len(model.encode("utf-8")) if isinstance(model, str) else 0
+    except UnicodeEncodeError as error:
+        raise HistoricalReplayControllerError(f"{label}.declared_model is invalid") from error
     if (
         not isinstance(model, str)
         or not model
-        or len(model.encode("utf-8")) > 256
+        or model_size > 256
         or any(ord(character) <= 0x1F or ord(character) == 0x7F for character in model)
     ):
         raise HistoricalReplayControllerError(f"{label}.declared_model is invalid")
-    _match(PROBLEM, task["problem_id"], f"{label}.problem_id")
-    _integer(task["statement_revision"], f"{label}.statement_revision", 1)
+    problem = _match(PROBLEM, task["problem_id"], f"{label}.problem_id")
+    revision = _integer(task["statement_revision"], f"{label}.statement_revision", 1)
+    try:
+        expected_result_id = stable_result_id(owner, model, problem, revision)
+    except ResultsSchemaError as error:
+        raise HistoricalReplayControllerError(f"{label}.result_id is invalid") from error
+    if result_id != expected_result_id:
+        raise HistoricalReplayControllerError(f"{label}.result_id differs from its identity")
     if task["results_repository"] != "leanprover/lean-eval-submissions":
         raise HistoricalReplayControllerError(f"{label}.results_repository is invalid")
     _match(COMMIT, task["results_commit"], f"{label}.results_commit")
@@ -577,6 +592,8 @@ def validate_qualification(value: Any, raw: bytes) -> dict[str, Any]:
         or profile["benchmark_repository"] != "leanprover/lean-eval"
         or profile["plan_repository"] != "leanprover/lean-eval-submissions"
         or profile["workflow_repository"] != "leanprover/lean-eval-submissions"
+        or profile["workflow_path"] != QUALIFICATION_WORKFLOW_PATH
+        or profile["registry_repository"] != "lean-eval-historical-public-v1"
     ):
         raise HistoricalReplayControllerError("historical qualification identity is invalid")
     for field in (
@@ -605,8 +622,19 @@ def validate_qualification(value: Any, raw: bytes) -> dict[str, Any]:
         raise HistoricalReplayControllerError("qualification matrix path changed")
     if profile["runner_contract_path"] != "configuration/historical-public-runner-v1.json":
         raise HistoricalReplayControllerError("qualification runner contract path changed")
+    if profile["qualification_contract_path"] != QUALIFICATION_CONTRACT_PATH:
+        raise HistoricalReplayControllerError("qualification producer contract path changed")
     execution_profile = validate_execution_profile(profile["execution_profile"])
     measurement = validate_measurement_config(profile["measurement_config"])
+    expected_registry_tag = f"{profile['benchmark_commit']}-{profile['image_source_commit']}"
+    if profile["registry_manifest_digest"] != execution_profile["vm_image_digest"]:
+        raise HistoricalReplayControllerError(
+            "qualified registry manifest differs from execution image"
+        )
+    if profile["registry_tag"] != expected_registry_tag:
+        raise HistoricalReplayControllerError(
+            "qualified registry tag differs from producer identity"
+        )
     if profile["execution_profile_digest"] != config_digest(
         "lean-eval-replay-execution-profile-v1", execution_profile
     ):
@@ -789,6 +817,21 @@ def _blocked_plan(
     }
 
 
+def _task_blocker(task: dict[str, Any]) -> tuple[str, str] | None:
+    if task["source_kind"] == "gist":
+        return GIST_ADAPTER_REASON, GIST_ADAPTER_CONTRACT
+    if task["attempt"] >= MAX_REPLAY_ATTEMPTS:
+        return ATTEMPT_LIMIT_REASON, "historical_public_retry_policy_v1"
+    return None
+
+
+def _next_eligible_task(queue: dict[str, Any]) -> dict[str, Any] | None:
+    return next(
+        (task for task in queue["tasks"] if _task_blocker(task) is None),
+        None,
+    )
+
+
 def plan_next(
     queue_value: Any,
     authority_plan: dict[str, Any] | None = None,
@@ -813,7 +856,8 @@ def plan_next(
             "transport": _transport(),
             "queue": bindings,
         }
-    task = queue["tasks"][0]
+    eligible_task = _next_eligible_task(queue)
+    task = queue["tasks"][0] if eligible_task is None else eligible_task
     if any(
         value is None
         for value in (
@@ -844,20 +888,10 @@ def plan_next(
         contract_value,
         contract_raw,
     )
-    if task["source_kind"] == "gist":
-        return _blocked_plan(
-            bindings,
-            task,
-            GIST_ADAPTER_REASON,
-            GIST_ADAPTER_CONTRACT,
-        )
-    if task["attempt"] >= MAX_REPLAY_ATTEMPTS:
-        return _blocked_plan(
-            bindings,
-            task,
-            ATTEMPT_LIMIT_REASON,
-            "historical_public_retry_policy_v1",
-        )
+    if eligible_task is None:
+        blocker = _task_blocker(task)
+        assert blocker is not None
+        return _blocked_plan(bindings, task, *blocker)
     attempt = task["attempt"] + 1
     return {
         "schema_version": 1,
@@ -975,7 +1009,7 @@ def validate_execution_plan(value: Any) -> dict[str, Any]:
 def validate_plan_against_queue(plan_value: Any, queue_value: Any) -> dict[str, Any]:
     plan = validate_execution_plan(plan_value)
     queue = validate_queue(queue_value)
-    task = queue["tasks"][0] if queue["tasks"] else None
+    task = _next_eligible_task(queue)
     expected_queue = {
         "queue_environment": queue["environment"],
         "queue_source_event_count": queue["source_event_count"],
@@ -1416,8 +1450,19 @@ def recover_running(
     events_root: pathlib.Path,
     trusted_now: str,
     *,
+    state_validated: bool,
     random_bytes: bytes | None = None,
 ) -> dict[str, Any]:
+    """Project recovery only after the caller completed full State validation.
+
+    This reducer defensively rechecks the historical transition subset that it
+    consumes; it is not a replacement for lean-eval-state's authoritative
+    schema and materialized-view validation.
+    """
+    if state_validated is not True:
+        raise HistoricalReplayControllerError(
+            "recovery requires an authoritative State-validated event set"
+        )
     events: list[dict[str, Any]] = []
     for path in _event_files(events_root):
         value, _ = _load_state_canonical(path, "State event")
@@ -1532,6 +1577,105 @@ def _verify_repository_identity_and_ancestry(
             ) from error
 
 
+def _verify_commit_ancestor(repository_root: pathlib.Path, commit: str) -> None:
+    try:
+        subprocess.run(
+            ["git", "-C", str(repository_root), "merge-base", "--is-ancestor", commit, "HEAD"],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise HistoricalReplayControllerError(
+            "reviewed Git commit is not an ancestor of the controller checkout"
+        ) from error
+
+
+def _verify_image_source_ancestry(
+    repository_root: pathlib.Path,
+    image_source_commit: str,
+    controller_source_commit: str,
+) -> None:
+    try:
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repository_root),
+                "cat-file",
+                "-e",
+                f"{image_source_commit}^{{commit}}",
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise HistoricalReplayControllerError(
+            "qualification image source commit is unavailable"
+        ) from error
+    try:
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repository_root),
+                "merge-base",
+                "--is-ancestor",
+                image_source_commit,
+                controller_source_commit,
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise HistoricalReplayControllerError(
+            "qualification image source is not an ancestor of its controller source"
+        ) from error
+
+
+def _verify_qualification_source_bindings(
+    repository_root: pathlib.Path, qualification: dict[str, Any]
+) -> None:
+    controller_commit = qualification["controller_source_commit"]
+    _verify_commit_ancestor(repository_root, controller_commit)
+    image_source_commit = qualification["image_source_commit"]
+    _verify_image_source_ancestry(
+        repository_root,
+        image_source_commit,
+        controller_commit,
+    )
+    workflow = _git_blob(repository_root, controller_commit, QUALIFICATION_WORKFLOW_PATH)
+    controller = _git_blob(repository_root, controller_commit, QUALIFICATION_CONTROLLER_PATH)
+    contract = _git_blob(repository_root, controller_commit, QUALIFICATION_CONTRACT_PATH)
+    matrix = _git_blob(
+        repository_root,
+        image_source_commit,
+        qualification["profile_matrix_path"],
+    )
+    runner_contract = _git_blob(
+        repository_root,
+        image_source_commit,
+        qualification["runner_contract_path"],
+    )
+    if (
+        sha256_bytes(workflow) != qualification["qualification_workflow_sha256"]
+        or sha256_bytes(controller) != qualification["qualification_controller_sha256"]
+        or sha256_bytes(contract) != qualification["qualification_contract_sha256"]
+    ):
+        raise HistoricalReplayControllerError(
+            "qualification controller source differs from exact reviewed Git blobs"
+        )
+    if (
+        sha256_bytes(matrix) != qualification["profile_matrix_sha256"]
+        or sha256_bytes(runner_contract) != qualification["runner_contract_sha256"]
+    ):
+        raise HistoricalReplayControllerError(
+            "qualification image source differs from exact reviewed Git blobs"
+        )
+
+
 def verify_repository_bindings(
     repository_root: pathlib.Path,
     task: dict[str, Any],
@@ -1578,6 +1722,7 @@ def load_reviewed_inputs(
         qualification_raw, "exact qualification Git blob"
     )
     validate_qualification(qualification, qualification_raw)
+    _verify_qualification_source_bindings(repository_root, qualification)
     matrix_raw = _git_blob(
         repository_root,
         task["qualification_commit"],
@@ -1620,6 +1765,7 @@ def parser() -> argparse.ArgumentParser:
     event.add_argument("--output", required=True, type=pathlib.Path)
     recover = commands.add_parser("recover")
     recover.add_argument("--events-root", required=True, type=pathlib.Path)
+    recover.add_argument("--state-validated", required=True, action="store_true")
     recover.add_argument("--trusted-now", required=True)
     recover.add_argument("--output", required=True, type=pathlib.Path)
     return result
@@ -1631,6 +1777,10 @@ def main() -> int:
         if args.command == "plan":
             queue, _ = _load_state_canonical(args.queue, "historical replay queue")
             if queue.get("tasks"):
+                validated_queue = validate_queue(queue)
+                selected = _next_eligible_task(validated_queue)
+                if selected is None:
+                    selected = validated_queue["tasks"][0]
                 (
                     authority,
                     authority_raw,
@@ -1640,7 +1790,7 @@ def main() -> int:
                     matrix_raw,
                     contract,
                     contract_raw,
-                ) = load_reviewed_inputs(args.repository_root, queue["tasks"][0])
+                ) = load_reviewed_inputs(args.repository_root, selected)
                 planned = plan_next(
                     queue,
                     authority,
@@ -1672,7 +1822,11 @@ def main() -> int:
         else:
             _write(
                 args.output,
-                recover_running(args.events_root, args.trusted_now),
+                recover_running(
+                    args.events_root,
+                    args.trusted_now,
+                    state_validated=args.state_validated,
+                ),
                 state_canonical_bytes,
             )
     except (HistoricalReplayControllerError, HistoricalPublicRunnerError) as error:

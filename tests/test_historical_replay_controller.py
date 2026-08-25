@@ -19,6 +19,7 @@ from scripts.historical_replay_controller import (
     _load_state_canonical,
     _read_regular,
     _terminal_transition,
+    _verify_qualification_source_bindings,
     bind_handoff,
     canonical_bytes,
     load_reviewed_inputs,
@@ -35,6 +36,7 @@ from scripts.historical_replay_controller import (
     verify_repository_bindings,
 )
 from scripts.replay_orchestrator import config_digest
+from scripts.results_schema import result_id as stable_result_id
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PLAN_PATH = ROOT / "evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json"
@@ -44,8 +46,13 @@ CONTRACT_PATH = ROOT / "configuration/historical-public-runner-v1.json"
 PROFILE_COMMIT = "7ed4a2e33cec8800f65eb6d53619c1b7fb703876"
 
 
-def loaded(path: pathlib.Path) -> tuple[dict, bytes]:
-    raw = path.read_bytes()
+def loaded_git(commit: str, path: pathlib.Path) -> tuple[dict, bytes]:
+    raw = subprocess.run(
+        ["git", "-C", str(ROOT), "show", f"{commit}:{path.relative_to(ROOT)}"],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    ).stdout
     return json.loads(raw), raw
 
 
@@ -93,7 +100,17 @@ class HistoricalReplayInputTests(unittest.TestCase):
 
         fixture = Fixture()
         queue = copy.deepcopy(fixture.queue)
-        queue["tasks"][0]["declared_model"] = "model-β"
+        task = queue["tasks"][0]
+        task["declared_model"] = "model-β"
+        task["result_id"] = stable_result_id(
+            task["owner_login"],
+            task["declared_model"],
+            task["problem_id"],
+            task["statement_revision"],
+        )
+        task["replay_task_id"] = replay_task_id(
+            task["result_id"], task["measurement_config_digest"]
+        )
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory) / "queue.json"
             path.write_bytes(state_canonical_bytes(queue))
@@ -131,10 +148,12 @@ class HistoricalReplayInputTests(unittest.TestCase):
 
 class Fixture:
     def __init__(self) -> None:
-        self.authority, self.authority_raw = loaded(PLAN_PATH)
-        self.profile, self.profile_raw = loaded(PROFILE_PATH)
-        self.matrix, self.matrix_raw = loaded(MATRIX_PATH)
-        self.contract, self.contract_raw = loaded(CONTRACT_PATH)
+        self.profile, self.profile_raw = loaded_git(PROFILE_COMMIT, PROFILE_PATH)
+        self.authority, self.authority_raw = loaded_git(
+            self.profile["plan_commit"], PLAN_PATH
+        )
+        self.matrix, self.matrix_raw = loaded_git(PROFILE_COMMIT, MATRIX_PATH)
+        self.contract, self.contract_raw = loaded_git(PROFILE_COMMIT, CONTRACT_PATH)
         requests = [
             request
             for request in self.authority["requests"]
@@ -303,7 +322,7 @@ class HistoricalReplayPlanTests(unittest.TestCase):
     def setUp(self) -> None:
         self.fixture = Fixture()
 
-    def test_plans_exact_first_task_without_modern_or_private_identity(self) -> None:
+    def test_plans_exact_first_eligible_task_without_modern_or_private_identity(self) -> None:
         plan = self.fixture.plan()
         self.assertEqual(plan["kind"], "execution")
         self.assertEqual(plan["transport"]["status"], "blocked")
@@ -393,6 +412,42 @@ class HistoricalReplayPlanTests(unittest.TestCase):
             "historical_public_attempt_limit_reached",
         )
 
+    def test_blocked_tasks_do_not_starve_later_eligible_work(self) -> None:
+        queue = copy.deepcopy(self.fixture.queue)
+        blocked = copy.deepcopy(self.fixture.task)
+        for index in range(1_000):
+            model = f"blocked-gist-{index}"
+            result = stable_result_id(
+                blocked["owner_login"],
+                model,
+                blocked["problem_id"],
+                blocked["statement_revision"],
+            )
+            candidate = replay_task_id(result, blocked["measurement_config_digest"])
+            if candidate < self.fixture.task["replay_task_id"]:
+                break
+        else:  # pragma: no cover - a cryptographic-ordering impossibility guard
+            self.fail("could not construct a preceding deterministic replay identity")
+        blocked.update(
+            declared_model=model,
+            result_id=result,
+            replay_task_id=candidate,
+            request_id="prr_" + hashlib.sha256(model.encode()).hexdigest(),
+            source_kind="gist",
+            authority_event_id="01a035b4-d6ca-7000-8000-000000000001",
+            qualification_event_id="01a035b4-d6cb-7000-8000-000000000001",
+            event_id="01a035b4-d6cc-7000-8000-000000000001",
+        )
+        queue["tasks"] = [blocked, queue["tasks"][0]]
+        plan = self.fixture.plan(queue)
+        self.assertEqual(plan["kind"], "execution")
+        self.assertEqual(plan["task"], self.fixture.task)
+        self.assertEqual(validate_plan_against_queue(plan, queue), plan)
+
+        queue["tasks"][0]["source_kind"] = "github_repo"
+        with self.assertRaisesRegex(HistoricalReplayControllerError, "next live queue task"):
+            validate_plan_against_queue(plan, queue)
+
     def test_reconfigured_nonzero_queued_attempt_is_preserved(self) -> None:
         queue = copy.deepcopy(self.fixture.queue)
         task = queue["tasks"][0]
@@ -417,6 +472,8 @@ class HistoricalReplayPlanTests(unittest.TestCase):
             lambda task: task.__setitem__("source_visibility", "private"),
             lambda task: task.__setitem__("submission_id", "not-authority"),
             lambda task: task.__setitem__("replay_task_id", "rt1_" + "0" * 64),
+            lambda task: task.__setitem__("declared_model", "identity drift"),
+            lambda task: task.__setitem__("declared_model", "unpaired-\ud800"),
             lambda task: task.__setitem__("results_path", "results/other.json"),
             lambda task: task.__setitem__("qualification_path", "profiles/x.json"),
         ):
@@ -470,6 +527,84 @@ class HistoricalReplayPlanTests(unittest.TestCase):
         fixture.recanonicalize_reviewed_inputs()
         with self.assertRaisesRegex(HistoricalReplayControllerError, "matrix entry"):
             fixture.plan()
+
+    def test_qualification_image_identity_and_source_provenance_are_enforced(self) -> None:
+        fixture = Fixture()
+        fixture.profile["registry_manifest_digest"] = "sha256:" + "0" * 64
+        fixture.recanonicalize_reviewed_inputs()
+        with self.assertRaisesRegex(HistoricalReplayControllerError, "execution image"):
+            fixture.plan()
+
+        fixture = Fixture()
+        fixture.profile["registry_tag"] = (
+            f"{'0' * 40}-{fixture.profile['image_source_commit']}"
+        )
+        fixture.recanonicalize_reviewed_inputs()
+        with self.assertRaisesRegex(HistoricalReplayControllerError, "producer identity"):
+            fixture.plan()
+
+        _verify_qualification_source_bindings(ROOT, self.fixture.profile)
+        for field in (
+            "qualification_workflow_sha256",
+            "qualification_controller_sha256",
+            "qualification_contract_sha256",
+        ):
+            profile = copy.deepcopy(self.fixture.profile)
+            profile[field] = "0" * 64
+            with self.assertRaisesRegex(
+                HistoricalReplayControllerError, "exact reviewed Git blobs"
+            ):
+                _verify_qualification_source_bindings(ROOT, profile)
+        profile = copy.deepcopy(self.fixture.profile)
+        profile["controller_source_commit"] = "0" * 40
+        with self.assertRaisesRegex(HistoricalReplayControllerError, "not an ancestor"):
+            _verify_qualification_source_bindings(ROOT, profile)
+
+        profile = copy.deepcopy(self.fixture.profile)
+        profile["image_source_commit"] = "0" * 40
+        with self.assertRaisesRegex(HistoricalReplayControllerError, "unavailable"):
+            _verify_qualification_source_bindings(ROOT, profile)
+
+        for field in ("profile_matrix_sha256", "runner_contract_sha256"):
+            profile = copy.deepcopy(self.fixture.profile)
+            profile[field] = "0" * 64
+            with self.assertRaisesRegex(
+                HistoricalReplayControllerError, "image source differs"
+            ):
+                _verify_qualification_source_bindings(ROOT, profile)
+
+        with tempfile.TemporaryDirectory() as directory:
+            repository = pathlib.Path(directory) / "submissions"
+            subprocess.run(
+                ["git", "clone", "--quiet", "--shared", str(ROOT), str(repository)],
+                check=True,
+            )
+            empty_tree = subprocess.run(
+                ["git", "-C", str(repository), "mktree"],
+                check=True,
+                input=b"",
+                stdout=subprocess.PIPE,
+            ).stdout.decode().strip()
+            environment = {
+                **os.environ,
+                "GIT_AUTHOR_NAME": "Controller Test",
+                "GIT_AUTHOR_EMAIL": "controller-test@example.invalid",
+                "GIT_AUTHOR_DATE": "2000-01-01T00:00:00Z",
+                "GIT_COMMITTER_NAME": "Controller Test",
+                "GIT_COMMITTER_EMAIL": "controller-test@example.invalid",
+                "GIT_COMMITTER_DATE": "2000-01-01T00:00:00Z",
+            }
+            unrelated = subprocess.run(
+                ["git", "-C", str(repository), "commit-tree", empty_tree],
+                check=True,
+                input=b"unrelated image source\n",
+                stdout=subprocess.PIPE,
+                env=environment,
+            ).stdout.decode().strip()
+            profile = copy.deepcopy(self.fixture.profile)
+            profile["image_source_commit"] = unrelated
+            with self.assertRaisesRegex(HistoricalReplayControllerError, "not an ancestor"):
+                _verify_qualification_source_bindings(repository, profile)
 
     def test_plan_validation_detects_embedded_task_and_transition_tampering(self) -> None:
         for field, value in (
@@ -768,7 +903,95 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
             directory.mkdir(parents=True, exist_ok=True)
             (directory / f"{event_id}.json").write_bytes(state_canonical_bytes(event))
 
+    @staticmethod
+    def modern_running_events() -> list[dict]:
+        submission_id = "0198abcd-0000-7000-8000-000000000002"
+        result_id = "r2_80f02f892fb0b90474675aa0b572252a8758faf74b95400521e9da724583931f"
+        replay_id = "rt1_a49738fb7237c613ff62c98e58ff6e2bfff77b75a215c2e43c13854d97ca7cc1"
+        ids = [f"0198abcd-0000-7000-8000-{number:012x}" for number in range(1, 9)]
+        return [
+            {
+                "schema_version": 1, "event_id": ids[0], "event_type": "system.initialized",
+                "occurred_at": "2026-08-20T06:07:01.000Z", "subject_id": "state_production",
+                "causation_event_id": None, "actor": {"kind": "system"},
+                "payload": {"environment": "production"},
+            },
+            {
+                "schema_version": 1, "event_id": ids[1], "event_type": "submission.received",
+                "occurred_at": "2026-08-20T06:07:02.000Z", "subject_id": submission_id,
+                "causation_event_id": None, "actor": {"kind": "github", "login": "kim-em"},
+                "payload": {
+                    "problem_id": "two_plus_two", "statement_revision": 1,
+                    "declared_model": "Example Model", "source_repository": "example/submission",
+                    "source_commit": "a" * 40, "source_visibility": "private",
+                    "publication_choice": "scheduled",
+                },
+            },
+            {
+                "schema_version": 1, "event_id": ids[2], "event_type": "archive.completed",
+                "occurred_at": "2026-08-20T06:07:03.000Z", "subject_id": submission_id,
+                "causation_event_id": ids[1], "actor": {"kind": "system"},
+                "payload": {
+                    "archive_repository": "leanprover/lean-eval-audit",
+                    "archive_commit": "b" * 40,
+                    "archive_path": f"archives/01/{submission_id}.tar.age",
+                    "archive_ciphertext_sha256": "c" * 64, "encrypted": True,
+                },
+            },
+            {
+                "schema_version": 1, "event_id": ids[3], "event_type": "evaluation.started",
+                "occurred_at": "2026-08-20T06:07:04.000Z", "subject_id": submission_id,
+                "causation_event_id": ids[2], "actor": {"kind": "system"},
+                "payload": {
+                    "attempt": 1, "benchmark_repository": "leanprover/lean-eval",
+                    "benchmark_commit": "d" * 40, "toolchain": "leanprover/lean4:v4.32.0",
+                },
+            },
+            {
+                "schema_version": 1, "event_id": ids[4], "event_type": "evaluation.accepted",
+                "occurred_at": "2026-08-20T06:07:05.000Z", "subject_id": submission_id,
+                "causation_event_id": ids[3], "actor": {"kind": "system"},
+                "payload": {"attempt": 1, "evaluator_version": "v1"},
+            },
+            {
+                "schema_version": 1, "event_id": ids[5], "event_type": "result.recorded",
+                "occurred_at": "2026-08-20T06:07:06.000Z", "subject_id": result_id,
+                "causation_event_id": ids[4], "actor": {"kind": "system"},
+                "payload": {
+                    "submission_id": submission_id, "problem_id": "two_plus_two",
+                    "statement_revision": 1, "result_commit": "e" * 40,
+                    "tree_digest": "f" * 64,
+                },
+            },
+            {
+                "schema_version": 1, "event_id": ids[6], "event_type": "replay.enqueued",
+                "occurred_at": "2026-08-20T06:07:07.000Z", "subject_id": replay_id,
+                "causation_event_id": ids[5], "actor": {"kind": "system"},
+                "payload": {
+                    "result_id": result_id, "measurement_config_digest": "1" * 64,
+                    "execution_profile_digest": "2" * 64, "checker": "nanoda",
+                },
+            },
+            {
+                "schema_version": 1, "event_id": ids[7], "event_type": "replay.started",
+                "occurred_at": "2026-08-20T06:07:08.000Z", "subject_id": replay_id,
+                "causation_event_id": ids[6], "actor": {"kind": "system"},
+                "payload": {"attempt": 1, "runner_profile": "lean-eval-disposable-v1"},
+            },
+        ]
+
     def events(self, *, second_task: bool = False) -> list[dict]:
+        task = self.fixture.task
+        initialized = {
+            "schema_version": 1,
+            "event_id": "01a035b4-d6cd-7000-8000-000000000001",
+            "event_type": "system.initialized",
+            "occurred_at": "2026-08-25T00:59:59.999Z",
+            "subject_id": "state_production",
+            "causation_event_id": None,
+            "actor": {"kind": "system"},
+            "payload": {"environment": "production"},
+        }
         authority = {
             "schema_version": 1,
             "event_id": self.fixture.task["authority_event_id"],
@@ -777,7 +1000,20 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
             "subject_id": self.fixture.task["result_id"],
             "causation_event_id": None,
             "actor": {"kind": "system"},
-            "payload": {},
+            "payload": {
+                field: task[field]
+                for field in (
+                    "request_id", "historical_accepted_at", "owner_login",
+                    "declared_model", "problem_id", "statement_revision",
+                    "results_repository", "results_commit", "results_path",
+                    "result_file_sha256", "result_tree_digest", "source_kind",
+                    "source_repository", "source_commit", "source_visibility",
+                    "benchmark_repository", "benchmark_commit", "toolchain",
+                    "lean_toolchain_blob_sha256", "workflow_run_identity_sha256",
+                    "authority_repository", "authority_commit", "authority_path",
+                    "authority_sha256",
+                )
+            },
         }
         enqueue = {
             "schema_version": 1,
@@ -787,7 +1023,13 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
             "subject_id": self.fixture.task["replay_task_id"],
             "causation_event_id": self.fixture.task["qualification_event_id"],
             "actor": {"kind": "system"},
-            "payload": {"result_id": self.fixture.task["result_id"]},
+            "payload": {
+                field: task[field]
+                for field in (
+                    "result_id", "measurement_config_digest",
+                    "execution_profile_digest", "checker", "benchmark_commit",
+                )
+            },
         }
         qualification = {
             "schema_version": 1,
@@ -797,7 +1039,15 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
             "subject_id": self.fixture.task["result_id"],
             "causation_event_id": authority["event_id"],
             "actor": {"kind": "system"},
-            "payload": {},
+            "payload": {
+                field: task[field]
+                for field in (
+                    "toolchain", "benchmark_commit", "measurement_config_digest",
+                    "execution_profile_digest", "checker",
+                    "qualification_repository", "qualification_commit",
+                    "qualification_path", "qualification_sha256",
+                )
+            },
         }
         started = {
             "schema_version": 1,
@@ -809,9 +1059,13 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
             "actor": {"kind": "system"},
             "payload": {"attempt": 1, "runner_profile": "fixture"},
         }
-        events = [authority, qualification, enqueue, started]
+        events = [initialized, authority, qualification, enqueue, started]
         if second_task:
-            result_id = "r2_" + "a" * 64
+            second_model = "second-model"
+            result_id = stable_result_id(
+                task["owner_login"], second_model, task["problem_id"],
+                task["statement_revision"],
+            )
             task_id = replay_task_id(result_id, self.fixture.task["measurement_config_digest"])
             events.extend(
                 [
@@ -820,6 +1074,12 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
                         "event_id": "01a035b4-d6d2-7000-8000-000000000001",
                         "occurred_at": "2026-08-25T01:00:00.004Z",
                         "subject_id": result_id,
+                        "payload": {
+                            **authority["payload"],
+                            "request_id": "prr_" + "a" * 64,
+                            "declared_model": second_model,
+                            "workflow_run_identity_sha256": "b" * 64,
+                        },
                     },
                     {
                         **qualification,
@@ -834,7 +1094,7 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
                         "occurred_at": "2026-08-25T01:00:00.006Z",
                         "subject_id": task_id,
                         "causation_event_id": "01a035b4-d6d3-7000-8000-000000000001",
-                        "payload": {"result_id": result_id},
+                        "payload": {**enqueue["payload"], "result_id": result_id},
                     },
                     {
                         **started,
@@ -852,16 +1112,18 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
             root = pathlib.Path(directory)
             events = self.events()
             self.write_events(root, events)
-            busy = recover_running(root, "2026-08-25T02:00:00.000Z")
+            busy = recover_running(root, "2026-08-25T02:00:00.000Z", state_validated=True)
             self.assertEqual(busy["kind"], "busy")
             failed = recover_running(
                 root,
                 "2026-08-25T08:00:00.004Z",
+                state_validated=True,
                 random_bytes=b"\x05" * 10,
             )
             repeated = recover_running(
                 root,
                 "2026-08-25T08:00:00.004Z",
+                state_validated=True,
                 random_bytes=b"\x05" * 10,
             )
             self.assertEqual(failed, repeated)
@@ -869,7 +1131,7 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
             events.append(failed["event"])
             self.write_events(root, [failed["event"]])
             self.assertEqual(
-                recover_running(root, "2026-08-25T08:00:01.000Z")["kind"],
+                recover_running(root, "2026-08-25T08:00:01.000Z", state_validated=True)["kind"],
                 "none",
             )
 
@@ -878,7 +1140,7 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
             root = pathlib.Path(directory)
             self.write_events(root, self.events(second_task=True))
             with self.assertRaises(HistoricalReplayControllerError):
-                recover_running(root, "2026-08-25T08:00:00.004Z")
+                recover_running(root, "2026-08-25T08:00:00.004Z", state_validated=True)
 
     def test_recovery_rejects_invalid_causality_and_attempt(self) -> None:
         mutations = (
@@ -894,7 +1156,7 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
                 root = pathlib.Path(directory)
                 self.write_events(root, events)
                 with self.assertRaises(HistoricalReplayControllerError):
-                    recover_running(root, "2026-08-25T08:00:00.004Z")
+                    recover_running(root, "2026-08-25T08:00:00.004Z", state_validated=True)
 
     def test_reducer_sorts_authoritatively_and_rejects_unknown_or_duplicate_enqueue(self) -> None:
         events = self.events()
@@ -914,33 +1176,19 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
             _historical_replay_states(events + [unknown], authorities)
 
         duplicate = {
-            **events[2],
+            **events[3],
             "event_id": "01a035b4-d6d2-7000-8000-000000000002",
             "occurred_at": "2026-08-25T01:00:00.004Z",
         }
         with self.assertRaisesRegex(HistoricalReplayControllerError, "re-enqueue"):
             _historical_replay_states(events + [duplicate], authorities)
 
-    def test_unrelated_nonascii_state_event_does_not_break_recovery(self) -> None:
-        events = self.events()
-        events.append(
-            {
-                "schema_version": 1,
-                "event_id": "01a035b4-d6d2-7000-8000-000000000003",
-                "event_type": "authentication.nonce_consumed",
-                "occurred_at": "2026-08-25T01:00:00.004Z",
-                "subject_id": "unrelated-β",
-                "causation_event_id": None,
-                "actor": {"kind": "system"},
-                "payload": {"note": "β"},
-            }
-        )
-        with tempfile.TemporaryDirectory() as directory:
-            root = pathlib.Path(directory)
-            self.write_events(root, events)
-            self.assertEqual(
-                recover_running(root, "2026-08-25T02:00:00.000Z")["kind"],
-                "busy",
+    def test_recovery_requires_authoritative_state_validation(self) -> None:
+        with self.assertRaisesRegex(HistoricalReplayControllerError, "State-validated"):
+            recover_running(
+                pathlib.Path("not-read"),
+                "2026-08-25T02:00:00.000Z",
+                state_validated=False,
             )
 
     def test_reconfiguration_chain_preserves_attempt_and_allows_withdrawal(self) -> None:
@@ -958,36 +1206,82 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
                 "retryable": False,
             },
         }
+        replacement_qualification = copy.deepcopy(events[2])
+        replacement_qualification.update(
+            event_id="01a035b4-d6d3-7000-8000-000000000010",
+            occurred_at="2026-08-25T01:00:00.005Z",
+        )
+        replacement_qualification["payload"].update(
+            execution_profile_digest="5" * 64,
+            qualification_path="evidence/public-replay/profiles/" + "5" * 64 + ".json",
+            qualification_sha256="6" * 64,
+        )
         reconfiguration = {
             **failed,
-            "event_id": "01a035b4-d6d3-7000-8000-000000000010",
+            "event_id": "01a035b4-d6d4-7000-8000-000000000010",
             "event_type": "historical_result.replay_reconfigured",
-            "occurred_at": "2026-08-25T01:00:00.005Z",
+            "occurred_at": "2026-08-25T01:00:00.006Z",
             "subject_id": self.fixture.task["result_id"],
             "causation_event_id": failed["event_id"],
-            "payload": {"replay_task_id": self.fixture.task["replay_task_id"]},
+            "payload": {
+                "replay_task_id": self.fixture.task["replay_task_id"],
+                "measurement_config_digest": self.fixture.task["measurement_config_digest"],
+                "checker": "nanoda",
+                "superseded_enqueue_event_id": events[3]["event_id"],
+                "superseded_qualification_event_id": events[2]["event_id"],
+                "superseded_execution_profile_digest": self.fixture.task["execution_profile_digest"],
+                "replacement_qualification_event_id": replacement_qualification["event_id"],
+                "replacement_execution_profile_digest": "5" * 64,
+                "reason_code": "profile_execution_failed",
+                "reconfiguration_repository": "leanprover/lean-eval-submissions",
+                "reconfiguration_commit": "3" * 40,
+                "reconfiguration_path": "evidence/public-replay/reconfigurations/" + "4" * 64 + ".json",
+                "reconfiguration_sha256": "4" * 64,
+            },
         }
+        third_qualification = copy.deepcopy(replacement_qualification)
+        third_qualification.update(
+            event_id="01a035b4-d6d5-7000-8000-000000000010",
+            occurred_at="2026-08-25T01:00:00.007Z",
+        )
+        third_qualification["payload"].update(
+            execution_profile_digest="7" * 64,
+            qualification_path="evidence/public-replay/profiles/" + "7" * 64 + ".json",
+            qualification_sha256="8" * 64,
+        )
         withdrawal = {
             **reconfiguration,
-            "event_id": "01a035b4-d6d4-7000-8000-000000000010",
-            "occurred_at": "2026-08-25T01:00:00.006Z",
+            "event_id": "01a035b4-d6d6-7000-8000-000000000010",
+            "occurred_at": "2026-08-25T01:00:00.008Z",
             "causation_event_id": reconfiguration["event_id"],
+            "payload": {
+                **reconfiguration["payload"],
+                "superseded_qualification_event_id": replacement_qualification["event_id"],
+                "superseded_execution_profile_digest": "5" * 64,
+                "replacement_qualification_event_id": third_qualification["event_id"],
+                "replacement_execution_profile_digest": "7" * 64,
+                "reason_code": "profile_replacement_withdrawn",
+                "reconfiguration_path": "evidence/public-replay/reconfigurations/" + "9" * 64 + ".json",
+                "reconfiguration_sha256": "9" * 64,
+            },
         }
         enqueue = {
-            **events[2],
-            "event_id": "01a035b4-d6d5-7000-8000-000000000010",
-            "occurred_at": "2026-08-25T01:00:00.007Z",
+            **events[3],
+            "event_id": "01a035b4-d6d7-7000-8000-000000000010",
+            "occurred_at": "2026-08-25T01:00:00.009Z",
             "causation_event_id": withdrawal["event_id"],
+            "payload": {**events[3]["payload"], "execution_profile_digest": "7" * 64},
         }
         retried = {
             **started,
-            "event_id": "01a035b4-d6d6-7000-8000-000000000010",
-            "occurred_at": "2026-08-25T01:00:00.008Z",
+            "event_id": "01a035b4-d6d8-7000-8000-000000000010",
+            "occurred_at": "2026-08-25T01:00:00.010Z",
             "causation_event_id": enqueue["event_id"],
             "payload": {"attempt": 2, "runner_profile": "fixture"},
         }
         states = _historical_replay_states(
-            events + [failed, reconfiguration, withdrawal, enqueue, retried],
+            events + [failed, replacement_qualification, reconfiguration,
+                      third_qualification, withdrawal, enqueue, retried],
             {self.fixture.task["result_id"]},
         )
         state = states[self.fixture.task["replay_task_id"]]
@@ -1014,7 +1308,13 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
             "event_type": "replay.unavailable",
             "occurred_at": "2026-08-25T01:00:00.005Z",
             "causation_event_id": failed["event_id"],
-            "payload": {"reason_code": "execution_profile_permanently_unavailable"},
+            "payload": {
+                "reason_code": "execution_profile_permanently_unavailable",
+                "evidence_repository": "leanprover/lean-eval-submissions",
+                "evidence_commit": "f" * 40,
+                "evidence_path": "evidence/public-replay/unavailable.json",
+                "evidence_sha256": "0" * 64,
+            },
         }
         states = _historical_replay_states(
             events + [failed, unavailable],
@@ -1035,17 +1335,17 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
                 recover_running(
                     root,
                     "2026-08-25T08:00:00.004Z",
+                    state_validated=True,
                     random_bytes=b"\x05" * 10,
                 )
 
     def test_modern_running_task_is_not_claimed_by_historical_controller(self) -> None:
-        events = self.events()
-        events = [event for event in events if event["event_type"] != "historical_result.replay_authorized"]
+        events = self.modern_running_events()
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             self.write_events(root, events)
             self.assertEqual(
-                recover_running(root, "2026-08-25T08:00:00.004Z")["kind"],
+                recover_running(root, "2026-08-25T08:00:00.004Z", state_validated=True)["kind"],
                 "none",
             )
 

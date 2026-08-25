@@ -777,10 +777,10 @@ and verify all of the following:
 1. `historical-authoritative-replay.yml` is still gated on exact repository
    variable `HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED`; keep it absent until
    the separately reviewed executor transport is deployed and qualified.
-2. The controller's first task is byte-bound to production State's version-2
-   historical queue and to the exact committed authority plan, qualification
-   profile, profile matrix, and runner contract. No submission UUID, archive
-   locator, ciphertext digest, or KMS field may appear.
+2. The controller's first eligible task is byte-bound to production State's
+   version-2 historical queue and to the exact committed authority plan,
+   qualification profile, profile matrix, and runner contract. No submission
+   UUID, archive locator, ciphertext digest, or KMS field may appear.
 3. The distinct `historical_public_executor_v1` transport replaces the tracked
    `historical_public_executor_not_implemented` blocker. Do not remove the
    blocker based only on image publication or staging qualification evidence.
