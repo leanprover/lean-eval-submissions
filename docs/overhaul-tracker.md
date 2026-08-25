@@ -156,6 +156,24 @@ the already implemented owner status, metadata, and publication routes.
       bounded CAS. Health reports `atomic_reverse_impact_v1`. This is source-only:
       all owner/maintainer gates remain false pending paid-plan and dark staging
       qualification.
+- [x] Merge the inert model-identity staging qualification and automatic/manual
+      recovery contract (`lean-eval-submissions#1371`, exact reviewed head
+      `caaae54c`, merge `029b69ce`). Every job retains an impossible source-ref
+      gate; the workflows bind stable/original/triggering actor identity,
+      first attempts, operation-specific credentials, journal/lease recovery,
+      exact State commit/tree transitions, and final disabled health. PR CI
+      `32815289877` and Worker check `32815289745` passed without reaching an
+      environment. Protected rollout `32815495847` then promoted and deployed
+      the exact merge to staging and production, passed its staging canary, and
+      retained every impossible source gate; follow-up canary `32815898527`
+      passed. Live health binds both intake Workers to `029b69ce` with intake
+      and every result/model owner or maintainer API disabled.
+- [ ] Implement the persistent model-identity qualification harness, require
+      protected-environment reviewers with self-review prevention, provision
+      the five separately scoped ephemeral credentials, prove quiescence and
+      rollback, and run the staging qualification. The merged source scaffold
+      is deliberately unusable until all of those prerequisites exist; it does
+      not authorize a State write or either public model-identity gate.
 - [x] Add State problem-repair request and maintainer decision events with
       explicit revision/causation rules without rewriting accepted records
       (`lean-eval-state#13`, merge `0c875994`) and the targeted private
