@@ -58,6 +58,27 @@ run is the default and needs no legacy identity. Apply additionally requires:
   this workflow; and
 - the existing audit-writer GitHub App, restricted to the private audit repo.
 
+The apply workflow deliberately never overlaps the audit write token with
+decrypt or wrap authority. It validates the inventory and installs pinned
+tools before assuming the Encrypt-only role. The re-encryption step installs
+its cleanup trap before materializing the legacy identity, and that same step
+removes the identity and clears its local AWS session and OIDC request
+variables before it can finish. A separate fail-closed step proves those local
+credential and request variables are unavailable before the workflow mints the
+audit-repository-only App token. It also removes the read-only source checkout
+before minting that token. The writer phase therefore retains only the
+validated schema-version-3 ciphertext tree and source-free plan/report, then
+checks out the exact audit source needed to create the orphan review branch; it
+cannot see a legacy identity, plaintext, or AWS session variables. Every
+writer-phase step explicitly overrides the OIDC request and AWS session
+variables with empty values. The writer checkout persists no credential. The
+App token is passed transiently to that checkout, then the push step moves it
+immediately into an unexported shell variable. Only the derived authorization
+header is exposed to the single push through command-local `GIT_CONFIG_*`
+environment variables guarded by an exit trap; neither checkout nor push
+writes the credential to Git configuration or places it in a command-line
+argument.
+
 For every entry the job decrypts into runner scratch, verifies the historical
 plaintext digest and size, creates a fresh post-quantum age identity, wraps
 only that identity through the KMS adapter, and immediately discards plaintext
