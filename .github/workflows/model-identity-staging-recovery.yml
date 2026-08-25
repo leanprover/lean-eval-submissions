@@ -53,8 +53,11 @@ jobs:
           ORIGINAL_ACTOR_ID: ${{ github.event.workflow_run.actor.id }}
           ORIGINAL_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
           ORIGINAL_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          ORIGINAL_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           ORIGINAL_RUN_ID: ${{ github.event.workflow_run.id }}
           ORIGINAL_SHA: ${{ github.event.workflow_run.head_sha }}
+          ORIGINAL_TRIGGERING_ACTOR_ID: ${{ github.event.workflow_run.triggering_actor.id }}
+          ORIGINAL_TRIGGERING_ACTOR_LOGIN: ${{ github.event.workflow_run.triggering_actor.login }}
           MANUAL_RUN_ID: ${{ inputs.qualification_run_id }}
           MANUAL_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           MANUAL_CONFIRM: ${{ inputs.confirm }}
@@ -68,6 +71,9 @@ jobs:
             test "$ORIGINAL_ACTOR_ID" = "477956"
             test "$ORIGINAL_HEAD_BRANCH" = main
             test "$ORIGINAL_HEAD_REPOSITORY" = leanprover/lean-eval-submissions
+            test "$ORIGINAL_RUN_ATTEMPT" = "1"
+            test "$ORIGINAL_TRIGGERING_ACTOR_ID" = "477956"
+            test "$ORIGINAL_TRIGGERING_ACTOR_LOGIN" = kim-em
             run_id="$ORIGINAL_RUN_ID"
             expected_commit="$ORIGINAL_SHA"
           else

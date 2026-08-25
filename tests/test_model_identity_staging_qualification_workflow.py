@@ -78,6 +78,31 @@ class ModelIdentityStagingQualificationWorkflowTests(unittest.TestCase):
         self.assertNotIn("MODEL_IDENTITY_OAUTH_SESSION", RECOVERY)
         self.assertNotIn("MODEL_IDENTITY_AGENT_SESSION", RECOVERY)
 
+    def test_automatic_recovery_rejects_reruns_and_a_different_operator(self) -> None:
+        automatic = RECOVERY.split(
+            'if test "$EVENT_NAME" = workflow_run; then', maxsplit=1
+        )[1].split("          else", maxsplit=1)[0]
+        self.assertIn('test "$ORIGINAL_ACTOR_ID" = "477956"', automatic)
+        self.assertIn('test "$ORIGINAL_RUN_ATTEMPT" = "1"', automatic)
+        self.assertIn(
+            'test "$ORIGINAL_TRIGGERING_ACTOR_ID" = "477956"', automatic
+        )
+        self.assertIn(
+            'test "$ORIGINAL_TRIGGERING_ACTOR_LOGIN" = kim-em', automatic
+        )
+        self.assertIn(
+            "ORIGINAL_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}",
+            RECOVERY,
+        )
+        self.assertIn(
+            "ORIGINAL_TRIGGERING_ACTOR_ID: ${{ github.event.workflow_run.triggering_actor.id }}",
+            RECOVERY,
+        )
+        self.assertIn(
+            "ORIGINAL_TRIGGERING_ACTOR_LOGIN: ${{ github.event.workflow_run.triggering_actor.login }}",
+            RECOVERY,
+        )
+
     def test_durable_source_free_evidence_is_always_uploaded(self) -> None:
         for text in (WORKFLOW, RECOVERY):
             self.assertIn("if: ${{ always() }}", text)

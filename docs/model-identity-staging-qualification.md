@@ -65,10 +65,13 @@ already records an exact restoration. The controller reports failure if
 restoration is absent or malformed, and reports the combined failure class if
 both qualification and recovery fail. It always verifies disabled public health
 after a successful restoration, including when the qualification itself failed.
-Both workflows preserve a canonical source-free JSON evidence artifact; it
-contains the complete intent, journal, proof responses, contention measurement,
-restoration parent/head/tree evidence, errors by phase, and final health without
-containing credentials.
+The qualification workflow preserves a canonical source-free JSON evidence
+artifact containing its complete intent, journal, accepted proof responses,
+contention measurement, restoration parent/head/tree evidence, errors by phase,
+and final health without containing credentials. Standalone recovery preserves
+its own source-free artifact containing the recovered journal,
+restoration parent/head/tree evidence, recovery errors, and final health; it does
+not reproduce the qualification intent or proof responses.
 
 ## Live-only prerequisites
 
