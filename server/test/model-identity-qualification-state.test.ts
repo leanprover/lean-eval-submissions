@@ -42,6 +42,7 @@ const CONFIG: QualificationStateConfig = {
 };
 
 const QUALIFICATION_TOKEN = "test-only-model-identity-qualification-token-value";
+const SOURCE_TEST_ONLY_FIXTURE_VERIFICATION = () => Promise.resolve();
 
 function qualificationEnv(): ModelIdentityQualificationEnv {
   const namespace = env.MODEL_IDENTITY_QUALIFICATION_JOURNAL;
@@ -323,6 +324,44 @@ describe("model identity qualification State restoration", () => {
       .rejects.toEqual(new QualificationStateError("foreign_state_movement"));
   });
 
+  it("accepts only an exact same-tree zero-diff planned contender commit", async () => {
+    const contender = "5".repeat(40);
+    const state = fakeState(contender, INITIAL_TREE);
+    state.commits.set(INITIAL_HEAD, {
+      message: "parent",
+      tree: INITIAL_TREE,
+      parents: ["0".repeat(40)],
+    });
+    state.commits.set(contender, {
+      message: "planned contender",
+      tree: INITIAL_TREE,
+      parents: [INITIAL_HEAD],
+      files: [],
+    });
+    const request = {
+      expectedParent: INITIAL_HEAD,
+      expectedMutations: [{
+        expectedMessage: "planned contender",
+        expectedDocuments: {},
+        expectedDeletedPaths: [],
+        expectedTreeUnchanged: true,
+      }],
+    } as const;
+    await expect(qualificationStateMutationSequence(CONFIG, state.fetcher, request))
+      .resolves.toEqual({
+        state_commit: contender,
+        state_tree: INITIAL_TREE,
+        parent_commit: INITIAL_HEAD,
+      });
+    state.commits.get(contender)?.files?.push({
+      filename: "events/foreign.json",
+      status: "added",
+      sha: "6".repeat(40),
+    });
+    await expect(qualificationStateMutationSequence(CONFIG, state.fetcher, request))
+      .rejects.toEqual(new QualificationStateError("foreign_state_movement"));
+  });
+
   it("creates one non-force audit commit and verifies the restored ref and tree", async () => {
     const state = fakeState();
     await expect(restoreQualificationState(CONFIG, state.fetcher, REQUEST)).resolves.toEqual({
@@ -407,6 +446,33 @@ describe("closed model identity qualification HTTP boundary", () => {
     expect(state.fetcher).not.toHaveBeenCalled();
   });
 
+  it("cannot acquire before an exact reviewed live fixture is source-armed", async () => {
+    const state = fakeState();
+    const runtime = qualificationEnv();
+    const response = await handleModelIdentityQualificationRequest(
+      qualificationRequest({
+        schema_version: 2,
+        operation: "acquire",
+        confirmation: "QUALIFY_AND_RESTORE_MODEL_IDENTITY_STAGING",
+        deployed_commit: runtime.DEPLOYED_COMMIT,
+        initial_state_commit: INITIAL_HEAD,
+        initial_state_tree: MUTATED_TREE,
+        run_id: "4099",
+        run_attempt: 1,
+        intent: {
+          owner: { github_id: 1, login: "owner" },
+          cross_owner: { github_id: 2, login: "cross-owner" },
+          maintainer: { github_id: 3, login: "maintainer" },
+        },
+      }),
+      runtime,
+      { stateFetch: state.fetcher },
+    );
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "provider_unavailable" });
+    expect(state.fetcher).not.toHaveBeenCalled();
+  });
+
   it("acquires, reports, restores, and idempotently re-reports one exact journal", async () => {
     const state = fakeState();
     const runtime = qualificationEnv();
@@ -426,7 +492,10 @@ describe("closed model identity qualification HTTP boundary", () => {
       },
     };
     const acquiredResponse = await handleModelIdentityQualificationRequest(
-      qualificationRequest(acquireBody), runtime, { stateFetch: state.fetcher },
+      qualificationRequest(acquireBody), runtime, {
+        stateFetch: state.fetcher,
+        sourceTestOnlyFixtureVerification: SOURCE_TEST_ONLY_FIXTURE_VERIFICATION,
+      },
     );
     expect(acquiredResponse.status).toBe(200);
     const acquired = await acquiredResponse.json<{
@@ -509,7 +578,10 @@ describe("closed model identity qualification HTTP boundary", () => {
         },
       }),
       runtime,
-      { stateFetch: state.fetcher },
+      {
+        stateFetch: state.fetcher,
+        sourceTestOnlyFixtureVerification: SOURCE_TEST_ONLY_FIXTURE_VERIFICATION,
+      },
     );
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ error: "foreign_state_movement" });
@@ -537,7 +609,10 @@ describe("closed model identity qualification HTTP boundary", () => {
         intent,
       }),
       runtime,
-      { stateFetch: state.fetcher },
+      {
+        stateFetch: state.fetcher,
+        sourceTestOnlyFixtureVerification: SOURCE_TEST_ONLY_FIXTURE_VERIFICATION,
+      },
     );
     const acquired = await acquiredResponse.json<{
       journal_id: string;
@@ -674,7 +749,10 @@ describe("closed model identity qualification HTTP boundary", () => {
         expected_state_tree: MUTATED_TREE,
       }),
       runtime,
-      { stateFetch: state.fetcher },
+      {
+        stateFetch: state.fetcher,
+        sourceTestOnlyFixtureVerification: SOURCE_TEST_ONLY_FIXTURE_VERIFICATION,
+      },
     );
     expect(restored.status).toBe(200);
     expect(await restored.json()).toMatchObject({
@@ -705,7 +783,10 @@ describe("closed model identity qualification HTTP boundary", () => {
         intent,
       }),
       runtime,
-      { stateFetch: state.fetcher },
+      {
+        stateFetch: state.fetcher,
+        sourceTestOnlyFixtureVerification: SOURCE_TEST_ONLY_FIXTURE_VERIFICATION,
+      },
     );
     expect(acquiredResponse.status).toBe(200);
     const acquired = await acquiredResponse.json<{

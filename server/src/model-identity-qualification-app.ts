@@ -18,7 +18,9 @@ import {
   qualificationStateSnapshot,
   QualificationStateError,
   restoreQualificationState,
+  verifyQualificationFixtureAtState,
 } from "./model-identity-qualification-state";
+import { reviewedQualificationFixtureManifest } from "./model-identity-qualification-fixture";
 import type { GitHubFetch } from "./github-state";
 import {
   AuthError,
@@ -64,6 +66,7 @@ export type ModelIdentityQualificationDependencies = Readonly<{
     occurredAtMilliseconds: number,
     context: QualificationExecutionContext,
   ) => Promise<Response>;
+  sourceTestOnlyFixtureVerification?: () => Promise<void>;
 }>;
 
 type QualificationExecutionContext = Readonly<{
@@ -244,15 +247,7 @@ async function acquire(
     typeof body.initial_state_tree !== "string" ||
     !SHA.test(body.initial_state_tree)
   ) throw new TypeError("qualification acquisition is invalid");
-  const snapshot = await qualificationStateSnapshot(
-    stateConfig(env),
-    stateFetch(dependencies),
-  );
-  if (
-    snapshot.head_commit !== body.initial_state_commit ||
-    snapshot.head_tree !== body.initial_state_tree
-  ) throw new QualificationStateError("foreign_state_movement");
-  const journal = await stub(env).acquire({
+  const acquisition = {
     schema_version: 2,
     run_id: runId,
     run_attempt: runAttempt,
@@ -260,8 +255,49 @@ async function acquire(
     initial_state_commit: body.initial_state_commit,
     initial_state_tree: body.initial_state_tree,
     intent: body.intent,
-  });
-  return json(journal);
+  };
+  const begun = object(JSON.parse(
+    await stub(env).beginAcquisitionVerification(acquisition),
+  ) as unknown);
+  if (begun.kind === "active") return json(begun.journal);
+  exactFields(begun, ["journal_id", "kind"]);
+  if (
+    begun.kind !== "verifying" ||
+    typeof begun.journal_id !== "string" ||
+    !JOURNAL_ID.test(begun.journal_id)
+  ) throw new QualificationStateError("provider_unavailable");
+  try {
+    if (dependencies.sourceTestOnlyFixtureVerification !== undefined) {
+      await dependencies.sourceTestOnlyFixtureVerification();
+    } else {
+      const fixture = await reviewedQualificationFixtureManifest();
+      if (fixture === null) {
+        throw new QualificationStateError("provider_unavailable");
+      }
+      if (
+        body.initial_state_commit !== fixture.state.seed_commit ||
+        body.initial_state_tree !== fixture.state.seed_tree ||
+        !exactIntent(body.intent, fixture.intent)
+      ) throw new QualificationStateError("foreign_state_movement");
+      await verifyQualificationFixtureAtState(
+        stateConfig(env),
+        stateFetch(dependencies),
+        fixture,
+      );
+    }
+    const snapshot = await qualificationStateSnapshot(
+      stateConfig(env),
+      stateFetch(dependencies),
+    );
+    if (
+      snapshot.head_commit !== body.initial_state_commit ||
+      snapshot.head_tree !== body.initial_state_tree
+    ) throw new QualificationStateError("foreign_state_movement");
+    return json(await stub(env).activateVerifiedAcquisition(acquisition));
+  } catch (error) {
+    await stub(env).failAcquisitionVerification(acquisition);
+    throw error;
+  }
 }
 
 async function journalStatus(

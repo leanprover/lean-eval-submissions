@@ -203,6 +203,7 @@ export type QualificationJournalStatus = Readonly<{
 }>;
 
 type StoredRow = Readonly<{ body: string }>;
+type VerificationRow = Readonly<{ body: string; created_at: number }>;
 
 export type QualificationStepReservationOutcome =
   | Readonly<{
@@ -1569,6 +1570,86 @@ export class ModelIdentityQualificationJournal extends DurableObject {
     this.ctx.storage.sql.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS one_active_qualification ON qualification_journals ((1)) WHERE json_extract(body, '$.lease_status') = 'active'",
     );
+    this.ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS qualification_verification_lease (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), body TEXT NOT NULL, created_at INTEGER NOT NULL)",
+    );
+  }
+
+  async beginAcquisitionVerification(value: unknown): Promise<string> {
+    const acquisition = canonicalAcquisition(value);
+    const identifier = await journalId(acquisition);
+    return this.ctx.storage.transaction(async () => {
+      const existing = this.read(acquisition.run_id);
+      if (existing !== null) {
+        if (!exactJson(existing.acquisition, acquisition)) {
+          throw new Error("qualification acquisition conflicts with its durable journal");
+        }
+        return JSON.stringify({ kind: "active", journal: status(existing) });
+      }
+      const verification = this.verification();
+      if (verification !== null) {
+        if (!exactJson(verification.acquisition, acquisition)) {
+          throw new Error("another model identity qualification holds the staging verification lease");
+        }
+      } else {
+        if (this.active() !== null) {
+          throw new Error("another model identity qualification holds the staging lease");
+        }
+        this.ctx.storage.sql.exec(
+          "INSERT INTO qualification_verification_lease (singleton, body, created_at) VALUES (1, ?, ?)",
+          JSON.stringify({ acquisition, journal_id: identifier }),
+          Date.now(),
+        );
+      }
+      await this.ctx.storage.setAlarm(Date.now() + ACTIVE_LEASE_ALARM_MS);
+      return JSON.stringify({ kind: "verifying", journal_id: identifier });
+    });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/require-await -- Durable Object RPC methods are asynchronous boundaries.
+  async activateVerifiedAcquisition(value: unknown): Promise<QualificationJournalStatus> {
+    const acquisition = canonicalAcquisition(value);
+    return this.ctx.storage.transactionSync(() => {
+      const verification = this.verification();
+      if (
+        verification === null ||
+        !exactJson(verification.acquisition, acquisition)
+      ) throw new Error("qualification acquisition verification lease is unavailable");
+      const next: StoredJournal = {
+        acquisition,
+        journal_id: verification.journal_id,
+        journal_revision: 1,
+        current_state_commit: acquisition.initial_state_commit,
+        current_state_tree: acquisition.initial_state_tree,
+        lease_status: "active",
+        pending_step: null,
+        completed_plans: [],
+        recovery_reconciliations: [],
+        recovery_nonce: recoveryNonce(),
+        restoration: null,
+      };
+      this.write(next);
+      this.ctx.storage.sql.exec(
+        "DELETE FROM qualification_verification_lease WHERE singleton = 1",
+      );
+      return status(next);
+    });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/require-await -- Durable Object RPC methods are asynchronous boundaries.
+  async failAcquisitionVerification(value: unknown): Promise<void> {
+    const acquisition = canonicalAcquisition(value);
+    this.ctx.storage.transactionSync(() => {
+      const verification = this.verification();
+      if (
+        verification !== null &&
+        exactJson(verification.acquisition, acquisition)
+      ) {
+        this.ctx.storage.sql.exec(
+          "DELETE FROM qualification_verification_lease WHERE singleton = 1",
+        );
+      }
+    });
   }
 
   async acquire(value: unknown): Promise<QualificationJournalStatus> {
@@ -1908,6 +1989,10 @@ export class ModelIdentityQualificationJournal extends DurableObject {
   }
 
   override async alarm(): Promise<void> {
+    this.ctx.storage.sql.exec(
+      "DELETE FROM qualification_verification_lease WHERE created_at <= ?",
+      Date.now() - ACTIVE_LEASE_ALARM_MS,
+    );
     const active = this.active();
     if (active === null) return;
     console.error(JSON.stringify({
@@ -1938,6 +2023,20 @@ export class ModelIdentityQualificationJournal extends DurableObject {
       "SELECT body FROM qualification_journals WHERE json_extract(body, '$.lease_status') = 'active' LIMIT 1",
     ).toArray()[0];
     return row === undefined ? null : JSON.parse(row.body) as StoredJournal;
+  }
+
+  private verification(): Readonly<{
+    acquisition: QualificationAcquisition;
+    journal_id: string;
+  }> | null {
+    const row = this.ctx.storage.sql.exec<VerificationRow>(
+      "SELECT body, created_at FROM qualification_verification_lease WHERE singleton = 1",
+    ).toArray()[0];
+    if (row === undefined) return null;
+    return JSON.parse(row.body) as Readonly<{
+      acquisition: QualificationAcquisition;
+      journal_id: string;
+    }>;
   }
 
   private read(runId: string): StoredJournal | null {
