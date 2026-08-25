@@ -61,6 +61,11 @@ describe("model identity qualification executor capability", () => {
       .rejects.toThrow("capability is invalid");
     await expect(verifyQualificationExecutorCapability(SECRET, signed, NOW + 61))
       .rejects.toThrow("capability is invalid");
+    await expect(signQualificationExecutorCapability(SECRET, {
+      ...capability(),
+      operation: "unreviewed_operation",
+    } as unknown as QualificationExecutorCapability)).rejects
+      .toThrow("capability is invalid");
   });
 
   it("has no public route and fails closed before invoking a kernel", async () => {

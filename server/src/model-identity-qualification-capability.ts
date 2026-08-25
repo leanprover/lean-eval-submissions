@@ -1,4 +1,8 @@
-import { canonicalQualificationValue } from "./model-identity-qualification-journal";
+import {
+  canonicalQualificationValue,
+  QUALIFICATION_OPERATIONS,
+  type QualificationOperation,
+} from "./model-identity-qualification-journal";
 
 const SHA = /^[0-9a-f]{40}$/;
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -14,7 +18,7 @@ export type QualificationExecutorCapability = Readonly<{
   run_attempt: 1;
   journal_id: string;
   journal_revision: number;
-  operation: string;
+  operation: QualificationOperation;
   plan_digest: string;
   request_digest: string;
   request_index: number;
@@ -88,7 +92,7 @@ function capability(value: unknown, nowSeconds: number): QualificationExecutorCa
     !Number.isSafeInteger(input.journal_revision) ||
     input.journal_revision < 1 ||
     typeof input.operation !== "string" ||
-    !/^[a-z][a-z0-9_]{0,63}$/.test(input.operation) ||
+    !QUALIFICATION_OPERATIONS.includes(input.operation as QualificationOperation) ||
     typeof input.plan_digest !== "string" ||
     !SHA256.test(input.plan_digest) ||
     typeof input.request_digest !== "string" ||
