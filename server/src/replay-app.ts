@@ -3,8 +3,14 @@ import type { Sandbox } from "@cloudflare/sandbox";
 import {
   canonicalHistoricalPublicHandoff,
   HistoricalPublicExecutorContractError,
-  historicalPublicExecutorVerdict,
+  historicalPublicExecutorVerdictFromBinding,
+  historicalPublicRunnerBinding,
   readHistoricalPublicExecutorRequest,
+  readHistoricalPublicExecutorStatusRequest,
+  type HistoricalPublicExecutorInput,
+  type HistoricalPublicExecutorStatusRequest,
+  type HistoricalPublicExecutorVerdict,
+  type HistoricalPublicRunnerBinding,
 } from "./historical-public-executor-contract";
 import {
   AuthoritativeReplayContractError,
@@ -114,8 +120,14 @@ const ARCHIVE_COMMAND_FAILURES = new Map([
 ]);
 
 const AUTHORITATIVE_COMMAND_PREFIX = "replay-authoritative: ";
+const SHA256_DIGEST = /^[0-9a-f]{64}$/;
+const OCI_SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/;
+const REPLAY_TASK_ID = /^rt1_[0-9a-f]{64}$/;
+const HISTORICAL_REQUEST_ID = /^prr_[0-9a-f]{64}$/;
+const RESULT_ID = /^r2_[0-9a-f]{64}$/;
 const AUTHORITATIVE_PROCESS_ID = "lean-eval-authoritative";
 const AUTHORITATIVE_COMMAND = "/opt/lean-eval/replay-authoritative";
+const HISTORICAL_PUBLIC_PROCESS_ID = "lean-eval-historical-public";
 const HISTORICAL_PUBLIC_COMMAND =
   "base64 --decode /workspace/historical-public-source.tar.gz.b64 "
   + "> /workspace/historical-public-source.tar.gz "
@@ -163,6 +175,23 @@ type AuthoritativeTerminalReceipt = {
 };
 
 type AuthoritativeActiveBinding = AuthoritativeReplayStatusRequest & {
+  retained_until_epoch_ms: number;
+};
+
+type HistoricalPublicProcessBinding = HistoricalPublicExecutorStatusRequest
+  & HistoricalPublicRunnerBinding;
+
+type HistoricalPublicActiveBinding = HistoricalPublicProcessBinding & {
+  retained_until_epoch_ms: number;
+};
+
+type HistoricalPublicTerminalReceipt = {
+  schema_version: 1;
+  binding: HistoricalPublicProcessBinding;
+  http_status: 200 | 500;
+  body: HistoricalPublicExecutorVerdict | AuthoritativeFailureBody;
+  destruction_state: "pending" | "confirmed";
+  stored_at_epoch_ms: number;
   retained_until_epoch_ms: number;
 };
 
@@ -254,6 +283,32 @@ async function startAuthoritativeProcess(
     await sandbox.startProcess(AUTHORITATIVE_COMMAND, {
       timeout: AUTHORITATIVE_TIMEOUT_MS,
       processId: AUTHORITATIVE_PROCESS_ID,
+      autoCleanup: false,
+    });
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+}
+
+async function startHistoricalPublicProcess(
+  sandbox: SandboxClient,
+  prepare: () => Promise<void>,
+): Promise<void> {
+  if (sandbox.getProcess === undefined || sandbox.startProcess === undefined) {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  let existing: Awaited<ReturnType<NonNullable<SandboxClient["getProcess"]>>>;
+  try {
+    existing = await sandbox.getProcess(HISTORICAL_PUBLIC_PROCESS_ID);
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  if (existing !== null) return;
+  await prepare();
+  try {
+    await sandbox.startProcess(HISTORICAL_PUBLIC_COMMAND, {
+      timeout: AUTHORITATIVE_TIMEOUT_MS,
+      processId: HISTORICAL_PUBLIC_PROCESS_ID,
       autoCleanup: false,
     });
   } catch {
@@ -416,6 +471,245 @@ async function requireActiveBinding(
   }
   if (value === null) throw new ReplayExecutorError("command_rpc_failed");
   if (!sameActiveBinding(value, request)) rejectBindingMismatch(value);
+}
+
+function historicalStatusBinding(
+  input: HistoricalPublicExecutorInput,
+): HistoricalPublicExecutorStatusRequest {
+  return {
+    schema_version: 1,
+    runner_nonce: input.runner_nonce,
+    replay_task_id: input.replay_task_id,
+    attempt: input.attempt,
+    handoff_sha256: input.handoff_sha256,
+    source_archive_sha256: input.source_archive_sha256,
+    execution_profile_digest: input.execution_profile_digest,
+    measurement_config_digest: input.measurement_config_digest,
+    vm_image_digest: input.vm_image_digest,
+  };
+}
+
+function historicalProcessBinding(
+  input: HistoricalPublicExecutorInput,
+): HistoricalPublicProcessBinding {
+  return {
+    ...historicalStatusBinding(input),
+    ...historicalPublicRunnerBinding(input),
+  };
+}
+
+function historicalProcessBindingValue(
+  value: unknown,
+): HistoricalPublicProcessBinding | null {
+  const binding = objectValue(value);
+  if (
+    binding === null
+    || !exactObjectFields(binding, [
+      "schema_version",
+      "runner_nonce",
+      "replay_task_id",
+      "attempt",
+      "handoff_sha256",
+      "source_archive_sha256",
+      "execution_profile_digest",
+      "measurement_config_digest",
+      "vm_image_digest",
+      "request_id",
+      "result_id",
+    ])
+    || binding.schema_version !== 1
+    || typeof binding.runner_nonce !== "string"
+    || !SHA256_DIGEST.test(binding.runner_nonce)
+    || typeof binding.replay_task_id !== "string"
+    || !REPLAY_TASK_ID.test(binding.replay_task_id)
+    || !Number.isSafeInteger(binding.attempt)
+    || (binding.attempt as number) < 1
+    || typeof binding.handoff_sha256 !== "string"
+    || !SHA256_DIGEST.test(binding.handoff_sha256)
+    || typeof binding.source_archive_sha256 !== "string"
+    || !SHA256_DIGEST.test(binding.source_archive_sha256)
+    || typeof binding.execution_profile_digest !== "string"
+    || !SHA256_DIGEST.test(binding.execution_profile_digest)
+    || typeof binding.measurement_config_digest !== "string"
+    || !SHA256_DIGEST.test(binding.measurement_config_digest)
+    || typeof binding.vm_image_digest !== "string"
+    || !OCI_SHA256_DIGEST.test(binding.vm_image_digest)
+    || typeof binding.request_id !== "string"
+    || !HISTORICAL_REQUEST_ID.test(binding.request_id)
+    || typeof binding.result_id !== "string"
+    || !RESULT_ID.test(binding.result_id)
+  ) {
+    return null;
+  }
+  return binding as HistoricalPublicProcessBinding;
+}
+
+function sameHistoricalStatusBinding(
+  value: unknown,
+  request: HistoricalPublicExecutorStatusRequest,
+): value is HistoricalPublicExecutorStatusRequest {
+  const binding = objectValue(value);
+  return binding !== null
+    && exactObjectFields(binding, [
+      "schema_version",
+      "runner_nonce",
+      "replay_task_id",
+      "attempt",
+      "handoff_sha256",
+      "source_archive_sha256",
+      "execution_profile_digest",
+      "measurement_config_digest",
+      "vm_image_digest",
+    ])
+    && binding.schema_version === request.schema_version
+    && binding.runner_nonce === request.runner_nonce
+    && binding.replay_task_id === request.replay_task_id
+    && binding.attempt === request.attempt
+    && binding.handoff_sha256 === request.handoff_sha256
+    && binding.source_archive_sha256 === request.source_archive_sha256
+    && binding.execution_profile_digest === request.execution_profile_digest
+    && binding.measurement_config_digest === request.measurement_config_digest
+    && binding.vm_image_digest === request.vm_image_digest;
+}
+
+function sameHistoricalProcessBinding(
+  value: unknown,
+  request: HistoricalPublicProcessBinding,
+): value is HistoricalPublicProcessBinding {
+  const binding = historicalProcessBindingValue(value);
+  return binding !== null
+    && sameHistoricalStatusBinding(historicalStatusBindingFromProcess(binding), request)
+    && binding.request_id === request.request_id
+    && binding.result_id === request.result_id;
+}
+
+function historicalStatusBindingFromProcess(
+  binding: HistoricalPublicProcessBinding,
+): HistoricalPublicExecutorStatusRequest {
+  return {
+    schema_version: 1,
+    runner_nonce: binding.runner_nonce,
+    replay_task_id: binding.replay_task_id,
+    attempt: binding.attempt,
+    handoff_sha256: binding.handoff_sha256,
+    source_archive_sha256: binding.source_archive_sha256,
+    execution_profile_digest: binding.execution_profile_digest,
+    measurement_config_digest: binding.measurement_config_digest,
+    vm_image_digest: binding.vm_image_digest,
+  };
+}
+
+function historicalProcessBindingFromActive(
+  binding: HistoricalPublicActiveBinding,
+): HistoricalPublicProcessBinding {
+  return {
+    ...historicalStatusBindingFromProcess(binding),
+    request_id: binding.request_id,
+    result_id: binding.result_id,
+  };
+}
+
+function historicalActiveBinding(
+  binding: HistoricalPublicProcessBinding,
+  now = Date.now(),
+): HistoricalPublicActiveBinding {
+  return {
+    ...binding,
+    retained_until_epoch_ms: now + AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS,
+  };
+}
+
+function historicalActiveBindingValue(
+  value: unknown,
+): HistoricalPublicActiveBinding | null {
+  const binding = objectValue(value);
+  if (
+    binding === null
+    || !exactObjectFields(binding, [
+      "schema_version",
+      "runner_nonce",
+      "replay_task_id",
+      "attempt",
+      "handoff_sha256",
+      "source_archive_sha256",
+      "execution_profile_digest",
+      "measurement_config_digest",
+      "vm_image_digest",
+      "request_id",
+      "result_id",
+      "retained_until_epoch_ms",
+    ])
+    || !Number.isSafeInteger(binding.retained_until_epoch_ms)
+  ) {
+    return null;
+  }
+  return historicalProcessBindingValue({
+    schema_version: binding.schema_version,
+    runner_nonce: binding.runner_nonce,
+    replay_task_id: binding.replay_task_id,
+    attempt: binding.attempt,
+    handoff_sha256: binding.handoff_sha256,
+    source_archive_sha256: binding.source_archive_sha256,
+    execution_profile_digest: binding.execution_profile_digest,
+    measurement_config_digest: binding.measurement_config_digest,
+    vm_image_digest: binding.vm_image_digest,
+    request_id: binding.request_id,
+    result_id: binding.result_id,
+  }) === null
+    ? null
+    : binding as HistoricalPublicActiveBinding;
+}
+
+function sameHistoricalActiveBinding(
+  value: unknown,
+  request: HistoricalPublicProcessBinding,
+): value is HistoricalPublicActiveBinding {
+  const binding = historicalActiveBindingValue(value);
+  if (binding === null) return false;
+  return sameHistoricalProcessBinding(historicalProcessBindingFromActive(binding), request);
+}
+
+function rejectHistoricalBindingMismatch(value: unknown): never {
+  if (historicalActiveBindingValue(value) === null) {
+    throw new ReplayExecutorError("command_output_invalid");
+  }
+  throw new HistoricalPublicExecutorContractError("runner nonce is already bound");
+}
+
+async function claimHistoricalActiveBinding(
+  store: TerminalReceiptStore,
+  request: HistoricalPublicProcessBinding,
+): Promise<void> {
+  let value: unknown;
+  try {
+    value = await store.claimBinding(historicalActiveBinding(request));
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  if (!sameHistoricalActiveBinding(value, request)) rejectHistoricalBindingMismatch(value);
+}
+
+async function requireHistoricalActiveBinding(
+  store: TerminalReceiptStore,
+  request: HistoricalPublicExecutorStatusRequest,
+): Promise<HistoricalPublicProcessBinding> {
+  let value: unknown;
+  try {
+    value = await store.readBinding();
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  if (value === null) throw new ReplayExecutorError("command_rpc_failed");
+  const binding = historicalActiveBindingValue(value);
+  if (binding === null) throw new ReplayExecutorError("command_output_invalid");
+  const processBinding = historicalProcessBindingFromActive(binding);
+  if (!sameHistoricalStatusBinding(
+    historicalStatusBindingFromProcess(processBinding),
+    request,
+  )) {
+    throw new HistoricalPublicExecutorContractError("runner nonce is already bound");
+  }
+  return processBinding;
 }
 
 function failureBody(error: unknown): AuthoritativeFailureBody {
@@ -671,6 +965,274 @@ async function authoritativeProcessStatus(
   return terminalReceiptResponse(await confirmTerminalReceipt(sandbox, store, receipt));
 }
 
+function validateHistoricalTerminalReceipt(
+  value: unknown,
+  request: HistoricalPublicProcessBinding,
+): HistoricalPublicTerminalReceipt {
+  const receipt = objectValue(value);
+  if (
+    receipt === null
+    || !exactObjectFields(receipt, [
+      "schema_version",
+      "binding",
+      "http_status",
+      "body",
+      "destruction_state",
+      "stored_at_epoch_ms",
+      "retained_until_epoch_ms",
+    ])
+    || receipt.schema_version !== 1
+    || !sameHistoricalProcessBinding(receipt.binding, request)
+    || !["pending", "confirmed"].includes(receipt.destruction_state as string)
+    || !Number.isSafeInteger(receipt.stored_at_epoch_ms)
+    || !Number.isSafeInteger(receipt.retained_until_epoch_ms)
+    || (receipt.retained_until_epoch_ms as number)
+      !== (receipt.stored_at_epoch_ms as number) + AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS
+  ) {
+    throw new ReplayExecutorError("command_output_invalid");
+  }
+  const body = objectValue(receipt.body);
+  if (receipt.http_status === 200 && body !== null) {
+    if (
+      !exactObjectFields(body, [
+        "schema_version",
+        "contract",
+        "runner_nonce",
+        "replay_task_id",
+        "attempt",
+        "handoff_sha256",
+        "source_archive_sha256",
+        "execution_profile_digest",
+        "measurement_config_digest",
+        "vm_image_digest",
+        "runner_verdict",
+        "destruction",
+      ])
+      || body.contract !== "historical_public_executor_v1"
+      || body.destruction !== "confirmed"
+      || !sameHistoricalStatusBinding({
+        schema_version: body.schema_version,
+        runner_nonce: body.runner_nonce,
+        replay_task_id: body.replay_task_id,
+        attempt: body.attempt,
+        handoff_sha256: body.handoff_sha256,
+        source_archive_sha256: body.source_archive_sha256,
+        execution_profile_digest: body.execution_profile_digest,
+        measurement_config_digest: body.measurement_config_digest,
+        vm_image_digest: body.vm_image_digest,
+      }, historicalStatusBindingFromProcess(request))
+    ) {
+      throw new ReplayExecutorError("command_output_invalid");
+    }
+    let verdict: HistoricalPublicExecutorVerdict;
+    try {
+      verdict = historicalPublicExecutorVerdictFromBinding(
+        historicalStatusBindingFromProcess(request),
+        { request_id: request.request_id, result_id: request.result_id },
+        body.runner_verdict,
+      );
+    } catch {
+      throw new ReplayExecutorError("command_output_invalid");
+    }
+    return {
+      schema_version: 1,
+      binding: { ...request },
+      http_status: 200,
+      body: verdict,
+      destruction_state: receipt.destruction_state as "pending" | "confirmed",
+      stored_at_epoch_ms: receipt.stored_at_epoch_ms as number,
+      retained_until_epoch_ms: receipt.retained_until_epoch_ms as number,
+    };
+  }
+  if (receipt.http_status === 500 && body !== null) {
+    const hasDetail = Object.hasOwn(body, "detail");
+    if (
+      !exactObjectFields(body, hasDetail
+        ? ["error", "reason", "detail"]
+        : ["error", "reason"])
+      || body.error !== "executor_failed"
+      || ![
+        "input_transfer_failed",
+        "command_rpc_failed",
+        "command_failed",
+        "command_output_invalid",
+        "sandbox_destroy_failed",
+        "unexpected_failure",
+      ].includes(body.reason as string)
+      || (hasDetail
+        && (typeof body.detail !== "string" || !/^[a-z0-9_]{1,64}$/.test(body.detail)))
+    ) {
+      throw new ReplayExecutorError("command_output_invalid");
+    }
+    return {
+      schema_version: 1,
+      binding: { ...request },
+      http_status: 500,
+      body: {
+        error: "executor_failed",
+        reason: body.reason as ExecutorFailureReason,
+        ...(hasDetail ? { detail: body.detail as string } : {}),
+      },
+      destruction_state: receipt.destruction_state as "pending" | "confirmed",
+      stored_at_epoch_ms: receipt.stored_at_epoch_ms as number,
+      retained_until_epoch_ms: receipt.retained_until_epoch_ms as number,
+    };
+  }
+  throw new ReplayExecutorError("command_output_invalid");
+}
+
+async function readHistoricalTerminalReceipt(
+  store: TerminalReceiptStore,
+  request: HistoricalPublicProcessBinding,
+): Promise<HistoricalPublicTerminalReceipt | null> {
+  let value: unknown;
+  try {
+    value = await store.readReceipt();
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  return value === null ? null : validateHistoricalTerminalReceipt(value, request);
+}
+
+async function prepareHistoricalTerminalReceipt(
+  store: TerminalReceiptStore,
+  receipt: HistoricalPublicTerminalReceipt,
+  request: HistoricalPublicProcessBinding,
+): Promise<HistoricalPublicTerminalReceipt> {
+  let value: unknown;
+  try {
+    value = await store.prepareReceipt(receipt);
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  return validateHistoricalTerminalReceipt(value, request);
+}
+
+function historicalTerminalReceiptResponse(
+  receipt: HistoricalPublicTerminalReceipt,
+): Response {
+  if (receipt.destruction_state !== "confirmed") {
+    throw new ReplayExecutorError("sandbox_destroy_failed");
+  }
+  return json(receipt.body, receipt.http_status);
+}
+
+async function confirmHistoricalTerminalReceipt(
+  sandbox: SandboxClient,
+  store: TerminalReceiptStore,
+  receipt: HistoricalPublicTerminalReceipt,
+): Promise<HistoricalPublicTerminalReceipt> {
+  if (receipt.destruction_state === "confirmed") return receipt;
+  try {
+    await sandbox.destroy();
+  } catch {
+    throw new ReplayExecutorError("sandbox_destroy_failed");
+  }
+  let value: unknown;
+  try {
+    value = await store.confirmReceipt();
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  return validateHistoricalTerminalReceipt(value, receipt.binding);
+}
+
+function historicalTerminalReceipt(
+  request: HistoricalPublicProcessBinding,
+  status: string,
+  logs: { stdout: string; stderr: string },
+  now = Date.now(),
+): HistoricalPublicTerminalReceipt {
+  let httpStatus: 200 | 500;
+  let body: HistoricalPublicTerminalReceipt["body"];
+  try {
+    if (status !== "completed") {
+      throw new ReplayExecutorError("command_failed");
+    }
+    if (logs.stdout.length > 64 * 1024) {
+      throw new ReplayExecutorError("command_output_invalid");
+    }
+    try {
+      body = historicalPublicExecutorVerdictFromBinding(
+        historicalStatusBindingFromProcess(request),
+        { request_id: request.request_id, result_id: request.result_id },
+        JSON.parse(logs.stdout) as unknown,
+      );
+    } catch {
+      throw new ReplayExecutorError("command_output_invalid");
+    }
+    httpStatus = 200;
+  } catch (error) {
+    recordExecutorFailure("historical_public_replay_status", error);
+    httpStatus = 500;
+    body = failureBody(error);
+  }
+  return {
+    schema_version: 1,
+    binding: { ...request },
+    http_status: httpStatus,
+    body,
+    destruction_state: "pending",
+    stored_at_epoch_ms: now,
+    retained_until_epoch_ms: now + AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS,
+  };
+}
+
+function historicalRunningResponse(
+  request: HistoricalPublicExecutorStatusRequest,
+): Response {
+  return json({
+    schema_version: 1,
+    replay_task_id: request.replay_task_id,
+    attempt: request.attempt,
+    status: "running",
+  }, 202);
+}
+
+async function historicalProcessStatus(
+  sandbox: SandboxClient,
+  store: TerminalReceiptStore,
+  request: HistoricalPublicProcessBinding,
+): Promise<Response> {
+  const stored = await readHistoricalTerminalReceipt(store, request);
+  if (stored !== null) {
+    return historicalTerminalReceiptResponse(
+      await confirmHistoricalTerminalReceipt(sandbox, store, stored),
+    );
+  }
+  if (sandbox.getProcess === undefined) throw new ReplayExecutorError("command_rpc_failed");
+  let process: Awaited<ReturnType<NonNullable<SandboxClient["getProcess"]>>>;
+  try {
+    process = await sandbox.getProcess(HISTORICAL_PUBLIC_PROCESS_ID);
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  if (process === null) throw new ReplayExecutorError("command_rpc_failed");
+  let status: Awaited<ReturnType<typeof process.getStatus>>;
+  try {
+    status = await process.getStatus();
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  if (status === "starting" || status === "running") {
+    return historicalRunningResponse(historicalStatusBindingFromProcess(request));
+  }
+  let logs: Awaited<ReturnType<typeof process.getLogs>>;
+  try {
+    logs = await process.getLogs();
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  const receipt = await prepareHistoricalTerminalReceipt(
+    store,
+    historicalTerminalReceipt(request, status, logs),
+    request,
+  );
+  return historicalTerminalReceiptResponse(
+    await confirmHistoricalTerminalReceipt(sandbox, store, receipt),
+  );
+}
+
 async function writeSandboxFile(
   sandbox: SandboxClient,
   path: string,
@@ -776,6 +1338,7 @@ export async function handleReplayRequest(
   const authoritativeReplay = url.pathname === "/api/v1/replay";
   const authoritativeStatus = url.pathname === "/api/v1/replay/status";
   const historicalPublicReplay = url.pathname === "/api/v1/historical-public-replay";
+  const historicalPublicStatus = url.pathname === "/api/v1/historical-public-replay/status";
   if (
     (
       !syntheticAcceptance
@@ -783,6 +1346,7 @@ export async function handleReplayRequest(
       && !authoritativeReplay
       && !authoritativeStatus
       && !historicalPublicReplay
+      && !historicalPublicStatus
     ) ||
     request.method !== "POST"
   ) {
@@ -791,8 +1355,33 @@ export async function handleReplayRequest(
   if (authoritativeReplay && env.REPLAY_ENABLED !== "true") {
     return json({ error: "replay_disabled" }, 503);
   }
-  if (historicalPublicReplay && env.HISTORICAL_PUBLIC_REPLAY_ENABLED !== "true") {
+  if (
+    (historicalPublicReplay || historicalPublicStatus)
+    && env.HISTORICAL_PUBLIC_REPLAY_ENABLED !== "true"
+  ) {
     return json({ error: "historical_public_replay_disabled" }, 503);
+  }
+  if (historicalPublicStatus) {
+    try {
+      await dependencies.authenticate(request, env);
+      const input = await readHistoricalPublicExecutorStatusRequest(
+        request,
+        env.REVIEWED_EXECUTION_PROFILE_DIGEST,
+        env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
+        env.REVIEWED_VM_IMAGE_DIGEST,
+      );
+      const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
+      const binding = await requireHistoricalActiveBinding(store, input);
+      const sandbox = dependencies.sandbox(env, input.runner_nonce);
+      return await historicalProcessStatus(sandbox, store, binding);
+    } catch (error) {
+      if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
+      if (error instanceof HistoricalPublicExecutorContractError || error instanceof SyntaxError) {
+        return json({ error: "invalid_request" }, 400);
+      }
+      recordExecutorFailure("historical_public_replay_status", error);
+      return authoritativeExecutorFailure(error);
+    }
   }
   if (historicalPublicReplay) {
     try {
@@ -803,34 +1392,32 @@ export async function handleReplayRequest(
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
+      const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
+      const binding = historicalProcessBinding(input);
+      await claimHistoricalActiveBinding(store, binding);
+      const existingReceipt = await readHistoricalTerminalReceipt(store, binding);
+      if (existingReceipt !== null) {
+        return historicalRunningResponse(historicalStatusBinding(input));
+      }
       const sandbox = dependencies.sandbox(env, input.runner_nonce);
-      const verdict = await withSandboxDestruction(sandbox, async () => {
-        await writeSandboxFile(
-          sandbox,
-          "/workspace/historical-public-request.json",
-          canonicalHistoricalPublicHandoff(input.handoff),
-        );
-        await writeSandboxFile(
-          sandbox,
-          "/workspace/historical-public-source.tar.gz.b64",
-          input.source_archive_base64,
-        );
-        const stdout = await executeSandboxCommand(
-          sandbox,
-          HISTORICAL_PUBLIC_COMMAND,
-          AUTHORITATIVE_TIMEOUT_MS,
-          64 * 1024,
-        );
-        try {
-          return historicalPublicExecutorVerdict(
-            input,
-            JSON.parse(stdout) as unknown,
+      try {
+        await startHistoricalPublicProcess(sandbox, async () => {
+          await writeSandboxFile(
+            sandbox,
+            "/workspace/historical-public-request.json",
+            canonicalHistoricalPublicHandoff(input.handoff),
           );
-        } catch {
-          throw new ReplayExecutorError("command_output_invalid");
-        }
-      });
-      return json(verdict);
+          await writeSandboxFile(
+            sandbox,
+            "/workspace/historical-public-source.tar.gz.b64",
+            input.source_archive_base64,
+          );
+        });
+      } catch (error) {
+        await sandbox.destroy();
+        throw error;
+      }
+      return historicalRunningResponse(historicalStatusBinding(input));
     } catch (error) {
       if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
       if (error instanceof HistoricalPublicExecutorContractError || error instanceof SyntaxError) {

@@ -149,6 +149,22 @@ function historicalPublicRunnerVerdict(body: Record<string, unknown>): Record<st
   };
 }
 
+function historicalStatusInput(body: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(body).filter(
+    ([field]) => field !== "handoff" && field !== "source_archive_base64",
+  ));
+}
+
+function historicalProcessBindingInput(body: Record<string, unknown>): Record<string, unknown> {
+  const handoff = body.handoff as Record<string, unknown>;
+  const result = handoff.result as Record<string, unknown>;
+  return {
+    ...historicalStatusInput(body),
+    request_id: handoff.request_id,
+    result_id: result.result_id,
+  };
+}
+
 function authoritativeStatusInput(body: Record<string, unknown>): Record<string, unknown> {
   const execution = body.request as Record<string, unknown>;
   const profile = execution.execution_profile as Record<string, unknown>;
@@ -250,67 +266,137 @@ describe("Cloudflare replay executor", () => {
   });
 
   it("keeps historical public replay separately disabled before authentication", async () => {
-    let authenticated = false;
-    const response = await handleReplayRequest(new Request(
-      "https://example.test/api/v1/historical-public-replay",
-      { method: "POST", body: "{}" },
-    ), REVIEWED_ENV, {
-      authenticate: () => {
-        authenticated = true;
-        return Promise.resolve();
-      },
-      sandbox: () => { throw new Error("sandbox must remain unreachable"); },
-    });
-    expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({
-      error: "historical_public_replay_disabled",
-    });
-    expect(authenticated).toBe(false);
+    for (const path of [
+      "/api/v1/historical-public-replay",
+      "/api/v1/historical-public-replay/status",
+    ]) {
+      let authenticated = false;
+      const response = await handleReplayRequest(new Request(
+        `https://example.test${path}`,
+        { method: "POST", body: "{}" },
+      ), REVIEWED_ENV, {
+        authenticate: () => {
+          authenticated = true;
+          return Promise.resolve();
+        },
+        sandbox: () => { throw new Error("sandbox must remain unreachable"); },
+      });
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({
+        error: "historical_public_replay_disabled",
+      });
+      expect(authenticated).toBe(false);
+    }
   });
 
-  it("executes one exact historical handoff and confirms destruction", async () => {
+  it("idempotently starts and polls one historical handoff through confirmed destruction", async () => {
     const body = await historicalPublicInput();
     const writes = new Map<string, string>();
     const commands: string[] = [];
-    let destroyed = false;
-    const response = await handleReplayRequest(new Request(
+    const processIds: string[] = [];
+    let processStarted = false;
+    let processStatus: "running" | "completed" = "running";
+    let logReads = 0;
+    let destroyCalls = 0;
+    let claimedBinding: unknown = null;
+    let storedReceipt: unknown = null;
+    const receipts = {
+      readBinding: () => Promise.resolve(claimedBinding),
+      claimBinding: (value: unknown) => {
+        if (claimedBinding === null) claimedBinding = value;
+        return Promise.resolve(claimedBinding);
+      },
+      readReceipt: () => Promise.resolve(storedReceipt),
+      prepareReceipt: (value: unknown) => {
+        if (storedReceipt === null) storedReceipt = value;
+        return Promise.resolve(storedReceipt);
+      },
+      confirmReceipt: () => {
+        storedReceipt = {
+          ...(storedReceipt as Record<string, unknown>),
+          destruction_state: "confirmed",
+        };
+        return Promise.resolve(storedReceipt);
+      },
+    };
+    const process = {
+      getStatus: () => Promise.resolve(processStatus),
+      getLogs: () => {
+        logReads += 1;
+        return Promise.resolve({
+          stdout: JSON.stringify(historicalPublicRunnerVerdict(body)),
+          stderr: "",
+        });
+      },
+    };
+    const sandbox = {
+      writeFile: (path: string, contents: string) => {
+        writes.set(path, contents);
+        return Promise.resolve({ success: true, path, timestamp: "fixture" });
+      },
+      exec: () => { throw new Error("blocking exec must remain unreachable"); },
+      getProcess: () => Promise.resolve(processStarted ? process as never : null),
+      startProcess: (command: string, options?: { processId?: string }) => {
+        processStarted = true;
+        commands.push(command);
+        processIds.push(options?.processId ?? "");
+        return Promise.resolve(process as never);
+      },
+      destroy: () => {
+        destroyCalls += 1;
+        return Promise.resolve();
+      },
+    };
+    const dependencies = {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => sandbox,
+      receiptStore: () => receipts,
+    };
+    const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
+    const startRequest = () => new Request(
       "https://example.test/api/v1/historical-public-replay",
       { method: "POST", body: JSON.stringify(body) },
-    ), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
-      authenticate: () => Promise.resolve(),
-      sandbox: () => ({
-        writeFile: (path, contents) => {
-          if (typeof contents !== "string") throw new Error("expected string input");
-          writes.set(path, contents);
-          return Promise.resolve({ success: true, path, timestamp: "fixture" });
-        },
-        exec: (command) => {
-          commands.push(command);
-          return Promise.resolve({
-            success: true,
-            exitCode: 0,
-            stdout: JSON.stringify(historicalPublicRunnerVerdict(body)),
-            stderr: "",
-            command,
-            duration: 1,
-            timestamp: "fixture",
-          });
-        },
-        destroy: () => {
-          destroyed = true;
-          return Promise.resolve();
-        },
-      }),
+    );
+    const statusRequest = () => new Request(
+      "https://example.test/api/v1/historical-public-replay/status",
+      { method: "POST", body: JSON.stringify(historicalStatusInput(body)) },
+    );
+
+    const start = await handleReplayRequest(startRequest(), enabled, dependencies);
+    expect(start.status).toBe(202);
+    expect(await start.json()).toEqual({
+      schema_version: 1,
+      replay_task_id: body.replay_task_id,
+      attempt: body.attempt,
+      status: "running",
     });
-    expect(response.status).toBe(200);
-    expect(destroyed).toBe(true);
     expect(commands).toHaveLength(1);
     expect(commands[0]).toContain("/opt/lean-eval/historical-public-runner");
+    expect(processIds).toEqual(["lean-eval-historical-public"]);
     expect(writes.get("/workspace/historical-public-request.json"))
       .toBe(canonicalHistoricalPublicHandoff(body.handoff));
     expect(writes.get("/workspace/historical-public-source.tar.gz.b64"))
       .toBe(body.source_archive_base64);
-    expect(await response.json()).toMatchObject({
+    expect(claimedBinding).toMatchObject(historicalProcessBindingInput(body));
+    expect(typeof (claimedBinding as Record<string, unknown>).retained_until_epoch_ms)
+      .toBe("number");
+    expect(destroyCalls).toBe(0);
+
+    const duplicateStart = await handleReplayRequest(startRequest(), enabled, dependencies);
+    expect(duplicateStart.status).toBe(202);
+    expect(commands).toHaveLength(1);
+    expect(writes).toHaveLength(2);
+
+    const running = await handleReplayRequest(statusRequest(), enabled, dependencies);
+    expect(running.status).toBe(202);
+    expect(await running.json()).toMatchObject({ status: "running" });
+    expect(destroyCalls).toBe(0);
+
+    processStatus = "completed";
+    const terminal = await handleReplayRequest(statusRequest(), enabled, dependencies);
+    expect(terminal.status).toBe(200);
+    const terminalBody = await terminal.json();
+    expect(terminalBody).toMatchObject({
       contract: "historical_public_executor_v1",
       replay_task_id: body.replay_task_id,
       attempt: body.attempt,
@@ -322,6 +408,312 @@ describe("Cloudflare replay executor", () => {
       vm_image_digest: VM_IMAGE_DIGEST,
       destruction: "confirmed",
     });
+    expect(storedReceipt).toMatchObject({
+      binding: historicalProcessBindingInput(body),
+      http_status: 200,
+      body: terminalBody,
+      destruction_state: "confirmed",
+    });
+    expect(destroyCalls).toBe(1);
+    expect(logReads).toBe(1);
+
+    const repeated = await handleReplayRequest(statusRequest(), enabled, dependencies);
+    expect(repeated.status).toBe(200);
+    expect(await repeated.json()).toEqual(terminalBody);
+    expect(destroyCalls).toBe(1);
+    expect(logReads).toBe(1);
+
+    const startAfterTerminal = await handleReplayRequest(startRequest(), enabled, dependencies);
+    expect(startAfterTerminal.status).toBe(202);
+    expect(commands).toHaveLength(1);
+  });
+
+  it("rejects historical active-binding drift before sandbox lookup", async () => {
+    const body = await historicalPublicInput();
+    const activeBinding = {
+      ...historicalProcessBindingInput(body),
+      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
+    };
+    const status = historicalStatusInput(body);
+    const mutations: [string, unknown][] = [
+      ["runner_nonce", "a".repeat(64)],
+      ["replay_task_id", `rt1_${"b".repeat(64)}`],
+      ["attempt", 2],
+      ["handoff_sha256", "c".repeat(64)],
+      ["source_archive_sha256", "d".repeat(64)],
+      ["execution_profile_digest", "e".repeat(64)],
+      ["measurement_config_digest", "f".repeat(64)],
+      ["vm_image_digest", `sha256:${"a".repeat(64)}`],
+    ];
+    for (const [field, value] of mutations) {
+      let sandboxLookups = 0;
+      const response = await handleReplayRequest(new Request(
+        "https://example.test/api/v1/historical-public-replay/status",
+        { method: "POST", body: JSON.stringify({ ...status, [field]: value }) },
+      ), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => {
+          sandboxLookups += 1;
+          throw new Error("sandbox must remain unreachable");
+        },
+        receiptStore: () => ({
+          readBinding: () => Promise.resolve(activeBinding),
+          claimBinding: (claimed) => Promise.resolve(claimed),
+          readReceipt: () => Promise.resolve(null),
+          prepareReceipt: (receipt) => Promise.resolve(receipt),
+          confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
+        }),
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "invalid_request" });
+      expect(sandboxLookups).toBe(0);
+    }
+  });
+
+  it("rejects a historical duplicate start bound to another replay task", async () => {
+    const body = await historicalPublicInput();
+    const claimed = {
+      ...historicalProcessBindingInput(body),
+      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
+    };
+    const duplicate = { ...body, replay_task_id: `rt1_${"f".repeat(64)}` };
+    let sandboxLookups = 0;
+    const response = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/historical-public-replay",
+      { method: "POST", body: JSON.stringify(duplicate) },
+    ), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => {
+        sandboxLookups += 1;
+        throw new Error("sandbox must remain unreachable");
+      },
+      receiptStore: () => ({
+        readBinding: () => Promise.resolve(claimed),
+        claimBinding: () => Promise.resolve(claimed),
+        readReceipt: () => Promise.resolve(null),
+        prepareReceipt: (receipt) => Promise.resolve(receipt),
+        confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
+      }),
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_request" });
+    expect(sandboxLookups).toBe(0);
+  });
+
+  it("persists and replays an exact historical terminal failure after destruction", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const body = await historicalPublicInput();
+      const binding = historicalProcessBindingInput(body);
+      const activeBinding = {
+        ...binding,
+        retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
+      };
+      let receipt: unknown = null;
+      let logReads = 0;
+      let destroyCalls = 0;
+      const receipts = {
+        readBinding: () => Promise.resolve(activeBinding),
+        claimBinding: () => Promise.resolve(activeBinding),
+        readReceipt: () => Promise.resolve(receipt),
+        prepareReceipt: (value: unknown) => {
+          if (receipt === null) receipt = value;
+          return Promise.resolve(receipt);
+        },
+        confirmReceipt: () => {
+          receipt = { ...(receipt as Record<string, unknown>), destruction_state: "confirmed" };
+          return Promise.resolve(receipt);
+        },
+      };
+      const sandbox = {
+        writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+        exec: () => { throw new Error("blocking exec must remain unreachable"); },
+        getProcess: () => Promise.resolve({
+          getStatus: () => Promise.resolve("failed"),
+          getLogs: () => {
+            logReads += 1;
+            return Promise.resolve({ stdout: "", stderr: "untrusted historical output" });
+          },
+        } as never),
+        destroy: () => {
+          destroyCalls += 1;
+          return Promise.resolve();
+        },
+      };
+      const request = () => new Request(
+        "https://example.test/api/v1/historical-public-replay/status",
+        { method: "POST", body: JSON.stringify(historicalStatusInput(body)) },
+      );
+      const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
+      const dependencies = {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => sandbox,
+        receiptStore: () => receipts,
+      };
+
+      const first = await handleReplayRequest(request(), enabled, dependencies);
+      expect(first.status).toBe(500);
+      const failure = await first.json();
+      expect(failure).toEqual({ error: "executor_failed", reason: "command_failed" });
+      expect(JSON.stringify(failure)).not.toContain("untrusted historical output");
+      expect(receipt).toMatchObject({
+        binding,
+        http_status: 500,
+        body: failure,
+        destruction_state: "confirmed",
+      });
+      expect(destroyCalls).toBe(1);
+      expect(logReads).toBe(1);
+
+      const repeated = await handleReplayRequest(request(), enabled, dependencies);
+      expect(repeated.status).toBe(500);
+      expect(await repeated.json()).toEqual(failure);
+      expect(destroyCalls).toBe(1);
+      expect(logReads).toBe(1);
+      expect(logged).toHaveBeenCalledExactlyOnceWith(JSON.stringify({
+        event: "lean_eval_replay_executor_failure",
+        route: "historical_public_replay_status",
+        reason: "command_failed",
+      }));
+      expect(logged.mock.calls.flat().join(" ")).not.toContain("untrusted historical output");
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  it("does not release a historical terminal verdict until destruction is confirmed", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const body = await historicalPublicInput();
+      const binding = historicalProcessBindingInput(body);
+      const activeBinding = {
+        ...binding,
+        retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
+      };
+      let receipt: unknown = null;
+      let rejectDestruction = true;
+      let destroyCalls = 0;
+      let confirmCalls = 0;
+      const receipts = {
+        readBinding: () => Promise.resolve(activeBinding),
+        claimBinding: () => Promise.resolve(activeBinding),
+        readReceipt: () => Promise.resolve(receipt),
+        prepareReceipt: (value: unknown) => {
+          if (receipt === null) receipt = value;
+          return Promise.resolve(receipt);
+        },
+        confirmReceipt: () => {
+          confirmCalls += 1;
+          receipt = { ...(receipt as Record<string, unknown>), destruction_state: "confirmed" };
+          return Promise.resolve(receipt);
+        },
+      };
+      const sandbox = {
+        writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+        exec: () => { throw new Error("blocking exec must remain unreachable"); },
+        getProcess: () => Promise.resolve({
+          getStatus: () => Promise.resolve("completed"),
+          getLogs: () => Promise.resolve({
+            stdout: JSON.stringify(historicalPublicRunnerVerdict(body)),
+            stderr: "",
+          }),
+        } as never),
+        destroy: () => {
+          destroyCalls += 1;
+          if (rejectDestruction) {
+            rejectDestruction = false;
+            return Promise.reject(new Error("destruction unavailable"));
+          }
+          return Promise.resolve();
+        },
+      };
+      const request = () => new Request(
+        "https://example.test/api/v1/historical-public-replay/status",
+        { method: "POST", body: JSON.stringify(historicalStatusInput(body)) },
+      );
+      const dependencies = {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => sandbox,
+        receiptStore: () => receipts,
+      };
+      const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
+
+      const first = await handleReplayRequest(request(), enabled, dependencies);
+      expect(first.status).toBe(500);
+      expect(await first.json()).toEqual({
+        error: "executor_failed",
+        reason: "sandbox_destroy_failed",
+      });
+      expect(receipt).toMatchObject({ destruction_state: "pending", http_status: 200 });
+      expect(confirmCalls).toBe(0);
+
+      const retry = await handleReplayRequest(request(), enabled, dependencies);
+      expect(retry.status).toBe(200);
+      expect(await retry.json()).toMatchObject({
+        contract: "historical_public_executor_v1",
+        destruction: "confirmed",
+      });
+      expect(destroyCalls).toBe(2);
+      expect(confirmCalls).toBe(1);
+    } finally {
+      logged.mockRestore();
+    }
+  });
+
+  it("fails closed on corrupt or differently bound historical receipts", async () => {
+    const body = await historicalPublicInput();
+    const binding = historicalProcessBindingInput(body);
+    const activeBinding = {
+      ...binding,
+      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
+    };
+    const storedAt = 1_000;
+    const terminalBody = {
+      ...historicalStatusInput(body),
+      contract: "historical_public_executor_v1",
+      runner_verdict: historicalPublicRunnerVerdict(body),
+      destruction: "confirmed",
+    };
+    const mismatched = {
+      schema_version: 1,
+      binding: { ...binding, source_archive_sha256: "f".repeat(64) },
+      http_status: 200,
+      body: terminalBody,
+      destruction_state: "confirmed",
+      stored_at_epoch_ms: storedAt,
+      retained_until_epoch_ms: storedAt + 24 * 60 * 60 * 1000,
+    };
+    for (const stored of [{ schema_version: 1 }, mismatched]) {
+      let processReads = 0;
+      const response = await handleReplayRequest(new Request(
+        "https://example.test/api/v1/historical-public-replay/status",
+        { method: "POST", body: JSON.stringify(historicalStatusInput(body)) },
+      ), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => ({
+          writeFile: (path) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+          exec: () => { throw new Error("blocking exec must remain unreachable"); },
+          getProcess: () => {
+            processReads += 1;
+            return Promise.resolve(null);
+          },
+          destroy: () => Promise.resolve(),
+        }),
+        receiptStore: () => ({
+          readBinding: () => Promise.resolve(activeBinding),
+          claimBinding: () => Promise.resolve(activeBinding),
+          readReceipt: () => Promise.resolve(stored),
+          prepareReceipt: (receipt) => Promise.resolve(receipt),
+          confirmReceipt: () => Promise.resolve(stored),
+        }),
+      });
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({
+        error: "executor_failed",
+        reason: "command_output_invalid",
+      });
+      expect(processReads).toBe(0);
+    }
   });
 
   it("starts one background command, polls it, and confirms destruction", async () => {

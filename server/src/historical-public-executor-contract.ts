@@ -44,6 +44,11 @@ export type HistoricalPublicExecutorVerdict = HistoricalPublicExecutorStatusRequ
   destruction: "confirmed";
 };
 
+export type HistoricalPublicRunnerBinding = {
+  request_id: string;
+  result_id: string;
+};
+
 export class HistoricalPublicExecutorContractError extends Error {}
 
 function object(value: unknown, label: string): Record<string, unknown> {
@@ -306,6 +311,16 @@ export function validateHistoricalPublicRunnerVerdict(
   value: unknown,
   input: HistoricalPublicExecutorInput,
 ): HistoricalPublicRunnerVerdict {
+  return validateHistoricalPublicRunnerVerdictBinding(
+    value,
+    historicalPublicRunnerBinding(input),
+  );
+}
+
+function validateHistoricalPublicRunnerVerdictBinding(
+  value: unknown,
+  binding: HistoricalPublicRunnerBinding,
+): HistoricalPublicRunnerVerdict {
   const verdict = object(value, "historical runner verdict");
   exactFields(verdict, [
     "schema_version",
@@ -316,11 +331,10 @@ export function validateHistoricalPublicRunnerVerdict(
     "failure_reason",
     "statistics",
   ], "historical runner verdict");
-  const handoffResult = object(input.handoff.result, "historical runner handoff result");
   if (
     verdict.schema_version !== 1
-    || verdict.request_id !== input.handoff.request_id
-    || verdict.result_id !== handoffResult.result_id
+    || verdict.request_id !== binding.request_id
+    || verdict.result_id !== binding.result_id
     || !["completed", "crashed", "timed_out"].includes(verdict.execution_outcome as string)
     || (verdict.execution_outcome === "completed"
       ? !["accepted", "rejected", "declined"].includes(verdict.checker_outcome as string)
@@ -346,24 +360,48 @@ export function validateHistoricalPublicRunnerVerdict(
   return verdict as HistoricalPublicRunnerVerdict;
 }
 
+export function historicalPublicRunnerBinding(
+  input: HistoricalPublicExecutorInput,
+): HistoricalPublicRunnerBinding {
+  const result = object(input.handoff.result, "historical runner handoff result");
+  return {
+    request_id: input.handoff.request_id as string,
+    result_id: result.result_id as string,
+  };
+}
+
+export function historicalPublicExecutorVerdictFromBinding(
+  input: HistoricalPublicExecutorStatusRequest,
+  binding: HistoricalPublicRunnerBinding,
+  runnerVerdict: unknown,
+): HistoricalPublicExecutorVerdict {
+  return {
+    ...input,
+    contract: "historical_public_executor_v1",
+    runner_verdict: validateHistoricalPublicRunnerVerdictBinding(runnerVerdict, binding),
+    destruction: "confirmed",
+  };
+}
+
 export function historicalPublicExecutorVerdict(
   input: HistoricalPublicExecutorInput,
   runnerVerdict: unknown,
 ): HistoricalPublicExecutorVerdict {
-  return {
-    schema_version: 1,
-    contract: "historical_public_executor_v1",
-    runner_nonce: input.runner_nonce,
-    replay_task_id: input.replay_task_id,
-    attempt: input.attempt,
-    handoff_sha256: input.handoff_sha256,
-    source_archive_sha256: input.source_archive_sha256,
-    execution_profile_digest: input.execution_profile_digest,
-    measurement_config_digest: input.measurement_config_digest,
-    vm_image_digest: input.vm_image_digest,
-    runner_verdict: validateHistoricalPublicRunnerVerdict(runnerVerdict, input),
-    destruction: "confirmed",
-  };
+  return historicalPublicExecutorVerdictFromBinding(
+    {
+      schema_version: 1,
+      runner_nonce: input.runner_nonce,
+      replay_task_id: input.replay_task_id,
+      attempt: input.attempt,
+      handoff_sha256: input.handoff_sha256,
+      source_archive_sha256: input.source_archive_sha256,
+      execution_profile_digest: input.execution_profile_digest,
+      measurement_config_digest: input.measurement_config_digest,
+      vm_image_digest: input.vm_image_digest,
+    },
+    historicalPublicRunnerBinding(input),
+    runnerVerdict,
+  );
 }
 
 export function canonicalHistoricalPublicHandoff(value: unknown): string {
