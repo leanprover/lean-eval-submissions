@@ -176,12 +176,26 @@ the already implemented owner status, metadata, and publication routes.
       verification all passed. Every intake lease and enablement step was
       skipped. Credential-free readiness run `32832326810` then passed and
       closed monitor incident `#1310`.
-- [ ] Implement the persistent model-identity qualification harness, require
-      protected-environment reviewers with self-review prevention, provision
-      the five separately scoped ephemeral credentials, prove quiescence and
-      rollback, and run the staging qualification. The merged source scaffold
-      is deliberately unusable until all of those prerequisites exist; it does
-      not authorize a State write or either public model-identity gate.
+- [x] Implement the source-disabled persistent model-identity qualification
+      harness. It durably reserves immutable plans and receipt-only recovery,
+      verifies a source-pinned staging fixture before acquisition, calls the
+      real API kernel through a private service-bound executor, creates genuine
+      contention through a second private Worker, checks exact post-write State
+      blobs, and retains the operation-only fourteen-proof runner contract.
+      The live fixture manifest and digest are deliberately absent and every
+      workflow job still requires the impossible source ref, so this source
+      cannot execute the qualification, acquire an active journal, or write
+      State. Any later inert staging deployment remains separate from arming.
+- [ ] Arm and execute the persistent model-identity qualification only after an
+      independently reviewed live fixture exists: configure protected-
+      environment reviewers with self-review prevention, obtain explicit
+      participation for three distinct identities, provision and later rotate
+      the five separately scoped ephemeral credentials, deploy the private
+      service bindings, prove paid-plan capacity and quiescence, complete the
+      exact fourteen-step E2E and full failure-injection/recovery matrix, prove
+      rollback, and preserve the live staging evidence. None of these
+      operational gates is supplied or authorized by the source harness, and
+      both public model-identity gates must remain false until they pass.
 - [x] Add State problem-repair request and maintainer decision events with
       explicit revision/causation rules without rewriting accepted records
       (`lean-eval-state#13`, merge `0c875994`) and the targeted private
