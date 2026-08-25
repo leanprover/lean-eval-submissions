@@ -603,6 +603,22 @@ class ServerDispatchTests(unittest.TestCase):
         self.assertEqual(metadata["statement_revision"], 2)
         self.assertEqual(metadata["production_metadata"]["input_tokens"], 123)
 
+    def test_server_dispatch_preserves_retired_open_conjectures_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as td, patch.object(
+            fs, "resolve_repo_visibility", return_value=True
+        ):
+            metadata = fs.fetch_server_submission(
+                inputs=self._inputs(
+                    problem_group="open-conjectures",
+                    source_visibility="public",
+                ),
+                output_dir=pathlib.Path(td),
+                app_token=None,
+                skip_clone=True,
+            )
+        self.assertEqual(metadata["problem_group"], "open-conjectures")
+        self.assertIs(metadata["submission_public"], True)
+
     def test_server_dispatch_rejects_drift_and_unknown_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as td, patch.object(
             fs, "resolve_repo_visibility", return_value=True

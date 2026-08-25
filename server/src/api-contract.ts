@@ -16,6 +16,7 @@ export type ProblemGroup =
   | "formalization-evaluation"
   | "software-verification"
   | "open-conjectures";
+export type IntakeProblemGroup = Exclude<ProblemGroup, "open-conjectures">;
 export type PublicationChoice = "scheduled" | "withheld";
 export type SourceVisibility = "private" | "public";
 
@@ -45,6 +46,12 @@ export type SubmissionInput = Readonly<{
   publication_choice: PublicationChoice;
   production_metadata: ProductionMetadata;
 }>;
+
+export type IntakeSubmissionInput = Omit<SubmissionInput, "problem_group" | "source_visibility"> &
+  Readonly<{
+    problem_group: IntakeProblemGroup;
+    source_visibility: "private";
+  }>;
 
 export type AgentChallengeInput = Readonly<{
   login: string;
@@ -278,6 +285,8 @@ export function decodeProductionMetadata(value: unknown): ProductionMetadata {
   return result;
 }
 
+// Persisted State views and dispatch outboxes retain retired problem groups.
+// New admission must use decodeIntakeSubmissionInput below.
 export function decodeSubmissionInput(value: unknown): SubmissionInput {
   const data = object(value, "submission");
   exactFields(
@@ -330,6 +339,17 @@ export function decodeSubmissionInput(value: unknown): SubmissionInput {
   };
 }
 
+export function decodeIntakeSubmissionInput(value: unknown): IntakeSubmissionInput {
+  const input = decodeSubmissionInput(value);
+  if (input.problem_group === "open-conjectures") {
+    throw new ApiDecodeError("problem_group is not accepted for new submissions");
+  }
+  if (input.source_visibility !== "private") {
+    throw new ApiDecodeError("source_visibility is not accepted for new submissions");
+  }
+  return input as IntakeSubmissionInput;
+}
+
 export function decodeAgentChallengeInput(value: unknown): AgentChallengeInput {
   const data = object(value, "agent challenge");
   exactFields(data, ["gist_id", "login", "source_commit", "source_repository"], [], "agent challenge");
@@ -355,25 +375,25 @@ export function decodeAgentChallengeInput(value: unknown): AgentChallengeInput {
 
 export function decodeChallengeSubmission(value: unknown): {
   challenge: string;
-  submission: SubmissionInput;
+  submission: IntakeSubmissionInput;
 } {
   const data = object(value, "agent submission");
   exactFields(data, ["challenge", "submission"], [], "agent submission");
   return {
     challenge: boundedString(data.challenge, "challenge", 8192),
-    submission: decodeSubmissionInput(data.submission),
+    submission: decodeIntakeSubmissionInput(data.submission),
   };
 }
 
 export function decodeBrowserSubmission(value: unknown): {
   grant: string;
-  submission: SubmissionInput;
+  submission: IntakeSubmissionInput;
 } {
   const data = object(value, "browser submission");
   exactFields(data, ["grant", "submission"], [], "browser submission");
   return {
     grant: boundedString(data.grant, "grant", 8192),
-    submission: decodeSubmissionInput(data.submission),
+    submission: decodeIntakeSubmissionInput(data.submission),
   };
 }
 
@@ -647,15 +667,16 @@ export function decodeSourceReaderPreflight(value: unknown): string {
 }
 
 export function assertSourcePolicy(
-  group: ProblemGroup,
-  declared: SourceVisibility,
+  group: IntakeProblemGroup,
+  declared: "private",
   actualPrivate: boolean,
 ): void {
   const actual = actualPrivate ? "private" : "public";
-  if (declared !== actual) throw new ApiDecodeError("declared source visibility does not match GitHub");
-  const required = group === "open-conjectures" ? "public" : "private";
-  if (actual !== required) {
-    throw new ApiDecodeError(`${group} submissions require ${required} source`);
+  if (declared !== actual) {
+    throw new ApiDecodeError("declared source visibility does not match GitHub");
+  }
+  if (!actualPrivate) {
+    throw new ApiDecodeError(`${group} submissions require private source`);
   }
 }
 

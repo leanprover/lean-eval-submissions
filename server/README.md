@@ -144,8 +144,10 @@ contract testing:
 
 All JSON objects use exact-field decoders, request bodies are limited to 16
 KiB, and submitter-controlled text has explicit Unicode/control-character and
-size rules. Formalization-evaluation and software-verification sources must be
-private; open-conjecture sources must be public. GitHub's observed visibility
+size rules. New intake accepts only formalization-evaluation and
+software-verification submissions, and their sources must be private. Persisted
+State and dispatch decoders retain the retired open-conjectures value solely so
+historical records remain readable and processable. GitHub's observed visibility
 must equal the declaration. GitHub accepts only a branch or tag name as the
 `workflow_dispatch` `ref`, so dispatch uses an immutable tag named
 `lean-eval-dispatch/<40-character-commit>` and carries that commit as a

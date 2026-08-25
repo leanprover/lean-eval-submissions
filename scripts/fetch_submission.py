@@ -678,6 +678,9 @@ def fetch_server_submission(
         raise FetchError("server source_commit is not an exact lowercase commit")
     if not PROBLEM_RE.fullmatch(problem_id):
         raise FetchError("server problem_id is not canonical")
+    # Workflow dispatch is a durable serialized boundary. Retain the retired
+    # open-conjectures value here so a dispatch accepted before intake removal
+    # can still finish without weakening new Worker admission.
     if problem_group not in {
         "formalization-evaluation",
         "software-verification",
