@@ -23,7 +23,9 @@ on:
 permissions: {}
 
 concurrency:
-  group: model-identity-staging-qualification
+  # Recovery and protected-main deployment must never replace one another's
+  # executable while a staging qualification lease remains active.
+  group: submission-worker-main
   cancel-in-progress: false
 
 # IMMUTABLE SOURCE SAFETY GATE: GitHub never emits the deliberately impossible
