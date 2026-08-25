@@ -162,11 +162,13 @@ class ModelIdentityStagingQualificationWorkflowTests(unittest.TestCase):
                 variables["MODEL_IDENTITY_MAINTAINER_API_ENABLED"], "false"
             )
 
-    def test_documentation_keeps_live_harness_as_a_blocker(self) -> None:
+    def test_documentation_keeps_live_arming_as_a_blocker(self) -> None:
         self.assertIn(
-            "The privileged internal harness is intentionally **not** implemented",
+            "The persistent harness remains intentionally **unarmed**",
             DOCUMENTATION,
         )
+        self.assertIn("exact fourteen-step E2E", DOCUMENTATION)
+        self.assertIn("explicit identity participation", DOCUMENTATION)
         self.assertIn("Do not mark any dark gate complete", DOCUMENTATION)
 
 
