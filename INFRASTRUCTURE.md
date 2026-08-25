@@ -773,7 +773,9 @@ The later run had already validated staging State, checked out the exact audit
 commit, bound the encrypted object and sidecar, and prepared the unwrap request;
 none of those earlier steps supplied AWS authority. Apply the reviewed stack
 update before repeating that smoke; do not opt the repository out of immutable
-subjects to preserve an obsolete trust policy.
+subjects to preserve an obsolete trust policy. The exact staging-only change
+set whitelist, verification, smoke, and rollback procedure is recorded in
+[`docs/aws-release-staging-trust-repair.md`](docs/aws-release-staging-trust-repair.md).
 
 Both keys are enabled customer-managed symmetric keys with annual rotation.
 Both one-use tables are active, on-demand, server-side encrypted, and use

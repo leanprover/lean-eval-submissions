@@ -29,9 +29,12 @@ Provider URL: https://token.actions.githubusercontent.com
 Audience:     sts.amazonaws.com
 ```
 
-Copy its ARN. The deployment template binds roles to the exact protected
-GitHub environment subjects in `leanprover/lean-eval-submissions`; it does not
-accept an organization-wide wildcard.
+Copy its ARN. The deployment template binds archive and replay roles to exact
+protected GitHub environment subjects in `leanprover/lean-eval-submissions`
+and release roles to exact protected subjects in
+`leanprover/lean-eval-releases`; it does not accept an organization-wide
+wildcard. Read both subject prefixes from GitHub's repository OIDC
+customization API immediately before preparing a deployment or change set.
 
 ## 3. Validate and deploy both stacks
 
@@ -111,10 +114,13 @@ protected branches. It must use the production-only
 only `archive-production` and deliberately cannot be assumed by a migration
 job.
 
-Before provisioning they are intentionally empty. After a reviewed staging
-deployment, only the two staging role variables below are installed. Do not
-recreate or broaden the environments, and do not connect production merely
-because its dormant stack exists.
+Before provisioning they are intentionally empty. The archive and replay
+staging role variables and both release role variables are now installed. The
+release variables are non-secret role selectors and do not enable publication;
+the separate `PUBLICATION_ENABLED` repository variable remains absent.
+Production archive and replay role variables remain deliberately unconnected.
+Do not recreate or broaden the environments, and do not connect production
+merely because its dormant stack exists.
 
 For each stack, copy the seven common non-secret outputs into
 `INFRASTRUCTURE.md`:
@@ -132,11 +138,15 @@ Encrypt-only role bound exactly to the `archive-migration-production` OIDC
 subject. Store that ARN as `AWS_WRAP_ROLE_ARN` only in the migration
 environment; do not reuse the ordinary `WrapRoleArn` there.
 
-After the outputs exist, store each corresponding role ARN as a non-secret
-variable in its existing environment. Recheck rather than change the recorded
-ref policies. Use variable `AWS_WRAP_ROLE_ARN` in `archive-staging` and
-`AWS_REPLAY_UNWRAP_ROLE_ARN` in `replay-staging`; reserve the corresponding
-production and release role variables until their workflows are reviewed.
+After the outputs exist, store each reviewed role ARN as a non-secret variable
+in its existing environment. Recheck rather than change the recorded ref
+policies. Use variable `AWS_WRAP_ROLE_ARN` in `archive-staging`,
+`AWS_REPLAY_UNWRAP_ROLE_ARN` in `replay-staging`, and
+`AWS_RELEASE_UNWRAP_ROLE_ARN` in each matching release environment. The
+release role variables are installed because their workflows have been
+reviewed; production publication remains independently disabled. Reserve the
+production archive and replay variables until their workflows and launch gates
+are qualified.
 
 List both stacks' recorded outputs without exposing a credential:
 
@@ -154,8 +164,9 @@ aws cloudformation describe-stacks \
   --output table
 ```
 
-Install only the two staging role outputs needed by the reviewed smoke. The
-values are non-secret ARNs, but still avoid placing them in an issue or chat:
+The original archive/replay staging bootstrap installed the two role outputs
+below. The values are non-secret ARNs, but still avoid placing them in an issue
+or chat:
 
 ```sh
 LEAN_EVAL_STAGING_WRAP_ROLE_ARN="$(aws cloudformation describe-stacks \
@@ -209,6 +220,18 @@ credential, State event, result, or release is uploaded.
 Do not wire the production archive workflow, enable private replay/release, or
 enable production intake merely because the stacks and this synthetic smoke
 exist.
+
+## 5. Repair a transferred repository's release subject without widening trust
+
+The release repository was transferred after GitHub's immutable-subject
+rollout. The current source template pins the API-reported ID-bearing subject,
+but the live staging stack still trusts the obsolete name-only subject. Do not
+disable immutable subjects or edit the IAM role directly. Follow
+[`aws-release-staging-trust-repair.md`](aws-release-staging-trust-repair.md) to
+prepare a staging-only CloudFormation change set, require that it modifies
+exactly the non-replacing staging `ReleaseInvokerRole`, leave the production
+stack untouched with an unchanged `LastUpdatedTime`, and run the
+publication-disabled credentialed smoke.
 
 ## Why this is one-use
 
