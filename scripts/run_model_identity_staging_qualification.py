@@ -301,7 +301,7 @@ PROOF_CONTRACTS = (
         "PUT /api/v1/model-identities/{model_id}/name",
         ("oauth_owner",),
         "owner",
-        200,
+        201,
         True,
         1,
         1,

@@ -21,6 +21,7 @@ import {
   type QualificationStateConfig,
 } from "../src/model-identity-qualification-state";
 import { modelIdentityId } from "../src/model-identity";
+import { canonicalStateDocument } from "../src/github-state";
 
 const INITIAL_HEAD = "a".repeat(40);
 const MUTATED_TREE = "b".repeat(40);
@@ -43,6 +44,8 @@ const QUALIFICATION_TOKEN = "test-only-model-identity-qualification-token-value"
 function qualificationEnv(): ModelIdentityQualificationEnv {
   const namespace = env.MODEL_IDENTITY_QUALIFICATION_JOURNAL;
   if (namespace === undefined) throw new Error("qualification journal binding is unavailable");
+  const executor = env.MODEL_IDENTITY_QUALIFICATION_EXECUTOR;
+  if (executor === undefined) throw new Error("qualification executor binding is unavailable");
   return {
     AUTH_TOKEN_SECRET: "test-only-auth-token-secret-value-long-enough",
     DEPLOYED_COMMIT: "e".repeat(40),
@@ -58,6 +61,9 @@ function qualificationEnv(): ModelIdentityQualificationEnv {
     STATE_REPOSITORY: "leanprover/lean-eval-state-staging",
     GITHUB_STATE_TOKEN: CONFIG.token,
     MODEL_IDENTITY_QUALIFICATION_TOKEN: QUALIFICATION_TOKEN,
+    MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET:
+      "test-only-qualification-executor-secret-value",
+    MODEL_IDENTITY_QUALIFICATION_EXECUTOR: executor,
     MODEL_IDENTITY_QUALIFICATION_JOURNAL: namespace,
   };
 }
@@ -95,13 +101,25 @@ function requestUrl(input: RequestInfo | URL): URL {
   return new URL(String(input));
 }
 
+async function gitBlobSha(content: string): Promise<string> {
+  const encoded = new TextEncoder().encode(content);
+  const prefix = new TextEncoder().encode(`blob ${String(encoded.byteLength)}\0`);
+  const bytes = new Uint8Array(prefix.byteLength + encoded.byteLength);
+  bytes.set(prefix);
+  bytes.set(encoded, prefix.byteLength);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-1", bytes));
+  return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function fakeState(initialHead = INITIAL_HEAD, initialTree = MUTATED_TREE) {
   let head = initialHead;
+  let failingDocumentReads = 0;
   const commits = new Map<string, { message: string; tree: string; parents: string[] }>([
     [initialHead, { message: "qualification mutation", tree: initialTree, parents: ["0".repeat(40)] }],
   ]);
+  const documents = new Map<string, unknown>();
   const writes: { method: string; path: string; body: unknown }[] = [];
-  const fetcher = vi.fn<GitHubFetch>((input, init) => {
+  const fetcher = vi.fn<GitHubFetch>(async (input, init) => {
     const url = requestUrl(input);
     const method = (init?.method ?? "GET").toUpperCase();
     const path = url.pathname.replace("/repos/leanprover/lean-eval-state-staging", "");
@@ -124,6 +142,25 @@ function fakeState(initialHead = INITIAL_HEAD, initialTree = MUTATED_TREE) {
         parents: commit.parents.map((sha) => ({ sha })),
       }));
     }
+    if (method === "GET" && path.startsWith("/contents/")) {
+      if (failingDocumentReads > 0) {
+        failingDocumentReads -= 1;
+        return Response.json({ message: "injected" }, { status: 500 });
+      }
+      const documentPath = decodeURI(path.slice("/contents/".length));
+      const document = documents.get(documentPath);
+      if (document === undefined) {
+        return Response.json({ message: "missing" }, { status: 404 });
+      }
+      const content = canonicalStateDocument(document);
+      return Response.json({
+        type: "file",
+        path: documentPath,
+        encoding: "base64",
+        content: btoa(content),
+        sha: await gitBlobSha(content),
+      });
+    }
     if (method === "POST" && path === "/git/commits") {
       const value = body as { message: string; tree: string; parents: string[] };
       commits.set(RESTORATION_HEAD, value);
@@ -139,7 +176,14 @@ function fakeState(initialHead = INITIAL_HEAD, initialTree = MUTATED_TREE) {
     }
     return Promise.resolve(Response.json({ message: "unexpected" }, { status: 500 }));
   });
-  return { fetcher, writes, commits, setHead(value: string): void { head = value; } };
+  return {
+    fetcher,
+    writes,
+    commits,
+    documents,
+    failNextDocumentRead(): void { failingDocumentReads += 1; },
+    setHead(value: string): void { head = value; },
+  };
 }
 
 describe("model identity qualification State restoration", () => {
@@ -163,9 +207,12 @@ describe("model identity qualification State restoration", () => {
       tree: QUALIFICATION_MUTATION_TREE,
       parents: [INITIAL_HEAD],
     });
+    const expectedDocument = { schema_version: 1, value: "exact" };
+    state.documents.set("events/exact.json", expectedDocument);
     await expect(qualificationStateMutation(CONFIG, state.fetcher, {
       expectedParent: INITIAL_HEAD,
       expectedMessage: "Request model identity mi1_test",
+      expectedDocuments: { "events/exact.json": expectedDocument },
     })).resolves.toEqual({
       state_commit: QUALIFICATION_MUTATION_HEAD,
       state_tree: QUALIFICATION_MUTATION_TREE,
@@ -179,6 +226,7 @@ describe("model identity qualification State restoration", () => {
     await expect(qualificationStateMutation(CONFIG, state.fetcher, {
       expectedParent: INITIAL_HEAD,
       expectedMessage: "Request model identity mi1_test",
+      expectedDocuments: { "events/exact.json": expectedDocument },
     })).rejects.toEqual(new QualificationStateError("foreign_state_movement"));
   });
 
@@ -443,7 +491,6 @@ describe("closed model identity qualification HTTP boundary", () => {
       expected_state_commit: INITIAL_HEAD,
       expected_state_tree: MUTATED_TREE,
       intent,
-      request: {},
     });
 
     const oauth = await handleModelIdentityQualificationRequest(
@@ -572,8 +619,6 @@ describe("closed model identity qualification HTTP boundary", () => {
       journal_id: string;
       journal_revision: number;
     }>();
-    const eventId = "0198abcd-0000-7000-8000-000000000001";
-    const expectedModelId = await modelIdentityId(eventId);
     const now = Math.floor(Date.now() / 1000);
     const browserSession: BrowserSession = {
       kind: "browser_session",
@@ -586,6 +631,50 @@ describe("closed model identity qualification HTTP boundary", () => {
       runtime.AUTH_TOKEN_SECRET ?? "",
       browserSession,
     );
+    const challenge = makeAgentChallenge({
+      login: intent.owner.login,
+      source_repository: "owner/private-proof",
+      source_commit: "7".repeat(40),
+      gist_id: "qualification-secret-gist",
+    }, now - 1);
+    const agentToken = await signToken(
+      runtime.AUTH_TOKEN_SECRET ?? "",
+      makeAgentSession(
+        { id: intent.owner.github_id, login: intent.owner.login },
+        challenge,
+        now,
+      ),
+    );
+    const identityStep = (
+      operation: "oauth_session_identity" | "agent_session_identity",
+      revision: number,
+    ) => ({
+      schema_version: 2,
+      operation,
+      confirmation: "QUALIFY_AND_RESTORE_MODEL_IDENTITY_STAGING",
+      deployed_commit: runtime.DEPLOYED_COMMIT,
+      run_id: "4004",
+      run_attempt: 1,
+      journal_id: acquired.journal_id,
+      expected_journal_revision: revision,
+      expected_state_commit: INITIAL_HEAD,
+      expected_state_tree: MUTATED_TREE,
+      intent,
+    });
+    const oauth = await handleModelIdentityQualificationRequest(
+      qualificationRequest(identityStep("oauth_session_identity", 1), QUALIFICATION_TOKEN, {
+        "x-lean-eval-oauth-session": sessionToken,
+      }),
+      runtime,
+    );
+    expect(oauth.status).toBe(200);
+    const agent = await handleModelIdentityQualificationRequest(
+      qualificationRequest(identityStep("agent_session_identity", 2), QUALIFICATION_TOKEN, {
+        "x-lean-eval-agent-session": agentToken,
+      }),
+      runtime,
+    );
+    expect(agent.status).toBe(200);
     const stepBody = {
       schema_version: 2,
       operation: "owner_request",
@@ -594,29 +683,62 @@ describe("closed model identity qualification HTTP boundary", () => {
       run_id: "4004",
       run_attempt: 1,
       journal_id: acquired.journal_id,
-      expected_journal_revision: acquired.journal_revision,
+      expected_journal_revision: 3,
       expected_state_commit: INITIAL_HEAD,
       expected_state_tree: MUTATED_TREE,
       intent,
-      request: {
-        event_id: eventId,
-        display_name: "Qualification Owner Model",
-      },
     };
     let invocation = 0;
+    let expectedModelId = "";
+    let eventId = "";
     const modelApiRequest = vi.fn(async (
       internalRequest: Request,
       maintainer: { github_id: number; login: string },
+      occurredAtMilliseconds: number,
     ): Promise<Response> => {
       invocation += 1;
       expect(maintainer).toEqual(intent.maintainer);
       expect(new URL(internalRequest.url).pathname).toBe("/api/v1/model-identities");
       expect(internalRequest.headers.get("authorization")).toBe(`Bearer ${sessionToken}`);
-      expect(internalRequest.headers.get("idempotency-key")).toBe(eventId);
-      expect(await internalRequest.json()).toEqual({
-        display_name: "Qualification Owner Model",
-      });
+      eventId = internalRequest.headers.get("idempotency-key") ?? "";
+      expectedModelId = await modelIdentityId(eventId);
+      const body = await internalRequest.json<{ display_name: string }>();
+      expect(body.display_name).toBe(`Qualification owner model run 4004`);
       if (invocation === 1) {
+        const occurredAt = new Date(occurredAtMilliseconds).toISOString();
+        state.documents.set(
+          `events/${eventId.replaceAll("-", "").slice(0, 2)}/${eventId}.json`,
+          {
+            schema_version: 1,
+            event_id: eventId,
+            event_type: "model_identity.requested",
+            occurred_at: occurredAt,
+            subject_id: expectedModelId,
+            causation_event_id: null,
+            actor: { kind: "github", login: intent.owner.login },
+            payload: { display_name: body.display_name },
+          },
+        );
+        state.documents.set(
+          `views/model-identities/${expectedModelId.slice(4, 6)}/${expectedModelId}.json`,
+          {
+            schema_version: 1,
+            model_id: expectedModelId,
+            owner_login: intent.owner.login,
+            requested_name: body.display_name,
+            display_name: body.display_name,
+            status: "pending",
+            request_event_id: eventId,
+            requested_at: occurredAt,
+            decision_event_id: null,
+            decided_at: null,
+            reviewer_login: null,
+            rejection_reason: null,
+            mutation_event_id: eventId,
+            consolidated_into: null,
+            resolved_model_id: null,
+          },
+        );
         state.commits.set(QUALIFICATION_MUTATION_HEAD, {
           message: `Request model identity ${expectedModelId}`,
           tree: QUALIFICATION_MUTATION_TREE,
@@ -625,11 +747,11 @@ describe("closed model identity qualification HTTP boundary", () => {
         state.setHead(QUALIFICATION_MUTATION_HEAD);
         throw new Error("simulated lost response");
       }
-      return Response.json({
-        model_id: expectedModelId,
-        status: "identity_already_requested",
+      return Response.json({ model_id: expectedModelId, status: "identity_requested" }, {
+        status: 201,
       });
     });
+    state.failNextDocumentRead();
     const first = await handleModelIdentityQualificationRequest(
       qualificationRequest(stepBody, QUALIFICATION_TOKEN, {
         "x-lean-eval-oauth-session": sessionToken,
@@ -639,28 +761,18 @@ describe("closed model identity qualification HTTP boundary", () => {
     );
     expect(first.status).toBe(503);
     const recovered = await handleModelIdentityQualificationRequest(
-      qualificationRequest(stepBody, QUALIFICATION_TOKEN, {
-        "x-lean-eval-oauth-session": sessionToken,
-      }),
+      qualificationRequest({ schema_version: 2, run_id: "4004", run_attempt: 1 }),
       runtime,
-      { stateFetch: state.fetcher, modelApiRequest },
+      { stateFetch: state.fetcher },
     );
     expect(recovered.status).toBe(200);
     expect(await recovered.json()).toMatchObject({
-      journal_revision: 2,
-      mutation_created: true,
-      previous_state_commit: INITIAL_HEAD,
-      state_commit: QUALIFICATION_MUTATION_HEAD,
-      state_tree: QUALIFICATION_MUTATION_TREE,
-      proof: {
-        operation: "owner_request",
-        http_status: 200,
-        event_ids: [eventId],
-        model_ids: [expectedModelId],
-        assertions: { idempotent_response: true },
-      },
+      journal_revision: 3,
+      current_state_commit: QUALIFICATION_MUTATION_HEAD,
+      current_state_tree: QUALIFICATION_MUTATION_TREE,
+      lease_status: "active",
     });
-    expect(modelApiRequest).toHaveBeenCalledTimes(2);
+    expect(modelApiRequest).toHaveBeenCalledTimes(1);
 
     const restored = await handleModelIdentityQualificationRequest(
       qualificationRequest({
@@ -671,7 +783,7 @@ describe("closed model identity qualification HTTP boundary", () => {
         run_id: "4004",
         run_attempt: 1,
         journal_id: acquired.journal_id,
-        expected_journal_revision: 2,
+        expected_journal_revision: 3,
         expected_state_commit: QUALIFICATION_MUTATION_HEAD,
         expected_state_tree: QUALIFICATION_MUTATION_TREE,
       }),

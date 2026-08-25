@@ -15,5 +15,5 @@
     "target": "ES2024",
     "types": ["node", "@cloudflare/vitest-pool-workers/types"]
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts", "worker-configuration.d.ts", "broker-configuration.d.ts", "replay-configuration.d.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts", "worker-configuration.d.ts", "broker-configuration.d.ts", "model-identity-qualification-executor-configuration.d.ts", "replay-configuration.d.ts"]
 }

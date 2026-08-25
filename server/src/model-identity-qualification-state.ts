@@ -45,6 +45,7 @@ export type QualificationRestorationRequest = Readonly<{
 export type QualificationMutationRequest = Readonly<{
   expectedParent: string;
   expectedMessage: string;
+  expectedDocuments: Readonly<Record<string, unknown>>;
 }>;
 
 export class QualificationStateError extends Error {
@@ -130,6 +131,81 @@ function configValid(config: QualificationStateConfig): void {
   }
 }
 
+function sortJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortJson);
+  if (value !== null && typeof value === "object") {
+    const source = value as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.keys(source).sort().map((key) => [key, sortJson(source[key])]),
+    );
+  }
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number" ||
+    typeof value === "string"
+  ) return value;
+  throw new TypeError("qualification expected State document is invalid");
+}
+
+function canonicalStateDocument(value: unknown): string {
+  return `${JSON.stringify(sortJson(value), null, 2)
+    .replace(/[\u0080-\uffff]/g, (character) =>
+      `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`)}\n`;
+}
+
+async function gitBlobSha(content: Uint8Array): Promise<string> {
+  const prefix = new TextEncoder().encode(`blob ${String(content.byteLength)}\0`);
+  const bytes = new Uint8Array(prefix.byteLength + content.byteLength);
+  bytes.set(prefix);
+  bytes.set(content, prefix.byteLength);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-1", bytes));
+  return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function decodeBase64(value: unknown): Uint8Array {
+  if (typeof value !== "string" || value.length > MAX_RESPONSE_BYTES * 2) {
+    throw new QualificationStateError("provider_unavailable");
+  }
+  try {
+    const binary = atob(value.replaceAll(/\s/g, ""));
+    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  } catch {
+    throw new QualificationStateError("provider_unavailable");
+  }
+}
+
+async function verifyExactDocument(
+  config: QualificationStateConfig,
+  fetcher: GitHubFetch,
+  commit: string,
+  path: string,
+  expected: unknown,
+): Promise<void> {
+  if (
+    path.startsWith("/") ||
+    path.includes("..") ||
+    !/^[a-z0-9][a-z0-9./_-]{0,511}$/.test(path)
+  ) throw new TypeError("qualification expected State path is invalid");
+  const query = new URLSearchParams({ ref: commit });
+  const value = object(
+    await call(config, fetcher, `/contents/${encodeURI(path)}?${query.toString()}`),
+    "qualification State document",
+  );
+  const bytes = decodeBase64(value.content);
+  const expectedBytes = new TextEncoder().encode(canonicalStateDocument(expected));
+  if (
+    value.type !== "file" ||
+    value.path !== path ||
+    value.encoding !== "base64" ||
+    typeof value.sha !== "string" ||
+    !SHA.test(value.sha) ||
+    value.sha !== await gitBlobSha(expectedBytes) ||
+    bytes.byteLength !== expectedBytes.byteLength ||
+    !crypto.subtle.timingSafeEqual(bytes, expectedBytes)
+  ) throw new QualificationStateError("foreign_state_movement");
+}
+
 function restorationMessage(request: QualificationRestorationRequest): string {
   return `Restore model identity qualification ${request.journalId} nonce ${request.recoveryNonce}`;
 }
@@ -198,7 +274,9 @@ export async function qualificationStateMutation(
   if (
     !SHA.test(request.expectedParent) ||
     request.expectedMessage.length < 1 ||
-    new TextEncoder().encode(request.expectedMessage).byteLength > 512
+    new TextEncoder().encode(request.expectedMessage).byteLength > 512 ||
+    Object.keys(request.expectedDocuments).length < 1 ||
+    Object.keys(request.expectedDocuments).length > 128
   ) {
     throw new TypeError("qualification mutation request is invalid");
   }
@@ -213,6 +291,15 @@ export async function qualificationStateMutation(
   ) {
     throw new QualificationStateError("foreign_state_movement");
   }
+  await Promise.all(Object.entries(request.expectedDocuments).map(
+    ([path, expected]) => verifyExactDocument(
+      config,
+      fetcher,
+      commit.sha,
+      path,
+      expected,
+    ),
+  ));
   return {
     state_commit: commit.sha,
     state_tree: commit.tree,

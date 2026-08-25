@@ -7,6 +7,8 @@ for (const name of [
   "GITHUB_OAUTH_CLIENT_SECRET",
   "GITHUB_STATE_TOKEN",
   "LIFECYCLE_CALLBACK_TOKEN",
+  "MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET",
+  "MODEL_IDENTITY_QUALIFICATION_TOKEN",
   "READINESS_TOKEN",
 ]) {
   process.env[name] ??= `test-only-${name.toLowerCase()}`;
@@ -19,6 +21,7 @@ export default defineConfig({
       miniflare: {
         serviceBindings: {
           GITHUB_BROKER: () => Promise.resolve(Response.json({ error: "broker_not_configured_in_main_worker_tests" }, { status: 503 })),
+          MODEL_IDENTITY_QUALIFICATION_EXECUTOR: () => Promise.resolve(Response.json({ error: "qualification_executor_not_configured_in_main_worker_tests" }, { status: 503 })),
         },
       },
     }),
