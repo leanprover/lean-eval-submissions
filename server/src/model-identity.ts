@@ -9,10 +9,16 @@ const ALIAS_KEY_DOMAIN = "lean-eval-model-alias-v1\0";
 export type ModelIdentityStatus = "pending" | "approved" | "rejected" | "consolidated";
 
 export type ModelIdentityConsolidationCapability =
-  "requires_protected_reverse_impact_index";
+  "atomic_reverse_impact_v1";
 
 export const MODEL_IDENTITY_CONSOLIDATION_CAPABILITY:
-  ModelIdentityConsolidationCapability = "requires_protected_reverse_impact_index";
+  ModelIdentityConsolidationCapability = "atomic_reverse_impact_v1";
+
+export const PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT =
+  "714f7408cbc591b7166ea6f4d6d19b66ba481f83";
+export const STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT =
+  "9fc7c431a92c678554c65ebac68d3fddf4990d29";
+export const MODEL_IDENTITY_REVERSE_IMPACT_MAX_VIEWS = 32;
 
 export type ModelIdentityView = Readonly<{
   schema_version: 1;
@@ -41,6 +47,35 @@ export type ModelAliasView = Readonly<{
   assignment_event_id: string;
   assigned_at: string;
   resolved_model_id: string;
+}>;
+
+export type ModelIdentityReverseImpactIdentityMember = Readonly<{
+  kind: "identity";
+  model_id: string;
+  mutation_event_id: string;
+  view_path: string;
+}>;
+
+export type ModelIdentityReverseImpactAliasMember = Readonly<{
+  kind: "alias";
+  alias_key: string;
+  assignment_event_id: string;
+  model_id: string;
+  view_path: string;
+}>;
+
+export type ModelIdentityReverseImpactMember =
+  | ModelIdentityReverseImpactIdentityMember
+  | ModelIdentityReverseImpactAliasMember;
+
+export type ModelIdentityReverseImpactView = Readonly<{
+  schema_version: 1;
+  terminal_model_id: string;
+  owner_login: string;
+  terminal_mutation_event_id: string;
+  member_count: number;
+  maximum_member_count: 32;
+  members: readonly ModelIdentityReverseImpactMember[];
 }>;
 
 export type ModelIdentityDecisionInput = Readonly<{
@@ -120,6 +155,12 @@ export function decodeModelRename(value: unknown): Readonly<{ display_name: stri
   return { display_name: decodeModelLabel(input.display_name, "display_name") };
 }
 
+export function decodeModelConsolidation(value: unknown): Readonly<{ target_model_id: string }> {
+  const input = object(value, "model identity consolidation");
+  exact(input, ["target_model_id"], "model identity consolidation");
+  return { target_model_id: decodeModelId(input.target_model_id) };
+}
+
 async function sha256Hex(value: string): Promise<string> {
   const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
   return Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -145,6 +186,11 @@ export function modelIdentityPath(modelId: string): string {
 export function modelAliasPath(aliasKey: string): string {
   if (!ALIAS_KEY.test(aliasKey)) throw new TypeError("model alias key is invalid");
   return `views/model-aliases/${aliasKey.slice(4, 6)}/${aliasKey}.json`;
+}
+
+export function modelIdentityReverseImpactPath(terminalModelId: string): string {
+  decodeModelId(terminalModelId);
+  return `views/model-identity-reverse-impacts/${terminalModelId.slice(4, 6)}/${terminalModelId}.json`;
 }
 
 export function decodeModelIdentityView(value: unknown): ModelIdentityView {
@@ -203,4 +249,86 @@ export function decodeModelAliasView(value: unknown): ModelAliasView {
   ) throw new TypeError("model alias view is invalid");
   decodeModelLabel(view.alias, "model alias");
   return view as ModelAliasView;
+}
+
+export function decodeModelIdentityReverseImpactView(
+  value: unknown,
+): ModelIdentityReverseImpactView {
+  const view = object(value, "model identity reverse-impact view");
+  exact(view, [
+    "maximum_member_count", "member_count", "members", "owner_login", "schema_version",
+    "terminal_model_id", "terminal_mutation_event_id",
+  ], "model identity reverse-impact view");
+  if (
+    view.schema_version !== 1 ||
+    typeof view.terminal_model_id !== "string" || !MODEL_ID.test(view.terminal_model_id) ||
+    typeof view.owner_login !== "string" || !LOGIN.test(view.owner_login) ||
+    typeof view.terminal_mutation_event_id !== "string" || !EVENT_ID.test(view.terminal_mutation_event_id) ||
+    typeof view.member_count !== "number" || !Number.isInteger(view.member_count) || view.member_count < 1 ||
+    view.maximum_member_count !== MODEL_IDENTITY_REVERSE_IMPACT_MAX_VIEWS ||
+    !Array.isArray(view.members) || view.members.length !== view.member_count ||
+    view.members.length > MODEL_IDENTITY_REVERSE_IMPACT_MAX_VIEWS
+  ) throw new TypeError("model identity reverse-impact view is invalid");
+
+  const members: ModelIdentityReverseImpactMember[] = [];
+  for (const rawMember of view.members) {
+    const member = object(rawMember, "model identity reverse-impact member");
+    if (member.kind === "identity") {
+      exact(member, ["kind", "model_id", "mutation_event_id", "view_path"], "model identity reverse-impact identity member");
+      if (
+        typeof member.model_id !== "string" || !MODEL_ID.test(member.model_id) ||
+        typeof member.mutation_event_id !== "string" || !EVENT_ID.test(member.mutation_event_id) ||
+        member.view_path !== modelIdentityPath(member.model_id)
+      ) throw new TypeError("model identity reverse-impact identity member is invalid");
+      members.push(member as ModelIdentityReverseImpactIdentityMember);
+      continue;
+    }
+    if (member.kind === "alias") {
+      exact(member, [
+        "alias_key", "assignment_event_id", "kind", "model_id", "view_path",
+      ], "model identity reverse-impact alias member");
+      if (
+        typeof member.alias_key !== "string" || !ALIAS_KEY.test(member.alias_key) ||
+        typeof member.assignment_event_id !== "string" || !EVENT_ID.test(member.assignment_event_id) ||
+        typeof member.model_id !== "string" || !MODEL_ID.test(member.model_id) ||
+        member.view_path !== modelAliasPath(member.alias_key)
+      ) throw new TypeError("model identity reverse-impact alias member is invalid");
+      members.push(member as ModelIdentityReverseImpactAliasMember);
+      continue;
+    }
+    throw new TypeError("model identity reverse-impact member kind is invalid");
+  }
+  const paths = members.map((member) => member.view_path);
+  if (
+    paths.some((path, index) => index > 0 && path <= (paths[index - 1] ?? "")) ||
+    !members.some((member) =>
+      member.kind === "identity" &&
+      member.model_id === view.terminal_model_id &&
+      member.mutation_event_id === view.terminal_mutation_event_id)
+  ) throw new TypeError("model identity reverse-impact members are invalid");
+  return {
+    schema_version: 1,
+    terminal_model_id: view.terminal_model_id,
+    owner_login: view.owner_login,
+    terminal_mutation_event_id: view.terminal_mutation_event_id,
+    member_count: view.member_count,
+    maximum_member_count: MODEL_IDENTITY_REVERSE_IMPACT_MAX_VIEWS,
+    members,
+  };
+}
+
+export function modelIdentityReverseImpactView(
+  terminal: ModelIdentityView,
+  members: readonly ModelIdentityReverseImpactMember[],
+): ModelIdentityReverseImpactView {
+  const view = {
+    schema_version: 1,
+    terminal_model_id: terminal.model_id,
+    owner_login: terminal.owner_login,
+    terminal_mutation_event_id: terminal.mutation_event_id,
+    member_count: members.length,
+    maximum_member_count: MODEL_IDENTITY_REVERSE_IMPACT_MAX_VIEWS,
+    members: [...members].sort((left, right) => left.view_path.localeCompare(right.view_path)),
+  } as const;
+  return decodeModelIdentityReverseImpactView(view);
 }

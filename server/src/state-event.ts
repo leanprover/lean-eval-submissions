@@ -245,9 +245,7 @@ export type ModelIdentityOwnerEvent<
   payload: Readonly<Record<string, unknown>>;
 }>;
 
-type WritableModelIdentityOwnerEvent = ModelIdentityOwnerEvent<
-  Exclude<ModelIdentityOwnerEventType, "model_identity.consolidated">
->;
+type WritableModelIdentityOwnerEvent = ModelIdentityOwnerEvent;
 type ModelIdentityConsolidationEvent = ModelIdentityOwnerEvent<"model_identity.consolidated">;
 
 export type ModelIdentityDecisionEvent = Readonly<{

@@ -39,6 +39,7 @@ import {
   type LegacyResultClaimRequest,
   type ModelAliasAssignmentRequest,
   type ModelIdentityDecisionRequest,
+  type ModelIdentityConsolidationRequest,
   type ModelIdentityRenameRequest,
   type ModelIdentityRequest,
   type ResultProblemRepairRequest,
@@ -144,6 +145,7 @@ class MemoryState implements StateAccess {
   readonly modelIdentityDecisions: ModelIdentityDecisionRequest[] = [];
   readonly modelAliasAssignments: ModelAliasAssignmentRequest[] = [];
   readonly modelIdentityRenames: ModelIdentityRenameRequest[] = [];
+  readonly modelIdentityConsolidations: ModelIdentityConsolidationRequest[] = [];
   maintainerAmendment: ResultAmendmentView | null = null;
   contractAssertions = 0;
 
@@ -425,6 +427,17 @@ class MemoryState implements StateAccess {
   renameModelIdentity(request: ModelIdentityRenameRequest): Promise<{ created: boolean; modelId: string }> {
     this.modelIdentityRenames.push(request);
     return Promise.resolve({ created: this.created, modelId: request.modelId });
+  }
+
+  consolidateModelIdentity(request: ModelIdentityConsolidationRequest): Promise<{
+    created: boolean; modelId: string; targetModelId: string;
+  }> {
+    this.modelIdentityConsolidations.push(request);
+    return Promise.resolve({
+      created: this.created,
+      modelId: request.modelId,
+      targetModelId: request.targetModelId,
+    });
   }
 
 }
@@ -2193,7 +2206,7 @@ describe("browser OAuth and owner routes in workerd", () => {
 
 describe("authenticated model identity producer routes", () => {
   const modelId = `mi1_${"1".repeat(64)}`;
-  const contract = "48f8c975d725a9ac18df545653fdb2f8371c3293";
+  const contract = "9fc7c431a92c678554c65ebac68d3fddf4990d29";
   const ownerEnv: RuntimeEnv = {
     ...ENV,
     INTAKE_ENABLED: "false",
@@ -2256,25 +2269,18 @@ describe("authenticated model identity producer routes", () => {
     expect(ownerEnv.INTAKE_ENABLED).toBe("false");
   });
 
-  it("keeps consolidation unavailable under every gate combination", async () => {
+  it("keeps consolidation dark without the owner gate and derives its actor from the session", async () => {
     const auth = await authorization();
+    const targetModelId = `mi1_${"2".repeat(64)}`;
     const request = () => mutation(
       `/api/v1/model-identities/${modelId}/consolidations`, "POST",
-      { target_model_id: `mi1_${"2".repeat(64)}` },
+      { target_model_id: targetModelId },
       "019debd0-1968-7000-8000-000000000024", auth,
     );
-    const maintainerEnabled = {
+    for (const env of [{ ...ENV, INTAKE_ENABLED: "false" }, {
       ...ownerEnv,
-      MODEL_IDENTITY_MAINTAINER_API_ENABLED: "true",
-      MODEL_IDENTITY_MAINTAINERS: JSON.stringify([{ github_id: 42, login: "alice" }]),
-    };
-    for (const env of [
-      { ...ENV, INTAKE_ENABLED: "false" },
-      ownerEnv,
-      maintainerEnabled,
-      { ...maintainerEnabled, MODEL_IDENTITY_OWNER_API_ENABLED: "false" },
-      { ...maintainerEnabled, INTAKE_ENABLED: "true" },
-    ]) {
+      MODEL_IDENTITY_OWNER_API_ENABLED: "false",
+    }]) {
       const state = new MemoryState();
       const response = await handleRequest(request(), env, LIFECYCLE, {
         now: () => NOW_MS,
@@ -2285,7 +2291,26 @@ describe("authenticated model identity producer routes", () => {
       expect(state.modelIdentityDecisions).toHaveLength(0);
       expect(state.modelAliasAssignments).toHaveLength(0);
       expect(state.modelIdentityRenames).toHaveLength(0);
+      expect(state.modelIdentityConsolidations).toHaveLength(0);
     }
+    const state = new MemoryState();
+    const response = await handleRequest(request(), ownerEnv, LIFECYCLE, {
+      now: () => NOW_MS,
+      state,
+    });
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      model_id: modelId,
+      target_model_id: targetModelId,
+      status: "identity_consolidated",
+    });
+    expect(state.modelIdentityConsolidations).toEqual([{
+      eventId: "019debd0-1968-7000-8000-000000000024",
+      occurredAt: new Date(NOW_MS).toISOString(),
+      modelId,
+      targetModelId,
+      ownerLogin: "alice",
+    }]);
   });
 
   it("binds maintainer authority to the exact numeric ID and lowercase login pair", async () => {

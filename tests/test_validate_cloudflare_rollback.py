@@ -389,7 +389,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         self.assertIs(plan["model_identity_owner_api_enabled"], False)
         self.assertIs(plan["model_identity_maintainer_api_contract_supported"], True)
         self.assertIs(plan["model_identity_maintainer_api_enabled"], False)
-        self.assertEqual(plan["model_identity_state_contract_commit"], "a53c658a2de2188675134dc2890285fbaa17cf5a")
+        self.assertEqual(plan["model_identity_state_contract_commit"], "714f7408cbc591b7166ea6f4d6d19b66ba481f83")
         self.assertNotIn("MODEL_IDENTITY_MAINTAINERS", plan)
         self.assertNotIn("RESULT_AMENDMENT_MAINTAINERS", plan)
         self.assertEqual(
@@ -614,8 +614,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "intake_lease_expires_at": None,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
-                "model_identity_write_max_subrequests": 171,
-                "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                "model_identity_write_max_subrequests": 376,
+                "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -652,8 +652,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
-                "model_identity_write_max_subrequests": 171,
-                "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                "model_identity_write_max_subrequests": 376,
+                "model_identity_consolidation_api": "atomic_reverse_impact_v1",
             },
             require_intake_disabled=True,
         )
@@ -689,8 +689,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
-                "model_identity_write_max_subrequests": 171,
-                "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                "model_identity_write_max_subrequests": 376,
+                "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -1009,8 +1009,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
-                "model_identity_write_max_subrequests": 171,
-                "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                "model_identity_write_max_subrequests": 376,
+                "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -1033,8 +1033,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                     "result_amendment_maintainer_api_enabled": False,
                     "model_identity_owner_api_enabled": False,
                     "model_identity_maintainer_api_enabled": False,
-                    "model_identity_write_max_subrequests": 171,
-                    "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                    "model_identity_write_max_subrequests": 376,
+                    "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                     "result_amendment_maintainers": [],
                     "promotion_canary_configured_enabled": False,
                     "promotion_canary_enabled": False,
@@ -1058,8 +1058,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                     "result_amendment_maintainer_api_enabled": False,
                     "model_identity_owner_api_enabled": False,
                     "model_identity_maintainer_api_enabled": False,
-                    "model_identity_write_max_subrequests": 171,
-                    "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                    "model_identity_write_max_subrequests": 376,
+                    "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 },
             )
 
@@ -1083,8 +1083,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
-                "model_identity_write_max_subrequests": 171,
-                "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                "model_identity_write_max_subrequests": 376,
+                "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -1107,8 +1107,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
-                "model_identity_write_max_subrequests": 171,
-                "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                "model_identity_write_max_subrequests": 376,
+                "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -1191,7 +1191,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                     "a53c658a2de2188675134dc2890285fbaa17cf5a"
                 ),
                 "model_identity_state_contract_commit": (
-                    "a53c658a2de2188675134dc2890285fbaa17cf5a"
+                    "714f7408cbc591b7166ea6f4d6d19b66ba481f83"
                 ),
             },
         )

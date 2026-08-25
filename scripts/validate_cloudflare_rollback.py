@@ -1154,8 +1154,8 @@ def validate_health(
                     "model_identity_owner_api_enabled": plan[
                         "model_identity_owner_api_enabled"
                     ],
-                    "model_identity_write_max_subrequests": 171,
-                    "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                    "model_identity_write_max_subrequests": 376,
+                    "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 }
             )
         if plan["model_identity_maintainer_api_contract_supported"]:

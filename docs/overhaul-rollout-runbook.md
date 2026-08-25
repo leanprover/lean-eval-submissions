@@ -397,15 +397,18 @@ confirm protected deployment preserved that limit on the paid plan and repeat
 the maximal dark-path qualification; the 50-subrequest free allowance is
 insufficient.
 
-The separately gated model-identity request, decision, alias, and rename lanes
-have a conservative 171-request bound inside the same tracked 400-request
-limit. Both their owner and maintainer gates must remain false until protected
-deployment, rollback health, live OAuth and verified-agent session issuance,
-exact maintainer numeric-ID/login drift denial, and dark staging end-to-end
-qualification are recorded. Consolidation is not part of that enablement: its
-path is an unconditional 404 until protected State supplies a complete
-reverse-impact index and an atomic producer that rematerializes every affected
-transitive identity and alias view.
+The separately gated model-identity request, decision, alias, rename, and
+consolidation lanes have a conservative 376-request bound inside the same
+tracked 400-request limit. Consolidation uses the hard-32-view protected
+reverse-impact components at production contract `714f7408` and staging mirror
+`9fc7c431`: every source and target member is read and validated, every affected
+source identity and alias is rewritten, the source index is deleted, and the
+sorted target union is installed in one CAS.
+Both owner and maintainer gates must remain false until protected deployment,
+paid-plan limit preservation, rollback health, live OAuth and verified-agent
+session issuance, exact maintainer numeric-ID/login drift denial, and dark
+staging end-to-end qualification are recorded. Source completion alone does not
+authorize one State write or enable either route family.
 
 This gate closed on 2026-08-25 against disabled deployed commit
 `d34aab279dd99380530b9d77c3aa199559849209`. Retry `32792905120` started at
