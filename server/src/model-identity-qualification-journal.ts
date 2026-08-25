@@ -167,6 +167,7 @@ export type RecoveryReconciliation = Readonly<{
   operation: QualificationOperation;
   plan_digest: string;
   applied_mutations: number;
+  planned_mutations: number;
   state_commit: string;
   state_tree: string;
 }>;
@@ -202,6 +203,7 @@ export type QualificationJournalStatus = Readonly<{
   fixture_evidence_class: "reviewed_live_fixture" | "source_test_only";
   fixture_id: string;
   fixture_manifest_digest: string;
+  recovery_reconciliations: readonly RecoveryReconciliation[];
   lease_status: "active" | "restored";
   lease_released: boolean;
   owner_api_enabled: false;
@@ -1581,6 +1583,7 @@ function status(journal: StoredJournal): QualificationJournalStatus {
     fixture_evidence_class: journal.acquisition.fixture_evidence.evidence_class,
     fixture_id: journal.acquisition.fixture_evidence.fixture_id,
     fixture_manifest_digest: journal.acquisition.fixture_evidence.manifest_digest,
+    recovery_reconciliations: journal.recovery_reconciliations,
     lease_status: journal.lease_status,
     lease_released: journal.lease_status === "restored",
     owner_api_enabled: false,
@@ -1964,20 +1967,56 @@ export class ModelIdentityQualificationJournal extends DurableObject {
         operation: pending.operation,
         plan_digest: pending.plan_digest,
         applied_mutations: appliedMutations,
+        planned_mutations: plannedMutations,
         state_commit: stateCommit,
         state_tree: stateTree,
       };
+      const reservation: QualificationStepReservation = {
+        run_id: runId,
+        run_attempt: 1,
+        journal_id: journalId,
+        expected_journal_revision: expectedRevision,
+        expected_state_commit: pending.expected_state_commit,
+        expected_state_tree: pending.expected_state_tree,
+        operation: pending.operation,
+      };
+      const receipt = {
+        schema_version: 2,
+        status: "model_identity_qualification_mutation_reconciled",
+        journal_id: journalId,
+        journal_revision: expectedRevision + 1,
+        operation: pending.operation,
+        plan_digest: pending.plan_digest,
+        applied_mutations: appliedMutations,
+        planned_mutations: plannedMutations,
+        state_commit: stateCommit,
+        state_tree: stateTree,
+      } as const;
+      const completion: QualificationStepCompletion = {
+        reservation,
+        state_commit: stateCommit,
+        state_tree: stateTree,
+        receipt,
+      };
       const next: StoredJournal = {
         ...journal,
+        journal_revision: journal.journal_revision + 1,
         current_state_commit: stateCommit,
         current_state_tree: stateTree,
         pending_step: null,
+        completed_plans: [...journal.completed_plans, pending.plan],
         recovery_reconciliations: [
           ...journal.recovery_reconciliations,
           reconciliation,
         ],
       };
       this.write(next);
+      this.ctx.storage.sql.exec(
+        "INSERT INTO qualification_step_receipts (run_id, reserved_revision, body) VALUES (?, ?, ?)",
+        runId,
+        expectedRevision,
+        JSON.stringify(completion),
+      );
       return status(next);
     });
   }

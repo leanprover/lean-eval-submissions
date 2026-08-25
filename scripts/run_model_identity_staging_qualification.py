@@ -468,6 +468,7 @@ JOURNAL_FIELDS = {
     "lease_status",
     "maintainer_api_enabled",
     "owner_api_enabled",
+    "recovery_reconciliations",
     "restoration_commit",
     "restoration_fast_forward",
     "restoration_parent_commit",
@@ -478,6 +479,15 @@ JOURNAL_FIELDS = {
     "run_id",
     "schema_version",
     "status",
+}
+
+RECONCILIATION_FIELDS = {
+    "applied_mutations",
+    "operation",
+    "plan_digest",
+    "planned_mutations",
+    "state_commit",
+    "state_tree",
 }
 
 
@@ -523,6 +533,35 @@ def validate_journal(
         or SHA256.fullmatch(body["fixture_manifest_digest"]) is None
     ):
         raise QualificationFailure("qualification journal boundary was not exact")
+    reconciliations = body["recovery_reconciliations"]
+    if not isinstance(reconciliations, list):
+        raise QualificationFailure("journal recovery evidence was not canonical")
+    for value in reconciliations:
+        reconciliation = require_fields(
+            value,
+            RECONCILIATION_FIELDS,
+            "qualification recovery reconciliation",
+        )
+        if (
+            reconciliation["operation"] not in CONTRACT_BY_OPERATION
+            or not isinstance(reconciliation["plan_digest"], str)
+            or SHA256.fullmatch(reconciliation["plan_digest"]) is None
+            or not isinstance(reconciliation["state_commit"], str)
+            or SHA.fullmatch(reconciliation["state_commit"]) is None
+            or not isinstance(reconciliation["state_tree"], str)
+            or SHA.fullmatch(reconciliation["state_tree"]) is None
+            or positive_int(
+                reconciliation["applied_mutations"], "applied mutation count"
+            )
+            != reconciliation["applied_mutations"]
+            or positive_int(
+                reconciliation["planned_mutations"], "planned mutation count"
+            )
+            != reconciliation["planned_mutations"]
+            or reconciliation["applied_mutations"]
+            > reconciliation["planned_mutations"]
+        ):
+            raise QualificationFailure("journal recovery evidence was not canonical")
     if (
         expected_initial_commit is not None
         and body["initial_state_commit"] != expected_initial_commit

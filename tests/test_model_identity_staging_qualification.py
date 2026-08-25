@@ -86,6 +86,7 @@ class FakeHarness:
             "lease_status": "restored" if self.restoration_commit else "active",
             "maintainer_api_enabled": False,
             "owner_api_enabled": False,
+            "recovery_reconciliations": [],
             "restoration_commit": self.restoration_commit,
             "restoration_fast_forward": self.restoration_commit is not None,
             "restoration_parent_commit": self.restoration_parent_commit,
