@@ -75,6 +75,26 @@ def write_pair(root: pathlib.Path, relative: str, value: dict[str, object], ciph
     sidecar_path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def named_workflow_steps(workflow: str) -> dict[str, str]:
+    """Return complete step blocks keyed by their exact YAML name."""
+    marker = "      - "
+    starts = [
+        offset
+        for offset in range(len(workflow))
+        if workflow.startswith(marker, offset)
+        and (offset == 0 or workflow[offset - 1] == "\n")
+    ]
+    steps: dict[str, str] = {}
+    for index, start in enumerate(starts):
+        end = starts[index + 1] if index + 1 < len(starts) else len(workflow)
+        block = workflow[start:end]
+        first_line = block.splitlines()[0]
+        prefix = "      - name: "
+        if first_line.startswith(prefix):
+            steps[first_line.removeprefix(prefix)] = block
+    return steps
+
+
 class ArchiveEnvelopeMigrationTests(unittest.TestCase):
     def fixture(self, root: pathlib.Path) -> tuple[str, str]:
         schema2_id = "0198abcd-0000-7000-8000-000000000002"
@@ -143,11 +163,83 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
         self.assertNotIn("HEAD:main", workflow)
         self.assertNotIn("--force", workflow)
         self.assertNotIn("upload-artifact", workflow)
+        steps = named_workflow_steps(workflow)
         confirmation = workflow.index("Require explicit apply confirmation")
-        writer = workflow.index("Mint audit-repository-only migration writer")
+        dependencies = workflow.index("Install hash-locked adapter dependencies")
         aws = workflow.index("Assume only the production Encrypt role")
-        self.assertLess(confirmation, writer)
-        self.assertLess(writer, aws)
+        migration = workflow.index("Re-encrypt every planned object into a clean tree")
+        authority_gone = workflow.index(
+            "Prove decrypt and wrap authority is gone before audit write authority"
+        )
+        writer = workflow.index("Mint audit-repository-only migration writer")
+        writer_checkout = workflow.index(
+            "Re-check out the exact audit source with branch-staging authority"
+        )
+        push = workflow.index("Push only an isolated orphan review branch")
+        self.assertLess(confirmation, dependencies)
+        self.assertLess(dependencies, aws)
+        self.assertLess(aws, migration)
+        self.assertLess(migration, authority_gone)
+        self.assertLess(authority_gone, writer)
+        self.assertLess(writer, writer_checkout)
+        self.assertLess(writer_checkout, push)
+        self.assertIn('test ! -e /dev/shm/lean-eval-legacy-archive-identity', workflow)
+        self.assertIn('test -z "${AWS_ACCESS_KEY_ID:-}"', workflow)
+        self.assertIn("rm -rf audit\n          test ! -e audit", workflow)
+        migration_step = steps["Re-encrypt every planned object into a clean tree"]
+        self.assertLess(
+            migration_step.index("trap cleanup EXIT"),
+            migration_step.index("printf '%s' \"$LEGACY_ARCHIVE_IDENTITY\""),
+        )
+        self.assertLess(
+            migration_step.index(
+                "rm -f /dev/shm/lean-eval-legacy-archive-identity"
+            ),
+            migration_step.index("echo 'AWS_ACCESS_KEY_ID='"),
+        )
+        writer_checkout_step = steps[
+            "Re-check out the exact audit source with branch-staging authority"
+        ]
+        self.assertIn("persist-credentials: false", writer_checkout_step)
+        self.assertNotIn("persist-credentials: true", writer_checkout_step)
+        push_step = steps["Push only an isolated orphan review branch"]
+        self.assertIn(
+            "AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}", push_step
+        )
+        self.assertIn("trap cleanup_writer EXIT", push_step)
+        self.assertIn(
+            "test -n \"$AUDIT_TOKEN\"\n"
+            "          audit_token=$AUDIT_TOKEN\n"
+            "          unset AUDIT_TOKEN\n"
+            "          git -C audit switch",
+            push_step,
+        )
+        self.assertLess(
+            push_step.index("git -C audit commit"),
+            push_step.index("audit_basic_auth=$(printf"),
+        )
+        self.assertIn("GIT_CONFIG_COUNT=1", push_step)
+        self.assertIn(
+            "GIT_CONFIG_KEY_0=http.https://github.com/.extraheader",
+            push_step,
+        )
+        self.assertIn(
+            "GIT_CONFIG_COUNT=1 \\\n"
+            "          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \\\n"
+            "          GIT_CONFIG_VALUE_0=\"AUTHORIZATION: basic $audit_basic_auth\" \\\n"
+            "            git -C audit push origin "
+            "HEAD:refs/heads/archive-envelope-migration-v1",
+            push_step,
+        )
+        self.assertNotIn("export GIT_CONFIG_", push_step)
+        self.assertIn('unset AUDIT_TOKEN audit_token audit_basic_auth', push_step)
+        self.assertNotIn("git -C audit config --local", push_step)
+        self.assertNotIn("http.https://github.com/.extraheader ||", push_step)
+        post_authority = workflow[authority_gone:]
+        self.assertGreaterEqual(
+            post_authority.count('ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""'), 3
+        )
+        self.assertGreaterEqual(post_authority.count('AWS_ACCESS_KEY_ID: ""'), 3)
 
     def test_migrate_one_preserves_plaintext_evidence_and_rebinds_ciphertext(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

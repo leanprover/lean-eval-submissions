@@ -98,39 +98,13 @@ jobs:
             echo "retained=$(jq -r .retained_count "$RUNNER_TEMP/archive-migration-plan.json")"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Require explicit apply confirmation and legacy identity
+      - name: Require explicit apply confirmation
         if: inputs.apply == true
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
-          LEGACY_ARCHIVE_IDENTITY: ${{ secrets.LEGACY_ARCHIVE_IDENTITY }}
         run: |
           set -euo pipefail
           test "$CONFIRMATION" = stage-envelope-migration
-          test -n "$LEGACY_ARCHIVE_IDENTITY"
-          umask 077
-          printf '%s' "$LEGACY_ARCHIVE_IDENTITY" > /dev/shm/lean-eval-legacy-archive-identity
-          test -s /dev/shm/lean-eval-legacy-archive-identity
-
-      - name: Mint audit-repository-only migration writer
-        if: inputs.apply == true
-        id: audit_token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
-        with:
-          client-id: ${{ secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID }}
-          private-key: ${{ secrets.LEAN_EVAL_ARCHIVER_PRIVATE_KEY }}
-          owner: leanprover
-          repositories: lean-eval-audit
-
-      - name: Re-check out the exact audit source with branch-staging authority
-        if: inputs.apply == true
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: leanprover/lean-eval-audit
-          ref: ${{ inputs.audit_commit }}
-          path: audit
-          fetch-depth: 1
-          persist-credentials: true
-          token: ${{ steps.audit_token.outputs.token }}
 
       - name: Install hash-locked adapter dependencies
         if: inputs.apply == true
@@ -166,11 +140,14 @@ jobs:
       - name: Re-encrypt every planned object into a clean tree
         if: inputs.apply == true
         env:
+          LEGACY_ARCHIVE_IDENTITY: ${{ secrets.LEGACY_ARCHIVE_IDENTITY }}
           LEAN_EVAL_KMS_KEY_ID: alias/lean-eval-archive-identities-production
           LEAN_EVAL_ADAPTER_NAME: aws-kms-v1
         run: |
           set -euo pipefail
           cleanup() {
+            rm -f /dev/shm/lean-eval-legacy-archive-identity
+            unset LEGACY_ARCHIVE_IDENTITY
             unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
             unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
             {
@@ -180,9 +157,14 @@ jobs:
               echo 'ACTIONS_ID_TOKEN_REQUEST_TOKEN='
               echo 'ACTIONS_ID_TOKEN_REQUEST_URL='
             } >> "$GITHUB_ENV"
-            rm -f /dev/shm/lean-eval-legacy-archive-identity
           }
           trap cleanup EXIT
+          test -n "$LEGACY_ARCHIVE_IDENTITY"
+          umask 077
+          printf '%s' "$LEGACY_ARCHIVE_IDENTITY" > \
+            /dev/shm/lean-eval-legacy-archive-identity
+          unset LEGACY_ARCHIVE_IDENTITY
+          test -s /dev/shm/lean-eval-legacy-archive-identity
           output_root="$RUNNER_TEMP/migrated-audit"
           python scripts/migrate_archive_envelopes.py seed-retained \
             --plan "$RUNNER_TEMP/archive-migration-plan.json" \
@@ -205,12 +187,73 @@ jobs:
             --output-root "$output_root" \
             --output "$RUNNER_TEMP/archive-migration-report.json"
 
+      - name: Prove decrypt and wrap authority is gone before audit write authority
+        if: inputs.apply == true
+        run: |
+          set -euo pipefail
+          test ! -e /dev/shm/lean-eval-legacy-archive-identity
+          test -z "${AWS_ACCESS_KEY_ID:-}"
+          test -z "${AWS_SECRET_ACCESS_KEY:-}"
+          test -z "${AWS_SESSION_TOKEN:-}"
+          test -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}"
+          test -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}"
+          test -s "$RUNNER_TEMP/archive-migration-report.json"
+          rm -rf audit
+          test ! -e audit
+
+      - name: Mint audit-repository-only migration writer
+        if: inputs.apply == true
+        id: audit_token
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_ARCHIVER_PRIVATE_KEY }}
+          owner: leanprover
+          repositories: lean-eval-audit
+
+      - name: Re-check out the exact audit source with branch-staging authority
+        if: inputs.apply == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          ref: ${{ inputs.audit_commit }}
+          path: audit
+          fetch-depth: 1
+          persist-credentials: false
+          token: ${{ steps.audit_token.outputs.token }}
+
       - name: Push only an isolated orphan review branch
         if: inputs.apply == true
         env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
+          AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}
           INVENTORY_DIGEST: ${{ steps.inventory.outputs.digest }}
         run: |
           set -euo pipefail
+          cleanup_writer() {
+            unset AUDIT_TOKEN audit_token audit_basic_auth
+            unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          }
+          trap cleanup_writer EXIT
+          test -n "$AUDIT_TOKEN"
+          audit_token=$AUDIT_TOKEN
+          unset AUDIT_TOKEN
           git -C audit switch --orphan archive-envelope-migration-v1
           git -C audit rm -rf --ignore-unmatch .
           cp -a "$RUNNER_TEMP/migrated-audit/." audit/
@@ -223,7 +266,15 @@ jobs:
           test "$(git -C audit ls-files '*.tar.age' | wc -l)" = \
             "$(( ${{ steps.inventory.outputs.count }} + ${{ steps.inventory.outputs.retained }} ))"
           git -C audit commit -m "migration: stage per-submission archive envelopes"
-          git -C audit push origin HEAD:refs/heads/archive-envelope-migration-v1
+          audit_basic_auth=$(printf 'x-access-token:%s' "$audit_token" | base64 -w0)
+          unset audit_token
+          GIT_CONFIG_COUNT=1 \
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $audit_basic_auth" \
+            git -C audit push origin HEAD:refs/heads/archive-envelope-migration-v1
+          unset audit_basic_auth
+          cleanup_writer
+          trap - EXIT
           {
             echo '### Historical archive migration branch staged'
             echo
