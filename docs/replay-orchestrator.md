@@ -69,13 +69,6 @@ security-boundary wiring only. It cannot produce a `replay.started` or terminal
 State event. The authoritative path below remains gated on a reviewed,
 pre-pinned execution profile and backend.
 
-The first hosted smoke completed in run `32499490261` at workflow commit
-`757b0831018dd6ad88092eff8a2f4b3245a456d6`. Its source-free artifact records
-an accepted `two_plus_two` revision 1 replay on Ubuntu 24.04 image
-`20260816.277.1`; the host did not report the optional retired-instruction
-counter. This evidence completes only the credential-free historical smoke,
-not isolated private replay.
-
 ### Authoritative queue path
 
 Run locally against reviewed files:
