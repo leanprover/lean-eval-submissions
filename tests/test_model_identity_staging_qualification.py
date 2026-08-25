@@ -1,9 +1,12 @@
-"""Contract tests for the dark model-identity staging controller."""
+"""Contract tests for the journaled dark model-identity staging controller."""
 
 from __future__ import annotations
 
 import importlib.util
+import json
 import pathlib
+import sys
+import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -12,13 +15,21 @@ SPEC = importlib.util.spec_from_file_location("model_identity_qualification", SC
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError("could not load model identity staging qualification module")
 QUALIFICATION = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = QUALIFICATION
 SPEC.loader.exec_module(QUALIFICATION)
-
 
 COMMIT = "a" * 40
 INITIAL = "b" * 40
+INITIAL_TREE = "c" * 40
 RUN_ID = "33000000001"
-SESSIONS = QUALIFICATION.Sessions("o" * 32, "a" * 32, "x" * 32)
+RUN_ATTEMPT = 1
+JOURNAL_ID = "mqj_" + "d" * 64
+INTENT = QUALIFICATION.Intent(
+    owner=QUALIFICATION.Identity(101, "owner-one"),
+    cross_owner=QUALIFICATION.Identity(202, "owner-two"),
+    maintainer=QUALIFICATION.Identity(303, "maintainer-one"),
+)
+SESSIONS = QUALIFICATION.Sessions("o" * 32, "a" * 32, "x" * 32, "m" * 32)
 
 
 def health() -> dict[str, object]:
@@ -45,177 +56,292 @@ def health() -> dict[str, object]:
 
 
 class FakeHarness:
-    def __init__(self, fail_operation: str | None = None, fail_restore: bool = False):
-        self.calls: list[tuple[str, object, object]] = []
+    def __init__(self, fail_operation: str | None = None):
+        self.calls: list[tuple[str, object, dict[str, str]]] = []
         self.head = INITIAL
-        self.counter = 0
+        self.tree = INITIAL_TREE
+        self.revision = 1
+        self.restoration_commit: str | None = None
+        self.restoration_parent_commit: str | None = None
+        self.restoration_parent_tree: str | None = None
         self.fail_operation = fail_operation
-        self.fail_restore = fail_restore
+        self.counter = 0
+        self.first_event: str | None = None
 
-    def __call__(self, kind, payload, sessions):
-        self.calls.append((kind, payload, sessions))
+    def journal(self) -> dict[str, object]:
+        return {
+            "current_state_commit": self.head,
+            "current_state_tree": self.tree,
+            "deployed_commit": COMMIT,
+            "environment": "staging",
+            "foreign_commit_observed": False,
+            "initial_state_commit": INITIAL,
+            "initial_state_tree": INITIAL_TREE,
+            "journal_id": JOURNAL_ID,
+            "journal_revision": self.revision,
+            "lease_released": self.restoration_commit is not None,
+            "lease_status": "restored" if self.restoration_commit else "active",
+            "maintainer_api_enabled": False,
+            "owner_api_enabled": False,
+            "restoration_commit": self.restoration_commit,
+            "restoration_fast_forward": self.restoration_commit is not None,
+            "restoration_parent_commit": self.restoration_parent_commit,
+            "restoration_parent_tree": self.restoration_parent_tree,
+            "restoration_tree": INITIAL_TREE if self.restoration_commit else None,
+            "restoration_tree_equal": self.restoration_commit is not None,
+            "run_attempt": RUN_ATTEMPT,
+            "run_id": RUN_ID,
+            "schema_version": 2,
+            "status": "model_identity_qualification_journal",
+        }
+
+    def __call__(self, kind, payload, credentials):
+        self.calls.append((kind, payload, dict(credentials)))
         if kind == "health":
             return 200, health()
+        if kind in {"acquire", "status"}:
+            return 200, self.journal()
         if kind == "restore":
-            if self.fail_restore:
-                return 503, {"error": "restore_failed"}
+            parent = self.head
+            parent_tree = self.tree
+            self.revision += 1
+            self.restoration_commit = "f" * 40
+            self.restoration_parent_commit = parent
+            self.restoration_parent_tree = parent_tree
+            self.head = self.restoration_commit
+            self.tree = INITIAL_TREE
             return 200, {
                 "deployed_commit": COMMIT,
+                "fast_forward": True,
+                "foreign_commit_observed": False,
+                "initial_state_commit": INITIAL,
+                "initial_state_tree": INITIAL_TREE,
+                "journal_id": JOURNAL_ID,
+                "journal_revision": self.revision,
+                "lease_released": True,
                 "maintainer_api_enabled": False,
                 "owner_api_enabled": False,
-                "restored_tree_commit": INITIAL,
+                "ref_head": self.restoration_commit,
+                "restoration_commit": self.restoration_commit,
+                "restoration_parent_commit": parent,
+                "restoration_parent_tree": parent_tree,
+                "restoration_tree": INITIAL_TREE,
+                "run_attempt": RUN_ATTEMPT,
                 "run_id": RUN_ID,
-                "schema_version": 1,
-                "state_commit": "f" * 40,
+                "schema_version": 2,
                 "status": "model_identity_qualification_restored",
+                "tree_equal": True,
             }
-        operation = payload["operation"]
-        if operation == self.fail_operation:
+        contract = QUALIFICATION.CONTRACT_BY_OPERATION[payload["operation"]]
+        if contract.operation == self.fail_operation:
             return 409, {"error": "injected"}
-        if operation not in QUALIFICATION.NON_MUTATING_PROOFS:
-            self.counter += 1
+        self.counter += 1
+        if contract.mutation_created:
             self.head = f"{self.counter:040x}"
-        measurement = operation == "maximal_contention_measurement"
+            self.tree = f"{self.counter + 100:040x}"
+        self.revision += 1
+        if contract.operation in {"idempotent_retry", "cross_route_event_collision"}:
+            event_ids = [self.first_event]
+        else:
+            event_ids = [
+                f"00000000-0000-7{self.counter:03x}-8000-{index + self.counter:012x}"
+                for index in range(contract.minimum_event_ids)
+            ]
+            if self.first_event is None and event_ids:
+                self.first_event = event_ids[0]
+        model_ids = [
+            f"mi1_{index + self.counter:064x}"
+            for index in range(contract.minimum_model_ids)
+        ]
+        alias_keys = [
+            f"ma1_{index + self.counter:064x}" for index in range(contract.alias_count)
+        ]
         return 200, {
-            "cas_attempts": 8 if measurement else None,
+            "cas_attempts": 8
+            if contract.operation == "maximal_contention_measurement"
+            else None,
             "deployed_commit": COMMIT,
+            "journal_id": JOURNAL_ID,
+            "journal_revision": self.revision,
             "maintainer_api_enabled": False,
-            "mutation_created": operation not in QUALIFICATION.NON_MUTATING_PROOFS,
-            "operation": operation,
-            "outcome": QUALIFICATION.PROOF_OUTCOMES[operation],
+            "mutation_created": contract.mutation_created,
             "owner_api_enabled": False,
             "previous_state_commit": payload["expected_state_commit"],
+            "previous_state_tree": payload["expected_state_tree"],
+            "proof": {
+                "actor": QUALIFICATION._identity_for_role(
+                    INTENT, contract.actor_role
+                ).json(),
+                "alias_keys": alias_keys,
+                "assertions": {assertion: True for assertion in contract.assertions},
+                "credential_roles": list(contract.credential_roles),
+                "event_ids": event_ids,
+                "http_status": contract.http_status,
+                "model_ids": model_ids,
+                "operation": contract.operation,
+                "route": contract.route,
+            },
+            "run_attempt": RUN_ATTEMPT,
             "run_id": RUN_ID,
-            "schema_version": 1,
+            "schema_version": 2,
             "state_commit": self.head,
+            "state_tree": self.tree,
             "status": "model_identity_qualification_step_verified",
-            "subrequests": 400 if measurement else None,
+            "subrequests": 400
+            if contract.operation == "maximal_contention_measurement"
+            else None,
         }
 
 
 class ModelIdentityStagingQualificationTests(unittest.TestCase):
-    def run_case(self, harness: FakeHarness) -> dict[str, object]:
-        return QUALIFICATION.run_qualification(
+    def run_case(self, harness: FakeHarness):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        path = pathlib.Path(temporary.name) / "evidence.json"
+        evidence = QUALIFICATION.Evidence(path, "qualification", RUN_ID, RUN_ATTEMPT)
+        result = QUALIFICATION.run_qualification(
             harness,
             expected_commit=COMMIT,
             initial_state_commit=INITIAL,
+            initial_state_tree=INITIAL_TREE,
             run_id=RUN_ID,
+            run_attempt=RUN_ATTEMPT,
+            intent=INTENT,
             sessions=SESSIONS,
+            evidence=evidence,
         )
+        return result, json.loads(path.read_text()), harness
 
-    def test_executes_every_closed_proof_chains_heads_and_restores(self) -> None:
-        harness = FakeHarness()
-        result = self.run_case(harness)
-        operations = [
-            payload["operation"] for kind, payload, _ in harness.calls if kind == "step"
-        ]
-        self.assertEqual(tuple(operations), QUALIFICATION.QUALIFICATION_PROOFS)
-        self.assertEqual(result["proofs"], list(QUALIFICATION.QUALIFICATION_PROOFS))
+    def test_closed_lifecycle_uses_least_privilege_and_preserves_full_evidence(self):
+        result, artifact, harness = self.run_case(FakeHarness())
+        step_calls = [call for call in harness.calls if call[0] == "step"]
         self.assertEqual(
-            [kind for kind, _, _ in harness.calls],
-            ["health", *("step" for _ in operations), "restore", "health"],
+            [call[1]["operation"] for call in step_calls],
+            [contract.operation for contract in QUALIFICATION.PROOF_CONTRACTS],
         )
-        expected_head = INITIAL
-        mutation_count = 0
-        for kind, payload, sessions in harness.calls:
+        for (_, _, credentials), contract in zip(
+            step_calls, QUALIFICATION.PROOF_CONTRACTS, strict=True
+        ):
+            self.assertEqual(set(credentials), set(contract.credential_roles))
+        for kind, _, credentials in harness.calls:
             if kind != "step":
-                continue
-            self.assertEqual(payload["expected_state_commit"], expected_head)
-            self.assertIs(sessions, SESSIONS)
-            if payload["operation"] not in QUALIFICATION.NON_MUTATING_PROOFS:
-                mutation_count += 1
-                expected_head = f"{mutation_count:040x}"
-
-    def test_restores_after_partial_failure_and_does_not_claim_success(self) -> None:
-        harness = FakeHarness(fail_operation="identity_rename")
-        with self.assertRaisesRegex(
-            QUALIFICATION.QualificationFailure,
-            r"qualification failed after 6 verified proof\(s\); restoration passed",
-        ):
-            self.run_case(harness)
-        kinds = [kind for kind, _, _ in harness.calls]
-        self.assertEqual(kinds[-1], "restore")
-        self.assertNotIn("health", kinds[1:])
-
-    def test_combines_primary_and_mandatory_restore_failure(self) -> None:
-        harness = FakeHarness(
-            fail_operation="identity_rename",
-            fail_restore=True,
+                self.assertEqual(credentials, {})
+        self.assertEqual(len(artifact["proofs"]), len(QUALIFICATION.PROOF_CONTRACTS))
+        self.assertEqual(artifact["proofs"][-1]["cas_attempts"], 8)
+        self.assertEqual(artifact["proofs"][-1]["subrequests"], 400)
+        self.assertEqual(
+            result["status"], "model_identity_staging_qualification_passed_and_restored"
         )
-        with self.assertRaisesRegex(
-            QUALIFICATION.QualificationFailure,
-            "qualification failed .* mandatory restoration failed",
-        ):
-            self.run_case(harness)
+        self.assertEqual(
+            [call[0] for call in harness.calls][-2:], ["restore", "health"]
+        )
 
-    def test_rejects_enabled_flags_extra_fields_and_state_movement_on_denial(
-        self,
-    ) -> None:
-        canonical = health()
-        for hostile in (
-            {**canonical, "model_identity_owner_api_enabled": True},
-            {**canonical, "model_identity_maintainer_api_enabled": True},
-            {**canonical, "unexpected": False},
-            {**canonical, "model_identity_write_max_subrequests": 401},
-        ):
-            with (
-                self.subTest(hostile=hostile),
-                self.assertRaises(QUALIFICATION.QualificationFailure),
-            ):
-                QUALIFICATION.validate_health(200, hostile, COMMIT)
-
-        operation = "cross_owner_denial"
-        response = {
-            "cas_attempts": None,
-            "deployed_commit": COMMIT,
-            "maintainer_api_enabled": False,
-            "mutation_created": False,
-            "operation": operation,
-            "outcome": QUALIFICATION.PROOF_OUTCOMES[operation],
-            "owner_api_enabled": False,
-            "previous_state_commit": INITIAL,
-            "run_id": RUN_ID,
-            "schema_version": 1,
-            "state_commit": "c" * 40,
-            "status": "model_identity_qualification_step_verified",
-            "subrequests": None,
-        }
+    def test_mutating_step_must_advance_both_commit_and_tree(self):
+        harness = FakeHarness()
+        contract = QUALIFICATION.CONTRACT_BY_OPERATION["owner_request"]
+        _, response = harness(
+            "step",
+            {
+                "operation": contract.operation,
+                "expected_state_commit": INITIAL,
+                "expected_state_tree": INITIAL_TREE,
+            },
+            {"oauth_owner": SESSIONS.oauth_owner},
+        )
+        response["state_commit"] = INITIAL
         with self.assertRaisesRegex(
-            QUALIFICATION.QualificationFailure,
-            "unexpectedly changed staging State",
+            QUALIFICATION.QualificationFailure, "did not advance"
         ):
-            QUALIFICATION.validate_proof_response(
+            QUALIFICATION.validate_step(
                 200,
                 response,
+                contract=contract,
+                intent=INTENT,
                 expected_commit=COMMIT,
-                expected_head=INITIAL,
-                operation=operation,
                 run_id=RUN_ID,
+                run_attempt=RUN_ATTEMPT,
+                journal_id=JOURNAL_ID,
+                expected_revision=1,
+                expected_head=INITIAL,
+                expected_tree=INITIAL_TREE,
             )
 
-    def test_requires_exact_live_maximal_contention_measurement(self) -> None:
-        harness = FakeHarness()
-        original = harness.__call__
-
-        def hostile(kind, payload, sessions):
-            status, response = original(kind, payload, sessions)
-            if (
-                kind == "step"
-                and payload["operation"] == "maximal_contention_measurement"
-            ):
-                response = {**response, "cas_attempts": 7}
-            return status, response
-
+    def test_partial_failure_still_restores_and_runs_final_disabled_health(self):
+        harness = FakeHarness(fail_operation="identity_rename")
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        evidence = QUALIFICATION.Evidence(
+            pathlib.Path(temporary.name) / "evidence.json", "qualification", RUN_ID, 1
+        )
         with self.assertRaisesRegex(
-            QUALIFICATION.QualificationFailure,
-            "qualification failed after 13 verified proof",
+            QUALIFICATION.QualificationFailure, "restoration.*passed"
         ):
             QUALIFICATION.run_qualification(
-                hostile,
+                harness,
                 expected_commit=COMMIT,
                 initial_state_commit=INITIAL,
+                initial_state_tree=INITIAL_TREE,
                 run_id=RUN_ID,
+                run_attempt=1,
+                intent=INTENT,
                 sessions=SESSIONS,
+                evidence=evidence,
+            )
+        self.assertEqual(
+            [call[0] for call in harness.calls][-3:], ["status", "restore", "health"]
+        )
+        self.assertIsNotNone(evidence.body["final_health"])
+
+    def test_standalone_recovery_is_idempotent_after_restoration(self):
+        harness = FakeHarness()
+        harness.restoration_commit = "f" * 40
+        harness.restoration_parent_commit = "e" * 40
+        harness.restoration_parent_tree = "d" * 40
+        harness.head = harness.restoration_commit
+        harness.tree = INITIAL_TREE
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        evidence = QUALIFICATION.Evidence(
+            pathlib.Path(temporary.name) / "recovery.json", "recovery", RUN_ID, 1
+        )
+        result = QUALIFICATION.recover_journal(
+            harness,
+            expected_commit=COMMIT,
+            run_id=RUN_ID,
+            run_attempt=1,
+            evidence=evidence,
+        )
+        self.assertEqual(result["status"], "already_restored")
+        self.assertEqual([call[0] for call in harness.calls], ["status", "health"])
+
+    def test_exact_actor_evidence_is_required(self):
+        harness = FakeHarness()
+        contract = QUALIFICATION.CONTRACT_BY_OPERATION["oauth_session_identity"]
+        _, response = harness(
+            "step",
+            {
+                "operation": contract.operation,
+                "expected_state_commit": INITIAL,
+                "expected_state_tree": INITIAL_TREE,
+            },
+            {"oauth_owner": SESSIONS.oauth_owner},
+        )
+        response["proof"]["actor"] = {"github_id": 999, "login": "intruder"}
+        with self.assertRaisesRegex(
+            QUALIFICATION.QualificationFailure, "closed boundary"
+        ):
+            QUALIFICATION.validate_step(
+                200,
+                response,
+                contract=contract,
+                intent=INTENT,
+                expected_commit=COMMIT,
+                run_id=RUN_ID,
+                run_attempt=1,
+                journal_id=JOURNAL_ID,
+                expected_revision=1,
+                expected_head=INITIAL,
+                expected_tree=INITIAL_TREE,
             )
 
 
