@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/historical-public-gist-source-adapter-v1.schema.json",
+  "title": "Historical public Gist source adapter receipt version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "contract", "request_id", "result_id",
+    "source", "archive", "handoff_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_public_gist_source_adapter_receipt"},
+    "contract": {"const": "historical_public_gist_source_adapter_v1"},
+    "request_id": {"type": "string", "pattern": "^prr_[0-9a-f]{64}$"},
+    "result_id": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind", "repository", "owner", "gist_id", "remote_url", "commit",
+        "tree", "checkout_clean", "checkout_detached"
+      ],
+      "properties": {
+        "kind": {"const": "gist"},
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[0-9a-f]+$"
+        },
+        "owner": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$"
+        },
+        "gist_id": {"type": "string", "pattern": "^[0-9a-f]+$"},
+        "remote_url": {
+          "type": "string",
+          "pattern": "^https://gist\\.github\\.com/[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?/[0-9a-f]+\\.git$"
+        },
+        "commit": {"$ref": "#/$defs/commit"},
+        "tree": {"$ref": "#/$defs/commit"},
+        "checkout_clean": {"const": true},
+        "checkout_detached": {"const": true}
+      }
+    },
+    "archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["format", "member_prefix", "sha256", "size_bytes"],
+      "properties": {
+        "format": {"const": "git_archive_tar_gzip_v1"},
+        "member_prefix": {"const": "source"},
+        "sha256": {"$ref": "#/$defs/digest"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 52428800}
+      }
+    },
+    "handoff_sha256": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
