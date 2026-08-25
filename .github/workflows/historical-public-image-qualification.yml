@@ -13,17 +13,32 @@ on:
         type: boolean
         default: false
       confirm_isolated_staging_probe:
-        description: Deploy only the replay-disabled qualification Worker and run two probes
+        description: After publication, deploy only the replay-disabled qualification Worker and run two probes; false publishes without mutating the Worker
         required: true
         type: boolean
         default: false
       resume_registry_manifest_digest:
-        description: Existing exact sha256 digest to resume after a post-publication failure; empty means create-only publication
+        description: Existing exact sha256 digest from a successful create-only publication; empty means create-only publication
         required: false
         type: string
         default: ''
       resume_image_source_commit:
-        description: Exact protected source commit that created the resumed immutable image tag; required only with a resume digest
+        description: Exact protected source commit from the successful create-only publication; required only with a resume digest
+        required: false
+        type: string
+        default: ''
+      created_publication_run_id:
+        description: Exact successful create-only publication workflow run ID; required for a staging probe
+        required: false
+        type: string
+        default: ''
+      created_publication_run_attempt:
+        description: Exact successful create-only publication workflow run attempt; required for a staging probe
+        required: false
+        type: string
+        default: ''
+      created_publication_artifact_id:
+        description: Exact two-member candidate artifact ID from the create-only publication run; required for a staging probe
         required: false
         type: string
         default: ''
@@ -32,15 +47,23 @@ permissions:
   contents: read
 
 concurrency:
-  group: historical-public-image-qualification
+  # Create-only publications for distinct benchmark commits may build in
+  # parallel. Any run that mutates the single qualification Worker remains
+  # serialized through the shared qualification group. Operators must not
+  # prequeue probe runs: GitHub's default single pending slot replaces an
+  # older pending run.
+  group: ${{ inputs.confirm_isolated_staging_probe && 'historical-public-image-qualification' || format('historical-public-image-publication-{0}', inputs.benchmark_commit) }}
   cancel-in-progress: false
 
 jobs:
-  publish-and-deploy-isolated-qualifier:
-    if: inputs.confirm_registry_publication == true && inputs.confirm_isolated_staging_probe == true
+  publish-and-optionally-deploy-isolated-qualifier:
+    if: inputs.confirm_registry_publication == true
     environment: cloudflare-staging
     runs-on: ubuntu-latest
     timeout-minutes: 300
+    permissions:
+      actions: read
+      contents: read
     outputs:
       manifest_digest: ${{ steps.publish_registry.outputs.digest || steps.resume_registry.outputs.digest }}
       image_source_commit: ${{ steps.select.outputs.image_source_commit }}
@@ -53,6 +76,30 @@ jobs:
       IMAGE_LIMIT_BYTES: '18000000000'
       QUALIFIER_CONFIG: historical-public-qualification/generated-wrangler.json
     steps:
+      - name: Require a coherent publication and probe mode
+        env:
+          RESUME_DIGEST: ${{ inputs.resume_registry_manifest_digest }}
+          RESUME_IMAGE_SOURCE_COMMIT: ${{ inputs.resume_image_source_commit }}
+          RUN_STAGING_PROBE: ${{ inputs.confirm_isolated_staging_probe }}
+          CREATED_RUN_ID: ${{ inputs.created_publication_run_id }}
+          CREATED_RUN_ATTEMPT: ${{ inputs.created_publication_run_attempt }}
+          CREATED_ARTIFACT_ID: ${{ inputs.created_publication_artifact_id }}
+        run: |
+          set -euo pipefail
+          if [ "$RUN_STAGING_PROBE" = false ]; then
+            test -z "$RESUME_DIGEST"
+            test -z "$RESUME_IMAGE_SOURCE_COMMIT"
+            test -z "$CREATED_RUN_ID"
+            test -z "$CREATED_RUN_ATTEMPT"
+            test -z "$CREATED_ARTIFACT_ID"
+          else
+            test -n "$RESUME_DIGEST"
+            test -n "$RESUME_IMAGE_SOURCE_COMMIT"
+            [[ "$CREATED_RUN_ID" =~ ^[1-9][0-9]{0,15}$ ]]
+            [[ "$CREATED_RUN_ATTEMPT" =~ ^[1-9][0-9]{0,6}$ ]]
+            [[ "$CREATED_ARTIFACT_ID" =~ ^[1-9][0-9]{0,15}$ ]]
+          fi
+
       - name: Require an immutable protected source tag
         run: |
           set -euo pipefail
@@ -337,7 +384,7 @@ jobs:
           rm -f "$RUNNER_TEMP/registry-credentials.json" "$RUNNER_TEMP/registry-headers" "$RUNNER_TEMP/registry-images.json" "$RUNNER_TEMP/registry-netrc"
           trap - EXIT
 
-      - name: Resume only the exact immutable digest after a post-publication failure
+      - name: Resume only the exact digest from a successful create-only publication
         if: inputs.resume_registry_manifest_digest != ''
         id: resume_registry
         env:
@@ -370,7 +417,57 @@ jobs:
           rm -f "$RUNNER_TEMP/registry-credentials.json" "$RUNNER_TEMP/registry-headers" "$RUNNER_TEMP/registry-netrc"
           trap - EXIT
 
+      - name: Bind the probe to exact create-only publication evidence
+        if: inputs.confirm_isolated_staging_probe == true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CREATED_RUN_ID: ${{ inputs.created_publication_run_id }}
+          CREATED_RUN_ATTEMPT: ${{ inputs.created_publication_run_attempt }}
+          CREATED_ARTIFACT_ID: ${{ inputs.created_publication_artifact_id }}
+          MANIFEST_DIGEST: ${{ steps.resume_registry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          umask 077
+          run_metadata="$RUNNER_TEMP/created-publication-run.json"
+          artifact_metadata="$RUNNER_TEMP/created-publication-artifact.json"
+          artifact_zip="$RUNNER_TEMP/created-publication-artifact.zip"
+          created_publication="$RUNNER_TEMP/created-publication.json"
+          trap 'rm -f "$run_metadata" "$artifact_metadata" "$artifact_zip" "$created_publication"' ERR
+          gh api \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$CREATED_RUN_ID/attempts/$CREATED_RUN_ATTEMPT" \
+            > "$run_metadata"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$CREATED_ARTIFACT_ID" \
+            > "$artifact_metadata"
+          archive_url=$(jq -er .archive_download_url "$artifact_metadata")
+          test "$archive_url" = \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/artifacts/$CREATED_ARTIFACT_ID/zip"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+            --max-time 60 --max-filesize 4194304 \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "$archive_url" --output "$artifact_zip"
+          python "$CONTROLLER" validate-created-publication \
+            --matrix "$MATRIX" --contract "$CONTRACT" \
+            --benchmark-commit "$BENCHMARK_COMMIT" \
+            --source-commit "$GITHUB_SHA" \
+            --image-source-commit "$IMAGE_SOURCE_COMMIT" \
+            --manifest-digest "$MANIFEST_DIGEST" \
+            --created-run-id "$CREATED_RUN_ID" \
+            --created-run-attempt "$CREATED_RUN_ATTEMPT" \
+            --created-artifact-id "$CREATED_ARTIFACT_ID" \
+            --current-run-id "$GITHUB_RUN_ID" \
+            --created-run-metadata "$run_metadata" \
+            --created-artifact-metadata "$artifact_metadata" \
+            --created-artifact-zip "$artifact_zip" \
+            --dockerfile Dockerfile.historical-public-replay \
+            --layer-preparation scripts/prepare_historical_image_layers.py \
+            --output "$created_publication"
+          rm -f "$run_metadata" "$artifact_metadata" "$artifact_zip"
+          trap - ERR
+
       - name: Render and deploy only the replay-disabled qualification Worker
+        if: inputs.confirm_isolated_staging_probe == true
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -395,13 +492,18 @@ jobs:
       - name: Write account-free unqualified candidate binding and publication evidence
         env:
           MANIFEST_DIGEST: ${{ steps.publish_registry.outputs.digest || steps.resume_registry.outputs.digest }}
+          RESUME_DIGEST: ${{ inputs.resume_registry_manifest_digest }}
         run: |
           set -euo pipefail
           python "$CONTROLLER" render-binding --matrix "$MATRIX" --contract "$CONTRACT" \
             --benchmark-commit "$BENCHMARK_COMMIT" --source-commit "$GITHUB_SHA" \
             --image-source-commit "$IMAGE_SOURCE_COMMIT" \
             --manifest-digest "$MANIFEST_DIGEST" --output candidate-binding.json
-          python - <<'PY'
+          if [ -n "$RESUME_DIGEST" ]; then
+            test "${{ inputs.confirm_isolated_staging_probe }}" = true
+            cp "$RUNNER_TEMP/created-publication.json" historical-image-publication.json
+          else
+            python - <<'PY'
           import hashlib, json, os, pathlib, subprocess
           candidate = json.loads(pathlib.Path(os.environ["RUNNER_TEMP"] + "/candidate.json").read_text())
           image_source_commit = os.environ["IMAGE_SOURCE_COMMIT"]
@@ -432,11 +534,11 @@ jobs:
               "registry_repository": candidate["registry_repository"],
               "registry_tag": os.environ["IMAGE_TAG"],
               "registry_manifest_digest": os.environ["MANIFEST_DIGEST"],
-              "publication_mode": "resumed" if os.environ.get("IMAGE_SIZE_BYTES") is None else "created",
-              "image_size_bytes": int(os.environ["IMAGE_SIZE_BYTES"]) if os.environ.get("IMAGE_SIZE_BYTES") is not None else None,
+              "publication_mode": "created",
+              "image_size_bytes": int(os.environ["IMAGE_SIZE_BYTES"]),
               "dockerfile_sha256": hashlib.sha256(dockerfile).hexdigest(),
               "layer_preparation_sha256": hashlib.sha256(layer_preparation).hexdigest() if layer_preparation is not None else None,
-              "layer_diff_ids": json.loads(pathlib.Path(os.environ["RUNNER_TEMP"] + "/image-layer-diff-ids.json").read_text()) if os.environ.get("IMAGE_SIZE_BYTES") is not None else None,
+              "layer_diff_ids": json.loads(pathlib.Path(os.environ["RUNNER_TEMP"] + "/image-layer-diff-ids.json").read_text()),
               "matrix_sha256": hashlib.sha256(pathlib.Path(os.environ["MATRIX"]).read_bytes()).hexdigest(),
               "matrix_entry_sha256": candidate["entry_sha256"],
               "profile_lock_sha256": candidate["profile_lock_sha256"],
@@ -445,7 +547,10 @@ jobs:
           }
           pathlib.Path("historical-image-publication.json").write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
           PY
-          cp "$RUNNER_TEMP/rollout.json" historical-qualification-rollout.json
+          fi
+          if [ "${{ inputs.confirm_isolated_staging_probe }}" = true ]; then
+            cp "$RUNNER_TEMP/rollout.json" historical-qualification-rollout.json
+          fi
 
       # actions/upload-artifact pinned to v7.0.1.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -463,10 +568,15 @@ jobs:
         run: |
           rm -f "$QUALIFIER_CONFIG" "$RUNNER_TEMP/registry-credentials.json" \
             "$RUNNER_TEMP/registry-headers" "$RUNNER_TEMP/registry-images.json" \
-            "$RUNNER_TEMP/registry-netrc" "$RUNNER_TEMP/image-layer-diff-ids.json"
+            "$RUNNER_TEMP/registry-netrc" "$RUNNER_TEMP/image-layer-diff-ids.json" \
+            "$RUNNER_TEMP/created-publication-run.json" \
+            "$RUNNER_TEMP/created-publication-artifact.json" \
+            "$RUNNER_TEMP/created-publication-artifact.zip" \
+            "$RUNNER_TEMP/created-publication.json"
 
   probe-isolated-qualifier:
-    needs: publish-and-deploy-isolated-qualifier
+    if: inputs.confirm_isolated_staging_probe == true
+    needs: publish-and-optionally-deploy-isolated-qualifier
     environment: replay-staging
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -479,7 +589,7 @@ jobs:
       CONTROLLER: historical-public-qualification/qualification.py
       FAILURE_SANITIZER: scripts/sanitize_executor_failure.py
       BENCHMARK_COMMIT: ${{ inputs.benchmark_commit }}
-      IMAGE_SOURCE_COMMIT: ${{ needs.publish-and-deploy-isolated-qualifier.outputs.image_source_commit }}
+      IMAGE_SOURCE_COMMIT: ${{ needs.publish-and-optionally-deploy-isolated-qualifier.outputs.image_source_commit }}
       DIAGNOSTIC: historical-public-staging-qualification-diagnostic.json
       QUALIFIER_URL: https://lean-eval-historical-qualifier-staging.lean-eval.workers.dev
     steps:
@@ -490,7 +600,7 @@ jobs:
 
       - name: Initialize bounded source-free probe diagnostics
         env:
-          MANIFEST_DIGEST: ${{ needs.publish-and-deploy-isolated-qualifier.outputs.manifest_digest }}
+          MANIFEST_DIGEST: ${{ needs.publish-and-optionally-deploy-isolated-qualifier.outputs.manifest_digest }}
         run: |
           set -euo pipefail
           python "$CONTROLLER" render-diagnostic --matrix "$MATRIX" --contract "$CONTRACT" \
@@ -516,7 +626,7 @@ jobs:
 
       - name: Prove health, isolation, runtime resources, and destroy/recreate
         env:
-          MANIFEST_DIGEST: ${{ needs.publish-and-deploy-isolated-qualifier.outputs.manifest_digest }}
+          MANIFEST_DIGEST: ${{ needs.publish-and-optionally-deploy-isolated-qualifier.outputs.manifest_digest }}
         run: |
           set -euo pipefail
           cleanup() {

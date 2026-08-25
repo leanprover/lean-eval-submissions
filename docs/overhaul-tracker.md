@@ -333,7 +333,10 @@ the already implemented owner status, metadata, and publication routes.
       request groups are now deterministically planned. The final source-free
       35-image build-readiness matrix (`a674707e…`) binds that exact plan,
       registry, and component lock; all entries remain unqualified, and none
-      is enqueued or executed.
+      is enqueued or executed. Registry publication and staging qualification
+      are separate phases: distinct create-only benchmark image builds may run
+      in parallel, while every deployment plus its two probes stays serialized
+      through the single isolated replay-disabled qualification Worker.
       Activation
       remains fail-closed on `legacy_public_result_replay_authority_v1` because
       current State replay materialization admits only modern

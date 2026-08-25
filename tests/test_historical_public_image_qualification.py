@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import copy
+import hashlib
 import importlib.util
+import io
 import json
 import os
 import pathlib
 import re
+import stat
 import tempfile
 import unittest
+import zipfile
 
 from scripts import sanitize_executor_failure
 
@@ -195,6 +200,171 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
             )
         self.assertNotIn("account", json.dumps(rollout))
 
+    def test_resumed_probe_requires_exact_created_publication_artifact(self) -> None:
+        source_commit = "1" * 40
+        manifest_digest = "sha256:" + "2" * 64
+        entry = self.entry
+        binding = {
+            "schema_version": 2,
+            "benchmark_commit": self.commit,
+            "controller_source_commit": source_commit,
+            "image_source_commit": source_commit,
+            "qualification_status": "unqualified",
+            "vars": qualification.render_config(
+                MATRIX,
+                CONTRACT,
+                self.commit,
+                "0" * 32,
+                manifest_digest,
+                source_commit,
+                source_commit,
+            )["env"]["staging"]["vars"],
+        }
+        publication = {
+            "schema_version": 2,
+            "kind": "historical_public_image_publication_evidence",
+            "qualification_status": "unqualified",
+            "controller_source_commit": source_commit,
+            "image_source_commit": source_commit,
+            "benchmark_commit": self.commit,
+            "benchmark_tree": entry["benchmark_tree"],
+            "registry_repository": "lean-eval-historical-public-v1",
+            "registry_tag": f"{self.commit}-{source_commit}",
+            "registry_manifest_digest": manifest_digest,
+            "publication_mode": "created",
+            "image_size_bytes": 12_345,
+            "dockerfile_sha256": hashlib.sha256(
+                (ROOT / "Dockerfile.historical-public-replay").read_bytes()
+            ).hexdigest(),
+            "layer_preparation_sha256": hashlib.sha256(
+                (ROOT / "scripts/prepare_historical_image_layers.py").read_bytes()
+            ).hexdigest(),
+            "layer_diff_ids": ["sha256:" + "3" * 64],
+            "matrix_sha256": qualification.MATRIX_SHA256,
+            "matrix_entry_sha256": qualification.sha256_bytes(
+                qualification.canonical(entry)
+            ),
+            "profile_lock_sha256": qualification.sha256_bytes(
+                qualification.canonical(entry["profile_lock"])
+            ),
+            "workspace_manifest_count": entry["workspace_count"],
+            "workflow_image_limit_bytes": 18_000_000_000,
+        }
+        run = {
+            "id": 123,
+            "run_attempt": 2,
+            "event": "workflow_dispatch",
+            "head_sha": source_commit,
+            "head_branch": f"lean-eval-dispatch/{source_commit}",
+            "path": ".github/workflows/historical-public-image-qualification.yml",
+            "status": "completed",
+            "conclusion": "success",
+            "run_started_at": "2026-08-25T01:00:00Z",
+            "updated_at": "2026-08-25T02:00:00Z",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            run_path = root / "run.json"
+            artifact_path = root / "artifact.json"
+            zip_path = root / "artifact.zip"
+            run_path.write_text(json.dumps(run), encoding="utf-8")
+
+            def write_artifact(
+                selected_publication: dict[str, object],
+                *,
+                extra_member: bool = False,
+            ) -> dict[str, object]:
+                payload = io.BytesIO()
+                with zipfile.ZipFile(payload, "w", zipfile.ZIP_DEFLATED) as archive:
+                    def write_member(name: str, raw: bytes) -> None:
+                        member = zipfile.ZipInfo(name)
+                        member.external_attr = (stat.S_IFREG | 0o600) << 16
+                        member.compress_type = zipfile.ZIP_DEFLATED
+                        archive.writestr(member, raw)
+
+                    write_member(
+                        "candidate-binding.json", qualification.canonical(binding)
+                    )
+                    write_member(
+                        "historical-image-publication.json",
+                        qualification.canonical(selected_publication),
+                    )
+                    if extra_member:
+                        write_member("extra.json", b"{}\n")
+                raw = payload.getvalue()
+                zip_path.write_bytes(raw)
+                artifact = {
+                    "id": 456,
+                    "name": "historical-public-image-candidate",
+                    "expired": False,
+                    "digest": "sha256:" + hashlib.sha256(raw).hexdigest(),
+                    "created_at": "2026-08-25T01:30:00Z",
+                    "workflow_run": {
+                        "id": 123,
+                        "head_sha": source_commit,
+                        "head_branch": f"lean-eval-dispatch/{source_commit}",
+                    },
+                    "size_in_bytes": len(raw),
+                }
+                artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+                return artifact
+
+            write_artifact(publication)
+
+            def validate() -> dict[str, object]:
+                return qualification.validate_created_publication_origin(
+                    MATRIX,
+                    CONTRACT,
+                    self.commit,
+                    source_commit,
+                    source_commit,
+                    manifest_digest,
+                    123,
+                    2,
+                    456,
+                    789,
+                    run_path,
+                    artifact_path,
+                    zip_path,
+                    ROOT / "Dockerfile.historical-public-replay",
+                    ROOT / "scripts/prepare_historical_image_layers.py",
+                )
+
+            self.assertEqual(validate(), publication)
+            for field, hostile_value in (
+                ("path", ".github/workflows/other.yml"),
+                ("head_sha", "9" * 40),
+                ("run_attempt", 3),
+                ("conclusion", "failure"),
+            ):
+                hostile = copy.deepcopy(run)
+                hostile[field] = hostile_value
+                run_path.write_text(json.dumps(hostile), encoding="utf-8")
+                with self.assertRaises(qualification.QualificationError):
+                    validate()
+            run_path.write_text(json.dumps(run), encoding="utf-8")
+            resumed = copy.deepcopy(publication)
+            resumed["publication_mode"] = "resumed"
+            resumed["image_size_bytes"] = None
+            resumed["layer_diff_ids"] = None
+            write_artifact(resumed)
+            with self.assertRaisesRegex(
+                qualification.QualificationError, "publication evidence changed"
+            ):
+                validate()
+            write_artifact(publication, extra_member=True)
+            with self.assertRaisesRegex(
+                qualification.QualificationError, "member set changed"
+            ):
+                validate()
+            artifact = write_artifact(publication)
+            artifact["expired"] = True
+            artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+            with self.assertRaisesRegex(
+                qualification.QualificationError, "metadata changed"
+            ):
+                validate()
+
     def test_rollout_loader_requires_the_digest_pinned_tag(self) -> None:
         config = qualification.render_config(
             MATRIX,
@@ -306,6 +476,50 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
         dockerfile = (ROOT / "Dockerfile.historical-public-replay").read_text()
         self.assertIn("workflow_dispatch:", workflow)
         self.assertNotIn("schedule:", workflow)
+        self.assertIn(
+            "inputs.confirm_isolated_staging_probe && "
+            "'historical-public-image-qualification'",
+            workflow,
+        )
+        self.assertIn(
+            "format('historical-public-image-publication-{0}', "
+            "inputs.benchmark_commit)",
+            workflow,
+        )
+        self.assertIn("Operators must not\n  # prequeue probe runs", workflow)
+        self.assertIn(
+            "if: inputs.confirm_isolated_staging_probe == true\n"
+            "        env:\n"
+            "          CLOUDFLARE_ACCOUNT_ID:",
+            workflow,
+        )
+        self.assertIn(
+            "if: inputs.confirm_isolated_staging_probe == true\n"
+            "    needs: publish-and-optionally-deploy-isolated-qualifier",
+            workflow,
+        )
+        self.assertIn(
+            'if [ "${{ inputs.confirm_isolated_staging_probe }}" = true ]; then',
+            workflow,
+        )
+        self.assertIn('if [ "$RUN_STAGING_PROBE" = false ]; then', workflow)
+        self.assertIn('test -z "$RESUME_DIGEST"', workflow)
+        self.assertIn('test -z "$RESUME_IMAGE_SOURCE_COMMIT"', workflow)
+        self.assertIn('test -n "$RESUME_DIGEST"', workflow)
+        self.assertIn('test -n "$RESUME_IMAGE_SOURCE_COMMIT"', workflow)
+        self.assertIn('test -z "$CREATED_RUN_ID"', workflow)
+        self.assertIn('[[ "$CREATED_RUN_ID" =~ ^[1-9][0-9]{0,15}$ ]]', workflow)
+        self.assertIn("      actions: read\n      contents: read", workflow)
+        self.assertIn("/attempts/$CREATED_RUN_ATTEMPT", workflow)
+        self.assertIn("validate-created-publication", workflow)
+        self.assertIn(
+            'cp "$RUNNER_TEMP/created-publication.json" '
+            "historical-image-publication.json",
+            workflow,
+        )
+        self.assertNotIn('"publication_mode": "resumed"', workflow)
+        self.assertNotIn("after a post-publication failure", workflow)
+        self.assertIn("from a successful create-only publication", workflow)
         self.assertIn("immutable registry tag already exists; refusing overwrite", workflow)
         self.assertIn('test -z "$RESUME_IMAGE_SOURCE_COMMIT"', workflow)
         self.assertIn('git merge-base --is-ancestor "$image_source_commit" "$GITHUB_SHA"', workflow)
