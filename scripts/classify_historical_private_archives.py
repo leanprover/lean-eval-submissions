@@ -9,6 +9,7 @@ bound to an operator-reviewed digest before a classification is emitted.
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import hashlib
 import json
 import os
@@ -25,7 +26,8 @@ from results_schema import (
     LOGIN_RE,
     OWNER_NAME_RE,
     ResultsSchemaError,
-    read_results_file,
+    canonical_store_digest,
+    validate_v2,
 )
 
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
@@ -34,14 +36,22 @@ MAX_PRIVATE_RESULTS = 10_000
 MAX_ARCHIVES = 10_000
 MAX_OUTPUT_BYTES = 16 * 1024 * 1024
 ENTRY_DIGEST_DOMAIN = b"lean-eval-private-archive-crosswalk-entry-v1\0"
-ALLOWED_SIDECAR_FIELDS = archive_migration.PRESERVED_FIELDS | {
+COMMON_SIDECAR_FIELDS = archive_migration.PRESERVED_FIELDS | {
     "schema_version",
-    "issue",
-    "submission_id",
     "sha256_ciphertext",
     "size_bytes_ciphertext",
-    "key_envelope",
 }
+OPTIONAL_SIDECAR_FIELDS = {
+    "production_description",
+    "solution_publication_status",
+    "solution_publication_date",
+    "problem_ids",
+    "evaluator_verdict",
+}
+REQUIRED_COMMON_SIDECAR_FIELDS = COMMON_SIDECAR_FIELDS - OPTIONAL_SIDECAR_FIELDS
+UTC_SECONDS = re.compile(
+    r"(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z"
+)
 CLASSIFICATIONS = (
     "bound",
     "archive_not_found",
@@ -128,25 +138,41 @@ def _require_git_checkout(
 def _load_private_results(
     results_root: pathlib.Path,
     source_commit: str,
+    expected_store_digest: str,
 ) -> tuple[dict[str, Any], list[tuple[str, dict[str, Any]]]]:
-    """Validate twice around the full-record read to reject a changing store."""
+    """Join and digest one immutable parsed snapshot between two inventories."""
     try:
         before = replay_inventory(results_root, source_commit)
     except (OSError, UnicodeError, ResultsSchemaError, ValueError) as error:
-        raise CrosswalkError(f"results inventory is invalid: {error}") from error
+        raise CrosswalkError("results inventory is invalid") from error
+    if before["results_store_sha256"] != expected_store_digest:
+        raise CrosswalkError("results-store digest disagrees with the reviewed input")
 
     private: list[tuple[str, dict[str, Any]]] = []
+    canonical_files: list[tuple[str, dict[str, Any]]] = []
     for path in sorted(results_root.iterdir(), key=lambda item: item.name):
         if path.name == ".gitkeep":
             continue
+        if path.is_symlink() or not path.is_file():
+            raise CrosswalkError("results store changed during validation")
         try:
-            data, version = read_results_file(path)
-        except (OSError, UnicodeError, ResultsSchemaError) as error:
-            raise CrosswalkError(
-                f"results store changed during validation: {error}"
-            ) from error
-        if version != 2:
+            # The join and canonical digest below use this same parsed object.
+            # In particular, neither operation reopens the path after this read.
+            encoded = path.read_bytes()
+            value = json.loads(encoded.decode("utf-8"))
+            if not isinstance(value, dict) or value.get("schema_version") != 2:
+                raise ResultsSchemaError("results input is not schema version 2")
+            data = validate_v2(value, context="private crosswalk results input")
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            ResultsSchemaError,
+        ) as error:
+            raise CrosswalkError("results store changed during validation") from error
+        if data["schema_version"] != 2:
             raise CrosswalkError("private crosswalk requires schema-version-2 results")
+        canonical_files.append((f"results/{path.name}", data))
         for record in data["results"]:
             if record["submission"]["public"] is False:
                 private.append((data["user"], record))
@@ -154,10 +180,14 @@ def _load_private_results(
     try:
         after = replay_inventory(results_root, source_commit)
     except (OSError, UnicodeError, ResultsSchemaError, ValueError) as error:
-        raise CrosswalkError(
-            f"results inventory changed during validation: {error}"
-        ) from error
+        raise CrosswalkError("results inventory changed during validation") from error
     if before != after:
+        raise CrosswalkError("results store changed during validation")
+    try:
+        joined_store_digest = canonical_store_digest(canonical_files)
+    except (UnicodeError, ResultsSchemaError, ValueError) as error:
+        raise CrosswalkError("results store changed during validation") from error
+    if joined_store_digest != expected_store_digest:
         raise CrosswalkError("results store changed during validation")
     expected_private_ids = {
         entry["result_id"]
@@ -178,28 +208,76 @@ def _load_private_results(
     return before, private
 
 
-def _read_json_object(path: pathlib.Path, label: str) -> dict[str, Any]:
+def _read_json_object(path: pathlib.Path, label: str) -> tuple[dict[str, Any], bytes]:
     if path.is_symlink() or not path.is_file():
         raise CrosswalkError(f"{label} must be one regular file")
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        encoded = path.read_bytes()
+        value = json.loads(encoded.decode("utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         raise CrosswalkError(f"{label} must be one UTF-8 JSON object") from error
     if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
         raise CrosswalkError(f"{label} must be one object with string keys")
-    return value
+    return value, encoded
+
+
+def _validate_publication_metadata(sidecar: dict[str, Any]) -> None:
+    description = sidecar.get("production_description")
+    if description is not None and (
+        not isinstance(description, str)
+        or not description.strip()
+        or "\x00" in description
+        or len(description) > 4000
+    ):
+        raise CrosswalkError("archive sidecar publication metadata is invalid")
+    status = sidecar.get("solution_publication_status")
+    publication_date = sidecar.get("solution_publication_date")
+    if status is not None:
+        if status not in {"private", "planned", "published"}:
+            raise CrosswalkError("archive sidecar publication metadata is invalid")
+        if status == "published" and sidecar["submission_public"] is not True:
+            raise CrosswalkError("archive sidecar publication metadata is invalid")
+        if (
+            status in {"private", "planned"}
+            and sidecar["submission_public"] is not False
+        ):
+            raise CrosswalkError("archive sidecar publication metadata is invalid")
+    if publication_date is not None:
+        if status not in {"planned", "published"} or not isinstance(
+            publication_date, str
+        ):
+            raise CrosswalkError("archive sidecar publication metadata is invalid")
+        try:
+            parsed = dt.date.fromisoformat(publication_date)
+        except ValueError as error:
+            raise CrosswalkError(
+                "archive sidecar publication metadata is invalid"
+            ) from error
+        if parsed.isoformat() != publication_date:
+            raise CrosswalkError("archive sidecar publication metadata is invalid")
+    elif status in {"planned", "published"}:
+        raise CrosswalkError("archive sidecar publication metadata is invalid")
 
 
 def _validate_sidecar_metadata(
     sidecar: dict[str, Any],
     plan_entry: dict[str, Any],
+    *,
+    ciphertext_size: int,
 ) -> dict[str, Any]:
-    unknown = set(sidecar) - ALLOWED_SIDECAR_FIELDS
-    if unknown:
-        raise CrosswalkError(f"archive sidecar has unknown fields: {sorted(unknown)}")
     schema = sidecar.get("schema_version")
     if type(schema) is not int or schema not in {1, 2, 3}:
         raise CrosswalkError("archive sidecar schema_version is unsupported")
+    allowed = COMMON_SIDECAR_FIELDS | ({"issue"} if schema == 1 else {"submission_id"})
+    if schema == 3:
+        allowed.add("key_envelope")
+    required = REQUIRED_COMMON_SIDECAR_FIELDS | (
+        {"issue"} if schema == 1 else {"submission_id"}
+    )
+    if schema == 3:
+        required.add("key_envelope")
+    if set(sidecar) - allowed or required - set(sidecar):
+        raise CrosswalkError("archive sidecar field set is invalid")
     submitter = sidecar.get("submitter")
     repository = sidecar.get("submission_repo")
     source_ref = sidecar.get("submission_ref")
@@ -227,6 +305,44 @@ def _validate_sidecar_metadata(
     benchmark = sidecar.get("benchmark_commit")
     if not isinstance(benchmark, str) or COMMIT.fullmatch(benchmark) is None:
         raise CrosswalkError("archive sidecar benchmark commit is invalid")
+    plaintext_digest = sidecar.get("sha256_plaintext_tar")
+    ciphertext_digest = sidecar.get("sha256_ciphertext")
+    plaintext_size = sidecar.get("size_bytes_plaintext_tar")
+    recorded_ciphertext_size = sidecar.get("size_bytes_ciphertext")
+    if (
+        not isinstance(plaintext_digest, str)
+        or DIGEST.fullmatch(plaintext_digest) is None
+        or not isinstance(ciphertext_digest, str)
+        or DIGEST.fullmatch(ciphertext_digest) is None
+        or type(plaintext_size) is not int
+        or plaintext_size < 0
+        or type(recorded_ciphertext_size) is not int
+        or recorded_ciphertext_size <= 0
+        or recorded_ciphertext_size != ciphertext_size
+    ):
+        raise CrosswalkError("archive sidecar digest or size evidence is invalid")
+    expected_ciphertext_digest = plan_entry.get(
+        "source_ciphertext_sha256", plan_entry.get("ciphertext_sha256")
+    )
+    if ciphertext_digest != expected_ciphertext_digest:
+        raise CrosswalkError("archive sidecar ciphertext binding is invalid")
+    archived_at = sidecar.get("archived_at")
+    if not isinstance(archived_at, str) or UTC_SECONDS.fullmatch(archived_at) is None:
+        raise CrosswalkError("archive sidecar archive timestamp is invalid")
+    try:
+        parsed_at = dt.datetime.fromisoformat(archived_at[:-1] + "+00:00")
+    except ValueError as error:
+        raise CrosswalkError("archive sidecar archive timestamp is invalid") from error
+    if parsed_at.strftime("%Y-%m-%dT%H:%M:%SZ") != archived_at:
+        raise CrosswalkError("archive sidecar archive timestamp is invalid")
+    workflow_run = sidecar.get("archiver_workflow_run")
+    if (
+        not isinstance(workflow_run, str)
+        or not workflow_run.strip()
+        or len(workflow_run) > 2048
+    ):
+        raise CrosswalkError("archive sidecar workflow evidence is invalid")
+    _validate_publication_metadata(sidecar)
 
     issue = sidecar.get("issue")
     submission_id = sidecar.get("submission_id")
@@ -238,6 +354,16 @@ def _validate_sidecar_metadata(
             raise CrosswalkError("server archive submission identity is invalid")
         if archive_migration.UUID7.fullmatch(submission_id) is None:
             raise CrosswalkError("server archive submission identity is invalid")
+    if schema == 3:
+        try:
+            envelope = archive_migration.validate_envelope(sidecar["key_envelope"])
+        except ValueError as error:
+            raise CrosswalkError("archive sidecar key envelope is invalid") from error
+        if (
+            envelope["submission_id"] != submission_id
+            or envelope["archive_ciphertext_sha256"] != ciphertext_digest
+        ):
+            raise CrosswalkError("archive sidecar key envelope binding is invalid")
 
     problems = sidecar.get("problem_ids")
     verdict = sidecar.get("evaluator_verdict")
@@ -254,13 +380,13 @@ def _validate_sidecar_metadata(
                 not isinstance(problem, str) or not problem or len(problem) > 256
                 for problem in problems
             )
-            or len(set(problems)) != len(problems)
+            or problems != sorted(set(problems))
         ):
             raise CrosswalkError("archive problem inventory is invalid")
         if (
             not isinstance(verdict, dict)
             or not all(
-                isinstance(problem, str) and status in {"pass", "fail"}
+                isinstance(problem, str) and status in {"pass", "fail", "skipped"}
                 for problem, status in verdict.items()
             )
             or set(verdict) != set(problems)
@@ -301,8 +427,8 @@ def _load_archives(
     try:
         supplied_plan = archive_migration._load_plan(plan_path)
         before = archive_migration.build_plan(audit_root, audit_commit)
-    except (OSError, UnicodeError, archive_migration.MigrationError) as error:
-        raise CrosswalkError(f"archive migration plan is invalid: {error}") from error
+    except (OSError, UnicodeError, ValueError) as error:
+        raise CrosswalkError("archive migration plan is invalid") from error
     if supplied_plan != before:
         raise CrosswalkError("supplied archive plan is stale or was not rederived")
     if before["source_commit"] != audit_commit:
@@ -327,6 +453,15 @@ def _load_archives(
     }
     if actual_sidecars != expected_sidecars:
         raise CrosswalkError("audit JSON inventory has missing or unrelated files")
+    actual_ciphertexts = {
+        path.relative_to(audit_root).as_posix()
+        for path in audit_root.rglob("*.tar.age")
+        if ".git" not in path.parts
+    }
+    if actual_ciphertexts != set(entries_by_path):
+        raise CrosswalkError(
+            "audit ciphertext inventory has missing or unrelated files"
+        )
 
     archives: list[dict[str, Any]] = []
     for source_path in sorted(entries_by_path):
@@ -334,23 +469,27 @@ def _load_archives(
         sidecar_path = audit_root.joinpath(
             *source_path.removesuffix(".tar.age").split("/")
         ).with_suffix(".json")
-        sidecar = _read_json_object(sidecar_path, "archive sidecar")
+        sidecar, sidecar_bytes = _read_json_object(sidecar_path, "archive sidecar")
         expected_sidecar_digest = plan_entry.get(
             "source_sidecar_sha256", plan_entry.get("sidecar_sha256")
         )
-        if (
-            hashlib.sha256(sidecar_path.read_bytes()).hexdigest()
-            != expected_sidecar_digest
-        ):
+        if hashlib.sha256(sidecar_bytes).hexdigest() != expected_sidecar_digest:
             raise CrosswalkError("archive sidecar changed after the migration plan")
-        archives.append(_validate_sidecar_metadata(sidecar, plan_entry))
+        ciphertext_path = audit_root.joinpath(*source_path.split("/"))
+        if ciphertext_path.is_symlink() or not ciphertext_path.is_file():
+            raise CrosswalkError("archive ciphertext must be one regular file")
+        archives.append(
+            _validate_sidecar_metadata(
+                sidecar,
+                plan_entry,
+                ciphertext_size=ciphertext_path.stat().st_size,
+            )
+        )
 
     try:
         after = archive_migration.build_plan(audit_root, audit_commit)
-    except (OSError, UnicodeError, archive_migration.MigrationError) as error:
-        raise CrosswalkError(
-            f"archive inventory changed during validation: {error}"
-        ) from error
+    except (OSError, UnicodeError, ValueError) as error:
+        raise CrosswalkError("archive inventory changed during validation") from error
     if before != after:
         raise CrosswalkError("archive inventory changed during validation")
     return before, archives
@@ -487,9 +626,11 @@ def build_crosswalk(
             require_repository_root=True,
         )
 
-    inventory, private_results = _load_private_results(results_root, results_commit)
-    if inventory["results_store_sha256"] != expected_results_store_sha256:
-        raise CrosswalkError("results-store digest disagrees with the reviewed input")
+    _inventory, private_results = _load_private_results(
+        results_root,
+        results_commit,
+        expected_results_store_sha256,
+    )
     if len(private_results) != expected_private_result_count:
         raise CrosswalkError("private result count disagrees with the reviewed input")
 
@@ -558,8 +699,16 @@ def main(argv: list[str] | None = None) -> int:
             expected_archive_inventory_digest=args.expected_archive_inventory_digest,
         )
         write_exclusive(args.output, crosswalk)
-    except (CrosswalkError, OSError, UnicodeError, ValueError) as error:
+    except CrosswalkError as error:
         print(f"historical-private-archive-crosswalk: {error}", file=sys.stderr)
+        return 1
+    except (OSError, UnicodeError, ValueError):
+        # Unexpected dependency errors may contain private repository paths or
+        # values.  The classifier boundary never writes those details to logs.
+        print(
+            "historical-private-archive-crosswalk: validation failed",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

@@ -8,13 +8,19 @@ artifact.
 
 `scripts/classify_historical_private_archives.py` performs that join inside a
 checkout that can read the private audit sidecars. It validates the complete
-schema-version-2 results store through the shared result validator, recomputes
-the canonical results-store digest, and rederives the complete archive-envelope
-migration plan from ciphertext and sidecar bytes. It refuses a supplied plan
-unless it is byte-for-byte equivalent to that rederivation. The command also
-requires the results subtree and complete audit checkout to be clean Git input
-at the claimed commits. Operator-supplied result and archive digests, commits,
-and counts must also agree.
+schema-version-2 results store through the shared result validator. Each result
+file is read once into an immutable byte buffer; the exact parsed objects used
+for the private join also produce the canonical results-store digest, which
+must equal the independently reviewed pin. Each archive sidecar is likewise
+parsed and hashed from one byte buffer. The classifier rejects schema hybrids,
+orphan ciphertexts, and any sidecar—including retained schema-version-3
+objects—that fails its independent finalized-sidecar validation. It also
+rederives the complete archive-envelope migration plan and refuses a supplied
+plan unless it is byte-for-byte equivalent. The command requires the results
+subtree and complete audit checkout to be clean Git input at the claimed
+commits. Operator-supplied result and archive digests, commits, and counts must
+also agree. Dependency failures crossing this private boundary are reduced to
+closed messages so private locators or values cannot enter logs.
 
 For legacy issue intake, the equality key is the archive contract's immutable
 recorded-submission identity:
