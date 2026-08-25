@@ -177,6 +177,19 @@ function eventReferenceIds(
   return referenced;
 }
 
+function fixtureDecisionMatches(
+  event: StateEvent | undefined,
+  modelId: string,
+  maintainerLogin: string,
+): boolean {
+  if (
+    event?.event_type !== "model_identity.approved" &&
+    event?.event_type !== "model_identity.rejected"
+  ) return false;
+  return event.subject_id === modelId &&
+    event.payload.reviewer_login === maintainerLogin;
+}
+
 function requireComponent(
   impacts: ReadonlyMap<string, ModelIdentityReverseImpactView>,
   fixture: FixtureComponent,
@@ -366,16 +379,40 @@ export async function verifyQualificationFixtureManifest(
     }
   }
   for (const view of modelViews.values()) {
+    const request = events.get(view.request_event_id);
+    const decision = view.decision_event_id === null
+      ? null
+      : events.get(view.decision_event_id);
+    const mutation = events.get(view.mutation_event_id);
     if (
       view.owner_login !== intent.owner.login ||
-      await modelIdentityId(view.request_event_id) !== view.model_id
+      await modelIdentityId(view.request_event_id) !== view.model_id ||
+      request?.event_type !== "model_identity.requested" ||
+      request.subject_id !== view.model_id ||
+      request.actor.login !== intent.owner.login ||
+      request.payload.display_name !== view.requested_name ||
+      mutation?.subject_id !== view.model_id ||
+      (view.status === "pending" && decision !== null) ||
+      (view.status !== "pending" && (
+        !fixtureDecisionMatches(
+          decision ?? undefined,
+          view.model_id,
+          intent.maintainer.login,
+        )
+      ))
     ) throw new TypeError("qualification fixture model binding is invalid");
   }
   for (const view of aliasViews.values()) {
+    const assignment = events.get(view.assignment_event_id);
     if (
       view.owner_login !== intent.owner.login ||
       await modelAliasKey(view.owner_login, view.alias) !== view.alias_key ||
-      !modelViews.has(view.model_id)
+      !modelViews.has(view.model_id) ||
+      assignment?.event_type !== "model_identity.alias_assigned" ||
+      assignment.subject_id !== view.model_id ||
+      assignment.actor.login !== intent.owner.login ||
+      assignment.payload.alias !== view.alias ||
+      assignment.occurred_at !== view.assigned_at
     ) throw new TypeError("qualification fixture alias binding is invalid");
   }
   const referencedEvents = eventReferenceIds(modelViews.values(), aliasViews.values());
@@ -386,7 +423,11 @@ export async function verifyQualificationFixtureManifest(
 
   const memberPaths = new Set<string>();
   for (const impact of impacts.values()) {
-    if (impact.owner_login !== intent.owner.login) {
+    const terminalMutation = events.get(impact.terminal_mutation_event_id);
+    if (
+      impact.owner_login !== intent.owner.login ||
+      terminalMutation?.subject_id !== impact.terminal_model_id
+    ) {
       throw new TypeError("qualification fixture reverse-impact owner is invalid");
     }
     for (const member of impact.members) {

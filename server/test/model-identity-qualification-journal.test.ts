@@ -35,6 +35,33 @@ function journal(name: string) {
 }
 
 describe("model identity qualification durable journal", () => {
+  it("holds a singleton verification lease before activation and releases failures", async () => {
+    const stub = journal(`verification-${crypto.randomUUID()}`);
+    const first = acquisition("9001");
+    const other = acquisition("9002");
+    await expect(stub.beginAcquisitionVerification(first)).resolves
+      .toContain('"kind":"verifying"');
+    await expect(stub.beginAcquisitionVerification(first)).resolves
+      .toContain('"kind":"verifying"');
+    await runInDurableObject(stub, async (instance) => {
+      await expect(instance.beginAcquisitionVerification(other))
+        .rejects.toThrow("holds the staging verification lease");
+    });
+    await stub.failAcquisitionVerification(first);
+    await expect(stub.beginAcquisitionVerification(other)).resolves
+      .toContain('"kind":"verifying"');
+    await expect(stub.activateVerifiedAcquisition(other)).resolves.toMatchObject({
+      run_id: "9002",
+      lease_status: "active",
+      journal_revision: 1,
+    });
+    const retry = JSON.parse(await stub.beginAcquisitionVerification(other)) as {
+      kind: string;
+      journal: { run_id: string };
+    };
+    expect(retry).toMatchObject({ kind: "active", journal: { run_id: "9002" } });
+  });
+
   it("acquires one exact staging lease and idempotently returns the same journal", async () => {
     const stub = journal(`acquire-${crypto.randomUUID()}`);
     const first = await stub.acquire(acquisition("1001"));
