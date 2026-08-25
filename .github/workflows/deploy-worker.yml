@@ -578,8 +578,8 @@ jobs:
               or proof["intake_lease_expires_at"] is not None
               or proof["state_branch_protected"] is not True
               or proof["state_contract_verified"] is not True
-              or proof["state_contract_commit"] != "6799522f7fe57263de4a66499e52ce4bfda69baa"
-              or proof["state_event_schema_sha256"] != "73598fb935b14ce9e9a02a1d49ee443f8f18b1fe9ed9d13e069ecb8fa2b8ab73"
+              or proof["state_contract_commit"] != "b0a30e3a64aa5c05660040405b32135dea4b7f1d"
+              or proof["state_event_schema_sha256"] != "bc79d44a8565dac415837ed2d7f1585f262f9b8cabcbfcde0c5b085d5da99b5f"
               or re.fullmatch(r"[0-9a-f]{40}", proof["state_commit"]) is None
           ):
               raise SystemExit("production State readiness proof did not bind the reviewed contract")
@@ -746,9 +746,9 @@ jobs:
               or proof["intake_lease_expires_at"] != int(os.environ["INTAKE_LEASE_EXPIRES_AT"])
               or proof["state_branch_protected"] is not True
               or proof["state_commit"] != os.environ["STATE_COMMIT"]
-              or proof["state_contract_commit"] != "6799522f7fe57263de4a66499e52ce4bfda69baa"
+              or proof["state_contract_commit"] != "b0a30e3a64aa5c05660040405b32135dea4b7f1d"
               or proof["state_contract_verified"] is not True
-              or proof["state_event_schema_sha256"] != "73598fb935b14ce9e9a02a1d49ee443f8f18b1fe9ed9d13e069ecb8fa2b8ab73"
+              or proof["state_event_schema_sha256"] != "bc79d44a8565dac415837ed2d7f1585f262f9b8cabcbfcde0c5b085d5da99b5f"
           ):
               raise SystemExit("protected State moved after the leased smoke proof")
           PY

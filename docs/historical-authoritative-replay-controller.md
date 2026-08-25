@@ -29,7 +29,7 @@ handoff:
 The recovery fixtures include the required `system.initialized` root and full
 authority, qualification, enqueue, retry/reconfiguration, unavailable, and
 ordinary modern-replay histories. They were validated against the production
-State contract at `6799522f7fe57263de4a66499e52ce4bfda69baa`; positive reducer
+State contract at `b0a30e3a64aa5c05660040405b32135dea4b7f1d`; positive reducer
 histories pass both State schema and semantic validation. The workflow still
 validates live protected State before invoking the narrower projection, so the
 fixtures are evidence rather than a substitute for that runtime precondition.

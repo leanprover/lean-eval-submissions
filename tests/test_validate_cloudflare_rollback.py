@@ -10,7 +10,7 @@ from scripts import validate_cloudflare_rollback as rollback
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 COMMIT = "a" * 40
-PROTECTED_STATE_COMMIT = "6799522f7fe57263de4a66499e52ce4bfda69baa"
+PROTECTED_STATE_COMMIT = "b0a30e3a64aa5c05660040405b32135dea4b7f1d"
 INTAKE_VERSION = "11111111-1111-1111-1111-111111111111"
 BROKER_VERSION = "22222222-2222-2222-2222-222222222222"
 REPLAY_VERSION = "33333333-3333-3333-3333-333333333333"
@@ -436,12 +436,12 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         self.assertIs(plan["model_identity_owner_api_enabled"], False)
         self.assertIs(plan["model_identity_maintainer_api_contract_supported"], True)
         self.assertIs(plan["model_identity_maintainer_api_enabled"], False)
-        self.assertEqual(plan["model_identity_state_contract_commit"], "6799522f7fe57263de4a66499e52ce4bfda69baa")
+        self.assertEqual(plan["model_identity_state_contract_commit"], "b0a30e3a64aa5c05660040405b32135dea4b7f1d")
         self.assertNotIn("MODEL_IDENTITY_MAINTAINERS", plan)
         self.assertNotIn("RESULT_AMENDMENT_MAINTAINERS", plan)
         self.assertEqual(
             plan["result_owner_state_contract_commit"],
-            "6799522f7fe57263de4a66499e52ce4bfda69baa",
+            "b0a30e3a64aa5c05660040405b32135dea4b7f1d",
         )
         self.assertIs(plan["promotion_canary_enabled"], False)
         self.assertIs(plan["replay_enabled"], False)
@@ -1235,10 +1235,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "replay_enabled": False,
                 "staging_acceptance_enabled": False,
                 "result_owner_state_contract_commit": (
-                    "6799522f7fe57263de4a66499e52ce4bfda69baa"
+                    "b0a30e3a64aa5c05660040405b32135dea4b7f1d"
                 ),
                 "model_identity_state_contract_commit": (
-                    "6799522f7fe57263de4a66499e52ce4bfda69baa"
+                    "b0a30e3a64aa5c05660040405b32135dea4b7f1d"
                 ),
             },
         )
