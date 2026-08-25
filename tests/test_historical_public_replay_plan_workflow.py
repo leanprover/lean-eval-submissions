@@ -23,6 +23,14 @@ class HistoricalPublicReplayPlanWorkflowTests(unittest.TestCase):
         self.assertIn('cmp "$plan" "$recomputed"', WORKFLOW)
         self.assertIn('value["activation_status"] == "blocked"', WORKFLOW)
         self.assertIn("legacy_public_result_replay_authority_v1", WORKFLOW)
+        self.assertIn('has("legacy_adjudication_registry_sha256")', WORKFLOW)
+        self.assertEqual(WORKFLOW.count('"${legacy_registry_args[@]}"'), 2)
+        self.assertEqual(
+            WORKFLOW.count(
+                "configuration/public-replay-legacy-adjudications-v1.json"
+            ),
+            1,
+        )
 
     def test_only_source_free_plan_artifacts_are_uploaded(self) -> None:
         upload = WORKFLOW.split("Upload source-free blocked replay seed plan", 1)[1]

@@ -142,6 +142,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
         offline_evidence = {
             "scripts/aggregate_public_replay_github_evidence.py",
+            "scripts/build_public_replay_toolchain_registry.py",
+            "scripts/prepare_public_replay_plan.py",
             "scripts/resolve_public_replay_github_evidence.py",
             "scripts/validate_historical_replay_inventory_evidence.py",
         }
@@ -267,10 +269,33 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             self.assertIn("'.audit/**'", trigger)
             self.assertIn("'scripts/**'", trigger)
 
-        resolver = "'scripts/resolve_public_replay_github_evidence.py'"
+        offline_evidence_scripts = {
+            "aggregate_public_replay_github_evidence.py",
+            "build_public_replay_toolchain_registry.py",
+            "prepare_public_replay_plan.py",
+            "resolve_public_replay_github_evidence.py",
+            "validate_historical_replay_inventory_evidence.py",
+        }
         for trigger in (pull_request, push):
-            self.assertIn(f"'!{resolver[1:]}", trigger)
-        self.assertIn(resolver, promotion_push)
+            self.assertEqual(
+                set(re.findall(r"'!scripts/([^']+)'", trigger)),
+                offline_evidence_scripts,
+            )
+        promoted_runtime_scripts = set(
+            re.findall(r"'scripts/([^']+)'", promotion_push)
+        )
+        self.assertEqual(
+            promoted_runtime_scripts,
+            offline_evidence_scripts
+            - {"validate_historical_replay_inventory_evidence.py"},
+        )
+        self.assertEqual(
+            set(re.findall(r"'configuration/([^']+)'", promotion_push)),
+            {
+                "public-replay-legacy-adjudications-v1.json",
+                "public-replay-workflow-definitions-v1.json",
+            },
+        )
 
     def test_exact_main_ci_trigger_cannot_be_path_filtered(self) -> None:
         ci_push = CI.split("  push:", 1)[1].split("  pull_request:", 1)[0]

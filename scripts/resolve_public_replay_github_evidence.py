@@ -21,7 +21,6 @@ from typing import Any
 
 from fetch_submission import GIST_ID_RE, FetchError, parse_issue_body, parse_source_url
 
-
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 REQUEST_ID = re.compile(r"prr_[0-9a-f]{64}\Z")
@@ -33,7 +32,9 @@ TIMESTAMP = re.compile(
     r"(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z"
 )
 PASS_LINE = re.compile(r"^- `([^`]+)`: pass\s*$", re.MULTILINE)
+NEWLY_SOLVED_LINE = re.compile(r"^✅ Newly-solved problems: (.+)$", re.MULTILINE)
 API_ROOT = "https://api.github.com"
+GRAPHQL_ROOT = "https://api.github.com/graphql"
 MAX_REQUEST_BYTES = 16 * 1024 * 1024
 MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 MAX_PAGES = 10
@@ -62,6 +63,15 @@ CANDIDATE_REPOSITORIES = [
     "leanprover/lean-eval-submissions",
 ]
 SPLIT_WORKFLOW_CONTRACT = "split_repository_recorded_benchmark_v1"
+LEGACY_ADJUDICATION_REQUEST_IDS = frozenset(
+    {
+        "prr_28b2240753b06ea6e13910cc12febf05382913abc54a986818775c14c7628b6d",
+        "prr_2adff6979df15e006fb93b614bd4442f945d157c0dead0d49f5a4f3c74f48518",
+        "prr_2c6e9a42630ab380bbbb488fbc7cbed58f331f3a2184608b39e73301951637da",
+        "prr_af8840ead5aefbf0b4aedf93ad1820b8d0cfee811519633779ff2cf57b15598a",
+        "prr_c2c1fef4cd70ffc42680e1424a4e092e7211a4e3c8bb996d0589dea767707985",
+    }
+)
 
 
 class EvidenceError(ValueError):
@@ -94,6 +104,12 @@ class _RejectRedirects(urllib.request.HTTPRedirectHandler):
 def canonical_bytes(value: Any) -> bytes:
     return json.dumps(
         value, ensure_ascii=False, separators=(",", ":"), sort_keys=True
+    ).encode("utf-8")
+
+
+def canonical_document_bytes(value: Any) -> bytes:
+    return (
+        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     ).encode("utf-8")
 
 
@@ -145,6 +161,315 @@ def validate_workflow_registry(value: Any) -> dict[str, dict[str, str]]:
         ordered.append(commit)
     if ordered != sorted(ordered):
         raise EvidenceError("workflow definition registry is not sorted")
+    return result
+
+
+def validate_legacy_adjudication_registry(value: Any) -> dict[str, dict[str, Any]]:
+    top_fields = {"schema_version", "kind", "source_repository", "adjudications"}
+    if not isinstance(value, dict) or set(value) != top_fields:
+        raise EvidenceError("legacy adjudication registry fields are not closed")
+    if (
+        type(value["schema_version"]) is not int
+        or value["schema_version"] != 1
+        or value["kind"]
+        != "historical_public_replay_legacy_adjudication_registry"
+        or value["source_repository"] != "leanprover/lean-eval-submissions"
+        or not isinstance(value["adjudications"], list)
+    ):
+        raise EvidenceError("legacy adjudication registry identity is invalid")
+
+    common_fields = {
+        "request_id",
+        "reason_code",
+        "source",
+        "issue",
+        "comment",
+        "workflow_run",
+        "record_job",
+        "result_commit",
+        "model_rename",
+    }
+    issue_fields = {
+        "repository",
+        "number",
+        "author",
+        "created_at",
+        "closed_at",
+        "title_sha256",
+        "body_binding",
+    }
+    run_fields = {
+        "id",
+        "name",
+        "event",
+        "attempt",
+        "actor",
+        "triggering_actor",
+        "head_sha",
+        "head_branch",
+        "path",
+        "created_at",
+        "updated_at",
+        "display_title_sha256",
+        "definition_sha256",
+    }
+    job_fields = {"id", "name", "started_at", "completed_at"}
+    result_commit_fields = {
+        "repository",
+        "commit",
+        "parent",
+        "path",
+        "blob_sha",
+        "committed_at",
+    }
+    source_fields = {"kind", "repository", "commit"}
+    comment_fields = {
+        "id",
+        "author",
+        "created_at",
+        "body_sha256",
+        "projection",
+    }
+    current_body_fields = {
+        "kind",
+        "accepted_body_sha256",
+        "source_reference_binding",
+    }
+    edited_body_fields = {
+        "kind",
+        "accepted_body_sha256",
+        "current_body_sha256",
+        "edit_count",
+        "edits",
+        "source_reference_binding",
+    }
+    edit_fields = {"edited_at", "editor", "body_sha256"}
+    rename_fields = {
+        "repository",
+        "commit",
+        "parent",
+        "path",
+        "before_blob_sha",
+        "after_blob_sha",
+        "renamed_from",
+        "renamed_to",
+    }
+
+    result: dict[str, dict[str, Any]] = {}
+    ordered: list[str] = []
+    for entry in value["adjudications"]:
+        if not isinstance(entry, dict) or set(entry) != common_fields:
+            raise EvidenceError("legacy adjudication entry fields are not closed")
+        request_id = entry["request_id"]
+        if (
+            not isinstance(request_id, str)
+            or REQUEST_ID.fullmatch(request_id) is None
+            or request_id in result
+            or entry["reason_code"]
+            not in {
+                "historical_issue_body_edit",
+                "historical_model_rename",
+                "legacy_delayed_workflow",
+                "truncated_result_comment",
+            }
+        ):
+            raise EvidenceError("legacy adjudication entry identity is invalid")
+
+        source = entry["source"]
+        if (
+            not isinstance(source, dict)
+            or set(source) != source_fields
+            or source.get("kind") not in {"github_repo", "gist"}
+            or not isinstance(source.get("repository"), str)
+            or REPOSITORY.fullmatch(source["repository"]) is None
+            or not isinstance(source.get("commit"), str)
+            or COMMIT.fullmatch(source["commit"]) is None
+        ):
+            raise EvidenceError("legacy adjudication source is invalid")
+
+        issue_value = entry["issue"]
+        if not isinstance(issue_value, dict) or set(issue_value) != issue_fields:
+            raise EvidenceError("legacy adjudication issue fields are not closed")
+        if (
+            issue_value["repository"] not in CANDIDATE_REPOSITORIES
+            or type(issue_value["number"]) is not int
+            or issue_value["number"] <= 0
+            or not isinstance(issue_value["author"], str)
+            or LOGIN.fullmatch(issue_value["author"]) is None
+            or not isinstance(issue_value["title_sha256"], str)
+            or DIGEST.fullmatch(issue_value["title_sha256"]) is None
+        ):
+            raise EvidenceError("legacy adjudication issue identity is invalid")
+        issue_created = timestamp(issue_value["created_at"], "adjudication.issue.created_at")
+        issue_closed = timestamp(issue_value["closed_at"], "adjudication.issue.closed_at")
+        if issue_closed < issue_created:
+            raise EvidenceError("legacy adjudication issue timing is invalid")
+        body_binding = issue_value["body_binding"]
+        if not isinstance(body_binding, dict):
+            raise EvidenceError("legacy adjudication body binding is invalid")
+        if body_binding.get("kind") == "current":
+            if set(body_binding) != current_body_fields:
+                raise EvidenceError("legacy current-body fields are not closed")
+        elif body_binding.get("kind") == "historical_edit":
+            if (
+                set(body_binding) != edited_body_fields
+                or type(body_binding["edit_count"]) is not int
+                or body_binding["edit_count"] <= 0
+                or not isinstance(body_binding["edits"], list)
+                or len(body_binding["edits"]) != body_binding["edit_count"]
+            ):
+                raise EvidenceError("legacy edited-body fields are invalid")
+            edit_order: list[str] = []
+            for edit in body_binding["edits"]:
+                if (
+                    not isinstance(edit, dict)
+                    or set(edit) != edit_fields
+                    or not isinstance(edit["editor"], str)
+                    or LOGIN.fullmatch(edit["editor"]) is None
+                    or not isinstance(edit["body_sha256"], str)
+                    or DIGEST.fullmatch(edit["body_sha256"]) is None
+                ):
+                    raise EvidenceError("legacy issue edit is invalid")
+                timestamp(edit["edited_at"], "adjudication.issue.edit.edited_at")
+                edit_order.append(edit["edited_at"])
+            if edit_order != sorted(edit_order):
+                raise EvidenceError("legacy issue edits are not sorted")
+        else:
+            raise EvidenceError("legacy adjudication body binding kind is invalid")
+        for field in ("accepted_body_sha256", "current_body_sha256"):
+            if field in body_binding and (
+                not isinstance(body_binding[field], str)
+                or DIGEST.fullmatch(body_binding[field]) is None
+            ):
+                raise EvidenceError("legacy body digest is invalid")
+        if body_binding["source_reference_binding"] not in {
+            "exact_commit",
+            "unpinned",
+        }:
+            raise EvidenceError("legacy source reference binding is invalid")
+
+        comment_value = entry["comment"]
+        if (
+            not isinstance(comment_value, dict)
+            or set(comment_value) != comment_fields
+            or type(comment_value["id"]) is not int
+            or comment_value["id"] <= 0
+            or comment_value["author"] != "github-actions[bot]"
+            or comment_value["projection"] not in {"newly_solved", "pass_lines"}
+            or not isinstance(comment_value["body_sha256"], str)
+            or DIGEST.fullmatch(comment_value["body_sha256"]) is None
+        ):
+            raise EvidenceError("legacy adjudication comment is invalid")
+        timestamp(comment_value["created_at"], "adjudication.comment.created_at")
+
+        run_value = entry["workflow_run"]
+        if not isinstance(run_value, dict) or set(run_value) != run_fields:
+            raise EvidenceError("legacy adjudication run fields are not closed")
+        if (
+            type(run_value["id"]) is not int
+            or run_value["id"] <= 0
+            or run_value["name"] != "Submission"
+            or run_value["event"] != "issues"
+            or type(run_value["attempt"]) is not int
+            or run_value["attempt"] <= 0
+            or not all(
+                isinstance(run_value[field], str)
+                and LOGIN.fullmatch(run_value[field]) is not None
+                for field in ("actor", "triggering_actor")
+            )
+            or not isinstance(run_value["head_sha"], str)
+            or COMMIT.fullmatch(run_value["head_sha"]) is None
+            or run_value["head_branch"] != "main"
+            or run_value["path"] != ".github/workflows/submission.yml"
+            or not isinstance(run_value["display_title_sha256"], str)
+            or DIGEST.fullmatch(run_value["display_title_sha256"]) is None
+            or not isinstance(run_value["definition_sha256"], str)
+            or DIGEST.fullmatch(run_value["definition_sha256"]) is None
+        ):
+            raise EvidenceError("legacy adjudication run identity is invalid")
+        run_created = timestamp(run_value["created_at"], "adjudication.run.created_at")
+        run_updated = timestamp(run_value["updated_at"], "adjudication.run.updated_at")
+        if run_updated < run_created:
+            raise EvidenceError("legacy adjudication run timing is invalid")
+
+        job_value = entry["record_job"]
+        if (
+            not isinstance(job_value, dict)
+            or set(job_value) != job_fields
+            or type(job_value["id"]) is not int
+            or job_value["id"] <= 0
+            or job_value["name"] != "record"
+        ):
+            raise EvidenceError("legacy adjudication record job is invalid")
+        job_started = timestamp(job_value["started_at"], "adjudication.job.started_at")
+        job_completed = timestamp(job_value["completed_at"], "adjudication.job.completed_at")
+        if job_completed < job_started:
+            raise EvidenceError("legacy adjudication record job timing is invalid")
+
+        result_commit = entry["result_commit"]
+        if (
+            not isinstance(result_commit, dict)
+            or set(result_commit) != result_commit_fields
+            or result_commit["repository"] != "leanprover/lean-eval-submissions"
+            or not all(
+                isinstance(result_commit[field], str)
+                and COMMIT.fullmatch(result_commit[field]) is not None
+                for field in ("commit", "parent")
+            )
+            or not isinstance(result_commit["path"], str)
+            or not result_commit["path"].startswith("results/")
+            or not result_commit["path"].endswith(".json")
+            or not isinstance(result_commit["blob_sha"], str)
+            or COMMIT.fullmatch(result_commit["blob_sha"]) is None
+        ):
+            raise EvidenceError("legacy adjudication result commit is invalid")
+        committed_at = timestamp(
+            result_commit["committed_at"], "adjudication.result_commit.committed_at"
+        )
+        if not job_started <= committed_at <= job_completed:
+            raise EvidenceError("legacy result commit is outside its record job")
+
+        rename = entry["model_rename"]
+        if rename is not None and (
+            not isinstance(rename, dict)
+            or set(rename) != rename_fields
+            or rename["repository"] != "leanprover/lean-eval-submissions"
+            or not all(
+                isinstance(rename[field], str)
+                and COMMIT.fullmatch(rename[field]) is not None
+                for field in ("commit", "parent", "before_blob_sha", "after_blob_sha")
+            )
+            or rename["path"] != result_commit["path"]
+            or not all(
+                isinstance(rename[field], str) and 1 <= len(rename[field]) <= 256
+                for field in ("renamed_from", "renamed_to")
+            )
+            or rename["renamed_from"] == rename["renamed_to"]
+        ):
+            raise EvidenceError("legacy adjudication model rename is invalid")
+
+        reason = entry["reason_code"]
+        if (body_binding["kind"] == "historical_edit") != (
+            reason == "historical_issue_body_edit"
+        ):
+            raise EvidenceError("legacy issue-edit reason is inconsistent")
+        if (rename is not None) != (reason == "historical_model_rename"):
+            raise EvidenceError("legacy model-rename reason is inconsistent")
+        if reason == "truncated_result_comment" and comment_value[
+            "projection"
+        ] != "newly_solved":
+            raise EvidenceError("legacy truncated-comment reason is inconsistent")
+        if reason == "legacy_delayed_workflow" and run_created <= issue_created + datetime.timedelta(
+            seconds=30
+        ):
+            raise EvidenceError("legacy delayed-workflow reason is inconsistent")
+
+        result[request_id] = entry
+        ordered.append(request_id)
+    if ordered != sorted(ordered):
+        raise EvidenceError("legacy adjudications are not sorted")
+    if set(result) != LEGACY_ADJUDICATION_REQUEST_IDS:
+        raise EvidenceError("legacy adjudication request set is not exact")
     return result
 
 
@@ -309,6 +634,102 @@ class GitHubClient:
         # entirely rather than broadening workflow authority or leaking the
         # repository credential to an API surface outside its repository.
         return self._get(f"/gists/{gist_id}/{commit}", authenticated=False)
+
+    def graphql(self, query: str, variables: dict[str, Any]) -> Any:
+        if (
+            not isinstance(query, str)
+            or not query
+            or not isinstance(variables, dict)
+        ):
+            raise EvidenceError("GitHub GraphQL request is invalid")
+        raw_request = canonical_bytes({"query": query, "variables": variables})
+        if len(raw_request) > MAX_WORKFLOW_BYTES:
+            raise EvidenceError("GitHub GraphQL request exceeds the size limit")
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+            "User-Agent": "lean-eval-historical-public-replay",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        for attempt in range(4):
+            request = urllib.request.Request(
+                GRAPHQL_ROOT, data=raw_request, headers=headers, method="POST"
+            )
+            try:
+                with self._opener.open(request, timeout=30) as response:
+                    if response.status != 200:
+                        raise EvidenceError(
+                            f"GitHub GraphQL returned unexpected HTTP {response.status}"
+                        )
+                    raw = response.read(MAX_RESPONSE_BYTES + 1)
+                    if len(raw) > MAX_RESPONSE_BYTES:
+                        raise ResponseTooLarge(
+                            "GitHub GraphQL response exceeds the size limit"
+                        )
+                    value = json.loads(raw)
+                    if (
+                        not isinstance(value, dict)
+                        or value.get("errors")
+                        or "data" not in value
+                    ):
+                        raise ProbeIndeterminate("github_response_invalid")
+                    return value["data"]
+            except urllib.error.HTTPError as error:
+                try:
+                    if error.code in {301, 302, 303, 307, 308}:
+                        raise ProbeIndeterminate("github_redirect_refused") from error
+                    if error.code == 451:
+                        raise ProbeIndeterminate("github_legal_restriction") from error
+                    if error.code == 403:
+                        raise ProbeIndeterminate(
+                            "github_rate_or_permission_boundary"
+                        ) from error
+                    if (
+                        error.code not in {429, 500, 502, 503, 504}
+                        or attempt == 3
+                    ):
+                        raise ProbeIndeterminate("github_http_error") from error
+                finally:
+                    error.close()
+            except (OSError, TimeoutError, UnicodeError, json.JSONDecodeError) as error:
+                if attempt == 3:
+                    raise ProbeIndeterminate("github_request_failed") from error
+            time.sleep(2**attempt)
+        raise AssertionError("unreachable")
+
+    def issue_body_edits(self, repository: str, issue_number: int) -> list[dict[str, Any]]:
+        owner, name = repository.split("/", 1)
+        query = """
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    issue(number: $number) {
+      userContentEdits(first: 20) {
+        totalCount
+        nodes { editedAt deletedAt diff editor { login } }
+      }
+    }
+  }
+}
+"""
+        data = self.graphql(
+            query, {"owner": owner, "name": name, "number": issue_number}
+        )
+        try:
+            connection = data["repository"]["issue"]["userContentEdits"]
+            nodes = connection["nodes"]
+            total_count = connection["totalCount"]
+        except (KeyError, TypeError) as error:
+            raise ProbeIndeterminate("github_response_invalid") from error
+        if (
+            type(total_count) is not int
+            or total_count < 0
+            or total_count > 20
+            or not isinstance(nodes, list)
+            or len(nodes) != total_count
+        ):
+            raise ProbeIndeterminate("github_response_invalid")
+        return nodes
 
     def pages(self, path: str, item_key: str | None = None) -> list[Any]:
         cache_key = (path, item_key)
@@ -552,6 +973,457 @@ def _workflow_binding(
         "repository_commit": head_sha,
         "definition_sha256": digest,
         "reviewed": reviewed is not None,
+    }
+
+
+def _content_json(
+    client: GitHubClient, repository: str, path: str, commit: str, blob_sha: str
+) -> Any:
+    value, status = client.get(
+        "/repos/{}/contents/{}?ref={}".format(
+            repository, urllib.parse.quote(path, safe="/"), commit
+        )
+    )
+    if (
+        status != 200
+        or not isinstance(value, dict)
+        or value.get("sha") != blob_sha
+        or value.get("encoding") != "base64"
+        or not isinstance(value.get("content"), str)
+        or type(value.get("size")) is not int
+        or not 0 < value["size"] <= MAX_RESPONSE_BYTES
+    ):
+        raise IntegrityError("legacy result blob identity does not match")
+    try:
+        raw = base64.b64decode("".join(value["content"].split()), validate=True)
+        decoded = json.loads(raw)
+    except (ValueError, TypeError, UnicodeError, json.JSONDecodeError) as error:
+        raise IntegrityError("legacy result blob is not canonical JSON") from error
+    if len(raw) != value["size"] or len(raw) > MAX_RESPONSE_BYTES:
+        raise IntegrityError("legacy result blob size does not match")
+    return decoded
+
+
+def _validate_historical_results(
+    value: Any, request: dict[str, Any], accepted_model: str
+) -> None:
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"schema_version", "solved", "user"}
+        or type(value["schema_version"]) is not int
+        or value["schema_version"] not in {1, 2}
+        or not isinstance(value["user"], str)
+        or value["user"].casefold() != request["owner"].casefold()
+    ):
+        raise IntegrityError("legacy result document is invalid")
+    solved = value["solved"]
+    if not isinstance(solved, dict):
+        raise IntegrityError("legacy result collection is invalid")
+    nested = isinstance(solved.get(accepted_model), dict) and not {
+        "benchmark_commit",
+        "issue_number",
+        "solved_at",
+    }.intersection(solved[accepted_model])
+    if nested:
+        records = solved[accepted_model]
+    elif value["schema_version"] == 1:
+        records = solved
+    else:
+        raise IntegrityError("legacy result model bucket is absent")
+    expected = {item["problem_id"] for item in request["results"]}
+    selected = {
+        problem: record
+        for problem, record in records.items()
+        if isinstance(record, dict)
+        and record.get("issue_number") == request["issue_number"]
+        and record.get("solved_at") == request["accepted_at"]
+    }
+    if set(selected) != expected:
+        raise IntegrityError("legacy result problem set does not match the request")
+    source = request["source"]
+    for problem, record in selected.items():
+        required = {
+            "benchmark_commit": request["benchmark"]["commit"],
+            "issue_number": request["issue_number"],
+            "solved_at": request["accepted_at"],
+            "submission_public": True,
+            "submission_ref": source["commit"],
+            "submission_repo": source["repository"],
+        }
+        if any(record.get(field) != wanted for field, wanted in required.items()):
+            raise IntegrityError(f"legacy result {problem} is not cross-bound")
+        if not nested and record.get("model") != accepted_model:
+            raise IntegrityError(f"legacy result {problem} model does not match")
+        submission_kind = record.get("submission_kind")
+        if nested and submission_kind is not None and submission_kind != source["kind"]:
+            raise IntegrityError(f"legacy result {problem} source kind does not match")
+
+
+def _validate_result_commit(
+    client: GitHubClient,
+    request: dict[str, Any],
+    entry: dict[str, Any],
+    accepted_model: str,
+) -> None:
+    binding = entry["result_commit"]
+    commit, status = client.get(
+        f"/repos/{binding['repository']}/commits/{binding['commit']}"
+    )
+    try:
+        exact = (
+            status == 200
+            and isinstance(commit, dict)
+            and commit.get("sha") == binding["commit"]
+            and [parent.get("sha") for parent in commit["parents"]]
+            == [binding["parent"]]
+            and commit["commit"]["author"]["date"] == binding["committed_at"]
+            and commit["commit"]["committer"]["date"] == binding["committed_at"]
+            and commit["commit"]["author"]["name"] == "lean-eval-bot"
+            and commit["commit"]["author"]["email"]
+            == "lean-eval-bot@users.noreply.github.com"
+            and commit["commit"]["committer"]["name"] == "lean-eval-bot"
+            and commit["commit"]["committer"]["email"]
+            == "lean-eval-bot@users.noreply.github.com"
+            and [
+                (item.get("filename"), item.get("sha")) for item in commit["files"]
+            ]
+            == [(binding["path"], binding["blob_sha"])]
+        )
+    except (KeyError, TypeError):
+        exact = False
+    if not exact:
+        raise IntegrityError("legacy result-introducing commit does not match")
+    document = _content_json(
+        client,
+        binding["repository"],
+        binding["path"],
+        binding["commit"],
+        binding["blob_sha"],
+    )
+    _validate_historical_results(document, request, accepted_model)
+
+
+def _validate_model_rename(client: GitHubClient, rename: dict[str, Any]) -> None:
+    commit, status = client.get(
+        f"/repos/{rename['repository']}/commits/{rename['commit']}"
+    )
+    try:
+        exact = (
+            status == 200
+            and isinstance(commit, dict)
+            and commit.get("sha") == rename["commit"]
+            and [parent.get("sha") for parent in commit["parents"]]
+            == [rename["parent"]]
+            and [(item.get("filename"), item.get("sha")) for item in commit["files"]]
+            == [(rename["path"], rename["after_blob_sha"])]
+        )
+    except (KeyError, TypeError):
+        exact = False
+    if not exact:
+        raise IntegrityError("legacy model-rename commit does not match")
+    before = _content_json(
+        client,
+        rename["repository"],
+        rename["path"],
+        rename["parent"],
+        rename["before_blob_sha"],
+    )
+    after = _content_json(
+        client,
+        rename["repository"],
+        rename["path"],
+        rename["commit"],
+        rename["after_blob_sha"],
+    )
+    if (
+        not isinstance(before, dict)
+        or not isinstance(after, dict)
+        or not isinstance(before.get("solved"), dict)
+        or rename["renamed_from"] not in before["solved"]
+        or rename["renamed_to"] in before["solved"]
+    ):
+        raise IntegrityError("legacy model-rename source bucket is invalid")
+    expected = json.loads(json.dumps(before))
+    expected["solved"][rename["renamed_to"]] = expected["solved"].pop(
+        rename["renamed_from"]
+    )
+    if expected != after:
+        raise IntegrityError("legacy model-rename commit changed other content")
+
+
+def _legacy_candidate_projection(
+    entry: dict[str, Any], request: dict[str, Any]
+) -> dict[str, Any]:
+    issue = entry["issue"]
+    body_binding = issue["body_binding"]
+    run = entry["workflow_run"]
+    comment = entry["comment"]
+    job = entry["record_job"]
+    result_commit = entry["result_commit"]
+    rename = entry["model_rename"]
+    repository = issue["repository"]
+    issue_url = f"https://github.com/{repository}/issues/{issue['number']}"
+    workflow_url = f"https://github.com/{repository}/actions/runs/{run['id']}"
+    source_ref: str | None = (
+        entry["source"]["commit"]
+        if body_binding["source_reference_binding"] == "exact_commit"
+        else None
+    )
+    issue_identity = {
+        "declared_model": request["declared_model"],
+        "source_kind": entry["source"]["kind"],
+        "source_repository": entry["source"]["repository"].casefold(),
+    }
+    run_identity = {
+        "id": run["id"],
+        "name": run["name"],
+        "event": run["event"],
+        "attempt": run["attempt"],
+        "actor": run["actor"].casefold(),
+        "repository": repository,
+        "head_repository": repository,
+        "head_branch": run["head_branch"],
+        "head_sha": run["head_sha"],
+        "path": run["path"],
+        "display_title_sha256": run["display_title_sha256"],
+        "created_at": run["created_at"],
+        "updated_at": run["updated_at"],
+        "status": "completed",
+        "conclusion": "success",
+        "html_url": workflow_url,
+    }
+    return {
+        "legacy_adjudication_sha256": hashlib.sha256(
+            canonical_bytes(entry)
+        ).hexdigest(),
+        "legacy_reason_code": entry["reason_code"],
+        "issue_url": issue_url,
+        "issue_author": issue["author"],
+        "issue_created_at": issue["created_at"],
+        "issue_closed_at": issue["closed_at"],
+        "issue_title_sha256": issue["title_sha256"],
+        "issue_body_sha256": body_binding["accepted_body_sha256"],
+        "issue_identity_sha256": hashlib.sha256(
+            canonical_bytes(issue_identity)
+        ).hexdigest(),
+        "issue_source_ref_sha256": hashlib.sha256(
+            canonical_bytes(source_ref)
+        ).hexdigest(),
+        "issue_source_reference_binding": body_binding[
+            "source_reference_binding"
+        ],
+        "workflow_run_id": run["id"],
+        "workflow_run_url": workflow_url,
+        "workflow_run_created_at": run["created_at"],
+        "workflow_run_updated_at": run["updated_at"],
+        "workflow_run_attempt": run["attempt"],
+        "workflow_run_actor": run["actor"],
+        "workflow_run_triggering_actor": run["triggering_actor"],
+        "workflow_run_display_title_sha256": run["display_title_sha256"],
+        "workflow_run_identity_sha256": hashlib.sha256(
+            canonical_bytes(run_identity)
+        ).hexdigest(),
+        "workflow_contract": (
+            "benchmark_repository_head"
+            if repository == "leanprover/lean-eval"
+            else SPLIT_WORKFLOW_CONTRACT
+        ),
+        "workflow_repository_commit": run["head_sha"],
+        "workflow_definition_sha256": run["definition_sha256"],
+        "record_job_id": job["id"],
+        "record_job_started_at": job["started_at"],
+        "record_job_completed_at": job["completed_at"],
+        "result_commit_sha": result_commit["commit"],
+        "result_blob_sha": result_commit["blob_sha"],
+        "result_comment_url": f"{issue_url}#issuecomment-{comment['id']}",
+        "result_comment_created_at": comment["created_at"],
+        "result_comment_author": comment["author"],
+        "result_comment_body_sha256": comment["body_sha256"],
+        "reported_pass_problem_ids": sorted(
+            item["problem_id"] for item in request["results"]
+        ),
+        "model_rename_sha256": (
+            hashlib.sha256(canonical_bytes(rename)).hexdigest()
+            if rename is not None
+            else None
+        ),
+        "source_commit_url": _source_url(request["source"]),
+    }
+
+
+def _legacy_candidate(
+    client: GitHubClient,
+    request: dict[str, Any],
+    repository: str,
+    workflow_registry: dict[str, dict[str, str]],
+    entry: dict[str, Any],
+) -> dict[str, Any]:
+    if (
+        entry["request_id"] != request["request_id"]
+        or entry["source"]
+        != {field: request["source"][field] for field in ("kind", "repository", "commit")}
+        or entry["issue"]["repository"] != repository
+        or entry["issue"]["number"] != request["issue_number"]
+    ):
+        raise IntegrityError("legacy adjudication is not cross-bound to its request")
+    _preflight_evidence_repository(client, repository)
+    issue_binding = entry["issue"]
+    issue, status = client.get(f"/repos/{repository}/issues/{request['issue_number']}")
+    expected_issue_url = f"https://github.com/{repository}/issues/{request['issue_number']}"
+    try:
+        exact_issue = (
+            status == 200
+            and isinstance(issue, dict)
+            and "pull_request" not in issue
+            and issue.get("number") == request["issue_number"]
+            and issue.get("html_url") == expected_issue_url
+            and issue.get("state") == "closed"
+            and issue["user"]["login"] == issue_binding["author"]
+            and issue.get("created_at") == issue_binding["created_at"]
+            and issue.get("closed_at") == issue_binding["closed_at"]
+            and text_digest(issue["title"]) == issue_binding["title_sha256"]
+            and isinstance(issue.get("body"), str)
+        )
+    except (KeyError, TypeError):
+        exact_issue = False
+    if not exact_issue:
+        raise IntegrityError("legacy issue identity does not match")
+    body_binding = issue_binding["body_binding"]
+    if body_binding["kind"] == "current":
+        accepted_body = issue["body"]
+        if text_digest(accepted_body) != body_binding["accepted_body_sha256"]:
+            raise IntegrityError("legacy current issue body does not match")
+    else:
+        if text_digest(issue["body"]) != body_binding["current_body_sha256"]:
+            raise IntegrityError("legacy edited issue current body does not match")
+        edits = client.issue_body_edits(repository, request["issue_number"])
+        projected: list[dict[str, str]] = []
+        accepted_body = ""
+        for edit in edits:
+            try:
+                body = edit["diff"]
+                projected.append(
+                    {
+                        "edited_at": edit["editedAt"],
+                        "editor": edit["editor"]["login"],
+                        "body_sha256": text_digest(body),
+                    }
+                )
+                if text_digest(body) == body_binding["accepted_body_sha256"]:
+                    accepted_body = body
+                if edit.get("deletedAt") is not None:
+                    raise IntegrityError("legacy issue edit was deleted")
+            except (KeyError, TypeError) as error:
+                raise IntegrityError("legacy issue edit identity is invalid") from error
+        if sorted(projected, key=lambda item: item["edited_at"]) != body_binding["edits"]:
+            raise IntegrityError("legacy issue edit history does not match")
+        if not accepted_body:
+            raise IntegrityError("legacy accepted issue body is absent")
+
+    model, source_kind, source_repository, source_ref = _source_identity(accepted_body)
+    rename = entry["model_rename"]
+    expected_model = rename["renamed_from"] if rename is not None else request["declared_model"]
+    if (
+        model != expected_model
+        or issue_binding["author"].casefold() != request["owner"].casefold()
+        or source_kind != request["source"]["kind"]
+        or source_repository.casefold() != request["source"]["repository"].casefold()
+        or source_ref not in {None, request["source"]["commit"]}
+    ):
+        raise IntegrityError("legacy issue body is not cross-bound")
+    actual_reference_binding = (
+        "exact_commit"
+        if source_ref == request["source"]["commit"]
+        else "unpinned"
+    )
+    if actual_reference_binding != body_binding["source_reference_binding"]:
+        raise IntegrityError("legacy issue source reference binding does not match")
+
+    run_binding = entry["workflow_run"]
+    run, status = client.get(f"/repos/{repository}/actions/runs/{run_binding['id']}")
+    run_fields = {
+        "id": run_binding["id"], "name": run_binding["name"],
+        "event": run_binding["event"], "run_attempt": run_binding["attempt"],
+        "head_sha": run_binding["head_sha"], "head_branch": run_binding["head_branch"],
+        "path": run_binding["path"], "created_at": run_binding["created_at"],
+        "updated_at": run_binding["updated_at"], "status": "completed", "conclusion": "success",
+    }
+    if status != 200 or not isinstance(run, dict) or any(run.get(k) != v for k, v in run_fields.items()):
+        raise IntegrityError("legacy workflow run identity does not match")
+    try:
+        if (
+            run["actor"]["login"] != run_binding["actor"]
+            or run["triggering_actor"]["login"] != run_binding["triggering_actor"]
+            or run["repository"]["full_name"] != repository
+            or run["head_repository"]["full_name"] != repository
+            or run["html_url"] != f"https://github.com/{repository}/actions/runs/{run_binding['id']}"
+            or text_digest(run["display_title"]) != run_binding["display_title_sha256"]
+        ):
+            raise IntegrityError("legacy workflow run binding does not match")
+    except (KeyError, TypeError) as error:
+        raise IntegrityError("legacy workflow run binding is invalid") from error
+    workflow = _workflow_binding(client, request, repository, run, workflow_registry)
+    if (
+        workflow is None
+        or not workflow["reviewed"]
+        or workflow["definition_sha256"] != run_binding["definition_sha256"]
+    ):
+        raise IntegrityError("legacy workflow definition is not reviewed")
+
+    comment_binding = entry["comment"]
+    comment, status = client.get(
+        f"/repos/{repository}/issues/comments/{comment_binding['id']}"
+    )
+    try:
+        exact_comment = (
+            status == 200
+            and isinstance(comment, dict)
+            and comment.get("id") == comment_binding["id"]
+            and comment["user"]["login"] == comment_binding["author"]
+            and comment.get("created_at") == comment_binding["created_at"]
+            and comment.get("updated_at") == comment_binding["created_at"]
+            and comment.get("html_url")
+            == f"{expected_issue_url}#issuecomment-{comment_binding['id']}"
+            and text_digest(comment["body"]) == comment_binding["body_sha256"]
+        )
+    except (KeyError, TypeError):
+        exact_comment = False
+    if not exact_comment:
+        raise IntegrityError("legacy result comment identity does not match")
+    if comment_binding["projection"] == "pass_lines":
+        projected = PASS_LINE.findall(comment["body"])
+    else:
+        lines = NEWLY_SOLVED_LINE.findall(comment["body"])
+        if len(lines) != 1:
+            raise IntegrityError("legacy newly-solved projection is ambiguous")
+        projected = [item.strip() for item in lines[0].split(",")]
+    expected_problems = {item["problem_id"] for item in request["results"]}
+    if len(projected) > MAX_REPORTED_PASSES or set(projected) != expected_problems or len(projected) != len(set(projected)):
+        raise IntegrityError("legacy result comment problem set does not match")
+
+    job_binding = entry["record_job"]
+    job, status = client.get(f"/repos/{repository}/actions/jobs/{job_binding['id']}")
+    if (
+        status != 200 or not isinstance(job, dict)
+        or any(job.get(field) != job_binding[field] for field in ("id", "name", "started_at", "completed_at"))
+        or job.get("status") != "completed" or job.get("conclusion") != "success"
+        or job.get("run_url") != f"https://api.github.com/repos/{repository}/actions/runs/{run_binding['id']}"
+    ):
+        raise IntegrityError("legacy record job identity does not match")
+    _validate_result_commit(client, request, entry, expected_model)
+    if rename is not None:
+        if rename["renamed_to"] != request["declared_model"]:
+            raise IntegrityError("legacy model rename target does not match request")
+        _validate_model_rename(client, rename)
+
+    source_probe = _probe_source(client, request)
+    source_status = source_probe["status"]
+    projection = _legacy_candidate_projection(entry, request)
+    return {
+        "issue_repository": repository,
+        "status": {"available": "matched_source_available", "unavailable": "matched_source_unavailable", "indeterminate": "matched_source_indeterminate"}[source_status],
+        **projection,
+        **({"source_probe_reason_code": source_probe["reason_code"]} if source_status == "indeterminate" else {}),
     }
 
 
@@ -887,6 +1759,32 @@ def _safe_candidate(
     }
 
 
+def _safe_legacy_candidate(
+    client: GitHubClient,
+    request: dict[str, Any],
+    repository: str,
+    workflow_registry: dict[str, dict[str, str]],
+    entry: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        return _legacy_candidate(
+            client, request, repository, workflow_registry, entry
+        )
+    except IntegrityError:
+        raise
+    except ResponseTooLarge:
+        reason = "github_response_too_large"
+    except ProbeIndeterminate as error:
+        reason = error.reason_code
+    except EvidenceError:
+        reason = "github_response_invalid"
+    return {
+        "issue_repository": repository,
+        "status": "probe_indeterminate",
+        "reason_code": reason,
+    }
+
+
 def validate_requests(value: Any) -> None:
     top_fields = {
         "schema_version",
@@ -1137,20 +2035,56 @@ def resolve(
     client: GitHubClient,
     workflow_registry: dict[str, Any] | None = None,
     workflow_registry_sha256: str | None = None,
+    legacy_adjudication_registry: dict[str, Any] | None = None,
+    legacy_adjudication_registry_sha256: str | None = None,
     shard_index: int = 0,
     shard_count: int = 1,
 ) -> dict[str, Any]:
     validate_requests(value)
+    canonical_requests_sha256 = hashlib.sha256(
+        canonical_document_bytes(value)
+    ).hexdigest()
+    if (
+        not isinstance(raw_sha256, str)
+        or DIGEST.fullmatch(raw_sha256) is None
+        or raw_sha256 != canonical_requests_sha256
+    ):
+        raise EvidenceError(
+            "resolution requests are not canonical or digest-bound"
+        )
     if workflow_registry is None or workflow_registry_sha256 is None:
         raise EvidenceError("exact raw workflow registry and digest are required")
     registry = validate_workflow_registry(workflow_registry)
     if (
         not isinstance(workflow_registry_sha256, str)
         or DIGEST.fullmatch(workflow_registry_sha256) is None
+        or workflow_registry_sha256
+        != hashlib.sha256(canonical_document_bytes(workflow_registry)).hexdigest()
     ):
-        raise EvidenceError("workflow definition registry digest is invalid")
-    if not isinstance(raw_sha256, str) or DIGEST.fullmatch(raw_sha256) is None:
-        raise EvidenceError("resolution request digest is invalid")
+        raise EvidenceError(
+            "workflow definition registry is not canonical or digest-bound"
+        )
+    if legacy_adjudication_registry is None and legacy_adjudication_registry_sha256 is None:
+        adjudications: dict[str, dict[str, Any]] = {}
+    elif (
+        legacy_adjudication_registry is None
+        or not isinstance(legacy_adjudication_registry_sha256, str)
+        or DIGEST.fullmatch(legacy_adjudication_registry_sha256) is None
+    ):
+        raise EvidenceError("exact raw legacy adjudication registry and digest are required")
+    else:
+        adjudications = validate_legacy_adjudication_registry(
+            legacy_adjudication_registry
+        )
+        if (
+            hashlib.sha256(
+                canonical_document_bytes(legacy_adjudication_registry)
+            ).hexdigest()
+            != legacy_adjudication_registry_sha256
+        ):
+            raise EvidenceError(
+                "legacy adjudication registry is not canonical or digest-bound"
+            )
     if (
         type(shard_index) is not int
         or type(shard_count) is not int
@@ -1163,10 +2097,19 @@ def resolve(
     resolutions: list[dict[str, Any]] = []
     counts: collections.Counter[str] = collections.Counter()
     for request in selected_requests:
-        candidates = [
-            _safe_candidate(client, request, repository, registry)
-            for repository in request["candidate_issue_repositories"]
-        ]
+        adjudication = adjudications.get(request["request_id"])
+        candidates = []
+        for repository in request["candidate_issue_repositories"]:
+            if (
+                adjudication is not None
+                and repository == adjudication["issue"]["repository"]
+            ):
+                candidate = _safe_legacy_candidate(
+                    client, request, repository, registry, adjudication
+                )
+            else:
+                candidate = _safe_candidate(client, request, repository, registry)
+            candidates.append(candidate)
         status, selected_repository = _classify_candidates(candidates)
         counts[status] += 1
         resolutions.append(
@@ -1186,6 +2129,15 @@ def resolve(
         "inventory_sha256": value["inventory_sha256"],
         "resolution_requests_sha256": raw_sha256,
         "workflow_definition_registry_sha256": workflow_registry_sha256,
+        **(
+            {
+                "legacy_adjudication_registry_sha256": (
+                    legacy_adjudication_registry_sha256
+                )
+            }
+            if legacy_adjudication_registry_sha256 is not None
+            else {}
+        ),
         "request_count": value["request_count"],
         "result_count": value["result_count"],
         "shard_index": shard_index,
@@ -1228,6 +2180,8 @@ def validate_evidence(
     requests_value: Any,
     workflow_registry: dict[str, Any] | None = None,
     workflow_registry_sha256: str | None = None,
+    legacy_adjudication_registry: dict[str, Any] | None = None,
+    legacy_adjudication_registry_sha256: str | None = None,
 ) -> None:
     if not isinstance(value, dict):
         raise EvidenceError("GitHub evidence is not an object")
@@ -1254,7 +2208,10 @@ def validate_evidence(
         "pending_count",
         "resolutions",
     }
-    if set(value) != expected_top:
+    has_adjudications = "legacy_adjudication_registry_sha256" in value
+    if set(value) != expected_top | (
+        {"legacy_adjudication_registry_sha256"} if has_adjudications else set()
+    ):
         raise EvidenceError("GitHub evidence top-level fields are not closed")
     if (
         type(value["schema_version"]) is not int
@@ -1269,6 +2226,7 @@ def validate_evidence(
         "inventory_sha256",
         "resolution_requests_sha256",
         "workflow_definition_registry_sha256",
+        *(('legacy_adjudication_registry_sha256',) if has_adjudications else ()),
     ):
         if not isinstance(value[field], str) or DIGEST.fullmatch(value[field]) is None:
             raise EvidenceError(f"GitHub evidence {field} is invalid")
@@ -1317,15 +2275,54 @@ def validate_evidence(
         raise EvidenceError("GitHub evidence resolutions are not unique and sorted")
 
     validate_requests(requests_value)
+    canonical_requests_sha256 = hashlib.sha256(
+        canonical_document_bytes(requests_value)
+    ).hexdigest()
+    if value["resolution_requests_sha256"] != canonical_requests_sha256:
+        raise EvidenceError(
+            "GitHub evidence does not bind the canonical resolution requests"
+        )
     if workflow_registry is None or workflow_registry_sha256 is None:
         raise EvidenceError("exact raw workflow registry and digest are required")
     registry = validate_workflow_registry(workflow_registry)
-    if not isinstance(workflow_registry_sha256, str) or DIGEST.fullmatch(
-        workflow_registry_sha256
-    ) is None:
-        raise EvidenceError("workflow registry raw digest is invalid")
+    if (
+        not isinstance(workflow_registry_sha256, str)
+        or DIGEST.fullmatch(workflow_registry_sha256) is None
+        or workflow_registry_sha256
+        != hashlib.sha256(canonical_document_bytes(workflow_registry)).hexdigest()
+    ):
+        raise EvidenceError("workflow registry is not canonical or digest-bound")
     if value["workflow_definition_registry_sha256"] != workflow_registry_sha256:
         raise EvidenceError("GitHub evidence does not bind its workflow registry")
+    registry_supplied = (
+        legacy_adjudication_registry is not None
+        or legacy_adjudication_registry_sha256 is not None
+    )
+    if has_adjudications != registry_supplied:
+        raise EvidenceError(
+            "GitHub evidence legacy registry mode does not match the validator"
+        )
+    adjudications: dict[str, dict[str, Any]] = {}
+    if registry_supplied:
+        if (
+            legacy_adjudication_registry is None
+            or legacy_adjudication_registry_sha256 is None
+        ):
+            raise EvidenceError("exact raw legacy adjudication registry and digest are required")
+        adjudications = validate_legacy_adjudication_registry(
+            legacy_adjudication_registry
+        )
+        if (
+            not isinstance(legacy_adjudication_registry_sha256, str)
+            or DIGEST.fullmatch(legacy_adjudication_registry_sha256) is None
+            or value["legacy_adjudication_registry_sha256"]
+            != legacy_adjudication_registry_sha256
+            or hashlib.sha256(
+                canonical_document_bytes(legacy_adjudication_registry)
+            ).hexdigest()
+            != legacy_adjudication_registry_sha256
+        ):
+            raise EvidenceError("GitHub evidence does not bind its legacy registry")
     request_by_id = {
         request["request_id"]: request for request in requests_value["requests"]
     }
@@ -1401,10 +2398,34 @@ def validate_evidence(
             != CANDIDATE_REPOSITORIES
         ):
             raise EvidenceError(f"{label}.candidates are not canonical")
+        legacy_entry = adjudications.get(request_id)
+        if legacy_entry is not None and (
+            legacy_entry["request_id"] != request_id
+            or legacy_entry["source"]
+            != {
+                field: request["source"][field]
+                for field in ("kind", "repository", "commit")
+            }
+            or legacy_entry["issue"]["number"] != request["issue_number"]
+        ):
+            raise EvidenceError(
+                f"{label} legacy adjudication is not cross-bound to its request"
+            )
         for candidate_index, candidate in enumerate(candidates):
             candidate_label = f"{label}.candidates[{candidate_index}]"
             status = candidate.get("status")
             base = {"issue_repository", "status"}
+            registered_legacy_repository = (
+                legacy_entry is not None
+                and candidate["issue_repository"]
+                == legacy_entry["issue"]["repository"]
+            )
+            if registered_legacy_repository and status not in (
+                matched_statuses | {"probe_indeterminate"}
+            ):
+                raise EvidenceError(
+                    f"{candidate_label} registered legacy candidate mode is invalid"
+                )
             if status in simple_statuses:
                 if set(candidate) != base:
                     raise EvidenceError(f"{candidate_label} fields are not closed")
@@ -1579,10 +2600,54 @@ def validate_evidence(
                 "reported_pass_problem_ids",
                 "source_commit_url",
             }
+            legacy_digest = candidate.get("legacy_adjudication_sha256")
+            if legacy_digest is not None:
+                matched_fields.update(
+                    {
+                        "legacy_adjudication_sha256",
+                        "legacy_reason_code",
+                        "workflow_run_triggering_actor",
+                        "record_job_id",
+                        "record_job_started_at",
+                        "record_job_completed_at",
+                        "result_commit_sha",
+                        "result_blob_sha",
+                        "model_rename_sha256",
+                    }
+                )
             if status == "matched_source_indeterminate":
                 matched_fields.add("source_probe_reason_code")
             if set(candidate) != matched_fields:
                 raise EvidenceError(f"{candidate_label} fields are not closed")
+            is_legacy = legacy_digest is not None
+            legacy_repository = (
+                legacy_entry is not None
+                and candidate["issue_repository"]
+                == legacy_entry["issue"]["repository"]
+            )
+            if is_legacy != legacy_repository:
+                raise EvidenceError(
+                    f"{candidate_label} legacy adjudication mode is invalid"
+                )
+            if is_legacy:
+                if legacy_entry is None:
+                    raise EvidenceError(
+                        f"{candidate_label} legacy adjudication is invalid"
+                    )
+                expected_projection = _legacy_candidate_projection(
+                    legacy_entry, request
+                )
+                actual_projection = {
+                    field: candidate[field] for field in expected_projection
+                }
+                if (
+                    candidate["issue_repository"]
+                    != legacy_entry["issue"]["repository"]
+                    or actual_projection != expected_projection
+                ):
+                    raise EvidenceError(
+                        f"{candidate_label} legacy projection is not registry-bound"
+                    )
             for url_field in (
                 "issue_url",
                 "workflow_run_url",
@@ -1620,21 +2685,31 @@ def validate_evidence(
                 type(candidate["workflow_run_attempt"]) is not int
                 or candidate["workflow_run_attempt"] <= 0
                 or issue_closed < issue_created
-                or issue_closed > accepted + datetime.timedelta(minutes=2)
-                or not issue_created
-                <= run_created
-                <= issue_created + datetime.timedelta(seconds=30)
-                or not accepted <= run_updated <= accepted + RUN_COMPLETION_LAG
-                or not accepted
-                <= comment_created
-                <= accepted + COMMENT_ACCEPTANCE_LAG
+                or (
+                    not is_legacy
+                    and (
+                        issue_closed > accepted + datetime.timedelta(minutes=2)
+                        or not issue_created
+                        <= run_created
+                        <= issue_created + datetime.timedelta(seconds=30)
+                        or not accepted
+                        <= run_updated
+                        <= accepted + RUN_COMPLETION_LAG
+                        or not accepted
+                        <= comment_created
+                        <= accepted + COMMENT_ACCEPTANCE_LAG
+                    )
+                )
             ):
                 raise EvidenceError(f"{candidate_label} timing identity is invalid")
             if (
                 not isinstance(candidate["workflow_run_actor"], str)
                 or LOGIN.fullmatch(candidate["workflow_run_actor"]) is None
-                or candidate["workflow_run_actor"].casefold()
-                != candidate["issue_author"].casefold()
+                or (
+                    not is_legacy
+                    and candidate["workflow_run_actor"].casefold()
+                    != candidate["issue_author"].casefold()
+                )
                 or candidate["workflow_run_display_title_sha256"]
                 != candidate["issue_title_sha256"]
                 or candidate["result_comment_author"] != "github-actions[bot]"
@@ -1660,8 +2735,11 @@ def validate_evidence(
                 raise EvidenceError(
                     f"{candidate_label} source reference binding is invalid"
                 )
+            identity_model = request["declared_model"]
+            if is_legacy and legacy_entry["model_rename"] is not None:
+                identity_model = legacy_entry["model_rename"]["renamed_to"]
             expected_issue_identity = {
-                "declared_model": request["declared_model"],
+                "declared_model": identity_model,
                 "source_kind": request["source"]["kind"],
                 "source_repository": request["source"]["repository"].casefold(),
             }
@@ -1812,6 +2890,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--requests", required=True, type=pathlib.Path)
     parser.add_argument("--workflow-registry", required=True, type=pathlib.Path)
+    parser.add_argument(
+        "--legacy-adjudication-registry", required=True, type=pathlib.Path
+    )
     parser.add_argument("--output", required=True, type=pathlib.Path)
     parser.add_argument("--shard-index", required=True, type=int)
     parser.add_argument("--shard-count", required=True, type=int)
@@ -1825,6 +2906,14 @@ def main() -> int:
         registry_value = json.loads(registry_raw)
         validate_workflow_registry(registry_value)
         registry_sha256 = hashlib.sha256(registry_raw).hexdigest()
+        adjudication_raw = _read_bounded(
+            args.legacy_adjudication_registry,
+            MAX_WORKFLOW_BYTES,
+            "legacy adjudication registry",
+        )
+        adjudication_value = json.loads(adjudication_raw)
+        validate_legacy_adjudication_registry(adjudication_value)
+        adjudication_sha256 = hashlib.sha256(adjudication_raw).hexdigest()
         client = GitHubClient(os.environ.get("GITHUB_TOKEN", ""))
         output = resolve(
             value,
@@ -1832,10 +2921,19 @@ def main() -> int:
             client,
             registry_value,
             registry_sha256,
-            args.shard_index,
-            args.shard_count,
+            adjudication_value,
+            adjudication_sha256,
+            shard_index=args.shard_index,
+            shard_count=args.shard_count,
         )
-        validate_evidence(output, value, registry_value, registry_sha256)
+        validate_evidence(
+            output,
+            value,
+            registry_value,
+            registry_sha256,
+            adjudication_value,
+            adjudication_sha256,
+        )
         _write_exclusive(args.output, output)
     except (OSError, UnicodeError, json.JSONDecodeError, EvidenceError) as error:
         print(f"public-replay-github-evidence: {error}", file=sys.stderr)

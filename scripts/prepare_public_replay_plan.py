@@ -182,6 +182,8 @@ def build_plan(
     toolchain_registry: dict[str, Any],
     toolchain_registry_raw: bytes,
     results_root: pathlib.Path,
+    legacy_adjudication_registry: dict[str, Any] | None = None,
+    legacy_adjudication_registry_raw: bytes | None = None,
 ) -> dict[str, Any]:
     if hashlib.sha256(inventory_raw).hexdigest() != aggregate["inventory_sha256"]:
         raise PublicReplayPlanError("inventory digest differs from evidence aggregate")
@@ -203,6 +205,12 @@ def build_plan(
         raise PublicReplayPlanError(
             "resolution requests do not equal the exact results snapshot"
         )
+    if (legacy_adjudication_registry is None) != (
+        legacy_adjudication_registry_raw is None
+    ):
+        raise PublicReplayPlanError(
+            "legacy adjudication registry value and bytes must be supplied together"
+        )
     try:
         validate_workflow_registry(workflow_registry)
         validate_aggregate(
@@ -211,6 +219,12 @@ def build_plan(
             hashlib.sha256(requests_raw).hexdigest(),
             workflow_registry,
             hashlib.sha256(workflow_registry_raw).hexdigest(),
+            legacy_adjudication_registry,
+            (
+                hashlib.sha256(legacy_adjudication_registry_raw).hexdigest()
+                if legacy_adjudication_registry_raw is not None
+                else None
+            ),
         )
     except (AggregationError, ValueError) as error:
         raise PublicReplayPlanError(str(error)) from error
@@ -367,6 +381,7 @@ def main() -> int:
     parser.add_argument("--requests", required=True, type=pathlib.Path)
     parser.add_argument("--evidence-aggregate", required=True, type=pathlib.Path)
     parser.add_argument("--workflow-registry", required=True, type=pathlib.Path)
+    parser.add_argument("--legacy-adjudication-registry", type=pathlib.Path)
     parser.add_argument("--toolchain-registry", required=True, type=pathlib.Path)
     parser.add_argument("--results-root", required=True, type=pathlib.Path)
     parser.add_argument("--output", required=True, type=pathlib.Path)
@@ -384,6 +399,17 @@ def main() -> int:
         workflow_registry, workflow_registry_raw = _canonical_input(
             args.workflow_registry, MAX_REGISTRY_BYTES, "workflow registry"
         )
+        legacy_adjudication_registry = None
+        legacy_adjudication_registry_raw = None
+        if args.legacy_adjudication_registry is not None:
+            (
+                legacy_adjudication_registry,
+                legacy_adjudication_registry_raw,
+            ) = _canonical_input(
+                args.legacy_adjudication_registry,
+                MAX_REGISTRY_BYTES,
+                "legacy adjudication registry",
+            )
         toolchain_registry, toolchain_registry_raw = _canonical_input(
             args.toolchain_registry,
             MAX_TOOLCHAIN_REGISTRY_BYTES,
@@ -401,6 +427,8 @@ def main() -> int:
             toolchain_registry=toolchain_registry,
             toolchain_registry_raw=toolchain_registry_raw,
             results_root=args.results_root,
+            legacy_adjudication_registry=legacy_adjudication_registry,
+            legacy_adjudication_registry_raw=legacy_adjudication_registry_raw,
         )
         _write_exclusive(args.output, output)
     except (

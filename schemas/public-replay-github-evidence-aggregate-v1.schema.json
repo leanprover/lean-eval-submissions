@@ -22,6 +22,7 @@
     "inventory_sha256": {"$ref": "#/$defs/digest"},
     "resolution_requests_sha256": {"$ref": "#/$defs/digest"},
     "workflow_definition_registry_sha256": {"$ref": "#/$defs/digest"},
+    "legacy_adjudication_registry_sha256": {"$ref": "#/$defs/digest"},
     "request_count": {"type": "integer", "minimum": 1},
     "result_count": {"type": "integer", "minimum": 1},
     "shard_count": {"type": "integer", "minimum": 1, "maximum": 64},

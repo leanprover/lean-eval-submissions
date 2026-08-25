@@ -13,23 +13,29 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from resolve_public_replay_github_evidence import (  # noqa: E402
+    MAX_PUBLIC_GIST_API_REQUESTS_PER_SHARD,
     EvidenceError,
     GitHubClient,
-    MAX_PUBLIC_GIST_API_REQUESTS_PER_SHARD,
     ProbeIndeterminate,
-    _require_public_gist_probe_budget,
-    _RejectRedirects,
+    _legacy_candidate,
+    _legacy_candidate_projection,
     _read_bounded,
+    _RejectRedirects,
+    _require_public_gist_probe_budget,
+    _validate_historical_results,
     _workflow_binding,
     _write_exclusive,
     canonical_bytes,
-    resolve as _resolve,
+    canonical_document_bytes,
     shard_requests,
-    validate_evidence as _validate_evidence,
+    validate_legacy_adjudication_registry,
     validate_requests,
     validate_workflow_registry,
 )
-
+from resolve_public_replay_github_evidence import resolve as _resolve  # noqa: E402
+from resolve_public_replay_github_evidence import (  # noqa: E402
+    validate_evidence as _validate_evidence,
+)
 
 BENCHMARK = "1" * 40
 SOURCE = "2" * 40
@@ -45,8 +51,20 @@ def registry_bytes(value: dict | None = None) -> tuple[dict, str]:
     return value, hashlib.sha256(raw).hexdigest()
 
 
+def adjudication_bytes(value: dict | None = None) -> tuple[dict, str]:
+    if value is None:
+        path = ROOT / "configuration/public-replay-legacy-adjudications-v1.json"
+        raw = path.read_bytes()
+        value = json.loads(raw)
+    else:
+        raw = (json.dumps(value, indent=2, sort_keys=True) + "\n").encode()
+    return value, hashlib.sha256(raw).hexdigest()
+
+
 def resolve(value, digest, client, workflow_registry=None, registry_digest=None, **kwargs):
     workflow_registry, computed = registry_bytes(workflow_registry)
+    if digest == "8" * 64:
+        digest = hashlib.sha256(canonical_document_bytes(value)).hexdigest()
     return _resolve(
         value,
         digest,
@@ -60,7 +78,10 @@ def resolve(value, digest, client, workflow_registry=None, registry_digest=None,
 def validate_evidence(value, requests, workflow_registry=None, registry_digest=None):
     workflow_registry, computed = registry_bytes(workflow_registry)
     return _validate_evidence(
-        value, requests, workflow_registry, registry_digest or computed
+        value,
+        requests,
+        workflow_registry,
+        registry_digest or computed,
     )
 
 
@@ -285,7 +306,294 @@ class FakeClient:
         raise AssertionError((path, item_key))
 
 
+def synthetic_legacy_candidate(reason: str) -> dict:
+    requests = request_value()
+    request = requests["requests"][0]
+    accepted_body = issue()["body"]
+    current_body = accepted_body
+    accepted_model = request["declared_model"]
+    rename = None
+    edits = []
+    if reason == "historical_issue_body_edit":
+        current_body = accepted_body + "\nEdited after acceptance.\n"
+        edits = [
+            {
+                "editedAt": "2026-05-07T06:57:46Z",
+                "deletedAt": None,
+                "diff": accepted_body,
+                "editor": {"login": request["owner"]},
+            },
+            {
+                "editedAt": "2026-05-07T08:00:00Z",
+                "deletedAt": None,
+                "diff": current_body,
+                "editor": {"login": request["owner"]},
+            },
+        ]
+    elif reason == "historical_model_rename":
+        accepted_model = "GPT-5.5 Codex Historical"
+        accepted_body = accepted_body.replace(request["declared_model"], accepted_model)
+        current_body = accepted_body
+        rename = {
+            "repository": "leanprover/lean-eval-submissions",
+            "commit": "d" * 40,
+            "parent": "c" * 40,
+            "path": "results/a-m-berns.json",
+            "before_blob_sha": "e" * 40,
+            "after_blob_sha": "f" * 40,
+            "renamed_from": accepted_model,
+            "renamed_to": request["declared_model"],
+        }
+    elif reason != "truncated_result_comment":
+        raise AssertionError(reason)
+
+    issue_value = issue()
+    issue_value["body"] = current_body
+    run_value = run()
+    run_value["triggering_actor"] = {"login": request["owner"]}
+    comment_value = comment()
+    comment_value["updated_at"] = comment_value["created_at"]
+    result_document = {
+        "schema_version": 2,
+        "solved": {
+            accepted_model: {
+                item["problem_id"]: {
+                    "benchmark_commit": request["benchmark"]["commit"],
+                    "issue_number": request["issue_number"],
+                    "solved_at": request["accepted_at"],
+                    "submission_public": True,
+                    "submission_ref": request["source"]["commit"],
+                    "submission_repo": request["source"]["repository"],
+                    "submission_kind": request["source"]["kind"],
+                }
+                for item in request["results"]
+            }
+        },
+        "user": request["owner"],
+    }
+    result_raw = json.dumps(result_document).encode()
+    renamed_document = copy.deepcopy(result_document)
+    if rename is not None:
+        renamed_document["solved"][request["declared_model"]] = renamed_document[
+            "solved"
+        ].pop(accepted_model)
+    renamed_raw = json.dumps(renamed_document).encode()
+    entry = {
+        "request_id": request["request_id"],
+        "reason_code": reason,
+        "source": {
+            field: request["source"][field]
+            for field in ("kind", "repository", "commit")
+        },
+        "issue": {
+            "repository": "leanprover/lean-eval",
+            "number": request["issue_number"],
+            "author": request["owner"],
+            "created_at": issue_value["created_at"],
+            "closed_at": issue_value["closed_at"],
+            "title_sha256": hashlib.sha256(issue_value["title"].encode()).hexdigest(),
+            "body_binding": (
+                {
+                    "kind": "historical_edit",
+                    "accepted_body_sha256": hashlib.sha256(
+                        accepted_body.encode()
+                    ).hexdigest(),
+                    "current_body_sha256": hashlib.sha256(
+                        current_body.encode()
+                    ).hexdigest(),
+                    "edit_count": len(edits),
+                    "edits": [
+                        {
+                            "edited_at": item["editedAt"],
+                            "editor": item["editor"]["login"],
+                            "body_sha256": hashlib.sha256(
+                                item["diff"].encode()
+                            ).hexdigest(),
+                        }
+                        for item in edits
+                    ],
+                    "source_reference_binding": "unpinned",
+                }
+                if edits
+                else {
+                    "kind": "current",
+                    "accepted_body_sha256": hashlib.sha256(
+                        accepted_body.encode()
+                    ).hexdigest(),
+                    "source_reference_binding": "unpinned",
+                }
+            ),
+        },
+        "comment": {
+            "id": comment_value["id"],
+            "author": "github-actions[bot]",
+            "created_at": comment_value["created_at"],
+            "body_sha256": hashlib.sha256(
+                comment_value["body"].encode()
+            ).hexdigest(),
+            "projection": (
+                "newly_solved"
+                if reason == "truncated_result_comment"
+                else "pass_lines"
+            ),
+        },
+        "workflow_run": {
+            "id": run_value["id"],
+            "name": run_value["name"],
+            "event": run_value["event"],
+            "attempt": run_value["run_attempt"],
+            "actor": run_value["actor"]["login"],
+            "triggering_actor": run_value["triggering_actor"]["login"],
+            "head_sha": run_value["head_sha"],
+            "head_branch": run_value["head_branch"],
+            "path": run_value["path"],
+            "created_at": run_value["created_at"],
+            "updated_at": run_value["updated_at"],
+            "display_title_sha256": hashlib.sha256(
+                run_value["display_title"].encode()
+            ).hexdigest(),
+            "definition_sha256": "a" * 64,
+        },
+        "record_job": {
+            "id": 12345,
+            "name": "record",
+            "started_at": "2026-05-07T07:05:40Z",
+            "completed_at": "2026-05-07T07:05:55Z",
+        },
+        "result_commit": {
+            "repository": "leanprover/lean-eval-submissions",
+            "commit": "c" * 40,
+            "parent": "b" * 40,
+            "path": "results/a-m-berns.json",
+            "blob_sha": "e" * 40,
+            "committed_at": "2026-05-07T07:05:49Z",
+        },
+        "model_rename": rename,
+    }
+
+    class LegacyClient:
+        def get(self, path):
+            repository = entry["issue"]["repository"]
+            if path == f"/repos/{repository}":
+                return {
+                    "full_name": repository,
+                    "private": False,
+                    "visibility": "public",
+                }, 200
+            if path == f"/repos/{repository}/issues/{request['issue_number']}":
+                return issue_value, 200
+            if path == f"/repos/{repository}/actions/runs/{run_value['id']}":
+                return run_value, 200
+            if path == f"/repos/{repository}/issues/comments/{comment_value['id']}":
+                return comment_value, 200
+            if path == f"/repos/{repository}/actions/jobs/12345":
+                return {
+                    **entry["record_job"],
+                    "status": "completed",
+                    "conclusion": "success",
+                    "run_url": (
+                        f"https://api.github.com/repos/{repository}/actions/runs/"
+                        f"{run_value['id']}"
+                    ),
+                }, 200
+            result_commit = entry["result_commit"]
+            if path == (
+                f"/repos/{result_commit['repository']}/commits/"
+                f"{result_commit['commit']}"
+            ):
+                identity = {
+                    "name": "lean-eval-bot",
+                    "email": "lean-eval-bot@users.noreply.github.com",
+                    "date": result_commit["committed_at"],
+                }
+                return {
+                    "sha": result_commit["commit"],
+                    "parents": [{"sha": result_commit["parent"]}],
+                    "commit": {"author": identity, "committer": identity},
+                    "files": [
+                        {
+                            "filename": result_commit["path"],
+                            "sha": result_commit["blob_sha"],
+                        }
+                    ],
+                }, 200
+            if rename is not None and path == (
+                f"/repos/{rename['repository']}/commits/{rename['commit']}"
+            ):
+                return {
+                    "sha": rename["commit"],
+                    "parents": [{"sha": rename["parent"]}],
+                    "files": [
+                        {"filename": rename["path"], "sha": rename["after_blob_sha"]}
+                    ],
+                }, 200
+            if path == (
+                f"/repos/{result_commit['repository']}/contents/{result_commit['path']}"
+                f"?ref={result_commit['commit']}"
+            ):
+                return {
+                    "sha": result_commit["blob_sha"],
+                    "encoding": "base64",
+                    "content": base64.b64encode(result_raw).decode(),
+                    "size": len(result_raw),
+                }, 200
+            if rename is not None and path == (
+                f"/repos/{rename['repository']}/contents/{rename['path']}"
+                f"?ref={rename['commit']}"
+            ):
+                return {
+                    "sha": rename["after_blob_sha"],
+                    "encoding": "base64",
+                    "content": base64.b64encode(renamed_raw).decode(),
+                    "size": len(renamed_raw),
+                }, 200
+            if path == f"/repos/{request['source']['repository']}":
+                return {
+                    "full_name": request["source"]["repository"],
+                    "private": False,
+                    "visibility": "public",
+                }, 200
+            if path == (
+                f"/repos/{request['source']['repository']}/git/commits/"
+                f"{request['source']['commit']}"
+            ):
+                return {"sha": request["source"]["commit"]}, 200
+            raise AssertionError(path)
+
+        def issue_body_edits(self, repository, issue_number):
+            if repository != entry["issue"]["repository"]:
+                raise AssertionError(repository)
+            if issue_number != request["issue_number"]:
+                raise AssertionError(issue_number)
+            return edits
+
+    workflow = {
+        "contract": "benchmark_repository_head",
+        "repository_commit": request["benchmark"]["commit"],
+        "definition_sha256": entry["workflow_run"]["definition_sha256"],
+        "reviewed": True,
+    }
+    with mock.patch(
+        "resolve_public_replay_github_evidence._workflow_binding",
+        return_value=workflow,
+    ):
+        return _legacy_candidate(
+            LegacyClient(), request, entry["issue"]["repository"], {}, entry
+        )
+
+
 class ResolvePublicReplayGitHubEvidenceTests(unittest.TestCase):
+    def test_all_non_gist_legacy_paths_have_full_fake_client_coverage(self) -> None:
+        for reason in (
+            "historical_issue_body_edit",
+            "historical_model_rename",
+            "truncated_result_comment",
+        ):
+            with self.subTest(reason=reason):
+                candidate = synthetic_legacy_candidate(reason)
+                self.assertEqual(candidate["status"], "matched_source_available")
+                self.assertEqual(candidate["legacy_reason_code"], reason)
+
     def test_resolves_one_exact_candidate_and_emits_no_issue_body(self) -> None:
         value = request_value()
         output = resolve(value, "8" * 64, FakeClient())
@@ -946,13 +1254,81 @@ GPT-5.5 Codex
 
     def test_registry_value_and_exact_raw_digest_are_mandatory(self) -> None:
         value = request_value()
+        requests_digest = hashlib.sha256(
+            canonical_document_bytes(value)
+        ).hexdigest()
         with self.assertRaisesRegex(EvidenceError, "raw workflow registry"):
-            _resolve(value, "8" * 64, FakeClient())
+            _resolve(value, requests_digest, FakeClient())
         registry, _ = registry_bytes()
         with self.assertRaisesRegex(EvidenceError, "raw workflow registry"):
-            _resolve(value, "8" * 64, FakeClient(), registry)
-        with self.assertRaisesRegex(EvidenceError, "digest is invalid"):
-            _resolve(value, "8" * 64, FakeClient(), registry, 7)
+            _resolve(value, requests_digest, FakeClient(), registry)
+        with self.assertRaisesRegex(EvidenceError, "canonical or digest-bound"):
+            _resolve(value, requests_digest, FakeClient(), registry, 7)
+
+    def test_resolver_recomputes_both_canonical_input_digests(self) -> None:
+        value = request_value()
+        requests_digest = hashlib.sha256(
+            canonical_document_bytes(value)
+        ).hexdigest()
+        workflow_registry, workflow_digest = registry_bytes()
+        with self.assertRaisesRegex(
+            EvidenceError, "resolution requests are not canonical or digest-bound"
+        ):
+            _resolve(
+                value,
+                "f" * 64,
+                FakeClient(),
+                workflow_registry,
+                workflow_digest,
+            )
+        with self.assertRaisesRegex(
+            EvidenceError, "workflow definition registry is not canonical or digest-bound"
+        ):
+            _resolve(
+                value,
+                requests_digest,
+                FakeClient(),
+                workflow_registry,
+                "f" * 64,
+            )
+
+    def test_evidence_validator_recomputes_both_canonical_input_digests(self) -> None:
+        requests = request_value()
+        requests_digest = hashlib.sha256(
+            canonical_document_bytes(requests)
+        ).hexdigest()
+        workflow_registry, workflow_digest = registry_bytes()
+        evidence = _resolve(
+            requests,
+            requests_digest,
+            FakeClient(),
+            workflow_registry,
+            workflow_digest,
+        )
+
+        stale_requests = copy.deepcopy(evidence)
+        stale_requests["resolution_requests_sha256"] = "f" * 64
+        with self.assertRaisesRegex(
+            EvidenceError, "canonical resolution requests"
+        ):
+            _validate_evidence(
+                stale_requests,
+                requests,
+                workflow_registry,
+                workflow_digest,
+            )
+
+        stale_workflow = copy.deepcopy(evidence)
+        stale_workflow["workflow_definition_registry_sha256"] = "f" * 64
+        with self.assertRaisesRegex(
+            EvidenceError, "workflow registry is not canonical or digest-bound"
+        ):
+            _validate_evidence(
+                stale_workflow,
+                requests,
+                workflow_registry,
+                "f" * 64,
+            )
 
     def test_split_workflow_binds_evaluator_separately_from_benchmark(self) -> None:
         class SplitClient(FakeClient):
@@ -1132,14 +1508,14 @@ GPT-5.5 Codex
         registry_raw = registry_path.read_bytes()
         registry = json.loads(registry_raw)
         reviewed = validate_workflow_registry(registry)
-        self.assertEqual(len(reviewed), 119)
+        self.assertEqual(len(reviewed), 120)
         self.assertEqual(
             len({entry["definition_sha256"] for entry in reviewed.values()}),
             12,
         )
         self.assertEqual(
             hashlib.sha256(registry_raw).hexdigest(),
-            "82eff4dce70c2fcb7f480522f4de1fb16884534ce5f9452032908bb299c12196",
+            "b9004ee87f0ff032e78198e251b87fe1bb1d0baaf77d6ea853335dd1f5487108",
         )
         schema = json.loads(
             (
@@ -1149,6 +1525,530 @@ GPT-5.5 Codex
         self.assertIs(schema["additionalProperties"], False)
         self.assertIs(schema["properties"]["contracts"]["items"]["additionalProperties"], False)
 
+    def test_legacy_adjudication_registry_is_exact_closed_and_schema_valid(self) -> None:
+        path = ROOT / "configuration/public-replay-legacy-adjudications-v1.json"
+        raw = path.read_bytes()
+        value = json.loads(raw)
+        self.assertEqual(raw, canonical_document_bytes(value))
+        reviewed = validate_legacy_adjudication_registry(value)
+        self.assertEqual(len(reviewed), 5)
+        self.assertEqual(
+            hashlib.sha256(raw).hexdigest(),
+            "4df6682b0e8b0ff129235c286aebf3322f37b002c846cc9fc8b14c054acf4ed1",
+        )
+        schema = json.loads(
+            (ROOT / "schemas/public-replay-legacy-adjudications-v1.schema.json").read_text()
+        )
+        self.assertIs(schema["additionalProperties"], False)
+        self.assertIs(
+            schema["$defs"]["adjudication"]["additionalProperties"], False
+        )
+        changed = copy.deepcopy(value)
+        changed["adjudications"][0]["record_job"]["completed_at"] = (
+            "2026-07-28T15:22:40Z"
+        )
+        with self.assertRaisesRegex(EvidenceError, "outside its record job"):
+            validate_legacy_adjudication_registry(changed)
+        changed = copy.deepcopy(value)
+        changed["adjudications"][0]["unexpected"] = True
+        with self.assertRaisesRegex(EvidenceError, "fields are not closed"):
+            validate_legacy_adjudication_registry(changed)
+        changed = copy.deepcopy(value)
+        changed["adjudications"].pop()
+        with self.assertRaisesRegex(EvidenceError, "request set is not exact"):
+            validate_legacy_adjudication_registry(changed)
 
+    def test_legacy_candidate_digest_cannot_be_attached_to_another_request(self) -> None:
+        requests = request_value()
+        output = resolve(requests, "8" * 64, FakeClient())
+        adjudications, adjudication_digest = adjudication_bytes()
+        output["legacy_adjudication_registry_sha256"] = adjudication_digest
+        output["resolutions"][0]["candidates"][0][
+            "legacy_adjudication_sha256"
+        ] = hashlib.sha256(
+            canonical_bytes(adjudications["adjudications"][0])
+        ).hexdigest()
+        output["resolutions"][0]["candidates"][0].update(
+            _legacy_candidate_projection(
+                adjudications["adjudications"][0], requests["requests"][0]
+            )
+        )
+        with self.assertRaisesRegex(EvidenceError, "legacy adjudication mode is invalid"):
+            workflow_registry, workflow_digest = registry_bytes()
+            _validate_evidence(
+                output,
+                requests,
+                workflow_registry,
+                workflow_digest,
+                adjudications,
+                adjudication_digest,
+            )
+
+    def test_unpinned_legacy_source_commit_cannot_be_laundered(self) -> None:
+        fixture = json.loads(
+            (ROOT / "tests/fixtures/legacy-gist-result-records-v1.json").read_text()
+        )[0]
+        request = fixture["request"]
+        requests = {
+            "schema_version": 1,
+            "kind": "historical_public_replay_resolution_requests",
+            "source_repository": "leanprover/lean-eval-submissions",
+            "source_commit": "a" * 40,
+            "inventory_sha256": "b" * 64,
+            "request_count": 1,
+            "result_count": len(request["results"]),
+            "requests": [request],
+        }
+        requests_digest = hashlib.sha256(
+            canonical_document_bytes(requests)
+        ).hexdigest()
+        workflow_registry, workflow_digest = registry_bytes()
+        adjudications, adjudication_digest = adjudication_bytes()
+        entry = next(
+            item
+            for item in adjudications["adjudications"]
+            if item["request_id"] == request["request_id"]
+        )
+        self.assertEqual(
+            entry["issue"]["body_binding"]["source_reference_binding"],
+            "unpinned",
+        )
+        legacy_candidate = {
+            "issue_repository": entry["issue"]["repository"],
+            "status": "matched_source_available",
+            **_legacy_candidate_projection(entry, request),
+        }
+        candidates = [
+            legacy_candidate
+            if repository == entry["issue"]["repository"]
+            else {"issue_repository": repository, "status": "issue_not_found"}
+            for repository in request["candidate_issue_repositories"]
+        ]
+        evidence = {
+            "schema_version": 1,
+            "kind": "historical_public_replay_github_evidence",
+            "source_repository": requests["source_repository"],
+            "source_commit": requests["source_commit"],
+            "inventory_sha256": requests["inventory_sha256"],
+            "resolution_requests_sha256": requests_digest,
+            "workflow_definition_registry_sha256": workflow_digest,
+            "legacy_adjudication_registry_sha256": adjudication_digest,
+            "request_count": 1,
+            "result_count": len(request["results"]),
+            "shard_index": 0,
+            "shard_count": 1,
+            "shard_request_count": 1,
+            "shard_result_count": len(request["results"]),
+            "resolved_count": 1,
+            "source_unavailable_count": 0,
+            "source_indeterminate_count": 0,
+            "probe_indeterminate_count": 0,
+            "timing_indeterminate_count": 0,
+            "workflow_contract_unreviewed_count": 0,
+            "pending_count": 0,
+            "resolutions": [
+                {
+                    "request_id": request["request_id"],
+                    "status": "resolved",
+                    "selected_issue_repository": entry["issue"]["repository"],
+                    "candidates": candidates,
+                }
+            ],
+        }
+        _validate_evidence(
+            evidence,
+            requests,
+            workflow_registry,
+            workflow_digest,
+            adjudications,
+            adjudication_digest,
+        )
+
+        changed_registry = copy.deepcopy(adjudications)
+        changed_entry = next(
+            item
+            for item in changed_registry["adjudications"]
+            if item["request_id"] == request["request_id"]
+        )
+        changed_entry["source"]["commit"] = "f" * 40
+        changed_digest = hashlib.sha256(
+            canonical_document_bytes(changed_registry)
+        ).hexdigest()
+        laundered = copy.deepcopy(evidence)
+        laundered["legacy_adjudication_registry_sha256"] = changed_digest
+        laundered_candidate = next(
+            item
+            for item in laundered["resolutions"][0]["candidates"]
+            if item["issue_repository"] == changed_entry["issue"]["repository"]
+        )
+        laundered_candidate.update(
+            _legacy_candidate_projection(changed_entry, request)
+        )
+        with self.assertRaisesRegex(EvidenceError, "not cross-bound to its request"):
+            _validate_evidence(
+                laundered,
+                requests,
+                workflow_registry,
+                workflow_digest,
+                changed_registry,
+                changed_digest,
+            )
+
+    def test_historical_result_binding_rejects_extra_or_changed_records(self) -> None:
+        request = request_value()["requests"][0]
+        record = {
+            "benchmark_commit": request["benchmark"]["commit"],
+            "issue_number": request["issue_number"],
+            "model": request["declared_model"],
+            "solved_at": request["accepted_at"],
+            "submission_public": True,
+            "submission_ref": request["source"]["commit"],
+            "submission_repo": request["source"]["repository"],
+        }
+        document = {
+            "schema_version": 1,
+            "solved": {
+                item["problem_id"]: dict(record) for item in request["results"]
+            },
+            "user": request["owner"],
+        }
+        _validate_historical_results(document, request, request["declared_model"])
+        changed = copy.deepcopy(document)
+        changed["solved"]["decoy_problem"] = dict(record)
+        with self.assertRaisesRegex(EvidenceError, "problem set"):
+            _validate_historical_results(
+                changed, request, request["declared_model"]
+            )
+        changed = copy.deepcopy(document)
+        changed["solved"][request["results"][0]["problem_id"]][
+            "submission_ref"
+        ] = "f" * 40
+        with self.assertRaisesRegex(EvidenceError, "not cross-bound"):
+            _validate_historical_results(
+                changed, request, request["declared_model"]
+            )
+
+    def test_live_shaped_schema_v2_gists_resolve_and_projection_is_closed(self) -> None:
+        fixtures = json.loads(
+            (ROOT / "tests/fixtures/legacy-gist-result-records-v1.json").read_text()
+        )
+        adjudication_value, adjudication_digest = adjudication_bytes()
+        adjudications = validate_legacy_adjudication_registry(adjudication_value)
+        workflow_registry, workflow_digest = registry_bytes()
+
+        for fixture in fixtures:
+            request = fixture["request"]
+            entry = adjudications[request["request_id"]]
+            repository = entry["issue"]["repository"]
+            issue_url = f"https://github.com/{repository}/issues/{request['issue_number']}"
+            workflow_url = (
+                f"https://github.com/{repository}/actions/runs/"
+                f"{entry['workflow_run']['id']}"
+            )
+            result_raw = json.dumps(fixture["result_document"]).encode()
+            case = self
+
+            class LegacyGistClient:
+                def get(self, path):
+                    if path == f"/repos/{repository}":
+                        return {
+                            "full_name": repository,
+                            "private": False,
+                            "visibility": "public",
+                        }, 200
+                    if path == f"/repos/{repository}/issues/{request['issue_number']}":
+                        return {
+                            "number": request["issue_number"],
+                            "html_url": issue_url,
+                            "state": "closed",
+                            "user": {"login": entry["issue"]["author"]},
+                            "created_at": entry["issue"]["created_at"],
+                            "closed_at": entry["issue"]["closed_at"],
+                            "title": {
+                                46: "[submission] two_plus_two via Grok 4.3",
+                                47: "[submission] two_plus_two via Qwen3.6 Max",
+                            }[request["issue_number"]],
+                            "body": fixture["issue_body"],
+                        }, 200
+                    if path == (
+                        f"/repos/{repository}/actions/runs/"
+                        f"{entry['workflow_run']['id']}"
+                    ):
+                        run = entry["workflow_run"]
+                        return {
+                            "id": run["id"],
+                            "name": run["name"],
+                            "event": run["event"],
+                            "run_attempt": run["attempt"],
+                            "actor": {"login": run["actor"]},
+                            "triggering_actor": {"login": run["triggering_actor"]},
+                            "head_sha": run["head_sha"],
+                            "head_branch": run["head_branch"],
+                            "path": run["path"],
+                            "created_at": run["created_at"],
+                            "updated_at": run["updated_at"],
+                            "display_title": {
+                                46: "[submission] two_plus_two via Grok 4.3",
+                                47: "[submission] two_plus_two via Qwen3.6 Max",
+                            }[request["issue_number"]],
+                            "status": "completed",
+                            "conclusion": "success",
+                            "repository": {"full_name": repository},
+                            "head_repository": {"full_name": repository},
+                            "html_url": workflow_url,
+                        }, 200
+                    if path == (
+                        f"/repos/{repository}/issues/comments/{entry['comment']['id']}"
+                    ):
+                        comment = entry["comment"]
+                        return {
+                            "id": comment["id"],
+                            "user": {"login": comment["author"]},
+                            "created_at": comment["created_at"],
+                            "updated_at": comment["created_at"],
+                            "html_url": f"{issue_url}#issuecomment-{comment['id']}",
+                            "body": fixture["comment_body"],
+                        }, 200
+                    if path == (
+                        f"/repos/{repository}/actions/jobs/{entry['record_job']['id']}"
+                    ):
+                        job = entry["record_job"]
+                        return {
+                            **job,
+                            "status": "completed",
+                            "conclusion": "success",
+                            "run_url": (
+                                f"https://api.github.com/repos/{repository}/actions/"
+                                f"runs/{entry['workflow_run']['id']}"
+                            ),
+                        }, 200
+                    commit = entry["result_commit"]
+                    if path == (
+                        f"/repos/{commit['repository']}/commits/{commit['commit']}"
+                    ):
+                        identity = {
+                            "name": "lean-eval-bot",
+                            "email": "lean-eval-bot@users.noreply.github.com",
+                            "date": commit["committed_at"],
+                        }
+                        return {
+                            "sha": commit["commit"],
+                            "parents": [{"sha": commit["parent"]}],
+                            "commit": {"author": identity, "committer": identity},
+                            "files": [
+                                {"filename": commit["path"], "sha": commit["blob_sha"]}
+                            ],
+                        }, 200
+                    if path == (
+                        f"/repos/{commit['repository']}/contents/{commit['path']}"
+                        f"?ref={commit['commit']}"
+                    ):
+                        return {
+                            "sha": commit["blob_sha"],
+                            "encoding": "base64",
+                            "content": base64.b64encode(result_raw).decode(),
+                            "size": len(result_raw),
+                        }, 200
+                    raise AssertionError(path)
+
+                def get_public_gist(self, gist_id, commit):
+                    owner, expected_id = request["source"]["repository"].split("/")
+                    case.assertEqual(gist_id, expected_id)
+                    case.assertEqual(commit, request["source"]["commit"])
+                    return {
+                        "id": expected_id,
+                        "owner": {"login": owner},
+                        "public": True,
+                        "history": [{"version": commit}],
+                    }, 200
+
+            workflow = {
+                "contract": "benchmark_repository_head",
+                "repository_commit": entry["workflow_run"]["head_sha"],
+                "definition_sha256": entry["workflow_run"]["definition_sha256"],
+                "reviewed": True,
+            }
+            with mock.patch(
+                "resolve_public_replay_github_evidence._workflow_binding",
+                return_value=workflow,
+            ):
+                candidate = _legacy_candidate(
+                    LegacyGistClient(), request, repository, workflow_registry, entry
+                )
+            self.assertEqual(candidate["status"], "matched_source_available")
+            result_record = fixture["result_document"]["solved"][
+                request["declared_model"]
+            ]["two_plus_two"]
+            self.assertNotIn("submission_kind", result_record)
+            conflicting = copy.deepcopy(fixture["result_document"])
+            conflicting["solved"][request["declared_model"]]["two_plus_two"][
+                "submission_kind"
+            ] = "github_repo"
+            with self.assertRaisesRegex(EvidenceError, "source kind does not match"):
+                _validate_historical_results(
+                    conflicting, request, request["declared_model"]
+                )
+
+            requests = {
+                "schema_version": 1,
+                "kind": "historical_public_replay_resolution_requests",
+                "source_repository": "leanprover/lean-eval-submissions",
+                "source_commit": "a" * 40,
+                "inventory_sha256": "b" * 64,
+                "request_count": 1,
+                "result_count": 1,
+                "requests": [request],
+            }
+            evidence = {
+                "schema_version": 1,
+                "kind": "historical_public_replay_github_evidence",
+                "source_repository": requests["source_repository"],
+                "source_commit": requests["source_commit"],
+                "inventory_sha256": requests["inventory_sha256"],
+                "resolution_requests_sha256": hashlib.sha256(
+                    canonical_document_bytes(requests)
+                ).hexdigest(),
+                "workflow_definition_registry_sha256": workflow_digest,
+                "legacy_adjudication_registry_sha256": adjudication_digest,
+                "request_count": 1,
+                "result_count": 1,
+                "shard_index": 0,
+                "shard_count": 1,
+                "shard_request_count": 1,
+                "shard_result_count": 1,
+                "resolved_count": 1,
+                "source_unavailable_count": 0,
+                "source_indeterminate_count": 0,
+                "probe_indeterminate_count": 0,
+                "timing_indeterminate_count": 0,
+                "workflow_contract_unreviewed_count": 0,
+                "pending_count": 0,
+                "resolutions": [
+                    {
+                        "request_id": request["request_id"],
+                        "status": "resolved",
+                        "selected_issue_repository": repository,
+                        "candidates": [
+                            candidate,
+                            {
+                                "issue_repository": "leanprover/lean-eval-submissions",
+                                "status": "issue_not_found",
+                            },
+                        ],
+                    }
+                ],
+            }
+            _validate_evidence(
+                evidence,
+                requests,
+                workflow_registry,
+                workflow_digest,
+                adjudication_value,
+                adjudication_digest,
+            )
+            probe_indeterminate = copy.deepcopy(evidence)
+            probe_indeterminate["resolved_count"] = 0
+            probe_indeterminate["probe_indeterminate_count"] = 1
+            probe_indeterminate["pending_count"] = 1
+            resolution = probe_indeterminate["resolutions"][0]
+            resolution["status"] = "probe_indeterminate"
+            resolution["selected_issue_repository"] = repository
+            resolution["candidates"][0] = {
+                "issue_repository": repository,
+                "status": "probe_indeterminate",
+                "reason_code": "github_request_failed",
+            }
+            _validate_evidence(
+                probe_indeterminate,
+                requests,
+                workflow_registry,
+                workflow_digest,
+                adjudication_value,
+                adjudication_digest,
+            )
+            downgraded = copy.deepcopy(evidence)
+            downgraded_candidate = downgraded["resolutions"][0]["candidates"][0]
+            for field in (
+                "legacy_adjudication_sha256",
+                "legacy_reason_code",
+                "workflow_run_triggering_actor",
+                "record_job_id",
+                "record_job_started_at",
+                "record_job_completed_at",
+                "result_commit_sha",
+                "result_blob_sha",
+                "model_rename_sha256",
+            ):
+                downgraded_candidate.pop(field)
+            with self.assertRaisesRegex(EvidenceError, "mode is invalid"):
+                _validate_evidence(
+                    downgraded,
+                    requests,
+                    workflow_registry,
+                    workflow_digest,
+                    adjudication_value,
+                    adjudication_digest,
+                )
+            stripped = copy.deepcopy(evidence)
+            stripped.pop("legacy_adjudication_registry_sha256")
+            with self.assertRaisesRegex(EvidenceError, "mode does not match"):
+                _validate_evidence(
+                    stripped,
+                    requests,
+                    workflow_registry,
+                    workflow_digest,
+                    adjudication_value,
+                    adjudication_digest,
+                )
+            hostile = {
+                "legacy_adjudication_sha256": "f" * 64,
+                "legacy_reason_code": "historical_issue_body_edit",
+                "issue_url": f"https://github.com/{repository}/issues/99999",
+                "issue_author": "attacker",
+                "issue_created_at": "2026-05-01T03:53:00Z",
+                "issue_closed_at": "2026-05-01T03:56:00Z",
+                "issue_title_sha256": "f" * 64,
+                "issue_body_sha256": "f" * 64,
+                "issue_identity_sha256": "f" * 64,
+                "issue_source_ref_sha256": "f" * 64,
+                "issue_source_reference_binding": "exact_commit",
+                "workflow_run_id": entry["workflow_run"]["id"] + 1,
+                "workflow_run_url": f"https://github.com/{repository}/actions/runs/1",
+                "workflow_run_created_at": "2026-05-01T03:54:00Z",
+                "workflow_run_updated_at": "2026-05-01T03:56:00Z",
+                "workflow_run_attempt": entry["workflow_run"]["attempt"] + 1,
+                "workflow_run_actor": "attacker",
+                "workflow_run_triggering_actor": "attacker",
+                "workflow_run_display_title_sha256": "f" * 64,
+                "workflow_run_identity_sha256": "f" * 64,
+                "workflow_contract": "split_repository_recorded_benchmark_v1",
+                "workflow_repository_commit": "f" * 40,
+                "record_job_id": entry["record_job"]["id"] + 1,
+                "record_job_started_at": "2026-05-01T03:54:54Z",
+                "record_job_completed_at": "2026-05-01T03:55:01Z",
+                "result_commit_sha": "f" * 40,
+                "result_blob_sha": "f" * 40,
+                "result_comment_url": f"{issue_url}#issuecomment-1",
+                "result_comment_created_at": "2026-05-01T03:56:00Z",
+                "result_comment_author": "attacker",
+                "result_comment_body_sha256": "f" * 64,
+                "workflow_definition_sha256": "f" * 64,
+                "model_rename_sha256": "f" * 64,
+                "reported_pass_problem_ids": [],
+                "source_commit_url": "https://gist.github.com/kim-em/abc/f" + "f" * 39,
+            }
+            for field, replacement in hostile.items():
+                changed = copy.deepcopy(evidence)
+                changed["resolutions"][0]["candidates"][0][field] = replacement
+                with self.subTest(request=request["request_id"], field=field):
+                    with self.assertRaisesRegex(EvidenceError, "registry-bound"):
+                        _validate_evidence(
+                            changed,
+                            requests,
+                            workflow_registry,
+                            workflow_digest,
+                            adjudication_value,
+                            adjudication_digest,
+                        )
 if __name__ == "__main__":
     unittest.main()

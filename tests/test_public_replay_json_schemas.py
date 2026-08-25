@@ -26,6 +26,7 @@ from resolve_public_replay_github_evidence import (
 )
 from tests.test_resolve_public_replay_github_evidence import (
     FakeClient,
+    adjudication_bytes,
     refresh_request_id,
     registry_bytes,
     request_value,
@@ -55,6 +56,13 @@ class PublicReplayJsonSchemaParityTests(unittest.TestCase):
         cls.registry = Registry().with_resources(resources)
         for schema in cls.schemas.values():
             jsonschema.Draft202012Validator.check_schema(schema)
+        cls.legacy_schema = json.loads(
+            (
+                ROOT
+                / "schemas/public-replay-legacy-adjudications-v1.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        jsonschema.Draft202012Validator.check_schema(cls.legacy_schema)
 
     def validate(self, schema_name: str, value: object) -> None:
         jsonschema.Draft202012Validator(
@@ -107,6 +115,15 @@ class PublicReplayJsonSchemaParityTests(unittest.TestCase):
             workflow_registry,
             registry_digest,
         )
+
+    def test_legacy_registry_schema_and_candidate_fields_are_strict(self) -> None:
+        adjudications, _ = adjudication_bytes()
+        jsonschema.Draft202012Validator(self.legacy_schema).validate(adjudications)
+        _, _, evidence, _ = self.artifacts()
+        candidate = evidence["resolutions"][0]["candidates"][0]
+        candidate["legacy_adjudication_sha256"] = "f" * 64
+        with self.assertRaises(jsonschema.ValidationError):
+            self.validate("evidence", evidence)
 
     def test_empty_shard_is_producible_and_schema_valid(self) -> None:
         requests = request_value()

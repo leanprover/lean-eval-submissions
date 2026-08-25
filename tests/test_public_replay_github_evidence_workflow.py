@@ -2,7 +2,6 @@ import pathlib
 import re
 import unittest
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = (
     ROOT / ".github" / "workflows" / "public-replay-github-evidence.yml"
@@ -85,6 +84,13 @@ class PublicReplayGitHubEvidenceWorkflowTests(unittest.TestCase):
         )
         self.assertIn("validate_evidence(", WORKFLOW)
         self.assertIn("registry_raw", WORKFLOW)
+        self.assertIn(
+            'adjudications="configuration/public-replay-legacy-adjudications-v1.json"',
+            WORKFLOW,
+        )
+        self.assertIn('--legacy-adjudication-registry "$adjudications"', WORKFLOW)
+        self.assertIn("adjudication_raw", WORKFLOW)
+        self.assertIn("legacy_adjudication_registry_sha256", WORKFLOW)
         self.assertNotIn("strategy:\n      matrix:", WORKFLOW)
 
     def test_verifies_live_main_is_still_protected(self) -> None:
