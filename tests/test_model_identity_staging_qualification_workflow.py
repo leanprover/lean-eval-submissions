@@ -41,6 +41,21 @@ class ModelIdentityStagingQualificationWorkflowTests(unittest.TestCase):
         self.assertIn('test "$GITHUB_REF" = "refs/heads/main"', WORKFLOW)
         self.assertIn('test "$GITHUB_SHA" = "$EXPECTED_COMMIT"', WORKFLOW)
 
+    def test_all_fixture_identity_inputs_are_distinct_before_secrets(self) -> None:
+        authorize = WORKFLOW.split("  qualify-and-restore:", maxsplit=1)[0]
+        for field in ("OWNER_LOGIN", "CROSS_OWNER_LOGIN", "MAINTAINER_LOGIN"):
+            self.assertIn(f"          {field}:", authorize)
+            self.assertRegex(authorize, rf'\[\[ "\${field}" =~ \^\[a-z0-9\]')
+        for left, right in (
+            ("OWNER", "CROSS_OWNER"),
+            ("OWNER", "MAINTAINER"),
+            ("CROSS_OWNER", "MAINTAINER"),
+        ):
+            self.assertIn(
+                f'test "${left}_GITHUB_ID" != "${right}_GITHUB_ID"', authorize
+            )
+            self.assertIn(f'test "${left}_LOGIN" != "${right}_LOGIN"', authorize)
+
     def test_secrets_are_only_on_authored_controller_steps_after_checkout(self) -> None:
         secrets = {
             "MODEL_IDENTITY_AGENT_SESSION",

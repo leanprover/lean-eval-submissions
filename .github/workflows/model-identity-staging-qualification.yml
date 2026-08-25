@@ -74,8 +74,11 @@ jobs:
           INITIAL_STATE_COMMIT: ${{ inputs.initial_state_commit }}
           INITIAL_STATE_TREE: ${{ inputs.initial_state_tree }}
           OWNER_GITHUB_ID: ${{ inputs.owner_github_id }}
+          OWNER_LOGIN: ${{ inputs.owner_login }}
           CROSS_OWNER_GITHUB_ID: ${{ inputs.cross_owner_github_id }}
+          CROSS_OWNER_LOGIN: ${{ inputs.cross_owner_login }}
           MAINTAINER_GITHUB_ID: ${{ inputs.maintainer_github_id }}
+          MAINTAINER_LOGIN: ${{ inputs.maintainer_login }}
           TRIGGERING_ACTOR: ${{ github.triggering_actor }}
           ACTOR_ID: ${{ github.actor_id }}
         run: |
@@ -94,7 +97,15 @@ jobs:
           [[ "$OWNER_GITHUB_ID" =~ ^[1-9][0-9]{0,19}$ ]]
           [[ "$CROSS_OWNER_GITHUB_ID" =~ ^[1-9][0-9]{0,19}$ ]]
           [[ "$MAINTAINER_GITHUB_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          [[ "$OWNER_LOGIN" =~ ^[a-z0-9]([a-z0-9-]{0,37}[a-z0-9])?$ ]]
+          [[ "$CROSS_OWNER_LOGIN" =~ ^[a-z0-9]([a-z0-9-]{0,37}[a-z0-9])?$ ]]
+          [[ "$MAINTAINER_LOGIN" =~ ^[a-z0-9]([a-z0-9-]{0,37}[a-z0-9])?$ ]]
           test "$OWNER_GITHUB_ID" != "$CROSS_OWNER_GITHUB_ID"
+          test "$OWNER_GITHUB_ID" != "$MAINTAINER_GITHUB_ID"
+          test "$CROSS_OWNER_GITHUB_ID" != "$MAINTAINER_GITHUB_ID"
+          test "$OWNER_LOGIN" != "$CROSS_OWNER_LOGIN"
+          test "$OWNER_LOGIN" != "$MAINTAINER_LOGIN"
+          test "$CROSS_OWNER_LOGIN" != "$MAINTAINER_LOGIN"
           test "$CONFIRM" = "QUALIFY_AND_RESTORE_MODEL_IDENTITY_STAGING"
           echo "commit=$EXPECTED_COMMIT" >> "$GITHUB_OUTPUT"
 
