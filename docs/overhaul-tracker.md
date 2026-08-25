@@ -168,6 +168,14 @@ the already implemented owner status, metadata, and publication routes.
       retained every impossible source gate; follow-up canary `32815898527`
       passed. Live health binds both intake Workers to `029b69ce` with intake
       and every result/model owner or maintainer API disabled.
+- [x] Repin the disabled Worker coherently to reviewed production State
+      `b0a30e3a` (`lean-eval-submissions#1383`, merge `0d52fb66`) and complete
+      protected rollout `32831767076`. Exact staging deployment and smoke,
+      promotion canary, provisional disabled production deployment, disabled
+      replay/container rollout, broker verification, and final protected-State
+      verification all passed. Every intake lease and enablement step was
+      skipped. Credential-free readiness run `32832326810` then passed and
+      closed monitor incident `#1310`.
 - [ ] Implement the persistent model-identity qualification harness, require
       protected-environment reviewers with self-review prevention, provision
       the five separately scoped ephemeral credentials, prove quiescence and
@@ -365,6 +373,11 @@ the already implemented owner status, metadata, and publication routes.
       are separate phases: distinct create-only benchmark image builds may run
       in parallel, while every deployment plus its two probes stays serialized
       through the single isolated replay-disabled qualification Worker.
+      The controlled qualification batch has completed at least 13 of 29
+      entries. Exact isolated qualification run `32832967763` passed deployment
+      and both probes for the next selected entry; its separate authority
+      profile is not counted here. This records progress only, not completion
+      of the matrix or authorization to execute the corpus.
       Activation
       remains fail-closed on `legacy_public_result_replay_authority_v1` because
       current State replay materialization admits only modern
@@ -477,6 +490,12 @@ the already implemented owner status, metadata, and publication routes.
       dry-run pushes while `PUBLICATION_ENABLED` remained absent. This proves
       the current keys reach receive-pack, not a real ref update, audit read,
       AWS unwrap, decrypt, reconstruction, or publication.
+- [x] Merge the hardened credential boundary and exact reconstruction checks
+      as `lean-eval-releases#18`, current main `90dadc87`. Post-merge run
+      `32832191302` passed all 118 release-tooling tests, exact pinned-State
+      integration, and the intentionally publication-disabled job. This did
+      not update live AWS trust, assume an AWS role, unwrap an archive, mutate
+      State, or publish a release.
 - [ ] Pass the credentialed staging release smoke after the live AWS OIDC trust
       update. Runs `32617539355` and `32624640050` both failed at STS role
       assumption before Lambda invocation or decrypt. Keep publication disabled

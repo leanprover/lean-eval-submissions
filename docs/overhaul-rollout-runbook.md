@@ -27,14 +27,15 @@ primary checkout is not the integration workspace.
 | `lean-eval-generator` | `77373a539b31f8f304c852f288d7d8469cceebff` on `main`; fixes `#1` / `#2` and synchronization `#3` are merged and green; merged LeanEval consumer `#553` pins this exact commit and removes the embedded core |
 | production State | `b0a30e3a64aa5c05660040405b32135dea4b7f1d` on private protected `main`; hardened historical-public and historical-private validation, reviewed unavailability disposition, release-status v2, permanent effective-result reservation, and reverse-impact contracts are merged, and the graph still contains only `system.initialized`, with no accepted submission, reservation, or due release work |
 | staging State | reviewed portable contract `9fc7c431a92c678554c65ebac68d3fddf4990d29`; its README/docs/schema/scripts roots are byte-bound independently from production and include the same reverse-impact semantics |
-| `lean-eval-releases` | `dfd866f1dc5c9bd9f63dabdc0d078f572d7f357b` on `main`; the deterministic controller, source-free recovery, State-bound removal planning, OIDC trust-only and Git credential preflights, and offline removal qualification are merged; credentialed staging unwrap and publication remain disabled |
+| `lean-eval-releases` | `90dadc872d624b8e6d171caf439313d185fc3e7f` on `main`; the deterministic controller, source-free recovery, State-bound removal planning, OIDC trust-only and Git credential preflights, offline removal qualification, and credential-boundary hardening are merged. Post-merge run `32832191302` passed validation, exact pinned-State integration, and the publication-disabled job; credentialed staging unwrap and publication remain disabled |
 | catalog, generator consumer, software verification | v1 freeze merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; terminology rule merged in `#554`; standalone-generator consumer merged in `#553`; current main `b91d4757aa0d7776c02540c9089df54fa0d0658a` |
-| results schema version 2, intake server, replay contracts | current main `029b69ce6852fd9a0ee6e9f33aa7adb58474887f` includes the schema-version-3 per-submission archive lane, accepted lifecycle, private replay controller, hardened historical-private contract, complete dark result/model identity producer, and inert model-identity staging qualification/recovery scaffold. Protected rollout `32815495847` promoted the immutable dispatch ref, deployed staging, passed its canary, and deployed production; follow-up canary `32815898527` passed. Live health binds both intake Workers to that exact commit with intake and every result/model owner or maintainer API disabled |
+| results schema version 2, intake server, replay contracts | current main `0d52fb663d6fe09ae56caf5b007a12e2c5e2c5b5` includes the schema-version-3 per-submission archive lane, accepted lifecycle, private replay controller, hardened historical-private contract, complete dark result/model identity producer, inert model-identity staging scaffold, and exact production-State `b0a30e3a` repin. Protected rollout `32831767076` promoted the immutable dispatch ref, deployed and smoke-tested staging, passed its canary, then deployed production with intake and replay disabled and every lease/enablement step skipped. Readiness run `32832326810` passed and closed monitor incident `#1310` |
+| historical public image qualification | at least 13 of the 29-entry controlled batch are complete. Exact isolated run `32832967763` passed deployment and both probes for the next selected entry; its separate authority-profile preparation is not counted yet. The full matrix and corpus remain incomplete and unexecuted |
 | AWS archive-key custody | dedicated account `lean-eval` (`161072922960`) and isolated stacks are provisioned; accepted-archive staging run `32618166048` passed. Release OIDC template correction is merged but the live stacks still require an authenticated operator update: release staging runs `32617539355` and `32624640050` failed at STS before Lambda or decrypt. Production intake archive/replay roles remain disconnected |
 | lifecycle-aware leaderboard | preview foundation merged as `lean-eval-leaderboard#69`; UI terminology merged in `#73`; deeper schema terminology merged in `#74`; cutover `#72` is merged and live at `https://lean-lang.org/eval/`, with `/legacy/` retained and read-only State deploy key `160968617` provisioned; owner-scoped State v4 model-identity consumption merged as `#75` (`89be802f`) after exact-head run `32741897578`, and production Pages run `32747172862` deployed it successfully |
 
 The private broker, replay, and intake Workers are deployed in staging and
-production from exact commit `029b69ce6852fd9a0ee6e9f33aa7adb58474887f`.
+production from exact commit `0d52fb663d6fe09ae56caf5b007a12e2c5e2c5b5`.
 Deployment, OAuth,
 readiness, authentication, State-writer, and broker App secrets are installed.
 Both State-writer tokens are organization-approved and preflighted, and both
@@ -428,6 +429,18 @@ reported exact commit `029b69ce`, ordinary intake disabled, every result/model
 owner and maintainer API disabled, the tracked 400-subrequest limit, and the
 promotion canary effective only in staging. The impossible workflow source ref
 remains unchanged, so this rollout did not execute or authorize qualification.
+
+PR `#1383` subsequently repinned the Worker to protected production State
+`b0a30e3a64aa5c05660040405b32135dea4b7f1d` and merged as
+`0d52fb663d6fe09ae56caf5b007a12e2c5e2c5b5`. Protected rollout `32831767076`
+deployed and smoke-tested that exact commit in staging, passed the promotion
+canary, and deployed production provisionally with intake and replay disabled.
+Every intake-lease and durable-enablement step was skipped, and finalization
+reverified the protected State and disabled health. Credential-free readiness
+run `32832326810` then passed and closed monitor incident `#1310`. The
+persistent 14-proof model-identity harness is still incomplete and exists only
+as unmerged local work; neither rollout executed it or authorized a
+model-identity State write.
 
 This gate closed on 2026-08-25 against disabled deployed commit
 `d34aab279dd99380530b9d77c3aa199559849209`. Retry `32792905120` started at
