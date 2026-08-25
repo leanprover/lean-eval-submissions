@@ -41,6 +41,12 @@ qualified image digest. The dedicated Worker route is independently gated by
 the generated historical executor. A terminal State event requires the exact
 request/verdict pair and `destruction: confirmed`.
 
+The Worker start is idempotent and returns a running receipt. The workflow then
+polls a source-free status request carrying the same complete execution
+identity, minting a fresh short-lived OIDC token for each bounded poll. Exact
+terminal receipts are replayable, while command-RPC and sandbox-destruction
+failures remain retryable until the executor can durably confirm destruction.
+
 The only remaining typed planning blocker is the reviewed three-attempt limit.
 An exhausted task remains in State and cannot starve a later eligible task.
 

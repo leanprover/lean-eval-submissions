@@ -86,6 +86,19 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertIn("timeout-minutes: 360", WORKFLOW)
         self.assertNotIn("actions/upload-artifact", WORKFLOW)
 
+    def test_executor_uses_idempotent_start_and_status_polling(self) -> None:
+        executor = WORKFLOW.split(
+            "Invoke the exact executor without Cloudflare or State write authority", 1
+        )[1].split("Append the exact reported historical terminal outcome", 1)[0]
+        self.assertIn("executor-status-request.json", executor)
+        self.assertIn('test "$start_status" = 202', executor)
+        self.assertIn('$HISTORICAL_EXECUTOR_URL/status', executor)
+        self.assertIn('if [ "$poll_status" = 202 ]', executor)
+        self.assertIn("sandbox_destroy_failed", executor)
+        self.assertIn("mint_oidc", executor)
+        self.assertIn("HISTORICAL_REPLAY_JOB_STARTED_EPOCH", WORKFLOW)
+        self.assertNotIn("--max-time 20400", executor)
+
     def test_actions_are_commit_pinned(self) -> None:
         pins = re.findall(r"uses:\s*[^\s@]+@([^\s#]+)", WORKFLOW)
         self.assertTrue(pins)

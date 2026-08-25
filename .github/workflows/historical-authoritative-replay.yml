@@ -39,6 +39,7 @@ jobs:
           branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
             --jq '[.commit.sha, .protected] | @tsv')
           test "$branch" = "$GITHUB_SHA"$'\ttrue'
+          echo "HISTORICAL_REPLAY_JOB_STARTED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -277,6 +278,11 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
+          cleanup() {
+            unset historical_oidc_token
+            rm -f "$RUNNER_TEMP/historical-oidc-response.json"
+          }
+          trap cleanup EXIT
           test -z "${STATE_WRITE_KEY:-}"
           test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -z "${CLOUDFLARE_API_TOKEN:-}"
@@ -286,20 +292,95 @@ jobs:
             --source-archive "$RUNNER_TEMP/historical-public-source.tar.gz" \
             --repository-root . --runner-nonce "$(openssl rand -hex 32)" \
             --output "$RUNNER_TEMP/executor-request.json"
+          jq '{
+            schema_version,
+            runner_nonce,
+            replay_task_id,
+            attempt,
+            handoff_sha256,
+            source_archive_sha256,
+            execution_profile_digest,
+            measurement_config_digest,
+            vm_image_digest
+          }' "$RUNNER_TEMP/executor-request.json" > "$RUNNER_TEMP/executor-status-request.json"
           echo runner_lost > "$RUNNER_TEMP/failure-reason"
-          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --max-time 30 \
-            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-public-replay-production" \
-            --output "$RUNNER_TEMP/oidc.json"
-          token=$(jq -er .value "$RUNNER_TEMP/oidc.json")
-          rm -f "$RUNNER_TEMP/oidc.json"
-          status=$(curl --proto '=https' --tlsv1.2 --silent --show-error --max-time 20400 \
-            --header "Authorization: Bearer $token" --header 'Content-Type: application/json' \
-            --request POST --data-binary "@$RUNNER_TEMP/executor-request.json" \
-            "$HISTORICAL_EXECUTOR_URL" --output "$RUNNER_TEMP/executor-response.json" \
+          mint_oidc() {
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --max-time 15 \
+              --retry 3 \
+              --retry-max-time 60 \
+              --retry-all-errors \
+              --retry-delay 2 \
+              --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-public-replay-production" \
+              --output "$RUNNER_TEMP/historical-oidc-response.json"
+            historical_oidc_token=$(jq -er .value "$RUNNER_TEMP/historical-oidc-response.json")
+            test -n "$historical_oidc_token"
+            rm "$RUNNER_TEMP/historical-oidc-response.json"
+          }
+          mint_oidc
+          start_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+            --max-time 300 \
+            --retry 3 \
+            --retry-max-time 300 \
+            --retry-all-errors \
+            --retry-delay 2 \
+            --header "Authorization: Bearer $historical_oidc_token" \
+            --header 'Content-Type: application/json' \
+            --request POST \
+            --data-binary "@$RUNNER_TEMP/executor-request.json" \
+            "$HISTORICAL_EXECUTOR_URL" \
+            --output "$RUNNER_TEMP/executor-start-response.json" \
             --write-out '%{http_code}')
-          unset token
-          test "$status" = 200
+          unset historical_oidc_token
+          test "$start_status" = 202
+          jq -e --arg task "$(jq -r .replay_task_id "$RUNNER_TEMP/executor-status-request.json")" \
+            --argjson attempt "$(jq -r .attempt "$RUNNER_TEMP/executor-status-request.json")" \
+            '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, status: "running"}' \
+            "$RUNNER_TEMP/executor-start-response.json" >/dev/null
+          rm -f "$RUNNER_TEMP/executor-start-response.json"
+
+          process_deadline=$(( $(date +%s) + 20100 ))
+          job_deadline=$(( HISTORICAL_REPLAY_JOB_STARTED_EPOCH + 20880 ))
+          deadline=$process_deadline
+          if [ "$job_deadline" -lt "$deadline" ]; then deadline=$job_deadline; fi
+          while [ "$(date +%s)" -lt "$deadline" ]; do
+            sleep 15
+            mint_oidc
+            poll_status=000
+            if poll_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+              --max-time 60 \
+              --header "Authorization: Bearer $historical_oidc_token" \
+              --header 'Content-Type: application/json' \
+              --request POST \
+              --data-binary "@$RUNNER_TEMP/executor-status-request.json" \
+              "$HISTORICAL_EXECUTOR_URL/status" \
+              --output "$RUNNER_TEMP/executor-poll-response.json" \
+              --write-out '%{http_code}'); then
+              unset historical_oidc_token
+              if [ "$poll_status" = 202 ]; then
+                jq -e --arg task "$(jq -r .replay_task_id "$RUNNER_TEMP/executor-status-request.json")" \
+                  --argjson attempt "$(jq -r .attempt "$RUNNER_TEMP/executor-status-request.json")" \
+                  '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, status: "running"}' \
+                  "$RUNNER_TEMP/executor-poll-response.json" >/dev/null
+                continue
+              fi
+              if [ "$poll_status" = 500 ] && jq -e \
+                '.error == "executor_failed" and
+                 (.reason == "command_rpc_failed" or .reason == "sandbox_destroy_failed") and
+                 (keys | sort) == ["error", "reason"]' \
+                "$RUNNER_TEMP/executor-poll-response.json" >/dev/null; then
+                rm "$RUNNER_TEMP/executor-poll-response.json"
+                continue
+              fi
+              mv "$RUNNER_TEMP/executor-poll-response.json" "$RUNNER_TEMP/executor-response.json"
+              test "$poll_status" = 200
+              break
+            fi
+            unset historical_oidc_token
+            rm -f "$RUNNER_TEMP/executor-poll-response.json"
+          done
+          test -f "$RUNNER_TEMP/executor-response.json"
           echo verdict_invalid > "$RUNNER_TEMP/failure-reason"
           python scripts/historical_replay_controller.py terminal-event \
             --plan "$RUNNER_TEMP/historical-replay-plan.json" \
@@ -308,6 +389,8 @@ jobs:
             --verdict "$RUNNER_TEMP/executor-response.json" \
             --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
             --output "$RUNNER_TEMP/terminal-event.json"
+          cleanup
+          trap - EXIT
           echo 'ready=true' >> "$GITHUB_OUTPUT"
 
       - name: Append the exact reported historical terminal outcome
