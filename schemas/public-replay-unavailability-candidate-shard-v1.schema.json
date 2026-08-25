@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/public-replay-unavailability-candidate-shard-v1.schema.json",
+  "title": "Historical public replay unavailability candidate shard v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "candidate_identity_sha256", "shard_index",
+    "shard_count", "request_count", "result_count", "first_request_id",
+    "last_request_id", "candidates"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_public_replay_unavailability_candidate_shard"},
+    "candidate_identity_sha256": {"$ref": "#/$defs/digest"},
+    "shard_index": {"type": "integer", "minimum": 0, "maximum": 9999},
+    "shard_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "request_count": {"type": "integer", "minimum": 1, "maximum": 32},
+    "result_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "first_request_id": {"$ref": "#/$defs/request_id"},
+    "last_request_id": {"$ref": "#/$defs/request_id"},
+    "candidates": {
+      "type": "array", "minItems": 1, "maxItems": 32,
+      "items": {"$ref": "#/$defs/candidate"}
+    }
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "request_id": {"type": "string", "pattern": "^prr_[0-9a-f]{64}$"},
+    "result_id": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "repository", "commit", "visibility"],
+      "properties": {
+        "kind": {"enum": ["github_repo", "gist"]},
+        "repository": {"type": "string", "minLength": 3, "maxLength": 256},
+        "commit": {"$ref": "#/$defs/commit"},
+        "visibility": {"const": "public"}
+      }
+    },
+    "benchmark": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repository", "commit"],
+      "properties": {
+        "repository": {"const": "leanprover/lean-eval"},
+        "commit": {"$ref": "#/$defs/commit"}
+      }
+    },
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "result_id", "owner_login", "problem_id", "statement_revision",
+        "results_repository", "results_commit", "results_path",
+        "result_file_sha256", "result_tree_digest"
+      ],
+      "properties": {
+        "result_id": {"$ref": "#/$defs/result_id"},
+        "owner_login": {"type": "string", "minLength": 1, "maxLength": 39},
+        "problem_id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "statement_revision": {"type": "integer", "minimum": 1},
+        "results_repository": {"const": "leanprover/lean-eval-submissions"},
+        "results_commit": {"$ref": "#/$defs/commit"},
+        "results_path": {"type": "string", "pattern": "^results/[^/]+\\.json$"},
+        "result_file_sha256": {"$ref": "#/$defs/digest"},
+        "result_tree_digest": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "issue": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repository", "number", "identity_sha256"],
+      "properties": {
+        "repository": {
+          "enum": ["leanprover/lean-eval", "leanprover/lean-eval-submissions"]
+        },
+        "number": {"type": "integer", "minimum": 1},
+        "identity_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "historical_evaluation": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "workflow_contract", "workflow_repository_commit",
+        "workflow_definition_sha256", "workflow_run_id",
+        "workflow_run_attempt", "workflow_run_identity_sha256"
+      ],
+      "properties": {
+        "workflow_contract": {"type": "string", "minLength": 1, "maxLength": 128},
+        "workflow_repository_commit": {"$ref": "#/$defs/commit"},
+        "workflow_definition_sha256": {"$ref": "#/$defs/digest"},
+        "workflow_run_id": {"type": "integer", "minimum": 1},
+        "workflow_run_attempt": {"type": "integer", "minimum": 1},
+        "workflow_run_identity_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "request_id", "historical_accepted_at", "owner_login", "declared_model",
+        "issue", "historical_evaluation", "source", "benchmark",
+        "github_resolution_sha256", "issue_candidates", "results",
+        "proposed_reason_code",
+        "proposed_rationale_code", "review_status", "candidate_sha256"
+      ],
+      "properties": {
+        "request_id": {"$ref": "#/$defs/request_id"},
+        "historical_accepted_at": {"type": "string", "format": "date-time"},
+        "owner_login": {"type": "string", "minLength": 1, "maxLength": 39},
+        "declared_model": {"type": "string", "minLength": 1, "maxLength": 256},
+        "issue": {"$ref": "#/$defs/issue"},
+        "historical_evaluation": {"$ref": "#/$defs/historical_evaluation"},
+        "source": {"$ref": "#/$defs/source"},
+        "benchmark": {"$ref": "#/$defs/benchmark"},
+        "github_resolution_sha256": {"$ref": "#/$defs/digest"},
+        "issue_candidates": {
+          "type": "array", "minItems": 2, "maxItems": 2,
+          "prefixItems": [
+            {
+              "allOf": [
+                {"$ref": "#/$defs/issue_candidate"},
+                {"properties": {"repository": {"const": "leanprover/lean-eval"}}}
+              ]
+            },
+            {
+              "allOf": [
+                {"$ref": "#/$defs/issue_candidate"},
+                {
+                  "properties": {
+                    "repository": {"const": "leanprover/lean-eval-submissions"}
+                  }
+                }
+              ]
+            }
+          ],
+          "items": false
+        },
+        "results": {
+          "type": "array", "minItems": 1, "maxItems": 10000,
+          "items": {"$ref": "#/$defs/result"}
+        },
+        "proposed_reason_code": {"const": "source_ref_permanently_unavailable"},
+        "proposed_rationale_code": {
+          "const": "accepted_immutable_source_ref_unavailable_without_archive"
+        },
+        "review_status": {"const": "pending"},
+        "candidate_sha256": {"$ref": "#/$defs/digest"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "issue": {
+                "properties": {
+                  "repository": {"const": "leanprover/lean-eval"}
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "issue_candidates": {
+                "prefixItems": [
+                  {"properties": {"status": {"const": "matched_source_unavailable"}}},
+                  {"properties": {"status": {"$ref": "#/$defs/non_selected_status"}}}
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "issue_candidates": {
+                "prefixItems": [
+                  {"properties": {"status": {"$ref": "#/$defs/non_selected_status"}}},
+                  {"properties": {"status": {"const": "matched_source_unavailable"}}}
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "non_selected_status": {
+      "enum": [
+        "issue_not_found", "issue_invalid", "model_mismatch", "owner_mismatch",
+        "source_mismatch", "acceptance_time_mismatch", "workflow_run_missing",
+        "workflow_run_ambiguous", "workflow_contract_mismatch",
+        "result_comment_missing", "result_comment_ambiguous",
+        "result_comment_projection_too_large"
+      ]
+    },
+    "issue_candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repository", "status"],
+      "properties": {
+        "repository": {
+          "enum": ["leanprover/lean-eval", "leanprover/lean-eval-submissions"]
+        },
+        "status": {
+          "enum": [
+            "issue_not_found", "issue_invalid", "model_mismatch", "owner_mismatch",
+            "source_mismatch", "acceptance_time_mismatch", "workflow_run_missing",
+            "workflow_run_ambiguous", "workflow_contract_mismatch",
+            "result_comment_missing", "result_comment_ambiguous",
+            "result_comment_projection_too_large", "matched_source_unavailable"
+          ]
+        }
+      }
+    }
+  }
+}

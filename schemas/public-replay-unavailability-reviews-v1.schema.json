@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/public-replay-unavailability-reviews-v1.schema.json",
+  "title": "Historical public replay unavailability reviews v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "kind", "candidate_manifest_sha256", "reviews"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_public_replay_unavailability_reviews"},
+    "candidate_manifest_sha256": {"$ref": "#/$defs/digest"},
+    "reviews": {
+      "type": "array", "minItems": 1, "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/review"}
+    }
+  },
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "review": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "request_id", "candidate_sha256", "decision", "reason_code",
+        "rationale_code"
+      ],
+      "properties": {
+        "request_id": {"type": "string", "pattern": "^prr_[0-9a-f]{64}$"},
+        "candidate_sha256": {"$ref": "#/$defs/digest"},
+        "decision": {"enum": ["permanently_unavailable", "defer"]},
+        "reason_code": {
+          "type": ["string", "null"],
+          "enum": ["source_ref_permanently_unavailable", null]
+        },
+        "rationale_code": {
+          "type": ["string", "null"],
+          "enum": ["accepted_immutable_source_ref_unavailable_without_archive", null]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"decision": {"const": "defer"}}},
+          "then": {
+            "properties": {
+              "reason_code": {"const": null},
+              "rationale_code": {"const": null}
+            }
+          },
+          "else": {
+            "properties": {
+              "reason_code": {"const": "source_ref_permanently_unavailable"},
+              "rationale_code": {
+                "const": "accepted_immutable_source_ref_unavailable_without_archive"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

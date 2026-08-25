@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval-submissions/schemas/public-replay-unavailability-dispositions-v1.schema.json",
+  "title": "Historical public replay unavailability dispositions v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "candidate_manifest_sha256",
+    "candidate_identity_sha256", "review_registry_sha256",
+    "candidate_request_count", "candidate_result_count", "request_count",
+    "result_count", "deferred_request_count", "deferred_result_count",
+    "review_status", "activation_status", "claims", "dispositions"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_public_replay_unavailability_dispositions"},
+    "candidate_manifest_sha256": {"$ref": "#/$defs/digest"},
+    "candidate_identity_sha256": {"$ref": "#/$defs/digest"},
+    "review_registry_sha256": {"$ref": "#/$defs/digest"},
+    "candidate_request_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "candidate_result_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "request_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "result_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "deferred_request_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "deferred_result_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "review_status": {"enum": ["complete", "incomplete"]},
+    "activation_status": {"const": "blocked_on_state_contract_and_append_authorization"},
+    "claims": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "state_append_authorized", "replay_executed",
+        "unavailability_review_complete", "corpus_complete"
+      ],
+      "properties": {
+        "state_append_authorized": {"const": false},
+        "replay_executed": {"const": false},
+        "unavailability_review_complete": {"type": "boolean"},
+        "corpus_complete": {"const": false}
+      }
+    },
+    "dispositions": {
+      "type": "array", "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/disposition"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"review_status": {"const": "complete"}}},
+      "then": {
+        "properties": {
+          "deferred_request_count": {"const": 0},
+          "deferred_result_count": {"const": 0},
+          "claims": {
+            "properties": {"unavailability_review_complete": {"const": true}}
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "deferred_request_count": {"type": "integer", "minimum": 1},
+          "deferred_result_count": {"type": "integer", "minimum": 1},
+          "claims": {
+            "properties": {"unavailability_review_complete": {"const": false}}
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "result_id": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
+    "disposition": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "request_id", "candidate_sha256", "reason_code", "rationale_code",
+        "result_ids"
+      ],
+      "properties": {
+        "request_id": {"type": "string", "pattern": "^prr_[0-9a-f]{64}$"},
+        "candidate_sha256": {"$ref": "#/$defs/digest"},
+        "reason_code": {"const": "source_ref_permanently_unavailable"},
+        "rationale_code": {
+          "const": "accepted_immutable_source_ref_unavailable_without_archive"
+        },
+        "result_ids": {
+          "type": "array", "minItems": 1, "maxItems": 10000,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/result_id"}
+        }
+      }
+    }
+  }
+}
