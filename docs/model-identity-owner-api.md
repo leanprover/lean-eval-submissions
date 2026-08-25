@@ -64,7 +64,7 @@ source view to its current terminal component instead of assuming the immediate
 target remains terminal. Health records `atomic_reverse_impact_v1`.
 
 Before any model write, production is ancestry- and exact-root-tree-bound to
-protected State `6799522f7fe57263de4a66499e52ce4bfda69baa`; staging is bound
+protected State `b0a30e3a64aa5c05660040405b32135dea4b7f1d`; staging is bound
 to portable mirror `9fc7c431a92c678554c65ebac68d3fddf4990d29`. The proof fixes the
 complete README, docs, schema, and scripts entries that define and validate the
 inductive reverse-impact contract. Each unseen State head is reproved; malformed

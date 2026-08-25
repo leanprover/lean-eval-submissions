@@ -25,7 +25,7 @@ primary checkout is not the integration workspace.
 | Repository / lane | Published commit or pull request |
 | --- | --- |
 | `lean-eval-generator` | `77373a539b31f8f304c852f288d7d8469cceebff` on `main`; fixes `#1` / `#2` and synchronization `#3` are merged and green; merged LeanEval consumer `#553` pins this exact commit and removes the embedded core |
-| production State | `6799522f7fe57263de4a66499e52ce4bfda69baa` on private protected `main`; hardened historical-public and historical-private validation, release-status v2, permanent effective-result reservation, and reverse-impact contracts are merged, and the graph still contains only `system.initialized`, with no accepted submission, reservation, or due release work |
+| production State | `b0a30e3a64aa5c05660040405b32135dea4b7f1d` on private protected `main`; hardened historical-public and historical-private validation, reviewed unavailability disposition, release-status v2, permanent effective-result reservation, and reverse-impact contracts are merged, and the graph still contains only `system.initialized`, with no accepted submission, reservation, or due release work |
 | staging State | reviewed portable contract `9fc7c431a92c678554c65ebac68d3fddf4990d29`; its README/docs/schema/scripts roots are byte-bound independently from production and include the same reverse-impact semantics |
 | `lean-eval-releases` | `57ab36341ccf653b45366c32d4472b9ee670890b` on `main`; source-free recovery `#8`, State-bound removal planning `#9`, and the deterministic automatic controller `#10` are merged; exact-main validation `32719159678` and publication-disabled Git credential preflight `32723471497` passed; credentialed staging unwrap and publication remain disabled |
 | catalog, generator consumer, software verification | v1 freeze merged as `lean-eval#540`; final 128-member v1 set merged in `#548`; terminology rule merged in `#554`; standalone-generator consumer merged in `#553`; current main `b91d4757aa0d7776c02540c9089df54fa0d0658a` |
@@ -365,7 +365,7 @@ one closed reservation under `views/effective-result-identities/`. Once a tuple
 belongs to a stable result it is never deleted or rebound to another result;
 the same result may revisit it.
 
-Production contract `6799522f7fe57263de4a66499e52ce4bfda69baa` validates the
+Production contract `b0a30e3a64aa5c05660040405b32135dea4b7f1d` validates the
 empty production authority/reservation set. Staging contract
 `9fc7c431a92c678554c65ebac68d3fddf4990d29` materializes the two existing
 base-tuple reservations and passed exact-contract validation run `32772193134`.
@@ -400,7 +400,7 @@ insufficient.
 The separately gated model-identity request, decision, alias, rename, and
 consolidation lanes have a conservative 400-request bound at the tracked
 400-request limit. Consolidation uses the hard-32-view protected
-reverse-impact components at production contract `6799522f` and staging mirror
+reverse-impact components at production contract `b0a30e3a` and staging mirror
 `9fc7c431`: every write snapshot proves the branch is protected at that exact
 head, every source and target member and causal predecessor is read and its
 timestamp plus UUID append-authority ordering is validated, every affected
