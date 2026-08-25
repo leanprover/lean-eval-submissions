@@ -471,6 +471,21 @@ qualification secret, Durable Object, service binding, and private-service
 deployment from the ordinary Worker rollout; arming must introduce all of them
 together only after the live prerequisites above have passed.
 
+The corrected ordinary rollout then completed coherently in run
+`32843022949` at `3ae8e6f190c6b0709d0864eed203b6d945580179`; post-merge CI
+`32843022931` also passed. Staging deployment
+`20fda098-6586-4137-98be-5c6a92e2b3f8` made version
+`7fdb4062-72ec-4ea8-b181-f4e7b88b5a1c` 100% active, its promotion canary
+passed, and production deployment `2a70ad71-b156-407c-b652-642e8fa03c09`
+made version `c7c8c7b0-26a5-46bd-a458-9cd380940836` 100% active. Direct
+health in both environments reported that exact commit, configured and
+effective intake false, and both public model-identity gates false. The active
+binding inventories contained no qualification secret, service, or Durable
+Object binding. Direct Cloudflare deployment reads returned `10007` (Worker
+does not exist) for both private qualification services, so they also have no
+route or preview deployment. This recovery deployed no qualification runtime
+capability and did not execute or arm the harness.
+
 This gate closed on 2026-08-25 against disabled deployed commit
 `d34aab279dd99380530b9d77c3aa199559849209`. Retry `32792905120` started at
 State `2436d631a005b7f2d83e5385c4041c7f05259e0f`, durably applied the repair at
