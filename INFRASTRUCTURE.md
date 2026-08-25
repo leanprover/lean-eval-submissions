@@ -439,8 +439,9 @@ promotes commits that change the running Worker, its directly dispatched
 workflows, or the staging-only intake and replay workflows whose preconditions
 are bound to the live staging commit. The deployment-free
 `promote-workflow-dispatch-ref.yml` path covers tag-consuming operational
-workflows and the source-only public-evidence resolver they run; it waits for
-exact protected-main CI and cannot invoke Wrangler or a deployment. Both
+workflows, the source-only public-evidence resolver they run, and Results-only
+commits that must become exact historical-inventory cutoffs; it waits for exact
+protected-main CI and cannot invoke Wrangler or a deployment. Both
 minters enter the reviewer-gated
 `submission-dispatch-promotion` environment and use only a job-scoped
 `GITHUB_TOKEN` with `contents: write` plus read-only Actions access for the

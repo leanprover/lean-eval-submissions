@@ -145,7 +145,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "scripts/build_public_replay_toolchain_registry.py",
             "scripts/classify_historical_private_archives.py",
             "scripts/historical_replay_controller.py",
+            "scripts/inventory_historical_replay.py",
             "scripts/prepare_public_replay_plan.py",
+            "scripts/reconcile_historical_replay_inventory_delta.py",
             "scripts/resolve_public_replay_github_evidence.py",
             "scripts/validate_historical_replay_inventory_evidence.py",
         }
@@ -276,7 +278,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "build_public_replay_toolchain_registry.py",
             "classify_historical_private_archives.py",
             "historical_replay_controller.py",
+            "inventory_historical_replay.py",
             "prepare_public_replay_plan.py",
+            "reconcile_historical_replay_inventory_delta.py",
             "resolve_public_replay_github_evidence.py",
             "validate_historical_replay_inventory_evidence.py",
         }
@@ -310,6 +314,20 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("branches: [main]", ci_push)
         self.assertNotIn("paths:", ci_push)
         self.assertNotIn("paths-ignore:", ci_push)
+
+    def test_results_only_cutoff_uses_deployment_free_promotion(self) -> None:
+        deploy_pull_request = DEPLOY.split("  pull_request:", 1)[1].split(
+            "  push:", 1
+        )[0]
+        deploy_push = DEPLOY.split("  push:", 1)[1].split(
+            "  workflow_dispatch:", 1
+        )[0]
+        promotion_push = WORKFLOW_PROMOTION.split("  push:", 1)[1].split(
+            "permissions:", 1
+        )[0]
+        self.assertIn("'results/**'", promotion_push)
+        self.assertNotIn("'results/**'", deploy_pull_request)
+        self.assertNotIn("'results/**'", deploy_push)
 
     def test_workflow_only_promotion_is_protected_and_deployment_free(self) -> None:
         self.assertIn("environment: submission-dispatch-promotion", WORKFLOW_PROMOTION)

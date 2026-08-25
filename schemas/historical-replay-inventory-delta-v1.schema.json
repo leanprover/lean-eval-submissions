@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval/schemas/historical-replay-inventory-delta-v1.schema.json",
+  "title": "LeanEval append-only historical replay inventory delta version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "source_repository",
+    "baseline",
+    "current",
+    "delta_counts",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_replay_inventory_delta"},
+    "source_repository": {"const": "leanprover/lean-eval-submissions"},
+    "baseline": {"$ref": "#/$defs/inventory_identity"},
+    "current": {"$ref": "#/$defs/inventory_identity"},
+    "delta_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_count",
+        "public_source_probe_pending",
+        "private_archive_migration_pending"
+      ],
+      "properties": {
+        "result_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "public_source_probe_pending": {"type": "integer", "minimum": 0},
+        "private_archive_migration_pending": {"type": "integer", "minimum": 0}
+      }
+    },
+    "entries": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {"$ref": "historical-replay-inventory-v1.schema.json#/$defs/entry"}
+    }
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "inventory_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_commit",
+        "results_store_sha256",
+        "inventory_sha256",
+        "result_count"
+      ],
+      "properties": {
+        "source_commit": {"$ref": "#/$defs/commit"},
+        "results_store_sha256": {"$ref": "#/$defs/digest"},
+        "inventory_sha256": {"$ref": "#/$defs/digest"},
+        "result_count": {"type": "integer", "minimum": 1, "maximum": 10000}
+      }
+    }
+  }
+}

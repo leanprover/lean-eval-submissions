@@ -347,11 +347,12 @@ changing the name and include condition, and omitting `required_status_checks`.
 
 ### Acceptable consequences of the bypass
 
-- The `record` job's results push to `main` does not need to re-trigger
-  any workflow: the leaderboard redeploy is driven by an explicit
-  `results-advanced` `repository_dispatch`, and `ci.yml` running (or not)
-  on a machine-authored results commit changes nothing — `results/*.json`
-  is not exercised by `ci.yml`.
+- The `record` job's results push to `main` does not drive the leaderboard
+  implicitly: that redeploy is driven by an explicit `results-advanced`
+  `repository_dispatch`. A Results-only push does select unfiltered `ci.yml`
+  and the reviewer-gated, deployment-free immutable-tag promoter so the final
+  accepted-result commit can become an exact historical-inventory cutoff; it
+  does not select the Worker deployment workflow.
 - Anyone who can land a PR that modifies `submission.yml` to push
   arbitrary content to `main` could, after merge, exfiltrate that
   capability. This is the same trust boundary as merging any PR.

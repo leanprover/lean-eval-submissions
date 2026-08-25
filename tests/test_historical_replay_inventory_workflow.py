@@ -100,6 +100,31 @@ class HistoricalReplayInventoryWorkflowTests(unittest.TestCase):
         self.assertTrue(actions)
         self.assertTrue(all(re.fullmatch(r"[0-9a-f]{40}", pin) for pin in actions))
 
+    def test_optional_delta_is_append_only_source_free_and_recomputed(self) -> None:
+        self.assertIn("confirm_append_only_delta:", WORKFLOW)
+        self.assertEqual(
+            WORKFLOW.count(
+                "python scripts/reconcile_historical_replay_inventory_delta.py"
+            ),
+            2,
+        )
+        self.assertIn('cmp "$delta" "$delta_recomputed"', WORKFLOW)
+        self.assertIn(
+            'git merge-base --is-ancestor "$baseline_commit" "$EXPECTED_COMMIT"',
+            WORKFLOW,
+        )
+        self.assertIn(
+            'delta["current"]["result_count"] - delta["baseline"]["result_count"]',
+            WORKFLOW,
+        )
+        self.assertIn(
+            "historical-replay-inventory-delta-${{ inputs.expected_commit }}",
+            WORKFLOW,
+        )
+        self.assertIn("if: inputs.confirm_append_only_delta == true", WORKFLOW)
+        self.assertNotIn("contents: write", WORKFLOW)
+        self.assertNotIn("id-token: write", WORKFLOW)
+
     def test_transient_run_requires_followup_durable_evidence(self) -> None:
         self.assertIn("transient transport, not durable", DOCUMENTATION)
         self.assertIn("run ID and attempt", DOCUMENTATION)
