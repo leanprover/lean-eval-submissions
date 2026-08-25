@@ -159,13 +159,16 @@ the already implemented owner status, metadata, and publication routes.
       routes and State writers using the qualified human identity boundary.
 - [x] Add hostile-input, owner/maintainer authorization, idempotence, causal
       conflict, and public-redaction tests for every amendment flow.
-- [ ] Complete the final staging apply/reject canary for the targeted `eri1_…`
+- [x] Complete the final staging apply/reject canary for the targeted `eri1_…`
       permanent effective-identity reservation contract. The online aggregate
       read is removed; production's empty set and staging's two reservations
       are migrated and validated, and the runtime uses atomic create/confirm
-      semantics. The canary remains deliberately unexecuted in this source-only
-      lane, so the maintainer gate stays false; see the rollout runbook's
-      collision-index gate.
+      semantics. Exact run `32793103590` at deployed commit `d34aab2` advanced
+      staging State from `2436d631` to `cc52d7c2`: the apply candidate is
+      permanently reserved, the reject candidate remains absent, and all four
+      fixed events are present. Intake and both public amendment gates stayed
+      false; the temporary credential was revoked and the one-shot surface is
+      retired. See the rollout runbook's collision-index gate.
 
 ## Cloudflare bootstrap
 

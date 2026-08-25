@@ -8,7 +8,6 @@ for (const name of [
   "GITHUB_STATE_TOKEN",
   "LIFECYCLE_CALLBACK_TOKEN",
   "READINESS_TOKEN",
-  "STAGING_AMENDMENT_CANARY_TOKEN",
 ]) {
   process.env[name] ??= `test-only-${name.toLowerCase()}`;
 }
