@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval/schemas/historical-replay-inventory-evidence-v1.schema.json",
+  "title": "Reviewed historical replay inventory evidence schema version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "kind",
+    "evidence_status",
+    "scope",
+    "workflow_repository",
+    "workflow_path",
+    "workflow_run_id",
+    "workflow_run_attempt",
+    "workflow_event",
+    "workflow_conclusion",
+    "workflow_run_url",
+    "workflow_head_sha",
+    "dispatch_tag",
+    "source_repository",
+    "source_commit",
+    "source_tree",
+    "results_store_sha256",
+    "result_count",
+    "classification_counts",
+    "inventory_path",
+    "inventory_sha256",
+    "inventory_size_bytes",
+    "producer",
+    "transport_artifact",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_replay_inventory_evidence"},
+    "evidence_status": {"const": "closed"},
+    "scope": {"const": "contract_only_inventory"},
+    "workflow_repository": {"const": "leanprover/lean-eval-submissions"},
+    "workflow_path": {"const": ".github/workflows/historical-replay-inventory.yml"},
+    "workflow_run_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "workflow_run_attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "workflow_event": {"const": "workflow_dispatch"},
+    "workflow_conclusion": {"const": "success"},
+    "workflow_run_url": {
+      "type": "string",
+      "pattern": "^https://github\\.com/leanprover/lean-eval-submissions/actions/runs/[1-9][0-9]*$"
+    },
+    "workflow_head_sha": {"$ref": "#/$defs/commit"},
+    "dispatch_tag": {
+      "type": "string",
+      "pattern": "^lean-eval-dispatch/[0-9a-f]{40}$"
+    },
+    "source_repository": {"const": "leanprover/lean-eval-submissions"},
+    "source_commit": {"$ref": "#/$defs/commit"},
+    "source_tree": {"$ref": "#/$defs/commit"},
+    "results_store_sha256": {"$ref": "#/$defs/digest"},
+    "result_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "classification_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "public_source_probe_pending",
+        "private_archive_migration_pending"
+      ],
+      "properties": {
+        "public_source_probe_pending": {"type": "integer", "minimum": 0},
+        "private_archive_migration_pending": {"type": "integer", "minimum": 0}
+      }
+    },
+    "inventory_path": {
+      "type": "string",
+      "pattern": "^evidence/historical-replay/inventories/[0-9a-f]{64}\\.json$"
+    },
+    "inventory_sha256": {"$ref": "#/$defs/digest"},
+    "inventory_size_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 16777216
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow_definition_sha256",
+        "inventory_schema_sha256",
+        "inventory_generator_sha256"
+      ],
+      "properties": {
+        "workflow_definition_sha256": {"$ref": "#/$defs/digest"},
+        "inventory_schema_sha256": {"$ref": "#/$defs/digest"},
+        "inventory_generator_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "transport_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "name",
+        "archive_sha256",
+        "size_in_bytes",
+        "created_at",
+        "expires_at"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "name": {"type": "string", "minLength": 1, "maxLength": 255},
+        "archive_sha256": {"$ref": "#/$defs/digest"},
+        "size_in_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16777216
+        },
+        "created_at": {"$ref": "#/$defs/timestamp"},
+        "expires_at": {"$ref": "#/$defs/timestamp"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replay_executed",
+        "result_replay_qualified",
+        "corpus_replay_qualified",
+        "private_archive_migrated",
+        "publication_authorized"
+      ],
+      "properties": {
+        "replay_executed": {"const": false},
+        "result_replay_qualified": {"const": false},
+        "corpus_replay_qualified": {"const": false},
+        "private_archive_migrated": {"const": false},
+        "publication_authorized": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "timestamp": {
+      "type": "string",
+      "pattern": "^(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}

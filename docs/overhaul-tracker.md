@@ -274,6 +274,13 @@ the already implemented owner status, metadata, and publication routes.
       classifications, but 441 public results still require adjudication or an
       explicit unavailability policy, and all 668 private results still require
       the separately credentialed archive-migration lane.
+      The contract-only cutoff inventory is now complete and durably reviewed:
+      protected run `32790927560`, attempt 1, at immutable source `ae1a9714`
+      reproduced canonical store digest `14e8c868…` and committed exact inventory
+      `bb405fba…`, containing all 1,301 accepted results (633 public-probe
+      pending and 668 private-migration pending). This closes only the inventory
+      handoff; none of those pending classifications is replay qualification or
+      a permanent-unavailability decision.
 - [ ] Enqueue and execute the complete historical replay corpus under exact
       original pins, recording terminal verdicts/statistics or explicit
       unavailability; the isolated staging proofs above do not satisfy this

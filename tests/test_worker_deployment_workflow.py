@@ -113,12 +113,13 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("'!server/*.md'", push)
         self.assertIn("'!server/**/*.md'", push)
 
-    def test_offline_public_evidence_scripts_do_not_redeploy_workers(self) -> None:
+    def test_offline_evidence_scripts_do_not_redeploy_workers(self) -> None:
         pull_request = DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0]
         push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
-        offline_public_evidence = {
+        offline_evidence = {
             "scripts/aggregate_public_replay_github_evidence.py",
             "scripts/resolve_public_replay_github_evidence.py",
+            "scripts/validate_historical_replay_inventory_evidence.py",
         }
         runtime_scripts = {
             "scripts/prepare_intake_enablement_lease.py",
@@ -128,8 +129,11 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         }
         for trigger in (pull_request, push):
             self.assertIn("'scripts/**'", trigger)
-            for path in offline_public_evidence:
+            excluded_scripts = set(re.findall(r"'!(scripts/[^']+)'", trigger))
+            self.assertEqual(excluded_scripts, offline_evidence)
+            for path in offline_evidence:
                 with self.subTest(trigger=trigger[:20], path=path):
+                    self.assertTrue((ROOT / path).is_file())
                     self.assertIn(f"'!{path}'", trigger)
             for path in runtime_scripts:
                 with self.subTest(trigger=trigger[:20], path=path):

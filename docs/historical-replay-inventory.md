@@ -64,3 +64,18 @@ conclusion and exact artifact bytes. The inventory workflow deliberately has no
 write credential and cannot satisfy this durable-evidence gate by itself. A
 local invocation is useful for reviewing expected inputs but is not publication
 or qualification evidence.
+
+The first reviewed cutoff inventory is now durable at
+`evidence/historical-replay/inventories/bb405fbabe084e106ad5500b455a05ba1e1d54175d1964db3aebcc3b6ea3fce3.json`.
+Its closed record at
+`evidence/historical-replay/inventory-evidence/run-32790927560-attempt-1.json`
+binds protected run `32790927560`, attempt 1, its immutable dispatch tag and
+source commit, canonical store digest, all counts, producer digests, inventory
+bytes, and transient transport identity. The record validates through
+`scripts/validate_historical_replay_inventory_evidence.py`.
+
+That record is contract-only inventory evidence. Its 633 public entries remain
+`public_source_probe_pending`, and its 668 private entries remain
+`private_archive_migration_pending`. It proves neither source availability nor
+archive migration, performs no replay, qualifies no result or corpus, and
+authorizes no publication.
