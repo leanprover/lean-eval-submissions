@@ -20,16 +20,25 @@ python scripts/migrate_archive_envelopes.py inventory \
   --output /private/path/migration-plan.json
 ```
 
-At audit commit `92b95c162ad9bf38d027e11193683ca61ed2a994`, the
-verified inventory contains 1,042 ciphertext/sidecar pairs: 1,039 schema
-version 1, one schema version 2, and two already-current schema version 3.
-Thus 1,040 objects require migration and two are retained byte-for-byte. The
-canonical inventory digest is
-`48f55807f430d8754e4a7b79cb391d582028df6abce347d037bd810a0e3decfa`.
-Credentialed dry run `32616816083` reproduced this exact inventory with every
-decrypt, wrap, and write step skipped. Later schema-version-3 intake changes
-the retained count and source commit but must not change the 1,040-entry
-migration set.
+The first credentialed snapshot, at audit commit
+`92b95c162ad9bf38d027e11193683ca61ed2a994`, contained 1,042
+ciphertext/sidecar pairs: 1,040 requiring migration and two already-current
+schema-version-3 objects retained byte-for-byte. Dry run `32616816083`
+reproduced its canonical inventory digest
+`48f55807f430d8754e4a7b79cb391d582028df6abce347d037bd810a0e3decfa`
+with every decrypt, wrap, and write step skipped.
+
+The current protected snapshot, at audit commit
+`ad356e7bc5a2d650d9902ac3f6d352a0164360bc`, contains 1,045 pairs:
+1,043 requiring migration and two retained schema-version-3 objects. Protected
+dry run `32840226134`, from submissions commit
+`fc761446bb71d655a7cbab1d76d2ea7fc1cad898`, reproduced the exact count and
+canonical digest
+`6b8867f41a13c3ba323746988058886e5dc73da7b509deaf01ccf9c36fe8d5d4`.
+It used only the audit-repository read credential: no legacy identity, AWS
+role, plaintext, artifact, branch, or audit write was used. Intake changes the
+source commit and can change the inventory; operators must therefore freeze
+and review fresh counts and a fresh digest immediately before apply.
 
 The migration plan alone cannot correlate an accepted private result with an
 archive because it intentionally omits repository and ref metadata. Before
