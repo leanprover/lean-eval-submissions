@@ -74,11 +74,19 @@ import { ScheduledSubrequestBudgetError } from "./scheduled-subrequest-budget";
 import {
   decodeModelAliasView,
   decodeModelIdentityView,
+  decodeModelIdentityReverseImpactView,
   modelAliasKey,
   modelAliasPath,
   modelIdentityId,
   modelIdentityPath,
+  modelIdentityReverseImpactPath,
+  modelIdentityReverseImpactView,
+  MODEL_IDENTITY_REVERSE_IMPACT_MAX_VIEWS,
+  PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
+  STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
   type ModelAliasView,
+  type ModelIdentityReverseImpactMember,
+  type ModelIdentityReverseImpactView,
   type ModelIdentityView,
 } from "./model-identity";
 
@@ -87,6 +95,7 @@ const STATE_BRANCH = "main";
 const PRODUCTION_STATE_REPOSITORY = "leanprover/lean-eval-state";
 const STAGING_STATE_REPOSITORY = "leanprover/lean-eval-state-staging";
 const MAX_WRITE_ATTEMPTS = 8;
+const MODEL_CONSOLIDATION_MAX_WRITE_ATTEMPTS = 7;
 // updateDispatch has nine attempts. One maximal attempt is 2 snapshot reads +
 // (1 view + 6 directly referenced events + 1 terminal evaluation cause) +
 // 2 tree/commit writes + (PATCH + retry + ref + comparison) = 16.
@@ -98,11 +107,17 @@ export const DISPATCH_UPDATE_MAX_SUBREQUESTS =
   (MAX_WRITE_ATTEMPTS + 1) *
   (BRANCH_SNAPSHOT_SUBREQUESTS + SUBMISSION_GRAPH_MAX_SUBREQUESTS +
     CREATE_DISPATCH_COMMIT_SUBREQUESTS + REFERENCE_UPDATE_MAX_SUBREQUESTS);
-// Nine maximum CAS attempts. Each attempt reserves 4 contract/snapshot reads,
-// 9 targeted identity/alias/event reads,
-// 2 Git object writes, and the 4-request uncertain ref-update recovery bound.
+// Eight consolidation CAS attempts. A maximal write attempt reserves 5
+// protected-branch/contract/snapshot reads, 32 member-document reads across the
+// disjoint source and target components, 2 component-index reads, 5 event reads
+// (idempotency, both terminal mutations, and both causal predecessors), 2 Git
+// object writes, and the 4-request uncertain ref-update recovery bound:
+// 8 * 50 = 400.
 export const MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS =
-  (MAX_WRITE_ATTEMPTS + 1) * (4 + 9 + CREATE_DISPATCH_COMMIT_SUBREQUESTS + REFERENCE_UPDATE_MAX_SUBREQUESTS);
+  (MODEL_CONSOLIDATION_MAX_WRITE_ATTEMPTS + 1) * (
+    5 + MODEL_IDENTITY_REVERSE_IMPACT_MAX_VIEWS + 2 + 5 +
+    CREATE_DISPATCH_COMMIT_SUBREQUESTS + REFERENCE_UPDATE_MAX_SUBREQUESTS
+  );
 const NEW_EVENT_CLOCK_WINDOW_MS = 5 * 60 * 1000;
 const SHA = /^[0-9a-f]{40}$/i;
 const LOWER_SHA = /^[0-9a-f]{40}$/;
@@ -119,28 +134,50 @@ type ResultOwnerContract = Readonly<{
     sha: string;
   }>>>;
 }>;
+type ModelIdentityContract = ResultOwnerContract;
 const RESULT_OWNER_CONTRACTS: Readonly<Record<string, ResultOwnerContract>> = {
   [PRODUCTION_STATE_REPOSITORY]: {
     commit: PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT,
     rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "fa70bf42f98d3a33cd6d419cd08eb3e96dfd9540" },
-      docs: { mode: "040000", type: "tree", sha: "7cc621002711682e6876bcfb6663f4c2e5c16336" },
-      schema: { mode: "040000", type: "tree", sha: "3111bf02bd9983a8712425923de8fca6ba696469" },
-      scripts: { mode: "040000", type: "tree", sha: "f9fe278ef1ea062bc21a3fafc7ddea7ab758a099" },
+      "README.md": { mode: "100644", type: "blob", sha: "d2487d0330b708e856bdcd79ba114631355225a7" },
+      docs: { mode: "040000", type: "tree", sha: "3e9957ffc1a7b653d940d3b8020b583ea2fae0f3" },
+      schema: { mode: "040000", type: "tree", sha: "3043a7b6afa042577645e0520ee9bd105a15424a" },
+      scripts: { mode: "040000", type: "tree", sha: "4e2c39cac2510716577a7fd6d13abf0f9cf26976" },
     },
   },
   [STAGING_STATE_REPOSITORY]: {
     commit: STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT,
     rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "f3f1820e7781c724e649762f184c16206675d7ac" },
-      docs: { mode: "040000", type: "tree", sha: "b335dc9232956201c8ec99e732e05a1b388d2617" },
-      schema: { mode: "040000", type: "tree", sha: "730d44520c70fdd6da4d27e381d4e6593c5c77fe" },
-      scripts: { mode: "040000", type: "tree", sha: "438693aed415474802beae32a5398fb436a4ac71" },
+      "README.md": { mode: "100644", type: "blob", sha: "e40d0e92b0125786a64c27a17bff8b322a3d0a95" },
+      docs: { mode: "040000", type: "tree", sha: "7a5088cee94a70da22656406d680a23bc3c9b9f4" },
+      schema: { mode: "040000", type: "tree", sha: "e4b815a07b1634f64c7a5618ad6a5b8fe8a1f09a" },
+      scripts: { mode: "040000", type: "tree", sha: "43399faa2c733a956568c225acff0d9a614f1590" },
+    },
+  },
+};
+const MODEL_IDENTITY_CONTRACTS: Readonly<Record<string, ModelIdentityContract>> = {
+  [PRODUCTION_STATE_REPOSITORY]: {
+    commit: PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
+    rootEntries: {
+      "README.md": { mode: "100644", type: "blob", sha: "d2487d0330b708e856bdcd79ba114631355225a7" },
+      docs: { mode: "040000", type: "tree", sha: "3e9957ffc1a7b653d940d3b8020b583ea2fae0f3" },
+      schema: { mode: "040000", type: "tree", sha: "3043a7b6afa042577645e0520ee9bd105a15424a" },
+      scripts: { mode: "040000", type: "tree", sha: "4e2c39cac2510716577a7fd6d13abf0f9cf26976" },
+    },
+  },
+  [STAGING_STATE_REPOSITORY]: {
+    commit: STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
+    rootEntries: {
+      "README.md": { mode: "100644", type: "blob", sha: "e40d0e92b0125786a64c27a17bff8b322a3d0a95" },
+      docs: { mode: "040000", type: "tree", sha: "7a5088cee94a70da22656406d680a23bc3c9b9f4" },
+      schema: { mode: "040000", type: "tree", sha: "e4b815a07b1634f64c7a5618ad6a5b8fe8a1f09a" },
+      scripts: { mode: "040000", type: "tree", sha: "43399faa2c733a956568c225acff0d9a614f1590" },
     },
   },
 };
 const RESULT_OWNER_CONTRACT_PROOF_CACHE_LIMIT = 64;
 const resultOwnerContractProofCache = new Map<string, true>();
+const modelIdentityContractProofCache = new Map<string, true>();
 
 export type GitHubFetch = (
   input: RequestInfo | URL,
@@ -264,6 +301,14 @@ export type ModelIdentityRenameRequest = Readonly<{
   displayName: string;
 }>;
 
+export type ModelIdentityConsolidationRequest = Readonly<{
+  eventId: string;
+  occurredAt: string;
+  modelId: string;
+  targetModelId: string;
+  ownerLogin: string;
+}>;
+
 export class GitHubStateError extends Error {
   readonly status: number;
 
@@ -321,6 +366,7 @@ export class StateEventConflictError extends Error {
 
 export function clearResultOwnerContractProofCacheForTest(): void {
   resultOwnerContractProofCache.clear();
+  modelIdentityContractProofCache.clear();
 }
 
 function resultOwnerContract(repository: string): ResultOwnerContract {
@@ -328,6 +374,15 @@ function resultOwnerContract(repository: string): ResultOwnerContract {
   const contract = RESULT_OWNER_CONTRACTS[key];
   if (!Object.hasOwn(RESULT_OWNER_CONTRACTS, key) || contract === undefined) {
     throw new GitHubStateError(503, "result-owner contract targeted an unsupported State repository");
+  }
+  return contract;
+}
+
+function modelIdentityContract(repository: string): ModelIdentityContract {
+  const key = repository.toLowerCase();
+  const contract = MODEL_IDENTITY_CONTRACTS[key];
+  if (!Object.hasOwn(MODEL_IDENTITY_CONTRACTS, key) || contract === undefined) {
+    throw new GitHubStateError(503, "model-identity contract targeted an unsupported State repository");
   }
   return contract;
 }
@@ -346,6 +401,22 @@ function rememberResultOwnerContractProof(key: string): void {
     resultOwnerContractProofCache.delete(resultOwnerContractProofCache.keys().next().value ?? "");
   }
   resultOwnerContractProofCache.set(key, true);
+}
+
+function modelIdentityContractProofCacheKey(repository: string, head: string): string {
+  const contract = modelIdentityContract(repository);
+  const proofId = Object.entries(contract.rootEntries)
+    .map(([path, entry]) => `${path}:${entry.mode}:${entry.type}:${entry.sha}`)
+    .join("|");
+  return `${repository.toLowerCase()}\0${head}\0${contract.commit}\0${proofId}`;
+}
+
+function rememberModelIdentityContractProof(key: string): void {
+  modelIdentityContractProofCache.delete(key);
+  if (modelIdentityContractProofCache.size >= RESULT_OWNER_CONTRACT_PROOF_CACHE_LIMIT) {
+    modelIdentityContractProofCache.delete(modelIdentityContractProofCache.keys().next().value ?? "");
+  }
+  modelIdentityContractProofCache.set(key, true);
 }
 
 function headers(config: GitHubStateConfig): Headers {
@@ -454,7 +525,40 @@ async function assertResultOwnerContractAt(
   commit: string,
   treeSha: string,
 ): Promise<void> {
-  const contract = resultOwnerContract(config.repository);
+  await assertStateSourceContractAt(
+    config,
+    fetcher,
+    commit,
+    treeSha,
+    resultOwnerContract(config.repository),
+    "result-owner",
+  );
+}
+
+async function assertModelIdentityContractAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  commit: string,
+  treeSha: string,
+): Promise<void> {
+  await assertStateSourceContractAt(
+    config,
+    fetcher,
+    commit,
+    treeSha,
+    modelIdentityContract(config.repository),
+    "model-identity",
+  );
+}
+
+async function assertStateSourceContractAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  commit: string,
+  treeSha: string,
+  contract: ResultOwnerContract,
+  label: "result-owner" | "model-identity",
+): Promise<void> {
   if (commit !== contract.commit) {
     const comparison = object(
       await jsonCall(
@@ -462,28 +566,28 @@ async function assertResultOwnerContractAt(
         fetcher,
         `/compare/${contract.commit}...${commit}`,
       ),
-      "State result-owner contract comparison",
+      `State ${label} contract comparison`,
     );
     if (
       comparison.status !== "ahead" ||
       nested(comparison, ["merge_base_commit", "sha"]) !== contract.commit
     ) {
-      throw new GitHubStateError(503, "protected State main does not descend from the reviewed result-owner contract");
+      throw new GitHubStateError(503, `protected State main does not descend from the reviewed ${label} contract`);
     }
   }
   const rawTree = object(
     await jsonCall(config, fetcher, `/git/trees/${treeSha}`),
-    "State result-owner contract root tree",
+    `State ${label} contract root tree`,
   );
   if (rawTree.sha !== treeSha || rawTree.truncated !== false || !Array.isArray(rawTree.tree)) {
-    throw new GitHubStateError(503, "protected State main result-owner contract root tree was incomplete");
+    throw new GitHubStateError(503, `protected State main ${label} contract root tree was incomplete`);
   }
   for (const [path, expected] of Object.entries(contract.rootEntries)) {
     const matches = rawTree.tree.filter((value) =>
       value !== null && typeof value === "object" && !Array.isArray(value) &&
       (value as Record<string, unknown>).path === path);
     if (matches.length !== 1) {
-      throw new GitHubStateError(503, "protected State main result-owner contract root entries changed");
+      throw new GitHubStateError(503, `protected State main ${label} contract root entries changed`);
     }
     const entry = object(matches[0], `${path} contract root entry`);
     if (
@@ -491,13 +595,16 @@ async function assertResultOwnerContractAt(
       entry.type !== expected.type ||
       entry.sha !== expected.sha
     ) {
-      throw new GitHubStateError(503, "protected State main result-owner contract root entries changed");
+      throw new GitHubStateError(503, `protected State main ${label} contract root entries changed`);
     }
   }
 }
 
 function decodeInlineJson(value: unknown, path: string): unknown {
   const data = object(value, `${path} contents response`);
+  if (data.type !== "file" || data.path !== path) {
+    throw new GitHubStateError(502, `${path} was not the exact regular State file`);
+  }
   if (data.encoding !== "base64" || typeof data.content !== "string") {
     throw new GitHubStateError(502, `${path} did not contain inline base64 JSON`);
   }
@@ -1454,6 +1561,294 @@ async function readModelIdentityAt(
   return { view, mutationEvent: mutation };
 }
 
+async function readModelIdentityViewAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  modelId: string,
+  commit: string,
+): Promise<ModelIdentityView | null> {
+  const path = modelIdentityPath(modelId);
+  const entry = await readPathAt(config, fetcher, path, commit);
+  if (!entry.found) return null;
+  try {
+    const view = decodeModelIdentityView(entry.value);
+    if (view.model_id !== modelId || await modelIdentityId(view.request_event_id) !== modelId) {
+      throw new TypeError("derived identity disagrees with path");
+    }
+    return view;
+  } catch (error) {
+    throw new GitHubStateError(502, `${path} is invalid: ${String(error)}`);
+  }
+}
+
+async function readModelAliasViewAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  aliasKey: string,
+  commit: string,
+): Promise<ModelAliasView | null> {
+  const path = modelAliasPath(aliasKey);
+  const entry = await readPathAt(config, fetcher, path, commit);
+  if (!entry.found) return null;
+  try {
+    const view = decodeModelAliasView(entry.value);
+    if (view.alias_key !== aliasKey || await modelAliasKey(view.owner_login, view.alias) !== aliasKey) {
+      throw new TypeError("derived alias disagrees with path");
+    }
+    return view;
+  } catch (error) {
+    throw new GitHubStateError(502, `${path} is invalid: ${String(error)}`);
+  }
+}
+
+async function readModelIdentityReverseImpactAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  terminalModelId: string,
+  commit: string,
+): Promise<ModelIdentityReverseImpactView | null> {
+  const path = modelIdentityReverseImpactPath(terminalModelId);
+  const entry = await readPathAt(config, fetcher, path, commit);
+  if (!entry.found) return null;
+  try {
+    const view = decodeModelIdentityReverseImpactView(entry.value);
+    if (view.terminal_model_id !== terminalModelId) {
+      throw new TypeError("terminal identity disagrees with path");
+    }
+    return view;
+  } catch (error) {
+    throw new GitHubStateError(502, `${path} is invalid: ${String(error)}`);
+  }
+}
+
+type ReverseImpactDocuments = Readonly<{
+  identities: ReadonlyMap<string, ModelIdentityView>;
+  aliases: ReadonlyMap<string, ModelAliasView>;
+  terminalMutation: StateEvent;
+}>;
+
+async function readModelMutationPredecessorAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  mutation: StateEvent,
+  modelId: string,
+  commit: string,
+  path: string,
+): Promise<StateEvent> {
+  if (mutation.causation_event_id === null) throw new StateEventConflictError(path);
+  const predecessor = await readEventAt(
+    config,
+    fetcher,
+    mutation.causation_event_id,
+    commit,
+  );
+  if (
+    predecessor.event_id !== mutation.causation_event_id ||
+    predecessor.subject_id !== modelId || mutation.subject_id !== modelId ||
+    predecessor.event_id >= mutation.event_id ||
+    Date.parse(predecessor.occurred_at) >= Date.parse(mutation.occurred_at)
+  ) throw new StateEventConflictError(path);
+  return predecessor;
+}
+
+async function assertTerminalMutationMatches(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  terminal: ModelIdentityView,
+  mutation: StateEvent,
+  aliases: ReadonlyMap<string, ModelAliasView>,
+  commit: string,
+  path: string,
+): Promise<void> {
+  if (
+    terminal.status !== "approved" || terminal.consolidated_into !== null ||
+    mutation.event_id !== terminal.mutation_event_id ||
+    mutation.subject_id !== terminal.model_id
+  ) throw new StateEventConflictError(path);
+  const predecessor = await readModelMutationPredecessorAt(
+    config,
+    fetcher,
+    mutation,
+    terminal.model_id,
+    commit,
+    path,
+  );
+  if (mutation.event_type === "model_identity.approved") {
+    if (
+      mutation.causation_event_id !== terminal.request_event_id ||
+      mutation.event_id !== terminal.decision_event_id ||
+      mutation.occurred_at !== terminal.decided_at ||
+      mutation.payload.reviewer_login !== terminal.reviewer_login ||
+      terminal.display_name !== terminal.requested_name ||
+      predecessor.event_type !== "model_identity.requested" ||
+      predecessor.actor.login !== terminal.owner_login ||
+      predecessor.occurred_at !== terminal.requested_at ||
+      predecessor.payload.display_name !== terminal.requested_name
+    ) throw new StateEventConflictError(path);
+    return;
+  }
+  if (
+    predecessor.event_type !== "model_identity.approved" &&
+    predecessor.event_type !== "model_identity.alias_assigned" &&
+    predecessor.event_type !== "model_identity.renamed"
+  ) throw new StateEventConflictError(path);
+  if (predecessor.event_type === "model_identity.approved") {
+    if (
+      predecessor.causation_event_id !== terminal.request_event_id ||
+      predecessor.event_id !== terminal.decision_event_id ||
+      predecessor.occurred_at !== terminal.decided_at ||
+      predecessor.payload.reviewer_login !== terminal.reviewer_login
+    ) throw new StateEventConflictError(path);
+  } else if (predecessor.event_type === "model_identity.alias_assigned") {
+    if (typeof predecessor.payload.alias !== "string") throw new StateEventConflictError(path);
+    const predecessorAliasKey = await modelAliasKey(
+      terminal.owner_login,
+      predecessor.payload.alias,
+    );
+    const predecessorAlias = aliases.get(predecessorAliasKey);
+    if (
+      predecessor.actor.login !== terminal.owner_login ||
+      predecessorAlias?.model_id !== terminal.model_id ||
+      predecessorAlias.assignment_event_id !== predecessor.event_id ||
+      predecessorAlias.assigned_at !== predecessor.occurred_at
+    ) throw new StateEventConflictError(path);
+  } else if (
+    ("login" in predecessor.actor ? predecessor.actor.login : null) !== terminal.owner_login
+  ) throw new StateEventConflictError(path);
+  if (mutation.event_type === "model_identity.alias_assigned") {
+    if (typeof mutation.payload.alias !== "string") throw new StateEventConflictError(path);
+    const mutationAlias = mutation.payload.alias;
+    const aliasKey = await modelAliasKey(terminal.owner_login, mutationAlias);
+    const alias = aliases.get(aliasKey);
+    if (
+      mutation.actor.login !== terminal.owner_login ||
+      alias?.model_id !== terminal.model_id || alias.alias !== mutationAlias ||
+      alias.assignment_event_id !== mutation.event_id || alias.assigned_at !== mutation.occurred_at
+    ) throw new StateEventConflictError(path);
+    return;
+  }
+  if (
+    mutation.event_type === "model_identity.renamed" &&
+    mutation.actor.login === terminal.owner_login &&
+    mutation.payload.display_name === terminal.display_name
+  ) return;
+  throw new StateEventConflictError(path);
+}
+
+async function assertConsolidationPredecessorAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  source: ModelIdentityView,
+  event: StateEvent,
+  aliases: ReadonlyMap<string, ModelAliasView>,
+  commit: string,
+  path: string,
+): Promise<void> {
+  const predecessor = await readModelMutationPredecessorAt(
+    config,
+    fetcher,
+    event,
+    source.model_id,
+    commit,
+    path,
+  );
+  if (predecessor.event_type === "model_identity.approved") {
+    if (
+      predecessor.causation_event_id !== source.request_event_id ||
+      predecessor.event_id !== source.decision_event_id ||
+      predecessor.occurred_at !== source.decided_at ||
+      predecessor.payload.reviewer_login !== source.reviewer_login ||
+      source.display_name !== source.requested_name
+    ) throw new StateEventConflictError(path);
+    return;
+  }
+  if (predecessor.event_type === "model_identity.alias_assigned") {
+    if (typeof predecessor.payload.alias !== "string") throw new StateEventConflictError(path);
+    const aliasKey = await modelAliasKey(source.owner_login, predecessor.payload.alias);
+    const alias = aliases.get(aliasKey);
+    if (
+      predecessor.actor.login !== source.owner_login ||
+      alias?.model_id !== source.model_id || alias.assignment_event_id !== predecessor.event_id ||
+      alias.alias !== predecessor.payload.alias || alias.assigned_at !== predecessor.occurred_at
+    ) throw new StateEventConflictError(path);
+    return;
+  }
+  if (
+    predecessor.event_type === "model_identity.renamed" &&
+    predecessor.actor.login === source.owner_login &&
+    predecessor.payload.display_name === source.display_name
+  ) return;
+  throw new StateEventConflictError(path);
+}
+
+async function readReverseImpactDocumentsAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  component: ModelIdentityReverseImpactView,
+  commit: string,
+): Promise<ReverseImpactDocuments> {
+  const identities = new Map<string, ModelIdentityView>();
+  const aliases = new Map<string, ModelAliasView>();
+  const [, terminalMutation] = await Promise.all([
+    Promise.all(component.members.map(async (member) => {
+      if (member.kind === "identity") {
+        const view = await readModelIdentityViewAt(config, fetcher, member.model_id, commit);
+        if (
+          view?.owner_login !== component.owner_login ||
+          view.resolved_model_id !== component.terminal_model_id ||
+          view.mutation_event_id !== member.mutation_event_id
+        ) throw new StateEventConflictError(member.view_path);
+        identities.set(member.model_id, view);
+        return;
+      }
+      const view = await readModelAliasViewAt(config, fetcher, member.alias_key, commit);
+      if (
+        view?.owner_login !== component.owner_login ||
+        view.model_id !== member.model_id ||
+        view.resolved_model_id !== component.terminal_model_id ||
+        view.assignment_event_id !== member.assignment_event_id
+      ) throw new StateEventConflictError(member.view_path);
+      aliases.set(member.alias_key, view);
+    })),
+    readEventAt(
+      config,
+      fetcher,
+      component.terminal_mutation_event_id,
+      commit,
+    ),
+  ]);
+  const terminal = identities.get(component.terminal_model_id);
+  if (
+    terminal?.status !== "approved" || terminal.consolidated_into !== null ||
+    terminal.mutation_event_id !== component.terminal_mutation_event_id
+  ) throw new StateEventConflictError(modelIdentityReverseImpactPath(component.terminal_model_id));
+  await assertTerminalMutationMatches(
+    config,
+    fetcher,
+    terminal,
+    terminalMutation,
+    aliases,
+    commit,
+    modelIdentityReverseImpactPath(component.terminal_model_id),
+  );
+  return { identities, aliases, terminalMutation };
+}
+
+function replaceReverseImpactIdentityMutation(
+  component: ModelIdentityReverseImpactView,
+  modelId: string,
+  mutationEventId: string,
+): readonly ModelIdentityReverseImpactMember[] {
+  if (!component.members.some((member) =>
+    member.kind === "identity" && member.model_id === modelId)) {
+    throw new StateEventConflictError(modelIdentityReverseImpactPath(component.terminal_model_id));
+  }
+  return component.members.map((member) =>
+    member.kind === "identity" && member.model_id === modelId
+      ? { ...member, mutation_event_id: mutationEventId }
+      : member);
+}
+
 function existingModelEvent(value: unknown, path: string): StateEvent {
   try {
     validateStateEvent(value);
@@ -1507,6 +1902,25 @@ export class GitHubStateRepository {
     return snapshot;
   }
 
+  async #modelIdentitySnapshot(): Promise<BranchSnapshot> {
+    const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+    await assertProtectedBranchAt(this.#config, this.#fetcher, snapshot.headSha);
+    const proofKey = modelIdentityContractProofCacheKey(
+      this.#config.repository,
+      snapshot.headSha,
+    );
+    if (!modelIdentityContractProofCache.has(proofKey)) {
+      await assertModelIdentityContractAt(
+        this.#config,
+        this.#fetcher,
+        snapshot.headSha,
+        snapshot.treeSha,
+      );
+    }
+    rememberModelIdentityContractProof(proofKey);
+    return snapshot;
+  }
+
   async assertResultOwnerContract(): Promise<string> {
     return (await this.#resultOwnerSnapshot()).headSha;
   }
@@ -1523,16 +1937,43 @@ export class GitHubStateRepository {
   }> {
     const modelId = await modelIdentityId(request.eventId);
     const path = modelIdentityPath(modelId);
+    const eventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
-      const snapshot = await this.#resultOwnerSnapshot();
-      const existing = await readModelIdentityAt(this.#config, this.#fetcher, modelId, snapshot.headSha);
-      if (existing !== null) {
+      const snapshot = await this.#modelIdentitySnapshot();
+      const existingEvent = await readPathAt(
+        this.#config,
+        this.#fetcher,
+        eventPath,
+        snapshot.headSha,
+      );
+      if (existingEvent.found) {
+        const event = existingModelEvent(existingEvent.value, eventPath);
+        if (
+          event.event_type !== "model_identity.requested" ||
+          event.event_id !== request.eventId || event.subject_id !== modelId ||
+          event.causation_event_id !== null || event.actor.login !== request.ownerLogin ||
+          event.payload.display_name !== request.displayName
+        ) throw new StateEventConflictError(eventPath);
+        const existing = await readModelIdentityAt(
+          this.#config,
+          this.#fetcher,
+          modelId,
+          snapshot.headSha,
+        );
+        if (existing === null) throw new StateEventConflictError(eventPath);
         if (
           existing.view.owner_login !== request.ownerLogin ||
           existing.view.requested_name !== request.displayName
-        ) throw new StateEventConflictError(path);
+        ) throw new StateEventConflictError(eventPath);
         return { commit: snapshot.headSha, created: false, modelId };
       }
+      const existing = await readModelIdentityAt(
+        this.#config,
+        this.#fetcher,
+        modelId,
+        snapshot.headSha,
+      );
+      if (existing !== null) throw new StateEventConflictError(path);
       this.#assertModelEventClock(request.eventId, request.occurredAt);
       const event: ModelIdentityOwnerEvent<"model_identity.requested"> = {
         schema_version: 1,
@@ -1587,11 +2028,13 @@ export class GitHubStateRepository {
     status: "approved" | "rejected";
   }> {
     const eventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
+    const reverseImpactPath = modelIdentityReverseImpactPath(request.modelId);
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
-      const snapshot = await this.#resultOwnerSnapshot();
-      const [current, existingEvent] = await Promise.all([
+      const snapshot = await this.#modelIdentitySnapshot();
+      const [current, existingEvent, reverseImpactEntry] = await Promise.all([
         readModelIdentityAt(this.#config, this.#fetcher, request.modelId, snapshot.headSha),
         readPathAt(this.#config, this.#fetcher, eventPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, reverseImpactPath, snapshot.headSha),
       ]);
       if (current === null) throw new ModelIdentityStateError(404, "model identity was not found");
       const expectedType = request.decision === "approve" ? "model_identity.approved" : "model_identity.rejected";
@@ -1616,6 +2059,22 @@ export class GitHubStateRepository {
           existing.subject_id !== request.modelId || existing.payload.reviewer_login !== request.reviewerLogin ||
           (request.decision === "reject" && existing.payload.reason_code !== request.reasonCode)
         ) throw new StateEventConflictError(eventPath);
+        if (request.decision === "approve") {
+          if (current.view.resolved_model_id === null) throw new StateEventConflictError(reverseImpactPath);
+          const component = await readModelIdentityReverseImpactAt(
+            this.#config,
+            this.#fetcher,
+            current.view.resolved_model_id,
+            snapshot.headSha,
+          );
+          if (
+            component?.owner_login !== current.view.owner_login ||
+            !component.members.some((member) =>
+              member.kind === "identity" && member.model_id === request.modelId)
+          ) throw new StateEventConflictError(reverseImpactPath);
+        } else if (reverseImpactEntry.found) {
+          throw new StateEventConflictError(reverseImpactPath);
+        }
         return { commit: snapshot.headSha, created: false, modelId: request.modelId, status: request.decision === "approve" ? "approved" : "rejected" };
       }
       if (current.view.status !== "pending" || current.view.mutation_event_id !== current.view.request_event_id) {
@@ -1634,7 +2093,20 @@ export class GitHubStateRepository {
         resolved_model_id: status === "approved" ? request.modelId : null,
       };
       decodeModelIdentityView(view);
-      const commit = await createCommit(this.#config, this.#fetcher, snapshot, [event], [{ path: modelIdentityPath(request.modelId), value: view }], `Record model identity decision ${request.modelId}`);
+      if (reverseImpactEntry.found) throw new StateEventConflictError(reverseImpactPath);
+      const writes: TreeWrite[] = [{ path: modelIdentityPath(request.modelId), value: view }];
+      if (status === "approved") {
+        writes.push({
+          path: reverseImpactPath,
+          value: modelIdentityReverseImpactView(view, [{
+            kind: "identity",
+            model_id: request.modelId,
+            mutation_event_id: request.eventId,
+            view_path: modelIdentityPath(request.modelId),
+          }]),
+        });
+      }
+      const commit = await createCommit(this.#config, this.#fetcher, snapshot, [event], writes, `Record model identity decision ${request.modelId}`);
       if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
         return { commit, created: true, modelId: request.modelId, status };
       }
@@ -1653,12 +2125,14 @@ export class GitHubStateRepository {
     const aliasKey = await modelAliasKey(request.ownerLogin, request.alias);
     const aliasPath = modelAliasPath(aliasKey);
     const eventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
+    const reverseImpactPath = modelIdentityReverseImpactPath(request.modelId);
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
-      const snapshot = await this.#resultOwnerSnapshot();
-      const [current, aliasEntry, eventEntry] = await Promise.all([
+      const snapshot = await this.#modelIdentitySnapshot();
+      const [current, aliasEntry, eventEntry, reverseImpactEntry] = await Promise.all([
         readModelIdentityAt(this.#config, this.#fetcher, request.modelId, snapshot.headSha),
         readPathAt(this.#config, this.#fetcher, aliasPath, snapshot.headSha),
         readPathAt(this.#config, this.#fetcher, eventPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, reverseImpactPath, snapshot.headSha),
       ]);
       if (current?.view.owner_login !== request.ownerLogin) throw new ModelIdentityStateError(404, "model identity was not found");
       const event: ModelIdentityOwnerEvent<"model_identity.alias_assigned"> = {
@@ -1683,8 +2157,20 @@ export class GitHubStateRepository {
           existing.actor.login !== request.ownerLogin || existing.payload.alias !== request.alias ||
           alias.alias_key !== aliasKey || alias.model_id !== request.modelId ||
           alias.owner_login !== request.ownerLogin || alias.alias !== request.alias ||
-          alias.assignment_event_id !== request.eventId || alias.assigned_at !== existing.occurred_at
+          alias.assignment_event_id !== request.eventId || alias.assigned_at !== existing.occurred_at ||
+          alias.resolved_model_id !== current.view.resolved_model_id
         ) throw new StateEventConflictError(eventPath);
+        const component = await readModelIdentityReverseImpactAt(
+          this.#config,
+          this.#fetcher,
+          current.view.resolved_model_id,
+          snapshot.headSha,
+        );
+        if (component === null) throw new StateEventConflictError(reverseImpactPath);
+        if (!component.members.some((member) =>
+          member.kind === "alias" && member.alias_key === aliasKey &&
+          member.assignment_event_id === request.eventId && member.model_id === request.modelId
+        )) throw new StateEventConflictError(reverseImpactPath);
         return { commit: snapshot.headSha, created: false, modelId: request.modelId, aliasKey };
       }
       if (aliasEntry.found) {
@@ -1693,6 +2179,15 @@ export class GitHubStateRepository {
       }
       this.#requireActiveOwnedModel(current.view, request.ownerLogin);
       this.#assertModelMutationFollows(request.eventId, request.occurredAt, current.mutationEvent);
+      if (!reverseImpactEntry.found) throw new StateEventConflictError(reverseImpactPath);
+      const component = decodeModelIdentityReverseImpactView(reverseImpactEntry.value);
+      if (
+        component.terminal_model_id !== request.modelId || component.owner_login !== request.ownerLogin ||
+        component.terminal_mutation_event_id !== current.view.mutation_event_id
+      ) throw new StateEventConflictError(reverseImpactPath);
+      if (component.member_count >= MODEL_IDENTITY_REVERSE_IMPACT_MAX_VIEWS) {
+        throw new ModelIdentityStateError(409, "model identity component is at the alias cap");
+      }
       const alias: ModelAliasView = {
         schema_version: 1, alias_key: aliasKey, owner_login: request.ownerLogin, alias: request.alias,
         model_id: request.modelId, assignment_event_id: request.eventId, assigned_at: request.occurredAt,
@@ -1700,8 +2195,20 @@ export class GitHubStateRepository {
       };
       decodeModelAliasView(alias);
       const view: ModelIdentityView = { ...current.view, mutation_event_id: request.eventId };
+      const members = [
+        ...replaceReverseImpactIdentityMutation(component, request.modelId, request.eventId),
+        {
+          kind: "alias" as const,
+          alias_key: aliasKey,
+          assignment_event_id: request.eventId,
+          model_id: request.modelId,
+          view_path: aliasPath,
+        },
+      ];
       const commit = await createCommit(this.#config, this.#fetcher, snapshot, [event], [
-        { path: modelIdentityPath(request.modelId), value: view }, { path: aliasPath, value: alias },
+        { path: modelIdentityPath(request.modelId), value: view },
+        { path: aliasPath, value: alias },
+        { path: reverseImpactPath, value: modelIdentityReverseImpactView(view, members) },
       ], `Assign model alias ${aliasKey}`);
       if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") return { commit, created: true, modelId: request.modelId, aliasKey };
       if (attempt === MAX_WRITE_ATTEMPTS) throw new ModelIdentityStateError(409, "State kept changing during model alias assignment");
@@ -1714,6 +2221,213 @@ export class GitHubStateRepository {
     return this.#mutateOwnedModel(request, "model_identity.renamed", { display_name: request.displayName }, (view) => ({
       ...view, display_name: request.displayName, mutation_event_id: request.eventId,
     }), `Rename model identity ${request.modelId}`);
+  }
+
+  async consolidateModelIdentity(request: ModelIdentityConsolidationRequest): Promise<{
+    commit: string;
+    created: boolean;
+    modelId: string;
+    targetModelId: string;
+  }> {
+    if (request.modelId === request.targetModelId) {
+      throw new ModelIdentityStateError(409, "model identity cannot be consolidated into itself");
+    }
+    const eventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
+    const sourceImpactPath = modelIdentityReverseImpactPath(request.modelId);
+    const targetImpactPath = modelIdentityReverseImpactPath(request.targetModelId);
+    for (let attempt = 0; attempt <= MODEL_CONSOLIDATION_MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await this.#modelIdentitySnapshot();
+      const existingEvent = await readPathAt(
+        this.#config,
+        this.#fetcher,
+        eventPath,
+        snapshot.headSha,
+      );
+      if (existingEvent.found) {
+        const source = await readModelIdentityViewAt(
+          this.#config,
+          this.#fetcher,
+          request.modelId,
+          snapshot.headSha,
+        );
+        const existing = existingModelEvent(existingEvent.value, eventPath);
+        if (
+          existing.event_type !== "model_identity.consolidated" ||
+          existing.event_id !== request.eventId || existing.subject_id !== request.modelId ||
+          existing.actor.login !== request.ownerLogin ||
+          existing.payload.target_model_id !== request.targetModelId ||
+          source?.owner_login !== request.ownerLogin || source.status !== "consolidated" ||
+          source.mutation_event_id !== request.eventId ||
+          source.consolidated_into !== request.targetModelId ||
+          source.resolved_model_id === null
+        ) throw new StateEventConflictError(eventPath);
+        const terminalImpact = await readModelIdentityReverseImpactAt(
+          this.#config,
+          this.#fetcher,
+          source.resolved_model_id,
+          snapshot.headSha,
+        );
+        if (
+          terminalImpact?.owner_login !== request.ownerLogin ||
+          !terminalImpact.members.some((member) =>
+            member.kind === "identity" && member.model_id === request.modelId &&
+            member.mutation_event_id === request.eventId)
+        ) throw new StateEventConflictError(eventPath);
+        const terminalDocuments = await readReverseImpactDocumentsAt(
+          this.#config,
+          this.#fetcher,
+          terminalImpact,
+          snapshot.headSha,
+        );
+        await assertConsolidationPredecessorAt(
+          this.#config,
+          this.#fetcher,
+          source,
+          existing,
+          terminalDocuments.aliases,
+          snapshot.headSha,
+          eventPath,
+        );
+        return {
+          commit: snapshot.headSha,
+          created: false,
+          modelId: request.modelId,
+          targetModelId: request.targetModelId,
+        };
+      }
+
+      const [sourceImpact, targetImpact] = await Promise.all([
+        readModelIdentityReverseImpactAt(
+          this.#config,
+          this.#fetcher,
+          request.modelId,
+          snapshot.headSha,
+        ),
+        readModelIdentityReverseImpactAt(
+          this.#config,
+          this.#fetcher,
+          request.targetModelId,
+          snapshot.headSha,
+        ),
+      ]);
+      if (sourceImpact?.owner_login !== request.ownerLogin) {
+        throw new ModelIdentityStateError(404, "model identity was not found");
+      }
+      if (targetImpact?.owner_login !== request.ownerLogin) {
+        throw new ModelIdentityStateError(409, "consolidation target is not an active owned identity");
+      }
+      const memberPaths = new Set([
+        ...sourceImpact.members.map((member) => member.view_path),
+        ...targetImpact.members.map((member) => member.view_path),
+      ]);
+      if (
+        memberPaths.size !== sourceImpact.member_count + targetImpact.member_count ||
+        memberPaths.size > MODEL_IDENTITY_REVERSE_IMPACT_MAX_VIEWS
+      ) throw new ModelIdentityStateError(409, "model identity component exceeds the consolidation cap");
+
+      const [sourceDocuments] = await Promise.all([
+        readReverseImpactDocumentsAt(
+          this.#config,
+          this.#fetcher,
+          sourceImpact,
+          snapshot.headSha,
+        ),
+        readReverseImpactDocumentsAt(
+          this.#config,
+          this.#fetcher,
+          targetImpact,
+          snapshot.headSha,
+        ),
+      ]);
+      const source = sourceDocuments.identities.get(request.modelId);
+      if (source === undefined) throw new StateEventConflictError(sourceImpactPath);
+      const currentMutation = sourceDocuments.terminalMutation;
+      if (
+        currentMutation.subject_id !== request.modelId ||
+        currentMutation.event_id !== source.mutation_event_id
+      ) throw new StateEventConflictError(modelIdentityPath(request.modelId));
+      this.#assertModelMutationFollows(
+        request.eventId,
+        request.occurredAt,
+        currentMutation,
+      );
+      const event: ModelIdentityOwnerEvent<"model_identity.consolidated"> = {
+        schema_version: 1,
+        event_id: request.eventId,
+        event_type: "model_identity.consolidated",
+        occurred_at: request.occurredAt,
+        subject_id: request.modelId,
+        causation_event_id: source.mutation_event_id,
+        actor: { kind: "github", login: request.ownerLogin },
+        payload: { target_model_id: request.targetModelId },
+      };
+      validateStateEvent(event);
+
+      const writes: TreeWrite[] = [];
+      const movedMembers: ModelIdentityReverseImpactMember[] = [];
+      for (const member of sourceImpact.members) {
+        if (member.kind === "identity") {
+          const current = sourceDocuments.identities.get(member.model_id);
+          if (current === undefined) throw new StateEventConflictError(member.view_path);
+          const next: ModelIdentityView = member.model_id === request.modelId
+            ? {
+                ...current,
+                status: "consolidated",
+                mutation_event_id: request.eventId,
+                consolidated_into: request.targetModelId,
+                resolved_model_id: request.targetModelId,
+              }
+            : { ...current, resolved_model_id: request.targetModelId };
+          decodeModelIdentityView(next);
+          writes.push({ path: member.view_path, value: next });
+          movedMembers.push(member.model_id === request.modelId
+            ? { ...member, mutation_event_id: request.eventId }
+            : member);
+          continue;
+        }
+        const current = sourceDocuments.aliases.get(member.alias_key);
+        if (current === undefined) throw new StateEventConflictError(member.view_path);
+        const next: ModelAliasView = {
+          ...current,
+          resolved_model_id: request.targetModelId,
+        };
+        decodeModelAliasView(next);
+        writes.push({ path: member.view_path, value: next });
+        movedMembers.push(member);
+      }
+      const mergedMembers = [...targetImpact.members, ...movedMembers]
+        .sort((left, right) => left.view_path.localeCompare(right.view_path));
+      const mergedImpact = decodeModelIdentityReverseImpactView({
+        ...targetImpact,
+        member_count: mergedMembers.length,
+        members: mergedMembers,
+      });
+      writes.push(
+        { path: sourceImpactPath, value: null },
+        { path: targetImpactPath, value: mergedImpact },
+      );
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        [event],
+        writes,
+        `Consolidate model identity ${request.modelId} into ${request.targetModelId}`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return {
+          commit,
+          created: true,
+          modelId: request.modelId,
+          targetModelId: request.targetModelId,
+        };
+      }
+      if (attempt === MODEL_CONSOLIDATION_MAX_WRITE_ATTEMPTS) {
+        throw new ModelIdentityStateError(409, "State kept changing during model identity consolidation");
+      }
+      await pause(attempt);
+    }
+    throw new Error("unreachable model identity consolidation attempt");
   }
 
   #requireActiveOwnedModel(view: ModelIdentityView, ownerLogin: string): void {
@@ -1746,11 +2460,13 @@ export class GitHubStateRepository {
     message: string,
   ): Promise<{ commit: string; created: boolean; modelId: string }> {
     const eventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
+    const reverseImpactPath = modelIdentityReverseImpactPath(request.modelId);
     for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
-      const snapshot = await this.#resultOwnerSnapshot();
-      const [current, existingEvent] = await Promise.all([
+      const snapshot = await this.#modelIdentitySnapshot();
+      const [current, existingEvent, reverseImpactEntry] = await Promise.all([
         readModelIdentityAt(this.#config, this.#fetcher, request.modelId, snapshot.headSha),
         readPathAt(this.#config, this.#fetcher, eventPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, reverseImpactPath, snapshot.headSha),
       ]);
       if (current?.view.owner_login !== request.ownerLogin) throw new ModelIdentityStateError(404, "model identity was not found");
       const event: ModelIdentityOwnerEvent<"model_identity.renamed"> = {
@@ -1768,13 +2484,39 @@ export class GitHubStateRepository {
           existing.subject_id !== request.modelId || existing.actor.login !== request.ownerLogin ||
           existing.payload[expectedField] !== payload[expectedField]
         ) throw new StateEventConflictError(eventPath);
+        if (current.view.resolved_model_id === null) throw new StateEventConflictError(reverseImpactPath);
+        const component = await readModelIdentityReverseImpactAt(
+          this.#config,
+          this.#fetcher,
+          current.view.resolved_model_id,
+          snapshot.headSha,
+        );
+        if (component === null) throw new StateEventConflictError(reverseImpactPath);
+        if (
+          !component.members.some((member) =>
+            member.kind === "identity" && member.model_id === request.modelId)
+        ) throw new StateEventConflictError(reverseImpactPath);
         return { commit: snapshot.headSha, created: false, modelId: request.modelId };
       }
       this.#requireActiveOwnedModel(current.view, request.ownerLogin);
       this.#assertModelMutationFollows(request.eventId, request.occurredAt, current.mutationEvent);
+      if (!reverseImpactEntry.found) throw new StateEventConflictError(reverseImpactPath);
+      const component = decodeModelIdentityReverseImpactView(reverseImpactEntry.value);
+      if (
+        component.terminal_model_id !== request.modelId || component.owner_login !== request.ownerLogin ||
+        component.terminal_mutation_event_id !== current.view.mutation_event_id
+      ) throw new StateEventConflictError(reverseImpactPath);
       const view = transition(current.view);
       decodeModelIdentityView(view);
-      const commit = await createCommit(this.#config, this.#fetcher, snapshot, [event], [{ path: modelIdentityPath(request.modelId), value: view }], message);
+      const members = replaceReverseImpactIdentityMutation(
+        component,
+        request.modelId,
+        request.eventId,
+      );
+      const commit = await createCommit(this.#config, this.#fetcher, snapshot, [event], [
+        { path: modelIdentityPath(request.modelId), value: view },
+        { path: reverseImpactPath, value: modelIdentityReverseImpactView(view, members) },
+      ], message);
       if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") return { commit, created: true, modelId: request.modelId };
       if (attempt === MAX_WRITE_ATTEMPTS) throw new ModelIdentityStateError(409, "State kept changing during model identity mutation");
       await pause(attempt);

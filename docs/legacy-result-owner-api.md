@@ -6,8 +6,8 @@ production metadata. It never rewrites a Results record, changes its stable
 result ID, or reinterprets its grandfathered solution-publication policy.
 
 The implementation is bound to production State contract commit
-`a53c658a2de2188675134dc2890285fbaa17cf5a` and staging contract commit
-`48f8c975d725a9ac18df545653fdb2f8371c3293`. Before an owner operation, the
+`6799522f7fe57263de4a66499e52ce4bfda69baa` and staging contract commit
+`9fc7c431a92c678554c65ebac68d3fddf4990d29`. Before an owner operation, the
 Worker resolves protected State `main`, proves that it equals or descends from
 the repository-specific commit, and checks the exact current root entries for
 `README.md`, `docs`, `schema`, and `scripts`. The three tree entries bind their
@@ -25,7 +25,7 @@ Both environments track these non-secret variables:
 
 ```text
 LEGACY_RESULT_OWNER_API_ENABLED=false
-RESULT_OWNER_STATE_CONTRACT_COMMIT=<48f8c975… in staging; a53c658a… in production>
+RESULT_OWNER_STATE_CONTRACT_COMMIT=<9fc7c431… in staging; 714f7408… in production>
 ```
 
 The route exists only when the enable flag is exactly `true` and the contract
@@ -187,8 +187,8 @@ logs contain stage and error class only.
 ## Enable and rollback gate
 
 The first production enablement has a zero-event migration precondition. At the
-protected binding commit `a53c658a2de2188675134dc2890285fbaa17cf5a`, inspected on
-2026-08-24, production State contained zero `result.recorded` events, zero
+protected binding commit `6799522f7fe57263de4a66499e52ce4bfda69baa`, inspected on
+2026-08-25, production State contained zero `result.recorded` events, zero
 `result.claimed` events, and zero files under `views/result-identities/`; its
 only event was `system.initialized`. Consequently no historical result guard
 backfill is required. Missing guards are not repaired at runtime: an apparent

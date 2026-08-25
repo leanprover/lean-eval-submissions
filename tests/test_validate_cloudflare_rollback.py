@@ -10,6 +10,7 @@ from scripts import validate_cloudflare_rollback as rollback
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 COMMIT = "a" * 40
+PROTECTED_STATE_COMMIT = "6799522f7fe57263de4a66499e52ce4bfda69baa"
 INTAKE_VERSION = "11111111-1111-1111-1111-111111111111"
 BROKER_VERSION = "22222222-2222-2222-2222-222222222222"
 REPLAY_VERSION = "33333333-3333-3333-3333-333333333333"
@@ -157,6 +158,52 @@ class RollbackContractCoverageTests(unittest.TestCase):
 
 
 class CloudflareRollbackValidationTests(unittest.TestCase):
+    def test_current_protected_state_contract_is_coherent_across_rollback_inputs(
+        self,
+    ) -> None:
+        expected = PROTECTED_STATE_COMMIT
+        qualification = json.loads(
+            (ROOT / ".audit" / "cloudflare-rollback-qualification-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        intake = json.loads(
+            (ROOT / "server" / "wrangler.jsonc").read_text(encoding="utf-8")
+        )["env"]["production"]["vars"]
+        self.assertEqual(qualification["state_main_commit"], expected)
+        self.assertEqual(intake["RESULT_OWNER_STATE_CONTRACT_COMMIT"], expected)
+        self.assertEqual(intake["MODEL_IDENTITY_STATE_CONTRACT_COMMIT"], expected)
+
+        self.configs["intake"]["env"]["production"]["vars"][
+            "RESULT_OWNER_STATE_CONTRACT_COMMIT"
+        ] = "e" * 40
+        self._write(self.paths["intake_config"], self.configs["intake"])
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "RESULT_OWNER_STATE_CONTRACT_COMMIT":
+                binding["text"] = "e" * 40
+        self._write(self.paths["intake_version"], self.versions["intake"])
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError,
+            "result owner API contract is not bound",
+        ):
+            rollback.build_plan(self._arguments())
+
+        variables = self.configs["intake"]["env"]["production"]["vars"]
+        variables["RESULT_OWNER_STATE_CONTRACT_COMMIT"] = expected
+        variables["MODEL_IDENTITY_STATE_CONTRACT_COMMIT"] = "e" * 40
+        self._write(self.paths["intake_config"], self.configs["intake"])
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "RESULT_OWNER_STATE_CONTRACT_COMMIT":
+                binding["text"] = expected
+            if binding.get("name") == "MODEL_IDENTITY_STATE_CONTRACT_COMMIT":
+                binding["text"] = "e" * 40
+        self._write(self.paths["intake_version"], self.versions["intake"])
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError,
+            "model identity API contract is not bound",
+        ):
+            rollback.build_plan(self._arguments())
+
     def test_repository_qualification_matches_runtime_schema_and_pause_guard(
         self,
     ) -> None:
@@ -207,7 +254,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             )
         )
         state_schema_raw = b'{"fixture":"exact State schema"}\n'
-        state_commit = "d" * 40
+        state_commit = PROTECTED_STATE_COMMIT
         qualification_value["state_main_commit"] = state_commit
         qualification_value["state_event_schema_sha256"] = hashlib.sha256(
             state_schema_raw
@@ -389,12 +436,12 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         self.assertIs(plan["model_identity_owner_api_enabled"], False)
         self.assertIs(plan["model_identity_maintainer_api_contract_supported"], True)
         self.assertIs(plan["model_identity_maintainer_api_enabled"], False)
-        self.assertEqual(plan["model_identity_state_contract_commit"], "a53c658a2de2188675134dc2890285fbaa17cf5a")
+        self.assertEqual(plan["model_identity_state_contract_commit"], "6799522f7fe57263de4a66499e52ce4bfda69baa")
         self.assertNotIn("MODEL_IDENTITY_MAINTAINERS", plan)
         self.assertNotIn("RESULT_AMENDMENT_MAINTAINERS", plan)
         self.assertEqual(
             plan["result_owner_state_contract_commit"],
-            "a53c658a2de2188675134dc2890285fbaa17cf5a",
+            "6799522f7fe57263de4a66499e52ce4bfda69baa",
         )
         self.assertIs(plan["promotion_canary_enabled"], False)
         self.assertIs(plan["replay_enabled"], False)
@@ -462,13 +509,13 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         ] = "true"
         self.configs["intake"]["env"]["production"]["vars"][
             "RESULT_OWNER_STATE_CONTRACT_COMMIT"
-        ] = "d" * 40
+        ] = PROTECTED_STATE_COMMIT
         self._write(self.paths["intake_config"], self.configs["intake"])
         for binding in self.versions["intake"]["resources"]["bindings"]:
             if binding.get("name") == "LEGACY_RESULT_OWNER_API_ENABLED":
                 binding["text"] = "true"
             if binding.get("name") == "RESULT_OWNER_STATE_CONTRACT_COMMIT":
-                binding["text"] = "d" * 40
+                binding["text"] = PROTECTED_STATE_COMMIT
         self._write(self.paths["intake_version"], self.versions["intake"])
         with self.assertRaisesRegex(
             rollback.RollbackValidationError, "must disable result owner APIs"
@@ -481,13 +528,13 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         ] = "true"
         self.configs["intake"]["env"]["production"]["vars"][
             "RESULT_OWNER_STATE_CONTRACT_COMMIT"
-        ] = "d" * 40
+        ] = PROTECTED_STATE_COMMIT
         self._write(self.paths["intake_config"], self.configs["intake"])
         for binding in self.versions["intake"]["resources"]["bindings"]:
             if binding.get("name") == "RESULT_AMENDMENT_OWNER_API_ENABLED":
                 binding["text"] = "true"
             if binding.get("name") == "RESULT_OWNER_STATE_CONTRACT_COMMIT":
-                binding["text"] = "d" * 40
+                binding["text"] = PROTECTED_STATE_COMMIT
         self._write(self.paths["intake_version"], self.versions["intake"])
         with self.assertRaisesRegex(
             rollback.RollbackValidationError, "must disable result owner APIs"
@@ -502,13 +549,13 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         ] = "true"
         self.configs["intake"]["env"]["production"]["vars"][
             "RESULT_OWNER_STATE_CONTRACT_COMMIT"
-        ] = "d" * 40
+        ] = PROTECTED_STATE_COMMIT
         self._write(self.paths["intake_config"], self.configs["intake"])
         for binding in self.versions["intake"]["resources"]["bindings"]:
             if binding.get("name") == "RESULT_AMENDMENT_MAINTAINER_API_ENABLED":
                 binding["text"] = "true"
             if binding.get("name") == "RESULT_OWNER_STATE_CONTRACT_COMMIT":
-                binding["text"] = "d" * 40
+                binding["text"] = PROTECTED_STATE_COMMIT
         self._write(self.paths["intake_version"], self.versions["intake"])
         with self.assertRaisesRegex(
             rollback.RollbackValidationError, "must disable result owner APIs"
@@ -614,8 +661,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "intake_lease_expires_at": None,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
-                "model_identity_write_max_subrequests": 171,
-                "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                "model_identity_write_max_subrequests": 400,
+                "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -652,8 +699,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
-                "model_identity_write_max_subrequests": 171,
-                "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                "model_identity_write_max_subrequests": 400,
+                "model_identity_consolidation_api": "atomic_reverse_impact_v1",
             },
             require_intake_disabled=True,
         )
@@ -689,8 +736,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
-                "model_identity_write_max_subrequests": 171,
-                "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                "model_identity_write_max_subrequests": 400,
+                "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -942,7 +989,7 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         ):
             rollback.build_plan(self._arguments())
 
-        state_main["commit"] = "d" * 40
+        state_main["commit"] = PROTECTED_STATE_COMMIT
         state_main["protected"] = False
         self._write(self.paths["state_main"], state_main)
         with self.assertRaisesRegex(
@@ -1009,8 +1056,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
-                "model_identity_write_max_subrequests": 171,
-                "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                "model_identity_write_max_subrequests": 400,
+                "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -1033,8 +1080,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                     "result_amendment_maintainer_api_enabled": False,
                     "model_identity_owner_api_enabled": False,
                     "model_identity_maintainer_api_enabled": False,
-                    "model_identity_write_max_subrequests": 171,
-                    "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                    "model_identity_write_max_subrequests": 400,
+                    "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                     "result_amendment_maintainers": [],
                     "promotion_canary_configured_enabled": False,
                     "promotion_canary_enabled": False,
@@ -1058,8 +1105,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                     "result_amendment_maintainer_api_enabled": False,
                     "model_identity_owner_api_enabled": False,
                     "model_identity_maintainer_api_enabled": False,
-                    "model_identity_write_max_subrequests": 171,
-                    "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                    "model_identity_write_max_subrequests": 400,
+                    "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 },
             )
 
@@ -1083,8 +1130,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
-                "model_identity_write_max_subrequests": 171,
-                "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                "model_identity_write_max_subrequests": 400,
+                "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -1107,8 +1154,8 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "result_amendment_maintainer_api_enabled": False,
                 "model_identity_owner_api_enabled": False,
                 "model_identity_maintainer_api_enabled": False,
-                "model_identity_write_max_subrequests": 171,
-                "model_identity_consolidation_api": "requires_protected_reverse_impact_index",
+                "model_identity_write_max_subrequests": 400,
+                "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 "promotion_canary_configured_enabled": False,
                 "promotion_canary_enabled": False,
             },
@@ -1188,10 +1235,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "replay_enabled": False,
                 "staging_acceptance_enabled": False,
                 "result_owner_state_contract_commit": (
-                    "a53c658a2de2188675134dc2890285fbaa17cf5a"
+                    "6799522f7fe57263de4a66499e52ce4bfda69baa"
                 ),
                 "model_identity_state_contract_commit": (
-                    "a53c658a2de2188675134dc2890285fbaa17cf5a"
+                    "6799522f7fe57263de4a66499e52ce4bfda69baa"
                 ),
             },
         )

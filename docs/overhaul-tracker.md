@@ -138,20 +138,24 @@ the already implemented owner status, metadata, and publication routes.
       `lean-eval-leaderboard#75` (merge `89be802f`); production Pages run
       `32747172862` published the redacted schema-v4 projection successfully.
 - [x] Add the bounded authenticated model-identity producer for requests,
-      decisions, aliases, and renames with exact
+      decisions, aliases, renames, and complete-graph consolidation with exact
       signed-session owner derivation from the OAuth and verified-agent issuers,
       numeric-ID/login maintainer binding,
       targeted State CAS, closed payloads, permanent alias collision handling,
       independent dark gates, rollback/health guards, and a conservative
-      171-subrequest ceiling. Both environments keep both gates false and the
+      400-subrequest ceiling. Both environments keep both gates false and the
       maintainer list empty. Live OAuth and agent session issuance, paid-plan
       allowance, dark staging E2E, and an enablement decision remain rollout gates; see
       `docs/model-identity-owner-api.md`.
-- [ ] Add a protected reverse-impact index and atomic State producer for model
-      consolidation. Consolidation can change every transitive predecessor and
-      alias view, so the Worker route is an unconditional 404 and health reports
-      `requires_protected_reverse_impact_index`; a repository scan or arbitrary
-      size ceiling must not stand in for complete graph rematerialization.
+- [x] Add the protected, hard-32-view reverse-impact index and complete-graph
+      atomic State producer for model consolidation. Production State contract
+      `6799522f` and staging mirror `9fc7c431` supply the exact index; the Worker
+      reproves their ancestry and source root entries, reads and validates every
+      source and target member, rematerializes every transitive predecessor and alias,
+      removes the old component, and creates the sorted target union in one
+      bounded CAS. Health reports `atomic_reverse_impact_v1`. This is source-only:
+      all owner/maintainer gates remain false pending paid-plan and dark staging
+      qualification.
 - [x] Add State problem-repair request and maintainer decision events with
       explicit revision/causation rules without rewriting accepted records
       (`lean-eval-state#13`, merge `0c875994`) and the targeted private

@@ -50,6 +50,7 @@ import {
   type ResultRetractionOverrideRequest,
   type ResultRetractionRequest,
   type ModelAliasAssignmentRequest,
+  type ModelIdentityConsolidationRequest,
   type ModelIdentityDecisionRequest,
   type ModelIdentityRenameRequest,
   type ModelIdentityRequest,
@@ -107,11 +108,14 @@ import {
 import type { ComparatorEvidence, ResultAmendmentView } from "./result-amendment";
 import {
   decodeModelAliasAssignment,
+  decodeModelConsolidation,
   decodeModelId,
   decodeModelIdentityDecision,
   decodeModelIdentityRequest,
   decodeModelRename,
   MODEL_IDENTITY_CONSOLIDATION_CAPABILITY,
+  PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
+  STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
 } from "./model-identity";
 
 export type RuntimeEnv = Omit<
@@ -297,6 +301,9 @@ export type StateAccess = Readonly<{
     created: boolean; modelId: string; aliasKey: string;
   }>;
   renameModelIdentity(request: ModelIdentityRenameRequest): Promise<{ created: boolean; modelId: string }>;
+  consolidateModelIdentity(request: ModelIdentityConsolidationRequest): Promise<{
+    created: boolean; modelId: string; targetModelId: string;
+  }>;
 }>;
 export type ApiDependencies = Readonly<{
   now?: () => number;
@@ -365,7 +372,9 @@ function resultAmendmentMaintainerApiEnabled(env: RuntimeEnv): boolean {
 
 function modelIdentityContractEnabled(env: RuntimeEnv): boolean {
   return env.MODEL_IDENTITY_STATE_CONTRACT_COMMIT ===
-    resultOwnerStateContractCommit(env.DEPLOYMENT_ENVIRONMENT);
+    (env.DEPLOYMENT_ENVIRONMENT === "production"
+      ? PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT
+      : STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT);
 }
 
 function modelIdentityOwnerApiEnabled(env: RuntimeEnv): boolean {
@@ -512,7 +521,7 @@ async function readiness(
         response.state_contract_commit = PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT;
         response.state_contract_verified = true;
         response.state_event_schema_sha256 =
-          "7ee83581b6e7bb7769afe130a394b41613e9cf24b8643777e63990c448da7cc0";
+          "73598fb935b14ce9e9a02a1d49ee443f8f18b1fe9ed9d13e069ecb8fa2b8ab73";
       }
       return json(response);
     }
@@ -1934,6 +1943,25 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     });
     return json({ model_id: outcome.modelId, status: outcome.created ? "identity_renamed" : "identity_already_renamed" }, outcome.created ? 201 : 200);
   }
+  const modelConsolidationMatch = /^\/api\/v1\/model-identities\/(mi1_[0-9a-f]{64})\/consolidations$/.exec(url.pathname);
+  if (request.method === "POST" && modelConsolidationMatch?.[1]) {
+    requireModelIdentityOwnerApi(env);
+    const authenticated = await session(request, env, dependencies);
+    const body = await readJson(request);
+    const input = modelInput(() => decodeModelConsolidation(body));
+    const outcome = await state(env, dependencies).consolidateModelIdentity({
+      eventId: idempotencyEventId(request, nowMilliseconds),
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
+      modelId: decodeModelId(modelConsolidationMatch[1]),
+      targetModelId: input.target_model_id,
+      ownerLogin: authenticated.login,
+    });
+    return json({
+      model_id: outcome.modelId,
+      target_model_id: outcome.targetModelId,
+      status: outcome.created ? "identity_consolidated" : "identity_already_consolidated",
+    }, outcome.created ? 201 : 200);
+  }
   if (request.method === "POST" && url.pathname === "/api/v1/results/claims") {
     requireResultOwnerApi(env);
     const authenticated = await session(request, env, dependencies);
@@ -2296,12 +2324,9 @@ export async function handleRequest(
   const amendmentOwnerRoute = /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/(?:problem-repairs|retractions)$/.test(url.pathname);
   const amendmentMaintainerRoute = /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/(?:problem-repairs\/decisions|retractions\/(?:decisions|override|finalize))$/.test(url.pathname);
   const modelIdentityRoute = url.pathname === "/api/v1/model-identities" ||
-    /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/(?:aliases|name)$/.test(url.pathname);
+    /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/(?:aliases|consolidations|name)$/.test(url.pathname);
   const modelIdentityMaintainerRoute =
     /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/decisions$/.test(url.pathname);
-  const modelIdentityUnsupportedRoute =
-    /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/consolidations$/.test(url.pathname);
-  if (modelIdentityUnsupportedRoute) return json({ error: "not_found" }, 404);
   if (legacyResultOwnerRoute && !resultOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (amendmentOwnerRoute && !resultAmendmentOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (amendmentMaintainerRoute && !resultAmendmentMaintainerApiEnabled(env)) return json({ error: "not_found" }, 404);
