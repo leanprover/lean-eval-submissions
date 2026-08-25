@@ -391,8 +391,9 @@ jobs:
             --env production --json > "$plan_dir/provisional-status.json"
           deployed_version=$(python ../scripts/validate_cloudflare_rollback.py \
             active-version --status "$plan_dir/provisional-status.json")
-          npx wrangler versions view "$deployed_version" --config wrangler.jsonc \
-            --env production --json > "$plan_dir/provisional-version.json"
+          ../scripts/read_cloudflare_worker_version \
+            ./node_modules/.bin/wrangler wrangler.jsonc production \
+            "$deployed_version" "$plan_dir/provisional-version.json"
           python ../scripts/validate_cloudflare_rollback.py component \
             --component intake --expected-commit "$EXPECTED_COMMIT" \
             --environment production --config wrangler.jsonc \
@@ -466,9 +467,9 @@ jobs:
             --env production --json > "$plan_dir/broker-status.json"
           deployed_version=$(python ../scripts/validate_cloudflare_rollback.py \
             active-version --status "$plan_dir/broker-status.json")
-          npx wrangler versions view "$deployed_version" \
-            --config wrangler.broker.jsonc --env production --json \
-            > "$plan_dir/broker-version.json"
+          ../scripts/read_cloudflare_worker_version \
+            ./node_modules/.bin/wrangler wrangler.broker.jsonc production \
+            "$deployed_version" "$plan_dir/broker-version.json"
           python ../scripts/validate_cloudflare_rollback.py component \
             --component broker --expected-commit "$EXPECTED_COMMIT" \
             --environment production --config wrangler.broker.jsonc \
@@ -486,9 +487,9 @@ jobs:
             --env production --json > "$plan_dir/replay-status.json"
           deployed_version=$(python ../scripts/validate_cloudflare_rollback.py \
             active-version --status "$plan_dir/replay-status.json")
-          npx wrangler versions view "$deployed_version" \
-            --config wrangler.replay.jsonc --env production --json \
-            > "$plan_dir/replay-version.json"
+          ../scripts/read_cloudflare_worker_version \
+            ./node_modules/.bin/wrangler wrangler.replay.jsonc production \
+            "$deployed_version" "$plan_dir/replay-version.json"
           python ../scripts/validate_cloudflare_rollback.py component \
             --component replay --expected-commit "$EXPECTED_COMMIT" \
             --environment production --config wrangler.replay.jsonc \
@@ -646,9 +647,9 @@ jobs:
             --env production --json > "$plan_dir/final-status.json"
           deployed_version=$(python ../scripts/validate_cloudflare_rollback.py \
             active-version --status "$plan_dir/final-status.json")
-          timeout 60s npx wrangler versions view "$deployed_version" \
-            --config wrangler.jsonc --env production --json \
-            > "$plan_dir/final-version.json"
+          ../scripts/read_cloudflare_worker_version \
+            ./node_modules/.bin/wrangler wrangler.jsonc production \
+            "$deployed_version" "$plan_dir/final-version.json"
           python ../scripts/validate_cloudflare_rollback.py component \
             --component intake --expected-commit "$EXPECTED_COMMIT" \
             --environment production --config wrangler.jsonc \
