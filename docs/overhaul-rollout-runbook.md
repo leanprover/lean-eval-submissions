@@ -416,11 +416,16 @@ authorize one State write or enable either route family.
 PR `#1371` merged the source-only staging qualification/recovery scaffold as
 `029b69ce6852fd9a0ee6e9f33aa7adb58474887f` after independent exact-head review
 and green CI `32815289877` / `32815289745`. Every job is still guarded by an
-intentionally impossible source ref. Before replacing that gate, implement and
-review the persistent harness, configure protected-environment reviewers with
-self-review prevention, install five operation-specific ephemeral credentials,
-prove an idle mutation window, and rehearse journal-based restoration. The
-scaffold itself is neither a live staging qualification nor State authority.
+intentionally impossible source ref. The follow-up persistent harness now
+exists in source: its Durable Object stores immutable per-step plans and
+receipts without sessions; its coordinator verifies exact State transitions;
+its staging-only private executor calls the real API kernel; its private
+collision Worker supplies seven genuine same-tree contenders; and its
+operation-only runner requires the exact ordered fourteen-proof contract.
+Acquisition additionally requires an independently verified, source-pinned live
+fixture manifest. That manifest and digest remain deliberately absent, so the
+harness fails closed before acquiring a journal or reading or writing State.
+The source remains neither a live staging qualification nor State authority.
 
 Protected rollout `32815495847` subsequently deployed that exact merge to
 staging and production after immutable dispatch promotion and a successful
@@ -438,8 +443,17 @@ canary, and deployed production provisionally with intake and replay disabled.
 Every intake-lease and durable-enablement step was skipped, and finalization
 reverified the protected State and disabled health. Credential-free readiness
 run `32832326810` then passed and closed monitor incident `#1310`. The
-persistent 14-proof model-identity harness is still incomplete and exists only
-as unmerged local work; neither rollout executed it or authorized a
+source-disabled persistent fourteen-proof harness is implemented, but it is
+intentionally unarmed and has not been deployed or executed. Before replacing
+the impossible source gate, independently review and pin the exact live fixture;
+obtain explicit participation for the distinct owner, cross-owner, and
+maintainer identities; configure protected-environment reviewers with
+self-review prevention; install five distinct ephemeral credentials; verify the
+paid 400-subrequest allowance; deploy and inspect both private service bindings;
+prove an idle mutation window; and complete the exact fourteen-step E2E, the
+full before/after-write and receipt failure-injection matrix, automatic and
+manual recovery, non-force restoration, credential rotation, and rollback
+qualification. Neither prior rollout executed the harness or authorized a
 model-identity State write.
 
 This gate closed on 2026-08-25 against disabled deployed commit
