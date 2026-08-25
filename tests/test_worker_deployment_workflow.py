@@ -113,6 +113,30 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("'!server/*.md'", push)
         self.assertIn("'!server/**/*.md'", push)
 
+    def test_one_shot_amendment_canary_is_retired(self) -> None:
+        retired_paths = {
+            ".github/workflows/staging-amendment-canary.yml",
+            "docs/staging-amendment-canary.md",
+            "server/src/staging-amendment-canary.ts",
+            "server/test/staging-amendment-canary.test.ts",
+            "tests/test_staging_amendment_canary_workflow.py",
+        }
+        for path in retired_paths:
+            with self.subTest(path=path):
+                self.assertFalse((ROOT / path).exists())
+        for path in [
+            "server/src/app.ts",
+            "server/vitest.config.ts",
+            "server/worker-configuration.d.ts",
+            "server/wrangler.jsonc",
+        ]:
+            with self.subTest(path=path):
+                self.assertNotIn(
+                    "STAGING_AMENDMENT_CANARY_TOKEN",
+                    (ROOT / path).read_text(encoding="utf-8"),
+                )
+        self.assertNotIn("/internal/v1/staging-amendment-canary", WORKER_APP)
+
     def test_offline_evidence_scripts_do_not_redeploy_workers(self) -> None:
         pull_request = DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0]
         push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
@@ -776,12 +800,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "SOURCE_APP_PRIVATE_KEY",
         }
         for environment in ("staging", "production"):
-            expected_intake_secrets = set(intake_secrets)
-            if environment == "staging":
-                expected_intake_secrets.add("STAGING_AMENDMENT_CANARY_TOKEN")
             self.assertEqual(
                 set(WRANGLER["env"][environment]["secrets"]["required"]),
-                expected_intake_secrets,
+                intake_secrets,
             )
             self.assertEqual(
                 set(BROKER_WRANGLER["env"][environment]["secrets"]["required"]),

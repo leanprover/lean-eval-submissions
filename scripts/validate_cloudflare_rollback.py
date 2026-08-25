@@ -60,15 +60,12 @@ CALLBACK_CONTRACT_FILES = [
     "server/src/result-amendment.ts",
     "server/src/result-owner.ts",
     "server/src/scheduled-subrequest-budget.ts",
-    "server/src/staging-amendment-canary.ts",
     "server/src/state-event.ts",
     "server/src/submission-view.ts",
 ]
-HISTORICAL_CALLBACK_CONTRACT_FILES = [
-    relative
-    for relative in CALLBACK_CONTRACT_FILES
-    if relative != "server/src/staging-amendment-canary.ts"
-]
+CANARY_CALLBACK_CONTRACT_FILES = sorted(
+    [*CALLBACK_CONTRACT_FILES, "server/src/staging-amendment-canary.ts"]
+)
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 MAX_CONTRACT_FILE_BYTES = 2 * 1024 * 1024
@@ -194,9 +191,9 @@ def _validate_qualification_header(
     qualified_files = qualification["lifecycle_callback_contract_files"]
     canary_contract = target_root / "server/src/staging-amendment-canary.ts"
     expected_files = (
-        CALLBACK_CONTRACT_FILES
+        CANARY_CALLBACK_CONTRACT_FILES
         if canary_contract.exists()
-        else HISTORICAL_CALLBACK_CONTRACT_FILES
+        else CALLBACK_CONTRACT_FILES
     )
     if qualified_files != expected_files:
         raise RollbackValidationError(

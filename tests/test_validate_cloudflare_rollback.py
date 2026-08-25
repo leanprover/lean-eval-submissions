@@ -66,33 +66,36 @@ class RollbackContractCoverageTests(unittest.TestCase):
         for relative in rollback.CALLBACK_CONTRACT_FILES:
             self.assertGreater((ROOT / relative).stat().st_size, 0)
 
-    def test_historical_qualified_file_set_remains_supported(self) -> None:
+    def test_removed_canary_is_not_part_of_the_current_contract(self) -> None:
         self.assertNotIn(
             "server/src/staging-amendment-canary.ts",
-            rollback.HISTORICAL_CALLBACK_CONTRACT_FILES,
+            rollback.CALLBACK_CONTRACT_FILES,
         )
 
+    def test_canary_qualified_file_set_remains_supported_for_rollback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             target = pathlib.Path(temporary)
             for relative in [
-                *rollback.HISTORICAL_CALLBACK_CONTRACT_FILES,
+                *rollback.CALLBACK_CONTRACT_FILES,
                 "server/package.json",
                 "server/package-lock.json",
             ]:
                 destination = target / relative
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(ROOT / relative, destination)
+            canary = target / "server/src/staging-amendment-canary.ts"
+            canary.write_text("export const rollbackCanaryFixture = true;\n", encoding="utf-8")
             qualification = json.loads(
                 (ROOT / ".audit" / "cloudflare-rollback-qualification-v1.json").read_text(
                     encoding="utf-8"
                 )
             )
             qualification["lifecycle_callback_contract_files"] = (
-                rollback.HISTORICAL_CALLBACK_CONTRACT_FILES
+                rollback.CANARY_CALLBACK_CONTRACT_FILES
             )
             qualification["lifecycle_callback_contract_sha256"] = (
                 rollback._callback_contract_digest(
-                    target, rollback.HISTORICAL_CALLBACK_CONTRACT_FILES
+                    target, rollback.CANARY_CALLBACK_CONTRACT_FILES
                 )
             )
             self.assertEqual(
@@ -100,7 +103,34 @@ class RollbackContractCoverageTests(unittest.TestCase):
                 qualification["lifecycle_callback_contract_sha256"],
             )
 
-    def test_current_target_cannot_omit_canary_callback_contract(self) -> None:
+    def test_canary_target_cannot_omit_canary_callback_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            target = pathlib.Path(temporary)
+            for relative in [
+                *rollback.CALLBACK_CONTRACT_FILES,
+                "server/package.json",
+                "server/package-lock.json",
+            ]:
+                destination = target / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, destination)
+            canary = target / "server/src/staging-amendment-canary.ts"
+            canary.write_text("export const rollbackCanaryFixture = true;\n", encoding="utf-8")
+            qualification = json.loads(
+                (ROOT / ".audit" / "cloudflare-rollback-qualification-v1.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            qualification["lifecycle_callback_contract_sha256"] = (
+                rollback._callback_contract_digest(target)
+            )
+            with self.assertRaisesRegex(
+                rollback.RollbackValidationError,
+                "does not cover its exact callback contract files",
+            ):
+                rollback._validate_qualification_header(qualification, target)
+
+    def test_current_target_cannot_claim_canary_callback_contract(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             target = pathlib.Path(temporary)
             for relative in [
@@ -117,34 +147,7 @@ class RollbackContractCoverageTests(unittest.TestCase):
                 )
             )
             qualification["lifecycle_callback_contract_files"] = (
-                rollback.HISTORICAL_CALLBACK_CONTRACT_FILES
-            )
-            qualification["lifecycle_callback_contract_sha256"] = (
-                rollback._callback_contract_digest(
-                    target, rollback.HISTORICAL_CALLBACK_CONTRACT_FILES
-                )
-            )
-            with self.assertRaisesRegex(
-                rollback.RollbackValidationError,
-                "does not cover its exact callback contract files",
-            ):
-                rollback._validate_qualification_header(qualification, target)
-
-    def test_historical_target_cannot_claim_canary_callback_contract(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary:
-            target = pathlib.Path(temporary)
-            for relative in [
-                *rollback.HISTORICAL_CALLBACK_CONTRACT_FILES,
-                "server/package.json",
-                "server/package-lock.json",
-            ]:
-                destination = target / relative
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(ROOT / relative, destination)
-            qualification = json.loads(
-                (ROOT / ".audit" / "cloudflare-rollback-qualification-v1.json").read_text(
-                    encoding="utf-8"
-                )
+                rollback.CANARY_CALLBACK_CONTRACT_FILES
             )
             with self.assertRaisesRegex(
                 rollback.RollbackValidationError,

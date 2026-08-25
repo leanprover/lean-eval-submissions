@@ -85,7 +85,6 @@ import {
   type EvaluationStartedEvent,
   type ReleaseScheduledEvent,
   type ResultRecordedEvent,
-  type StateEvent,
   type WritableStateEvent,
   type WritableResultLifecycleEvent,
   type WritableSubmissionLifecycleEvent,
@@ -96,23 +95,10 @@ import {
   type SubmissionView,
 } from "./submission-view";
 import {
-  canonicalJson,
   PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT,
   resultOwnerStateContractCommit,
 } from "./result-owner";
 import type { ComparatorEvidence, ResultAmendmentView } from "./result-amendment";
-import type { EffectiveResultIdentityReservation } from "./result-owner";
-import {
-  decodeStagingAmendmentCanaryRequest,
-  STAGING_CANARY_OWNER,
-  STAGING_CANARY_PROBLEM,
-  STAGING_CANARY_RESULTS_COMMIT,
-  STAGING_CANARY_REVIEWER,
-  STAGING_CANARY_STATE_REPOSITORY,
-  STAGING_CANARY_STATEMENT_REVISION,
-  STAGING_CANARY_INTENTS,
-  STAGING_CANARY_TARGETS,
-} from "./staging-amendment-canary";
 
 export type RuntimeEnv = Omit<
   CloudflareEnv,
@@ -149,7 +135,6 @@ export type RuntimeEnv = Omit<
   | "OAUTH_CALLBACK_URL"
   | "PROMOTION_CANARY_ENABLED"
   | "READINESS_TOKEN"
-  | "STAGING_AMENDMENT_CANARY_TOKEN"
   | "RESULT_OWNER_STATE_CONTRACT_COMMIT"
   | "STATE_REPOSITORY"
 > &
@@ -187,7 +172,6 @@ export type RuntimeEnv = Omit<
     OAUTH_CALLBACK_URL?: string;
     PROMOTION_CANARY_ENABLED?: string;
     READINESS_TOKEN?: string;
-    STAGING_AMENDMENT_CANARY_TOKEN?: string;
     RESULT_OWNER_STATE_CONTRACT_COMMIT?: string;
     STATE_REPOSITORY: string;
   }>;
@@ -196,30 +180,6 @@ type Lifecycle = Pick<ExecutionContext, "waitUntil">;
 export type StateAccess = Readonly<{
   assertResultOwnerContract(): Promise<string>;
   readResultAmendmentForMaintainer(resultId: string): Promise<ResultAmendmentView>;
-  readEffectiveResultIdentity(
-    identifier: string,
-  ): Promise<Readonly<{ commit: string; reservation: EffectiveResultIdentityReservation | null }>>;
-  readResultAmendmentCanary(
-    resultId: string,
-    candidateIdentityId: string,
-  ): Promise<Readonly<{
-    commit: string;
-    view: ResultAmendmentView;
-    reservation: EffectiveResultIdentityReservation | null;
-    requestEvent?: StateEvent | null;
-    decisionEvent?: StateEvent | null;
-  }>>;
-  readResultAmendmentCanaryAtHead(
-    resultId: string,
-    candidateIdentityId: string,
-    expectedHead: string,
-  ): Promise<Readonly<{
-    commit: string;
-    view: ResultAmendmentView;
-    reservation: EffectiveResultIdentityReservation | null;
-    requestEvent?: StateEvent | null;
-    decisionEvent?: StateEvent | null;
-  }>>;
   appendEvent(event: WritableStateEvent): Promise<{ commit?: string; created: boolean }>;
   appendEventAtHead?(
     event: WritableStateEvent,
@@ -295,15 +255,13 @@ export type StateAccess = Readonly<{
     mutationEventId: string;
     releaseDisposition: "not_published" | "removal_required" | "already_removed";
   }>;
-  requestResultProblemRepair(request: ResultProblemRepairRequest, expectedHead?: string): Promise<{
-    commit: string;
+  requestResultProblemRepair(request: ResultProblemRepairRequest): Promise<{
     created: boolean;
     resultId: string;
     mutationEventId: string;
     repairRevision: number;
   }>;
-  decideResultProblemRepair(request: ResultProblemRepairDecisionRequest, expectedHead?: string): Promise<{
-    commit: string;
+  decideResultProblemRepair(request: ResultProblemRepairDecisionRequest): Promise<{
     created: boolean;
     resultId: string;
     mutationEventId: string;
@@ -418,424 +376,6 @@ async function readinessAuthorized(request: Request, env: RuntimeEnv): Promise<b
   const header = request.headers.get("authorization");
   if (!header?.startsWith("Bearer ")) return false;
   return equalSecret(header.slice("Bearer ".length), env.READINESS_TOKEN);
-}
-
-async function stagingAmendmentCanaryAuthorized(
-  request: Request,
-  env: RuntimeEnv,
-): Promise<boolean> {
-  if (!env.STAGING_AMENDMENT_CANARY_TOKEN) return false;
-  const header = request.headers.get("authorization");
-  if (!header?.startsWith("Bearer ")) return false;
-  return equalSecret(
-    header.slice("Bearer ".length),
-    env.STAGING_AMENDMENT_CANARY_TOKEN,
-  );
-}
-
-function stagingAmendmentCanaryAvailable(env: RuntimeEnv): boolean {
-  return env.DEPLOYMENT_ENVIRONMENT === "staging" &&
-    typeof env.STAGING_AMENDMENT_CANARY_TOKEN === "string" &&
-    new TextEncoder().encode(env.STAGING_AMENDMENT_CANARY_TOKEN).byteLength >= 32 &&
-    env.STATE_REPOSITORY === STAGING_CANARY_STATE_REPOSITORY &&
-    env.PROMOTION_CANARY_ENABLED === "true" &&
-    env.INTAKE_ENABLED === "false" &&
-    env.INTAKE_ENABLEMENT_MODE === "disabled" &&
-    env.LEGACY_RESULT_OWNER_API_ENABLED === "false" &&
-    env.RESULT_AMENDMENT_OWNER_API_ENABLED === "false" &&
-    env.RESULT_AMENDMENT_MAINTAINER_API_ENABLED === "false" &&
-    env.RESULT_AMENDMENT_MAINTAINERS === "[]";
-}
-
-function stagingCanaryTargetMatches(
-  view: ResultAmendmentView,
-  lane: "apply" | "reject",
-): boolean {
-  const target = STAGING_CANARY_TARGETS[lane];
-  return view.result_id === target.resultId &&
-    view.owner_login === STAGING_CANARY_OWNER &&
-    view.declared_model === target.declaredModel &&
-    view.authority_event_id === target.authorityEventId &&
-    view.base_problem_id === "two_plus_two" &&
-    view.base_statement_revision === 1 &&
-    view.retraction === null &&
-    view.leaderboard_eligible;
-}
-
-function stagingCanaryReservationMatches(
-  reservation: EffectiveResultIdentityReservation | null,
-  lane: "apply" | "reject",
-  decisionEventId: string,
-): boolean {
-  const target = STAGING_CANARY_TARGETS[lane];
-  return reservation?.schema_version === 1 &&
-    reservation.effective_result_identity_id === target.candidateIdentityId &&
-    reservation.owner_login === STAGING_CANARY_OWNER &&
-    reservation.declared_model === target.declaredModel &&
-    reservation.problem_id === STAGING_CANARY_PROBLEM &&
-    reservation.statement_revision === STAGING_CANARY_STATEMENT_REVISION &&
-    reservation.result_id === target.resultId &&
-    reservation.reservation_event_id === decisionEventId &&
-    reservation.reservation_kind === "problem_repair";
-}
-
-function stagingCanaryRequestMatches(
-  view: ResultAmendmentView,
-  lane: "apply" | "reject",
-): boolean {
-  const operation = lane === "apply" ? "request_apply" : "request_reject";
-  const intent = STAGING_CANARY_INTENTS[operation];
-  const repair = view.problem_repair;
-  return repair?.revision === 1 &&
-    repair.request_event_id === intent.eventId &&
-    repair.requested_at === intent.occurredAt &&
-    repair.corrected_problem_id === STAGING_CANARY_PROBLEM &&
-    repair.corrected_statement_revision === STAGING_CANARY_STATEMENT_REVISION;
-}
-
-function stagingCanaryEventsMatch(
-  view: ResultAmendmentView,
-  operation: keyof typeof STAGING_CANARY_INTENTS,
-  requestEvent: StateEvent | null | undefined,
-  decisionEvent: StateEvent | null | undefined,
-): boolean {
-  const lane = operation.endsWith("apply") ? "apply" : "reject";
-  const target = STAGING_CANARY_TARGETS[lane];
-  const requestOperation = lane === "apply" ? "request_apply" : "request_reject";
-  const requestIntent = STAGING_CANARY_INTENTS[requestOperation];
-  const expectedRequestPayload = {
-    repair_revision: 1,
-    corrected_problem_id: STAGING_CANARY_PROBLEM,
-    corrected_statement_revision: STAGING_CANARY_STATEMENT_REVISION,
-    reason_code: "wrong_problem_revision",
-  };
-  if (
-    requestEvent?.schema_version !== 1 ||
-    requestEvent.event_type !== "result.problem_repair_requested" ||
-    requestEvent.event_id !== requestIntent.eventId ||
-    requestEvent.occurred_at !== requestIntent.occurredAt ||
-    requestEvent.subject_id !== target.resultId ||
-    requestEvent.causation_event_id !== target.authorityEventId ||
-    requestEvent.actor.login !== STAGING_CANARY_OWNER ||
-    canonicalJson(requestEvent.payload) !== canonicalJson(expectedRequestPayload)
-  ) {
-    return false;
-  }
-  const repair = view.problem_repair;
-  if (repair?.status === "pending") return decisionEvent === null;
-  const decision = STAGING_CANARY_INTENTS[lane];
-  if (
-    decisionEvent?.schema_version !== 1 ||
-    decisionEvent.event_id !== decision.eventId ||
-    decisionEvent.occurred_at !== decision.occurredAt ||
-    decisionEvent.subject_id !== target.resultId ||
-    decisionEvent.causation_event_id !== requestIntent.eventId ||
-    decisionEvent.actor.kind !== "system"
-  ) {
-    return false;
-  }
-  if (lane === "reject") {
-    return decisionEvent.event_type === "result.problem_repair_rejected" &&
-      canonicalJson(decisionEvent.payload) === canonicalJson({
-        repair_revision: 1,
-        reviewer_login: STAGING_CANARY_REVIEWER,
-        reason_code: "insufficient_comparator_evidence",
-      });
-  }
-  const evidence = repair?.comparator_evidence;
-  return decisionEvent.event_type === "result.problem_repaired" &&
-    evidence !== null && evidence !== undefined &&
-    canonicalJson(decisionEvent.payload) === canonicalJson({
-      repair_revision: 1,
-      corrected_problem_id: STAGING_CANARY_PROBLEM,
-      corrected_statement_revision: STAGING_CANARY_STATEMENT_REVISION,
-      reviewer_login: STAGING_CANARY_REVIEWER,
-      comparator_repository: evidence.repository,
-      comparator_commit: evidence.commit,
-      comparator_path: evidence.path,
-      comparator_blob_oid: evidence.blob_oid,
-      comparator_blob_sha256: evidence.blob_sha256,
-      comparator_record_sha256: evidence.record_sha256,
-      comparator_binding_sha256: evidence.binding_sha256,
-      comparator_verification_method: evidence.verification_method,
-      evidence_result_id: evidence.evidence_result_id,
-      evidence_owner_login: evidence.evidence_owner_login,
-      evidence_declared_model: evidence.evidence_declared_model,
-      evidence_base_problem_group: evidence.evidence_base_problem_group,
-      evidence_base_problem_id: evidence.evidence_base_problem_id,
-      evidence_base_statement_revision: evidence.evidence_base_statement_revision,
-      evidence_base_challenge_id: evidence.evidence_base_challenge_id,
-      evidence_corrected_problem_group: evidence.evidence_corrected_problem_group,
-      evidence_corrected_problem_id: evidence.evidence_corrected_problem_id,
-      evidence_corrected_statement_revision: evidence.evidence_corrected_statement_revision,
-      evidence_corrected_challenge_id: evidence.evidence_corrected_challenge_id,
-    });
-}
-
-function stagingCanaryAppliedEvidenceMatches(
-  evidence: ComparatorEvidence | null,
-  exactEvidence: ComparatorEvidence | null,
-): boolean {
-  return evidence !== null && exactEvidence !== null &&
-    canonicalJson(evidence) === canonicalJson(exactEvidence);
-}
-
-function stagingCanaryOperationMatches(
-  view: ResultAmendmentView,
-  reservation: EffectiveResultIdentityReservation | null,
-  operation: keyof typeof STAGING_CANARY_INTENTS,
-  exactApplyEvidence: ComparatorEvidence | null = null,
-): boolean {
-  const lane = operation.endsWith("apply") ? "apply" : "reject";
-  if (!stagingCanaryTargetMatches(view, lane) || !stagingCanaryRequestMatches(view, lane)) {
-    return false;
-  }
-  const repair = view.problem_repair;
-  if (repair === null) return false;
-  const requestOnly = operation.startsWith("request_");
-  if (repair.status === "pending") {
-    return requestOnly &&
-      view.mutation_event_id === repair.request_event_id &&
-      view.effective_problem_id === "two_plus_two" &&
-      view.effective_statement_revision === 1 &&
-      view.applied_problem_repair === null &&
-      repair.decision_event_id === null &&
-      repair.decided_at === null &&
-      repair.reviewer_login === null &&
-      repair.reason_code === "wrong_problem_revision" &&
-      repair.comparator_evidence === null &&
-      reservation === null;
-  }
-  const decisionOperation = lane;
-  const decision = STAGING_CANARY_INTENTS[decisionOperation];
-  const decisionMatches = repair.decision_event_id === decision.eventId &&
-    repair.decided_at === decision.occurredAt &&
-    repair.reviewer_login === STAGING_CANARY_REVIEWER &&
-    view.mutation_event_id === decision.eventId;
-  if (lane === "apply") {
-    return (requestOnly || operation === "apply") &&
-      repair.status === "applied" &&
-      decisionMatches &&
-      repair.reason_code === null &&
-      stagingCanaryAppliedEvidenceMatches(repair.comparator_evidence, exactApplyEvidence) &&
-      view.applied_problem_repair !== null &&
-      JSON.stringify(view.applied_problem_repair) === JSON.stringify(repair) &&
-      view.effective_problem_id === STAGING_CANARY_PROBLEM &&
-      view.effective_statement_revision === STAGING_CANARY_STATEMENT_REVISION &&
-      stagingCanaryReservationMatches(reservation, lane, decision.eventId);
-  }
-  return (requestOnly || operation === "reject") &&
-    repair.status === "rejected" &&
-    decisionMatches &&
-    repair.reason_code === "insufficient_comparator_evidence" &&
-    repair.comparator_evidence === null &&
-    view.applied_problem_repair === null &&
-    view.effective_problem_id === "two_plus_two" &&
-    view.effective_statement_revision === 1 &&
-    reservation === null;
-}
-
-function stagingCanaryResponse(
-  env: RuntimeEnv,
-  operation: keyof typeof STAGING_CANARY_INTENTS,
-  snapshot: Readonly<{
-    commit: string;
-    view: ResultAmendmentView;
-    reservation: EffectiveResultIdentityReservation | null;
-    requestEvent?: StateEvent | null;
-    decisionEvent?: StateEvent | null;
-  }>,
-  exactApplyEvidence: ComparatorEvidence | null = null,
-): Response {
-  const lane = operation.endsWith("apply") ? "apply" : "reject";
-  const target = STAGING_CANARY_TARGETS[lane];
-  const repair = snapshot.view.problem_repair;
-  if (repair === null ||
-    !stagingCanaryOperationMatches(
-      snapshot.view,
-      snapshot.reservation,
-      operation,
-      exactApplyEvidence,
-    ) ||
-    !stagingCanaryEventsMatch(
-      snapshot.view,
-      operation,
-      snapshot.requestEvent,
-      snapshot.decisionEvent,
-    )) {
-    throw new GitHubStateError(502, "staging amendment canary postcondition failed");
-  }
-  return json({
-    status: "staging_amendment_canary_verified",
-    operation,
-    amendment_status: repair.status,
-    deployed_commit: env.DEPLOYED_COMMIT,
-    state_commit: snapshot.commit,
-    result_id: target.resultId,
-    event_id: STAGING_CANARY_INTENTS[operation].eventId,
-    candidate_effective_result_identity_id: target.candidateIdentityId,
-    candidate_reserved: snapshot.reservation !== null,
-    owner_api_enabled: false,
-    maintainer_api_enabled: false,
-  });
-}
-
-async function stagingAmendmentCanary(
-  request: Request,
-  env: RuntimeEnv,
-  dependencies: ApiDependencies,
-): Promise<Response> {
-  if (!(await stagingAmendmentCanaryAuthorized(request, env))) {
-    return json({ error: "not_found" }, 404);
-  }
-  if (currentIntake(env, dependencies).effective) {
-    throw new ResultOwnerStateError(409, "staging amendment canary requires intake disabled");
-  }
-  const input = decodeStagingAmendmentCanaryRequest(await readJson(request));
-  if (input.deployed_commit !== env.DEPLOYED_COMMIT) {
-    throw new ApiDecodeError("staging amendment canary did not bind the deployed commit");
-  }
-  const intent = STAGING_CANARY_INTENTS[input.operation];
-  const lane = input.operation.endsWith("apply") ? "apply" : "reject";
-  const target = STAGING_CANARY_TARGETS[lane];
-  const ledger = state(env, dependencies);
-  let exactApplyEvidencePromise: Promise<ComparatorEvidence> | undefined;
-  const exactApplyEvidence = (): Promise<ComparatorEvidence> => {
-    exactApplyEvidencePromise ??= provider(
-      env,
-      dependencies,
-    ).verifyProblemRepairComparator({
-      resultsCommit: STAGING_CANARY_RESULTS_COMMIT,
-      resultId: STAGING_CANARY_TARGETS.apply.resultId,
-      ownerLogin: STAGING_CANARY_OWNER,
-      declaredModel: STAGING_CANARY_TARGETS.apply.declaredModel,
-      baseProblemId: "two_plus_two",
-      baseStatementRevision: 1,
-      correctedProblemId: STAGING_CANARY_PROBLEM,
-      correctedStatementRevision: STAGING_CANARY_STATEMENT_REVISION,
-    });
-    return exactApplyEvidencePromise;
-  };
-  const initialSnapshot = await ledger.readResultAmendmentCanary(
-    target.resultId,
-    target.candidateIdentityId,
-  );
-  if (input.operation === "request_reject") {
-    const applyTarget = STAGING_CANARY_TARGETS.apply;
-    const predecessor = await ledger.readResultAmendmentCanaryAtHead(
-      applyTarget.resultId,
-      applyTarget.candidateIdentityId,
-      initialSnapshot.commit,
-    );
-    const storedPredecessorEvidence = predecessor.view.problem_repair?.comparator_evidence ?? null;
-    if (!stagingCanaryOperationMatches(
-      predecessor.view,
-      predecessor.reservation,
-      "apply",
-      storedPredecessorEvidence,
-    ) ||
-      !stagingCanaryEventsMatch(
-        predecessor.view,
-        "apply",
-        predecessor.requestEvent,
-        predecessor.decisionEvent,
-      )) {
-      throw new ResultOwnerStateError(409, "staging amendment canary predecessor changed");
-    }
-    const predecessorEvidence = await exactApplyEvidence();
-    if (!stagingCanaryOperationMatches(
-      predecessor.view,
-      predecessor.reservation,
-      "apply",
-      predecessorEvidence,
-    )) {
-      throw new ResultOwnerStateError(409, "staging amendment canary predecessor changed");
-    }
-  }
-  const initial = initialSnapshot.view;
-  if (!stagingCanaryTargetMatches(initial, lane)) {
-    throw new ResultOwnerStateError(409, "staging amendment canary target identity changed");
-  }
-  const existingApplyEvidence = lane === "apply" &&
-      initial.problem_repair?.status === "applied"
-    ? await exactApplyEvidence()
-    : null;
-  const existingOperationMatches = stagingCanaryOperationMatches(
-    initial,
-    initialSnapshot.reservation,
-    input.operation,
-    existingApplyEvidence,
-  );
-  if (existingOperationMatches) {
-    if (!stagingCanaryEventsMatch(
-      initial,
-      input.operation,
-      initialSnapshot.requestEvent,
-      initialSnapshot.decisionEvent,
-    )) {
-      throw new GitHubStateError(409, "staging amendment canary event binding changed");
-    }
-    return stagingCanaryResponse(
-      env,
-      input.operation,
-      initialSnapshot,
-      existingApplyEvidence,
-    );
-  }
-  if (initialSnapshot.commit !== input.expected_state_commit) {
-    throw new GitHubStateError(409, "State moved before the bound amendment canary operation");
-  }
-  const existing = initial.problem_repair;
-  const requesting = input.operation.startsWith("request_");
-  let outcome: Readonly<{ commit: string }>;
-  let finalApplyEvidence: ComparatorEvidence | null = null;
-  if (requesting) {
-    if (existing !== null && existing.request_event_id !== intent.eventId) {
-      throw new ResultOwnerStateError(409, "staging amendment canary target was already exercised");
-    }
-    outcome = await ledger.requestResultProblemRepair({
-      eventId: intent.eventId,
-      occurredAt: intent.occurredAt,
-      resultId: target.resultId,
-      ownerLogin: STAGING_CANARY_OWNER,
-      correctedProblemId: STAGING_CANARY_PROBLEM,
-      correctedStatementRevision: STAGING_CANARY_STATEMENT_REVISION,
-      reasonCode: "wrong_problem_revision",
-    }, input.expected_state_commit);
-  } else {
-    if (
-      existing?.request_event_id !== intent.expectedRequestEventId ||
-      existing.corrected_problem_id !== STAGING_CANARY_PROBLEM ||
-      existing.corrected_statement_revision !== STAGING_CANARY_STATEMENT_REVISION
-    ) {
-      throw new ResultOwnerStateError(409, "staging amendment canary pending request changed");
-    }
-    let reasonCode: string | null = "insufficient_comparator_evidence";
-    if (input.operation === "apply") {
-      finalApplyEvidence = await exactApplyEvidence();
-      reasonCode = null;
-    }
-    outcome = await ledger.decideResultProblemRepair({
-      eventId: intent.eventId,
-      occurredAt: intent.occurredAt,
-      resultId: target.resultId,
-      reviewerLogin: STAGING_CANARY_REVIEWER,
-      decision: lane,
-      reasonCode,
-      comparatorEvidence: finalApplyEvidence,
-    }, input.expected_state_commit);
-  }
-  const finalSnapshot = await ledger.readResultAmendmentCanaryAtHead(
-    target.resultId,
-    target.candidateIdentityId,
-    outcome.commit,
-  );
-  return stagingCanaryResponse(
-    env,
-    input.operation,
-    finalSnapshot,
-    finalApplyEvidence,
-  );
 }
 
 function readinessCacheKey(env: RuntimeEnv): Request {
@@ -2566,14 +2106,6 @@ export async function handleRequest(
     if (!promotionCanaryEnabled(env)) return json({ error: "not_found" }, 404);
     try {
       return await promotionCanary(request, env, dependencies);
-    } catch (error) {
-      return errorResponse(error);
-    }
-  }
-  if (request.method === "POST" && url.pathname === "/internal/v1/staging-amendment-canary") {
-    if (!stagingAmendmentCanaryAvailable(env)) return json({ error: "not_found" }, 404);
-    try {
-      return await stagingAmendmentCanary(request, env, dependencies);
     } catch (error) {
       return errorResponse(error);
     }
