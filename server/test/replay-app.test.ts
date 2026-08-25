@@ -179,6 +179,15 @@ function authoritativeStatusInput(body: Record<string, unknown>): Record<string,
   };
 }
 
+function activeBindingForTest(binding: Record<string, unknown>): Record<string, unknown> {
+  const now = Date.now();
+  return {
+    ...binding,
+    cleanup_after_epoch_ms: now + 7 * 60 * 60 * 1000,
+    retained_until_epoch_ms: now + 24 * 60 * 60 * 1000,
+  };
+}
+
 function acceptedVerdict(body: Record<string, unknown>): Record<string, unknown> {
   const execution = body.request as Record<string, unknown>;
   return {
@@ -202,7 +211,7 @@ function acceptedVerdict(body: Record<string, unknown>): Record<string, unknown>
 function terminalReceiptStore(initialBinding?: Record<string, unknown>) {
   let binding: unknown = initialBinding === undefined
     ? null
-    : { ...initialBinding, retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000 };
+    : activeBindingForTest(initialBinding);
   let receipt: unknown = null;
   return {
     readBinding: () => Promise.resolve(binding),
@@ -590,10 +599,7 @@ describe("Cloudflare replay executor", () => {
 
   it("rejects historical active-binding drift before sandbox lookup", async () => {
     const body = await historicalPublicInput();
-    const activeBinding = {
-      ...historicalProcessBindingInput(body),
-      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
-    };
+    const activeBinding = activeBindingForTest(historicalProcessBindingInput(body));
     const status = historicalStatusInput(body);
     const mutations: [string, unknown][] = [
       ["runner_nonce", "a".repeat(64)],
@@ -632,10 +638,7 @@ describe("Cloudflare replay executor", () => {
 
   it("rejects a historical duplicate start bound to another replay task", async () => {
     const body = await historicalPublicInput();
-    const claimed = {
-      ...historicalProcessBindingInput(body),
-      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
-    };
+    const claimed = activeBindingForTest(historicalProcessBindingInput(body));
     const duplicate = { ...body, replay_task_id: `rt1_${"f".repeat(64)}` };
     let sandboxLookups = 0;
     const response = await handleReplayRequest(new Request(
@@ -665,10 +668,7 @@ describe("Cloudflare replay executor", () => {
     try {
       const body = await historicalPublicInput();
       const binding = historicalProcessBindingInput(body);
-      const activeBinding = {
-        ...binding,
-        retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
-      };
+      const activeBinding = activeBindingForTest(binding);
       let receipt: unknown = null;
       let logReads = 0;
       let destroyCalls = 0;
@@ -746,10 +746,7 @@ describe("Cloudflare replay executor", () => {
     try {
       const body = await historicalPublicInput();
       const binding = historicalProcessBindingInput(body);
-      const activeBinding = {
-        ...binding,
-        retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
-      };
+      const activeBinding = activeBindingForTest(binding);
       let receipt: unknown = null;
       let rejectDestruction = true;
       let destroyCalls = 0;
@@ -823,10 +820,7 @@ describe("Cloudflare replay executor", () => {
   it("fails closed on corrupt or differently bound historical receipts", async () => {
     const body = await historicalPublicInput();
     const binding = historicalProcessBindingInput(body);
-    const activeBinding = {
-      ...binding,
-      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
-    };
+    const activeBinding = activeBindingForTest(binding);
     const storedAt = 1_000;
     const terminalBody = {
       ...historicalStatusInput(body),
@@ -1098,11 +1092,7 @@ describe("Cloudflare replay executor", () => {
   it("rejects missing, corrupt, or mismatched active bindings before sandbox lookup", async () => {
     const body = await authoritativeInput();
     const status = authoritativeStatusInput(body);
-    const mismatched = {
-      ...status,
-      attempt: 2,
-      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
-    };
+    const mismatched = activeBindingForTest({ ...status, attempt: 2 });
     for (const [binding, expectedStatus, reason] of [
       [null, 500, "command_rpc_failed"],
       [{ schema_version: 1 }, 500, "command_output_invalid"],
@@ -1138,10 +1128,7 @@ describe("Cloudflare replay executor", () => {
     const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
     try {
       const body = await authoritativeInput();
-      const binding = {
-        ...authoritativeStatusInput(body),
-        retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
-      };
+      const binding = activeBindingForTest(authoritativeStatusInput(body));
       let receipt: unknown = null;
       let logCalls = 0;
       let releaseLogs!: () => void;
@@ -1245,10 +1232,7 @@ describe("Cloudflare replay executor", () => {
 
   it("retries a failed destruction from the durable pending receipt", async () => {
     const body = await authoritativeInput();
-    const binding = {
-      ...authoritativeStatusInput(body),
-      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
-    };
+    const binding = activeBindingForTest(authoritativeStatusInput(body));
     let receipt: unknown = null;
     let destroyCalls = 0;
     const receipts = {
@@ -1308,10 +1292,7 @@ describe("Cloudflare replay executor", () => {
 
   it("recovers when the durable pending-receipt response is lost before destruction", async () => {
     const body = await authoritativeInput();
-    const binding = {
-      ...authoritativeStatusInput(body),
-      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
-    };
+    const binding = activeBindingForTest(authoritativeStatusInput(body));
     let receipt: unknown = null;
     let rejectPrepared = true;
     let destroyCalls = 0;
@@ -1376,10 +1357,7 @@ describe("Cloudflare replay executor", () => {
 
   it("recovers after destruction when the durable confirmation response is lost", async () => {
     const body = await authoritativeInput();
-    const binding = {
-      ...authoritativeStatusInput(body),
-      retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
-    };
+    const binding = activeBindingForTest(authoritativeStatusInput(body));
     let receipt: unknown = null;
     let rejectConfirmation = true;
     let destroyCalls = 0;
@@ -1475,10 +1453,7 @@ describe("Cloudflare replay executor", () => {
           destroy: () => Promise.resolve(),
         }),
         receiptStore: () => ({
-          readBinding: () => Promise.resolve({
-            ...binding,
-            retained_until_epoch_ms: Date.now() + 24 * 60 * 60 * 1000,
-          }),
+          readBinding: () => Promise.resolve(activeBindingForTest(binding)),
           claimBinding: (value) => Promise.resolve(value),
           readReceipt: () => Promise.resolve(receipt),
           prepareReceipt: (value) => Promise.resolve(value),
@@ -1882,5 +1857,119 @@ describe("Cloudflare replay executor", () => {
     });
     expect(JSON.stringify(responseBody)).not.toContain("private identity fixture");
     expect(destroyed).toBe(true);
+  });
+
+  it("recovers a cancellation immediately after 202 with idempotent source-free cleanup", async () => {
+    const body = await historicalPublicInput();
+    let activeBinding: unknown = null;
+    let cleanupMarker: unknown = null;
+    let cleanupDestroyCalls = 0;
+    const receipts = {
+      readBinding: () => Promise.resolve(activeBinding),
+      claimBinding: (value: unknown) => {
+        if (activeBinding === null) activeBinding = value;
+        return Promise.resolve(activeBinding);
+      },
+      readReceipt: () => Promise.resolve(null),
+      prepareReceipt: (value: unknown) => Promise.resolve(value),
+      confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
+    };
+    const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
+    const dependencies = {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => ({
+        writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+        exec: () => { throw new Error("blocking exec must remain unreachable"); },
+        getProcess: () => Promise.resolve(null),
+        startProcess: () => Promise.resolve({ getStatus: () => Promise.resolve("running") } as never),
+        destroy: () => Promise.reject(new Error("request path must not clean up the winner")),
+      }),
+      receiptStore: () => receipts,
+      recoveryStore: (_env: ReplayRuntimeEnv, replayTaskId: string, attempt: number) => ({
+        destroyBoundSandbox: (expected: { replay_task_id: string; attempt: number }) => {
+          expect(activeBinding).toMatchObject({
+            runner_nonce: body.runner_nonce,
+            replay_task_id: replayTaskId,
+            attempt,
+          });
+          expect(expected).toEqual({
+            schema_version: 1,
+            replay_task_id: replayTaskId,
+            attempt,
+          });
+          if (cleanupMarker === null) {
+            cleanupDestroyCalls += 1;
+            cleanupMarker = {
+              ...expected,
+              destruction_state: "confirmed",
+              confirmed_at_epoch_ms: 1_000,
+              retained_until_epoch_ms: 2_000,
+            };
+          }
+          return Promise.resolve(cleanupMarker);
+        },
+      }),
+    };
+    const start = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/historical-public-replay",
+      { method: "POST", body: JSON.stringify(body) },
+    ), enabled, dependencies);
+    expect(start.status).toBe(202);
+
+    const cleanupBody = {
+      schema_version: 1,
+      replay_task_id: body.replay_task_id,
+      attempt: body.attempt,
+    };
+    for (let index = 0; index < 2; index += 1) {
+      const cleanup = await handleReplayRequest(new Request(
+        "https://example.test/api/v1/historical-public-replay/cleanup",
+        { method: "POST", body: JSON.stringify(cleanupBody) },
+      ), enabled, dependencies);
+      expect(cleanup.status).toBe(200);
+      expect(await cleanup.json()).toEqual({ ...cleanupBody, destruction: "confirmed" });
+    }
+    expect(cleanupDestroyCalls).toBe(1);
+    expect(JSON.stringify(cleanupBody)).not.toContain(body.runner_nonce as string);
+    expect(JSON.stringify(cleanupBody)).not.toContain("source_archive");
+  });
+
+  it("rejects a durable cleanup confirmation with mismatched identity", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const body = {
+        schema_version: 1,
+        replay_task_id: `rt1_${"2".repeat(64)}`,
+        attempt: 1,
+      };
+      let sandboxLookups = 0;
+      const response = await handleReplayRequest(new Request(
+        "https://example.test/api/v1/historical-public-replay/cleanup",
+        { method: "POST", body: JSON.stringify(body) },
+      ), { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" }, {
+        authenticate: () => Promise.resolve(),
+        sandbox: () => {
+          sandboxLookups += 1;
+          throw new Error("sandbox must remain unreachable from the route");
+        },
+        recoveryStore: () => ({
+          destroyBoundSandbox: () => Promise.resolve({
+            ...body,
+            attempt: 2,
+            destruction_state: "confirmed",
+            confirmed_at_epoch_ms: 1_000,
+            retained_until_epoch_ms: 2_000,
+          }),
+        }),
+      });
+      expect(response.status).toBe(500);
+      expect(await response.json()).toEqual({
+        error: "executor_failed",
+        reason: "command_output_invalid",
+      });
+      expect(sandboxLookups).toBe(0);
+    } finally {
+      logged.mockRestore();
+    }
   });
 });

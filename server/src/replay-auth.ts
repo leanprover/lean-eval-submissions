@@ -11,7 +11,9 @@ const HISTORICAL_WORKFLOW_REF = `${GITHUB_REPOSITORY}/.github/workflows/`
 const HISTORICAL_ROUTES = new Set([
   "/api/v1/historical-public-replay",
   "/api/v1/historical-public-replay/status",
+  "/api/v1/historical-public-replay/cleanup",
 ]);
+const HISTORICAL_CLEANUP_ROUTE = "/api/v1/historical-public-replay/cleanup";
 
 type JwtHeader = { alg: string; kid: string; typ: string };
 type JwtClaims = Record<string, unknown>;
@@ -108,13 +110,18 @@ function allowsHistoricalProtectedMain(
   ref: string,
   sha: string,
 ): boolean {
-  return isHistoricalProductionSurface(request, env)
-    && COMMIT.test(env.DEPLOYED_COMMIT)
+  const exactProtectedWorkflow = isHistoricalProductionSurface(request, env)
     && ref === "refs/heads/main"
-    && sha === env.DEPLOYED_COMMIT
+    && COMMIT.test(sha)
     && claims.workflow_ref === HISTORICAL_WORKFLOW_REF
-    && claims.workflow_sha === env.DEPLOYED_COMMIT
+    && claims.workflow_sha === sha
     && claims.event_name === "workflow_dispatch";
+  if (!exactProtectedWorkflow) return false;
+  // Cleanup can only destroy the sandbox bound inside the receipt object. It
+  // must remain callable by a later protected-main controller after main has
+  // advanced; start and status retain the exact deployed-commit boundary.
+  if (new URL(request.url).pathname === HISTORICAL_CLEANUP_ROUTE) return true;
+  return COMMIT.test(env.DEPLOYED_COMMIT) && sha === env.DEPLOYED_COMMIT;
 }
 
 function validateClaims(

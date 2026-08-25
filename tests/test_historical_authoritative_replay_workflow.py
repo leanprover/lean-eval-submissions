@@ -38,6 +38,25 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertIn("PRODUCTION_STATE_READ_KEY", WORKFLOW)
         self.assertIn("PRODUCTION_STATE_WRITE_KEY", WORKFLOW)
 
+    def test_stale_recovery_is_gated_by_exact_durable_destruction(self) -> None:
+        preflight = WORKFLOW.split(
+            "Validate State and identify only one stale running attempt", 1
+        )[1].split("Confirm exact stale sandbox destruction", 1)[0]
+        cleanup = WORKFLOW.split(
+            "Confirm exact stale sandbox destruction without State write authority", 1
+        )[1].split("Publish one destruction-confirmed stale-runner recovery", 1)[0]
+        publish = WORKFLOW.split(
+            "Publish one destruction-confirmed stale-runner recovery and stop", 1
+        )[1].split("Report a still-running controller", 1)[0]
+        self.assertIn("cleanup_required", cleanup)
+        self.assertIn("/historical-public-replay/cleanup", cleanup)
+        self.assertIn("destruction: \"confirmed\"", cleanup)
+        self.assertIn("--cleanup-confirmation", cleanup)
+        self.assertNotIn("STATE_WRITE_KEY: ${{ secrets", cleanup)
+        self.assertNotIn("CLOUDFLARE_API_TOKEN: ${{ secrets", cleanup)
+        self.assertNotIn("jq .event", preflight)
+        self.assertIn("steps.cleanup.outputs.kind == 'failed'", publish)
+
     def test_exact_profile_image_and_health_are_required_before_started(self) -> None:
         deploy = WORKFLOW.index("render-executor-config")
         health = WORKFLOW.index("historical executor health differs from the exact plan")
@@ -93,6 +112,7 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertNotIn("always()", failure_step)
         self.assertIn("timeout-minutes: 360", WORKFLOW)
         self.assertNotIn("actions/upload-artifact", WORKFLOW)
+        self.assertIn("runner-loss-cleanup-confirmed", failure_step)
 
     def test_start_failure_phase_changes_only_after_exact_running_receipt(self) -> None:
         start_failed = WORKFLOW.index('echo runner_start_failed > "$RUNNER_TEMP/failure-reason"')

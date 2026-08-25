@@ -139,10 +139,42 @@ describe("GitHub OIDC replay authentication", () => {
     for (const path of [
       "/api/v1/historical-public-replay",
       "/api/v1/historical-public-replay/status",
+      "/api/v1/historical-public-replay/cleanup",
     ]) {
       const { request, fetcher } = await signedRequest(HISTORICAL_MAIN_CLAIMS, path);
       await expect(verifyGithubOidc(request, HISTORICAL_ENV, fetcher, 1_787_395_200))
         .resolves.toBeUndefined();
+    }
+  });
+
+  it("allows only the destructive cleanup route after protected main advances", async () => {
+    const advancedClaims = {
+      ...HISTORICAL_MAIN_CLAIMS,
+      sha: "c".repeat(40),
+      workflow_sha: "c".repeat(40),
+    };
+    const cleanup = await signedRequest(
+      advancedClaims,
+      "/api/v1/historical-public-replay/cleanup",
+    );
+    await expect(verifyGithubOidc(
+      cleanup.request,
+      HISTORICAL_ENV,
+      cleanup.fetcher,
+      1_787_395_200,
+    )).resolves.toBeUndefined();
+
+    for (const path of [
+      "/api/v1/historical-public-replay",
+      "/api/v1/historical-public-replay/status",
+    ]) {
+      const request = await signedRequest(advancedClaims, path);
+      await expect(verifyGithubOidc(
+        request.request,
+        HISTORICAL_ENV,
+        request.fetcher,
+        1_787_395_200,
+      )).rejects.toThrow("immutable execution ref");
     }
   });
 

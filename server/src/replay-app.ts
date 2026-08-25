@@ -55,6 +55,8 @@ type TerminalReceiptStore = Pick<
   "claimBinding" | "readBinding" | "readReceipt" | "prepareReceipt" | "confirmReceipt"
 >;
 
+type HistoricalCleanupStore = Pick<ReplayTerminalReceipt, "destroyBoundSandbox">;
+
 type ExecutorFailureReason =
   | "input_transfer_failed"
   | "command_rpc_failed"
@@ -81,7 +83,16 @@ class ProcessStartConflictError extends ReplayExecutorError {
 type Dependencies = {
   authenticate(request: Request, env: ReplayAuthEnvironment): Promise<void>;
   sandbox(env: ReplayRuntimeEnv, runnerNonce: string): SandboxClient;
-  receiptStore?(env: ReplayRuntimeEnv, runnerNonce: string): TerminalReceiptStore;
+  receiptStore?(
+    env: ReplayRuntimeEnv,
+    runnerNonce: string,
+    historicalIdentity?: HistoricalPublicExecutorStatusRequest,
+  ): TerminalReceiptStore;
+  recoveryStore?(
+    env: ReplayRuntimeEnv,
+    replayTaskId: string,
+    attempt: number,
+  ): HistoricalCleanupStore;
 };
 
 const DEFAULT_DEPENDENCIES: Dependencies = {
@@ -95,11 +106,12 @@ function terminalReceiptStore(
   dependencies: Dependencies,
   env: ReplayRuntimeEnv,
   runnerNonce: string,
+  historicalIdentity?: HistoricalPublicExecutorStatusRequest,
 ): TerminalReceiptStore {
   if (dependencies.receiptStore === undefined) {
     throw new ReplayExecutorError("command_rpc_failed");
   }
-  return dependencies.receiptStore(env, runnerNonce);
+  return dependencies.receiptStore(env, runnerNonce, historicalIdentity);
 }
 
 function json(value: unknown, status = 200): Response {
@@ -138,6 +150,7 @@ const HISTORICAL_PUBLIC_COMMAND =
   + "&& rm /workspace/historical-public-source.tar.gz.b64 "
   + "&& /opt/lean-eval/historical-public-runner";
 const AUTHORITATIVE_TIMEOUT_MS = 20_100_000;
+const AUTHORITATIVE_CLEANUP_AFTER_MS = 7 * 60 * 60 * 1000;
 const AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const AUTHORITATIVE_COMMAND_FAILURES = new Map([
   ["request does not match the baked profile lock", "profile_lock_mismatch"],
@@ -179,6 +192,7 @@ type AuthoritativeTerminalReceipt = {
 };
 
 type AuthoritativeActiveBinding = AuthoritativeReplayStatusRequest & {
+  cleanup_after_epoch_ms: number;
   retained_until_epoch_ms: number;
 };
 
@@ -186,6 +200,7 @@ type HistoricalPublicProcessBinding = HistoricalPublicExecutorStatusRequest
   & HistoricalPublicRunnerBinding;
 
 type HistoricalPublicActiveBinding = HistoricalPublicProcessBinding & {
+  cleanup_after_epoch_ms: number;
   retained_until_epoch_ms: number;
 };
 
@@ -394,6 +409,7 @@ function activeBinding(
 ): AuthoritativeActiveBinding {
   return {
     ...request,
+    cleanup_after_epoch_ms: now + AUTHORITATIVE_CLEANUP_AFTER_MS,
     retained_until_epoch_ms: now + AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS,
   };
 }
@@ -413,6 +429,7 @@ function sameActiveBinding(
       "execution_profile_digest",
       "measurement_config_digest",
       "vm_image_digest",
+      "cleanup_after_epoch_ms",
       "retained_until_epoch_ms",
     ])
     || binding.schema_version !== 1
@@ -422,7 +439,11 @@ function sameActiveBinding(
     || typeof binding.execution_profile_digest !== "string"
     || typeof binding.measurement_config_digest !== "string"
     || typeof binding.vm_image_digest !== "string"
+    || !Number.isSafeInteger(binding.cleanup_after_epoch_ms)
     || !Number.isSafeInteger(binding.retained_until_epoch_ms)
+    || (binding.retained_until_epoch_ms as number)
+      - (binding.cleanup_after_epoch_ms as number)
+      !== AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS - AUTHORITATIVE_CLEANUP_AFTER_MS
   ) {
     return false;
   }
@@ -449,6 +470,7 @@ function rejectBindingMismatch(value: unknown): never {
       "execution_profile_digest",
       "measurement_config_digest",
       "vm_image_digest",
+      "cleanup_after_epoch_ms",
       "retained_until_epoch_ms",
     ])
     || binding.schema_version !== 1
@@ -458,6 +480,7 @@ function rejectBindingMismatch(value: unknown): never {
     || typeof binding.execution_profile_digest !== "string"
     || typeof binding.measurement_config_digest !== "string"
     || typeof binding.vm_image_digest !== "string"
+    || !Number.isSafeInteger(binding.cleanup_after_epoch_ms)
     || !Number.isSafeInteger(binding.retained_until_epoch_ms)
   ) {
     throw new ReplayExecutorError("command_output_invalid");
@@ -634,6 +657,7 @@ function historicalActiveBinding(
 ): HistoricalPublicActiveBinding {
   return {
     ...binding,
+    cleanup_after_epoch_ms: now + AUTHORITATIVE_CLEANUP_AFTER_MS,
     retained_until_epoch_ms: now + AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS,
   };
 }
@@ -656,9 +680,14 @@ function historicalActiveBindingValue(
       "vm_image_digest",
       "request_id",
       "result_id",
+      "cleanup_after_epoch_ms",
       "retained_until_epoch_ms",
     ])
+    || !Number.isSafeInteger(binding.cleanup_after_epoch_ms)
     || !Number.isSafeInteger(binding.retained_until_epoch_ms)
+    || (binding.retained_until_epoch_ms as number)
+      - (binding.cleanup_after_epoch_ms as number)
+      !== AUTHORITATIVE_TERMINAL_RECEIPT_RETENTION_MS - AUTHORITATIVE_CLEANUP_AFTER_MS
   ) {
     return null;
   }
@@ -1208,6 +1237,60 @@ function historicalRunningResponse(
   }, 202);
 }
 
+type HistoricalCleanupIdentity = {
+  schema_version: 1;
+  replay_task_id: string;
+  attempt: number;
+};
+
+function validateHistoricalCleanupIdentity(value: unknown): HistoricalCleanupIdentity {
+  const identity = objectValue(value);
+  if (
+    identity === null
+    || !exactObjectFields(identity, ["schema_version", "replay_task_id", "attempt"])
+    || identity.schema_version !== 1
+    || typeof identity.replay_task_id !== "string"
+    || !REPLAY_TASK_ID.test(identity.replay_task_id)
+    || !Number.isSafeInteger(identity.attempt)
+    || (identity.attempt as number) < 1
+    || (identity.attempt as number) > 3
+  ) {
+    throw new HistoricalPublicExecutorContractError("cleanup identity is invalid");
+  }
+  return {
+    schema_version: 1,
+    replay_task_id: identity.replay_task_id,
+    attempt: identity.attempt as number,
+  };
+}
+
+function validateHistoricalCleanupConfirmation(
+  value: unknown,
+  expected: HistoricalCleanupIdentity,
+): void {
+  const marker = objectValue(value);
+  if (
+    marker === null
+    || !exactObjectFields(marker, [
+      "schema_version",
+      "replay_task_id",
+      "attempt",
+      "destruction_state",
+      "confirmed_at_epoch_ms",
+      "retained_until_epoch_ms",
+    ])
+    || marker.schema_version !== expected.schema_version
+    || marker.replay_task_id !== expected.replay_task_id
+    || marker.attempt !== expected.attempt
+    || marker.destruction_state !== "confirmed"
+    || !Number.isSafeInteger(marker.confirmed_at_epoch_ms)
+    || !Number.isSafeInteger(marker.retained_until_epoch_ms)
+    || (marker.retained_until_epoch_ms as number) <= (marker.confirmed_at_epoch_ms as number)
+  ) {
+    throw new ReplayExecutorError("command_output_invalid");
+  }
+}
+
 async function historicalProcessStatus(
   sandbox: SandboxClient,
   store: TerminalReceiptStore,
@@ -1358,6 +1441,7 @@ export async function handleReplayRequest(
   const authoritativeStatus = url.pathname === "/api/v1/replay/status";
   const historicalPublicReplay = url.pathname === "/api/v1/historical-public-replay";
   const historicalPublicStatus = url.pathname === "/api/v1/historical-public-replay/status";
+  const historicalPublicCleanup = url.pathname === "/api/v1/historical-public-replay/cleanup";
   if (
     (
       !syntheticAcceptance
@@ -1366,6 +1450,7 @@ export async function handleReplayRequest(
       && !authoritativeStatus
       && !historicalPublicReplay
       && !historicalPublicStatus
+      && !historicalPublicCleanup
     ) ||
     request.method !== "POST"
   ) {
@@ -1375,10 +1460,34 @@ export async function handleReplayRequest(
     return json({ error: "replay_disabled" }, 503);
   }
   if (
-    (historicalPublicReplay || historicalPublicStatus)
+    (historicalPublicReplay || historicalPublicStatus || historicalPublicCleanup)
     && env.HISTORICAL_PUBLIC_REPLAY_ENABLED !== "true"
   ) {
     return json({ error: "historical_public_replay_disabled" }, 503);
+  }
+  if (historicalPublicCleanup) {
+    try {
+      await dependencies.authenticate(request, env);
+      if (dependencies.recoveryStore === undefined) {
+        throw new ReplayExecutorError("command_rpc_failed");
+      }
+      const identity = validateHistoricalCleanupIdentity(await request.json());
+      const store = dependencies.recoveryStore(
+        env,
+        identity.replay_task_id,
+        identity.attempt,
+      );
+      const marker = await store.destroyBoundSandbox(identity);
+      validateHistoricalCleanupConfirmation(marker, identity);
+      return json({ ...identity, destruction: "confirmed" });
+    } catch (error) {
+      if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
+      if (error instanceof HistoricalPublicExecutorContractError || error instanceof SyntaxError) {
+        return json({ error: "invalid_request" }, 400);
+      }
+      recordExecutorFailure("historical_public_replay_cleanup", error);
+      return authoritativeExecutorFailure(error);
+    }
   }
   if (historicalPublicStatus) {
     try {
@@ -1389,7 +1498,7 @@ export async function handleReplayRequest(
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
-      const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
+      const store = terminalReceiptStore(dependencies, env, input.runner_nonce, input);
       const binding = await requireHistoricalActiveBinding(store, input);
       const sandbox = dependencies.sandbox(env, input.runner_nonce);
       return await historicalProcessStatus(sandbox, store, binding);
@@ -1411,7 +1520,12 @@ export async function handleReplayRequest(
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
-      const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
+      const store = terminalReceiptStore(
+        dependencies,
+        env,
+        input.runner_nonce,
+        historicalStatusBinding(input),
+      );
       const binding = historicalProcessBinding(input);
       await claimHistoricalActiveBinding(store, binding);
       const existingReceipt = await readHistoricalTerminalReceipt(store, binding);

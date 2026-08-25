@@ -72,7 +72,7 @@ jobs:
           python -m pip install --disable-pip-version-check --only-binary=:all: \
             --require-hashes -r requirements-jsonschema-workflow.txt
 
-      - name: Validate State and recover only one stale running attempt
+      - name: Validate State and identify only one stale running attempt
         id: preflight
         run: |
           set -euo pipefail
@@ -90,8 +90,55 @@ jobs:
           echo "kind=$(jq -er .kind "$RUNNER_TEMP/recovery.json")" >> "$GITHUB_OUTPUT"
           echo "state_head=$(git -C state rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Publish one stale-runner recovery and stop
-        if: steps.preflight.outputs.kind == 'failed'
+      - name: Confirm exact stale sandbox destruction without State write authority
+        id: cleanup
+        if: steps.preflight.outputs.kind == 'cleanup_required'
+        env:
+          HISTORICAL_CLEANUP_URL: https://lean-eval-historical-public-replay.lean-eval.workers.dev/api/v1/historical-public-replay/cleanup
+        run: |
+          set -euo pipefail
+          umask 077
+          test -z "${STATE_WRITE_KEY:-}"
+          test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          jq '{schema_version, replay_task_id, attempt}' \
+            "$RUNNER_TEMP/recovery.json" > "$RUNNER_TEMP/cleanup-request.json"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 15 --retry 3 --retry-max-time 60 --retry-all-errors \
+            --retry-delay 2 \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-public-replay-production" \
+            --output "$RUNNER_TEMP/historical-cleanup-oidc.json"
+          historical_cleanup_token=$(jq -er .value "$RUNNER_TEMP/historical-cleanup-oidc.json")
+          trap 'unset historical_cleanup_token; rm -f "$RUNNER_TEMP/historical-cleanup-oidc.json"' EXIT
+          cleanup_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+            --max-time 300 --retry 3 --retry-max-time 300 --retry-all-errors \
+            --retry-delay 2 \
+            --header "Authorization: Bearer $historical_cleanup_token" \
+            --header 'Content-Type: application/json' --request POST \
+            --data-binary "@$RUNNER_TEMP/cleanup-request.json" \
+            "$HISTORICAL_CLEANUP_URL" \
+            --output "$RUNNER_TEMP/cleanup-confirmation.json" \
+            --write-out '%{http_code}')
+          unset historical_cleanup_token
+          rm -f "$RUNNER_TEMP/historical-cleanup-oidc.json"
+          trap - EXIT
+          test "$cleanup_status" = 200
+          jq -e --arg task "$(jq -r .replay_task_id "$RUNNER_TEMP/recovery.json")" \
+            --argjson attempt "$(jq -r .attempt "$RUNNER_TEMP/recovery.json")" \
+            '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, destruction: "confirmed"}' \
+            "$RUNNER_TEMP/cleanup-confirmation.json" >/dev/null
+          python scripts/historical_replay_controller.py recover \
+            --events-root state/events --state-validated \
+            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+            --cleanup-confirmation "$RUNNER_TEMP/cleanup-confirmation.json" \
+            --output "$RUNNER_TEMP/recovery-confirmed.json"
+          test "$(jq -er .kind "$RUNNER_TEMP/recovery-confirmed.json")" = failed
+          mv "$RUNNER_TEMP/recovery-confirmed.json" "$RUNNER_TEMP/recovery.json"
+          echo 'kind=failed' >> "$GITHUB_OUTPUT"
+
+      - name: Publish one destruction-confirmed stale-runner recovery and stop
+        if: steps.cleanup.outputs.kind == 'failed'
         env:
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
           EXPECTED_STATE_HEAD: ${{ steps.preflight.outputs.state_head }}
@@ -380,6 +427,28 @@ jobs:
             unset historical_oidc_token
             rm -f "$RUNNER_TEMP/executor-poll-response.json"
           done
+          if [ ! -f "$RUNNER_TEMP/executor-response.json" ]; then
+            jq '{schema_version, replay_task_id, attempt}' \
+              "$RUNNER_TEMP/executor-status-request.json" \
+              > "$RUNNER_TEMP/runner-loss-cleanup-request.json"
+            mint_oidc
+            cleanup_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+              --max-time 300 --retry 3 --retry-max-time 300 --retry-all-errors \
+              --retry-delay 2 \
+              --header "Authorization: Bearer $historical_oidc_token" \
+              --header 'Content-Type: application/json' --request POST \
+              --data-binary "@$RUNNER_TEMP/runner-loss-cleanup-request.json" \
+              "$HISTORICAL_EXECUTOR_URL/cleanup" \
+              --output "$RUNNER_TEMP/runner-loss-cleanup-confirmation.json" \
+              --write-out '%{http_code}')
+            unset historical_oidc_token
+            test "$cleanup_status" = 200
+            jq -e --arg task "$(jq -r .replay_task_id "$RUNNER_TEMP/executor-status-request.json")" \
+              --argjson attempt "$(jq -r .attempt "$RUNNER_TEMP/executor-status-request.json")" \
+              '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, destruction: "confirmed"}' \
+              "$RUNNER_TEMP/runner-loss-cleanup-confirmation.json" >/dev/null
+            touch "$RUNNER_TEMP/runner-loss-cleanup-confirmed"
+          fi
           test -f "$RUNNER_TEMP/executor-response.json"
           echo verdict_invalid > "$RUNNER_TEMP/failure-reason"
           python scripts/historical_replay_controller.py terminal-event \
@@ -415,10 +484,14 @@ jobs:
           EXPECTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
         run: |
           set -euo pipefail
+          failure_reason=$(cat "$RUNNER_TEMP/failure-reason")
+          if [ "$failure_reason" = runner_lost ]; then
+            test -f "$RUNNER_TEMP/runner-loss-cleanup-confirmed"
+          fi
           python scripts/historical_replay_controller.py terminal-event \
             --plan "$RUNNER_TEMP/historical-replay-plan.json" \
             --started "$RUNNER_TEMP/started-event.json" \
-            --failure-reason "$(cat "$RUNNER_TEMP/failure-reason")" \
+            --failure-reason "$failure_reason" \
             --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
             --output "$RUNNER_TEMP/failure-event.json"
           scripts/publish_replay_state_event --environment production \

@@ -1809,6 +1809,7 @@ def recover_running(
     trusted_now: str,
     *,
     state_validated: bool,
+    cleanup_confirmation_value: Any | None = None,
     random_bytes: bytes | None = None,
 ) -> dict[str, Any]:
     """Project recovery only after the caller completed full State validation.
@@ -1846,6 +1847,10 @@ def recover_running(
     started_at = _parse_timestamp(started.get("occurred_at"), "running historical occurred_at")
     now = _parse_timestamp(trusted_now, "trusted_now")
     if now - started_at < RECOVERY_AFTER:
+        if cleanup_confirmation_value is not None:
+            raise HistoricalReplayControllerError(
+                "sandbox cleanup confirmation was supplied before recovery was due"
+            )
         return {
             "schema_version": 1,
             "kind": "busy",
@@ -1853,6 +1858,36 @@ def recover_running(
         }
     payload = _object(started.get("payload"), "running historical payload")
     attempt = _integer(payload.get("attempt"), "running historical attempt", 1)
+    if cleanup_confirmation_value is None:
+        return {
+            "schema_version": 1,
+            "kind": "cleanup_required",
+            "replay_task_id": started["subject_id"],
+            "attempt": attempt,
+        }
+    cleanup = _object(
+        cleanup_confirmation_value, "sandbox cleanup confirmation"
+    )
+    _fields(
+        cleanup,
+        {"schema_version", "replay_task_id", "attempt", "destruction"},
+        "sandbox cleanup confirmation",
+    )
+    if (
+        cleanup.get("schema_version") != 1
+        or cleanup.get("destruction") != "confirmed"
+        or _match(
+            REPLAY_ID,
+            cleanup.get("replay_task_id"),
+            "sandbox cleanup replay_task_id",
+        )
+        != started["subject_id"]
+        or _integer(cleanup.get("attempt"), "sandbox cleanup attempt", 1)
+        != attempt
+    ):
+        raise HistoricalReplayControllerError(
+            "sandbox cleanup confirmation differs from the running attempt"
+        )
     occurred = max(now, started_at + dt.timedelta(milliseconds=1))
     return {
         "schema_version": 1,
@@ -2135,6 +2170,7 @@ def parser() -> argparse.ArgumentParser:
     recover.add_argument("--events-root", required=True, type=pathlib.Path)
     recover.add_argument("--state-validated", required=True, action="store_true")
     recover.add_argument("--trusted-now", required=True)
+    recover.add_argument("--cleanup-confirmation", type=pathlib.Path)
     recover.add_argument("--output", required=True, type=pathlib.Path)
     terminal = commands.add_parser("terminal-event")
     terminal.add_argument("--plan", required=True, type=pathlib.Path)
@@ -2258,12 +2294,20 @@ def main() -> int:
             )
             _write(args.output, value, state_canonical_bytes)
         else:
+            cleanup_confirmation = (
+                None
+                if args.cleanup_confirmation is None
+                else _load_canonical(
+                    args.cleanup_confirmation, "sandbox cleanup confirmation"
+                )[0]
+            )
             _write(
                 args.output,
                 recover_running(
                     args.events_root,
                     args.trusted_now,
                     state_validated=args.state_validated,
+                    cleanup_confirmation_value=cleanup_confirmation,
                 ),
                 state_canonical_bytes,
             )

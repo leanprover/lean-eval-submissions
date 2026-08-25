@@ -1256,16 +1256,35 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
             self.write_events(root, events)
             busy = recover_running(root, "2026-08-25T02:00:00.000Z", state_validated=True)
             self.assertEqual(busy["kind"], "busy")
+            stale = recover_running(
+                root,
+                "2026-08-25T08:00:00.004Z",
+                state_validated=True,
+            )
+            self.assertEqual(stale, {
+                "schema_version": 1,
+                "kind": "cleanup_required",
+                "replay_task_id": events[-1]["subject_id"],
+                "attempt": 1,
+            })
+            confirmation = {
+                "schema_version": 1,
+                "replay_task_id": events[-1]["subject_id"],
+                "attempt": 1,
+                "destruction": "confirmed",
+            }
             failed = recover_running(
                 root,
                 "2026-08-25T08:00:00.004Z",
                 state_validated=True,
+                cleanup_confirmation_value=confirmation,
                 random_bytes=b"\x05" * 10,
             )
             repeated = recover_running(
                 root,
                 "2026-08-25T08:00:00.004Z",
                 state_validated=True,
+                cleanup_confirmation_value=confirmation,
                 random_bytes=b"\x05" * 10,
             )
             self.assertEqual(failed, repeated)
@@ -1276,6 +1295,32 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
                 recover_running(root, "2026-08-25T08:00:01.000Z", state_validated=True)["kind"],
                 "none",
             )
+
+    def test_stale_recovery_rejects_unconfirmed_or_mismatched_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            events = self.events()
+            self.write_events(root, events)
+            base = {
+                "schema_version": 1,
+                "replay_task_id": events[-1]["subject_id"],
+                "attempt": 1,
+                "destruction": "confirmed",
+            }
+            mutations = (
+                {**base, "destruction": "pending"},
+                {**base, "replay_task_id": "rt1_" + "f" * 64},
+                {**base, "attempt": 2},
+                {**base, "extra": True},
+            )
+            for confirmation in mutations:
+                with self.assertRaises(HistoricalReplayControllerError):
+                    recover_running(
+                        root,
+                        "2026-08-25T08:00:00.004Z",
+                        state_validated=True,
+                        cleanup_confirmation_value=confirmation,
+                    )
 
     def test_multiple_running_historical_tasks_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -1478,6 +1523,12 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
                     root,
                     "2026-08-25T08:00:00.004Z",
                     state_validated=True,
+                    cleanup_confirmation_value={
+                        "schema_version": 1,
+                        "replay_task_id": events[-1]["subject_id"],
+                        "attempt": 1,
+                        "destruction": "confirmed",
+                    },
                     random_bytes=b"\x05" * 10,
                 )
 
