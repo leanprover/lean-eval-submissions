@@ -15,6 +15,7 @@ on:
       - 'scripts/**'
       - '!scripts/aggregate_public_replay_github_evidence.py'
       - '!scripts/resolve_public_replay_github_evidence.py'
+      - '!scripts/validate_historical_replay_inventory_evidence.py'
       - 'server/**'
   push:
     branches: [main]
@@ -30,6 +31,7 @@ on:
       - 'scripts/**'
       - '!scripts/aggregate_public_replay_github_evidence.py'
       - '!scripts/resolve_public_replay_github_evidence.py'
+      - '!scripts/validate_historical_replay_inventory_evidence.py'
       - 'server/**'
       - '!server/*.md'
       - '!server/**/*.md'

@@ -1,0 +1,47 @@
+{
+  "claims": {
+    "corpus_replay_qualified": false,
+    "private_archive_migrated": false,
+    "publication_authorized": false,
+    "replay_executed": false,
+    "result_replay_qualified": false
+  },
+  "classification_counts": {
+    "private_archive_migration_pending": 668,
+    "public_source_probe_pending": 633
+  },
+  "dispatch_tag": "lean-eval-dispatch/ae1a9714c5433b4c195b8fdfb5643893ecac8019",
+  "evidence_status": "closed",
+  "inventory_path": "evidence/historical-replay/inventories/bb405fbabe084e106ad5500b455a05ba1e1d54175d1964db3aebcc3b6ea3fce3.json",
+  "inventory_sha256": "bb405fbabe084e106ad5500b455a05ba1e1d54175d1964db3aebcc3b6ea3fce3",
+  "inventory_size_bytes": 752189,
+  "kind": "historical_replay_inventory_evidence",
+  "producer": {
+    "inventory_generator_sha256": "acf0709f02b1644d065c00b450977b59756d60097a97a8ddc0a0f2eb23d3a5f3",
+    "inventory_schema_sha256": "fe8bd9d2c0029f5e1a2687f7389ad40123c739d464ec60c1a2fa8e9462306b2b",
+    "workflow_definition_sha256": "1d63e3bd5b0ce5c691e12967fdeea6f83d85efb4b2f827bdfc8fc8a9fca41df6"
+  },
+  "result_count": 1301,
+  "results_store_sha256": "14e8c8682e5183d85fee32aafcf06eedb20d7cd8aa91d666d50753d516da7d43",
+  "schema_version": 1,
+  "scope": "contract_only_inventory",
+  "source_commit": "ae1a9714c5433b4c195b8fdfb5643893ecac8019",
+  "source_repository": "leanprover/lean-eval-submissions",
+  "source_tree": "d5495f4003083af611e74f3816e72825f5bcec2c",
+  "transport_artifact": {
+    "archive_sha256": "74e41292124b41d5dad62e9e83af0a4ee88b2050117507345a3b0c565d6199c1",
+    "artifact_id": 9543093515,
+    "created_at": "2026-08-24T23:48:12Z",
+    "expires_at": "2026-11-22T23:47:51Z",
+    "name": "historical-replay-inventory-ae1a9714c5433b4c195b8fdfb5643893ecac8019",
+    "size_in_bytes": 112604
+  },
+  "workflow_conclusion": "success",
+  "workflow_event": "workflow_dispatch",
+  "workflow_head_sha": "ae1a9714c5433b4c195b8fdfb5643893ecac8019",
+  "workflow_path": ".github/workflows/historical-replay-inventory.yml",
+  "workflow_repository": "leanprover/lean-eval-submissions",
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 32790927560,
+  "workflow_run_url": "https://github.com/leanprover/lean-eval-submissions/actions/runs/32790927560"
+}
