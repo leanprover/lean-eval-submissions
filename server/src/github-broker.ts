@@ -5,6 +5,8 @@ const APP_ID = /^[1-9][0-9]{0,15}$/;
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const DISPATCH_REF = /^lean-eval-dispatch\/([0-9a-f]{40})$/;
+// GitHub caps an unpaginated compare at 250 commits. Reject a truncated proof.
+const GITHUB_COMPARE_DEFAULT_COMMIT_LIMIT = 250;
 
 type Authority = "source" | "dispatch" | "results" | "benchmark";
 type BrokerRequest = Readonly<{
@@ -61,6 +63,67 @@ function object(value: unknown, label: string): Record<string, unknown> {
     throw new BrokerError(502, `${label} was not an object`);
   }
   return value as Record<string, unknown>;
+}
+
+function comparisonTerminalSha(
+  data: Record<string, unknown>,
+  expectedBase: string,
+  label: string,
+  failure: string,
+): string {
+  const base = object(data.base_commit, `${label} base commit`);
+  const mergeBase = object(data.merge_base_commit, `${label} merge base`);
+  const commits = data.commits;
+  const aheadBy = data.ahead_by;
+  const behindBy = data.behind_by;
+  const totalCommits = data.total_commits;
+  if (
+    base.sha !== expectedBase ||
+    mergeBase.sha !== expectedBase ||
+    !Array.isArray(commits) ||
+    typeof aheadBy !== "number" ||
+    !Number.isSafeInteger(aheadBy) ||
+    typeof behindBy !== "number" ||
+    !Number.isSafeInteger(behindBy) ||
+    typeof totalCommits !== "number" ||
+    !Number.isSafeInteger(totalCommits)
+  ) {
+    throw new BrokerError(409, failure);
+  }
+  const commitShas = commits.map((value, index) => {
+    const commit = object(value, `${label} commit ${String(index)}`);
+    if (typeof commit.sha !== "string" || !COMMIT.test(commit.sha)) {
+      throw new BrokerError(409, failure);
+    }
+    return commit.sha;
+  });
+  let terminalSha: string;
+  if (data.status === "identical") {
+    if (aheadBy !== 0 || behindBy !== 0 || totalCommits !== 0 || commitShas.length !== 0) {
+      throw new BrokerError(409, failure);
+    }
+    terminalSha = expectedBase;
+  } else if (data.status === "ahead") {
+    if (
+      behindBy !== 0 ||
+      aheadBy < 1 ||
+      totalCommits !== aheadBy ||
+      totalCommits > GITHUB_COMPARE_DEFAULT_COMMIT_LIMIT ||
+      commitShas.length !== totalCommits
+    ) {
+      throw new BrokerError(409, failure);
+    }
+    const terminal = commitShas.at(-1);
+    if (terminal === undefined) throw new BrokerError(409, failure);
+    terminalSha = terminal;
+  } else {
+    throw new BrokerError(409, failure);
+  }
+  if (data.head_commit !== undefined && data.head_commit !== null) {
+    const head = object(data.head_commit, `${label} head commit`);
+    if (head.sha !== terminalSha) throw new BrokerError(409, failure);
+  }
+  return terminalSha;
 }
 
 function exactKeys(value: Record<string, unknown>, keys: readonly string[], label: string): void {
@@ -509,18 +572,12 @@ async function validateResultsResponse(
     return;
   }
   if (suffix === `/compare/${request.expected_commit ?? ""}...${protectedBranch}`) {
-    const base = object(data.base_commit, "Results comparison base commit");
-    const mergeBase = object(data.merge_base_commit, "Results comparison merge base");
-    const head = object(data.head_commit, "Results comparison head commit");
-    if (
-      (data.status !== "ahead" && data.status !== "identical") ||
-      base.sha !== request.expected_commit ||
-      mergeBase.sha !== request.expected_commit ||
-      typeof head.sha !== "string" ||
-      !COMMIT.test(head.sha)
-    ) {
-      throw new BrokerError(409, "Results commit did not descend to the protected environment branch");
-    }
+    comparisonTerminalSha(
+      data,
+      request.expected_commit ?? "",
+      "Results comparison",
+      "Results commit did not descend to the protected environment branch",
+    );
     return;
   }
   const expectedPath = suffix.slice("/contents/".length);
@@ -562,18 +619,12 @@ async function validateBenchmarkResponse(
     return;
   }
   if (suffix === `/compare/${request.expected_commit ?? ""}...main`) {
-    const base = object(data.base_commit, "benchmark comparison base commit");
-    const mergeBase = object(data.merge_base_commit, "benchmark comparison merge base");
-    const head = object(data.head_commit, "benchmark comparison head commit");
-    if (
-      (data.status !== "ahead" && data.status !== "identical") ||
-      base.sha !== request.expected_commit ||
-      mergeBase.sha !== request.expected_commit ||
-      typeof head.sha !== "string" ||
-      !COMMIT.test(head.sha)
-    ) {
-      throw new BrokerError(409, "benchmark commit did not descend to protected main");
-    }
+    comparisonTerminalSha(
+      data,
+      request.expected_commit ?? "",
+      "benchmark comparison",
+      "benchmark commit did not descend to protected main",
+    );
     return;
   }
   const expectedPath = suffix.slice("/contents/".length);

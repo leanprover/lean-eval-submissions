@@ -29,6 +29,8 @@ const RESULT_ID_DOMAIN = "lean-eval-result-v2\0";
 const RESULT_TREE_DOMAIN = "lean-eval-result-tree-v1\0";
 const BENCHMARK_REPOSITORY = "leanprover/lean-eval";
 const MAX_MANIFEST_BYTES = 64 * 1024;
+// GitHub caps an unpaginated compare at 250 commits. Reject a truncated proof.
+const GITHUB_COMPARE_DEFAULT_COMMIT_LIMIT = 250;
 export type ResultsProtectedBranch = "main" | "staging-results";
 
 export type ProblemRepairComparatorRequest = Readonly<{
@@ -233,6 +235,71 @@ async function jsonResponse(response: Response, label: string): Promise<Record<s
     if (caught instanceof GitHubProviderError) throw caught;
     throw new GitHubProviderError(502, `${label} was not valid JSON`);
   }
+}
+
+function comparisonTerminalSha(
+  comparison: Record<string, unknown>,
+  expectedBase: string,
+  label: string,
+  failure: string,
+): string {
+  const base = object(comparison.base_commit, `${label} base commit`);
+  const mergeBase = object(comparison.merge_base_commit, `${label} merge base`);
+  const commits = comparison.commits;
+  const aheadBy = comparison.ahead_by;
+  const behindBy = comparison.behind_by;
+  const totalCommits = comparison.total_commits;
+  if (
+    base.sha !== expectedBase ||
+    mergeBase.sha !== expectedBase ||
+    !Array.isArray(commits) ||
+    typeof aheadBy !== "number" ||
+    !Number.isSafeInteger(aheadBy) ||
+    typeof behindBy !== "number" ||
+    !Number.isSafeInteger(behindBy) ||
+    typeof totalCommits !== "number" ||
+    !Number.isSafeInteger(totalCommits)
+  ) {
+    throw new GitHubProviderError(409, failure);
+  }
+  const commitShas = commits.map((value, index) => {
+    const commit = object(value, `${label} commit ${String(index)}`);
+    if (typeof commit.sha !== "string" || !COMMIT.test(commit.sha)) {
+      throw new GitHubProviderError(409, failure);
+    }
+    return commit.sha;
+  });
+  let terminalSha: string;
+  if (comparison.status === "identical") {
+    if (aheadBy !== 0 || behindBy !== 0 || totalCommits !== 0 || commitShas.length !== 0) {
+      throw new GitHubProviderError(409, failure);
+    }
+    terminalSha = expectedBase;
+  } else if (comparison.status === "ahead") {
+    if (
+      behindBy !== 0 ||
+      aheadBy < 1 ||
+      totalCommits !== aheadBy ||
+      totalCommits > GITHUB_COMPARE_DEFAULT_COMMIT_LIMIT ||
+      commitShas.length !== totalCommits
+    ) {
+      throw new GitHubProviderError(409, failure);
+    }
+    const terminal = commitShas.at(-1);
+    if (terminal === undefined) {
+      throw new GitHubProviderError(409, failure);
+    }
+    terminalSha = terminal;
+  } else {
+    throw new GitHubProviderError(409, failure);
+  }
+  if (comparison.head_commit !== undefined && comparison.head_commit !== null) {
+    const head = object(comparison.head_commit, `${label} head commit`);
+    if (head.sha !== terminalSha) {
+      throw new GitHubProviderError(409, failure);
+    }
+  }
+  return terminalSha;
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
@@ -582,21 +649,14 @@ export class GitHubProvider {
       { headers, redirect: "manual", signal: AbortSignal.timeout(5000) },
     );
     const comparison = await jsonResponse(compareResponse, "Results ancestry response");
-    const baseCommit = object(comparison.base_commit, "Results ancestry base commit");
-    const mergeBase = object(comparison.merge_base_commit, "Results ancestry merge base");
-    const headCommit = object(comparison.head_commit, "Results ancestry head commit");
-    if (typeof headCommit.sha !== "string" || !COMMIT.test(headCommit.sha)) {
-      throw new GitHubProviderError(502, "Results ancestry head commit was invalid");
-    }
-    if (headCommit.sha !== branchCommit.sha) {
+    const comparisonHead = comparisonTerminalSha(
+      comparison,
+      resultsCommit,
+      "Results ancestry response",
+      "Results commit is not an ancestor of the protected environment branch",
+    );
+    if (comparisonHead !== branchCommit.sha) {
       throw new GitHubProviderError(503, "protected Results branch moved during ancestry verification");
-    }
-    if (
-      (comparison.status !== "ahead" && comparison.status !== "identical") ||
-      baseCommit.sha !== resultsCommit ||
-      mergeBase.sha !== resultsCommit
-    ) {
-      throw new GitHubProviderError(409, "Results commit is not an ancestor of the protected environment branch");
     }
     const query = new URLSearchParams({ ref: resultsCommit });
     const response = await this.#resultFetcher(
@@ -922,25 +982,14 @@ export class GitHubProvider {
       benchmarkCompareResponse,
       "benchmark ancestry response",
     );
-    const benchmarkBase = object(benchmarkComparison.base_commit, "benchmark ancestry base commit");
-    const benchmarkMergeBase = object(
-      benchmarkComparison.merge_base_commit,
-      "benchmark ancestry merge base",
+    const benchmarkHead = comparisonTerminalSha(
+      benchmarkComparison,
+      benchmarkCommit,
+      "benchmark ancestry response",
+      "benchmark commit is not an ancestor of protected main",
     );
-    const benchmarkHead = object(benchmarkComparison.head_commit, "benchmark ancestry head commit");
-    if (
-      typeof benchmarkHead.sha !== "string" ||
-      !COMMIT.test(benchmarkHead.sha) ||
-      benchmarkHead.sha !== benchmarkBranchCommit.sha
-    ) {
+    if (benchmarkHead !== benchmarkBranchCommit.sha) {
       throw new GitHubProviderError(503, "protected benchmark branch moved during ancestry verification");
-    }
-    if (
-      (benchmarkComparison.status !== "ahead" && benchmarkComparison.status !== "identical") ||
-      benchmarkBase.sha !== benchmarkCommit ||
-      benchmarkMergeBase.sha !== benchmarkCommit
-    ) {
-      throw new GitHubProviderError(409, "benchmark commit is not an ancestor of protected main");
     }
 
     const readManifest = async (

@@ -342,7 +342,10 @@ describe("GitHub App broker", () => {
           status: "ahead",
           base_commit: { sha: COMMIT },
           merge_base_commit: { sha: COMMIT },
-          head_commit: { sha: "f".repeat(40) },
+          ahead_by: 1,
+          behind_by: 0,
+          total_commits: 1,
+          commits: [{ sha: "f".repeat(40) }],
         }));
       }
       if (url.endsWith("/app/installations/789/access_tokens")) {
@@ -433,7 +436,10 @@ describe("GitHub App broker", () => {
           status: "ahead",
           base_commit: { sha: COMMIT },
           merge_base_commit: { sha: COMMIT },
-          head_commit: { sha: "f".repeat(40) },
+          ahead_by: 1,
+          behind_by: 0,
+          total_commits: 1,
+          commits: [{ sha: "f".repeat(40) }],
         }));
       }
       expect(url).toBe(
@@ -478,6 +484,126 @@ describe("GitHub App broker", () => {
     expect(upstream.mock.calls.every(([input]) =>
       !inputUrl(input).includes("/installation") &&
       !inputUrl(input).includes("/access_tokens"))).toBe(true);
+  });
+
+  it("accepts the live identical compare shape for Results and benchmark reads", async () => {
+    for (const authority of ["results", "benchmark"] as const) {
+      const suffix = authority === "results" ? "staging-results" : "main";
+      const repository = authority === "results"
+        ? "leanprover/lean-eval-submissions"
+        : "leanprover/lean-eval";
+      const upstream = vi.fn<typeof fetch>((input) => {
+        const url = inputUrl(input);
+        if (url.endsWith("/installation")) return Promise.resolve(Response.json({ id: 792 }));
+        if (url.endsWith("/access_tokens")) {
+          return Promise.resolve(Response.json({
+            token: "ghs_identical-comparison-token",
+            expires_at: new Date(NOW + 3_600_000).toISOString(),
+          }));
+        }
+        return Promise.resolve(Response.json({
+          status: "identical",
+          base_commit: { sha: COMMIT },
+          merge_base_commit: { sha: COMMIT },
+          ahead_by: 0,
+          behind_by: 0,
+          total_commits: 0,
+          commits: [],
+        }));
+      });
+      const response = await handleBrokerRequest(
+        brokerRequest(
+          authority,
+          `https://api.github.com/repos/${repository}/compare/${COMMIT}...${suffix}`,
+          { expectedCommit: COMMIT },
+        ),
+        environment(),
+        upstream,
+        NOW + 3,
+      );
+      expect(response.status).toBe(200);
+    }
+  });
+
+  it("rejects empty, incoherent, truncated, or tampered compare shapes for both authorities", async () => {
+    const invalidComparisons = [
+      {
+        status: "ahead",
+        base_commit: { sha: COMMIT },
+        merge_base_commit: { sha: COMMIT },
+        ahead_by: 1,
+        behind_by: 0,
+        total_commits: 1,
+        commits: [],
+      },
+      {
+        status: "ahead",
+        base_commit: { sha: COMMIT },
+        merge_base_commit: { sha: COMMIT },
+        ahead_by: 2,
+        behind_by: 0,
+        total_commits: 1,
+        commits: [{ sha: "f".repeat(40) }],
+      },
+      {
+        status: "ahead",
+        base_commit: { sha: COMMIT },
+        merge_base_commit: { sha: COMMIT },
+        ahead_by: 251,
+        behind_by: 0,
+        total_commits: 251,
+        commits: [{ sha: "f".repeat(40) }],
+      },
+      {
+        status: "ahead",
+        base_commit: { sha: COMMIT },
+        merge_base_commit: { sha: COMMIT },
+        ahead_by: 1,
+        behind_by: 0,
+        total_commits: 1,
+        commits: [{ sha: "f".repeat(40) }],
+        head_commit: { sha: "9".repeat(40) },
+      },
+      {
+        status: "identical",
+        base_commit: { sha: COMMIT },
+        merge_base_commit: { sha: COMMIT },
+        ahead_by: 0,
+        behind_by: 0,
+        total_commits: 0,
+        commits: [{ sha: COMMIT }],
+      },
+    ];
+    for (const authority of ["results", "benchmark"] as const) {
+      const suffix = authority === "results" ? "staging-results" : "main";
+      const repository = authority === "results"
+        ? "leanprover/lean-eval-submissions"
+        : "leanprover/lean-eval";
+      for (const comparison of invalidComparisons) {
+        const upstream = vi.fn<typeof fetch>((input) => {
+          const url = inputUrl(input);
+          if (url.endsWith("/installation")) return Promise.resolve(Response.json({ id: 793 }));
+          if (url.endsWith("/access_tokens")) {
+            return Promise.resolve(Response.json({
+              token: "ghs_invalid-comparison-token",
+              expires_at: new Date(NOW + 3_600_000).toISOString(),
+            }));
+          }
+          return Promise.resolve(Response.json(comparison));
+        });
+        const response = await handleBrokerRequest(
+          brokerRequest(
+            authority,
+            `https://api.github.com/repos/${repository}/compare/${COMMIT}...${suffix}`,
+            { expectedCommit: COMMIT },
+          ),
+          environment(),
+          upstream,
+          NOW + 4,
+        );
+        expect(response.status).toBe(409);
+      }
+    }
   });
 
   it("pins the Results branch allowlist to the deployment environment", async () => {

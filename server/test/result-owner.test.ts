@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import canonicalizationVector from "./fixtures/result-owner-canonicalization-vectors-v1.json";
 import { GitHubProvider } from "../src/github-provider";
@@ -41,20 +41,35 @@ function reachableResultFetcher(
   contents: () => Response,
   commit = "e".repeat(40),
   branch: "main" | "staging-results" = "main",
+  comparison: Readonly<{
+    status?: "ahead" | "identical";
+    branchHead?: string;
+    aheadBy?: number;
+    totalCommits?: number;
+    commits?: readonly string[];
+  }> = {},
 ): (input: RequestInfo | URL, init?: RequestInit) => Promise<Response> {
+  const status = comparison.status ?? "ahead";
+  const branchHead = comparison.branchHead ?? (status === "identical" ? commit : "f".repeat(40));
+  const commits = comparison.commits ?? (status === "identical" ? [] : [branchHead]);
+  const aheadBy = comparison.aheadBy ?? (status === "identical" ? 0 : commits.length);
+  const totalCommits = comparison.totalCommits ?? aheadBy;
   return (input, init) => {
     const url = input instanceof Request ? input.url : input.toString();
     expect(new Headers(init?.headers).get("x-lean-eval-expected-commit")).toBe(commit);
     expect(init?.redirect).toBe("manual");
     if (url.endsWith(`/branches/${branch}`)) {
-      return Promise.resolve(Response.json({ name: branch, protected: true, commit: { sha: "f".repeat(40) } }));
+      return Promise.resolve(Response.json({ name: branch, protected: true, commit: { sha: branchHead } }));
     }
     if (url.endsWith(`/compare/${commit}...${branch}`)) {
       return Promise.resolve(Response.json({
-        status: "ahead",
+        status,
         base_commit: { sha: commit },
         merge_base_commit: { sha: commit },
-        head_commit: { sha: "f".repeat(40) },
+        ahead_by: aheadBy,
+        behind_by: 0,
+        total_commits: totalCommits,
+        commits: commits.map((sha) => ({ sha })),
       }));
     }
     if (url === `https://api.github.com/repos/leanprover/lean-eval-submissions/contents/results/alice.json?ref=${commit}`) {
@@ -311,6 +326,57 @@ describe("legacy result owner contracts", () => {
     expect(calls).toHaveLength(2);
   });
 
+  it("accepts the live identical Results shape by inferring the base as its terminal head", async () => {
+    const commit = "e".repeat(40);
+    const contents = vi.fn(() => new Response("content boundary reached", { status: 503 }));
+    const provider = new GitHubProvider(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      reachableResultFetcher(contents, commit, "staging-results", { status: "identical" }),
+      "staging-results",
+    );
+    await expect(provider.verifyLegacyResult("alice", commit, `r2_${"1".repeat(64)}`))
+      .rejects.toMatchObject({ status: 503 });
+    expect(contents).toHaveBeenCalledOnce();
+  });
+
+  it("rejects empty, count-incoherent, or branch-mismatched live Results comparisons", async () => {
+    const commit = "e".repeat(40);
+    for (const comparison of [
+      { status: "ahead" as const, commits: [] },
+      {
+        status: "ahead" as const,
+        aheadBy: 2,
+        totalCommits: 1,
+        commits: ["f".repeat(40)],
+      },
+      {
+        status: "ahead" as const,
+        branchHead: "f".repeat(40),
+        commits: ["9".repeat(40)],
+      },
+      {
+        status: "identical" as const,
+        branchHead: "f".repeat(40),
+      },
+    ]) {
+      const contents = vi.fn(() => new Response("must not be read"));
+      const provider = new GitHubProvider(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        reachableResultFetcher(contents, commit, "staging-results", comparison),
+        "staging-results",
+      );
+      await expect(provider.verifyLegacyResult("alice", commit, `r2_${"1".repeat(64)}`))
+        .rejects.toBeInstanceOf(Error);
+      expect(contents).not.toHaveBeenCalled();
+    }
+  });
+
   it("reports a protected Results head race as retryable provider unavailability", async () => {
     const commit = "e".repeat(40);
     const resultFetcher = (input: RequestInfo | URL): Promise<Response> => {
@@ -327,7 +393,10 @@ describe("legacy result owner contracts", () => {
           status: "ahead",
           base_commit: { sha: commit },
           merge_base_commit: { sha: commit },
-          head_commit: { sha: "9".repeat(40) },
+          ahead_by: 1,
+          behind_by: 0,
+          total_commits: 1,
+          commits: [{ sha: "9".repeat(40) }],
         }));
       }
       throw new Error("content must not be read after a branch-head race");
