@@ -627,7 +627,10 @@ function state(
   dependencies: ApiDependencies,
   githubFetch?: GitHubFetch,
 ): StateAccess {
-  return dependencies.state ?? stateRepository(env, githubFetch);
+  return dependencies.state ?? stateRepository(
+    env,
+    githubFetch ?? dependencies.stateFetch,
+  );
 }
 
 async function submissionStage<T>(stage: string, operation: () => Promise<T>): Promise<T> {

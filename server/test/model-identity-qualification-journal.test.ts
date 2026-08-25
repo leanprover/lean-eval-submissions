@@ -197,6 +197,35 @@ describe("model identity qualification durable journal", () => {
     expect(first.plan_json).not.toContain('"session":');
     expect(first.plan_json).not.toContain("authorization");
     expect(first.plan_json).not.toContain("token");
+
+    await stub.completeStep({
+      reservation,
+      state_commit: NEXT_COMMIT,
+      state_tree: NEXT_TREE,
+      receipt: { operation: "owner_request" },
+    });
+    const approval = await stub.reserveStep({
+      run_id: "2501",
+      run_attempt: 1,
+      journal_id: acquired.journal_id,
+      expected_journal_revision: 4,
+      expected_state_commit: NEXT_COMMIT,
+      expected_state_tree: NEXT_TREE,
+      operation: "maintainer_approve",
+    });
+    if (approval.kind !== "reserved") throw new Error("approval was not reserved");
+    const approvalPlan = JSON.parse(approval.plan_json) as {
+      actor: { github_id: number; login: string };
+      api_requests: { expected_http_status: number; occurred_at: string }[];
+      expected_documents: Record<string, unknown>;
+    };
+    expect(approvalPlan.actor).toEqual({ github_id: 3, login: "maintainer" });
+    expect(approvalPlan.api_requests).toHaveLength(1);
+    expect(approvalPlan.api_requests[0]?.expected_http_status).toBe(201);
+    expect(Date.parse(approvalPlan.api_requests[0]?.occurred_at ?? ""))
+      .toBeGreaterThan(Date.parse(plan.api_requests[0]?.occurred_at ?? ""));
+    expect(Object.keys(approvalPlan.expected_documents)).toHaveLength(3);
+    expect(approval.plan_json).not.toContain('"session":');
   });
 
   it("rejects foreign State movement and records only an exact fast-forward restoration", async () => {

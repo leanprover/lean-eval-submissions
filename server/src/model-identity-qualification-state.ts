@@ -1,4 +1,5 @@
 import type { GitHubFetch } from "./github-state";
+import type { QualificationFixtureManifest } from "./model-identity-qualification-fixture";
 
 const STATE_REPOSITORY = "leanprover/lean-eval-state-staging";
 const STATE_BRANCH = "main";
@@ -28,6 +29,10 @@ export type QualificationStateMutation = Readonly<{
   parent_commit: string;
 }>;
 
+export type QualificationStateMutationPrefix = QualificationStateMutation & Readonly<{
+  applied_mutations: number;
+}>;
+
 export type QualificationStateConfig = Readonly<{
   repository: string;
   token: string;
@@ -46,6 +51,18 @@ export type QualificationMutationRequest = Readonly<{
   expectedParent: string;
   expectedMessage: string;
   expectedDocuments: Readonly<Record<string, unknown>>;
+}>;
+
+export type QualificationExpectedMutation = Readonly<{
+  expectedMessage: string;
+  expectedDocuments: Readonly<Record<string, unknown>>;
+  expectedDeletedPaths: readonly string[];
+  expectedTreeUnchanged: boolean;
+}>;
+
+export type QualificationMutationSequenceRequest = Readonly<{
+  expectedParent: string;
+  expectedMutations: readonly QualificationExpectedMutation[];
 }>;
 
 export class QualificationStateError extends Error {
@@ -206,6 +223,96 @@ async function verifyExactDocument(
   ) throw new QualificationStateError("foreign_state_movement");
 }
 
+function statePathValid(path: string): boolean {
+  return !path.startsWith("/") &&
+    !path.includes("..") &&
+    /^[a-z0-9][a-z0-9./_-]{0,511}$/.test(path);
+}
+
+async function verifyExactDiff(
+  config: QualificationStateConfig,
+  fetcher: GitHubFetch,
+  parent: string,
+  commit: CommitIdentity,
+  expected: QualificationExpectedMutation,
+): Promise<void> {
+  const documents = Object.entries(expected.expectedDocuments);
+  const paths = [
+    ...documents.map(([path]) => path),
+    ...expected.expectedDeletedPaths,
+  ];
+  if (
+    expected.expectedMessage.length < 1 ||
+    new TextEncoder().encode(expected.expectedMessage).byteLength > 512 ||
+    (expected.expectedTreeUnchanged ? paths.length !== 0 : paths.length < 1) ||
+    paths.length > 128 ||
+    paths.some((path) => !statePathValid(path)) ||
+    new Set(paths).size !== paths.length
+  ) throw new TypeError("qualification expected State diff is invalid");
+
+  if (expected.expectedTreeUnchanged) {
+    const parentIdentity = await commitIdentity(config, fetcher, parent);
+    if (commit.tree !== parentIdentity.tree) {
+      throw new QualificationStateError("foreign_state_movement");
+    }
+  }
+
+  const comparison = object(
+    await call(config, fetcher, `/compare/${parent}...${commit.sha}`),
+    "qualification State comparison",
+  );
+  if (!Array.isArray(comparison.commits) || !Array.isArray(comparison.files)) {
+    throw new QualificationStateError("provider_unavailable");
+  }
+  const commits = comparison.commits.map((value) =>
+    sha(object(value, "qualification comparison commit").sha));
+  const files = comparison.files.map((value) =>
+    object(value, "qualification comparison file"));
+  if (
+    comparison.status !== "ahead" ||
+    comparison.ahead_by !== 1 ||
+    comparison.behind_by !== 0 ||
+    comparison.total_commits !== 1 ||
+    nested(comparison, ["merge_base_commit", "sha"]) !== parent ||
+    commits.length !== 1 ||
+    commits[0] !== commit.sha ||
+    files.length !== paths.length
+  ) throw new QualificationStateError("foreign_state_movement");
+
+  const expectedDocumentShas = new Map<string, string>();
+  for (const [path, value] of documents) {
+    const bytes = new TextEncoder().encode(canonicalStateDocument(value));
+    expectedDocumentShas.set(path, await gitBlobSha(bytes));
+  }
+  const deleted = new Set(expected.expectedDeletedPaths);
+  const seen = new Set<string>();
+  for (const file of files) {
+    const path = file.filename;
+    if (typeof path !== "string" || seen.has(path)) {
+      throw new QualificationStateError("foreign_state_movement");
+    }
+    seen.add(path);
+    if (deleted.has(path)) {
+      if (file.status !== "removed") {
+        throw new QualificationStateError("foreign_state_movement");
+      }
+      continue;
+    }
+    const expectedSha = expectedDocumentShas.get(path);
+    if (
+      expectedSha === undefined ||
+      !new Set(["added", "modified"]).has(String(file.status)) ||
+      file.sha !== expectedSha ||
+      ("previous_filename" in file)
+    ) throw new QualificationStateError("foreign_state_movement");
+  }
+  if (paths.some((path) => !seen.has(path))) {
+    throw new QualificationStateError("foreign_state_movement");
+  }
+  await Promise.all(documents.map(([path, value]) =>
+    verifyExactDocument(config, fetcher, commit.sha, path, value)));
+}
+
 function restorationMessage(request: QualificationRestorationRequest): string {
   return `Restore model identity qualification ${request.journalId} nonce ${request.recoveryNonce}`;
 }
@@ -265,45 +372,186 @@ export async function qualificationStateSnapshot(
   return protectedSnapshot(config, fetcher);
 }
 
+export async function verifyQualificationFixtureAtState(
+  config: QualificationStateConfig,
+  fetcher: GitHubFetch,
+  manifest: QualificationFixtureManifest,
+): Promise<QualificationStateSnapshot> {
+  configValid(config);
+  const before = await protectedSnapshot(config, fetcher);
+  if (
+    before.head_commit !== manifest.state.seed_commit ||
+    before.head_tree !== manifest.state.seed_tree
+  ) throw new QualificationStateError("foreign_state_movement");
+  const [seed, parent] = await Promise.all([
+    commitIdentity(config, fetcher, manifest.state.seed_commit),
+    commitIdentity(config, fetcher, manifest.state.seed_parent_commit),
+  ]);
+  if (
+    seed.tree !== manifest.state.seed_tree ||
+    seed.parents.length !== 1 ||
+    seed.parents[0] !== manifest.state.seed_parent_commit ||
+    seed.message !== manifest.state.seed_commit_message ||
+    parent.tree !== manifest.state.seed_parent_tree
+  ) throw new QualificationStateError("foreign_state_movement");
+
+  const comparison = object(await call(
+    config,
+    fetcher,
+    `/compare/${manifest.state.seed_parent_commit}...${manifest.state.seed_commit}`,
+  ), "qualification fixture seed comparison");
+  if (!Array.isArray(comparison.commits) || !Array.isArray(comparison.files)) {
+    throw new QualificationStateError("provider_unavailable");
+  }
+  const files = comparison.files.map((value) =>
+    object(value, "qualification fixture seed file"));
+  const documents = new Map(manifest.documents.map((document) => [
+    document.path,
+    document,
+  ]));
+  if (
+    comparison.status !== "ahead" ||
+    comparison.ahead_by !== 1 ||
+    comparison.behind_by !== 0 ||
+    comparison.total_commits !== 1 ||
+    nested(comparison, ["merge_base_commit", "sha"]) !==
+      manifest.state.seed_parent_commit ||
+    comparison.commits.length !== 1 ||
+    object(comparison.commits[0], "qualification fixture seed commit").sha !==
+      manifest.state.seed_commit ||
+    files.length !== manifest.document_count
+  ) throw new QualificationStateError("foreign_state_movement");
+  const seen = new Set<string>();
+  for (const file of files) {
+    const path = file.filename;
+    const document = typeof path === "string" ? documents.get(path) : undefined;
+    if (
+      document === undefined ||
+      seen.has(path as string) ||
+      file.status !== "added" ||
+      file.sha !== document.git_blob_sha1 ||
+      ("previous_filename" in file)
+    ) throw new QualificationStateError("foreign_state_movement");
+    seen.add(path as string);
+  }
+  if (seen.size !== documents.size) {
+    throw new QualificationStateError("foreign_state_movement");
+  }
+
+  if (manifest.state.contract_commit !== manifest.state.seed_parent_commit) {
+    const ancestry = object(await call(
+      config,
+      fetcher,
+      `/compare/${manifest.state.contract_commit}...${manifest.state.seed_parent_commit}`,
+    ), "qualification fixture contract ancestry");
+    if (
+      ancestry.status !== "ahead" ||
+      nested(ancestry, ["merge_base_commit", "sha"]) !==
+        manifest.state.contract_commit
+    ) throw new QualificationStateError("foreign_state_movement");
+  }
+
+  for (let offset = 0; offset < manifest.documents.length; offset += 6) {
+    await Promise.all(manifest.documents.slice(offset, offset + 6).map(
+      (document) => verifyExactDocument(
+        config,
+        fetcher,
+        manifest.state.seed_commit,
+        document.path,
+        document.value,
+      ),
+    ));
+  }
+  const after = await protectedSnapshot(config, fetcher);
+  if (
+    after.head_commit !== before.head_commit ||
+    after.head_tree !== before.head_tree
+  ) throw new QualificationStateError("foreign_state_movement");
+  return after;
+}
+
 export async function qualificationStateMutation(
   config: QualificationStateConfig,
   fetcher: GitHubFetch,
   request: QualificationMutationRequest,
 ): Promise<QualificationStateMutation> {
+  return qualificationStateMutationSequence(config, fetcher, {
+    expectedParent: request.expectedParent,
+    expectedMutations: [{
+      expectedMessage: request.expectedMessage,
+      expectedDocuments: request.expectedDocuments,
+      expectedDeletedPaths: [],
+      expectedTreeUnchanged: false,
+    }],
+  });
+}
+
+export async function qualificationStateMutationSequence(
+  config: QualificationStateConfig,
+  fetcher: GitHubFetch,
+  request: QualificationMutationSequenceRequest,
+): Promise<QualificationStateMutation> {
+  const prefix = await qualificationStateMutationPrefix(config, fetcher, request);
+  if (prefix.applied_mutations !== request.expectedMutations.length) {
+    throw new QualificationStateError("foreign_state_movement");
+  }
+  return {
+    state_commit: prefix.state_commit,
+    state_tree: prefix.state_tree,
+    parent_commit: prefix.parent_commit,
+  };
+}
+
+export async function qualificationStateMutationPrefix(
+  config: QualificationStateConfig,
+  fetcher: GitHubFetch,
+  request: QualificationMutationSequenceRequest,
+): Promise<QualificationStateMutationPrefix> {
   configValid(config);
   if (
     !SHA.test(request.expectedParent) ||
-    request.expectedMessage.length < 1 ||
-    new TextEncoder().encode(request.expectedMessage).byteLength > 512 ||
-    Object.keys(request.expectedDocuments).length < 1 ||
-    Object.keys(request.expectedDocuments).length > 128
+    request.expectedMutations.length < 1 ||
+    request.expectedMutations.length > 128
   ) {
-    throw new TypeError("qualification mutation request is invalid");
+    throw new TypeError("qualification mutation sequence request is invalid");
   }
   const snapshot = await protectedSnapshot(config, fetcher);
-  const commit = await commitIdentity(config, fetcher, snapshot.head_commit);
-  if (
-    commit.sha === request.expectedParent ||
-    commit.tree !== snapshot.head_tree ||
-    commit.parents.length !== 1 ||
-    commit.parents[0] !== request.expectedParent ||
-    commit.message !== request.expectedMessage
+  const commits: CommitIdentity[] = [];
+  let cursor = snapshot.head_commit;
+  while (
+    cursor !== request.expectedParent &&
+    commits.length < request.expectedMutations.length
   ) {
-    throw new QualificationStateError("foreign_state_movement");
+    const commit = await commitIdentity(config, fetcher, cursor);
+    if (commit.parents.length !== 1) {
+      throw new QualificationStateError("foreign_state_movement");
+    }
+    commits.push(commit);
+    cursor = commit.parents[0] ?? "";
   }
-  await Promise.all(Object.entries(request.expectedDocuments).map(
-    ([path, expected]) => verifyExactDocument(
-      config,
-      fetcher,
-      commit.sha,
-      path,
-      expected,
-    ),
-  ));
+  commits.reverse();
+  if (
+    cursor !== request.expectedParent ||
+    commits.length < 1 ||
+    commits.at(-1)?.sha !== snapshot.head_commit ||
+    commits.at(-1)?.tree !== snapshot.head_tree
+  ) throw new QualificationStateError("foreign_state_movement");
+  let parent = request.expectedParent;
+  for (const [index, commit] of commits.entries()) {
+    const expected = request.expectedMutations[index];
+    if (
+      expected === undefined ||
+      commit.parents[0] !== parent ||
+      commit.message !== expected.expectedMessage
+    ) throw new QualificationStateError("foreign_state_movement");
+    await verifyExactDiff(config, fetcher, parent, commit, expected);
+    parent = commit.sha;
+  }
   return {
-    state_commit: commit.sha,
-    state_tree: commit.tree,
+    state_commit: snapshot.head_commit,
+    state_tree: snapshot.head_tree,
     parent_commit: request.expectedParent,
+    applied_mutations: commits.length,
   };
 }
 

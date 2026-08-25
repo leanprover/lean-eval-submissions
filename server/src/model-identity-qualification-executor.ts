@@ -2,6 +2,7 @@ import {
   executeModelIdentityQualificationKernel,
   type RuntimeEnv,
 } from "./app";
+import type { GitHubFetch } from "./github-state";
 import {
   qualificationApiRequestDigest,
   type QualificationApiRequestPlan,
@@ -12,6 +13,13 @@ import { STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT } from "./model-identity";
 const MAX_REQUEST_BYTES = 32 * 1024;
 const SHA = /^[0-9a-f]{40}$/;
 const STATE_REPOSITORY = "leanprover/lean-eval-state-staging";
+const STATE_API_PREFIX = `/repos/${STATE_REPOSITORY}`;
+
+type ExecutionMeasurements = {
+  subrequests: number;
+  gitObjectWrites: number;
+  casAttempts: number;
+};
 
 type ExecutorIdentity = Readonly<{ github_id: number; login: string }>;
 
@@ -94,6 +102,75 @@ function runtime(env: ExecutorCloudflareEnv): RuntimeEnv {
   };
 }
 
+function measuredStateFetch(
+  env: ExecutorCloudflareEnv,
+  capability: string,
+  measurements: ExecutionMeasurements,
+): GitHubFetch {
+  return async (input, init) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
+    const method = request.method.toUpperCase();
+    if (
+      url.protocol !== "https:" ||
+      url.hostname !== "api.github.com" ||
+      !url.pathname.startsWith(`${STATE_API_PREFIX}/`)
+    ) throw new TypeError("qualification executor State request is invalid");
+    measurements.subrequests += 1;
+    const statePath = url.pathname.slice(STATE_API_PREFIX.length);
+    if (
+      method === "POST" &&
+      new Set(["/git/blobs", "/git/trees", "/git/commits"]).has(statePath)
+    ) measurements.gitObjectWrites += 1;
+    if (method === "PATCH" && statePath === "/git/refs/heads/main") {
+      measurements.casAttempts += 1;
+    }
+    const headers = new Headers({
+      "x-lean-eval-cas-attempt": String(measurements.casAttempts),
+      "x-lean-eval-qualification-capability": capability,
+      "x-lean-eval-upstream-method": method,
+      "x-lean-eval-upstream-path": `${statePath}${url.search}`,
+    });
+    for (const name of ["accept", "content-type", "user-agent", "x-github-api-version"]) {
+      const value = request.headers.get(name);
+      if (value !== null) headers.set(`x-lean-eval-upstream-${name}`, value);
+    }
+    const body = new Uint8Array(await request.arrayBuffer());
+    return env.MODEL_IDENTITY_QUALIFICATION_COLLISION.fetch(
+      "https://qualification-collision.invalid/internal/v1/github",
+      {
+        method: "POST",
+        headers,
+        ...(body.byteLength === 0 ? {} : { body }),
+      },
+    );
+  };
+}
+
+function measuredResponse(
+  response: Response,
+  measurements: ExecutionMeasurements,
+): Response {
+  const headers = new Headers(response.headers);
+  headers.set(
+    "x-lean-eval-qualification-subrequests",
+    String(measurements.subrequests),
+  );
+  headers.set(
+    "x-lean-eval-qualification-git-object-writes",
+    String(measurements.gitObjectWrites),
+  );
+  headers.set(
+    "x-lean-eval-qualification-cas-attempts",
+    String(measurements.casAttempts),
+  );
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export default {
   async fetch(request, env): Promise<Response> {
     if (
@@ -132,13 +209,19 @@ export default {
           body: JSON.stringify(operation.body),
         },
       );
-      return await executeModelIdentityQualificationKernel(
+      const measurements: ExecutionMeasurements = {
+        subrequests: 0,
+        gitObjectWrites: 0,
+        casAttempts: 0,
+      };
+      const response = await executeModelIdentityQualificationKernel(
         kernelRequest,
         runtime(env),
-        {},
+        { stateFetch: measuredStateFetch(env, body.capability, measurements) },
         maintainer,
         Date.parse(operation.occurred_at),
       );
+      return measuredResponse(response, measurements);
     } catch {
       return json({ error: "invalid_request" }, 400);
     }
