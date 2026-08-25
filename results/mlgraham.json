@@ -298,6 +298,29 @@
         "ref": "7b2dd553264c8e985c3065c498bdcadcfed322bd",
         "repo": "mlgraham/lean-eval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-25T00:53:06Z",
+      "benchmark_commit": "a910403b85a4f903d812538292393cc13ef6c801",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1353,
+        "kind": "issue"
+      },
+      "problem_id": "oppenheim_inequality",
+      "production_metadata": {
+        "production_description": "Original proof of oppenheim_inequality. Claude Fable 5 (Claude Code), under human direction,\nfrom the Challenge, Mathlib source search, and compiler feedback only; no published lean-eval\nsolution consulted. Method: induction on Fintype.card n. Trivial cases det A = 0 or some\nB i i = 0 reduce to det_nonneg of the Hadamard product (Schur product theorem,\nPosSemidef.hadamard). Otherwise A is positive definite; reindex along\nEquiv.sumCompl (. = i0) and split into blocks; the (1,1) blocks are 1x1 with positive entries,\nso PosDef.fromBlocks_11 gives positive semidefinite Schur complements S_A, S_B and\ndet_fromBlocks_11 gives det A = a * det S_A and det (A o B) = a b * det S_AB. The entrywise\nidentity S_AB = S_A o B_22 + (A_21 A_11^-1 A_12) o S_B exhibits S_AB as S_A o B_22 plus a\npositive semidefinite correction (rank-one PSD times inverse pivot, Hadamard with S_B). A\nself-proved lemma det X <= det (X + Y) for PSD X, Y (via CFC.sqrt X, conjugation to 1 + Z with\nZ PSD, and eigenvalues of 1 + Z being >= 1 from the orthonormal eigenvector basis) then\ncombines with the induction hypothesis on S_A and B_22. Slim imports. Cost: 2 compile\niterations, ~45 minutes of model loop time. (Earlier workspaces on this branch are already\nrecorded; results are sticky.)",
+        "solution_publication_date": "2026-08-24",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_b972b53988ff4fdb1630cd09f5e337d6617d1d4c8c7afec2b0b11f29743814c9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "e0e980e27185bbf4a5c91eb6780c1aa9791b739d",
+        "repo": "mlgraham/lean-eval-submission"
+      }
     }
   ],
   "schema_version": 2,
