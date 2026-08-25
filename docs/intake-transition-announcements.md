@@ -7,7 +7,7 @@ publishing an announcement.
 
 ## Production server launch
 
-Record these fields in the infrastructure ledger first:
+Prepare these fields in the compact launch packet first:
 
 ```text
 server URL: <URL>
@@ -39,7 +39,7 @@ Ready-to-edit announcement:
 > also pass. Any revised closure date will be announced explicitly.
 
 Publish the same dated notice in repository documentation and the LeanEval
-Zulip topic. Record both links and the timestamp in `INFRASTRUCTURE.md`.
+Zulip topic. Keep both links and the timestamp with the transition checklist.
 
 ## Issue-intake closure gate
 

@@ -105,9 +105,7 @@ Implementation is not activation. Before creating the repository variable:
   credentials only in the protected `replay-production` environment;
 - deploy and qualify the exact historical executor code and receipt protocol;
 - run one accepted staging/public canary through the complete State lifecycle;
-- verify stale recovery, terminal idempotency, and fail-closed health; and
-- record exact run, deployment, image, State, and terminal evidence in the
-  infrastructure ledger.
+- verify stale recovery, terminal idempotency, and fail-closed health.
 
 Production intake, ordinary private replay, and release publication are
 independent gates and do not become enabled by this controller.

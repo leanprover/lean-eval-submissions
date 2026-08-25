@@ -19,8 +19,8 @@ def steps(*pairs: tuple[str, str]) -> list[dict]:
     return [{"name": name, "conclusion": conclusion} for name, conclusion in pairs]
 
 
-# Trimmed from run 31962529479 (issue #1077), the second of the two attempts
-# that exhausted a 16 GB runner ~93% of the way through the build.
+# Representative log from a build whose runner was killed after exhausting
+# memory near the end of the build.
 OOM_LOG = """\
 2026-08-16T18:28:27.2676Z ✔ [8761/9423] Built Submission.E8.RootSystem.Data.Band03_05 (55s)
 2026-08-16T19:56:17.3844Z ✔ [8762/9423] Built Submission.E8
@@ -29,8 +29,8 @@ This can happen when the runner service is stopped, or a manually started runner
 2026-08-16T19:56:17.4025Z ##[error]Process completed with exit code 143.
 """
 
-# Trimmed from run 32320008071, the Namespace attempt: landrun's Landlock
-# confinement silently did not engage, so the probe refused to continue.
+# Representative log from a preflight where Landlock confinement did not
+# engage, so the probe refused to continue.
 PROBE_LOG = """\
 2026-08-20T01:12:16.1189Z sandbox_engaged_probe: FAIL — sandbox is NOT engaged as expected.
 2026-08-20T01:12:16.1190Z   - tmp: expected DENIED, got ALLOWED.
