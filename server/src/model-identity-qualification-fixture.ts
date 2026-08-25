@@ -192,6 +192,7 @@ function fixtureDecisionMatches(
 
 function requireComponent(
   impacts: ReadonlyMap<string, ModelIdentityReverseImpactView>,
+  modelViews: ReadonlyMap<string, ModelIdentityView>,
   fixture: FixtureComponent,
   sourceCount: number,
   targetCount: number,
@@ -200,12 +201,30 @@ function requireComponent(
 ): void {
   const source = impacts.get(fixture.source_terminal_model_id);
   const target = impacts.get(fixture.target_terminal_model_id);
+  const sourceView = modelViews.get(fixture.source_terminal_model_id);
+  const targetView = modelViews.get(fixture.target_terminal_model_id);
   if (
     fixture.source_member_count !== sourceCount ||
     fixture.target_member_count !== targetCount ||
     fixture.union_member_count !== unionCount ||
     source?.member_count !== sourceCount ||
-    target?.member_count !== targetCount
+    target?.member_count !== targetCount ||
+    source.members.filter((member) => member.kind === "identity").length !== 1 ||
+    source.members.filter((member) => member.kind === "alias").length !==
+      sourceCount - 1 ||
+    source.members.find((member) => member.kind === "identity")?.model_id !==
+      fixture.source_terminal_model_id ||
+    target.members.filter((member) => member.kind === "identity").length !== 1 ||
+    target.members.filter((member) => member.kind === "alias").length !==
+      targetCount - 1 ||
+    target.members.find((member) => member.kind === "identity")?.model_id !==
+      fixture.target_terminal_model_id ||
+    sourceView?.status !== "approved" ||
+    sourceView.resolved_model_id !== sourceView.model_id ||
+    sourceView.consolidated_into !== null ||
+    targetView?.status !== "approved" ||
+    targetView.resolved_model_id !== targetView.model_id ||
+    targetView.consolidated_into !== null
   ) throw new TypeError(`${label} topology is invalid`);
 }
 
@@ -468,8 +487,24 @@ export async function verifyQualificationFixtureManifest(
     secondTarget?.status !== "approved" ||
     secondTarget.resolved_model_id !== secondTarget.model_id
   ) throw new TypeError("qualification fixture lifecycle binding is invalid");
-  requireComponent(impacts, capRefusal, 16, 17, 33, "qualification cap fixture");
-  requireComponent(impacts, contention, 16, 16, 32, "qualification contention fixture");
+  requireComponent(
+    impacts,
+    modelViews,
+    capRefusal,
+    16,
+    17,
+    33,
+    "qualification cap fixture",
+  );
+  requireComponent(
+    impacts,
+    modelViews,
+    contention,
+    16,
+    16,
+    32,
+    "qualification contention fixture",
+  );
   const boundTerminals = new Set([
     chain.first_target_model_id,
     chain.second_target_model_id,

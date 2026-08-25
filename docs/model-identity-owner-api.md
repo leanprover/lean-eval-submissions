@@ -33,7 +33,8 @@ the closed environment configuration. Either numeric-ID or login drift fails
 closed as not found. The OAuth access token is discarded after `/user`; the
 callback remains bound to its exact environment URL, signed state cookie, and
 one-use State nonce. The two issuers produce the same closed, signed,
-one-hour `browser_session` contract; there is no unsigned actor path.
+one-hour contracts (`browser_session` for OAuth and source-bound
+`agent_session` for the agent lane); there is no unsigned actor path.
 
 ## State and collision binding
 

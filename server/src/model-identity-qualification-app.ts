@@ -852,7 +852,8 @@ async function executePlannedStep(
       break;
     }
     apiStatus = apiResponse.status;
-    lastMeasurements = executorMeasurements(apiResponse);
+    const measurements = executorMeasurements(apiResponse);
+    lastMeasurements = measurements;
     if (apiStatus !== operationRequest.expected_http_status) {
       throw new QualificationStateError("provider_unavailable");
     }
@@ -861,6 +862,13 @@ async function executePlannedStep(
       canonicalQualificationValue(outcome) !==
       canonicalQualificationValue(operationRequest.expected_response)
     ) throw new QualificationStateError("provider_unavailable");
+    if (
+      operationRequest.expected_commit_message === null &&
+      (
+        measurements?.gitObjectWrites !== 0 ||
+        measurements.casAttempts !== 0
+      )
+    ) throw new QualificationStateError("foreign_state_movement");
   }
   const expectedMutations = plan.api_requests.flatMap((operationRequest) =>
     operationRequest.expected_commit_message === null
@@ -901,10 +909,11 @@ async function executePlannedStep(
       after.head_commit !== step.expected_state_commit ||
       after.head_tree !== step.expected_state_tree ||
       expectedMutations.length !== 0 ||
-      lastMeasurements?.gitObjectWrites !== 0
+      lastMeasurements?.gitObjectWrites !== 0 ||
+      lastMeasurements.casAttempts !== 0
     ) throw new QualificationStateError("foreign_state_movement");
   }
-  if (responseLost && !plan.mutation_expected) {
+  if (responseLost) {
     throw new QualificationStateError("provider_unavailable");
   }
   const receipt = {
