@@ -287,6 +287,12 @@ the already implemented owner status, metadata, and publication routes.
       pending and 668 private-migration pending). This closes only the inventory
       handoff; none of those pending classifications is replay qualification or
       a permanent-unavailability decision.
+      The deterministic private crosswalk contract now proves, on the pinned
+      read-only snapshots, 639 exact archive bindings and 29 explicit
+      `archive_not_found` orphans with no ambiguity or metadata conflicts; see
+      `docs/historical-private-archive-crosswalk.md`. This diagnostic did not
+      migrate/decrypt archives or authorize replay, and the 29 orphans are not
+      permanent-unavailability evidence.
 - [ ] Enqueue and execute the complete historical replay corpus under exact
       original pins, recording terminal verdicts/statistics or explicit
       unavailability; the isolated staging proofs above do not satisfy this

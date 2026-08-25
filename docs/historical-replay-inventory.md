@@ -29,6 +29,14 @@ ref, correlate each private result with its migrated archive, resolve exact
 historical toolchains, and generate State enqueue or permanent-unavailability
 events with exact evidence.
 
+The private correlation contract is implemented by
+[`classify_historical_private_archives.py`](../scripts/classify_historical_private_archives.py)
+and documented in
+[`historical-private-archive-crosswalk.md`](historical-private-archive-crosswalk.md).
+It performs the private locator join only in memory and emits a closed,
+source-free classification for every private result. An `archive_not_found`
+entry remains pending and cannot be laundered into permanent unavailability.
+
 Example:
 
 ```bash

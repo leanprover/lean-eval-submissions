@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://leanprover.github.io/lean-eval/schemas/historical-private-archive-crosswalk-v1.schema.json",
+  "title": "LeanEval historical private archive crosswalk schema version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "results_repository",
+    "results_commit",
+    "results_store_sha256",
+    "private_result_count",
+    "audit_repository",
+    "audit_commit",
+    "archive_inventory_digest",
+    "archive_count",
+    "classification_counts",
+    "entries"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "results_repository": {"const": "leanprover/lean-eval-submissions"},
+    "results_commit": {"$ref": "#/$defs/commit"},
+    "results_store_sha256": {"$ref": "#/$defs/digest"},
+    "private_result_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "audit_repository": {"const": "leanprover/lean-eval-audit"},
+    "audit_commit": {"$ref": "#/$defs/commit"},
+    "archive_inventory_digest": {"$ref": "#/$defs/digest"},
+    "archive_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "classification_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bound",
+        "archive_not_found",
+        "archive_identity_ambiguous",
+        "archive_metadata_conflict"
+      ],
+      "properties": {
+        "bound": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "archive_not_found": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "archive_identity_ambiguous": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "archive_metadata_conflict": {"type": "integer", "minimum": 0, "maximum": 10000}
+      }
+    },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "oneOf": [
+          {"$ref": "#/$defs/bound"},
+          {"$ref": "#/$defs/not_found"},
+          {"$ref": "#/$defs/ambiguous"},
+          {"$ref": "#/$defs/conflict"}
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "result_id": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
+    "uuid7": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "bound": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_id",
+        "classification",
+        "submission_id",
+        "archive_plan_entry_sha256",
+        "archive_schema_version",
+        "archive_result_evidence",
+        "benchmark_relation"
+      ],
+      "properties": {
+        "result_id": {"$ref": "#/$defs/result_id"},
+        "classification": {"const": "bound"},
+        "submission_id": {"$ref": "#/$defs/uuid7"},
+        "archive_plan_entry_sha256": {"$ref": "#/$defs/digest"},
+        "archive_schema_version": {"enum": [1, 2, 3]},
+        "archive_result_evidence": {"enum": ["confirmed_pass", "legacy_unrecorded"]},
+        "benchmark_relation": {"enum": ["same", "archive_recorded_different"]}
+      }
+    },
+    "not_found": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result_id", "classification"],
+      "properties": {
+        "result_id": {"$ref": "#/$defs/result_id"},
+        "classification": {"const": "archive_not_found"}
+      }
+    },
+    "ambiguous": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result_id", "classification", "candidate_count"],
+      "properties": {
+        "result_id": {"$ref": "#/$defs/result_id"},
+        "classification": {"const": "archive_identity_ambiguous"},
+        "candidate_count": {"type": "integer", "minimum": 2, "maximum": 10000}
+      }
+    },
+    "conflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result_id", "classification", "reason"],
+      "properties": {
+        "result_id": {"$ref": "#/$defs/result_id"},
+        "classification": {"const": "archive_metadata_conflict"},
+        "reason": {
+          "enum": [
+            "archive_visibility_not_private",
+            "declared_model_mismatch",
+            "problem_not_archived",
+            "evaluator_verdict_not_pass"
+          ]
+        }
+      }
+    }
+  }
+}
