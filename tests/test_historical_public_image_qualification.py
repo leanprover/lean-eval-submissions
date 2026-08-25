@@ -42,16 +42,16 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
         cls.entry = cls.matrix["images"][0]
         cls.commit = cls.entry["benchmark_commit"]
 
-    def test_all_25_profiles_remain_unqualified_and_select_exactly(self) -> None:
-        self.assertEqual(self.matrix["image_count"], 25)
-        self.assertEqual(len(self.matrix["images"]), 25)
+    def test_all_35_profiles_remain_unqualified_and_select_exactly(self) -> None:
+        self.assertEqual(self.matrix["image_count"], 35)
+        self.assertEqual(len(self.matrix["images"]), 35)
         self.assertEqual(self.matrix["qualification_status"], "unqualified")
         self.assertEqual({item["qualification_status"] for item in self.matrix["images"]}, {"unqualified"})
         candidates = [
             qualification.candidate(MATRIX, CONTRACT, entry["benchmark_commit"])
             for entry in self.matrix["images"]
         ]
-        self.assertEqual(len({item["benchmark_commit"] for item in candidates}), 25)
+        self.assertEqual(len({item["benchmark_commit"] for item in candidates}), 35)
         self.assertEqual({item["qualification_status"] for item in candidates}, {"unqualified"})
         candidate = candidates[0]
         self.assertEqual(candidate["benchmark_tree"], self.entry["benchmark_tree"])
@@ -354,7 +354,7 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
         self.assertIn("REPLAY_ENABLED\": \"false", MODULE_PATH.read_text())
         self.assertIn("qualification_status\": \"unqualified", MODULE_PATH.read_text())
         self.assertIn(qualification.MATRIX_SHA256, dockerfile)
-        self.assertIn('matrix["image_count"] == len(matrix["images"]) == 25', dockerfile)
+        self.assertIn('matrix["image_count"] == len(matrix["images"]) == 35', dockerfile)
         self.assertNotIn("containers push", dockerfile)
 
     def test_large_image_layers_are_separated_canonical_and_root_owned(self) -> None:

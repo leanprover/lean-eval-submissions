@@ -330,8 +330,10 @@ the already implemented owner status, metadata, and publication routes.
       reproduced the final adjudicated 128-request / 194-result plan twice. Its
       exact plan (`d6e81393…`) and 35-commit toolchain registry (`4f2f3737…`)
       are retained under digest-derived evidence paths. All resolved public
-      request groups are now deterministically planned, but none is qualified,
-      enqueued, or executed.
+      request groups are now deterministically planned. The final source-free
+      35-image build-readiness matrix (`a674707e…`) binds that exact plan,
+      registry, and component lock; all entries remain unqualified, and none
+      is enqueued or executed.
       Activation
       remains fail-closed on `legacy_public_result_replay_authority_v1` because
       current State replay materialization admits only modern

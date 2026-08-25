@@ -26,11 +26,11 @@ from prepare_public_replay_plan import validate_toolchain_registry
 
 PLAN = (
     ROOT
-    / "evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json"
+    / "evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json"
 )
 REGISTRY = (
     ROOT
-    / "evidence/public-replay/toolchains/5144fc19bbbbcf0ef16a1d7c88b163254f96a250cb4a5846fbbb0d465ce16790.json"
+    / "evidence/public-replay/toolchains/4f2f3737d79e6abd6c169ebdde3f2218157d8f6c482a85ad2026821a4b8e81a0.json"
 )
 COMPONENTS = ROOT / "configuration/historical-public-replay-components-v1.json"
 MATRIX = ROOT / "configuration/historical-public-replay-profile-matrix-v1.json"
@@ -65,10 +65,10 @@ class HistoricalReplayProfileMatrixTests(unittest.TestCase):
     def test_committed_matrix_is_canonical_schema_valid_and_source_free(self) -> None:
         self.assertEqual(canonical_document_bytes(self.matrix), self.matrix_raw)
         jsonschema.Draft202012Validator(self.schema).validate(self.matrix)
-        self.assertEqual(self.matrix["image_count"], 25)
+        self.assertEqual(self.matrix["image_count"], 35)
         self.assertEqual(self.matrix["toolchain_count"], 5)
-        self.assertEqual(self.matrix["request_count"], 69)
-        self.assertEqual(self.matrix["result_count"], 135)
+        self.assertEqual(self.matrix["request_count"], 128)
+        self.assertEqual(self.matrix["result_count"], 194)
         encoded = self.matrix_raw.decode("utf-8").lower()
         for forbidden in (
             "submission_source",
@@ -126,15 +126,15 @@ class HistoricalReplayProfileMatrixTests(unittest.TestCase):
             versions,
             {
                 "leanprover/lean4:v4.30.0": 3,
-                "leanprover/lean4:v4.30.0-rc2": 12,
+                "leanprover/lean4:v4.30.0-rc2": 21,
                 "leanprover/lean4:v4.32.0-rc1": 3,
                 "leanprover/lean4:v4.32.2": 5,
-                "leanprover/lean4:v4.33.0": 2,
+                "leanprover/lean4:v4.33.0": 3,
             },
         )
         layouts = [image["manifest_layout"] for image in self.matrix["images"]]
-        self.assertEqual(layouts.count("monolith_v1"), 6)
-        self.assertEqual(layouts.count("per_problem_v1"), 19)
+        self.assertEqual(layouts.count("monolith_v1"), 15)
+        self.assertEqual(layouts.count("per_problem_v1"), 20)
 
     def test_producer_reconstructs_exact_bytes_from_reviewed_inspections(self) -> None:
         inspections = {
@@ -246,7 +246,7 @@ class HistoricalReplayProfileMatrixTests(unittest.TestCase):
                 0
             ].__setitem__("results_commit", "f" * 40),
             "request ordering": lambda plan: plan["requests"].reverse(),
-            "result ordering": lambda plan: plan["requests"][0]["results"].reverse(),
+            "result ordering": lambda plan: plan["requests"][4]["results"].reverse(),
         }
         for label, change in changes.items():
             with self.subTest(label=label):

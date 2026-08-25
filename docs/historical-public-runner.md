@@ -62,7 +62,7 @@ State event.
 ## Delivery state
 
 This contract-only change deliberately does not install the historical runner
-into `Dockerfile.replay-authoritative` or publish a runnable image. The 25
+into `Dockerfile.replay-authoritative` or publish a runnable image. The 35
 matrix-derived image builds are a separate gated lane: each must copy the
 historical entrypoint, validator, contract, and exact matrix into the image and
 bake both benchmark markers from the fetched Git object. Until those immutable
@@ -76,11 +76,11 @@ canonical HTTPS GitHub URLs:
 
 ```console
 python scripts/historical_public_runner.py prepare \
-  --plan evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json \
+  --plan evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json \
   --profile-matrix configuration/historical-public-replay-profile-matrix-v1.json \
   --contract configuration/historical-public-runner-v1.json \
-  --expected-plan-sha256 2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942 \
-  --expected-profile-matrix-sha256 aad9132f729ef9f429532900d1e50b665330721fa9360699328c47bdfb2aedfc \
+  --expected-plan-sha256 d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e \
+  --expected-profile-matrix-sha256 a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c \
   --expected-contract-sha256 6d341a642dfd6aa9092228269da6761000bf0818128ce3f35cb259bd8fb2303f \
   --request-id prr_<64-lowercase-hex> \
   --result-id r2_<64-lowercase-hex> \
@@ -90,6 +90,6 @@ python scripts/historical_public_runner.py prepare \
   --output /new/path/historical-public-request.json
 ```
 
-Both outputs are create-only. Their production use remains blocked on the 25
+Both outputs are create-only. Their production use remains blocked on the 35
 immutable matrix-derived images and the complete Cloudflare staging runtime
 probe for each immutable manifest digest.

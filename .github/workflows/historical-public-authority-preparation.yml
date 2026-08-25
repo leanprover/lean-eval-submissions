@@ -66,7 +66,7 @@ jobs:
       contents: read
     env:
       CONTROLLER: scripts/prepare_historical_public_authority.py
-      PLAN: evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json
+      PLAN: evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json
       MATRIX: configuration/historical-public-replay-profile-matrix-v1.json
       RUNNER_CONTRACT: configuration/historical-public-runner-v1.json
       QUALIFICATION_CONTRACT: historical-public-qualification/contract-v1.json

@@ -4,7 +4,7 @@
   "cpu_model_requirement": "nonempty",
   "destruction_probe_count": 2,
   "disk_size_mb": 20000,
-  "image_count": 25,
+  "image_count": 35,
   "instance_type": "standard-4",
   "kernel_release_requirement": "nonempty",
   "kind": "historical_public_image_qualification_contract",

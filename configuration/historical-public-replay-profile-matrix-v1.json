@@ -1,6 +1,6 @@
 {
   "component_lock_sha256": "68b5a58cba2769aa757d397e02b52170539da4f7184fe57fa4fb6e16d5980c77",
-  "image_count": 25,
+  "image_count": 35,
   "images": [
     {
       "benchmark_commit": "11081d345a580a0f3c46699240f28e4f41fbf9fe",
@@ -10,18 +10,27 @@
       "problem_ids": [
         "brauer_character_in_cyclotomic",
         "bvp_comparison",
+        "ci_regenerate_main_check",
+        "cubic_decay_asymptotic",
         "cyclotomic_integer_house_le_two",
         "def_hole_example",
         "dirichlet_eigenvalues_eq_nat_sq",
         "exists_complementary_polynomial_on_unit_circle",
         "exists_nonisotopic_link",
+        "finite_graph_ramsey_theorem",
         "heat_kernel_solves_heat_equation",
+        "instance_hole_example",
         "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius",
         "linear_ode_asymptotic_stability",
+        "list_append_singleton_length",
         "mem_convexHull_finset_extremePoints_of_mem_compact_convex",
+        "mulCayley_connected_iff_closure_eq_top",
         "oppenheim_inequality",
         "pi1_circle_mulEquiv_int",
+        "posSemidef_map_exp",
         "sturm_separation",
+        "substInv_X_sub_X_sq_eq_catalan",
+        "two_plus_two",
         "vonNeumann_doubleCommutant_tfae"
       ],
       "profile_lock": {
@@ -56,10 +65,150 @@
         "toolchain": "leanprover/lean4:v4.30.0-rc2"
       },
       "qualification_status": "unqualified",
-      "request_count": 4,
-      "result_count": 18,
+      "request_count": 24,
+      "result_count": 38,
       "toolchain": "leanprover/lean4:v4.30.0-rc2",
       "workspace_count": 57
+    },
+    {
+      "benchmark_commit": "126de1f3e6b053a0e8a7f67681045804cf12712e",
+      "benchmark_tree": "a50b8ca1be6e04628df1a2142acb5488139b3213",
+      "lean_toolchain_blob_sha256": "2ca79bdfcf30c10b90f1bf037cf0f0d7528cf6b1f4a72a7f98ef17a2752d36af",
+      "manifest_layout": "monolith_v1",
+      "problem_ids": [
+        "substInv_X_sub_X_sq_eq_catalan"
+      ],
+      "profile_lock": {
+        "benchmark_commit": "126de1f3e6b053a0e8a7f67681045804cf12712e",
+        "benchmark_repository": "leanprover/lean-eval",
+        "cache_state": "cold",
+        "components": {
+          "comparator": {
+            "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+            "repository": "leanprover/comparator"
+          },
+          "landrun": {
+            "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+            "repository": "zouuup/landrun"
+          },
+          "lean4export": {
+            "commit": "12581a6b680d8478175596338eb2d53383a323e3",
+            "repository": "leanprover/lean4export"
+          },
+          "nanoda": {
+            "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+            "repository": "robsimmons/nanoda_lib"
+          }
+        },
+        "go_toolchain": "go1.25.12",
+        "measurement_command": [
+          "/opt/lean-eval/replay-measure"
+        ],
+        "runner_profile": "cloudflare-sandbox-standard-4-v1",
+        "rust_toolchain": "rustc-1.89.0",
+        "schema_version": 1,
+        "toolchain": "leanprover/lean4:v4.30.0-rc2"
+      },
+      "qualification_status": "unqualified",
+      "request_count": 1,
+      "result_count": 1,
+      "toolchain": "leanprover/lean4:v4.30.0-rc2",
+      "workspace_count": 36
+    },
+    {
+      "benchmark_commit": "2385cd0654f1cd2bf74efc769265c65bec665cfb",
+      "benchmark_tree": "c4dca8e0329f914cb0c4521d508774f4198814da",
+      "lean_toolchain_blob_sha256": "2ca79bdfcf30c10b90f1bf037cf0f0d7528cf6b1f4a72a7f98ef17a2752d36af",
+      "manifest_layout": "monolith_v1",
+      "problem_ids": [
+        "brauer_character_in_cyclotomic",
+        "bvp_comparison",
+        "ci_regenerate_main_check",
+        "cubic_decay_asymptotic",
+        "def_hole_example",
+        "instance_hole_example"
+      ],
+      "profile_lock": {
+        "benchmark_commit": "2385cd0654f1cd2bf74efc769265c65bec665cfb",
+        "benchmark_repository": "leanprover/lean-eval",
+        "cache_state": "cold",
+        "components": {
+          "comparator": {
+            "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+            "repository": "leanprover/comparator"
+          },
+          "landrun": {
+            "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+            "repository": "zouuup/landrun"
+          },
+          "lean4export": {
+            "commit": "12581a6b680d8478175596338eb2d53383a323e3",
+            "repository": "leanprover/lean4export"
+          },
+          "nanoda": {
+            "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+            "repository": "robsimmons/nanoda_lib"
+          }
+        },
+        "go_toolchain": "go1.25.12",
+        "measurement_command": [
+          "/opt/lean-eval/replay-measure"
+        ],
+        "runner_profile": "cloudflare-sandbox-standard-4-v1",
+        "rust_toolchain": "rustc-1.89.0",
+        "schema_version": 1,
+        "toolchain": "leanprover/lean4:v4.30.0-rc2"
+      },
+      "qualification_status": "unqualified",
+      "request_count": 6,
+      "result_count": 6,
+      "toolchain": "leanprover/lean4:v4.30.0-rc2",
+      "workspace_count": 60
+    },
+    {
+      "benchmark_commit": "276a580e44cad4d6a1be2cb90f0874d73457296f",
+      "benchmark_tree": "eb528c5b0fbf4fba2f1643e049b254c1c4ad3141",
+      "lean_toolchain_blob_sha256": "2ca79bdfcf30c10b90f1bf037cf0f0d7528cf6b1f4a72a7f98ef17a2752d36af",
+      "manifest_layout": "monolith_v1",
+      "problem_ids": [
+        "instance_hole_example"
+      ],
+      "profile_lock": {
+        "benchmark_commit": "276a580e44cad4d6a1be2cb90f0874d73457296f",
+        "benchmark_repository": "leanprover/lean-eval",
+        "cache_state": "cold",
+        "components": {
+          "comparator": {
+            "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+            "repository": "leanprover/comparator"
+          },
+          "landrun": {
+            "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+            "repository": "zouuup/landrun"
+          },
+          "lean4export": {
+            "commit": "12581a6b680d8478175596338eb2d53383a323e3",
+            "repository": "leanprover/lean4export"
+          },
+          "nanoda": {
+            "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+            "repository": "robsimmons/nanoda_lib"
+          }
+        },
+        "go_toolchain": "go1.25.12",
+        "measurement_command": [
+          "/opt/lean-eval/replay-measure"
+        ],
+        "runner_profile": "cloudflare-sandbox-standard-4-v1",
+        "rust_toolchain": "rustc-1.89.0",
+        "schema_version": 1,
+        "toolchain": "leanprover/lean4:v4.30.0-rc2"
+      },
+      "qualification_status": "unqualified",
+      "request_count": 1,
+      "result_count": 1,
+      "toolchain": "leanprover/lean4:v4.30.0-rc2",
+      "workspace_count": 51
     },
     {
       "benchmark_commit": "2a12548d8b599c9c2e7c3ce8edfea0a8b97b5ab7",
@@ -629,6 +778,96 @@
       "workspace_count": 297
     },
     {
+      "benchmark_commit": "852c67d442ce24ac7e8db16d6c17d7e9c72c6756",
+      "benchmark_tree": "0c8f60fe677df6af0add5702e47144122a6aef65",
+      "lean_toolchain_blob_sha256": "2ca79bdfcf30c10b90f1bf037cf0f0d7528cf6b1f4a72a7f98ef17a2752d36af",
+      "manifest_layout": "monolith_v1",
+      "problem_ids": [
+        "bvp_comparison"
+      ],
+      "profile_lock": {
+        "benchmark_commit": "852c67d442ce24ac7e8db16d6c17d7e9c72c6756",
+        "benchmark_repository": "leanprover/lean-eval",
+        "cache_state": "cold",
+        "components": {
+          "comparator": {
+            "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+            "repository": "leanprover/comparator"
+          },
+          "landrun": {
+            "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+            "repository": "zouuup/landrun"
+          },
+          "lean4export": {
+            "commit": "12581a6b680d8478175596338eb2d53383a323e3",
+            "repository": "leanprover/lean4export"
+          },
+          "nanoda": {
+            "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+            "repository": "robsimmons/nanoda_lib"
+          }
+        },
+        "go_toolchain": "go1.25.12",
+        "measurement_command": [
+          "/opt/lean-eval/replay-measure"
+        ],
+        "runner_profile": "cloudflare-sandbox-standard-4-v1",
+        "rust_toolchain": "rustc-1.89.0",
+        "schema_version": 1,
+        "toolchain": "leanprover/lean4:v4.30.0-rc2"
+      },
+      "qualification_status": "unqualified",
+      "request_count": 1,
+      "result_count": 1,
+      "toolchain": "leanprover/lean4:v4.30.0-rc2",
+      "workspace_count": 51
+    },
+    {
+      "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
+      "benchmark_tree": "72b2063fd946163f0494d917b6f2fc84e937dab4",
+      "lean_toolchain_blob_sha256": "2ca79bdfcf30c10b90f1bf037cf0f0d7528cf6b1f4a72a7f98ef17a2752d36af",
+      "manifest_layout": "monolith_v1",
+      "problem_ids": [
+        "two_plus_two"
+      ],
+      "profile_lock": {
+        "benchmark_commit": "953d54a7af5038566775507761e48e365e7feb3b",
+        "benchmark_repository": "leanprover/lean-eval",
+        "cache_state": "cold",
+        "components": {
+          "comparator": {
+            "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+            "repository": "leanprover/comparator"
+          },
+          "landrun": {
+            "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+            "repository": "zouuup/landrun"
+          },
+          "lean4export": {
+            "commit": "12581a6b680d8478175596338eb2d53383a323e3",
+            "repository": "leanprover/lean4export"
+          },
+          "nanoda": {
+            "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+            "repository": "robsimmons/nanoda_lib"
+          }
+        },
+        "go_toolchain": "go1.25.12",
+        "measurement_command": [
+          "/opt/lean-eval/replay-measure"
+        ],
+        "runner_profile": "cloudflare-sandbox-standard-4-v1",
+        "rust_toolchain": "rustc-1.89.0",
+        "schema_version": 1,
+        "toolchain": "leanprover/lean4:v4.30.0-rc2"
+      },
+      "qualification_status": "unqualified",
+      "request_count": 5,
+      "result_count": 5,
+      "toolchain": "leanprover/lean4:v4.30.0-rc2",
+      "workspace_count": 36
+    },
+    {
       "benchmark_commit": "9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66",
       "benchmark_tree": "e6cd8bfdc43fe3e4293363c2c0656bd9c9c77efd",
       "lean_toolchain_blob_sha256": "2ca79bdfcf30c10b90f1bf037cf0f0d7528cf6b1f4a72a7f98ef17a2752d36af",
@@ -771,6 +1010,96 @@
       "workspace_count": 219
     },
     {
+      "benchmark_commit": "a88fb3c997d78064f7aaa8a8c830ca7b963f750d",
+      "benchmark_tree": "fdd77ecc3b7e6afd6b98a08dacb88bdcf07ad2e8",
+      "lean_toolchain_blob_sha256": "2ca79bdfcf30c10b90f1bf037cf0f0d7528cf6b1f4a72a7f98ef17a2752d36af",
+      "manifest_layout": "monolith_v1",
+      "problem_ids": [
+        "posSemidef_map_exp"
+      ],
+      "profile_lock": {
+        "benchmark_commit": "a88fb3c997d78064f7aaa8a8c830ca7b963f750d",
+        "benchmark_repository": "leanprover/lean-eval",
+        "cache_state": "cold",
+        "components": {
+          "comparator": {
+            "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+            "repository": "leanprover/comparator"
+          },
+          "landrun": {
+            "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+            "repository": "zouuup/landrun"
+          },
+          "lean4export": {
+            "commit": "12581a6b680d8478175596338eb2d53383a323e3",
+            "repository": "leanprover/lean4export"
+          },
+          "nanoda": {
+            "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+            "repository": "robsimmons/nanoda_lib"
+          }
+        },
+        "go_toolchain": "go1.25.12",
+        "measurement_command": [
+          "/opt/lean-eval/replay-measure"
+        ],
+        "runner_profile": "cloudflare-sandbox-standard-4-v1",
+        "rust_toolchain": "rustc-1.89.0",
+        "schema_version": 1,
+        "toolchain": "leanprover/lean4:v4.30.0-rc2"
+      },
+      "qualification_status": "unqualified",
+      "request_count": 1,
+      "result_count": 1,
+      "toolchain": "leanprover/lean4:v4.30.0-rc2",
+      "workspace_count": 41
+    },
+    {
+      "benchmark_commit": "b91d4757aa0d7776c02540c9089df54fa0d0658a",
+      "benchmark_tree": "1bc8d2291ecb2b0ad3bb92f5167e4b2ceffdd8d1",
+      "lean_toolchain_blob_sha256": "302cd63c54178885b89e669f33b38f12f4dd7ae7e5cac537b3203e3768d8fb2b",
+      "manifest_layout": "per_problem_v1",
+      "problem_ids": [
+        "annals_unit_conjecture"
+      ],
+      "profile_lock": {
+        "benchmark_commit": "b91d4757aa0d7776c02540c9089df54fa0d0658a",
+        "benchmark_repository": "leanprover/lean-eval",
+        "cache_state": "cold",
+        "components": {
+          "comparator": {
+            "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+            "repository": "leanprover/comparator"
+          },
+          "landrun": {
+            "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+            "repository": "zouuup/landrun"
+          },
+          "lean4export": {
+            "commit": "15f6055e299ad5b89345e533cc2192f4cc00f659",
+            "repository": "leanprover/lean4export"
+          },
+          "nanoda": {
+            "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+            "repository": "robsimmons/nanoda_lib"
+          }
+        },
+        "go_toolchain": "go1.25.12",
+        "measurement_command": [
+          "/opt/lean-eval/replay-measure"
+        ],
+        "runner_profile": "cloudflare-sandbox-standard-4-v1",
+        "rust_toolchain": "rustc-1.89.0",
+        "schema_version": 1,
+        "toolchain": "leanprover/lean4:v4.33.0"
+      },
+      "qualification_status": "unqualified",
+      "request_count": 1,
+      "result_count": 1,
+      "toolchain": "leanprover/lean4:v4.33.0",
+      "workspace_count": 309
+    },
+    {
       "benchmark_commit": "bca50f854199f61225bbab22b653dbcab882315a",
       "benchmark_tree": "0968fb2ae2dfb5d32691fb0a6a692e2e39816911",
       "lean_toolchain_blob_sha256": "ac52fbd2038f3138015950201a3f5067585cc1983a471a35604bde8369d28f24",
@@ -880,6 +1209,55 @@
       "result_count": 1,
       "toolchain": "leanprover/lean4:v4.30.0-rc2",
       "workspace_count": 145
+    },
+    {
+      "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
+      "benchmark_tree": "535a07567e2b17221984b344b6f4b5d3a49b756d",
+      "lean_toolchain_blob_sha256": "2ca79bdfcf30c10b90f1bf037cf0f0d7528cf6b1f4a72a7f98ef17a2752d36af",
+      "manifest_layout": "monolith_v1",
+      "problem_ids": [
+        "ci_regenerate_main_check",
+        "finite_graph_ramsey_theorem",
+        "list_append_singleton_length",
+        "mulCayley_connected_iff_closure_eq_top",
+        "two_plus_two"
+      ],
+      "profile_lock": {
+        "benchmark_commit": "c9c95847698c275591233dd487ac44e199f7b248",
+        "benchmark_repository": "leanprover/lean-eval",
+        "cache_state": "cold",
+        "components": {
+          "comparator": {
+            "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+            "repository": "leanprover/comparator"
+          },
+          "landrun": {
+            "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+            "repository": "zouuup/landrun"
+          },
+          "lean4export": {
+            "commit": "12581a6b680d8478175596338eb2d53383a323e3",
+            "repository": "leanprover/lean4export"
+          },
+          "nanoda": {
+            "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+            "repository": "robsimmons/nanoda_lib"
+          }
+        },
+        "go_toolchain": "go1.25.12",
+        "measurement_command": [
+          "/opt/lean-eval/replay-measure"
+        ],
+        "runner_profile": "cloudflare-sandbox-standard-4-v1",
+        "rust_toolchain": "rustc-1.89.0",
+        "schema_version": 1,
+        "toolchain": "leanprover/lean4:v4.30.0-rc2"
+      },
+      "qualification_status": "unqualified",
+      "request_count": 9,
+      "result_count": 9,
+      "toolchain": "leanprover/lean4:v4.30.0-rc2",
+      "workspace_count": 36
     },
     {
       "benchmark_commit": "c9e5b20fb06a0285ec861cec142e5f9498b5d58e",
@@ -1067,9 +1445,17 @@
       "lean_toolchain_blob_sha256": "2ca79bdfcf30c10b90f1bf037cf0f0d7528cf6b1f4a72a7f98ef17a2752d36af",
       "manifest_layout": "monolith_v1",
       "problem_ids": [
+        "contractibleSpace_houseWithTwoRooms",
+        "dirichlet_eigenvalues_eq_nat_sq",
         "dvd_card_connectedComponent_markoffGraph",
         "glAction_range_eq_centralizer_symAction",
-        "symAction_range_eq_centralizer_glAction"
+        "list_append_singleton_length",
+        "oppenheim_inequality",
+        "pi1_circle_mulEquiv_int",
+        "posSemidef_map_exp",
+        "sturm_separation",
+        "symAction_range_eq_centralizer_glAction",
+        "two_plus_two"
       ],
       "profile_lock": {
         "benchmark_commit": "e9a71a25a6bf3bed8dafd0dc32e45f16fe839a32",
@@ -1103,8 +1489,8 @@
         "toolchain": "leanprover/lean4:v4.30.0-rc2"
       },
       "qualification_status": "unqualified",
-      "request_count": 3,
-      "result_count": 3,
+      "request_count": 11,
+      "result_count": 11,
       "toolchain": "leanprover/lean4:v4.30.0-rc2",
       "workspace_count": 60
     },
@@ -1217,19 +1603,113 @@
       "result_count": 1,
       "toolchain": "leanprover/lean4:v4.30.0",
       "workspace_count": 216
+    },
+    {
+      "benchmark_commit": "f22df521c8a8577d4c4b439c5359931b71f59c33",
+      "benchmark_tree": "e24ada4d27aea3fac56dfa353a393dbff74b80be",
+      "lean_toolchain_blob_sha256": "2ca79bdfcf30c10b90f1bf037cf0f0d7528cf6b1f4a72a7f98ef17a2752d36af",
+      "manifest_layout": "monolith_v1",
+      "problem_ids": [
+        "ci_regenerate_main_check",
+        "def_hole_example",
+        "instance_hole_example",
+        "list_append_singleton_length",
+        "two_plus_two"
+      ],
+      "profile_lock": {
+        "benchmark_commit": "f22df521c8a8577d4c4b439c5359931b71f59c33",
+        "benchmark_repository": "leanprover/lean-eval",
+        "cache_state": "cold",
+        "components": {
+          "comparator": {
+            "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+            "repository": "leanprover/comparator"
+          },
+          "landrun": {
+            "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+            "repository": "zouuup/landrun"
+          },
+          "lean4export": {
+            "commit": "12581a6b680d8478175596338eb2d53383a323e3",
+            "repository": "leanprover/lean4export"
+          },
+          "nanoda": {
+            "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+            "repository": "robsimmons/nanoda_lib"
+          }
+        },
+        "go_toolchain": "go1.25.12",
+        "measurement_command": [
+          "/opt/lean-eval/replay-measure"
+        ],
+        "runner_profile": "cloudflare-sandbox-standard-4-v1",
+        "rust_toolchain": "rustc-1.89.0",
+        "schema_version": 1,
+        "toolchain": "leanprover/lean4:v4.30.0-rc2"
+      },
+      "qualification_status": "unqualified",
+      "request_count": 5,
+      "result_count": 5,
+      "toolchain": "leanprover/lean4:v4.30.0-rc2",
+      "workspace_count": 60
+    },
+    {
+      "benchmark_commit": "fd2c49bc9fb574f73008143a26e3f5a7646a41ea",
+      "benchmark_tree": "5b83e8ffd87a64536cacc6a4777744eb25068a22",
+      "lean_toolchain_blob_sha256": "2ca79bdfcf30c10b90f1bf037cf0f0d7528cf6b1f4a72a7f98ef17a2752d36af",
+      "manifest_layout": "monolith_v1",
+      "problem_ids": [
+        "cubic_decay_asymptotic"
+      ],
+      "profile_lock": {
+        "benchmark_commit": "fd2c49bc9fb574f73008143a26e3f5a7646a41ea",
+        "benchmark_repository": "leanprover/lean-eval",
+        "cache_state": "cold",
+        "components": {
+          "comparator": {
+            "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+            "repository": "leanprover/comparator"
+          },
+          "landrun": {
+            "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+            "repository": "zouuup/landrun"
+          },
+          "lean4export": {
+            "commit": "12581a6b680d8478175596338eb2d53383a323e3",
+            "repository": "leanprover/lean4export"
+          },
+          "nanoda": {
+            "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+            "repository": "robsimmons/nanoda_lib"
+          }
+        },
+        "go_toolchain": "go1.25.12",
+        "measurement_command": [
+          "/opt/lean-eval/replay-measure"
+        ],
+        "runner_profile": "cloudflare-sandbox-standard-4-v1",
+        "rust_toolchain": "rustc-1.89.0",
+        "schema_version": 1,
+        "toolchain": "leanprover/lean4:v4.30.0-rc2"
+      },
+      "qualification_status": "unqualified",
+      "request_count": 1,
+      "result_count": 1,
+      "toolchain": "leanprover/lean4:v4.30.0-rc2",
+      "workspace_count": 51
     }
   ],
   "kind": "historical_public_replay_profile_matrix",
-  "plan_sha256": "2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942",
+  "plan_sha256": "d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e",
   "qualification_requirements": [
     "historical_public_runner_v1",
     "immutable_registry_publication_v1",
     "cloudflare_staging_runtime_probe_v1"
   ],
   "qualification_status": "unqualified",
-  "request_count": 69,
-  "result_count": 135,
+  "request_count": 128,
+  "result_count": 194,
   "schema_version": 1,
   "toolchain_count": 5,
-  "toolchain_registry_sha256": "5144fc19bbbbcf0ef16a1d7c88b163254f96a250cb4a5846fbbb0d465ce16790"
+  "toolchain_registry_sha256": "4f2f3737d79e6abd6c169ebdde3f2218157d8f6c482a85ad2026821a4b8e81a0"
 }

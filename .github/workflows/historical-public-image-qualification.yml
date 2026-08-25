@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       benchmark_commit:
-        description: Exact benchmark commit from the reviewed 25-image matrix
+        description: Exact benchmark commit from the reviewed 35-image matrix
         required: true
         type: string
       confirm_registry_publication:
