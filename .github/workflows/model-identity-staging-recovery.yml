@@ -1,0 +1,104 @@
+name: Model identity dark staging recovery (source-disabled)
+
+on:
+  workflow_run:
+    workflows:
+      - Model identity dark staging qualification (source-disabled)
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      qualification_run_id:
+        description: Exact qualification workflow run ID whose persistent journal must be restored
+        required: true
+        type: string
+      expected_commit:
+        description: Exact staging harness deployment commit
+        required: true
+        type: string
+      confirm:
+        description: Type RESTORE_MODEL_IDENTITY_STAGING_JOURNAL
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: model-identity-staging-qualification
+  cancel-in-progress: false
+
+# IMMUTABLE SOURCE SAFETY GATE: GitHub never emits the deliberately impossible
+# refs/source-disabled/... value below. This remains inert until the persistent
+# staging-only harness exists. It is defined separately so an armed workflow_run
+# can recover after the qualification runner itself is cancelled or lost; no
+# secret installation can arm it without a reviewed source commit.
+jobs:
+  recover-and-verify:
+    if: ${{ github.repository == 'leanprover/lean-eval-submissions' && github.ref == 'refs/source-disabled/model-identity-qualification' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: cloudflare-staging
+    permissions:
+      contents: read
+    steps:
+      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Recover exact persistent qualification journal
+        env:
+          MODEL_IDENTITY_QUALIFICATION_TOKEN: ${{ secrets.MODEL_IDENTITY_QUALIFICATION_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          ORIGINAL_ACTOR_ID: ${{ github.event.workflow_run.actor.id }}
+          ORIGINAL_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          ORIGINAL_HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+          ORIGINAL_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          ORIGINAL_RUN_ID: ${{ github.event.workflow_run.id }}
+          ORIGINAL_SHA: ${{ github.event.workflow_run.head_sha }}
+          ORIGINAL_TRIGGERING_ACTOR_ID: ${{ github.event.workflow_run.triggering_actor.id }}
+          ORIGINAL_TRIGGERING_ACTOR_LOGIN: ${{ github.event.workflow_run.triggering_actor.login }}
+          MANUAL_RUN_ID: ${{ inputs.qualification_run_id }}
+          MANUAL_EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          MANUAL_CONFIRM: ${{ inputs.confirm }}
+          TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+          ACTOR_ID: ${{ github.actor_id }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "leanprover/lean-eval-submissions"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          if test "$EVENT_NAME" = workflow_run; then
+            test "$ORIGINAL_ACTOR_ID" = "477956"
+            test "$ORIGINAL_HEAD_BRANCH" = main
+            test "$ORIGINAL_HEAD_REPOSITORY" = leanprover/lean-eval-submissions
+            test "$ORIGINAL_RUN_ATTEMPT" = "1"
+            test "$ORIGINAL_TRIGGERING_ACTOR_ID" = "477956"
+            test "$ORIGINAL_TRIGGERING_ACTOR_LOGIN" = kim-em
+            run_id="$ORIGINAL_RUN_ID"
+            expected_commit="$ORIGINAL_SHA"
+          else
+            test "$EVENT_NAME" = workflow_dispatch
+            test "$GITHUB_ACTOR" = kim-em
+            test "$TRIGGERING_ACTOR" = kim-em
+            test "$ACTOR_ID" = "477956"
+            test "$GITHUB_REF" = refs/heads/main
+            test "$MANUAL_CONFIRM" = RESTORE_MODEL_IDENTITY_STAGING_JOURNAL
+            run_id="$MANUAL_RUN_ID"
+            expected_commit="$MANUAL_EXPECTED_COMMIT"
+          fi
+          python3 scripts/run_model_identity_staging_qualification.py recover \
+            --expected-commit "$expected_commit" \
+            --run-id "$run_id" \
+            --run-attempt 1 \
+            --evidence "$RUNNER_TEMP/model-identity-recovery-evidence.json" \
+            --confirm "RESTORE_MODEL_IDENTITY_STAGING_JOURNAL"
+
+      # actions/upload-artifact pinned to v4.6.2.
+      - name: Preserve source-free recovery evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: model-identity-staging-recovery-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/model-identity-recovery-evidence.json
+          if-no-files-found: error
+          retention-days: 90
