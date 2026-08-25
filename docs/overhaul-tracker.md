@@ -309,6 +309,12 @@ the already implemented owner status, metadata, and publication routes.
       pending and 668 private-migration pending). This closes only the inventory
       handoff; none of those pending classifications is replay qualification or
       a permanent-unavailability decision.
+      Because issue intake is still open, the reviewed inventory is now an
+      explicit baseline. The append-only delta contract rejects deletion or
+      mutation of any baseline entry and source-minimally captures all later
+      accepted results for the final announced cutoff. At source `7eb77aa8…`
+      the live delta is three public results; this is diagnostic, not the final
+      freeze, and must be rerun and durably reviewed when issue intake closes.
       The deterministic private crosswalk contract now proves, on the pinned
       read-only snapshots, 639 exact archive bindings and 29 explicit
       `archive_not_found` orphans with no ambiguity or metadata conflicts; see

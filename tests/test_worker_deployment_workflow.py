@@ -145,7 +145,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "scripts/build_public_replay_toolchain_registry.py",
             "scripts/classify_historical_private_archives.py",
             "scripts/historical_replay_controller.py",
+            "scripts/inventory_historical_replay.py",
             "scripts/prepare_public_replay_plan.py",
+            "scripts/reconcile_historical_replay_inventory_delta.py",
             "scripts/resolve_public_replay_github_evidence.py",
             "scripts/validate_historical_replay_inventory_evidence.py",
         }
@@ -276,7 +278,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "build_public_replay_toolchain_registry.py",
             "classify_historical_private_archives.py",
             "historical_replay_controller.py",
+            "inventory_historical_replay.py",
             "prepare_public_replay_plan.py",
+            "reconcile_historical_replay_inventory_delta.py",
             "resolve_public_replay_github_evidence.py",
             "validate_historical_replay_inventory_evidence.py",
         }

@@ -15,6 +15,16 @@ on:
         description: Reviewed accepted-result count
         required: true
         type: string
+      expected_baseline_inventory_sha256:
+        description: Exact committed baseline inventory digest; required only for append-only delta proof
+        required: false
+        type: string
+        default: bb405fbabe084e106ad5500b455a05ba1e1d54175d1964db3aebcc3b6ea3fce3
+      confirm_append_only_delta:
+        description: Also prove the append-only delta from the committed 1,301-result baseline
+        required: true
+        type: boolean
+        default: false
       confirm_contract_only:
         description: Build a source-minimized inventory without replay, State writes, or publication
         required: true
@@ -30,6 +40,8 @@ concurrency:
 
 env:
   INVENTORY_SCHEMA: schemas/historical-replay-inventory-v1.schema.json
+  DELTA_SCHEMA: schemas/historical-replay-inventory-delta-v1.schema.json
+  BASELINE_INVENTORY: evidence/historical-replay/inventories/bb405fbabe084e106ad5500b455a05ba1e1d54175d1964db3aebcc3b6ea3fce3.json
   MAX_INVENTORY_BYTES: '16777216'
 
 jobs:
@@ -117,6 +129,8 @@ jobs:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           EXPECTED_COUNT: ${{ inputs.expected_result_count }}
           EXPECTED_DIGEST: ${{ inputs.expected_results_store_sha256 }}
+          EXPECTED_BASELINE_INVENTORY_SHA256: ${{ inputs.expected_baseline_inventory_sha256 }}
+          CONFIRM_DELTA: ${{ inputs.confirm_append_only_delta }}
         run: |
           set -euo pipefail
           [[ "$EXPECTED_COUNT" =~ ^[1-9][0-9]*$ ]]
@@ -191,6 +205,89 @@ jobs:
           assert raw == canonical
           print(hashlib.sha256(raw).hexdigest())
           PY
+          if [ "$CONFIRM_DELTA" = true ]; then
+            [[ "$EXPECTED_BASELINE_INVENTORY_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            test -f "$BASELINE_INVENTORY"
+            test ! -L "$BASELINE_INVENTORY"
+            test "$(sha256sum "$BASELINE_INVENTORY" | cut -d' ' -f1)" = \
+              "$EXPECTED_BASELINE_INVENTORY_SHA256"
+            baseline_commit=$(jq -r .source_commit "$BASELINE_INVENTORY")
+            [[ "$baseline_commit" =~ ^[0-9a-f]{40}$ ]]
+            git cat-file -e "$baseline_commit^{commit}"
+            git merge-base --is-ancestor "$baseline_commit" "$EXPECTED_COMMIT"
+            delta="$RUNNER_TEMP/historical-replay-inventory-delta.json"
+            delta_recomputed="$RUNNER_TEMP/historical-replay-inventory-delta.recomputed.json"
+            python scripts/reconcile_historical_replay_inventory_delta.py \
+              --baseline "$BASELINE_INVENTORY" \
+              --current "$artifact" \
+              --inventory-schema "$INVENTORY_SCHEMA" \
+              --output "$delta"
+            python scripts/reconcile_historical_replay_inventory_delta.py \
+              --baseline "$BASELINE_INVENTORY" \
+              --current "$artifact" \
+              --inventory-schema "$INVENTORY_SCHEMA" \
+              --output "$delta_recomputed"
+            cmp "$delta" "$delta_recomputed"
+            DELTA="$delta" ARTIFACT="$artifact" python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+
+          from jsonschema import Draft202012Validator, FormatChecker
+          from referencing import Registry, Resource
+
+          artifact_raw = pathlib.Path(os.environ["ARTIFACT"]).read_bytes()
+          delta_path = pathlib.Path(os.environ["DELTA"])
+          delta_raw = delta_path.read_bytes()
+          assert 0 < len(delta_raw) <= int(os.environ["MAX_INVENTORY_BYTES"])
+          delta = json.loads(delta_raw)
+          inventory_schema = json.loads(
+              pathlib.Path(os.environ["INVENTORY_SCHEMA"]).read_text(encoding="utf-8")
+          )
+          delta_schema = json.loads(
+              pathlib.Path(os.environ["DELTA_SCHEMA"]).read_text(encoding="utf-8")
+          )
+          Draft202012Validator.check_schema(delta_schema)
+          registry = Registry().with_resource(
+              inventory_schema["$id"], Resource.from_contents(inventory_schema)
+          )
+          validator = Draft202012Validator(
+              delta_schema, registry=registry, format_checker=FormatChecker()
+          )
+          errors = sorted(validator.iter_errors(delta), key=lambda error: list(error.path))
+          assert not errors, errors
+          assert delta["baseline"]["inventory_sha256"] == os.environ[
+              "EXPECTED_BASELINE_INVENTORY_SHA256"
+          ]
+          assert delta["current"]["source_commit"] == os.environ["EXPECTED_COMMIT"]
+          assert delta["current"]["results_store_sha256"] == os.environ["EXPECTED_DIGEST"]
+          assert delta["current"]["result_count"] == int(os.environ["EXPECTED_COUNT"])
+          assert delta["current"]["inventory_sha256"] == hashlib.sha256(
+              artifact_raw
+          ).hexdigest()
+          counts = delta["delta_counts"]
+          assert counts["result_count"] == len(delta["entries"])
+          assert counts["result_count"] == (
+              delta["current"]["result_count"] - delta["baseline"]["result_count"]
+          )
+          assert counts["result_count"] == (
+              counts["public_source_probe_pending"]
+              + counts["private_archive_migration_pending"]
+          )
+          identities = [entry["result_id"] for entry in delta["entries"]]
+          assert identities == sorted(set(identities))
+          canonical = (
+              json.dumps(delta, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+          ).encode("utf-8")
+          assert delta_raw == canonical
+          PY
+            delta_sha256=$(sha256sum "$delta" | cut -d' ' -f1)
+            echo "delta_sha256=$delta_sha256" >> "$GITHUB_OUTPUT"
+            rm -f "$delta_recomputed"
+          else
+            test "$CONFIRM_DELTA" = false
+          fi
           artifact_sha256=$(sha256sum "$artifact" | cut -d' ' -f1)
           echo "artifact_sha256=$artifact_sha256" >> "$GITHUB_OUTPUT"
           rm -f "$recomputed"
@@ -205,9 +302,20 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+      - name: Upload only the source-free append-only delta
+        if: inputs.confirm_append_only_delta == true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-replay-inventory-delta-${{ inputs.expected_commit }}
+          path: ${{ runner.temp }}/historical-replay-inventory-delta.json
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Record reviewed inventory identities
         env:
           ARTIFACT_SHA256: ${{ steps.inventory.outputs.artifact_sha256 }}
+          BASELINE_INVENTORY_SHA256: ${{ inputs.expected_baseline_inventory_sha256 }}
+          DELTA_SHA256: ${{ steps.inventory.outputs.delta_sha256 }}
           RESULT_COUNT: ${{ inputs.expected_result_count }}
           RESULTS_STORE_SHA256: ${{ inputs.expected_results_store_sha256 }}
           SOURCE_COMMIT: ${{ inputs.expected_commit }}
@@ -219,6 +327,10 @@ jobs:
             echo "- canonical store digest: \`$RESULTS_STORE_SHA256\`"
             echo "- accepted result count: \`$RESULT_COUNT\`"
             echo "- artifact SHA-256: \`$ARTIFACT_SHA256\`"
+            if [ -n "$DELTA_SHA256" ]; then
+              echo "- append-only delta SHA-256: \`$DELTA_SHA256\`"
+              echo "- baseline inventory SHA-256: \`$BASELINE_INVENTORY_SHA256\`"
+            fi
             echo '- artifact contains no private source repository or commit locator'
             echo '- transient artifact is not durable qualification evidence until reviewed and committed'
           } >> "$GITHUB_STEP_SUMMARY"

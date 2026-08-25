@@ -87,3 +87,28 @@ That record is contract-only inventory evidence. Its 633 public entries remain
 `private_archive_migration_pending`. It proves neither source availability nor
 archive migration, performs no replay, qualifies no result or corpus, and
 authorizes no publication.
+
+Issue intake remains open during the server-intake overlap, so the first
+reviewed inventory is a baseline rather than a promise that the Results store
+will stay at 1,301 entries. `reconcile_historical_replay_inventory_delta.py`
+compares a later full inventory with that exact baseline. It rejects deletion
+or mutation of any baseline entry and emits only newly accepted, source-free
+entries, binding both source commits, Results-store digests, full-inventory
+digests, and counts. The output contract is
+`schemas/historical-replay-inventory-delta-v1.schema.json`.
+
+Set `confirm_append_only_delta` on the protected inventory workflow to build
+the full current inventory twice and independently build the baseline delta
+twice. The additional artifact is still contract-only transient evidence: it
+does not probe public sources, migrate a private archive, enqueue replay, write
+State or Results, enable intake, or close issue intake. At the final announced
+issue-intake cutoff, commit and review both the full inventory and its delta,
+then feed every delta entry into the same public/private classification and
+terminal replay gates as the baseline corpus. Retain the legacy issue-intake
+decryption authority until that final delta has closed.
+
+At protected source `7eb77aa8c2ef7f4d598c77240ea9effbb248dce2`,
+the deterministic comparison finds exactly three post-baseline entries, all
+public-source pending and none private-archive pending. This observation does
+not freeze the final delta; later issue acceptances must be included by rerunning
+the workflow at the actual cutoff.
