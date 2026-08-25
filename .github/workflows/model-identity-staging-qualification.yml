@@ -1,0 +1,94 @@
+name: Model identity dark staging qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: Exact protected-main commit deployed to staging
+        required: true
+        type: string
+      initial_state_commit:
+        description: Exact staging State head to restore after qualification
+        required: true
+        type: string
+      confirm:
+        description: Type QUALIFY_AND_RESTORE_MODEL_IDENTITY_STAGING
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: model-identity-staging-qualification
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions: {}
+    outputs:
+      commit: ${{ steps.guard.outputs.commit }}
+    steps:
+      - id: guard
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          INITIAL_STATE_COMMIT: ${{ inputs.initial_state_commit }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "leanprover/lean-eval-submissions"
+          test "$GITHUB_ACTOR" = "kim-em"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$EXPECTED_COMMIT"
+          [[ "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$INITIAL_STATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$CONFIRM" = "QUALIFY_AND_RESTORE_MODEL_IDENTITY_STAGING"
+          echo "commit=$EXPECTED_COMMIT" >> "$GITHUB_OUTPUT"
+
+  qualify-and-restore:
+    needs: authorize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: cloudflare-staging
+    permissions:
+      contents: read
+    env:
+      EXPECTED_COMMIT: ${{ needs.authorize.outputs.commit }}
+      INITIAL_STATE_COMMIT: ${{ inputs.initial_state_commit }}
+      MODEL_IDENTITY_AGENT_SESSION: ${{ secrets.MODEL_IDENTITY_AGENT_SESSION }}
+      MODEL_IDENTITY_CROSS_OWNER_SESSION: ${{ secrets.MODEL_IDENTITY_CROSS_OWNER_SESSION }}
+      MODEL_IDENTITY_OAUTH_SESSION: ${{ secrets.MODEL_IDENTITY_OAUTH_SESSION }}
+      MODEL_IDENTITY_QUALIFICATION_TOKEN: ${{ secrets.MODEL_IDENTITY_QUALIFICATION_TOKEN }}
+    steps:
+      # actions/checkout pinned to 3d3c42e5 (= refs/tags/v7.0.1 as of 2026-07-30).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          ref: ${{ needs.authorize.outputs.commit }}
+
+      - name: Run exact dark lifecycle and mandatory restoration
+        run: |
+          set -euo pipefail
+          result=$(python3 scripts/run_model_identity_staging_qualification.py \
+            --expected-commit "$EXPECTED_COMMIT" \
+            --initial-state-commit "$INITIAL_STATE_COMMIT" \
+            --run-id "$GITHUB_RUN_ID" \
+            --confirm "QUALIFY_AND_RESTORE_MODEL_IDENTITY_STAGING")
+          RESULT="$result" python3 - <<'PY'
+          import json
+          import os
+
+          body = json.loads(os.environ["RESULT"])
+          assert body["status"] == "model_identity_staging_qualification_passed_and_restored"
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          assert body["initial_state_commit"] == os.environ["INITIAL_STATE_COMMIT"]
+          assert len(body["proofs"]) == 14
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("### Model identity dark staging qualification\n")
+              summary.write(f"- deployed commit: `{body['deployed_commit']}`\n")
+              summary.write(f"- initial State tree restored from: `{body['initial_state_commit']}`\n")
+              summary.write(f"- restoration commit: `{body['restoration_commit']}`\n")
+              summary.write("- owner and maintainer API gates remained disabled\n")
+              summary.write("- all 14 closed proofs passed\n")
+          PY
