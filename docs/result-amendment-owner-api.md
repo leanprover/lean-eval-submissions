@@ -170,13 +170,8 @@ and rejected repairs do not reserve their proposed tuple. The protected State
 validator derives the permanent reservation set from immutable authority and
 applied-repair events; staging's two existing authorities were migrated to
 exact reservations, while production's empty authority set required none.
-This remains a dark implementation, not an enablement claim. The separately
-authorized staging apply/reject canary is complete: retry `32792905120`
-durably applied the repair before failing closed on a transient broker
-response, and exact successful run `32793103590` idempotently reverified that
-apply, completed the reject path, and left staging State at `cc52d7c2`. The
-temporary credential and one-shot route were retired. The remaining
-pre-enable checks below still apply; both public amendment gates remain false.
+This remains a dark implementation, not an enablement claim. Both public
+amendment gates remain false, and the pre-enable checks below still apply.
 
 ## Maintainer retraction decisions
 

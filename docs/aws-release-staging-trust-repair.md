@@ -26,10 +26,10 @@ The live role still expects:
 repo:leanprover/lean-eval-releases:environment:release-staging
 ```
 
-Runs `32617539355` and `32624640050` both failed only at
-`sts:AssumeRoleWithWebIdentity`. They did not invoke Lambda, consume a
-capability, decrypt an archive, mutate State, or publish a release. The current
-template and release workflow already use the correct ID-bearing contract.
+The live role therefore cannot currently be assumed by the release workflow.
+The current template and release workflow already use the correct ID-bearing
+contract, so the repair is limited to bringing that one live trust policy back
+under the tracked stack definition.
 
 The accepted change set has exactly one resource change:
 
