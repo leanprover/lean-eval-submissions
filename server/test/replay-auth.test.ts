@@ -140,6 +140,7 @@ describe("GitHub OIDC replay authentication", () => {
       "/api/v1/historical-public-replay",
       "/api/v1/historical-public-replay/status",
       "/api/v1/historical-public-replay/cleanup",
+      "/api/v1/historical-public-replay/cleanup-reservation",
     ]) {
       const { request, fetcher } = await signedRequest(HISTORICAL_MAIN_CLAIMS, path);
       await expect(verifyGithubOidc(request, HISTORICAL_ENV, fetcher, 1_787_395_200))
@@ -167,6 +168,7 @@ describe("GitHub OIDC replay authentication", () => {
     for (const path of [
       "/api/v1/historical-public-replay",
       "/api/v1/historical-public-replay/status",
+      "/api/v1/historical-public-replay/cleanup-reservation",
     ]) {
       const request = await signedRequest(advancedClaims, path);
       await expect(verifyGithubOidc(

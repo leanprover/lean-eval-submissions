@@ -278,6 +278,8 @@ describe("Cloudflare replay executor", () => {
     for (const path of [
       "/api/v1/historical-public-replay",
       "/api/v1/historical-public-replay/status",
+      "/api/v1/historical-public-replay/cleanup",
+      "/api/v1/historical-public-replay/cleanup-reservation",
     ]) {
       let authenticated = false;
       const response = await handleReplayRequest(new Request(
@@ -1863,7 +1865,9 @@ describe("Cloudflare replay executor", () => {
     const body = await historicalPublicInput();
     let activeBinding: unknown = null;
     let cleanupMarker: unknown = null;
+    let cleanupReservation: unknown = null;
     let cleanupDestroyCalls = 0;
+    let cleanupRequests = 0;
     const receipts = {
       readBinding: () => Promise.resolve(activeBinding),
       claimBinding: (value: unknown) => {
@@ -1886,7 +1890,12 @@ describe("Cloudflare replay executor", () => {
       }),
       receiptStore: () => receipts,
       recoveryStore: (_env: ReplayRuntimeEnv, replayTaskId: string, attempt: number) => ({
+        reserveCleanupIdentity: (expected: unknown) => {
+          if (cleanupReservation === null) cleanupReservation = expected;
+          return Promise.resolve(cleanupReservation);
+        },
         destroyBoundSandbox: (expected: { replay_task_id: string; attempt: number }) => {
+          cleanupRequests += 1;
           expect(activeBinding).toMatchObject({
             runner_nonce: body.runner_nonce,
             replay_task_id: replayTaskId,
@@ -1906,21 +1915,30 @@ describe("Cloudflare replay executor", () => {
               retained_until_epoch_ms: 2_000,
             };
           }
-          return Promise.resolve(cleanupMarker);
+          return Promise.resolve(cleanupRequests === 1 ? cleanupMarker : {
+            ...expected,
+            destruction_state: "confirmed",
+          });
         },
       }),
     };
+    const cleanupBody = {
+      schema_version: 1,
+      replay_task_id: body.replay_task_id,
+      attempt: body.attempt,
+    };
+    const reservation = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/historical-public-replay/cleanup-reservation",
+      { method: "POST", body: JSON.stringify(cleanupBody) },
+    ), enabled, dependencies);
+    expect(reservation.status).toBe(200);
+    expect(await reservation.json()).toEqual({ ...cleanupBody, status: "reserved" });
     const start = await handleReplayRequest(new Request(
       "https://example.test/api/v1/historical-public-replay",
       { method: "POST", body: JSON.stringify(body) },
     ), enabled, dependencies);
     expect(start.status).toBe(202);
 
-    const cleanupBody = {
-      schema_version: 1,
-      replay_task_id: body.replay_task_id,
-      attempt: body.attempt,
-    };
     for (let index = 0; index < 2; index += 1) {
       const cleanup = await handleReplayRequest(new Request(
         "https://example.test/api/v1/historical-public-replay/cleanup",
@@ -1932,6 +1950,61 @@ describe("Cloudflare replay executor", () => {
     expect(cleanupDestroyCalls).toBe(1);
     expect(JSON.stringify(cleanupBody)).not.toContain(body.runner_nonce as string);
     expect(JSON.stringify(cleanupBody)).not.toContain("source_archive");
+  });
+
+  it("recovers cancellation after replay.started but before an executor binding exists", async () => {
+    const body = await historicalPublicInput();
+    const identity = {
+      schema_version: 1,
+      replay_task_id: body.replay_task_id,
+      attempt: body.attempt,
+    };
+    let reservation: unknown = null;
+    let marker: unknown = null;
+    let sandboxLookups = 0;
+    const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
+    const dependencies = {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => {
+        sandboxLookups += 1;
+        throw new Error("pre-binding cleanup must not look up a sandbox");
+      },
+      recoveryStore: () => ({
+        reserveCleanupIdentity: (expected: unknown) => {
+          if (reservation === null) reservation = expected;
+          return Promise.resolve(reservation);
+        },
+        destroyBoundSandbox: (expected: unknown) => {
+          expect(reservation).toEqual(expected);
+          if (marker === null) {
+            marker = {
+              ...(expected as Record<string, unknown>),
+              destruction_state: "confirmed",
+              confirmed_at_epoch_ms: 1_000,
+              retained_until_epoch_ms: 2_000,
+            };
+          }
+          return Promise.resolve(marker);
+        },
+      }),
+    };
+
+    const reserved = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/historical-public-replay/cleanup-reservation",
+      { method: "POST", body: JSON.stringify(identity) },
+    ), enabled, dependencies);
+    expect(reserved.status).toBe(200);
+    expect(await reserved.json()).toEqual({ ...identity, status: "reserved" });
+
+    const cleanup = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/historical-public-replay/cleanup",
+      { method: "POST", body: JSON.stringify(identity) },
+    ), enabled, dependencies);
+    expect(cleanup.status).toBe(200);
+    expect(await cleanup.json()).toEqual({ ...identity, destruction: "confirmed" });
+    expect(sandboxLookups).toBe(0);
+    expect(JSON.stringify(marker)).not.toContain(body.runner_nonce as string);
+    expect(JSON.stringify(marker)).not.toContain("source_archive");
   });
 
   it("rejects a durable cleanup confirmation with mismatched identity", async () => {
@@ -1953,6 +2026,7 @@ describe("Cloudflare replay executor", () => {
           throw new Error("sandbox must remain unreachable from the route");
         },
         recoveryStore: () => ({
+          reserveCleanupIdentity: (expected: unknown) => Promise.resolve(expected),
           destroyBoundSandbox: () => Promise.resolve({
             ...body,
             attempt: 2,

@@ -60,9 +60,15 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
     def test_exact_profile_image_and_health_are_required_before_started(self) -> None:
         deploy = WORKFLOW.index("render-executor-config")
         health = WORKFLOW.index("historical executor health differs from the exact plan")
+        reservation = WORKFLOW.index(
+            "Reserve exact cleanup identity before State can become running"
+        )
         started = WORKFLOW.index("state-event started")
         self.assertLess(deploy, health)
-        self.assertLess(health, started)
+        self.assertLess(health, reservation)
+        self.assertLess(reservation, started)
+        self.assertIn("/historical-public-replay/cleanup-reservation", WORKFLOW)
+        self.assertIn('steps.reserve.outputs.reserved == \'true\'', WORKFLOW)
         self.assertIn("historical_public_replay_enabled\": True", WORKFLOW)
         self.assertIn("replay_enabled\": False", WORKFLOW)
         self.assertIn("reviewed_execution_profile_digest", WORKFLOW)
@@ -81,6 +87,9 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         deployment = WORKFLOW.split(
             "Render and deploy only the exact qualified historical executor", 1
         )[1].split("Require the exact enabled historical executor", 1)[0]
+        reservation = WORKFLOW.split(
+            "Reserve exact cleanup identity before State can become running", 1
+        )[1].split("Append replay.started before fetching public source", 1)[0]
         started = WORKFLOW.split(
             "Append replay.started before fetching public source", 1
         )[1].split("Fetch exact public source", 1)[0]
@@ -89,6 +98,9 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         )[1].split("Append the exact reported historical terminal outcome", 1)[0]
         self.assertIn("CLOUDFLARE_API_TOKEN", deployment)
         self.assertNotIn("STATE_WRITE_KEY", deployment)
+        self.assertIn('test -z "${STATE_WRITE_KEY:-}"', reservation)
+        self.assertNotIn("STATE_WRITE_KEY: ${{ secrets", reservation)
+        self.assertNotIn("CLOUDFLARE_API_TOKEN: ${{ secrets", reservation)
         self.assertIn("STATE_WRITE_KEY", started)
         self.assertNotIn("CLOUDFLARE_API_TOKEN: ${{ secrets", started)
         self.assertIn('test -z "${STATE_WRITE_KEY:-}"', executor)

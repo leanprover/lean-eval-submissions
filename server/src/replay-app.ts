@@ -55,7 +55,10 @@ type TerminalReceiptStore = Pick<
   "claimBinding" | "readBinding" | "readReceipt" | "prepareReceipt" | "confirmReceipt"
 >;
 
-type HistoricalCleanupStore = Pick<ReplayTerminalReceipt, "destroyBoundSandbox">;
+type HistoricalCleanupStore = Pick<
+  ReplayTerminalReceipt,
+  "destroyBoundSandbox" | "reserveCleanupIdentity"
+>;
 
 type ExecutorFailureReason =
   | "input_transfer_failed"
@@ -1269,23 +1272,35 @@ function validateHistoricalCleanupConfirmation(
   expected: HistoricalCleanupIdentity,
 ): void {
   const marker = objectValue(value);
+  const exactTombstone = marker !== null && exactObjectFields(marker, [
+    "schema_version",
+    "replay_task_id",
+    "attempt",
+    "destruction_state",
+  ]);
+  const exactRetainedConfirmation = marker !== null && exactObjectFields(marker, [
+    "schema_version",
+    "replay_task_id",
+    "attempt",
+    "destruction_state",
+    "confirmed_at_epoch_ms",
+    "retained_until_epoch_ms",
+  ]);
   if (
     marker === null
-    || !exactObjectFields(marker, [
-      "schema_version",
-      "replay_task_id",
-      "attempt",
-      "destruction_state",
-      "confirmed_at_epoch_ms",
-      "retained_until_epoch_ms",
-    ])
+    || (!exactTombstone && !exactRetainedConfirmation)
     || marker.schema_version !== expected.schema_version
     || marker.replay_task_id !== expected.replay_task_id
     || marker.attempt !== expected.attempt
     || marker.destruction_state !== "confirmed"
-    || !Number.isSafeInteger(marker.confirmed_at_epoch_ms)
-    || !Number.isSafeInteger(marker.retained_until_epoch_ms)
-    || (marker.retained_until_epoch_ms as number) <= (marker.confirmed_at_epoch_ms as number)
+    || (
+      exactRetainedConfirmation
+      && (
+        !Number.isSafeInteger(marker.confirmed_at_epoch_ms)
+        || !Number.isSafeInteger(marker.retained_until_epoch_ms)
+        || (marker.retained_until_epoch_ms as number) <= (marker.confirmed_at_epoch_ms as number)
+      )
+    )
   ) {
     throw new ReplayExecutorError("command_output_invalid");
   }
@@ -1442,6 +1457,8 @@ export async function handleReplayRequest(
   const historicalPublicReplay = url.pathname === "/api/v1/historical-public-replay";
   const historicalPublicStatus = url.pathname === "/api/v1/historical-public-replay/status";
   const historicalPublicCleanup = url.pathname === "/api/v1/historical-public-replay/cleanup";
+  const historicalPublicReservation = url.pathname
+    === "/api/v1/historical-public-replay/cleanup-reservation";
   if (
     (
       !syntheticAcceptance
@@ -1451,6 +1468,7 @@ export async function handleReplayRequest(
       && !historicalPublicReplay
       && !historicalPublicStatus
       && !historicalPublicCleanup
+      && !historicalPublicReservation
     ) ||
     request.method !== "POST"
   ) {
@@ -1460,10 +1478,45 @@ export async function handleReplayRequest(
     return json({ error: "replay_disabled" }, 503);
   }
   if (
-    (historicalPublicReplay || historicalPublicStatus || historicalPublicCleanup)
+    (
+      historicalPublicReplay
+      || historicalPublicStatus
+      || historicalPublicCleanup
+      || historicalPublicReservation
+    )
     && env.HISTORICAL_PUBLIC_REPLAY_ENABLED !== "true"
   ) {
     return json({ error: "historical_public_replay_disabled" }, 503);
+  }
+  if (historicalPublicReservation) {
+    try {
+      await dependencies.authenticate(request, env);
+      if (dependencies.recoveryStore === undefined) {
+        throw new ReplayExecutorError("command_rpc_failed");
+      }
+      const identity = validateHistoricalCleanupIdentity(await request.json());
+      const store = dependencies.recoveryStore(
+        env,
+        identity.replay_task_id,
+        identity.attempt,
+      );
+      const reserved = await store.reserveCleanupIdentity(identity);
+      const confirmed = validateHistoricalCleanupIdentity(reserved);
+      if (
+        confirmed.replay_task_id !== identity.replay_task_id
+        || confirmed.attempt !== identity.attempt
+      ) {
+        throw new ReplayExecutorError("command_output_invalid");
+      }
+      return json({ ...identity, status: "reserved" });
+    } catch (error) {
+      if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
+      if (error instanceof HistoricalPublicExecutorContractError || error instanceof SyntaxError) {
+        return json({ error: "invalid_request" }, 400);
+      }
+      recordExecutorFailure("historical_public_replay_cleanup_reservation", error);
+      return authoritativeExecutorFailure(error);
+    }
   }
   if (historicalPublicCleanup) {
     try {

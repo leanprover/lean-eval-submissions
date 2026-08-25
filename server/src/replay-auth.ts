@@ -12,6 +12,7 @@ const HISTORICAL_ROUTES = new Set([
   "/api/v1/historical-public-replay",
   "/api/v1/historical-public-replay/status",
   "/api/v1/historical-public-replay/cleanup",
+  "/api/v1/historical-public-replay/cleanup-reservation",
 ]);
 const HISTORICAL_CLEANUP_ROUTE = "/api/v1/historical-public-replay/cleanup";
 
