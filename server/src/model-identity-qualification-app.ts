@@ -476,25 +476,32 @@ function stepRequest(body: Record<string, unknown>, env: ModelIdentityQualificat
   };
 }
 
+const CREDENTIAL_ROLES = {
+  oauth_session_identity: "oauth_owner",
+  agent_session_identity: "agent_owner",
+  owner_request: "oauth_owner",
+  maintainer_approve: "maintainer",
+  maintainer_reject: "maintainer",
+  alias_assignment: "agent_owner",
+  identity_rename: "oauth_owner",
+  complete_graph_consolidation: "agent_owner",
+  chained_terminal_retry: "agent_owner",
+  component_cap_refusal: "oauth_owner",
+  idempotent_retry: "oauth_owner",
+  cross_route_event_collision: "oauth_owner",
+  cross_owner_denial: "cross_owner",
+  maximal_contention_measurement: "agent_owner",
+} as const;
+
 const SESSION_HEADERS = {
-  oauth_session_identity: "x-lean-eval-oauth-session",
-  agent_session_identity: "x-lean-eval-agent-session",
-  owner_request: "x-lean-eval-oauth-session",
-  maintainer_approve: "x-lean-eval-maintainer-session",
-  maintainer_reject: "x-lean-eval-maintainer-session",
-  alias_assignment: "x-lean-eval-agent-session",
-  identity_rename: "x-lean-eval-oauth-session",
-  complete_graph_consolidation: "x-lean-eval-agent-session",
-  chained_terminal_retry: "x-lean-eval-agent-session",
-  component_cap_refusal: "x-lean-eval-oauth-session",
-  idempotent_retry: "x-lean-eval-oauth-session",
-  cross_route_event_collision: "x-lean-eval-oauth-session",
-  cross_owner_denial: "x-lean-eval-cross-owner-session",
-  maximal_contention_measurement: "x-lean-eval-agent-session",
+  oauth_owner: "x-lean-eval-oauth-session",
+  agent_owner: "x-lean-eval-agent-session",
+  cross_owner: "x-lean-eval-cross-owner-session",
+  maintainer: "x-lean-eval-maintainer-session",
 } as const;
 
 function stepCredential(request: Request, operation: StepOperation): string {
-  const expected = SESSION_HEADERS[operation];
+  const expected = SESSION_HEADERS[CREDENTIAL_ROLES[operation]];
   for (const header of [
     "x-lean-eval-oauth-session",
     "x-lean-eval-agent-session",
@@ -530,6 +537,37 @@ function exactIntent(left: unknown, right: unknown): boolean {
     return canonicalQualificationValue(left) === canonicalQualificationValue(right);
   } catch {
     return false;
+  }
+}
+
+async function completedStepRetry(
+  env: ModelIdentityQualificationEnv,
+  journal: QualificationJournalStatus,
+  reservation: Readonly<{
+    run_id: string;
+    run_attempt: 1;
+    journal_id: string;
+    expected_journal_revision: number;
+    expected_state_commit: string;
+    expected_state_tree: string;
+    operation: QualificationOperation;
+  }>,
+): Promise<Response | null> {
+  if (journal.journal_revision === reservation.expected_journal_revision) {
+    return null;
+  }
+  if (journal.journal_revision < reservation.expected_journal_revision) {
+    throw new QualificationStateError("foreign_state_movement");
+  }
+  try {
+    const outcome = await stub(env).reserveStep(reservation);
+    if (outcome.kind !== "completed") {
+      throw new QualificationStateError("foreign_state_movement");
+    }
+    return json(JSON.parse(outcome.receipt_json) as unknown);
+  } catch (error) {
+    if (error instanceof QualificationStateError) throw error;
+    throw new QualificationStateError("foreign_state_movement");
   }
 }
 
@@ -637,9 +675,6 @@ async function proveSession(
   if (
     journal.deployed_commit !== env.DEPLOYED_COMMIT ||
     journal.journal_id !== step.journal_id ||
-    journal.journal_revision !== step.expected_journal_revision ||
-    journal.current_state_commit !== step.expected_state_commit ||
-    journal.current_state_tree !== step.expected_state_tree ||
     !exactIntent(plan.intent, step.intent)
   ) throw new QualificationStateError("foreign_state_movement");
   const owner = identity(object(step.intent).owner);
@@ -661,6 +696,12 @@ async function proveSession(
     expected_state_tree: step.expected_state_tree,
     operation: step.operation,
   };
+  const completedRetry = await completedStepRetry(env, journal, reservation);
+  if (completedRetry !== null) return completedRetry;
+  if (
+    journal.current_state_commit !== step.expected_state_commit ||
+    journal.current_state_tree !== step.expected_state_tree
+  ) throw new QualificationStateError("foreign_state_movement");
   const reserved = await stub(env).reserveStep(reservation);
   if (reserved.kind === "completed") {
     return json(JSON.parse(reserved.receipt_json) as unknown);
@@ -722,9 +763,6 @@ async function executePlannedStep(
   if (
     journal.deployed_commit !== env.DEPLOYED_COMMIT ||
     journal.journal_id !== step.journal_id ||
-    journal.journal_revision !== step.expected_journal_revision ||
-    journal.current_state_commit !== step.expected_state_commit ||
-    journal.current_state_tree !== step.expected_state_tree ||
     !exactIntent(recovery.intent, step.intent)
   ) throw new QualificationStateError("foreign_state_movement");
   const intent = object(step.intent);
@@ -743,28 +781,12 @@ async function executePlannedStep(
     expected_state_tree: step.expected_state_tree,
     operation: step.operation,
   };
-  const reserved = await stub(env).reserveStep(reservation);
-  if (reserved.kind === "completed") {
-    return json(JSON.parse(reserved.receipt_json) as unknown);
-  }
-  const plan = JSON.parse(reserved.plan_json) as QualificationStepPlan;
-  const credentialRole = plan.credential_roles[0];
+  const credentialRole = CREDENTIAL_ROLES[step.operation];
   const expectedActor = credentialRole === "maintainer"
     ? maintainer
     : credentialRole === "cross_owner"
       ? crossOwner
       : owner;
-  if (
-    plan.operation !== step.operation ||
-    credentialRole === undefined ||
-    plan.credential_roles.length !== 1 ||
-    !exactIntent(plan.actor, expectedActor) ||
-    plan.api_requests.some((operationRequest) =>
-      operationRequest.credential_role !== credentialRole ||
-      !exactIntent(operationRequest.actor, expectedActor))
-  ) {
-    throw new QualificationStateError("foreign_state_movement");
-  }
   const authenticated = credentialRole === "agent_owner"
     ? await verifyToken<AgentSession>(secret, credential, "agent_session")
     : await verifyToken<BrowserSession>(secret, credential, "browser_session");
@@ -772,6 +794,28 @@ async function executePlannedStep(
     authenticated.github_id !== expectedActor.github_id ||
     authenticated.login !== expectedActor.login
   ) throw new AuthError("qualification session identity changed");
+  const completedRetry = await completedStepRetry(env, journal, reservation);
+  if (completedRetry !== null) return completedRetry;
+  if (
+    journal.current_state_commit !== step.expected_state_commit ||
+    journal.current_state_tree !== step.expected_state_tree
+  ) throw new QualificationStateError("foreign_state_movement");
+  const reserved = await stub(env).reserveStep(reservation);
+  if (reserved.kind === "completed") {
+    return json(JSON.parse(reserved.receipt_json) as unknown);
+  }
+  const plan = JSON.parse(reserved.plan_json) as QualificationStepPlan;
+  if (
+    plan.operation !== step.operation ||
+    plan.credential_roles.length !== 1 ||
+    plan.credential_roles[0] !== credentialRole ||
+    !exactIntent(plan.actor, expectedActor) ||
+    plan.api_requests.some((operationRequest) =>
+      operationRequest.credential_role !== credentialRole ||
+      !exactIntent(operationRequest.actor, expectedActor))
+  ) {
+    throw new QualificationStateError("foreign_state_movement");
+  }
   const before = await qualificationStateSnapshot(
     stateConfig(env),
     stateFetch(dependencies),

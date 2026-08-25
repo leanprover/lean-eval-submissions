@@ -672,14 +672,18 @@ describe("closed model identity qualification HTTP boundary", () => {
       intent,
     });
 
-    const oauth = await handleModelIdentityQualificationRequest(
-      qualificationRequest(step("oauth_session_identity", 1), QUALIFICATION_TOKEN, {
+    const oauthRequest = qualificationRequest(
+      step("oauth_session_identity", 1), QUALIFICATION_TOKEN, {
         "x-lean-eval-oauth-session": browserToken,
-      }),
+      },
+    );
+    const oauth = await handleModelIdentityQualificationRequest(
+      oauthRequest.clone(),
       runtime,
     );
     expect(oauth.status).toBe(200);
-    expect(await oauth.json()).toMatchObject({
+    const oauthBody = await oauth.json();
+    expect(oauthBody).toMatchObject({
       journal_revision: 2,
       mutation_created: false,
       state_commit: INITIAL_HEAD,
@@ -696,6 +700,12 @@ describe("closed model identity qualification HTTP boundary", () => {
         },
       },
     });
+    const oauthRetry = await handleModelIdentityQualificationRequest(
+      oauthRequest,
+      runtime,
+    );
+    expect(oauthRetry.status).toBe(200);
+    expect(await oauthRetry.json()).toEqual(oauthBody);
 
     const agent = await handleModelIdentityQualificationRequest(
       qualificationRequest(step("agent_session_identity", 2), QUALIFICATION_TOKEN, {
@@ -721,6 +731,14 @@ describe("closed model identity qualification HTTP boundary", () => {
         },
       },
     });
+    const lateOauthRetry = await handleModelIdentityQualificationRequest(
+      qualificationRequest(step("oauth_session_identity", 1), QUALIFICATION_TOKEN, {
+        "x-lean-eval-oauth-session": browserToken,
+      }),
+      runtime,
+    );
+    expect(lateOauthRetry.status).toBe(200);
+    expect(await lateOauthRetry.json()).toEqual(oauthBody);
     expect(state.writes).toEqual([]);
 
     const wrongRole = await handleModelIdentityQualificationRequest(
@@ -951,11 +969,38 @@ describe("closed model identity qualification HTTP boundary", () => {
       { stateFetch: state.fetcher },
     );
     expect(recovered.status).toBe(200);
-    expect(await recovered.json()).toMatchObject({
-      journal_revision: 3,
+    const recoveredBody = await recovered.json();
+    expect(recoveredBody).toMatchObject({
+      journal_revision: 4,
       current_state_commit: QUALIFICATION_MUTATION_HEAD,
       current_state_tree: QUALIFICATION_MUTATION_TREE,
       lease_status: "active",
+      recovery_reconciliations: [{
+        operation: "owner_request",
+        applied_mutations: 1,
+        planned_mutations: 1,
+        state_commit: QUALIFICATION_MUTATION_HEAD,
+        state_tree: QUALIFICATION_MUTATION_TREE,
+      }],
+    });
+    expect(modelApiRequest).toHaveBeenCalledTimes(1);
+
+    const mutationRetry = await handleModelIdentityQualificationRequest(
+      qualificationRequest(stepBody, QUALIFICATION_TOKEN, {
+        "x-lean-eval-oauth-session": sessionToken,
+      }),
+      runtime,
+      { stateFetch: state.fetcher, modelApiRequest },
+    );
+    expect(mutationRetry.status).toBe(200);
+    expect(await mutationRetry.json()).toMatchObject({
+      status: "model_identity_qualification_mutation_reconciled",
+      journal_revision: 4,
+      operation: "owner_request",
+      applied_mutations: 1,
+      planned_mutations: 1,
+      state_commit: QUALIFICATION_MUTATION_HEAD,
+      state_tree: QUALIFICATION_MUTATION_TREE,
     });
     expect(modelApiRequest).toHaveBeenCalledTimes(1);
 
@@ -968,7 +1013,7 @@ describe("closed model identity qualification HTTP boundary", () => {
         run_id: "4004",
         run_attempt: 1,
         journal_id: acquired.journal_id,
-        expected_journal_revision: 3,
+        expected_journal_revision: 4,
         expected_state_commit: QUALIFICATION_MUTATION_HEAD,
         expected_state_tree: QUALIFICATION_MUTATION_TREE,
       }),
