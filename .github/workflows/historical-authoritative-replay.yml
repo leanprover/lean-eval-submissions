@@ -407,6 +407,14 @@ jobs:
             rm "$RUNNER_TEMP/historical-oidc-response.json"
           }
           mint_oidc
+          jq '{schema_version, replay_task_id, attempt}' \
+            "$RUNNER_TEMP/executor-status-request.json" \
+            > "$RUNNER_TEMP/runner-loss-cleanup-request.json"
+          # From this point onward the POST may have taken effect even if its
+          # response is lost. Any terminal State mutation must first consume
+          # the durable reservation through the exact cleanup route.
+          echo runner_lost > "$RUNNER_TEMP/failure-reason"
+          touch "$RUNNER_TEMP/executor-start-attempted"
           start_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
             --max-time 300 \
             --retry 3 \
@@ -427,7 +435,6 @@ jobs:
             '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, status: "running"}' \
             "$RUNNER_TEMP/executor-start-response.json" >/dev/null
           rm -f "$RUNNER_TEMP/executor-start-response.json"
-          echo runner_lost > "$RUNNER_TEMP/failure-reason"
 
           process_deadline=$(( $(date +%s) + 20100 ))
           job_deadline=$(( HISTORICAL_REPLAY_JOB_STARTED_EPOCH + 20880 ))
@@ -470,9 +477,6 @@ jobs:
             rm -f "$RUNNER_TEMP/executor-poll-response.json"
           done
           if [ ! -f "$RUNNER_TEMP/executor-response.json" ]; then
-            jq '{schema_version, replay_task_id, attempt}' \
-              "$RUNNER_TEMP/executor-status-request.json" \
-              > "$RUNNER_TEMP/runner-loss-cleanup-request.json"
             mint_oidc
             cleanup_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
               --max-time 300 --retry 3 --retry-max-time 300 --retry-all-errors \
@@ -504,6 +508,50 @@ jobs:
           trap - EXIT
           echo 'ready=true' >> "$GITHUB_OUTPUT"
 
+      - name: Confirm exact cleanup after any ambiguous executor start
+        id: ambiguous_cleanup
+        if: ${{ !cancelled() && steps.started.outputs.appended == 'true' && steps.execute.outputs.ready != 'true' }}
+        env:
+          HISTORICAL_CLEANUP_URL: https://lean-eval-historical-public-replay.lean-eval.workers.dev/api/v1/historical-public-replay/cleanup
+        run: |
+          set -euo pipefail
+          umask 077
+          test -z "${STATE_WRITE_KEY:-}"
+          test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          if [ ! -f "$RUNNER_TEMP/executor-start-attempted" ]; then
+            echo 'kind=not_required' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          test -f "$RUNNER_TEMP/runner-loss-cleanup-request.json"
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 15 --retry 3 --retry-max-time 60 --retry-all-errors \
+            --retry-delay 2 \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-public-replay-production" \
+            --output "$RUNNER_TEMP/historical-ambiguous-cleanup-oidc.json"
+          historical_cleanup_token=$(jq -er .value "$RUNNER_TEMP/historical-ambiguous-cleanup-oidc.json")
+          trap 'unset historical_cleanup_token; rm -f "$RUNNER_TEMP/historical-ambiguous-cleanup-oidc.json"' EXIT
+          cleanup_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+            --max-time 300 --retry 3 --retry-max-time 300 --retry-all-errors \
+            --retry-delay 2 \
+            --header "Authorization: Bearer $historical_cleanup_token" \
+            --header 'Content-Type: application/json' --request POST \
+            --data-binary "@$RUNNER_TEMP/runner-loss-cleanup-request.json" \
+            "$HISTORICAL_CLEANUP_URL" \
+            --output "$RUNNER_TEMP/runner-loss-cleanup-confirmation.json" \
+            --write-out '%{http_code}')
+          unset historical_cleanup_token
+          rm -f "$RUNNER_TEMP/historical-ambiguous-cleanup-oidc.json"
+          trap - EXIT
+          test "$cleanup_status" = 200
+          jq -e --arg task "$(jq -r .replay_task_id "$RUNNER_TEMP/runner-loss-cleanup-request.json")" \
+            --argjson attempt "$(jq -r .attempt "$RUNNER_TEMP/runner-loss-cleanup-request.json")" \
+            '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, destruction: "confirmed"}' \
+            "$RUNNER_TEMP/runner-loss-cleanup-confirmation.json" >/dev/null
+          touch "$RUNNER_TEMP/runner-loss-cleanup-confirmed"
+          echo 'kind=confirmed' >> "$GITHUB_OUTPUT"
+
       - name: Append the exact reported historical terminal outcome
         id: terminal
         if: steps.execute.outputs.ready == 'true'
@@ -524,10 +572,12 @@ jobs:
         env:
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
           EXPECTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
+          AMBIGUOUS_CLEANUP_KIND: ${{ steps.ambiguous_cleanup.outputs.kind }}
         run: |
           set -euo pipefail
           failure_reason=$(cat "$RUNNER_TEMP/failure-reason")
-          if [ "$failure_reason" = runner_lost ]; then
+          if [ -f "$RUNNER_TEMP/executor-start-attempted" ]; then
+            test "$AMBIGUOUS_CLEANUP_KIND" = confirmed
             test -f "$RUNNER_TEMP/runner-loss-cleanup-confirmed"
           fi
           python scripts/historical_replay_controller.py terminal-event \
@@ -551,6 +601,7 @@ jobs:
           rm -rf state "$RUNNER_TEMP/state-views" "$RUNNER_TEMP/source" "$RUNNER_TEMP/benchmark"
           find "$RUNNER_TEMP" -maxdepth 1 -type f \
             \( -name '*historical*' -o -name '*executor*' -o -name '*event.json' \
+               -o -name '*cleanup*' \
                -o -name 'failure-reason' -o -name 'qualification.json' \
                -o -name 'profile-matrix.json' -o -name 'runner-contract.json' \) -delete
           echo 'No AWS credential or encrypted private archive was used.' >> "$GITHUB_STEP_SUMMARY"

@@ -126,19 +126,80 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertNotIn("actions/upload-artifact", WORKFLOW)
         self.assertIn("runner-loss-cleanup-confirmed", failure_step)
 
-    def test_start_failure_phase_changes_only_after_exact_running_receipt(self) -> None:
-        start_failed = WORKFLOW.index('echo runner_start_failed > "$RUNNER_TEMP/failure-reason"')
+    def test_start_becomes_cleanup_required_before_the_request_can_escape(self) -> None:
+        start_failed = WORKFLOW.index(
+            'echo runner_start_failed > "$RUNNER_TEMP/failure-reason"'
+        )
+        runner_lost = WORKFLOW.index('echo runner_lost > "$RUNNER_TEMP/failure-reason"')
+        attempted = WORKFLOW.index('touch "$RUNNER_TEMP/executor-start-attempted"')
+        start_request = WORKFLOW.index("start_status=$(curl")
         status_accepted = WORKFLOW.index('test "$start_status" = 202')
         receipt_validated = WORKFLOW.index(
             '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, '
             'status: "running"}'
         )
-        runner_lost = WORKFLOW.index('echo runner_lost > "$RUNNER_TEMP/failure-reason"')
         polling = WORKFLOW.index('while [ "$(date +%s)" -lt "$deadline" ]')
-        self.assertLess(start_failed, status_accepted)
+        self.assertLess(start_failed, runner_lost)
+        self.assertLess(runner_lost, attempted)
+        self.assertLess(attempted, start_request)
+        self.assertLess(start_request, status_accepted)
         self.assertLess(status_accepted, receipt_validated)
-        self.assertLess(receipt_validated, runner_lost)
-        self.assertLess(runner_lost, polling)
+        self.assertLess(receipt_validated, polling)
+
+    def test_lost_start_response_requires_cleanup_before_state_failure(self) -> None:
+        attempted = WORKFLOW.index('touch "$RUNNER_TEMP/executor-start-attempted"')
+        start_request = WORKFLOW.index("start_status=$(curl")
+        cleanup = WORKFLOW.index(
+            "Confirm exact cleanup after any ambiguous executor start"
+        )
+        state_failure = WORKFLOW.index(
+            "Fail a started attempt explicitly if orchestration did not finish"
+        )
+        self.assertLess(attempted, start_request)
+        self.assertLess(start_request, cleanup)
+        self.assertLess(cleanup, state_failure)
+        cleanup_step = WORKFLOW.split(
+            "Confirm exact cleanup after any ambiguous executor start", 1
+        )[1].split("Append the exact reported historical terminal outcome", 1)[0]
+        self.assertIn("steps.execute.outputs.ready != 'true'", cleanup_step)
+        self.assertIn("runner-loss-cleanup-confirmed", cleanup_step)
+        self.assertIn('destruction: "confirmed"', cleanup_step)
+        self.assertNotIn("STATE_WRITE_KEY: ${{ secrets", cleanup_step)
+
+    def test_timed_out_or_rejected_start_cannot_publish_without_cleanup(self) -> None:
+        start_request = WORKFLOW.index("start_status=$(curl")
+        status_rejected = WORKFLOW.index('test "$start_status" = 202')
+        cleanup = WORKFLOW.index(
+            "Confirm exact cleanup after any ambiguous executor start"
+        )
+        self.assertLess(start_request, status_rejected)
+        self.assertLess(status_rejected, cleanup)
+        failure_step = WORKFLOW.split(
+            "Fail a started attempt explicitly if orchestration did not finish", 1
+        )[1].split("Confirm credentials remained separated", 1)[0]
+        self.assertIn(
+            'if [ -f "$RUNNER_TEMP/executor-start-attempted" ]', failure_step
+        )
+        self.assertIn('test "$AMBIGUOUS_CLEANUP_KIND" = confirmed', failure_step)
+        self.assertIn(
+            'test -f "$RUNNER_TEMP/runner-loss-cleanup-confirmed"', failure_step
+        )
+
+    def test_malformed_start_receipt_cannot_bypass_cleanup(self) -> None:
+        status_accepted = WORKFLOW.index('test "$start_status" = 202')
+        receipt_validated = WORKFLOW.index(
+            '. == {schema_version: 1, replay_task_id: $task, attempt: $attempt, '
+            'status: "running"}'
+        )
+        cleanup = WORKFLOW.index(
+            "Confirm exact cleanup after any ambiguous executor start"
+        )
+        self.assertLess(status_accepted, receipt_validated)
+        self.assertLess(receipt_validated, cleanup)
+        self.assertIn(
+            '> "$RUNNER_TEMP/runner-loss-cleanup-request.json"',
+            WORKFLOW[:status_accepted],
+        )
 
     def test_protected_main_oidc_is_bound_to_the_exact_historical_deployment(self) -> None:
         self.assertIn("test \"$GITHUB_REPOSITORY\" = leanprover/lean-eval-submissions", WORKFLOW)
