@@ -726,7 +726,7 @@ describe("closed model identity qualification HTTP boundary", () => {
         actor: intent.owner,
         assertions: {
           agent_source_commit_bound: true,
-          browser_session_signature_verified: true,
+          agent_session_signature_verified: true,
           exact_identity_verified: true,
         },
       },

@@ -144,18 +144,22 @@ class FakeHarness:
             self.head = f"{self.counter:040x}"
             self.tree = f"{self.counter + 100:040x}"
         self.revision += 1
-        if contract.operation in {"idempotent_retry", "cross_route_event_collision"}:
-            event_ids = [self.first_event]
-        else:
-            event_ids = [
-                f"00000000-0000-7{self.counter:03x}-8000-{index + self.counter:012x}"
-                for index in range(contract.minimum_event_ids)
-            ]
-            if self.first_event is None and event_ids:
-                self.first_event = event_ids[0]
+        reused_count = {
+            "chained_terminal_retry": 1,
+            "idempotent_retry": 1,
+            "cross_route_event_collision": 1,
+        }.get(contract.operation, 0)
+        event_ids = [
+            f"00000000-0000-7{self.counter:03x}-8000-{index + self.counter:012x}"
+            for index in range(contract.event_id_count - reused_count)
+        ]
+        if self.first_event is None and event_ids:
+            self.first_event = event_ids[0]
+        if reused_count:
+            event_ids.append(self.first_event)
         model_ids = [
             f"mi1_{index + self.counter:064x}"
-            for index in range(contract.minimum_model_ids)
+            for index in range(contract.model_id_count)
         ]
         alias_keys = [
             f"ma1_{index + self.counter:064x}" for index in range(contract.alias_count)
@@ -333,6 +337,38 @@ class ModelIdentityStagingQualificationTests(unittest.TestCase):
         response["proof"]["actor"] = {"github_id": 999, "login": "intruder"}
         with self.assertRaisesRegex(
             QUALIFICATION.QualificationFailure, "closed boundary"
+        ):
+            QUALIFICATION.validate_step(
+                200,
+                response,
+                contract=contract,
+                intent=INTENT,
+                expected_commit=COMMIT,
+                run_id=RUN_ID,
+                run_attempt=1,
+                journal_id=JOURNAL_ID,
+                expected_revision=1,
+                expected_head=INITIAL,
+                expected_tree=INITIAL_TREE,
+            )
+
+    def test_identifier_evidence_cardinality_is_exact(self):
+        harness = FakeHarness()
+        contract = QUALIFICATION.CONTRACT_BY_OPERATION["owner_request"]
+        _, response = harness(
+            "step",
+            {
+                "operation": contract.operation,
+                "expected_state_commit": INITIAL,
+                "expected_state_tree": INITIAL_TREE,
+            },
+            {"oauth_owner": SESSIONS.oauth_owner},
+        )
+        response["proof"]["event_ids"].append(
+            "00000000-0000-7000-8000-000000000099"
+        )
+        with self.assertRaisesRegex(
+            QUALIFICATION.QualificationFailure, "identifier evidence was incomplete"
         ):
             QUALIFICATION.validate_step(
                 200,

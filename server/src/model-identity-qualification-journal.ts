@@ -13,6 +13,7 @@ import {
 } from "./model-identity";
 import { newEventId, stateEventPath } from "./state-event";
 import {
+  REVIEWED_QUALIFICATION_FIXTURE_DIGEST,
   reviewedQualificationFixtureManifest,
   type QualificationFixtureManifest,
 } from "./model-identity-qualification-fixture";
@@ -459,7 +460,7 @@ function sessionPlan(
         }
       : {
           agent_source_commit_bound: true,
-          browser_session_signature_verified: true,
+          agent_session_signature_verified: true,
           exact_identity_verified: true,
         },
     expected_commit_messages: [],
@@ -542,12 +543,20 @@ async function ownerRequestPlan(
   };
 }
 
-function nextPlanMilliseconds(journal: StoredJournal): number {
+function nextPlanMilliseconds(
+  journal: StoredJournal,
+  fixture?: QualificationFixtureManifest,
+): number {
   let milliseconds = Date.now();
   for (const plan of journal.completed_plans) {
     for (const request of plan.api_requests) {
       milliseconds = Math.max(milliseconds, Date.parse(request.occurred_at) + 1);
     }
+  }
+  for (const document of fixture?.documents ?? []) {
+    if (document.kind !== "event") continue;
+    const event = document.value as Readonly<{ occurred_at: string }>;
+    milliseconds = Math.max(milliseconds, Date.parse(event.occurred_at) + 1);
   }
   return milliseconds;
 }
@@ -648,6 +657,14 @@ async function requiredFixture(
   if (fixture === null) {
     throw new Error("reviewed qualification fixture is not source-armed");
   }
+  if (
+    REVIEWED_QUALIFICATION_FIXTURE_DIGEST === null ||
+    journal.acquisition.fixture_evidence.evidence_class !==
+      "reviewed_live_fixture" ||
+    journal.acquisition.fixture_evidence.fixture_id !== fixture.fixture_id ||
+    journal.acquisition.fixture_evidence.manifest_digest !==
+      REVIEWED_QUALIFICATION_FIXTURE_DIGEST
+  ) throw new Error("qualification journal fixture evidence does not match source");
   for (const role of ["owner", "cross_owner", "maintainer"] as const) {
     const expected = journal.acquisition.intent[role];
     const actual = fixture.intent[role];
@@ -708,7 +725,7 @@ async function maintainerRejectPlan(
   const fixture = await requiredFixture(journal);
   const modelId = fixture.bindings.rejection.pending_model_id;
   const current = fixtureModelView(fixture, modelId);
-  const nowMilliseconds = nextPlanMilliseconds(journal);
+  const nowMilliseconds = nextPlanMilliseconds(journal, fixture);
   const eventId = newEventId(nowMilliseconds);
   const occurredAt = canonicalMilliseconds(nowMilliseconds);
   const reasonCode = fixture.bindings.rejection.reason_code;
@@ -979,7 +996,7 @@ async function completeGraphConsolidationPlan(
   const sourceAlias = sourceAliasValue as ModelAliasView;
   const target = fixtureModelView(fixture, targetModelId);
   const targetImpact = fixtureReverseImpact(fixture, targetModelId);
-  const nowMilliseconds = nextPlanMilliseconds(journal);
+  const nowMilliseconds = nextPlanMilliseconds(journal, fixture);
   const eventId = newEventId(nowMilliseconds);
   const occurredAt = canonicalMilliseconds(nowMilliseconds);
   const event = {
@@ -1045,7 +1062,7 @@ async function completeGraphConsolidationPlan(
     }],
     event_ids: [eventId],
     model_ids: [sourceModelId, targetModelId],
-    alias_keys: [],
+    alias_keys: [aliasKey],
     assertions: {
       all_reverse_impacts_retargeted: true,
       immutable_event_written: true,
@@ -1088,7 +1105,7 @@ async function chainedTerminalRetryPlan(
   const firstTarget = fixtureModelView(fixture, firstTargetModelId);
   const secondTarget = fixtureModelView(fixture, secondTargetModelId);
   const secondImpact = fixtureReverseImpact(fixture, secondTargetModelId);
-  const firstMilliseconds = nextPlanMilliseconds(journal);
+  const firstMilliseconds = nextPlanMilliseconds(journal, fixture);
   const firstEventId = newEventId(firstMilliseconds);
   const firstOccurredAt = canonicalMilliseconds(firstMilliseconds);
   const displayName = `Qualification chain target run ${journal.acquisition.run_id}`;
@@ -1219,9 +1236,9 @@ async function chainedTerminalRetryPlan(
     expected_http_status: 200,
     mutation_expected: true,
     api_requests: requests,
-    event_ids: [firstEventId, secondEventId],
+    event_ids: [firstEventId, secondEventId, firstRequest.event_id],
     model_ids: [sourceModelId, firstTargetModelId, secondTargetModelId],
-    alias_keys: [],
+    alias_keys: [aliasKey],
     assertions: {
       later_chain_created: true,
       retry_created_no_event: true,
@@ -1238,7 +1255,7 @@ async function componentCapRefusalPlan(
   const fixture = await requiredFixture(journal);
   const sourceModelId = fixture.bindings.cap_refusal.source_terminal_model_id;
   const targetModelId = fixture.bindings.cap_refusal.target_terminal_model_id;
-  const nowMilliseconds = nextPlanMilliseconds(journal);
+  const nowMilliseconds = nextPlanMilliseconds(journal, fixture);
   const eventId = newEventId(nowMilliseconds);
   const request: QualificationApiRequestPlan = {
     actor: journal.acquisition.intent.owner,
@@ -1262,7 +1279,7 @@ async function componentCapRefusalPlan(
     expected_http_status: 409,
     mutation_expected: false,
     api_requests: [request],
-    event_ids: [],
+    event_ids: [eventId],
     model_ids: [sourceModelId, targetModelId],
     alias_keys: [],
     assertions: {
@@ -1358,6 +1375,7 @@ function crossOwnerDenialPlan(journal: StoredJournal): QualificationStepPlan {
     throw new Error("qualification cross-owner predecessor is unavailable");
   }
   const nowMilliseconds = nextPlanMilliseconds(journal);
+  const eventId = newEventId(nowMilliseconds);
   return {
     operation: "cross_owner_denial",
     route: "PUT /api/v1/model-identities/{model_id}/name",
@@ -1369,7 +1387,7 @@ function crossOwnerDenialPlan(journal: StoredJournal): QualificationStepPlan {
       actor: journal.acquisition.intent.cross_owner,
       body: { display_name: `Qualification denied rename run ${journal.acquisition.run_id}` },
       credential_role: "cross_owner",
-      event_id: newEventId(nowMilliseconds),
+      event_id: eventId,
       method: "PUT",
       occurred_at: canonicalMilliseconds(nowMilliseconds),
       path: `/api/v1/model-identities/${modelId}/name`,
@@ -1379,7 +1397,7 @@ function crossOwnerDenialPlan(journal: StoredJournal): QualificationStepPlan {
       expected_documents: {},
       expected_deleted_paths: [],
     }],
-    event_ids: [],
+    event_ids: [eventId],
     model_ids: [modelId],
     alias_keys: [],
     assertions: {
@@ -1402,7 +1420,7 @@ async function maximalContentionPlan(
   const target = fixtureModelView(fixture, targetModelId);
   const sourceImpact = fixtureReverseImpact(fixture, sourceModelId);
   const targetImpact = fixtureReverseImpact(fixture, targetModelId);
-  const nowMilliseconds = nextPlanMilliseconds(journal);
+  const nowMilliseconds = nextPlanMilliseconds(journal, fixture);
   const eventId = newEventId(nowMilliseconds);
   const occurredAt = canonicalMilliseconds(nowMilliseconds);
   const event = {
@@ -1495,7 +1513,8 @@ async function maximalContentionPlan(
     }],
     event_ids: [eventId],
     model_ids: [sourceModelId, targetModelId],
-    alias_keys: [],
+    alias_keys: sourceImpact.members.flatMap((member) =>
+      member.kind === "alias" ? [member.alias_key] : []),
     assertions: {
       eight_cas_attempts_executed: true,
       network_subrequests_measured: true,

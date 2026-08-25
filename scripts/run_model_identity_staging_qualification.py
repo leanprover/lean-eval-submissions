@@ -194,8 +194,8 @@ class ProofContract:
     actor_role: str
     http_status: int
     mutation_created: bool
-    minimum_event_ids: int
-    minimum_model_ids: int
+    event_id_count: int
+    model_id_count: int
     alias_count: int
     assertions: tuple[str, ...]
 
@@ -229,7 +229,7 @@ PROOF_CONTRACTS = (
         0,
         (
             "agent_source_commit_bound",
-            "browser_session_signature_verified",
+            "agent_session_signature_verified",
             "exact_identity_verified",
         ),
     ),
@@ -318,7 +318,7 @@ PROOF_CONTRACTS = (
         True,
         1,
         2,
-        0,
+        1,
         (
             "all_reverse_impacts_retargeted",
             "immutable_event_written",
@@ -332,9 +332,9 @@ PROOF_CONTRACTS = (
         "owner",
         200,
         True,
-        2,
         3,
-        0,
+        3,
+        1,
         (
             "later_chain_created",
             "retry_created_no_event",
@@ -348,7 +348,7 @@ PROOF_CONTRACTS = (
         "owner",
         409,
         False,
-        0,
+        1,
         2,
         0,
         ("candidate_union_count_is_33", "component_cap_is_32", "no_git_object_created"),
@@ -388,7 +388,7 @@ PROOF_CONTRACTS = (
         "cross_owner",
         404,
         False,
-        0,
+        1,
         1,
         0,
         (
@@ -406,7 +406,7 @@ PROOF_CONTRACTS = (
         True,
         1,
         2,
-        0,
+        15,
         (
             "eight_cas_attempts_executed",
             "network_subrequests_measured",
@@ -727,8 +727,8 @@ def validate_step(
     model_ids = _canonical_identifiers(proof["model_ids"], MODEL_ID, "model IDs")
     alias_keys = _canonical_identifiers(proof["alias_keys"], ALIAS_KEY, "alias keys")
     if (
-        len(event_ids) < contract.minimum_event_ids
-        or len(model_ids) < contract.minimum_model_ids
+        len(event_ids) != contract.event_id_count
+        or len(model_ids) != contract.model_id_count
         or len(alias_keys) != contract.alias_count
     ):
         raise QualificationFailure(
@@ -1007,19 +1007,17 @@ def run_qualification(
             )
             proof = require_object(step["proof"], "step proof")
             event_ids = set(proof["event_ids"])
-            if contract.operation not in {
-                "idempotent_retry",
-                "cross_route_event_collision",
-            }:
-                if seen_events & event_ids:
-                    raise QualificationFailure(
-                        f"{contract.operation} reused an unexpected event ID"
-                    )
-                seen_events.update(event_ids)
-            elif not event_ids or not event_ids <= seen_events:
+            expected_reused = {
+                "chained_terminal_retry": 1,
+                "idempotent_retry": 1,
+                "cross_route_event_collision": 1,
+            }.get(contract.operation, 0)
+            reused = seen_events & event_ids
+            if len(reused) != expected_reused:
                 raise QualificationFailure(
-                    f"{contract.operation} did not bind an earlier event ID"
+                    f"{contract.operation} reused the wrong event IDs"
                 )
+            seen_events.update(event_ids - reused)
             current_head = str(step["state_commit"])
             current_tree = str(step["state_tree"])
             revision = int(step["journal_revision"])
