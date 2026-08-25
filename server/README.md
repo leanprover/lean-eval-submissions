@@ -130,6 +130,12 @@ contract testing:
   `PATCH /api/v1/results/<result-id>/metadata` implement the separately gated
   legacy-result owner flow documented in
   [`../docs/legacy-result-owner-api.md`](../docs/legacy-result-owner-api.md).
+- The independently gated model-identity producer routes implement owner
+  requests, aliases, renames, and exact-pair maintainer decisions as documented in
+  [`../docs/model-identity-owner-api.md`](../docs/model-identity-owner-api.md).
+  Consolidation remains an unconditional 404 pending a protected State
+  reverse-impact index and atomic graph rematerialization lane.
+  Both route families remain dark in staging and production.
   They remain disabled in both tracked environments and do not depend on or
   enable submission intake.
 
@@ -208,9 +214,10 @@ contract before intake is enabled. Submission-view schema version 1 remains
 readable for pre-lifecycle records; any lifecycle append upgrades the same
 canonical path to the strict lifecycle-aware schema.
 
-Each Cron invocation has its own application-level external-subrequest budget;
-there is no Worker-global `limits.subrequests` setting that could unexpectedly
-constrain owner or maintainer routes. A scheduled scan reads at most 32 outbox
+Each Cron invocation has its own 400-request application-level
+external-subrequest budget, matching the tracked Worker
+`limits.subrequests`. That explicit limit covers the 369-request synchronous
+repair bound and 171-request model-identity bound. A scheduled scan reads at most 32 outbox
 blobs from one alphabetically ordered shard window and rotates that window on
 the next visit. Before starting each due item, the handler requires 155
 requests of remaining capacity, including all 144 requests needed by the existing nine

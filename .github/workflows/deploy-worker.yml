@@ -255,6 +255,10 @@ jobs:
           assert body["intake_effective_enabled"] is False
           assert body["intake_enabled"] is False
           assert body["result_amendment_maintainer_api_enabled"] is False
+          assert body["model_identity_owner_api_enabled"] is False
+          assert body["model_identity_maintainer_api_enabled"] is False
+          assert body["model_identity_write_max_subrequests"] == 171
+          assert body["model_identity_consolidation_api"] == "requires_protected_reverse_impact_index"
           assert body["promotion_canary_configured_enabled"] is True
           assert body["promotion_canary_enabled"] is True
           assert body["intake_enablement_mode"] == "disabled"
@@ -409,6 +413,10 @@ jobs:
           assert body["intake_enablement_mode"] == "disabled"
           assert body["intake_lease_expires_at"] is None
           assert body["result_amendment_maintainer_api_enabled"] is False
+          assert body["model_identity_owner_api_enabled"] is False
+          assert body["model_identity_maintainer_api_enabled"] is False
+          assert body["model_identity_write_max_subrequests"] == 171
+          assert body["model_identity_consolidation_api"] == "requires_protected_reverse_impact_index"
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY
@@ -662,6 +670,10 @@ jobs:
           assert body["intake_enablement_mode"] == "leased"
           assert body["intake_lease_expires_at"] == int(os.environ["INTAKE_LEASE_EXPIRES_AT"])
           assert body["result_amendment_maintainer_api_enabled"] is False
+          assert body["model_identity_owner_api_enabled"] is False
+          assert body["model_identity_maintainer_api_enabled"] is False
+          assert body["model_identity_write_max_subrequests"] == 171
+          assert body["model_identity_consolidation_api"] == "requires_protected_reverse_impact_index"
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY
@@ -751,6 +763,10 @@ jobs:
           assert body["intake_enablement_mode"] == "disabled"
           assert body["intake_lease_expires_at"] is None
           assert body["result_amendment_maintainer_api_enabled"] is False
+          assert body["model_identity_owner_api_enabled"] is False
+          assert body["model_identity_maintainer_api_enabled"] is False
+          assert body["model_identity_write_max_subrequests"] == 171
+          assert body["model_identity_consolidation_api"] == "requires_protected_reverse_impact_index"
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY

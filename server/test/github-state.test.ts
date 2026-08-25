@@ -5,6 +5,7 @@ import {
   clearResultOwnerContractProofCacheForTest,
   DISPATCH_OUTBOX_SCAN_LIMIT,
   DISPATCH_UPDATE_MAX_SUBREQUESTS,
+  MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS,
   type GitHubFetch,
   GitHubStateError,
   GitHubStateRepository,
@@ -12,6 +13,7 @@ import {
   StateEventConflictError,
   StateUpdateOutcomeUnknownError,
 } from "../src/github-state";
+import { modelAliasKey, modelIdentityId } from "../src/model-identity";
 import type {
   StateEvent,
   WritableResultLifecycleEvent,
@@ -91,6 +93,66 @@ const CANARY_EVIDENCE: StateEvent = {
     expires_at: "2026-08-20T06:17:08.000Z",
   },
 };
+
+const MODEL_REQUEST_ID = "0198abcd-0000-7000-8000-000000000020";
+const MODEL_DECISION_ID = "0198abcd-0001-7000-8000-000000000021";
+const MODEL_ALIAS_ID = "0198abcd-0002-7000-8000-000000000022";
+const MODEL_RENAME_ID = "0198abcd-0003-7000-8000-000000000023";
+const MODEL_ID = "mi1_5a3dd8d6aa12ca21b76357b40cb5b9414b7097acf2a7817318e6277a40deba33";
+const MODEL_REQUEST: StateEvent = {
+  schema_version: 1,
+  event_id: MODEL_REQUEST_ID,
+  event_type: "model_identity.requested",
+  occurred_at: "2025-08-15T03:36:35.584Z",
+  subject_id: MODEL_ID,
+  causation_event_id: null,
+  actor: { kind: "github", login: "alice" },
+  payload: { display_name: "Model Alpha" },
+};
+const MODEL_DECISION: StateEvent = {
+  schema_version: 1,
+  event_id: MODEL_DECISION_ID,
+  event_type: "model_identity.approved",
+  occurred_at: "2025-08-15T03:36:35.585Z",
+  subject_id: MODEL_ID,
+  causation_event_id: MODEL_REQUEST_ID,
+  actor: { kind: "system" },
+  payload: { reviewer_login: "reviewer" },
+};
+const PENDING_MODEL_VIEW = {
+  schema_version: 1,
+  model_id: MODEL_ID,
+  owner_login: "alice",
+  requested_name: "Model Alpha",
+  display_name: "Model Alpha",
+  status: "pending",
+  request_event_id: MODEL_REQUEST_ID,
+  requested_at: MODEL_REQUEST.occurred_at,
+  decision_event_id: null,
+  decided_at: null,
+  reviewer_login: null,
+  rejection_reason: null,
+  mutation_event_id: MODEL_REQUEST_ID,
+  consolidated_into: null,
+  resolved_model_id: null,
+} as const;
+const APPROVED_MODEL_VIEW = {
+  ...PENDING_MODEL_VIEW,
+  status: "approved",
+  decision_event_id: MODEL_DECISION_ID,
+  decided_at: MODEL_DECISION.occurred_at,
+  reviewer_login: "reviewer",
+  mutation_event_id: MODEL_DECISION_ID,
+  resolved_model_id: MODEL_ID,
+} as const;
+
+function eventPath(eventId: string): string {
+  return `events/${eventId.replaceAll("-", "").slice(0, 2)}/${eventId}.json`;
+}
+
+function modelViewPath(modelId = MODEL_ID): string {
+  return `views/model-identities/${modelId.slice(4, 6)}/${modelId}.json`;
+}
 
 const SUBMISSION_ID = "0198abcd-1111-7000-8000-000000000001";
 const METADATA_ID = "0198abcd-1111-7000-8000-000000000002";
@@ -519,6 +581,52 @@ function resultOwnerContractRootTreeResponse(
   });
 }
 
+function modelWriterFetcher(
+  documents: Readonly<Record<string, unknown>>,
+  referenceStatus = 200,
+) {
+  const treeBodies: Record<string, unknown>[] = [];
+  const fetcher = vi.fn<GitHubFetch>((input, init) => {
+    const url = new URL(fetchUrl(input));
+    const method = init?.method ?? "GET";
+    if (url.pathname.endsWith("/git/ref/heads/main") && method === "GET") {
+      return Promise.resolve(json({ object: { sha: HEAD } }));
+    }
+    if (url.pathname.endsWith(`/git/commits/${HEAD}`) && method === "GET") {
+      return Promise.resolve(json({ tree: { sha: TREE } }));
+    }
+    if (url.pathname.includes(`/compare/${RESULT_OWNER_CONTRACT_COMMIT}...${HEAD}`)) {
+      return Promise.resolve(json({ status: "ahead", merge_base_commit: { sha: RESULT_OWNER_CONTRACT_COMMIT } }));
+    }
+    if (url.pathname.endsWith(`/git/trees/${TREE}`) && method === "GET") {
+      return Promise.resolve(resultOwnerContractRootTreeResponse());
+    }
+    const contentsMarker = "/contents/";
+    const contentsIndex = url.pathname.indexOf(contentsMarker);
+    if (contentsIndex !== -1 && method === "GET") {
+      const path = decodeURI(url.pathname.slice(contentsIndex + contentsMarker.length));
+      return Promise.resolve(Object.hasOwn(documents, path)
+        ? contents(documents[path])
+        : json({ message: "not found" }, 404));
+    }
+    if (url.pathname.endsWith("/git/trees") && method === "POST") {
+      if (typeof init?.body !== "string") throw new TypeError("tree request body was not JSON");
+      treeBodies.push(JSON.parse(init.body) as Record<string, unknown>);
+      return Promise.resolve(json({ sha: NEW_TREE }, 201));
+    }
+    if (url.pathname.endsWith("/git/commits") && method === "POST") {
+      return Promise.resolve(json({ sha: NEW_COMMIT }, 201));
+    }
+    if (url.pathname.endsWith("/git/refs/heads/main") && method === "PATCH") {
+      return Promise.resolve(referenceStatus === 200
+        ? json({ object: { sha: NEW_COMMIT } })
+        : json({ message: "not a fast-forward" }, referenceStatus));
+    }
+    throw new Error(`unexpected GitHub request: ${method} ${url.pathname}`);
+  });
+  return { fetcher, treeBodies };
+}
+
 function sequence(responses: readonly (Response | Error)[]) {
   const queue = [...responses];
   return vi.fn<GitHubFetch>(() => {
@@ -560,6 +668,268 @@ describe("atomic Git State append", () => {
 
   it("exports the exact scheduled dispatch CAS subrequest ceiling", () => {
     expect(DISPATCH_UPDATE_MAX_SUBREQUESTS).toBe(144);
+  });
+
+  it("exports a conservative bounded synchronous model-identity CAS ceiling", () => {
+    expect(MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS).toBe(171);
+    expect(MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS).toBeLessThan(369);
+  });
+
+  it("atomically creates a derived model identity request and targeted view", async () => {
+    const eventId = "0198abcd-0000-7000-8000-000000000020";
+    const modelId = await modelIdentityId(eventId);
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      json({ message: "not found" }, 404),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    await expect(repository(fetcher).requestModelIdentity({
+      eventId,
+      occurredAt: "2025-08-15T03:36:35.584Z",
+      ownerLogin: "alice",
+      displayName: "Model Alpha",
+    })).resolves.toEqual({ commit: NEW_COMMIT, created: true, modelId });
+    const treeRequest = fetcher.mock.calls[5]?.[1];
+    if (typeof treeRequest?.body !== "string") throw new TypeError("tree request body was not JSON");
+    const treeBody = JSON.parse(treeRequest.body) as { tree: { path: string; content: string }[] };
+    expect(treeBody.tree.map((entry) => entry.path)).toEqual([
+      `events/01/${eventId}.json`,
+      `views/model-identities/${modelId.slice(4, 6)}/${modelId}.json`,
+    ]);
+    expect(treeBody.tree[0]?.content).toContain('"event_type": "model_identity.requested"');
+    expect(treeBody.tree[1]?.content).toContain('"owner_login": "alice"');
+  });
+
+  it("writes and idempotently reuses the exact model decision event and view", async () => {
+    const initial = modelWriterFetcher({
+      [modelViewPath()]: PENDING_MODEL_VIEW,
+      [eventPath(MODEL_REQUEST_ID)]: MODEL_REQUEST,
+    });
+    await expect(repository(initial.fetcher).decideModelIdentity({
+      eventId: MODEL_DECISION_ID,
+      occurredAt: MODEL_DECISION.occurred_at,
+      modelId: MODEL_ID,
+      reviewerLogin: "reviewer",
+      decision: "approve",
+      reasonCode: null,
+    })).resolves.toEqual({
+      commit: NEW_COMMIT,
+      created: true,
+      modelId: MODEL_ID,
+      status: "approved",
+    });
+    const written = initial.treeBodies[0] as { tree: { path: string; content: string }[] };
+    expect(written.tree.map((entry) => entry.path)).toEqual([
+      eventPath(MODEL_DECISION_ID),
+      modelViewPath(),
+    ]);
+    expect(written.tree[0]?.content).toContain('"actor": {\n    "kind": "system"');
+    expect(written.tree[1]?.content).toContain('"status": "approved"');
+
+    clearResultOwnerContractProofCacheForTest();
+    const retry = modelWriterFetcher({
+      [modelViewPath()]: APPROVED_MODEL_VIEW,
+      [eventPath(MODEL_REQUEST_ID)]: MODEL_REQUEST,
+      [eventPath(MODEL_DECISION_ID)]: MODEL_DECISION,
+    });
+    await expect(repository(retry.fetcher).decideModelIdentity({
+      eventId: MODEL_DECISION_ID,
+      occurredAt: MODEL_DECISION.occurred_at,
+      modelId: MODEL_ID,
+      reviewerLogin: "reviewer",
+      decision: "approve",
+      reasonCode: null,
+    })).resolves.toMatchObject({ created: false, modelId: MODEL_ID, status: "approved" });
+    expect(retry.treeBodies).toHaveLength(0);
+  });
+
+  it("writes and idempotently reuses a permanent owner-scoped alias", async () => {
+    const alias = "Legacy Model";
+    const aliasKey = await modelAliasKey("alice", alias);
+    const aliasPath = `views/model-aliases/${aliasKey.slice(4, 6)}/${aliasKey}.json`;
+    const initial = modelWriterFetcher({
+      [modelViewPath()]: APPROVED_MODEL_VIEW,
+      [eventPath(MODEL_REQUEST_ID)]: MODEL_REQUEST,
+      [eventPath(MODEL_DECISION_ID)]: MODEL_DECISION,
+    });
+    await expect(repository(initial.fetcher).assignModelAlias({
+      eventId: MODEL_ALIAS_ID,
+      occurredAt: "2025-08-15T03:36:35.586Z",
+      modelId: MODEL_ID,
+      ownerLogin: "alice",
+      alias,
+    })).resolves.toEqual({ commit: NEW_COMMIT, created: true, modelId: MODEL_ID, aliasKey });
+    const written = initial.treeBodies[0] as { tree: { path: string; content: string }[] };
+    expect(written.tree.map((entry) => entry.path)).toEqual([
+      eventPath(MODEL_ALIAS_ID),
+      modelViewPath(),
+      aliasPath,
+    ]);
+    expect(written.tree[2]?.content).toContain(`"alias_key": "${aliasKey}"`);
+
+    clearResultOwnerContractProofCacheForTest();
+    const aliasEvent: StateEvent = {
+      schema_version: 1,
+      event_id: MODEL_ALIAS_ID,
+      event_type: "model_identity.alias_assigned",
+      occurred_at: "2025-08-15T03:36:35.586Z",
+      subject_id: MODEL_ID,
+      causation_event_id: MODEL_DECISION_ID,
+      actor: { kind: "github", login: "alice" },
+      payload: { alias },
+    };
+    const aliasView = {
+      schema_version: 1,
+      alias_key: aliasKey,
+      owner_login: "alice",
+      alias,
+      model_id: MODEL_ID,
+      assignment_event_id: MODEL_ALIAS_ID,
+      assigned_at: aliasEvent.occurred_at,
+      resolved_model_id: MODEL_ID,
+    } as const;
+    const retry = modelWriterFetcher({
+      [modelViewPath()]: { ...APPROVED_MODEL_VIEW, mutation_event_id: MODEL_ALIAS_ID },
+      [eventPath(MODEL_REQUEST_ID)]: MODEL_REQUEST,
+      [eventPath(MODEL_DECISION_ID)]: MODEL_DECISION,
+      [eventPath(MODEL_ALIAS_ID)]: aliasEvent,
+      [aliasPath]: aliasView,
+    });
+    await expect(repository(retry.fetcher).assignModelAlias({
+      eventId: MODEL_ALIAS_ID,
+      occurredAt: aliasEvent.occurred_at,
+      modelId: MODEL_ID,
+      ownerLogin: "alice",
+      alias,
+    })).resolves.toMatchObject({ created: false, modelId: MODEL_ID, aliasKey });
+    expect(retry.treeBodies).toHaveLength(0);
+  });
+
+  it("writes and idempotently reuses an owner-derived rename", async () => {
+    const initial = modelWriterFetcher({
+      [modelViewPath()]: APPROVED_MODEL_VIEW,
+      [eventPath(MODEL_REQUEST_ID)]: MODEL_REQUEST,
+      [eventPath(MODEL_DECISION_ID)]: MODEL_DECISION,
+    });
+    const request = {
+      eventId: MODEL_RENAME_ID,
+      occurredAt: "2025-08-15T03:36:35.587Z",
+      modelId: MODEL_ID,
+      ownerLogin: "alice",
+      displayName: "Model Beta",
+    } as const;
+    await expect(repository(initial.fetcher).renameModelIdentity(request)).resolves.toEqual({
+      commit: NEW_COMMIT,
+      created: true,
+      modelId: MODEL_ID,
+    });
+    const written = initial.treeBodies[0] as { tree: { path: string; content: string }[] };
+    expect(written.tree.map((entry) => entry.path)).toEqual([
+      eventPath(MODEL_RENAME_ID),
+      modelViewPath(),
+    ]);
+    expect(written.tree[1]?.content).toContain('"display_name": "Model Beta"');
+
+    clearResultOwnerContractProofCacheForTest();
+    const renameEvent: StateEvent = {
+      schema_version: 1,
+      event_id: MODEL_RENAME_ID,
+      event_type: "model_identity.renamed",
+      occurred_at: request.occurredAt,
+      subject_id: MODEL_ID,
+      causation_event_id: MODEL_DECISION_ID,
+      actor: { kind: "github", login: "alice" },
+      payload: { display_name: request.displayName },
+    };
+    const retry = modelWriterFetcher({
+      [modelViewPath()]: {
+        ...APPROVED_MODEL_VIEW,
+        display_name: request.displayName,
+        mutation_event_id: MODEL_RENAME_ID,
+      },
+      [eventPath(MODEL_REQUEST_ID)]: MODEL_REQUEST,
+      [eventPath(MODEL_DECISION_ID)]: MODEL_DECISION,
+      [eventPath(MODEL_RENAME_ID)]: renameEvent,
+    });
+    await expect(repository(retry.fetcher).renameModelIdentity(request)).resolves.toMatchObject({
+      created: false,
+      modelId: MODEL_ID,
+    });
+    expect(retry.treeBodies).toHaveLength(0);
+  });
+
+  it("fails owner drift and permanent alias collision closed before writing", async () => {
+    const alias = "Legacy Model";
+    const aliasKey = await modelAliasKey("alice", alias);
+    const aliasPath = `views/model-aliases/${aliasKey.slice(4, 6)}/${aliasKey}.json`;
+    const ownerDrift = modelWriterFetcher({
+      [modelViewPath()]: APPROVED_MODEL_VIEW,
+      [eventPath(MODEL_REQUEST_ID)]: MODEL_REQUEST,
+      [eventPath(MODEL_DECISION_ID)]: MODEL_DECISION,
+    });
+    await expect(repository(ownerDrift.fetcher).assignModelAlias({
+      eventId: MODEL_ALIAS_ID,
+      occurredAt: "2025-08-15T03:36:35.586Z",
+      modelId: MODEL_ID,
+      ownerLogin: "bob",
+      alias,
+    })).rejects.toMatchObject({ status: 404 });
+    expect(ownerDrift.treeBodies).toHaveLength(0);
+
+    clearResultOwnerContractProofCacheForTest();
+    const collision = modelWriterFetcher({
+      [modelViewPath()]: APPROVED_MODEL_VIEW,
+      [eventPath(MODEL_REQUEST_ID)]: MODEL_REQUEST,
+      [eventPath(MODEL_DECISION_ID)]: MODEL_DECISION,
+      [aliasPath]: {
+        schema_version: 1,
+        alias_key: aliasKey,
+        owner_login: "alice",
+        alias,
+        model_id: `mi1_${"f".repeat(64)}`,
+        assignment_event_id: "0198abcd-0001-7000-8000-000000000099",
+        assigned_at: "2025-08-15T03:36:35.585Z",
+        resolved_model_id: `mi1_${"f".repeat(64)}`,
+      },
+    });
+    await expect(repository(collision.fetcher).assignModelAlias({
+      eventId: MODEL_ALIAS_ID,
+      occurredAt: "2025-08-15T03:36:35.586Z",
+      modelId: MODEL_ID,
+      ownerLogin: "alice",
+      alias,
+    })).rejects.toMatchObject({ status: 409 });
+    expect(collision.treeBodies).toHaveLength(0);
+  });
+
+  it("bounds repeated model rename collisions by the advertised ceiling", async () => {
+    const collision = modelWriterFetcher({
+      [modelViewPath()]: APPROVED_MODEL_VIEW,
+      [eventPath(MODEL_REQUEST_ID)]: MODEL_REQUEST,
+      [eventPath(MODEL_DECISION_ID)]: MODEL_DECISION,
+    }, 409);
+    vi.useFakeTimers();
+    try {
+      const outcome = repository(collision.fetcher).renameModelIdentity({
+        eventId: MODEL_RENAME_ID,
+        occurredAt: "2025-08-15T03:36:35.587Z",
+        modelId: MODEL_ID,
+        ownerLogin: "alice",
+        displayName: "Model Beta",
+      });
+      const rejected = expect(outcome).rejects.toMatchObject({ status: 409 });
+      await vi.runAllTimersAsync();
+      await rejected;
+    } finally {
+      vi.useRealTimers();
+    }
+    const referenceWrites = collision.fetcher.mock.calls.filter(([, init]) => init?.method === "PATCH");
+    expect(referenceWrites).toHaveLength(9);
+    expect(collision.fetcher.mock.calls.length).toBeLessThanOrEqual(MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS);
   });
 
   it("binds the dispatch CAS ceiling to nine maximal ambiguous collisions", async () => {

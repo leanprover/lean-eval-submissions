@@ -8,13 +8,14 @@
     "server/src/github-provider.ts",
     "server/src/github-state.ts",
     "server/src/maintainer.ts",
+    "server/src/model-identity.ts",
     "server/src/result-amendment.ts",
     "server/src/result-owner.ts",
     "server/src/scheduled-subrequest-budget.ts",
     "server/src/state-event.ts",
     "server/src/submission-view.ts"
   ],
-  "lifecycle_callback_contract_sha256": "9fcca5a3973b481ed823a748a12c81b30961d404fa93f27b4c57397c2b30bdd0",
+  "lifecycle_callback_contract_sha256": "2007327845b3eba94efb64508d25ec5043d7ccb499d4e10e1fb0437d03a68d15",
   "replay_durable_object_migration_tags": [
     "v1",
     "v2"

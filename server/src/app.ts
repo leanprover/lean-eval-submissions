@@ -49,11 +49,17 @@ import {
   type ResultRetractionFinalizationRequest,
   type ResultRetractionOverrideRequest,
   type ResultRetractionRequest,
+  type ModelAliasAssignmentRequest,
+  type ModelIdentityDecisionRequest,
+  type ModelIdentityRenameRequest,
+  type ModelIdentityRequest,
   type GitHubFetch,
   DISPATCH_OUTBOX_SCAN_LIMIT,
   DISPATCH_UPDATE_MAX_SUBREQUESTS,
   GitHubStateError,
   GitHubStateRepository,
+  MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS,
+  ModelIdentityStateError,
   ResultIdentityCollisionError,
   ResultOwnerStateError,
   StateEventConflictError,
@@ -99,6 +105,14 @@ import {
   resultOwnerStateContractCommit,
 } from "./result-owner";
 import type { ComparatorEvidence, ResultAmendmentView } from "./result-amendment";
+import {
+  decodeModelAliasAssignment,
+  decodeModelId,
+  decodeModelIdentityDecision,
+  decodeModelIdentityRequest,
+  decodeModelRename,
+  MODEL_IDENTITY_CONSOLIDATION_CAPABILITY,
+} from "./model-identity";
 
 export type RuntimeEnv = Omit<
   CloudflareEnv,
@@ -136,6 +150,10 @@ export type RuntimeEnv = Omit<
   | "PROMOTION_CANARY_ENABLED"
   | "READINESS_TOKEN"
   | "RESULT_OWNER_STATE_CONTRACT_COMMIT"
+  | "MODEL_IDENTITY_OWNER_API_ENABLED"
+  | "MODEL_IDENTITY_MAINTAINER_API_ENABLED"
+  | "MODEL_IDENTITY_MAINTAINERS"
+  | "MODEL_IDENTITY_STATE_CONTRACT_COMMIT"
   | "STATE_REPOSITORY"
 > &
   Readonly<{
@@ -173,6 +191,10 @@ export type RuntimeEnv = Omit<
     PROMOTION_CANARY_ENABLED?: string;
     READINESS_TOKEN?: string;
     RESULT_OWNER_STATE_CONTRACT_COMMIT?: string;
+    MODEL_IDENTITY_OWNER_API_ENABLED?: string;
+    MODEL_IDENTITY_MAINTAINER_API_ENABLED?: string;
+    MODEL_IDENTITY_MAINTAINERS?: string;
+    MODEL_IDENTITY_STATE_CONTRACT_COMMIT?: string;
     STATE_REPOSITORY: string;
   }>;
 
@@ -267,6 +289,14 @@ export type StateAccess = Readonly<{
     mutationEventId: string;
     repairRevision: number;
   }>;
+  requestModelIdentity(request: ModelIdentityRequest): Promise<{ created: boolean; modelId: string }>;
+  decideModelIdentity(request: ModelIdentityDecisionRequest): Promise<{
+    created: boolean; modelId: string; status: "approved" | "rejected";
+  }>;
+  assignModelAlias(request: ModelAliasAssignmentRequest): Promise<{
+    created: boolean; modelId: string; aliasKey: string;
+  }>;
+  renameModelIdentity(request: ModelIdentityRenameRequest): Promise<{ created: boolean; modelId: string }>;
 }>;
 export type ApiDependencies = Readonly<{
   now?: () => number;
@@ -330,6 +360,38 @@ function resultAmendmentMaintainerApiEnabled(env: RuntimeEnv): boolean {
     return decodeMaintainerIdentities(env.RESULT_AMENDMENT_MAINTAINERS).length > 0;
   } catch {
     return false;
+  }
+}
+
+function modelIdentityContractEnabled(env: RuntimeEnv): boolean {
+  return env.MODEL_IDENTITY_STATE_CONTRACT_COMMIT ===
+    resultOwnerStateContractCommit(env.DEPLOYMENT_ENVIRONMENT);
+}
+
+function modelIdentityOwnerApiEnabled(env: RuntimeEnv): boolean {
+  return env.MODEL_IDENTITY_OWNER_API_ENABLED === "true" && modelIdentityContractEnabled(env);
+}
+
+function modelIdentityMaintainerApiEnabled(env: RuntimeEnv): boolean {
+  if (env.MODEL_IDENTITY_MAINTAINER_API_ENABLED !== "true" || !modelIdentityContractEnabled(env)) return false;
+  try {
+    return decodeMaintainerIdentities(env.MODEL_IDENTITY_MAINTAINERS).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function requireModelIdentityOwnerApi(env: RuntimeEnv): void {
+  if (!modelIdentityOwnerApiEnabled(env)) throw new GitHubProviderError(503, "model identity owner API is not configured");
+}
+
+function requireModelIdentityMaintainer(env: RuntimeEnv, session: BrowserSession): MaintainerIdentity {
+  if (!modelIdentityMaintainerApiEnabled(env)) throw new GitHubProviderError(503, "model identity maintainer API is not configured");
+  try {
+    return authenticateMaintainer(env.MODEL_IDENTITY_MAINTAINERS, session);
+  } catch (error) {
+    if (error instanceof AuthError) throw new ModelIdentityStateError(404, "model identity operation was not found");
+    throw error;
   }
 }
 
@@ -1707,6 +1769,15 @@ function idempotencyEventId(request: Request, nowMilliseconds: number): string {
   return value;
 }
 
+function modelInput<T>(decode: () => T): T {
+  try {
+    return decode();
+  } catch (error) {
+    if (error instanceof TypeError) throw new ApiDecodeError(error.message);
+    throw error;
+  }
+}
+
 async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDependencies): Promise<Response> {
   const url = new URL(request.url);
   const nowMilliseconds = dependencies.now?.() ?? Date.now();
@@ -1803,6 +1874,65 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     return json({ ...responseBody, session_token: await signToken(configuredSecret(env), agentSession) }, response.status, {
       location: response.headers.get("location") ?? "",
     });
+  }
+  if (request.method === "POST" && url.pathname === "/api/v1/model-identities") {
+    requireModelIdentityOwnerApi(env);
+    const authenticated = await session(request, env, dependencies);
+    const body = await readJson(request);
+    const input = modelInput(() => decodeModelIdentityRequest(body));
+    const outcome = await state(env, dependencies).requestModelIdentity({
+      eventId: idempotencyEventId(request, nowMilliseconds),
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
+      ownerLogin: authenticated.login,
+      displayName: input.display_name,
+    });
+    return json({
+      model_id: outcome.modelId,
+      status: outcome.created ? "identity_requested" : "identity_already_requested",
+    }, outcome.created ? 201 : 200);
+  }
+  const modelDecisionMatch = /^\/api\/v1\/model-identities\/(mi1_[0-9a-f]{64})\/decisions$/.exec(url.pathname);
+  if (request.method === "POST" && modelDecisionMatch?.[1]) {
+    const authenticated = await session(request, env, dependencies);
+    const maintainer = requireModelIdentityMaintainer(env, authenticated);
+    const body = await readJson(request);
+    const input = modelInput(() => decodeModelIdentityDecision(body));
+    const outcome = await state(env, dependencies).decideModelIdentity({
+      eventId: idempotencyEventId(request, nowMilliseconds),
+      occurredAt: canonicalMilliseconds(nowMilliseconds),
+      modelId: decodeModelId(modelDecisionMatch[1]),
+      reviewerLogin: maintainer.login,
+      decision: input.decision,
+      reasonCode: input.reason_code,
+    });
+    return json({
+      model_id: outcome.modelId,
+      status: outcome.created ? `identity_${outcome.status}` : `identity_already_${outcome.status}`,
+    }, outcome.created ? 201 : 200);
+  }
+  const modelAliasMatch = /^\/api\/v1\/model-identities\/(mi1_[0-9a-f]{64})\/aliases$/.exec(url.pathname);
+  if (request.method === "POST" && modelAliasMatch?.[1]) {
+    requireModelIdentityOwnerApi(env);
+    const authenticated = await session(request, env, dependencies);
+    const body = await readJson(request);
+    const input = modelInput(() => decodeModelAliasAssignment(body));
+    const outcome = await state(env, dependencies).assignModelAlias({
+      eventId: idempotencyEventId(request, nowMilliseconds), occurredAt: canonicalMilliseconds(nowMilliseconds),
+      modelId: decodeModelId(modelAliasMatch[1]), ownerLogin: authenticated.login, alias: input.alias,
+    });
+    return json({ alias_key: outcome.aliasKey, model_id: outcome.modelId, status: outcome.created ? "alias_assigned" : "alias_already_assigned" }, outcome.created ? 201 : 200);
+  }
+  const modelRenameMatch = /^\/api\/v1\/model-identities\/(mi1_[0-9a-f]{64})\/name$/.exec(url.pathname);
+  if (request.method === "PUT" && modelRenameMatch?.[1]) {
+    requireModelIdentityOwnerApi(env);
+    const authenticated = await session(request, env, dependencies);
+    const body = await readJson(request);
+    const input = modelInput(() => decodeModelRename(body));
+    const outcome = await state(env, dependencies).renameModelIdentity({
+      eventId: idempotencyEventId(request, nowMilliseconds), occurredAt: canonicalMilliseconds(nowMilliseconds),
+      modelId: decodeModelId(modelRenameMatch[1]), ownerLogin: authenticated.login, displayName: input.display_name,
+    });
+    return json({ model_id: outcome.modelId, status: outcome.created ? "identity_renamed" : "identity_already_renamed" }, outcome.created ? 201 : 200);
   }
   if (request.method === "POST" && url.pathname === "/api/v1/results/claims") {
     requireResultOwnerApi(env);
@@ -2056,6 +2186,11 @@ function errorResponse(error: unknown): Response {
       ? json({ error: "not_found" }, 404)
       : json({ error: "idempotency_conflict" }, 409);
   }
+  if (error instanceof ModelIdentityStateError) {
+    return error.status === 404
+      ? json({ error: "not_found" }, 404)
+      : json({ error: "idempotency_conflict" }, 409);
+  }
   if (error instanceof GitHubProviderError) {
     const status = error.status === 409 ? 409 : error.status === 404 ? 422 : 503;
     return json({ error: status === 409 ? "proof_failed" : status === 422 ? "source_not_found" : "provider_unavailable" }, status);
@@ -2095,6 +2230,10 @@ export async function handleRequest(
       legacy_result_owner_api_enabled: resultOwnerApiEnabled(env),
       result_amendment_owner_api_enabled: resultAmendmentOwnerApiEnabled(env),
       result_amendment_maintainer_api_enabled: resultAmendmentMaintainerApiEnabled(env),
+      model_identity_owner_api_enabled: modelIdentityOwnerApiEnabled(env),
+      model_identity_maintainer_api_enabled: modelIdentityMaintainerApiEnabled(env),
+      model_identity_write_max_subrequests: MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS,
+      model_identity_consolidation_api: MODEL_IDENTITY_CONSOLIDATION_CAPABILITY,
       promotion_canary_configured_enabled: env.PROMOTION_CANARY_ENABLED === "true",
       promotion_canary_enabled: promotionCanaryEnabled(env),
     });
@@ -2156,16 +2295,29 @@ export async function handleRequest(
     /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/metadata$/.test(url.pathname);
   const amendmentOwnerRoute = /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/(?:problem-repairs|retractions)$/.test(url.pathname);
   const amendmentMaintainerRoute = /^\/api\/v1\/results\/r2_[0-9a-f]{64}\/(?:problem-repairs\/decisions|retractions\/(?:decisions|override|finalize))$/.test(url.pathname);
+  const modelIdentityRoute = url.pathname === "/api/v1/model-identities" ||
+    /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/(?:aliases|name)$/.test(url.pathname);
+  const modelIdentityMaintainerRoute =
+    /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/decisions$/.test(url.pathname);
+  const modelIdentityUnsupportedRoute =
+    /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/consolidations$/.test(url.pathname);
+  if (modelIdentityUnsupportedRoute) return json({ error: "not_found" }, 404);
   if (legacyResultOwnerRoute && !resultOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (amendmentOwnerRoute && !resultAmendmentOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (amendmentMaintainerRoute && !resultAmendmentMaintainerApiEnabled(env)) return json({ error: "not_found" }, 404);
+  if (modelIdentityRoute && !modelIdentityOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
+  if (modelIdentityMaintainerRoute && !modelIdentityMaintainerApiEnabled(env)) return json({ error: "not_found" }, 404);
   const oauthRoute = url.pathname === "/api/v1/oauth/start" || url.pathname === "/api/v1/oauth/callback";
   const anyOwnerApiEnabled = resultOwnerApiEnabled(env) || resultAmendmentOwnerApiEnabled(env) ||
     resultAmendmentMaintainerApiEnabled(env);
+  const anyModelIdentityApiEnabled = modelIdentityOwnerApiEnabled(env) || modelIdentityMaintainerApiEnabled(env);
   if (
     url.pathname.startsWith("/api/") &&
     !intake.effective &&
-    !((legacyResultOwnerRoute || amendmentOwnerRoute || amendmentMaintainerRoute || oauthRoute) && anyOwnerApiEnabled)
+    !(
+      ((legacyResultOwnerRoute || amendmentOwnerRoute || amendmentMaintainerRoute || oauthRoute) && anyOwnerApiEnabled) ||
+      ((modelIdentityRoute || modelIdentityMaintainerRoute || oauthRoute) && anyModelIdentityApiEnabled)
+    )
   ) {
     return json({ error: "intake_disabled" }, 503);
   }

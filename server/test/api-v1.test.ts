@@ -37,6 +37,10 @@ import {
   type GitHubFetch,
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
+  type ModelAliasAssignmentRequest,
+  type ModelIdentityDecisionRequest,
+  type ModelIdentityRenameRequest,
+  type ModelIdentityRequest,
   type ResultProblemRepairRequest,
   type ResultProblemRepairDecisionRequest,
   type ResultRetractionDecisionRequest,
@@ -136,6 +140,10 @@ class MemoryState implements StateAccess {
   readonly retractionDecisions: ResultRetractionDecisionRequest[] = [];
   readonly retractionOverrides: ResultRetractionOverrideRequest[] = [];
   readonly retractionFinalizations: ResultRetractionFinalizationRequest[] = [];
+  readonly modelIdentityRequests: ModelIdentityRequest[] = [];
+  readonly modelIdentityDecisions: ModelIdentityDecisionRequest[] = [];
+  readonly modelAliasAssignments: ModelAliasAssignmentRequest[] = [];
+  readonly modelIdentityRenames: ModelIdentityRenameRequest[] = [];
   maintainerAmendment: ResultAmendmentView | null = null;
   contractAssertions = 0;
 
@@ -394,6 +402,31 @@ class MemoryState implements StateAccess {
       releaseDisposition: "not_published",
     });
   }
+
+  requestModelIdentity(request: ModelIdentityRequest): Promise<{ created: boolean; modelId: string }> {
+    this.modelIdentityRequests.push(request);
+    return Promise.resolve({ created: this.created, modelId: `mi1_${"a".repeat(64)}` });
+  }
+
+  decideModelIdentity(request: ModelIdentityDecisionRequest): Promise<{
+    created: boolean; modelId: string; status: "approved" | "rejected";
+  }> {
+    this.modelIdentityDecisions.push(request);
+    return Promise.resolve({ created: this.created, modelId: request.modelId, status: request.decision === "approve" ? "approved" : "rejected" });
+  }
+
+  assignModelAlias(request: ModelAliasAssignmentRequest): Promise<{
+    created: boolean; modelId: string; aliasKey: string;
+  }> {
+    this.modelAliasAssignments.push(request);
+    return Promise.resolve({ created: this.created, modelId: request.modelId, aliasKey: `ma1_${"b".repeat(64)}` });
+  }
+
+  renameModelIdentity(request: ModelIdentityRenameRequest): Promise<{ created: boolean; modelId: string }> {
+    this.modelIdentityRenames.push(request);
+    return Promise.resolve({ created: this.created, modelId: request.modelId });
+  }
+
 }
 
 function jsonRequest(path: string, body: unknown): Request {
@@ -2155,6 +2188,150 @@ describe("browser OAuth and owner routes in workerd", () => {
       { now: () => NOW_MS, state },
     );
     expect(hidden.status).toBe(404);
+  });
+});
+
+describe("authenticated model identity producer routes", () => {
+  const modelId = `mi1_${"1".repeat(64)}`;
+  const contract = "48f8c975d725a9ac18df545653fdb2f8371c3293";
+  const ownerEnv: RuntimeEnv = {
+    ...ENV,
+    INTAKE_ENABLED: "false",
+    MODEL_IDENTITY_OWNER_API_ENABLED: "true",
+    MODEL_IDENTITY_MAINTAINER_API_ENABLED: "false",
+    MODEL_IDENTITY_MAINTAINERS: "[]",
+    MODEL_IDENTITY_STATE_CONTRACT_COMMIT: contract,
+  };
+
+  async function authorization(githubId = 42, login = "alice"): Promise<string> {
+    return `Bearer ${await signToken(SECRET, {
+      kind: "browser_session",
+      login,
+      github_id: githubId,
+      issued_at: Math.floor(NOW_MS / 1000),
+      expires_at: Math.floor(NOW_MS / 1000) + 3600,
+    })}`;
+  }
+
+  function mutation(path: string, method: string, body: unknown, eventId: string, auth: string): Request {
+    return new Request(`https://submit.test${path}`, {
+      method,
+      headers: { authorization: auth, "content-type": "application/json", "idempotency-key": eventId },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it("keeps both surfaces independently dark unless the exact State pin is present", async () => {
+    const owner = new Request("https://submit.test/api/v1/model-identities", { method: "POST" });
+    expect((await handleRequest(owner.clone(), { ...ENV, INTAKE_ENABLED: "false" }, LIFECYCLE)).status).toBe(404);
+    expect((await handleRequest(owner, {
+      ...ownerEnv,
+      MODEL_IDENTITY_STATE_CONTRACT_COMMIT: "b".repeat(40),
+    }, LIFECYCLE)).status).toBe(404);
+    const decision = new Request(`https://submit.test/api/v1/model-identities/${modelId}/decisions`, { method: "POST" });
+    expect((await handleRequest(decision, ownerEnv, LIFECYCLE)).status).toBe(404);
+  });
+
+  it("derives every owner actor from the signed session while intake remains disabled", async () => {
+    const state = new MemoryState();
+    const auth = await authorization();
+    const request = await handleRequest(mutation(
+      "/api/v1/model-identities", "POST", { display_name: "Model Alpha" },
+      "019debd0-1968-7000-8000-000000000021", auth,
+    ), ownerEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(request.status).toBe(201);
+    expect(state.modelIdentityRequests[0]).toMatchObject({ ownerLogin: "alice", displayName: "Model Alpha" });
+
+    const alias = await handleRequest(mutation(
+      `/api/v1/model-identities/${modelId}/aliases`, "POST", { alias: "Legacy Name" },
+      "019debd0-1968-7000-8000-000000000022", auth,
+    ), ownerEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    const rename = await handleRequest(mutation(
+      `/api/v1/model-identities/${modelId}/name`, "PUT", { display_name: "Model Beta" },
+      "019debd0-1968-7000-8000-000000000023", auth,
+    ), ownerEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    expect([alias.status, rename.status]).toEqual([201, 201]);
+    expect(state.modelAliasAssignments[0]).toMatchObject({ modelId, ownerLogin: "alice", alias: "Legacy Name" });
+    expect(state.modelIdentityRenames[0]).toMatchObject({ modelId, ownerLogin: "alice", displayName: "Model Beta" });
+    expect(ownerEnv.INTAKE_ENABLED).toBe("false");
+  });
+
+  it("keeps consolidation unavailable under every gate combination", async () => {
+    const auth = await authorization();
+    const request = () => mutation(
+      `/api/v1/model-identities/${modelId}/consolidations`, "POST",
+      { target_model_id: `mi1_${"2".repeat(64)}` },
+      "019debd0-1968-7000-8000-000000000024", auth,
+    );
+    const maintainerEnabled = {
+      ...ownerEnv,
+      MODEL_IDENTITY_MAINTAINER_API_ENABLED: "true",
+      MODEL_IDENTITY_MAINTAINERS: JSON.stringify([{ github_id: 42, login: "alice" }]),
+    };
+    for (const env of [
+      { ...ENV, INTAKE_ENABLED: "false" },
+      ownerEnv,
+      maintainerEnabled,
+      { ...maintainerEnabled, MODEL_IDENTITY_OWNER_API_ENABLED: "false" },
+      { ...maintainerEnabled, INTAKE_ENABLED: "true" },
+    ]) {
+      const state = new MemoryState();
+      const response = await handleRequest(request(), env, LIFECYCLE, {
+        now: () => NOW_MS,
+        state,
+      });
+      expect(response.status).toBe(404);
+      expect(state.modelIdentityRequests).toHaveLength(0);
+      expect(state.modelIdentityDecisions).toHaveLength(0);
+      expect(state.modelAliasAssignments).toHaveLength(0);
+      expect(state.modelIdentityRenames).toHaveLength(0);
+    }
+  });
+
+  it("binds maintainer authority to the exact numeric ID and lowercase login pair", async () => {
+    const state = new MemoryState();
+    const request = (auth: string) => mutation(
+      `/api/v1/model-identities/${modelId}/decisions`, "POST", { decision: "reject", reason_code: "duplicate_identity" },
+      "019debd0-1968-7000-8000-000000000025", auth,
+    );
+    const base = {
+      ...ownerEnv,
+      MODEL_IDENTITY_MAINTAINER_API_ENABLED: "true",
+      MODEL_IDENTITY_MAINTAINERS: JSON.stringify([{ github_id: 42, login: "alice" }]),
+    };
+    const idDrift = await handleRequest(request(await authorization(43, "alice")), base, LIFECYCLE, { now: () => NOW_MS, state });
+    const loginDrift = await handleRequest(request(await authorization(42, "renamed-alice")), base, LIFECYCLE, { now: () => NOW_MS, state });
+    expect([idDrift.status, loginDrift.status]).toEqual([404, 404]);
+    expect(state.modelIdentityDecisions).toHaveLength(0);
+    const accepted = await handleRequest(request(await authorization()), base, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(accepted.status).toBe(201);
+    expect(state.modelIdentityDecisions).toEqual([{
+      eventId: "019debd0-1968-7000-8000-000000000025",
+      occurredAt: new Date(NOW_MS).toISOString(),
+      modelId,
+      reviewerLogin: "alice",
+      decision: "reject",
+      reasonCode: "duplicate_identity",
+    }]);
+    const responseBody = JSON.stringify(await accepted.json());
+    expect(responseBody).not.toContain("alice");
+    expect(responseBody).not.toContain("duplicate_identity");
+  });
+
+  it("rejects actor smuggling and malformed labels before invoking State", async () => {
+    const state = new MemoryState();
+    const response = await handleRequest(mutation(
+      "/api/v1/model-identities", "POST", { display_name: "Model", owner_login: "mallory" },
+      "019debd0-1968-7000-8000-000000000026", await authorization(),
+    ), ownerEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(response.status).toBe(400);
+    const surrogate = await handleRequest(mutation(
+      `/api/v1/model-identities/${modelId}/aliases`, "POST", { alias: "\ud800" },
+      "019debd0-1968-7000-8000-000000000027", await authorization(),
+    ), ownerEnv, LIFECYCLE, { now: () => NOW_MS, state });
+    expect(surrogate.status).toBe(400);
+    expect(state.modelIdentityRequests).toHaveLength(0);
+    expect(state.modelAliasAssignments).toHaveLength(0);
   });
 });
 

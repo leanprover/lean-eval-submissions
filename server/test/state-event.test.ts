@@ -19,6 +19,39 @@ const EVENT: StateEvent = {
 };
 
 describe("State event contract", () => {
+  it("validates the closed model identity producer event family", () => {
+    const modelId = `mi1_${"a".repeat(64)}`;
+    const request = {
+      schema_version: 1,
+      event_id: "0198abcd-0000-7000-8000-000000000020",
+      event_type: "model_identity.requested",
+      occurred_at: "2026-08-20T00:00:00.000Z",
+      subject_id: modelId,
+      causation_event_id: null,
+      actor: { kind: "github", login: "alice" },
+      payload: { display_name: "Model Alpha" },
+    } as const;
+    expect(() => validateStateEvent(request)).not.toThrow();
+    expect(() => validateStateEvent({ ...request, actor: { kind: "github", login: "Alice" } })).toThrow(/actor/u);
+    expect(() => validateStateEvent({ ...request, payload: { display_name: "Model", owner_login: "mallory" } })).toThrow(/fields/u);
+    expect(() => validateStateEvent({ ...request, payload: { display_name: "\ud800" } })).toThrow(/invalid/u);
+    expect(() => validateStateEvent({
+      ...request,
+      event_id: "0198abcd-0001-7000-8000-000000000021",
+      event_type: "model_identity.approved",
+      causation_event_id: request.event_id,
+      actor: { kind: "system" },
+      payload: { reviewer_login: "reviewer" },
+    })).not.toThrow();
+    expect(() => validateStateEvent({
+      ...request,
+      event_id: "0198abcd-0002-7000-8000-000000000022",
+      event_type: "model_identity.consolidated",
+      causation_event_id: request.event_id,
+      payload: { target_model_id: `mi1_${"b".repeat(64)}` },
+    })).not.toThrow();
+  });
+
   it("places one immutable event in an id-partitioned file", () => {
     expect(stateEventPath(EVENT)).toBe(`events/01/${EVENT.event_id}.json`);
   });
