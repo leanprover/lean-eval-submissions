@@ -259,8 +259,8 @@ jobs:
           assert body["result_amendment_maintainer_api_enabled"] is False
           assert body["model_identity_owner_api_enabled"] is False
           assert body["model_identity_maintainer_api_enabled"] is False
-          assert body["model_identity_write_max_subrequests"] == 171
-          assert body["model_identity_consolidation_api"] == "requires_protected_reverse_impact_index"
+          assert body["model_identity_write_max_subrequests"] == 400
+          assert body["model_identity_consolidation_api"] == "atomic_reverse_impact_v1"
           assert body["promotion_canary_configured_enabled"] is True
           assert body["promotion_canary_enabled"] is True
           assert body["intake_enablement_mode"] == "disabled"
@@ -418,8 +418,8 @@ jobs:
           assert body["result_amendment_maintainer_api_enabled"] is False
           assert body["model_identity_owner_api_enabled"] is False
           assert body["model_identity_maintainer_api_enabled"] is False
-          assert body["model_identity_write_max_subrequests"] == 171
-          assert body["model_identity_consolidation_api"] == "requires_protected_reverse_impact_index"
+          assert body["model_identity_write_max_subrequests"] == 400
+          assert body["model_identity_consolidation_api"] == "atomic_reverse_impact_v1"
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY
@@ -572,7 +572,7 @@ jobs:
               or proof["intake_lease_expires_at"] is not None
               or proof["state_branch_protected"] is not True
               or proof["state_contract_verified"] is not True
-              or proof["state_contract_commit"] != "a53c658a2de2188675134dc2890285fbaa17cf5a"
+              or proof["state_contract_commit"] != "714f7408cbc591b7166ea6f4d6d19b66ba481f83"
               or proof["state_event_schema_sha256"] != "7ee83581b6e7bb7769afe130a394b41613e9cf24b8643777e63990c448da7cc0"
               or re.fullmatch(r"[0-9a-f]{40}", proof["state_commit"]) is None
           ):
@@ -675,8 +675,8 @@ jobs:
           assert body["result_amendment_maintainer_api_enabled"] is False
           assert body["model_identity_owner_api_enabled"] is False
           assert body["model_identity_maintainer_api_enabled"] is False
-          assert body["model_identity_write_max_subrequests"] == 171
-          assert body["model_identity_consolidation_api"] == "requires_protected_reverse_impact_index"
+          assert body["model_identity_write_max_subrequests"] == 400
+          assert body["model_identity_consolidation_api"] == "atomic_reverse_impact_v1"
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY
@@ -740,7 +740,7 @@ jobs:
               or proof["intake_lease_expires_at"] != int(os.environ["INTAKE_LEASE_EXPIRES_AT"])
               or proof["state_branch_protected"] is not True
               or proof["state_commit"] != os.environ["STATE_COMMIT"]
-              or proof["state_contract_commit"] != "a53c658a2de2188675134dc2890285fbaa17cf5a"
+              or proof["state_contract_commit"] != "714f7408cbc591b7166ea6f4d6d19b66ba481f83"
               or proof["state_contract_verified"] is not True
               or proof["state_event_schema_sha256"] != "7ee83581b6e7bb7769afe130a394b41613e9cf24b8643777e63990c448da7cc0"
           ):
@@ -768,8 +768,8 @@ jobs:
           assert body["result_amendment_maintainer_api_enabled"] is False
           assert body["model_identity_owner_api_enabled"] is False
           assert body["model_identity_maintainer_api_enabled"] is False
-          assert body["model_identity_write_max_subrequests"] == 171
-          assert body["model_identity_consolidation_api"] == "requires_protected_reverse_impact_index"
+          assert body["model_identity_write_max_subrequests"] == 400
+          assert body["model_identity_consolidation_api"] == "atomic_reverse_impact_v1"
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY

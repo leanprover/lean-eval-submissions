@@ -66,11 +66,13 @@ regular-file metadata, paths, component counts, member paths, member bindings,
 or terminal bindings fail before a Git object is created. There is no repository
 scan and no repository-size assumption.
 
-The conservative synchronous ceiling is 376 external subrequests. Consolidation
-uses at most eight CAS attempts, each reserving four snapshot/contract requests,
+The conservative synchronous ceiling is 400 external subrequests. Consolidation
+uses at most eight CAS attempts, each reserving five
+protected-branch/snapshot/contract requests,
 32 member-document reads across the complete source and target components, two
-component-index reads, three event reads, two Git object writes, and four requests for uncertain reference-update
-recovery. The tracked intake Workers set `limits.subrequests` to 400, above this
+component-index reads, five mutation/causal event reads, two Git object writes,
+and four requests for uncertain reference-update
+recovery. The tracked intake Workers set `limits.subrequests` to 400, exactly at this
 route and the existing 369-request result-repair ceiling. Paid-plan preservation
 and a live dark maximal-path measurement remain mandatory pre-enable gates; see the current
 [Workers limits](https://developers.cloudflare.com/workers/platform/limits/).
@@ -87,14 +89,14 @@ The maintainer gate additionally requires a nonempty, closed
 `MODEL_IDENTITY_MAINTAINERS` list, and both gates require the exact reviewed
 `MODEL_IDENTITY_STATE_CONTRACT_COMMIT`. Both environments track both gates as
 `false` and the identity list as `[]`. Health and rollback validation expose
-only the two booleans and the public 376-request bound; configured identities
+only the two booleans and the public 400-request bound; configured identities
 are never exposed.
 
 Before enabling either gate, operators must separately record all of:
 
 1. protected deployment accepts and preserves the tracked 400-subrequest limit
    on the paid Workers plan, and a dark maximal-contention test stays within the
-   376-request model-identity bound;
+   400-request model-identity bound;
 2. environment-specific OAuth Apps retain the byte-exact HTTPS callback, least
    `read:user` scope, token expiry, and approved organization/temporary owner,
    and the agent issuer retains exact secret-gist owner, prescribed-tag, and

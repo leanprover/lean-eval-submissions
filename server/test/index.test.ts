@@ -30,7 +30,7 @@ describe("Worker routing", () => {
       result_amendment_maintainer_api_enabled: false,
       model_identity_owner_api_enabled: false,
       model_identity_maintainer_api_enabled: false,
-      model_identity_write_max_subrequests: 376,
+      model_identity_write_max_subrequests: 400,
       model_identity_consolidation_api: "atomic_reverse_impact_v1",
       promotion_canary_configured_enabled: true,
       promotion_canary_enabled: true,
@@ -59,7 +59,7 @@ describe("Worker routing", () => {
       result_amendment_maintainer_api_enabled: false,
       model_identity_owner_api_enabled: false,
       model_identity_maintainer_api_enabled: false,
-      model_identity_write_max_subrequests: 376,
+      model_identity_write_max_subrequests: 400,
       model_identity_consolidation_api: "atomic_reverse_impact_v1",
       promotion_canary_configured_enabled: false,
       promotion_canary_enabled: false,
@@ -78,7 +78,7 @@ describe("Worker routing", () => {
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: configured,
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "48f8c975d725a9ac18df545653fdb2f8371c3293",
+          "9fc7c431a92c678554c65ebac68d3fddf4990d29",
       },
       LIFECYCLE,
     );
@@ -93,14 +93,14 @@ describe("Worker routing", () => {
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: "[]",
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "48f8c975d725a9ac18df545653fdb2f8371c3293",
+          "9fc7c431a92c678554c65ebac68d3fddf4990d29",
       },
       {
         ...ENV,
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: "not-json",
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "48f8c975d725a9ac18df545653fdb2f8371c3293",
+          "9fc7c431a92c678554c65ebac68d3fddf4990d29",
       },
       {
         ...ENV,
@@ -221,13 +221,13 @@ describe("Worker routing", () => {
   });
 
   it("returns a closed protected-contract proof for production readiness", async () => {
-    const contract = "a53c658a2de2188675134dc2890285fbaa17cf5a";
+    const contract = "714f7408cbc591b7166ea6f4d6d19b66ba481f83";
     const tree = "2".repeat(40);
     const rootEntries = [
-      { path: "README.md", mode: "100644", type: "blob", sha: "fa70bf42f98d3a33cd6d419cd08eb3e96dfd9540" },
-      { path: "docs", mode: "040000", type: "tree", sha: "7cc621002711682e6876bcfb6663f4c2e5c16336" },
-      { path: "schema", mode: "040000", type: "tree", sha: "3111bf02bd9983a8712425923de8fca6ba696469" },
-      { path: "scripts", mode: "040000", type: "tree", sha: "f9fe278ef1ea062bc21a3fafc7ddea7ab758a099" },
+      { path: "README.md", mode: "100644", type: "blob", sha: "458b076586958f9502918766388beed66733cdd5" },
+      { path: "docs", mode: "040000", type: "tree", sha: "0bf6ad7e7e27e8dae8fcca08f56933fe8a6822fc" },
+      { path: "schema", mode: "040000", type: "tree", sha: "17fdf5bf47ec2689fa9a9beeb46652f2ad4ee451" },
+      { path: "scripts", mode: "040000", type: "tree", sha: "34ca0c7fe31bd5c49606fa3ecd71b4ea9161b0fb" },
     ] as const;
     const replies = [
       Response.json({ permissions: { push: true } }),

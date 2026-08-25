@@ -57,6 +57,23 @@ HISTORICAL_AUTHORITY_PREPARATION = (
 
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
+    def test_deploy_and_rollback_bind_current_state_and_atomic_model_health(self) -> None:
+        expected = "714f7408cbc591b7166ea6f4d6d19b66ba481f83"
+        self.assertEqual(QUALIFICATION["state_main_commit"], expected)
+        self.assertGreaterEqual(DEPLOY.count(expected), 2)
+        self.assertEqual(
+            DEPLOY.count('body["model_identity_write_max_subrequests"] == 400'),
+            4,
+        )
+        self.assertEqual(
+            DEPLOY.count(
+                'body["model_identity_consolidation_api"] == "atomic_reverse_impact_v1"'
+            ),
+            4,
+        )
+        self.assertIn("state-proof.json", ROLLBACK)
+        self.assertIn('"RESULT_OWNER_STATE_CONTRACT_COMMIT"', ROLLBACK_VALIDATOR)
+
     def test_private_state_proofs_use_the_single_repository_worker_credential(self) -> None:
         self.assertNotIn("repos/leanprover/lean-eval-state", DEPLOY)
         self.assertNotIn("repos/leanprover/lean-eval-state", ROLLBACK)
@@ -883,9 +900,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                     "false",
                 )
                 expected_contract = (
-                    "48f8c975d725a9ac18df545653fdb2f8371c3293"
+                    "9fc7c431a92c678554c65ebac68d3fddf4990d29"
                     if environment == "staging"
-                    else "a53c658a2de2188675134dc2890285fbaa17cf5a"
+                    else "714f7408cbc591b7166ea6f4d6d19b66ba481f83"
                 )
                 self.assertEqual(
                     configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],

@@ -143,7 +143,7 @@ the already implemented owner status, metadata, and publication routes.
       numeric-ID/login maintainer binding,
       targeted State CAS, closed payloads, permanent alias collision handling,
       independent dark gates, rollback/health guards, and a conservative
-      376-subrequest ceiling. Both environments keep both gates false and the
+      400-subrequest ceiling. Both environments keep both gates false and the
       maintainer list empty. Live OAuth and agent session issuance, paid-plan
       allowance, dark staging E2E, and an enablement decision remain rollout gates; see
       `docs/model-identity-owner-api.md`.

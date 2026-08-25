@@ -107,14 +107,15 @@ export const DISPATCH_UPDATE_MAX_SUBREQUESTS =
   (MAX_WRITE_ATTEMPTS + 1) *
   (BRANCH_SNAPSHOT_SUBREQUESTS + SUBMISSION_GRAPH_MAX_SUBREQUESTS +
     CREATE_DISPATCH_COMMIT_SUBREQUESTS + REFERENCE_UPDATE_MAX_SUBREQUESTS);
-// Eight consolidation CAS attempts. A maximal write attempt reserves 4
-// contract/snapshot reads, 32 member-document reads across the disjoint source
-// and target components, 2 component-index reads, 3 event reads (idempotency,
-// source terminal mutation, and target terminal mutation), 2 Git object writes,
-// and the 4-request uncertain ref-update recovery bound: 8 * 47 = 376.
+// Eight consolidation CAS attempts. A maximal write attempt reserves 5
+// protected-branch/contract/snapshot reads, 32 member-document reads across the
+// disjoint source and target components, 2 component-index reads, 5 event reads
+// (idempotency, both terminal mutations, and both causal predecessors), 2 Git
+// object writes, and the 4-request uncertain ref-update recovery bound:
+// 8 * 50 = 400.
 export const MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS =
   (MODEL_CONSOLIDATION_MAX_WRITE_ATTEMPTS + 1) * (
-    4 + MODEL_IDENTITY_REVERSE_IMPACT_MAX_VIEWS + 2 + 3 +
+    5 + MODEL_IDENTITY_REVERSE_IMPACT_MAX_VIEWS + 2 + 5 +
     CREATE_DISPATCH_COMMIT_SUBREQUESTS + REFERENCE_UPDATE_MAX_SUBREQUESTS
   );
 const NEW_EVENT_CLOCK_WINDOW_MS = 5 * 60 * 1000;
@@ -138,19 +139,19 @@ const RESULT_OWNER_CONTRACTS: Readonly<Record<string, ResultOwnerContract>> = {
   [PRODUCTION_STATE_REPOSITORY]: {
     commit: PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT,
     rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "fa70bf42f98d3a33cd6d419cd08eb3e96dfd9540" },
-      docs: { mode: "040000", type: "tree", sha: "7cc621002711682e6876bcfb6663f4c2e5c16336" },
-      schema: { mode: "040000", type: "tree", sha: "3111bf02bd9983a8712425923de8fca6ba696469" },
-      scripts: { mode: "040000", type: "tree", sha: "f9fe278ef1ea062bc21a3fafc7ddea7ab758a099" },
+      "README.md": { mode: "100644", type: "blob", sha: "458b076586958f9502918766388beed66733cdd5" },
+      docs: { mode: "040000", type: "tree", sha: "0bf6ad7e7e27e8dae8fcca08f56933fe8a6822fc" },
+      schema: { mode: "040000", type: "tree", sha: "17fdf5bf47ec2689fa9a9beeb46652f2ad4ee451" },
+      scripts: { mode: "040000", type: "tree", sha: "34ca0c7fe31bd5c49606fa3ecd71b4ea9161b0fb" },
     },
   },
   [STAGING_STATE_REPOSITORY]: {
     commit: STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT,
     rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "f3f1820e7781c724e649762f184c16206675d7ac" },
-      docs: { mode: "040000", type: "tree", sha: "b335dc9232956201c8ec99e732e05a1b388d2617" },
-      schema: { mode: "040000", type: "tree", sha: "730d44520c70fdd6da4d27e381d4e6593c5c77fe" },
-      scripts: { mode: "040000", type: "tree", sha: "438693aed415474802beae32a5398fb436a4ac71" },
+      "README.md": { mode: "100644", type: "blob", sha: "e40d0e92b0125786a64c27a17bff8b322a3d0a95" },
+      docs: { mode: "040000", type: "tree", sha: "7a5088cee94a70da22656406d680a23bc3c9b9f4" },
+      schema: { mode: "040000", type: "tree", sha: "e4b815a07b1634f64c7a5618ad6a5b8fe8a1f09a" },
+      scripts: { mode: "040000", type: "tree", sha: "43399faa2c733a956568c225acff0d9a614f1590" },
     },
   },
 };
@@ -1629,10 +1630,36 @@ type ReverseImpactDocuments = Readonly<{
   terminalMutation: StateEvent;
 }>;
 
+async function readModelMutationPredecessorAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  mutation: StateEvent,
+  modelId: string,
+  commit: string,
+  path: string,
+): Promise<StateEvent> {
+  if (mutation.causation_event_id === null) throw new StateEventConflictError(path);
+  const predecessor = await readEventAt(
+    config,
+    fetcher,
+    mutation.causation_event_id,
+    commit,
+  );
+  if (
+    predecessor.event_id !== mutation.causation_event_id ||
+    predecessor.subject_id !== modelId || mutation.subject_id !== modelId ||
+    Date.parse(predecessor.occurred_at) >= Date.parse(mutation.occurred_at)
+  ) throw new StateEventConflictError(path);
+  return predecessor;
+}
+
 async function assertTerminalMutationMatches(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
   terminal: ModelIdentityView,
   mutation: StateEvent,
   aliases: ReadonlyMap<string, ModelAliasView>,
+  commit: string,
   path: string,
 ): Promise<void> {
   if (
@@ -1640,15 +1667,56 @@ async function assertTerminalMutationMatches(
     mutation.event_id !== terminal.mutation_event_id ||
     mutation.subject_id !== terminal.model_id
   ) throw new StateEventConflictError(path);
+  const predecessor = await readModelMutationPredecessorAt(
+    config,
+    fetcher,
+    mutation,
+    terminal.model_id,
+    commit,
+    path,
+  );
   if (mutation.event_type === "model_identity.approved") {
     if (
+      mutation.causation_event_id !== terminal.request_event_id ||
       mutation.event_id !== terminal.decision_event_id ||
       mutation.occurred_at !== terminal.decided_at ||
       mutation.payload.reviewer_login !== terminal.reviewer_login ||
-      terminal.display_name !== terminal.requested_name
+      terminal.display_name !== terminal.requested_name ||
+      predecessor.event_type !== "model_identity.requested" ||
+      predecessor.actor.login !== terminal.owner_login ||
+      predecessor.occurred_at !== terminal.requested_at ||
+      predecessor.payload.display_name !== terminal.requested_name
     ) throw new StateEventConflictError(path);
     return;
   }
+  if (
+    predecessor.event_type !== "model_identity.approved" &&
+    predecessor.event_type !== "model_identity.alias_assigned" &&
+    predecessor.event_type !== "model_identity.renamed"
+  ) throw new StateEventConflictError(path);
+  if (predecessor.event_type === "model_identity.approved") {
+    if (
+      predecessor.causation_event_id !== terminal.request_event_id ||
+      predecessor.event_id !== terminal.decision_event_id ||
+      predecessor.occurred_at !== terminal.decided_at ||
+      predecessor.payload.reviewer_login !== terminal.reviewer_login
+    ) throw new StateEventConflictError(path);
+  } else if (predecessor.event_type === "model_identity.alias_assigned") {
+    if (typeof predecessor.payload.alias !== "string") throw new StateEventConflictError(path);
+    const predecessorAliasKey = await modelAliasKey(
+      terminal.owner_login,
+      predecessor.payload.alias,
+    );
+    const predecessorAlias = aliases.get(predecessorAliasKey);
+    if (
+      predecessor.actor.login !== terminal.owner_login ||
+      predecessorAlias?.model_id !== terminal.model_id ||
+      predecessorAlias.assignment_event_id !== predecessor.event_id ||
+      predecessorAlias.assigned_at !== predecessor.occurred_at
+    ) throw new StateEventConflictError(path);
+  } else if (
+    ("login" in predecessor.actor ? predecessor.actor.login : null) !== terminal.owner_login
+  ) throw new StateEventConflictError(path);
   if (mutation.event_type === "model_identity.alias_assigned") {
     if (typeof mutation.payload.alias !== "string") throw new StateEventConflictError(path);
     const mutationAlias = mutation.payload.alias;
@@ -1665,6 +1733,52 @@ async function assertTerminalMutationMatches(
     mutation.event_type === "model_identity.renamed" &&
     mutation.actor.login === terminal.owner_login &&
     mutation.payload.display_name === terminal.display_name
+  ) return;
+  throw new StateEventConflictError(path);
+}
+
+async function assertConsolidationPredecessorAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  source: ModelIdentityView,
+  event: StateEvent,
+  aliases: ReadonlyMap<string, ModelAliasView>,
+  commit: string,
+  path: string,
+): Promise<void> {
+  const predecessor = await readModelMutationPredecessorAt(
+    config,
+    fetcher,
+    event,
+    source.model_id,
+    commit,
+    path,
+  );
+  if (predecessor.event_type === "model_identity.approved") {
+    if (
+      predecessor.causation_event_id !== source.request_event_id ||
+      predecessor.event_id !== source.decision_event_id ||
+      predecessor.occurred_at !== source.decided_at ||
+      predecessor.payload.reviewer_login !== source.reviewer_login ||
+      source.display_name !== source.requested_name
+    ) throw new StateEventConflictError(path);
+    return;
+  }
+  if (predecessor.event_type === "model_identity.alias_assigned") {
+    if (typeof predecessor.payload.alias !== "string") throw new StateEventConflictError(path);
+    const aliasKey = await modelAliasKey(source.owner_login, predecessor.payload.alias);
+    const alias = aliases.get(aliasKey);
+    if (
+      predecessor.actor.login !== source.owner_login ||
+      alias?.model_id !== source.model_id || alias.assignment_event_id !== predecessor.event_id ||
+      alias.alias !== predecessor.payload.alias || alias.assigned_at !== predecessor.occurred_at
+    ) throw new StateEventConflictError(path);
+    return;
+  }
+  if (
+    predecessor.event_type === "model_identity.renamed" &&
+    predecessor.actor.login === source.owner_login &&
+    predecessor.payload.display_name === source.display_name
   ) return;
   throw new StateEventConflictError(path);
 }
@@ -1711,9 +1825,12 @@ async function readReverseImpactDocumentsAt(
     terminal.mutation_event_id !== component.terminal_mutation_event_id
   ) throw new StateEventConflictError(modelIdentityReverseImpactPath(component.terminal_model_id));
   await assertTerminalMutationMatches(
+    config,
+    fetcher,
     terminal,
     terminalMutation,
     aliases,
+    commit,
     modelIdentityReverseImpactPath(component.terminal_model_id),
   );
   return { identities, aliases, terminalMutation };
@@ -1789,6 +1906,7 @@ export class GitHubStateRepository {
 
   async #modelIdentitySnapshot(): Promise<BranchSnapshot> {
     const snapshot = await branchSnapshot(this.#config, this.#fetcher);
+    await assertProtectedBranchAt(this.#config, this.#fetcher, snapshot.headSha);
     const proofKey = modelIdentityContractProofCacheKey(
       this.#config.repository,
       snapshot.headSha,
@@ -2130,11 +2248,20 @@ export class GitHubStateRepository {
             member.kind === "identity" && member.model_id === request.modelId &&
             member.mutation_event_id === request.eventId)
         ) throw new StateEventConflictError(eventPath);
-        await readReverseImpactDocumentsAt(
+        const terminalDocuments = await readReverseImpactDocumentsAt(
           this.#config,
           this.#fetcher,
           terminalImpact,
           snapshot.headSha,
+        );
+        await assertConsolidationPredecessorAt(
+          this.#config,
+          this.#fetcher,
+          source,
+          existing,
+          terminalDocuments.aliases,
+          snapshot.headSha,
+          eventPath,
         );
         return {
           commit: snapshot.headSha,

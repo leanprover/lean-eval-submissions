@@ -935,13 +935,9 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         raise RollbackValidationError(
             "RESULT_OWNER_STATE_CONTRACT_COMMIT is not a full lowercase commit"
         )
-    if (
-        plan["legacy_result_owner_api_enabled"]
-        or plan["result_amendment_owner_api_enabled"]
-        or plan["result_amendment_maintainer_api_enabled"]
-    ) and owner_state_commit != state_contract["commit"]:
+    if owner_state_commit is not None and owner_state_commit != state_contract["commit"]:
         raise RollbackValidationError(
-            "enabled result owner API is not bound to current protected State"
+            "result owner API contract is not bound to current protected State"
         )
     plan["result_owner_state_contract_commit"] = owner_state_commit
     model_state_commit = (
@@ -953,12 +949,9 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         raise RollbackValidationError(
             "MODEL_IDENTITY_STATE_CONTRACT_COMMIT is not a full lowercase commit"
         )
-    if (
-        plan["model_identity_owner_api_enabled"]
-        or plan["model_identity_maintainer_api_enabled"]
-    ) and model_state_commit != state_contract["commit"]:
+    if model_state_commit is not None and model_state_commit != state_contract["commit"]:
         raise RollbackValidationError(
-            "enabled model identity API is not bound to current protected State"
+            "model identity API contract is not bound to current protected State"
         )
     plan["model_identity_state_contract_commit"] = model_state_commit
     if args.require_replay_disabled and any(
@@ -1154,7 +1147,7 @@ def validate_health(
                     "model_identity_owner_api_enabled": plan[
                         "model_identity_owner_api_enabled"
                     ],
-                    "model_identity_write_max_subrequests": 376,
+                    "model_identity_write_max_subrequests": 400,
                     "model_identity_consolidation_api": "atomic_reverse_impact_v1",
                 }
             )

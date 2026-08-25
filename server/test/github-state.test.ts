@@ -54,19 +54,19 @@ const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
 const NEW_TREE = "3".repeat(40);
 const NEW_COMMIT = "4".repeat(40);
-const RESULT_OWNER_CONTRACT_COMMIT = "a53c658a2de2188675134dc2890285fbaa17cf5a";
+const RESULT_OWNER_CONTRACT_COMMIT = "714f7408cbc591b7166ea6f4d6d19b66ba481f83";
 const RESULT_OWNER_CONTRACT_ROOT_ENTRIES = {
-  "README.md": { mode: "100644", type: "blob", sha: "fa70bf42f98d3a33cd6d419cd08eb3e96dfd9540" },
-  docs: { mode: "040000", type: "tree", sha: "7cc621002711682e6876bcfb6663f4c2e5c16336" },
-  schema: { mode: "040000", type: "tree", sha: "3111bf02bd9983a8712425923de8fca6ba696469" },
-  scripts: { mode: "040000", type: "tree", sha: "f9fe278ef1ea062bc21a3fafc7ddea7ab758a099" },
+  "README.md": { mode: "100644", type: "blob", sha: "458b076586958f9502918766388beed66733cdd5" },
+  docs: { mode: "040000", type: "tree", sha: "0bf6ad7e7e27e8dae8fcca08f56933fe8a6822fc" },
+  schema: { mode: "040000", type: "tree", sha: "17fdf5bf47ec2689fa9a9beeb46652f2ad4ee451" },
+  scripts: { mode: "040000", type: "tree", sha: "34ca0c7fe31bd5c49606fa3ecd71b4ea9161b0fb" },
 } as const;
-const STAGING_RESULT_OWNER_CONTRACT_COMMIT = "48f8c975d725a9ac18df545653fdb2f8371c3293";
+const STAGING_RESULT_OWNER_CONTRACT_COMMIT = "9fc7c431a92c678554c65ebac68d3fddf4990d29";
 const STAGING_RESULT_OWNER_CONTRACT_ROOT_ENTRIES = {
-  "README.md": { mode: "100644", type: "blob", sha: "f3f1820e7781c724e649762f184c16206675d7ac" },
-  docs: { mode: "040000", type: "tree", sha: "b335dc9232956201c8ec99e732e05a1b388d2617" },
-  schema: { mode: "040000", type: "tree", sha: "730d44520c70fdd6da4d27e381d4e6593c5c77fe" },
-  scripts: { mode: "040000", type: "tree", sha: "438693aed415474802beae32a5398fb436a4ac71" },
+  "README.md": { mode: "100644", type: "blob", sha: "e40d0e92b0125786a64c27a17bff8b322a3d0a95" },
+  docs: { mode: "040000", type: "tree", sha: "7a5088cee94a70da22656406d680a23bc3c9b9f4" },
+  schema: { mode: "040000", type: "tree", sha: "e4b815a07b1634f64c7a5618ad6a5b8fe8a1f09a" },
+  scripts: { mode: "040000", type: "tree", sha: "43399faa2c733a956568c225acff0d9a614f1590" },
 } as const;
 const MODEL_IDENTITY_CONTRACT_COMMIT = "714f7408cbc591b7166ea6f4d6d19b66ba481f83";
 const MODEL_IDENTITY_CONTRACT_ROOT_ENTRIES = {
@@ -200,6 +200,16 @@ function approvedModelFixture(
   decisionEventId: string,
   displayName: string,
 ) {
+  const request: StateEvent = {
+    schema_version: 1,
+    event_id: requestEventId,
+    event_type: "model_identity.requested",
+    occurred_at: "2025-08-15T03:36:35.574Z",
+    subject_id: modelId,
+    causation_event_id: null,
+    actor: { kind: "github", login: "alice" },
+    payload: { display_name: displayName },
+  };
   const decision: StateEvent = {
     schema_version: 1,
     event_id: decisionEventId,
@@ -218,7 +228,7 @@ function approvedModelFixture(
     display_name: displayName,
     status: "approved",
     request_event_id: requestEventId,
-    requested_at: "2025-08-15T03:36:35.574Z",
+    requested_at: request.occurred_at,
     decision_event_id: decisionEventId,
     decided_at: decision.occurred_at,
     reviewer_login: "reviewer",
@@ -227,7 +237,7 @@ function approvedModelFixture(
     consolidated_into: null,
     resolved_model_id: modelId,
   };
-  return { decision, view };
+  return { decision, request, view };
 }
 
 const SUBMISSION_ID = "0198abcd-1111-7000-8000-000000000001";
@@ -659,6 +669,7 @@ function resultOwnerContractRootTreeResponse(
 
 function modelIdentityContractProofResponses(treeSha = TREE): Response[] {
   return [
+    json({ name: "main", protected: true, commit: { sha: HEAD } }),
     json({
       status: "ahead",
       merge_base_commit: { sha: MODEL_IDENTITY_CONTRACT_COMMIT },
@@ -697,6 +708,9 @@ function modelWriterFetcher(
     }
     if (url.pathname.endsWith(`/git/commits/${HEAD}`) && method === "GET") {
       return Promise.resolve(json({ tree: { sha: TREE } }));
+    }
+    if (url.pathname.endsWith("/branches/main") && method === "GET") {
+      return Promise.resolve(json({ name: "main", protected: true, commit: { sha: HEAD } }));
     }
     if (url.pathname.includes(`/compare/${MODEL_IDENTITY_CONTRACT_COMMIT}...${HEAD}`)) {
       return Promise.resolve(json({ status: "ahead", merge_base_commit: { sha: MODEL_IDENTITY_CONTRACT_COMMIT } }));
@@ -775,7 +789,9 @@ describe("atomic Git State append", () => {
   });
 
   it("exports a conservative bounded synchronous model-identity CAS ceiling", () => {
-    expect(MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS).toBe(376);
+    const perAttempt = 5 + 32 + 2 + 5 + 2 + 4;
+    expect(MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS).toBe(8 * perAttempt);
+    expect(MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS).toBe(400);
     expect(MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS).toBeLessThanOrEqual(400);
   });
 
@@ -797,7 +813,7 @@ describe("atomic Git State append", () => {
       ownerLogin: "alice",
       displayName: "Model Alpha",
     })).resolves.toEqual({ commit: NEW_COMMIT, created: true, modelId });
-    const treeRequest = fetcher.mock.calls[5]?.[1];
+    const treeRequest = fetcher.mock.calls[6]?.[1];
     if (typeof treeRequest?.body !== "string") throw new TypeError("tree request body was not JSON");
     const treeBody = JSON.parse(treeRequest.body) as { tree: { path: string; content: string }[] };
     expect(treeBody.tree.map((entry) => entry.path)).toEqual([
@@ -818,11 +834,22 @@ describe("atomic Git State append", () => {
     const wrongAncestry = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
+      json({ name: "main", protected: true, commit: { sha: HEAD } }),
       json({ status: "diverged", merge_base_commit: { sha: "0".repeat(40) } }),
     ]);
     await expect(repository(wrongAncestry).requestModelIdentity(request))
       .rejects.toMatchObject({ status: 503 });
     expect(wrongAncestry.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
+
+    clearResultOwnerContractProofCacheForTest();
+    const unprotected = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      json({ name: "main", protected: false, commit: { sha: HEAD } }),
+    ]);
+    await expect(repository(unprotected).requestModelIdentity(request))
+      .rejects.toMatchObject({ status: 503 });
+    expect(unprotected.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
 
     clearResultOwnerContractProofCacheForTest();
     const changedScripts = {
@@ -832,6 +859,7 @@ describe("atomic Git State append", () => {
     const changedSource = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
+      json({ name: "main", protected: true, commit: { sha: HEAD } }),
       json({
         status: "ahead",
         merge_base_commit: { sha: MODEL_IDENTITY_CONTRACT_COMMIT },
@@ -847,6 +875,7 @@ describe("atomic Git State append", () => {
     const fetcher = sequence([
       json({ object: { sha: HEAD } }),
       json({ tree: { sha: TREE } }),
+      json({ name: "main", protected: true, commit: { sha: HEAD } }),
       json({
         status: "ahead",
         merge_base_commit: { sha: STAGING_MODEL_IDENTITY_CONTRACT_COMMIT },
@@ -1134,7 +1163,9 @@ describe("atomic Git State append", () => {
       [modelViewPath(targetModelId)]: target.view,
       [modelViewPath(predecessorModelId)]: predecessor,
       [aliasPath]: aliasView,
+      [eventPath(MODEL_DECISION_ID)]: MODEL_DECISION,
       [eventPath(MODEL_ALIAS_ID)]: aliasEvent,
+      [eventPath(targetRequestId)]: target.request,
       [eventPath(targetDecisionId)]: target.decision,
     });
     const request = {
@@ -1197,6 +1228,8 @@ describe("atomic Git State append", () => {
     );
     const retry = modelWriterFetcher({
       [eventPath(consolidationId)]: consolidationEvent,
+      [eventPath(MODEL_ALIAS_ID)]: aliasEvent,
+      [eventPath(targetRequestId)]: target.request,
       [eventPath(targetDecisionId)]: target.decision,
       [modelViewPath()]: consolidatedSource,
       [modelViewPath(targetModelId)]: target.view,
@@ -1212,8 +1245,32 @@ describe("atomic Git State append", () => {
     expect(retry.treeBodies).toHaveLength(0);
 
     clearResultOwnerContractProofCacheForTest();
+    const corruptCausation = modelWriterFetcher({
+      [eventPath(consolidationId)]: {
+        ...consolidationEvent,
+        causation_event_id: MODEL_REQUEST_ID,
+      },
+      [eventPath(MODEL_REQUEST_ID)]: MODEL_REQUEST,
+      [eventPath(targetRequestId)]: target.request,
+      [eventPath(targetDecisionId)]: target.decision,
+      [modelViewPath()]: consolidatedSource,
+      [modelViewPath(targetModelId)]: target.view,
+      [modelViewPath(predecessorModelId)]: {
+        ...predecessor,
+        resolved_model_id: targetModelId,
+      },
+      [aliasPath]: { ...aliasView, resolved_model_id: targetModelId },
+      [modelImpactPath(targetModelId)]: retryImpact,
+    });
+    await expect(repository(corruptCausation.fetcher).consolidateModelIdentity(request))
+      .rejects.toBeInstanceOf(StateEventConflictError);
+    expect(corruptCausation.treeBodies).toHaveLength(0);
+
+    clearResultOwnerContractProofCacheForTest();
     const corruptReplay = modelWriterFetcher({
       [eventPath(consolidationId)]: consolidationEvent,
+      [eventPath(MODEL_ALIAS_ID)]: aliasEvent,
+      [eventPath(targetRequestId)]: target.request,
       [eventPath(targetDecisionId)]: target.decision,
       [modelViewPath()]: consolidatedSource,
       [modelViewPath(targetModelId)]: target.view,
@@ -1248,7 +1305,9 @@ describe("atomic Git State append", () => {
       [modelImpactPath()]: modelImpact(),
       [modelImpactPath(targetModelId)]: targetImpact,
       [modelViewPath()]: APPROVED_MODEL_VIEW,
+      [eventPath(MODEL_REQUEST_ID)]: MODEL_REQUEST,
       [eventPath(MODEL_DECISION_ID)]: MODEL_DECISION,
+      [eventPath(targetRequestId)]: target.request,
     };
 
     const corruptMember = modelWriterFetcher({
@@ -1272,6 +1331,112 @@ describe("atomic Git State append", () => {
     await expect(repository(corruptMutation.fetcher).consolidateModelIdentity(request))
       .rejects.toBeInstanceOf(StateEventConflictError);
     expect(corruptMutation.treeBodies).toHaveLength(0);
+
+    clearResultOwnerContractProofCacheForTest();
+    const corruptApprovalCause = modelWriterFetcher({
+      ...common,
+      [modelViewPath(targetModelId)]: target.view,
+      [eventPath(targetDecisionId)]: {
+        ...target.decision,
+        causation_event_id: MODEL_REQUEST_ID,
+      },
+    });
+    await expect(repository(corruptApprovalCause.fetcher).consolidateModelIdentity(request))
+      .rejects.toBeInstanceOf(StateEventConflictError);
+    expect(corruptApprovalCause.treeBodies).toHaveLength(0);
+  });
+
+  it("rejects alias and rename terminal events that skip their current predecessor", async () => {
+    const targetRequestId = "0198abcd-0010-7000-8000-000000000030";
+    const targetModelId = await modelIdentityId(targetRequestId);
+    const targetDecisionId = "0198abcd-0011-7000-8000-000000000031";
+    const target = approvedModelFixture(
+      targetModelId,
+      targetRequestId,
+      targetDecisionId,
+      "Target Model",
+    );
+    const request = {
+      eventId: "0198abcd-0004-7000-8000-000000000024",
+      occurredAt: "2025-08-15T03:36:35.588Z",
+      modelId: MODEL_ID,
+      targetModelId,
+      ownerLogin: "alice",
+    } as const;
+    const common = {
+      [modelImpactPath()]: modelImpact(),
+      [modelViewPath()]: APPROVED_MODEL_VIEW,
+      [eventPath(MODEL_REQUEST_ID)]: MODEL_REQUEST,
+      [eventPath(MODEL_DECISION_ID)]: MODEL_DECISION,
+      [eventPath(targetRequestId)]: target.request,
+    };
+
+    const targetAliasId = "0198abcd-0012-7000-8000-000000000032";
+    const targetAlias = "Target Alias";
+    const targetAliasKey = await modelAliasKey("alice", targetAlias);
+    const targetAliasPath = `views/model-aliases/${targetAliasKey.slice(4, 6)}/${targetAliasKey}.json`;
+    const targetAliasView = {
+      schema_version: 1,
+      alias_key: targetAliasKey,
+      owner_login: "alice",
+      alias: targetAlias,
+      model_id: targetModelId,
+      assignment_event_id: targetAliasId,
+      assigned_at: "2025-08-15T03:36:35.576Z",
+      resolved_model_id: targetModelId,
+    } as const;
+    const aliasedTarget = { ...target.view, mutation_event_id: targetAliasId } as const;
+    const badAliasCause = modelWriterFetcher({
+      ...common,
+      [modelImpactPath(targetModelId)]: modelImpact(aliasedTarget, [{
+        kind: "alias",
+        alias_key: targetAliasKey,
+        assignment_event_id: targetAliasId,
+        model_id: targetModelId,
+        view_path: targetAliasPath,
+      }]),
+      [modelViewPath(targetModelId)]: aliasedTarget,
+      [targetAliasPath]: targetAliasView,
+      [eventPath(targetAliasId)]: {
+        schema_version: 1,
+        event_id: targetAliasId,
+        event_type: "model_identity.alias_assigned",
+        occurred_at: targetAliasView.assigned_at,
+        subject_id: targetModelId,
+        causation_event_id: targetRequestId,
+        actor: { kind: "github", login: "alice" },
+        payload: { alias: targetAlias },
+      },
+    });
+    await expect(repository(badAliasCause.fetcher).consolidateModelIdentity(request))
+      .rejects.toBeInstanceOf(StateEventConflictError);
+    expect(badAliasCause.treeBodies).toHaveLength(0);
+
+    clearResultOwnerContractProofCacheForTest();
+    const targetRenameId = "0198abcd-0013-7000-8000-000000000033";
+    const renamedTarget = {
+      ...target.view,
+      display_name: "Renamed Target",
+      mutation_event_id: targetRenameId,
+    } as const;
+    const badRenameCause = modelWriterFetcher({
+      ...common,
+      [modelImpactPath(targetModelId)]: modelImpact(renamedTarget),
+      [modelViewPath(targetModelId)]: renamedTarget,
+      [eventPath(targetRenameId)]: {
+        schema_version: 1,
+        event_id: targetRenameId,
+        event_type: "model_identity.renamed",
+        occurred_at: "2025-08-15T03:36:35.577Z",
+        subject_id: targetModelId,
+        causation_event_id: targetRequestId,
+        actor: { kind: "github", login: "alice" },
+        payload: { display_name: renamedTarget.display_name },
+      },
+    });
+    await expect(repository(badRenameCause.fetcher).consolidateModelIdentity(request))
+      .rejects.toBeInstanceOf(StateEventConflictError);
+    expect(badRenameCause.treeBodies).toHaveLength(0);
   });
 
   it("fails consolidation closed before reads or writes when the component union exceeds 32", async () => {
@@ -1392,7 +1557,9 @@ describe("atomic Git State append", () => {
       [modelImpactPath(targetModelId)]: targetImpact,
       [modelViewPath()]: APPROVED_MODEL_VIEW,
       [modelViewPath(targetModelId)]: target.view,
+      [eventPath(MODEL_REQUEST_ID)]: MODEL_REQUEST,
       [eventPath(MODEL_DECISION_ID)]: MODEL_DECISION,
+      [eventPath(targetRequestId)]: target.request,
       [eventPath(targetDecisionId)]: target.decision,
     }, 409);
     vi.useFakeTimers();
@@ -1413,6 +1580,9 @@ describe("atomic Git State append", () => {
     const referenceWrites = collision.fetcher.mock.calls.filter(([, init]) =>
       init?.method === "PATCH");
     expect(referenceWrites).toHaveLength(8);
+    const protectedBranchReads = collision.fetcher.mock.calls.filter(([input]) =>
+      fetchUrl(input).endsWith("/branches/main"));
+    expect(protectedBranchReads).toHaveLength(8);
     expect(collision.fetcher.mock.calls.length).toBeLessThanOrEqual(
       MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS,
     );

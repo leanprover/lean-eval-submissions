@@ -217,7 +217,7 @@ canonical path to the strict lifecycle-aware schema.
 Each Cron invocation has its own 400-request application-level
 external-subrequest budget, matching the tracked Worker
 `limits.subrequests`. That explicit limit covers the 369-request synchronous
-repair bound and 376-request complete-component model-identity bound. A scheduled scan reads at most 32 outbox
+repair bound and 400-request complete-component model-identity bound. A scheduled scan reads at most 32 outbox
 blobs from one alphabetically ordered shard window and rotates that window on
 the next visit. Before starting each due item, the handler requires 155
 requests of remaining capacity, including all 144 requests needed by the existing nine
