@@ -36,6 +36,11 @@ QUALIFICATION_EXECUTOR_WRANGLER = json.loads(
         ROOT / "server/wrangler.model-identity-qualification-executor.jsonc"
     ).read_text(encoding="utf-8")
 )
+QUALIFICATION_COLLISION_WRANGLER = json.loads(
+    (
+        ROOT / "server/wrangler.model-identity-qualification-collision.jsonc"
+    ).read_text(encoding="utf-8")
+)
 PACKAGE = json.loads((ROOT / "server/package.json").read_text(encoding="utf-8"))
 QUALIFICATION = json.loads(
     (ROOT / ".audit/cloudflare-rollback-qualification-v1.json").read_text(
@@ -893,6 +898,24 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIs(executor["preview_urls"], False)
         self.assertNotIn("routes", executor)
         self.assertEqual(executor["limits"], {"subrequests": 400})
+        self.assertEqual(
+            executor["services"],
+            [
+                {
+                    "binding": "MODEL_IDENTITY_QUALIFICATION_COLLISION",
+                    "service": (
+                        "lean-eval-model-identity-qualification-collision-staging"
+                    ),
+                }
+            ],
+        )
+
+        self.assertEqual(set(QUALIFICATION_COLLISION_WRANGLER["env"]), {"staging"})
+        collision = QUALIFICATION_COLLISION_WRANGLER["env"]["staging"]
+        self.assertIs(collision["workers_dev"], False)
+        self.assertIs(collision["preview_urls"], False)
+        self.assertNotIn("routes", collision)
+        self.assertEqual(collision["limits"], {"subrequests": 400})
 
         staging = DEPLOY.split("  deploy-staging:", 1)[1].split(
             "  deploy-production:", 1
@@ -900,8 +923,18 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         executor_deploy = staging.index(
             "- name: Deploy staging model identity qualification executor"
         )
+        collision_deploy = staging.index(
+            "- name: Deploy staging model identity qualification collision service"
+        )
         intake_deploy = staging.index("- name: Deploy staging submission Worker")
+        self.assertLess(collision_deploy, executor_deploy)
         self.assertLess(executor_deploy, intake_deploy)
+        collision_block = staging[collision_deploy:executor_deploy]
+        self.assertIn(
+            "--config wrangler.model-identity-qualification-collision.jsonc",
+            collision_block,
+        )
+        self.assertIn("--env staging", collision_block)
         executor_block = staging[executor_deploy:intake_deploy]
         self.assertIn(
             "--config wrangler.model-identity-qualification-executor.jsonc",
@@ -913,6 +946,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertNotIn("model identity qualification executor", production)
         self.assertNotIn(
             "wrangler.model-identity-qualification-executor.jsonc", production
+        )
+        self.assertNotIn(
+            "wrangler.model-identity-qualification-collision.jsonc", production
         )
 
     def test_secret_contracts_are_explicit_in_each_deployment_environment(self) -> None:
@@ -955,6 +991,17 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             ),
             {
                 "AUTH_TOKEN_SECRET",
+                "GITHUB_STATE_TOKEN",
+                "MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET",
+            },
+        )
+        self.assertEqual(
+            set(
+                QUALIFICATION_COLLISION_WRANGLER["env"]["staging"]["secrets"][
+                    "required"
+                ]
+            ),
+            {
                 "GITHUB_STATE_TOKEN",
                 "MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET",
             },

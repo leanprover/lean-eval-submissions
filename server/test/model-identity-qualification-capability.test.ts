@@ -32,6 +32,8 @@ function capability(): QualificationExecutorCapability {
 function executorEnv(): ExecutorCloudflareEnv {
   const rateLimiter = env.API_RATE_LIMITER;
   if (rateLimiter === undefined) throw new Error("rate limiter binding is unavailable");
+  const collision = env.MODEL_IDENTITY_QUALIFICATION_EXECUTOR;
+  if (collision === undefined) throw new Error("test collision binding is unavailable");
   return {
     API_RATE_LIMITER: rateLimiter,
     AUTH_TOKEN_SECRET: "test-only-auth-token-secret-value-long-enough",
@@ -39,6 +41,7 @@ function executorEnv(): ExecutorCloudflareEnv {
     DEPLOYMENT_ENVIRONMENT: "staging",
     GITHUB_STATE_TOKEN: "test-only-github-state-token-value-long-enough",
     MODEL_IDENTITY_QUALIFICATION_EXECUTOR_SECRET: SECRET,
+    MODEL_IDENTITY_QUALIFICATION_COLLISION: collision,
     MODEL_IDENTITY_STATE_CONTRACT_COMMIT:
       "9fc7c431a92c678554c65ebac68d3fddf4990d29",
     STATE_REPOSITORY: "leanprover/lean-eval-state-staging",

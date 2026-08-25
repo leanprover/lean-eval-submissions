@@ -14,6 +14,8 @@ import {
 } from "../src/model-identity-qualification-app";
 import {
   qualificationStateMutation,
+  qualificationStateMutationPrefix,
+  qualificationStateMutationSequence,
   qualificationStateSnapshot,
   QualificationStateError,
   restoreQualificationState,
@@ -114,7 +116,12 @@ async function gitBlobSha(content: string): Promise<string> {
 function fakeState(initialHead = INITIAL_HEAD, initialTree = MUTATED_TREE) {
   let head = initialHead;
   let failingDocumentReads = 0;
-  const commits = new Map<string, { message: string; tree: string; parents: string[] }>([
+  const commits = new Map<string, {
+    message: string;
+    tree: string;
+    parents: string[];
+    files?: { filename: string; status: "added" | "modified" | "removed"; sha?: string }[];
+  }>([
     [initialHead, { message: "qualification mutation", tree: initialTree, parents: ["0".repeat(40)] }],
   ]);
   const documents = new Map<string, unknown>();
@@ -159,6 +166,31 @@ function fakeState(initialHead = INITIAL_HEAD, initialTree = MUTATED_TREE) {
         encoding: "base64",
         content: btoa(content),
         sha: await gitBlobSha(content),
+      });
+    }
+    if (method === "GET" && path.startsWith("/compare/")) {
+      const comparison = path.slice("/compare/".length).split("...");
+      const parent = comparison[0];
+      const child = comparison[1];
+      const commit = child === undefined ? undefined : commits.get(child);
+      if (parent === undefined || child === undefined || commit === undefined) {
+        return Response.json({ message: "missing" }, { status: 404 });
+      }
+      const files = commit.files ?? await Promise.all(
+        [...documents.entries()].map(async ([filename, value]) => ({
+          filename,
+          status: "added" as const,
+          sha: await gitBlobSha(canonicalStateDocument(value)),
+        })),
+      );
+      return Response.json({
+        status: "ahead",
+        ahead_by: 1,
+        behind_by: 0,
+        total_commits: 1,
+        merge_base_commit: { sha: parent },
+        commits: [{ sha: child }],
+        files,
       });
     }
     if (method === "POST" && path === "/git/commits") {
@@ -228,6 +260,67 @@ describe("model identity qualification State restoration", () => {
       expectedMessage: "Request model identity mi1_test",
       expectedDocuments: { "events/exact.json": expectedDocument },
     })).rejects.toEqual(new QualificationStateError("foreign_state_movement"));
+  });
+
+  it("binds an exact ordered mutation prefix and rejects extra changed paths", async () => {
+    const first = "1".repeat(40);
+    const second = "2".repeat(40);
+    const firstTree = "3".repeat(40);
+    const state = fakeState(second, QUALIFICATION_MUTATION_TREE);
+    const firstDocument = { schema_version: 1, step: 1 };
+    const secondDocument = { schema_version: 1, step: 2 };
+    const firstSha = await gitBlobSha(canonicalStateDocument(firstDocument));
+    const secondSha = await gitBlobSha(canonicalStateDocument(secondDocument));
+    state.documents.set("events/first.json", firstDocument);
+    state.documents.set("events/second.json", secondDocument);
+    state.commits.set(first, {
+      message: "First exact qualification mutation",
+      tree: firstTree,
+      parents: [INITIAL_HEAD],
+      files: [{ filename: "events/first.json", status: "added", sha: firstSha }],
+    });
+    state.commits.set(second, {
+      message: "Second exact qualification mutation",
+      tree: QUALIFICATION_MUTATION_TREE,
+      parents: [first],
+      files: [{ filename: "events/second.json", status: "added", sha: secondSha }],
+    });
+    const request = {
+      expectedParent: INITIAL_HEAD,
+      expectedMutations: [{
+        expectedMessage: "First exact qualification mutation",
+        expectedDocuments: { "events/first.json": firstDocument },
+        expectedDeletedPaths: [],
+        expectedTreeUnchanged: false,
+      }, {
+        expectedMessage: "Second exact qualification mutation",
+        expectedDocuments: { "events/second.json": secondDocument },
+        expectedDeletedPaths: [],
+        expectedTreeUnchanged: false,
+      }],
+    } as const;
+    await expect(qualificationStateMutationSequence(CONFIG, state.fetcher, request))
+      .resolves.toEqual({
+        state_commit: second,
+        state_tree: QUALIFICATION_MUTATION_TREE,
+        parent_commit: INITIAL_HEAD,
+      });
+    state.setHead(first);
+    await expect(qualificationStateMutationPrefix(CONFIG, state.fetcher, request))
+      .resolves.toEqual({
+        state_commit: first,
+        state_tree: firstTree,
+        parent_commit: INITIAL_HEAD,
+        applied_mutations: 1,
+      });
+    state.setHead(second);
+    state.commits.get(second)?.files?.push({
+      filename: "views/foreign.json",
+      status: "added",
+      sha: "4".repeat(40),
+    });
+    await expect(qualificationStateMutationSequence(CONFIG, state.fetcher, request))
+      .rejects.toEqual(new QualificationStateError("foreign_state_movement"));
   });
 
   it("creates one non-force audit commit and verifies the restored ref and tree", async () => {

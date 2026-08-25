@@ -234,6 +234,15 @@ jobs:
         run: >-
           npx wrangler deploy --config wrangler.broker.jsonc --env staging
           --var "DEPLOYED_COMMIT:$GITHUB_SHA"
+      - name: Deploy staging model identity qualification collision service
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: >-
+          npx wrangler deploy
+          --config wrangler.model-identity-qualification-collision.jsonc
+          --env staging
+          --var "DEPLOYED_COMMIT:$GITHUB_SHA"
       - name: Deploy staging model identity qualification executor
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

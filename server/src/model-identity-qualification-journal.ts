@@ -2,9 +2,20 @@ import { DurableObject } from "cloudflare:workers";
 
 import {
   modelIdentityId,
+  modelAliasKey,
+  modelAliasPath,
   modelIdentityPath,
+  modelIdentityReverseImpactPath,
+  modelIdentityReverseImpactView,
+  type ModelIdentityView,
+  type ModelIdentityReverseImpactView,
+  type ModelAliasView,
 } from "./model-identity";
 import { newEventId, stateEventPath } from "./state-event";
+import {
+  reviewedQualificationFixtureManifest,
+  type QualificationFixtureManifest,
+} from "./model-identity-qualification-fixture";
 
 const SCHEMA_VERSION = 2;
 const ACTIVE_LEASE_ALARM_MS = 5 * 60 * 1000;
@@ -86,6 +97,7 @@ export type QualificationApiRequestPlan = Readonly<{
   expected_response: QualificationJson;
   expected_commit_message: string | null;
   expected_documents: Readonly<Record<string, QualificationJson>>;
+  expected_deleted_paths: readonly string[];
 }>;
 
 export type QualificationStepPlan = Readonly<{
@@ -104,6 +116,12 @@ export type QualificationStepPlan = Readonly<{
   assertions: Readonly<Record<string, true>>;
   expected_commit_messages: readonly string[];
   expected_documents: Readonly<Record<string, QualificationJson>>;
+  expected_state_prefix?: readonly Readonly<{
+    expected_message: string;
+    expected_documents: Readonly<Record<string, QualificationJson>>;
+    expected_deleted_paths: readonly string[];
+    expected_tree_unchanged: boolean;
+  }>[];
 }>;
 
 export type PendingStep = Readonly<{
@@ -139,6 +157,7 @@ type StoredJournal = Readonly<{
 export type RecoveryReconciliation = Readonly<{
   operation: QualificationOperation;
   plan_digest: string;
+  applied_mutations: number;
   state_commit: string;
   state_tree: string;
 }>;
@@ -467,6 +486,7 @@ async function ownerRequestPlan(
         [stateEventPath(event)]: event,
         [modelIdentityPath(modelId)]: view,
       },
+      expected_deleted_paths: [],
     }],
     event_ids: [eventId],
     model_ids: [modelId],
@@ -484,6 +504,971 @@ async function ownerRequestPlan(
   };
 }
 
+function nextPlanMilliseconds(journal: StoredJournal): number {
+  let milliseconds = Date.now();
+  for (const plan of journal.completed_plans) {
+    for (const request of plan.api_requests) {
+      milliseconds = Math.max(milliseconds, Date.parse(request.occurred_at) + 1);
+    }
+  }
+  return milliseconds;
+}
+
+function expectedModelView(
+  plan: QualificationStepPlan | undefined,
+  modelId: string,
+): ModelIdentityView {
+  const value = plan?.expected_documents[modelIdentityPath(modelId)];
+  if (value === undefined) {
+    throw new Error("qualification predecessor model view is unavailable");
+  }
+  return value as ModelIdentityView;
+}
+
+function maintainerApprovePlan(
+  journal: StoredJournal,
+): QualificationStepPlan {
+  const ownerPlan = journal.completed_plans[2];
+  const modelId = ownerPlan?.model_ids[0];
+  if (ownerPlan?.operation !== "owner_request" || modelId === undefined) {
+    throw new Error("qualification owner request predecessor is unavailable");
+  }
+  const current = expectedModelView(ownerPlan, modelId);
+  const nowMilliseconds = nextPlanMilliseconds(journal);
+  const eventId = newEventId(nowMilliseconds);
+  const occurredAt = canonicalMilliseconds(nowMilliseconds);
+  const event = {
+    schema_version: 1,
+    event_id: eventId,
+    event_type: "model_identity.approved",
+    occurred_at: occurredAt,
+    subject_id: modelId,
+    causation_event_id: current.request_event_id,
+    actor: { kind: "system" },
+    payload: { reviewer_login: journal.acquisition.intent.maintainer.login },
+  } as const;
+  const view: ModelIdentityView = {
+    ...current,
+    status: "approved",
+    decision_event_id: eventId,
+    decided_at: occurredAt,
+    reviewer_login: journal.acquisition.intent.maintainer.login,
+    rejection_reason: null,
+    mutation_event_id: eventId,
+    resolved_model_id: modelId,
+  };
+  const reverseImpact = modelIdentityReverseImpactView(view, [{
+    kind: "identity",
+    model_id: modelId,
+    mutation_event_id: eventId,
+    view_path: modelIdentityPath(modelId),
+  }]);
+  const documents = {
+    [stateEventPath(event)]: event,
+    [modelIdentityPath(modelId)]: view,
+    [modelIdentityReverseImpactPath(modelId)]: reverseImpact,
+  };
+  const message = `Record model identity decision ${modelId}`;
+  return {
+    operation: "maintainer_approve",
+    route: "POST /api/v1/model-identities/{model_id}/decisions",
+    actor: journal.acquisition.intent.maintainer,
+    credential_roles: ["maintainer"],
+    expected_http_status: 201,
+    mutation_expected: true,
+    api_requests: [{
+      actor: journal.acquisition.intent.maintainer,
+      body: { decision: "approve" },
+      credential_role: "maintainer",
+      event_id: eventId,
+      method: "POST",
+      occurred_at: occurredAt,
+      path: `/api/v1/model-identities/${modelId}/decisions`,
+      expected_http_status: 201,
+      expected_response: { model_id: modelId, status: "identity_approved" },
+      expected_commit_message: message,
+      expected_documents: documents,
+      expected_deleted_paths: [],
+    }],
+    event_ids: [eventId],
+    model_ids: [modelId],
+    alias_keys: [],
+    assertions: {
+      approval_view_written: true,
+      closed_maintainer_pair_verified: true,
+      immutable_event_written: true,
+    },
+    expected_commit_messages: [message],
+    expected_documents: documents,
+  };
+}
+
+async function requiredFixture(
+  journal: StoredJournal,
+): Promise<QualificationFixtureManifest> {
+  const fixture = await reviewedQualificationFixtureManifest();
+  if (fixture === null) {
+    throw new Error("reviewed qualification fixture is not source-armed");
+  }
+  for (const role of ["owner", "cross_owner", "maintainer"] as const) {
+    const expected = journal.acquisition.intent[role];
+    const actual = fixture.intent[role];
+    if (
+      expected.github_id !== actual.github_id ||
+      expected.login !== actual.login
+    ) throw new Error("qualification intent does not match the reviewed fixture");
+  }
+  if (
+    journal.acquisition.initial_state_commit !== fixture.state.seed_commit ||
+    journal.acquisition.initial_state_tree !== fixture.state.seed_tree
+  ) throw new Error("qualification State does not match the reviewed fixture");
+  return fixture;
+}
+
+function fixtureModelView(
+  fixture: QualificationFixtureManifest,
+  modelId: string,
+): ModelIdentityView {
+  const document = fixture.documents.find(
+    (candidate) => candidate.path === modelIdentityPath(modelId),
+  );
+  if (document?.kind !== "model_identity_view") {
+    throw new Error("qualification fixture model view is unavailable");
+  }
+  return document.value as ModelIdentityView;
+}
+
+function fixtureReverseImpact(
+  fixture: QualificationFixtureManifest,
+  modelId: string,
+): ModelIdentityReverseImpactView {
+  const document = fixture.documents.find(
+    (candidate) => candidate.path === modelIdentityReverseImpactPath(modelId),
+  );
+  if (document?.kind !== "reverse_impact_view") {
+    throw new Error("qualification fixture reverse impact is unavailable");
+  }
+  return document.value as ModelIdentityReverseImpactView;
+}
+
+function fixtureAliasView(
+  fixture: QualificationFixtureManifest,
+  aliasKey: string,
+): ModelAliasView {
+  const document = fixture.documents.find(
+    (candidate) => candidate.path === modelAliasPath(aliasKey),
+  );
+  if (document?.kind !== "model_alias_view") {
+    throw new Error("qualification fixture alias view is unavailable");
+  }
+  return document.value as ModelAliasView;
+}
+
+async function maintainerRejectPlan(
+  journal: StoredJournal,
+): Promise<QualificationStepPlan> {
+  const fixture = await requiredFixture(journal);
+  const modelId = fixture.bindings.rejection.pending_model_id;
+  const current = fixtureModelView(fixture, modelId);
+  const nowMilliseconds = nextPlanMilliseconds(journal);
+  const eventId = newEventId(nowMilliseconds);
+  const occurredAt = canonicalMilliseconds(nowMilliseconds);
+  const reasonCode = fixture.bindings.rejection.reason_code;
+  const event = {
+    schema_version: 1,
+    event_id: eventId,
+    event_type: "model_identity.rejected",
+    occurred_at: occurredAt,
+    subject_id: modelId,
+    causation_event_id: current.request_event_id,
+    actor: { kind: "system" },
+    payload: {
+      reviewer_login: journal.acquisition.intent.maintainer.login,
+      reason_code: reasonCode,
+    },
+  } as const;
+  const view: ModelIdentityView = {
+    ...current,
+    status: "rejected",
+    decision_event_id: eventId,
+    decided_at: occurredAt,
+    reviewer_login: journal.acquisition.intent.maintainer.login,
+    rejection_reason: reasonCode,
+    mutation_event_id: eventId,
+    resolved_model_id: null,
+  };
+  const documents = {
+    [stateEventPath(event)]: event,
+    [modelIdentityPath(modelId)]: view,
+  };
+  const message = `Record model identity decision ${modelId}`;
+  return {
+    operation: "maintainer_reject",
+    route: "POST /api/v1/model-identities/{model_id}/decisions",
+    actor: journal.acquisition.intent.maintainer,
+    credential_roles: ["maintainer"],
+    expected_http_status: 201,
+    mutation_expected: true,
+    api_requests: [{
+      actor: journal.acquisition.intent.maintainer,
+      body: { decision: "reject", reason_code: reasonCode },
+      credential_role: "maintainer",
+      event_id: eventId,
+      method: "POST",
+      occurred_at: occurredAt,
+      path: `/api/v1/model-identities/${modelId}/decisions`,
+      expected_http_status: 201,
+      expected_response: { model_id: modelId, status: "identity_rejected" },
+      expected_commit_message: message,
+      expected_documents: documents,
+      expected_deleted_paths: [],
+    }],
+    event_ids: [current.request_event_id, eventId],
+    model_ids: [modelId],
+    alias_keys: [],
+    assertions: {
+      closed_reason_code_verified: true,
+      immutable_events_written: true,
+      rejection_view_written: true,
+    },
+    expected_commit_messages: [message],
+    expected_documents: documents,
+  };
+}
+
+async function aliasAssignmentPlan(
+  journal: StoredJournal,
+): Promise<QualificationStepPlan> {
+  const approvalPlan = journal.completed_plans[3];
+  const modelId = approvalPlan?.model_ids[0];
+  if (approvalPlan?.operation !== "maintainer_approve" || modelId === undefined) {
+    throw new Error("qualification approval predecessor is unavailable");
+  }
+  const current = expectedModelView(approvalPlan, modelId);
+  const impactValue = approvalPlan.expected_documents[
+    modelIdentityReverseImpactPath(modelId)
+  ];
+  if (impactValue === undefined) {
+    throw new Error("qualification approval reverse impact is unavailable");
+  }
+  const impact = impactValue as ModelIdentityReverseImpactView;
+  const alias = `Qualification alias run ${journal.acquisition.run_id}`;
+  const aliasKey = await modelAliasKey(journal.acquisition.intent.owner.login, alias);
+  const nowMilliseconds = nextPlanMilliseconds(journal);
+  const eventId = newEventId(nowMilliseconds);
+  const occurredAt = canonicalMilliseconds(nowMilliseconds);
+  const event = {
+    schema_version: 1,
+    event_id: eventId,
+    event_type: "model_identity.alias_assigned",
+    occurred_at: occurredAt,
+    subject_id: modelId,
+    causation_event_id: current.mutation_event_id,
+    actor: { kind: "github", login: journal.acquisition.intent.owner.login },
+    payload: { alias },
+  } as const;
+  const view: ModelIdentityView = { ...current, mutation_event_id: eventId };
+  const aliasView = {
+    schema_version: 1,
+    alias_key: aliasKey,
+    owner_login: journal.acquisition.intent.owner.login,
+    alias,
+    model_id: modelId,
+    assignment_event_id: eventId,
+    assigned_at: occurredAt,
+    resolved_model_id: modelId,
+  } as const;
+  const reverseImpact = modelIdentityReverseImpactView(view, [
+    ...impact.members.map((member) =>
+      member.kind === "identity" && member.model_id === modelId
+        ? { ...member, mutation_event_id: eventId }
+        : member),
+    {
+      kind: "alias",
+      alias_key: aliasKey,
+      assignment_event_id: eventId,
+      model_id: modelId,
+      view_path: modelAliasPath(aliasKey),
+    },
+  ]);
+  const documents = {
+    [stateEventPath(event)]: event,
+    [modelIdentityPath(modelId)]: view,
+    [modelAliasPath(aliasKey)]: aliasView,
+    [modelIdentityReverseImpactPath(modelId)]: reverseImpact,
+  };
+  const message = `Assign model alias ${aliasKey}`;
+  return {
+    operation: "alias_assignment",
+    route: "POST /api/v1/model-identities/{model_id}/aliases",
+    actor: journal.acquisition.intent.owner,
+    credential_roles: ["agent_owner"],
+    expected_http_status: 201,
+    mutation_expected: true,
+    api_requests: [{
+      actor: journal.acquisition.intent.owner,
+      body: { alias },
+      credential_role: "agent_owner",
+      event_id: eventId,
+      method: "POST",
+      occurred_at: occurredAt,
+      path: `/api/v1/model-identities/${modelId}/aliases`,
+      expected_http_status: 201,
+      expected_response: {
+        alias_key: aliasKey,
+        model_id: modelId,
+        status: "alias_assigned",
+      },
+      expected_commit_message: message,
+      expected_documents: documents,
+      expected_deleted_paths: [],
+    }],
+    event_ids: [eventId],
+    model_ids: [modelId],
+    alias_keys: [aliasKey],
+    assertions: {
+      alias_reservation_written: true,
+      immutable_event_written: true,
+      reverse_impact_updated: true,
+    },
+    expected_commit_messages: [message],
+    expected_documents: documents,
+  };
+}
+
+function identityRenamePlan(journal: StoredJournal): QualificationStepPlan {
+  const aliasPlan = journal.completed_plans[5];
+  const modelId = aliasPlan?.model_ids[0];
+  if (aliasPlan?.operation !== "alias_assignment" || modelId === undefined) {
+    throw new Error("qualification alias predecessor is unavailable");
+  }
+  const current = expectedModelView(aliasPlan, modelId);
+  const impactValue = aliasPlan.expected_documents[
+    modelIdentityReverseImpactPath(modelId)
+  ];
+  if (impactValue === undefined) {
+    throw new Error("qualification alias reverse impact is unavailable");
+  }
+  const impact = impactValue as ModelIdentityReverseImpactView;
+  const displayName = `Qualification renamed model run ${journal.acquisition.run_id}`;
+  const nowMilliseconds = nextPlanMilliseconds(journal);
+  const eventId = newEventId(nowMilliseconds);
+  const occurredAt = canonicalMilliseconds(nowMilliseconds);
+  const event = {
+    schema_version: 1,
+    event_id: eventId,
+    event_type: "model_identity.renamed",
+    occurred_at: occurredAt,
+    subject_id: modelId,
+    causation_event_id: current.mutation_event_id,
+    actor: { kind: "github", login: journal.acquisition.intent.owner.login },
+    payload: { display_name: displayName },
+  } as const;
+  const view: ModelIdentityView = {
+    ...current,
+    display_name: displayName,
+    mutation_event_id: eventId,
+  };
+  const reverseImpact = modelIdentityReverseImpactView(view, impact.members.map(
+    (member) => member.kind === "identity" && member.model_id === modelId
+      ? { ...member, mutation_event_id: eventId }
+      : member,
+  ));
+  const documents = {
+    [stateEventPath(event)]: event,
+    [modelIdentityPath(modelId)]: view,
+    [modelIdentityReverseImpactPath(modelId)]: reverseImpact,
+  };
+  const message = `Rename model identity ${modelId}`;
+  return {
+    operation: "identity_rename",
+    route: "PUT /api/v1/model-identities/{model_id}/name",
+    actor: journal.acquisition.intent.owner,
+    credential_roles: ["oauth_owner"],
+    expected_http_status: 201,
+    mutation_expected: true,
+    api_requests: [{
+      actor: journal.acquisition.intent.owner,
+      body: { display_name: displayName },
+      credential_role: "oauth_owner",
+      event_id: eventId,
+      method: "PUT",
+      occurred_at: occurredAt,
+      path: `/api/v1/model-identities/${modelId}/name`,
+      expected_http_status: 201,
+      expected_response: { model_id: modelId, status: "identity_renamed" },
+      expected_commit_message: message,
+      expected_documents: documents,
+      expected_deleted_paths: [],
+    }],
+    event_ids: [eventId],
+    model_ids: [modelId],
+    alias_keys: [],
+    assertions: {
+      immutable_event_written: true,
+      reverse_impact_updated: true,
+      view_renamed: true,
+    },
+    expected_commit_messages: [message],
+    expected_documents: documents,
+  };
+}
+
+async function completeGraphConsolidationPlan(
+  journal: StoredJournal,
+): Promise<QualificationStepPlan> {
+  const fixture = await requiredFixture(journal);
+  const renamePlan = journal.completed_plans[6];
+  const aliasPlan = journal.completed_plans[5];
+  const sourceModelId = renamePlan?.model_ids[0];
+  const aliasKey = aliasPlan?.alias_keys[0];
+  const targetModelId = fixture.bindings.chain.first_target_model_id;
+  if (
+    renamePlan?.operation !== "identity_rename" ||
+    aliasPlan?.operation !== "alias_assignment" ||
+    sourceModelId === undefined ||
+    aliasKey === undefined
+  ) throw new Error("qualification consolidation predecessor is unavailable");
+  const source = expectedModelView(renamePlan, sourceModelId);
+  const sourceImpactValue = renamePlan.expected_documents[
+    modelIdentityReverseImpactPath(sourceModelId)
+  ];
+  const sourceAliasValue = aliasPlan.expected_documents[modelAliasPath(aliasKey)];
+  if (sourceImpactValue === undefined || sourceAliasValue === undefined) {
+    throw new Error("qualification consolidation source component is unavailable");
+  }
+  const sourceImpact = sourceImpactValue as ModelIdentityReverseImpactView;
+  const sourceAlias = sourceAliasValue as ModelAliasView;
+  const target = fixtureModelView(fixture, targetModelId);
+  const targetImpact = fixtureReverseImpact(fixture, targetModelId);
+  const nowMilliseconds = nextPlanMilliseconds(journal);
+  const eventId = newEventId(nowMilliseconds);
+  const occurredAt = canonicalMilliseconds(nowMilliseconds);
+  const event = {
+    schema_version: 1,
+    event_id: eventId,
+    event_type: "model_identity.consolidated",
+    occurred_at: occurredAt,
+    subject_id: sourceModelId,
+    causation_event_id: source.mutation_event_id,
+    actor: { kind: "github", login: journal.acquisition.intent.owner.login },
+    payload: { target_model_id: targetModelId },
+  } as const;
+  const sourceView: ModelIdentityView = {
+    ...source,
+    status: "consolidated",
+    mutation_event_id: eventId,
+    consolidated_into: targetModelId,
+    resolved_model_id: targetModelId,
+  };
+  const aliasView: ModelAliasView = {
+    ...sourceAlias,
+    resolved_model_id: targetModelId,
+  };
+  const movedMembers = sourceImpact.members.map((member) =>
+    member.kind === "identity" && member.model_id === sourceModelId
+      ? { ...member, mutation_event_id: eventId }
+      : member);
+  const targetReverseImpact = modelIdentityReverseImpactView(target, [
+    ...targetImpact.members,
+    ...movedMembers,
+  ]);
+  const documents = {
+    [stateEventPath(event)]: event,
+    [modelIdentityPath(sourceModelId)]: sourceView,
+    [modelAliasPath(aliasKey)]: aliasView,
+    [modelIdentityReverseImpactPath(targetModelId)]: targetReverseImpact,
+  };
+  const message = `Consolidate model identity ${sourceModelId} into ${targetModelId}`;
+  return {
+    operation: "complete_graph_consolidation",
+    route: "POST /api/v1/model-identities/{model_id}/consolidations",
+    actor: journal.acquisition.intent.owner,
+    credential_roles: ["agent_owner"],
+    expected_http_status: 201,
+    mutation_expected: true,
+    api_requests: [{
+      actor: journal.acquisition.intent.owner,
+      body: { target_model_id: targetModelId },
+      credential_role: "agent_owner",
+      event_id: eventId,
+      method: "POST",
+      occurred_at: occurredAt,
+      path: `/api/v1/model-identities/${sourceModelId}/consolidations`,
+      expected_http_status: 201,
+      expected_response: {
+        model_id: sourceModelId,
+        target_model_id: targetModelId,
+        status: "identity_consolidated",
+      },
+      expected_commit_message: message,
+      expected_documents: documents,
+      expected_deleted_paths: [modelIdentityReverseImpactPath(sourceModelId)],
+    }],
+    event_ids: [eventId],
+    model_ids: [sourceModelId, targetModelId],
+    alias_keys: [],
+    assertions: {
+      all_reverse_impacts_retargeted: true,
+      immutable_event_written: true,
+      source_component_deleted: true,
+    },
+    expected_commit_messages: [message],
+    expected_documents: documents,
+  };
+}
+
+async function chainedTerminalRetryPlan(
+  journal: StoredJournal,
+): Promise<QualificationStepPlan> {
+  const fixture = await requiredFixture(journal);
+  const firstConsolidation = journal.completed_plans[7];
+  const aliasPlan = journal.completed_plans[5];
+  const sourceModelId = firstConsolidation?.model_ids[0];
+  const firstTargetModelId = firstConsolidation?.model_ids[1];
+  const secondTargetModelId = fixture.bindings.chain.second_target_model_id;
+  const aliasKey = aliasPlan?.alias_keys[0];
+  const firstRequest = firstConsolidation?.api_requests[0];
+  if (
+    firstConsolidation?.operation !== "complete_graph_consolidation" ||
+    aliasPlan?.operation !== "alias_assignment" ||
+    sourceModelId === undefined ||
+    firstTargetModelId === undefined ||
+    aliasKey === undefined ||
+    firstRequest === undefined
+  ) throw new Error("qualification chained predecessor is unavailable");
+  const sourceView = expectedModelView(firstConsolidation, sourceModelId);
+  const aliasValue = firstConsolidation.expected_documents[modelAliasPath(aliasKey)];
+  const firstImpactValue = firstConsolidation.expected_documents[
+    modelIdentityReverseImpactPath(firstTargetModelId)
+  ];
+  if (aliasValue === undefined || firstImpactValue === undefined) {
+    throw new Error("qualification chained source component is unavailable");
+  }
+  const sourceAlias = aliasValue as ModelAliasView;
+  const firstImpact = firstImpactValue as ModelIdentityReverseImpactView;
+  const firstTarget = fixtureModelView(fixture, firstTargetModelId);
+  const secondTarget = fixtureModelView(fixture, secondTargetModelId);
+  const secondImpact = fixtureReverseImpact(fixture, secondTargetModelId);
+  const firstMilliseconds = nextPlanMilliseconds(journal);
+  const firstEventId = newEventId(firstMilliseconds);
+  const firstOccurredAt = canonicalMilliseconds(firstMilliseconds);
+  const displayName = `Qualification chain target run ${journal.acquisition.run_id}`;
+  const renameEvent = {
+    schema_version: 1,
+    event_id: firstEventId,
+    event_type: "model_identity.renamed",
+    occurred_at: firstOccurredAt,
+    subject_id: secondTargetModelId,
+    causation_event_id: secondTarget.mutation_event_id,
+    actor: { kind: "github", login: journal.acquisition.intent.owner.login },
+    payload: { display_name: displayName },
+  } as const;
+  const renamedTarget: ModelIdentityView = {
+    ...secondTarget,
+    display_name: displayName,
+    mutation_event_id: firstEventId,
+  };
+  const renamedImpact = modelIdentityReverseImpactView(
+    renamedTarget,
+    secondImpact.members.map((member) =>
+      member.kind === "identity" && member.model_id === secondTargetModelId
+        ? { ...member, mutation_event_id: firstEventId }
+        : member),
+  );
+  const renameDocuments = {
+    [stateEventPath(renameEvent)]: renameEvent,
+    [modelIdentityPath(secondTargetModelId)]: renamedTarget,
+    [modelIdentityReverseImpactPath(secondTargetModelId)]: renamedImpact,
+  };
+  const renameMessage = `Rename model identity ${secondTargetModelId}`;
+
+  const secondMilliseconds = firstMilliseconds + 1;
+  const secondEventId = newEventId(secondMilliseconds);
+  const secondOccurredAt = canonicalMilliseconds(secondMilliseconds);
+  const consolidationEvent = {
+    schema_version: 1,
+    event_id: secondEventId,
+    event_type: "model_identity.consolidated",
+    occurred_at: secondOccurredAt,
+    subject_id: firstTargetModelId,
+    causation_event_id: firstTarget.mutation_event_id,
+    actor: { kind: "github", login: journal.acquisition.intent.owner.login },
+    payload: { target_model_id: secondTargetModelId },
+  } as const;
+  const consolidatedFirstTarget: ModelIdentityView = {
+    ...firstTarget,
+    status: "consolidated",
+    mutation_event_id: secondEventId,
+    consolidated_into: secondTargetModelId,
+    resolved_model_id: secondTargetModelId,
+  };
+  const movedSource: ModelIdentityView = {
+    ...sourceView,
+    resolved_model_id: secondTargetModelId,
+  };
+  const movedAlias: ModelAliasView = {
+    ...sourceAlias,
+    resolved_model_id: secondTargetModelId,
+  };
+  const movedMembers = firstImpact.members.map((member) =>
+    member.kind === "identity" && member.model_id === firstTargetModelId
+      ? { ...member, mutation_event_id: secondEventId }
+      : member);
+  const finalImpact = modelIdentityReverseImpactView(renamedTarget, [
+    ...renamedImpact.members,
+    ...movedMembers,
+  ]);
+  const consolidationDocuments = {
+    [stateEventPath(consolidationEvent)]: consolidationEvent,
+    [modelIdentityPath(firstTargetModelId)]: consolidatedFirstTarget,
+    [modelIdentityPath(sourceModelId)]: movedSource,
+    [modelAliasPath(aliasKey)]: movedAlias,
+    [modelIdentityReverseImpactPath(secondTargetModelId)]: finalImpact,
+  };
+  const consolidationMessage =
+    `Consolidate model identity ${firstTargetModelId} into ${secondTargetModelId}`;
+  const requests: QualificationApiRequestPlan[] = [{
+    actor: journal.acquisition.intent.owner,
+    body: { display_name: displayName },
+    credential_role: "agent_owner",
+    event_id: firstEventId,
+    method: "PUT",
+    occurred_at: firstOccurredAt,
+    path: `/api/v1/model-identities/${secondTargetModelId}/name`,
+    expected_http_status: 201,
+    expected_response: {
+      model_id: secondTargetModelId,
+      status: "identity_renamed",
+    },
+    expected_commit_message: renameMessage,
+    expected_documents: renameDocuments,
+    expected_deleted_paths: [],
+  }, {
+    actor: journal.acquisition.intent.owner,
+    body: { target_model_id: secondTargetModelId },
+    credential_role: "agent_owner",
+    event_id: secondEventId,
+    method: "POST",
+    occurred_at: secondOccurredAt,
+    path: `/api/v1/model-identities/${firstTargetModelId}/consolidations`,
+    expected_http_status: 201,
+    expected_response: {
+      model_id: firstTargetModelId,
+      target_model_id: secondTargetModelId,
+      status: "identity_consolidated",
+    },
+    expected_commit_message: consolidationMessage,
+    expected_documents: consolidationDocuments,
+    expected_deleted_paths: [modelIdentityReverseImpactPath(firstTargetModelId)],
+  }, {
+    ...firstRequest,
+    expected_http_status: 200,
+    expected_response: {
+      model_id: sourceModelId,
+      target_model_id: firstTargetModelId,
+      status: "identity_already_consolidated",
+    },
+    expected_commit_message: null,
+    expected_documents: {},
+    expected_deleted_paths: [],
+  }];
+  return {
+    operation: "chained_terminal_retry",
+    route: "POST /api/v1/model-identities/{model_id}/consolidations",
+    actor: journal.acquisition.intent.owner,
+    credential_roles: ["agent_owner"],
+    expected_http_status: 200,
+    mutation_expected: true,
+    api_requests: requests,
+    event_ids: [firstEventId, secondEventId],
+    model_ids: [sourceModelId, firstTargetModelId, secondTargetModelId],
+    alias_keys: [],
+    assertions: {
+      later_chain_created: true,
+      retry_created_no_event: true,
+      retry_resolved_current_terminal: true,
+    },
+    expected_commit_messages: [renameMessage, consolidationMessage],
+    expected_documents: { ...renameDocuments, ...consolidationDocuments },
+  };
+}
+
+async function componentCapRefusalPlan(
+  journal: StoredJournal,
+): Promise<QualificationStepPlan> {
+  const fixture = await requiredFixture(journal);
+  const sourceModelId = fixture.bindings.cap_refusal.source_terminal_model_id;
+  const targetModelId = fixture.bindings.cap_refusal.target_terminal_model_id;
+  const nowMilliseconds = nextPlanMilliseconds(journal);
+  const eventId = newEventId(nowMilliseconds);
+  const request: QualificationApiRequestPlan = {
+    actor: journal.acquisition.intent.owner,
+    body: { target_model_id: targetModelId },
+    credential_role: "oauth_owner",
+    event_id: eventId,
+    method: "POST",
+    occurred_at: canonicalMilliseconds(nowMilliseconds),
+    path: `/api/v1/model-identities/${sourceModelId}/consolidations`,
+    expected_http_status: 409,
+    expected_response: { error: "idempotency_conflict" },
+    expected_commit_message: null,
+    expected_documents: {},
+    expected_deleted_paths: [],
+  };
+  return {
+    operation: "component_cap_refusal",
+    route: "POST /api/v1/model-identities/{model_id}/consolidations",
+    actor: journal.acquisition.intent.owner,
+    credential_roles: ["oauth_owner"],
+    expected_http_status: 409,
+    mutation_expected: false,
+    api_requests: [request],
+    event_ids: [],
+    model_ids: [sourceModelId, targetModelId],
+    alias_keys: [],
+    assertions: {
+      candidate_union_count_is_33: true,
+      component_cap_is_32: true,
+      no_git_object_created: true,
+    },
+    expected_commit_messages: [],
+    expected_documents: {},
+  };
+}
+
+function idempotentRetryPlan(journal: StoredJournal): QualificationStepPlan {
+  const ownerPlan = journal.completed_plans[2];
+  const request = ownerPlan?.api_requests[0];
+  const modelId = ownerPlan?.model_ids[0];
+  if (ownerPlan?.operation !== "owner_request" || request === undefined || modelId === undefined) {
+    throw new Error("qualification idempotent predecessor is unavailable");
+  }
+  return {
+    operation: "idempotent_retry",
+    route: "POST /api/v1/model-identities",
+    actor: journal.acquisition.intent.owner,
+    credential_roles: ["oauth_owner"],
+    expected_http_status: 200,
+    mutation_expected: false,
+    api_requests: [{
+      ...request,
+      expected_http_status: 200,
+      expected_response: { model_id: modelId, status: "identity_already_requested" },
+      expected_commit_message: null,
+      expected_documents: {},
+      expected_deleted_paths: [],
+    }],
+    event_ids: [request.event_id],
+    model_ids: [modelId],
+    alias_keys: [],
+    assertions: {
+      event_payload_byte_equal: true,
+      existing_event_reused: true,
+      no_git_object_created: true,
+    },
+    expected_commit_messages: [],
+    expected_documents: {},
+  };
+}
+
+function crossRouteCollisionPlan(journal: StoredJournal): QualificationStepPlan {
+  const ownerPlan = journal.completed_plans[2];
+  const request = ownerPlan?.api_requests[0];
+  const modelId = ownerPlan?.model_ids[0];
+  if (ownerPlan?.operation !== "owner_request" || request === undefined || modelId === undefined) {
+    throw new Error("qualification collision predecessor is unavailable");
+  }
+  return {
+    operation: "cross_route_event_collision",
+    route: "PUT /api/v1/model-identities/{model_id}/name",
+    actor: journal.acquisition.intent.owner,
+    credential_roles: ["oauth_owner"],
+    expected_http_status: 409,
+    mutation_expected: false,
+    api_requests: [{
+      actor: journal.acquisition.intent.owner,
+      body: { display_name: `Qualification collision run ${journal.acquisition.run_id}` },
+      credential_role: "oauth_owner",
+      event_id: request.event_id,
+      method: "PUT",
+      occurred_at: request.occurred_at,
+      path: `/api/v1/model-identities/${modelId}/name`,
+      expected_http_status: 409,
+      expected_response: { error: "idempotency_conflict" },
+      expected_commit_message: null,
+      expected_documents: {},
+      expected_deleted_paths: [],
+    }],
+    event_ids: [request.event_id],
+    model_ids: [modelId],
+    alias_keys: [],
+    assertions: {
+      event_route_family_mismatch: true,
+      immutable_event_preserved: true,
+      no_git_object_created: true,
+    },
+    expected_commit_messages: [],
+    expected_documents: {},
+  };
+}
+
+function crossOwnerDenialPlan(journal: StoredJournal): QualificationStepPlan {
+  const ownerPlan = journal.completed_plans[2];
+  const modelId = ownerPlan?.model_ids[0];
+  if (ownerPlan?.operation !== "owner_request" || modelId === undefined) {
+    throw new Error("qualification cross-owner predecessor is unavailable");
+  }
+  const nowMilliseconds = nextPlanMilliseconds(journal);
+  return {
+    operation: "cross_owner_denial",
+    route: "PUT /api/v1/model-identities/{model_id}/name",
+    actor: journal.acquisition.intent.cross_owner,
+    credential_roles: ["cross_owner"],
+    expected_http_status: 404,
+    mutation_expected: false,
+    api_requests: [{
+      actor: journal.acquisition.intent.cross_owner,
+      body: { display_name: `Qualification denied rename run ${journal.acquisition.run_id}` },
+      credential_role: "cross_owner",
+      event_id: newEventId(nowMilliseconds),
+      method: "PUT",
+      occurred_at: canonicalMilliseconds(nowMilliseconds),
+      path: `/api/v1/model-identities/${modelId}/name`,
+      expected_http_status: 404,
+      expected_response: { error: "not_found" },
+      expected_commit_message: null,
+      expected_documents: {},
+      expected_deleted_paths: [],
+    }],
+    event_ids: [],
+    model_ids: [modelId],
+    alias_keys: [],
+    assertions: {
+      distinct_signed_owner_verified: true,
+      no_git_object_created: true,
+      target_owner_not_disclosed: true,
+    },
+    expected_commit_messages: [],
+    expected_documents: {},
+  };
+}
+
+async function maximalContentionPlan(
+  journal: StoredJournal,
+): Promise<QualificationStepPlan> {
+  const fixture = await requiredFixture(journal);
+  const sourceModelId = fixture.bindings.contention.source_terminal_model_id;
+  const targetModelId = fixture.bindings.contention.target_terminal_model_id;
+  const source = fixtureModelView(fixture, sourceModelId);
+  const target = fixtureModelView(fixture, targetModelId);
+  const sourceImpact = fixtureReverseImpact(fixture, sourceModelId);
+  const targetImpact = fixtureReverseImpact(fixture, targetModelId);
+  const nowMilliseconds = nextPlanMilliseconds(journal);
+  const eventId = newEventId(nowMilliseconds);
+  const occurredAt = canonicalMilliseconds(nowMilliseconds);
+  const event = {
+    schema_version: 1,
+    event_id: eventId,
+    event_type: "model_identity.consolidated",
+    occurred_at: occurredAt,
+    subject_id: sourceModelId,
+    causation_event_id: source.mutation_event_id,
+    actor: { kind: "github", login: journal.acquisition.intent.owner.login },
+    payload: { target_model_id: targetModelId },
+  } as const;
+  const documents: Record<string, QualificationJson> = {
+    [stateEventPath(event)]: event,
+  };
+  const movedMembers = [] as ModelIdentityReverseImpactView["members"][number][];
+  for (const member of sourceImpact.members) {
+    if (member.kind === "identity") {
+      const current = fixtureModelView(fixture, member.model_id);
+      const next: ModelIdentityView = member.model_id === sourceModelId
+        ? {
+            ...current,
+            status: "consolidated",
+            mutation_event_id: eventId,
+            consolidated_into: targetModelId,
+            resolved_model_id: targetModelId,
+          }
+        : { ...current, resolved_model_id: targetModelId };
+      documents[member.view_path] = next;
+      movedMembers.push(member.model_id === sourceModelId
+        ? { ...member, mutation_event_id: eventId }
+        : member);
+    } else {
+      const current = fixtureAliasView(fixture, member.alias_key);
+      documents[member.view_path] = {
+        ...current,
+        resolved_model_id: targetModelId,
+      };
+      movedMembers.push(member);
+    }
+  }
+  const mergedImpact = modelIdentityReverseImpactView(target, [
+    ...targetImpact.members,
+    ...movedMembers,
+  ]);
+  documents[modelIdentityReverseImpactPath(targetModelId)] = mergedImpact;
+  const message = `Consolidate model identity ${sourceModelId} into ${targetModelId}`;
+  const expectedStatePrefix: {
+    expected_message: string;
+    expected_documents: Readonly<Record<string, QualificationJson>>;
+    expected_deleted_paths: readonly string[];
+    expected_tree_unchanged: boolean;
+  }[] = Array.from({ length: 7 }, (_, index) => ({
+    expected_message:
+      `Model identity qualification collision ${journal.journal_id} revision ${String(journal.journal_revision)} attempt ${String(index + 1)}`,
+    expected_documents: {},
+    expected_deleted_paths: [],
+    expected_tree_unchanged: true,
+  }));
+  expectedStatePrefix.push({
+    expected_message: message,
+    expected_documents: documents,
+    expected_deleted_paths: [modelIdentityReverseImpactPath(sourceModelId)],
+    expected_tree_unchanged: false,
+  });
+  return {
+    operation: "maximal_contention_measurement",
+    route: "POST /api/v1/model-identities/{model_id}/consolidations",
+    actor: journal.acquisition.intent.owner,
+    credential_roles: ["agent_owner"],
+    expected_http_status: 201,
+    mutation_expected: true,
+    api_requests: [{
+      actor: journal.acquisition.intent.owner,
+      body: { target_model_id: targetModelId },
+      credential_role: "agent_owner",
+      event_id: eventId,
+      method: "POST",
+      occurred_at: occurredAt,
+      path: `/api/v1/model-identities/${sourceModelId}/consolidations`,
+      expected_http_status: 201,
+      expected_response: {
+        model_id: sourceModelId,
+        target_model_id: targetModelId,
+        status: "identity_consolidated",
+      },
+      expected_commit_message: message,
+      expected_documents: documents,
+      expected_deleted_paths: [modelIdentityReverseImpactPath(sourceModelId)],
+    }],
+    event_ids: [eventId],
+    model_ids: [sourceModelId, targetModelId],
+    alias_keys: [],
+    assertions: {
+      eight_cas_attempts_executed: true,
+      network_subrequests_measured: true,
+      successful_final_cas: true,
+    },
+    expected_commit_messages: [message],
+    expected_documents: documents,
+    expected_state_prefix: expectedStatePrefix,
+  };
+}
+
 async function createPlan(
   journal: StoredJournal,
   operation: QualificationOperation,
@@ -494,7 +1479,37 @@ async function createPlan(
   if (operation === "owner_request") {
     return ownerRequestPlan(journal.acquisition, Date.now());
   }
-  throw new Error(`qualification operation ${operation} does not yet have a fixed durable plan`);
+  if (operation === "maintainer_approve") {
+    return maintainerApprovePlan(journal);
+  }
+  if (operation === "maintainer_reject") {
+    return maintainerRejectPlan(journal);
+  }
+  if (operation === "alias_assignment") {
+    return aliasAssignmentPlan(journal);
+  }
+  if (operation === "identity_rename") {
+    return identityRenamePlan(journal);
+  }
+  if (operation === "complete_graph_consolidation") {
+    return completeGraphConsolidationPlan(journal);
+  }
+  if (operation === "chained_terminal_retry") {
+    return chainedTerminalRetryPlan(journal);
+  }
+  if (operation === "component_cap_refusal") {
+    return componentCapRefusalPlan(journal);
+  }
+  if (operation === "idempotent_retry") {
+    return idempotentRetryPlan(journal);
+  }
+  if (operation === "cross_route_event_collision") {
+    return crossRouteCollisionPlan(journal);
+  }
+  if (operation === "cross_owner_denial") {
+    return crossOwnerDenialPlan(journal);
+  }
+  return maximalContentionPlan(journal);
 }
 
 async function journalId(acquisition: QualificationAcquisition): Promise<string> {
@@ -795,8 +1810,14 @@ export class ModelIdentityQualificationJournal extends DurableObject {
     expectedRevision: number,
     stateCommit: string,
     stateTree: string,
+    appliedMutations: number,
   ): Promise<QualificationJournalStatus> {
-    if (!SHA.test(stateCommit) || !SHA.test(stateTree)) {
+    if (
+      !SHA.test(stateCommit) ||
+      !SHA.test(stateTree) ||
+      !Number.isSafeInteger(appliedMutations) ||
+      appliedMutations < 1
+    ) {
       throw new TypeError("qualification reconciled State identity is invalid");
     }
     return this.ctx.storage.transactionSync(() => {
@@ -812,9 +1833,17 @@ export class ModelIdentityQualificationJournal extends DurableObject {
       ) {
         throw new Error("qualification pending mutation cannot be reconciled safely");
       }
+      const plannedMutations = pending.plan.expected_state_prefix?.length ??
+        pending.plan.api_requests.filter(
+          (request) => request.expected_commit_message !== null,
+        ).length;
+      if (appliedMutations > plannedMutations) {
+        throw new Error("qualification recovered mutation prefix is invalid");
+      }
       const reconciliation: RecoveryReconciliation = {
         operation: pending.operation,
         plan_digest: pending.plan_digest,
+        applied_mutations: appliedMutations,
         state_commit: stateCommit,
         state_tree: stateTree,
       };
