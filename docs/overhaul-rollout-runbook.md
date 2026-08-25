@@ -767,6 +767,43 @@ tokens. Custom domains can be added later without changing the API contracts.
     without enabling intake or changing State. Record the result, account, and
     deployment version IDs in `INFRASTRUCTURE.md`.
 
+## Historical authoritative replay controller gate
+
+The modern encrypted-archive queue and the historical public queue are
+different authorities. Before corpus execution, review
+[`historical-authoritative-replay-controller.md`](historical-authoritative-replay-controller.md)
+and verify all of the following:
+
+1. `historical-authoritative-replay.yml` is still gated on exact repository
+   variable `HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED`; keep it absent until
+   the separately reviewed executor transport is deployed and qualified.
+2. The controller's first task is byte-bound to production State's version-2
+   historical queue and to the exact committed authority plan, qualification
+   profile, profile matrix, and runner contract. No submission UUID, archive
+   locator, ciphertext digest, or KMS field may appear.
+3. The distinct `historical_public_executor_v1` transport replaces the tracked
+   `historical_public_executor_not_implemented` blocker. Do not remove the
+   blocker based only on image publication or staging qualification evidence.
+4. Add a reviewed Gist source adapter and clear
+   `historical_public_gist_source_adapter_not_implemented`; a repository-only
+   runner must never start a Gist task. Bind the exact replay attempt into the
+   handoff and verdict before clearing
+   `historical_public_attempt_binding_not_implemented` or enabling terminal
+   State-event construction. Retain the three-attempt terminal blocker unless
+   a replacement retry policy is reviewed together with State.
+5. Before the first State write, add and review an exact-head State append lane:
+   recover a stale running task or stop on a current one; append exactly one
+   `replay.started`; execute without State authority; and append exactly one
+   terminal event. Cancellation after start must converge through the same
+   seven-hour `runner_lost` recovery, never by selecting a second task.
+6. Provision only a read credential for the current planning workflow. A State
+   writer and any executor credential are separate launch actions and must not
+   exist in the read-only lane.
+
+The current implementation satisfies only the source/controller contract. It
+does not authorize State mutation or satisfy the historical corpus execution
+gate.
+
 ## Historical public GitHub evidence walkthrough
 
 Treat GitHub evidence resolution as a source-free, immutable input to corpus

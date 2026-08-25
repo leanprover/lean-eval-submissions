@@ -347,6 +347,20 @@ the already implemented owner status, metadata, and publication routes.
       Authorization remains separate from the unresolved historical-toolchain
       execution-profile gate; it does not claim the current v4.33 profile can
       execute older or prerelease toolchains.
+      The distinct historical queue now has a source-free controller
+      foundation and a manual read-only production planning workflow. It binds
+      the exact State queue, authority plan, committed qualification profile,
+      profile matrix, runner contract, and source handoff. It uses State's exact
+      canonical bytes and reducer order, refuses malformed re-enqueue or unknown
+      transitions, refuses concurrent work, and prepares only a stale
+      `runner_lost` recovery after the finite lease. The workflow remains dark
+      on the absent `HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED` variable and
+      contains no State writer. Every execution plan is explicitly blocked on
+      `historical_public_executor_not_implemented`; Gist tasks and exhausted
+      retries have additional typed blockers. Terminal construction is also
+      blocked until the runner contract binds the exact attempt. No enqueue,
+      started event, executor invocation, or terminal append has occurred. See
+      [`historical-authoritative-replay-controller.md`](historical-authoritative-replay-controller.md).
 - [ ] Expand independent-kernel validation from the one-result shadow smoke to
       a checker-series/corpus report with separately recorded
       accept/reject/decline/crash/timeout outcomes and an explicit promotion
