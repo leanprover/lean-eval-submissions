@@ -513,6 +513,7 @@ jobs:
               "environment": "production",
               "deployed_commit": os.environ["EXPECTED_COMMIT"],
               "replay_enabled": False,
+              "historical_public_replay_enabled": False,
               "staging_acceptance_enabled": False,
               "staging_memory_limit_bytes": 12 * 1024**3,
               "production_memory_gate_bytes": 12 * 1024**3,
