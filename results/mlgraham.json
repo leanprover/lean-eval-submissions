@@ -275,6 +275,29 @@
         "ref": "8d44d31c6bb221bed45749804fa18ec7fec79d71",
         "repo": "mlgraham/lean-eval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-25T00:40:15Z",
+      "benchmark_commit": "a910403b85a4f903d812538292393cc13ef6c801",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1351,
+        "kind": "issue"
+      },
+      "problem_id": "lp_maximum_principle",
+      "production_metadata": {
+        "production_description": "Original proof of lp_maximum_principle (both holes: lp_maximum_principle and\nsimplex_algorithm). Claude Fable 5 (Claude Code), under human direction, from the Challenge,\nMathlib source search, and compiler feedback only; no published lean-eval solution consulted.\nMethod: the feasible region {A x <= b, 0 <= x} is convex and closed (mulVecLin is continuous in\nfinite dimension; isClosed_le on the Pi order); the objective c . x is concave (linear), so\nIsMaxOn.of_isLocalMaxOn_of_concaveOn gives the global maximum; for the frontier claim, an\ninterior point could be moved by (eps / 2|c|) c and stay feasible while strictly increasing\nc . x (dotProduct_self_star_pos_iff), contradicting maximality. For vertex optimality: closed +\nbounded => compact (Metric.isCompact_of_isClosed_isBounded), the max is attained\n(IsCompact.exists_isMaxOn), the maximal face is an exposed face of the region (IsExposed with\nthe objective as a StrongDual element), hence compact; the Krein-Milman lemma\n(IsCompact.extremePoints_nonempty) gives it an extreme point, which is extreme in the region\nvia IsExposed.isExtreme and IsExtreme.extremePoints_subset_extremePoints. Cost: 2 compile\niterations, ~25 minutes of model loop time. (Earlier workspaces on this branch are already\nrecorded; results are sticky.)",
+        "solution_publication_date": "2026-08-24",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_4139cfac63c01798ba59dca8768653d54173cd1bb6222283bcf9f63cdaf40c64",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "7b2dd553264c8e985c3065c498bdcadcfed322bd",
+        "repo": "mlgraham/lean-eval-submission"
+      }
     }
   ],
   "schema_version": 2,
