@@ -10,6 +10,8 @@ import {
   type ResultRetractionRequestedEvent,
   type WritableSubmissionLifecycleEvent,
   type WritableStateEvent,
+  type ModelIdentityDecisionEvent,
+  type ModelIdentityOwnerEvent,
   validateStateEvent,
 } from "./state-event";
 import {
@@ -69,6 +71,16 @@ import {
   type SubmissionView,
 } from "./submission-view";
 import { ScheduledSubrequestBudgetError } from "./scheduled-subrequest-budget";
+import {
+  decodeModelAliasView,
+  decodeModelIdentityView,
+  modelAliasKey,
+  modelAliasPath,
+  modelIdentityId,
+  modelIdentityPath,
+  type ModelAliasView,
+  type ModelIdentityView,
+} from "./model-identity";
 
 const API = "https://api.github.com";
 const STATE_BRANCH = "main";
@@ -86,6 +98,11 @@ export const DISPATCH_UPDATE_MAX_SUBREQUESTS =
   (MAX_WRITE_ATTEMPTS + 1) *
   (BRANCH_SNAPSHOT_SUBREQUESTS + SUBMISSION_GRAPH_MAX_SUBREQUESTS +
     CREATE_DISPATCH_COMMIT_SUBREQUESTS + REFERENCE_UPDATE_MAX_SUBREQUESTS);
+// Nine maximum CAS attempts. Each attempt reserves 4 contract/snapshot reads,
+// 9 targeted identity/alias/event reads,
+// 2 Git object writes, and the 4-request uncertain ref-update recovery bound.
+export const MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS =
+  (MAX_WRITE_ATTEMPTS + 1) * (4 + 9 + CREATE_DISPATCH_COMMIT_SUBREQUESTS + REFERENCE_UPDATE_MAX_SUBREQUESTS);
 const NEW_EVENT_CLOCK_WINDOW_MS = 5 * 60 * 1000;
 const SHA = /^[0-9a-f]{40}$/i;
 const LOWER_SHA = /^[0-9a-f]{40}$/;
@@ -215,6 +232,38 @@ export type ResultRetractionFinalizationRequest = Readonly<{
   maintainerLogin: string;
 }>;
 
+export type ModelIdentityRequest = Readonly<{
+  eventId: string;
+  occurredAt: string;
+  ownerLogin: string;
+  displayName: string;
+}>;
+
+export type ModelIdentityDecisionRequest = Readonly<{
+  eventId: string;
+  occurredAt: string;
+  modelId: string;
+  reviewerLogin: string;
+  decision: "approve" | "reject";
+  reasonCode: string | null;
+}>;
+
+export type ModelAliasAssignmentRequest = Readonly<{
+  eventId: string;
+  occurredAt: string;
+  modelId: string;
+  ownerLogin: string;
+  alias: string;
+}>;
+
+export type ModelIdentityRenameRequest = Readonly<{
+  eventId: string;
+  occurredAt: string;
+  modelId: string;
+  ownerLogin: string;
+  displayName: string;
+}>;
+
 export class GitHubStateError extends Error {
   readonly status: number;
 
@@ -232,6 +281,16 @@ export class ResultOwnerStateError extends Error {
   constructor(status: 404 | 409, message: string) {
     super(message);
     this.name = "ResultOwnerStateError";
+    this.status = status;
+  }
+}
+
+export class ModelIdentityStateError extends Error {
+  readonly status: 404 | 409;
+
+  constructor(status: 404 | 409, message: string) {
+    super(message);
+    this.name = "ModelIdentityStateError";
     this.status = status;
   }
 }
@@ -1321,6 +1380,89 @@ async function readResultOwnerDocumentAt<T>(
   }
 }
 
+async function readModelIdentityAt(
+  config: GitHubStateConfig,
+  fetcher: GitHubFetch,
+  modelId: string,
+  commit: string,
+): Promise<Readonly<{ view: ModelIdentityView; mutationEvent: StateEvent }> | null> {
+  const path = modelIdentityPath(modelId);
+  const entry = await readPathAt(config, fetcher, path, commit);
+  if (!entry.found) return null;
+  let view: ModelIdentityView;
+  try {
+    view = decodeModelIdentityView(entry.value);
+  } catch (error) {
+    throw new GitHubStateError(502, `${path} is invalid: ${String(error)}`);
+  }
+  if (view.model_id !== modelId || await modelIdentityId(view.request_event_id) !== modelId) {
+    throw new StateEventConflictError(path);
+  }
+  const eventIds = new Set([view.request_event_id, view.mutation_event_id]);
+  if (view.decision_event_id !== null) eventIds.add(view.decision_event_id);
+  const events = new Map((await Promise.all(
+    [...eventIds].map(async (eventId) => [eventId, await readEventAt(config, fetcher, eventId, commit)] as const),
+  )));
+  const request = events.get(view.request_event_id);
+  const mutation = events.get(view.mutation_event_id);
+  if (
+    request?.event_type !== "model_identity.requested" || request.subject_id !== modelId ||
+    request.actor.login !== view.owner_login ||
+    request.occurred_at !== view.requested_at || request.payload.display_name !== view.requested_name ||
+    mutation?.subject_id !== modelId
+  ) throw new StateEventConflictError(path);
+  if (view.status === "pending") {
+    if (mutation.event_type !== "model_identity.requested") throw new StateEventConflictError(path);
+    return { view, mutationEvent: mutation };
+  }
+  const decision = view.decision_event_id === null ? undefined : events.get(view.decision_event_id);
+  const expectedDecision = view.status === "rejected" ? "model_identity.rejected" : "model_identity.approved";
+  if (
+    decision?.event_type !== expectedDecision || decision.subject_id !== modelId ||
+    decision.causation_event_id !== view.request_event_id || decision.occurred_at !== view.decided_at ||
+    decision.payload.reviewer_login !== view.reviewer_login ||
+    (expectedDecision === "model_identity.rejected" && decision.payload.reason_code !== view.rejection_reason)
+  ) throw new StateEventConflictError(path);
+  if (view.status === "rejected") {
+    if (mutation.event_id !== decision.event_id) throw new StateEventConflictError(path);
+    return { view, mutationEvent: mutation };
+  }
+  if (mutation.event_type === "model_identity.approved") {
+    if (mutation.event_id !== decision.event_id || view.display_name !== view.requested_name) {
+      throw new StateEventConflictError(path);
+    }
+  } else if (mutation.event_type === "model_identity.alias_assigned") {
+    if (mutation.actor.login !== view.owner_login) {
+      throw new StateEventConflictError(path);
+    }
+  } else if (mutation.event_type === "model_identity.renamed") {
+    if (
+      mutation.actor.login !== view.owner_login ||
+      mutation.payload.display_name !== view.display_name
+    ) throw new StateEventConflictError(path);
+  } else if (mutation.event_type === "model_identity.consolidated") {
+    if (
+      view.status !== "consolidated" || mutation.actor.login !== view.owner_login ||
+      mutation.payload.target_model_id !== view.consolidated_into
+    ) throw new StateEventConflictError(path);
+  } else {
+    throw new StateEventConflictError(path);
+  }
+  if ((view.status === "consolidated") !== (mutation.event_type === "model_identity.consolidated")) {
+    throw new StateEventConflictError(path);
+  }
+  return { view, mutationEvent: mutation };
+}
+
+function existingModelEvent(value: unknown, path: string): StateEvent {
+  try {
+    validateStateEvent(value);
+  } catch {
+    throw new StateEventConflictError(path);
+  }
+  return value;
+}
+
 export class GitHubStateRepository {
   readonly #config: GitHubStateConfig;
   readonly #fetcher: GitHubFetch;
@@ -1372,6 +1514,272 @@ export class GitHubStateRepository {
   async readResultAmendmentForMaintainer(resultId: string): Promise<ResultAmendmentView> {
     const snapshot = await this.#resultOwnerSnapshot();
     return (await this.#resultAmendmentAt(resultId, snapshot)).view;
+  }
+
+  async requestModelIdentity(request: ModelIdentityRequest): Promise<{
+    commit: string;
+    created: boolean;
+    modelId: string;
+  }> {
+    const modelId = await modelIdentityId(request.eventId);
+    const path = modelIdentityPath(modelId);
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await this.#resultOwnerSnapshot();
+      const existing = await readModelIdentityAt(this.#config, this.#fetcher, modelId, snapshot.headSha);
+      if (existing !== null) {
+        if (
+          existing.view.owner_login !== request.ownerLogin ||
+          existing.view.requested_name !== request.displayName
+        ) throw new StateEventConflictError(path);
+        return { commit: snapshot.headSha, created: false, modelId };
+      }
+      this.#assertModelEventClock(request.eventId, request.occurredAt);
+      const event: ModelIdentityOwnerEvent<"model_identity.requested"> = {
+        schema_version: 1,
+        event_id: request.eventId,
+        event_type: "model_identity.requested",
+        occurred_at: request.occurredAt,
+        subject_id: modelId,
+        causation_event_id: null,
+        actor: { kind: "github", login: request.ownerLogin },
+        payload: { display_name: request.displayName },
+      };
+      validateStateEvent(event);
+      const view: ModelIdentityView = {
+        schema_version: 1,
+        model_id: modelId,
+        owner_login: request.ownerLogin,
+        requested_name: request.displayName,
+        display_name: request.displayName,
+        status: "pending",
+        request_event_id: request.eventId,
+        requested_at: request.occurredAt,
+        decision_event_id: null,
+        decided_at: null,
+        reviewer_login: null,
+        rejection_reason: null,
+        mutation_event_id: request.eventId,
+        consolidated_into: null,
+        resolved_model_id: null,
+      };
+      decodeModelIdentityView(view);
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        [event],
+        [{ path, value: view }],
+        `Request model identity ${modelId}`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return { commit, created: true, modelId };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) throw new ModelIdentityStateError(409, "State kept changing during model identity request");
+      await pause(attempt);
+    }
+    throw new Error("unreachable model identity request attempt");
+  }
+
+  async decideModelIdentity(request: ModelIdentityDecisionRequest): Promise<{
+    commit: string;
+    created: boolean;
+    modelId: string;
+    status: "approved" | "rejected";
+  }> {
+    const eventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await this.#resultOwnerSnapshot();
+      const [current, existingEvent] = await Promise.all([
+        readModelIdentityAt(this.#config, this.#fetcher, request.modelId, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, eventPath, snapshot.headSha),
+      ]);
+      if (current === null) throw new ModelIdentityStateError(404, "model identity was not found");
+      const expectedType = request.decision === "approve" ? "model_identity.approved" : "model_identity.rejected";
+      const payload = request.decision === "approve"
+        ? { reviewer_login: request.reviewerLogin }
+        : { reviewer_login: request.reviewerLogin, reason_code: request.reasonCode };
+      const event: ModelIdentityDecisionEvent = {
+        schema_version: 1,
+        event_id: request.eventId,
+        event_type: expectedType,
+        occurred_at: request.occurredAt,
+        subject_id: request.modelId,
+        causation_event_id: current.view.request_event_id,
+        actor: { kind: "system" },
+        payload,
+      };
+      validateStateEvent(event);
+      if (existingEvent.found) {
+        const existing = existingModelEvent(existingEvent.value, eventPath);
+        if (
+          existing.event_type !== expectedType || existing.event_id !== request.eventId ||
+          existing.subject_id !== request.modelId || existing.payload.reviewer_login !== request.reviewerLogin ||
+          (request.decision === "reject" && existing.payload.reason_code !== request.reasonCode)
+        ) throw new StateEventConflictError(eventPath);
+        return { commit: snapshot.headSha, created: false, modelId: request.modelId, status: request.decision === "approve" ? "approved" : "rejected" };
+      }
+      if (current.view.status !== "pending" || current.view.mutation_event_id !== current.view.request_event_id) {
+        throw new ModelIdentityStateError(409, "model identity does not have one pending request");
+      }
+      this.#assertModelMutationFollows(request.eventId, request.occurredAt, current.mutationEvent);
+      const status = request.decision === "approve" ? "approved" : "rejected";
+      const view: ModelIdentityView = {
+        ...current.view,
+        status,
+        decision_event_id: request.eventId,
+        decided_at: request.occurredAt,
+        reviewer_login: request.reviewerLogin,
+        rejection_reason: request.reasonCode,
+        mutation_event_id: request.eventId,
+        resolved_model_id: status === "approved" ? request.modelId : null,
+      };
+      decodeModelIdentityView(view);
+      const commit = await createCommit(this.#config, this.#fetcher, snapshot, [event], [{ path: modelIdentityPath(request.modelId), value: view }], `Record model identity decision ${request.modelId}`);
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return { commit, created: true, modelId: request.modelId, status };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) throw new ModelIdentityStateError(409, "State kept changing during model identity decision");
+      await pause(attempt);
+    }
+    throw new Error("unreachable model identity decision attempt");
+  }
+
+  async assignModelAlias(request: ModelAliasAssignmentRequest): Promise<{
+    commit: string;
+    created: boolean;
+    modelId: string;
+    aliasKey: string;
+  }> {
+    const aliasKey = await modelAliasKey(request.ownerLogin, request.alias);
+    const aliasPath = modelAliasPath(aliasKey);
+    const eventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await this.#resultOwnerSnapshot();
+      const [current, aliasEntry, eventEntry] = await Promise.all([
+        readModelIdentityAt(this.#config, this.#fetcher, request.modelId, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, aliasPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, eventPath, snapshot.headSha),
+      ]);
+      if (current?.view.owner_login !== request.ownerLogin) throw new ModelIdentityStateError(404, "model identity was not found");
+      const event: ModelIdentityOwnerEvent<"model_identity.alias_assigned"> = {
+        schema_version: 1, event_id: request.eventId, event_type: "model_identity.alias_assigned",
+        occurred_at: request.occurredAt, subject_id: request.modelId,
+        causation_event_id: current.view.mutation_event_id,
+        actor: { kind: "github", login: request.ownerLogin }, payload: { alias: request.alias },
+      };
+      validateStateEvent(event);
+      if (eventEntry.found) {
+        const existing = existingModelEvent(eventEntry.value, eventPath);
+        let alias: ModelAliasView;
+        try {
+          if (!aliasEntry.found) throw new TypeError("alias view is missing");
+          alias = decodeModelAliasView(aliasEntry.value);
+        } catch {
+          throw new StateEventConflictError(aliasPath);
+        }
+        if (
+          existing.event_type !== "model_identity.alias_assigned" ||
+          existing.event_id !== request.eventId || existing.subject_id !== request.modelId ||
+          existing.actor.login !== request.ownerLogin || existing.payload.alias !== request.alias ||
+          alias.alias_key !== aliasKey || alias.model_id !== request.modelId ||
+          alias.owner_login !== request.ownerLogin || alias.alias !== request.alias ||
+          alias.assignment_event_id !== request.eventId || alias.assigned_at !== existing.occurred_at
+        ) throw new StateEventConflictError(eventPath);
+        return { commit: snapshot.headSha, created: false, modelId: request.modelId, aliasKey };
+      }
+      if (aliasEntry.found) {
+        const alias = decodeModelAliasView(aliasEntry.value);
+        throw new ModelIdentityStateError(409, `model alias is permanently assigned to ${alias.model_id}`);
+      }
+      this.#requireActiveOwnedModel(current.view, request.ownerLogin);
+      this.#assertModelMutationFollows(request.eventId, request.occurredAt, current.mutationEvent);
+      const alias: ModelAliasView = {
+        schema_version: 1, alias_key: aliasKey, owner_login: request.ownerLogin, alias: request.alias,
+        model_id: request.modelId, assignment_event_id: request.eventId, assigned_at: request.occurredAt,
+        resolved_model_id: request.modelId,
+      };
+      decodeModelAliasView(alias);
+      const view: ModelIdentityView = { ...current.view, mutation_event_id: request.eventId };
+      const commit = await createCommit(this.#config, this.#fetcher, snapshot, [event], [
+        { path: modelIdentityPath(request.modelId), value: view }, { path: aliasPath, value: alias },
+      ], `Assign model alias ${aliasKey}`);
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") return { commit, created: true, modelId: request.modelId, aliasKey };
+      if (attempt === MAX_WRITE_ATTEMPTS) throw new ModelIdentityStateError(409, "State kept changing during model alias assignment");
+      await pause(attempt);
+    }
+    throw new Error("unreachable model alias assignment attempt");
+  }
+
+  async renameModelIdentity(request: ModelIdentityRenameRequest): Promise<{ commit: string; created: boolean; modelId: string }> {
+    return this.#mutateOwnedModel(request, "model_identity.renamed", { display_name: request.displayName }, (view) => ({
+      ...view, display_name: request.displayName, mutation_event_id: request.eventId,
+    }), `Rename model identity ${request.modelId}`);
+  }
+
+  #requireActiveOwnedModel(view: ModelIdentityView, ownerLogin: string): void {
+    if (view.owner_login !== ownerLogin) throw new ModelIdentityStateError(404, "model identity was not found");
+    if (view.status !== "approved" || view.resolved_model_id !== view.model_id) {
+      throw new ModelIdentityStateError(409, "model identity is not active and approved");
+    }
+  }
+
+  #assertModelMutationFollows(eventId: string, occurredAt: string, current: StateEvent): void {
+    this.#assertModelEventClock(eventId, occurredAt);
+    if (eventId <= current.event_id || Date.parse(occurredAt) <= Date.parse(current.occurred_at)) {
+      throw new ModelIdentityStateError(409, "model identity mutation does not follow its current head");
+    }
+  }
+
+  #assertModelEventClock(eventId: string, occurredAt: string): void {
+    const occurred = Date.parse(occurredAt);
+    const timestamp = uuidV7Timestamp(eventId);
+    if (timestamp > occurred || timestamp < occurred - NEW_EVENT_CLOCK_WINDOW_MS) {
+      throw new ModelIdentityStateError(409, "Idempotency-Key does not match the current request clock");
+    }
+  }
+
+  async #mutateOwnedModel(
+    request: ModelIdentityRenameRequest,
+    eventType: "model_identity.renamed",
+    payload: Readonly<Record<string, unknown>>,
+    transition: (view: ModelIdentityView) => ModelIdentityView,
+    message: string,
+  ): Promise<{ commit: string; created: boolean; modelId: string }> {
+    const eventPath = `events/${request.eventId.replaceAll("-", "").slice(0, 2)}/${request.eventId}.json`;
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await this.#resultOwnerSnapshot();
+      const [current, existingEvent] = await Promise.all([
+        readModelIdentityAt(this.#config, this.#fetcher, request.modelId, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, eventPath, snapshot.headSha),
+      ]);
+      if (current?.view.owner_login !== request.ownerLogin) throw new ModelIdentityStateError(404, "model identity was not found");
+      const event: ModelIdentityOwnerEvent<"model_identity.renamed"> = {
+        schema_version: 1, event_id: request.eventId, event_type: eventType,
+        occurred_at: request.occurredAt, subject_id: request.modelId,
+        causation_event_id: current.view.mutation_event_id,
+        actor: { kind: "github", login: request.ownerLogin }, payload,
+      };
+      validateStateEvent(event);
+      if (existingEvent.found) {
+        const existing = existingModelEvent(existingEvent.value, eventPath);
+        const expectedField = "display_name";
+        if (
+          existing.event_type !== eventType || existing.event_id !== request.eventId ||
+          existing.subject_id !== request.modelId || existing.actor.login !== request.ownerLogin ||
+          existing.payload[expectedField] !== payload[expectedField]
+        ) throw new StateEventConflictError(eventPath);
+        return { commit: snapshot.headSha, created: false, modelId: request.modelId };
+      }
+      this.#requireActiveOwnedModel(current.view, request.ownerLogin);
+      this.#assertModelMutationFollows(request.eventId, request.occurredAt, current.mutationEvent);
+      const view = transition(current.view);
+      decodeModelIdentityView(view);
+      const commit = await createCommit(this.#config, this.#fetcher, snapshot, [event], [{ path: modelIdentityPath(request.modelId), value: view }], message);
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") return { commit, created: true, modelId: request.modelId };
+      if (attempt === MAX_WRITE_ATTEMPTS) throw new ModelIdentityStateError(409, "State kept changing during model identity mutation");
+      await pause(attempt);
+    }
+    throw new Error("unreachable model identity mutation attempt");
   }
 
   async assertAvailable(): Promise<void> {

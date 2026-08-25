@@ -8,6 +8,7 @@ const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const RESULT_ID = /^r2_[0-9a-f]{64}$/;
 const REPLAY_ID = /^rt1_[0-9a-f]{64}$/;
+const MODEL_ID = /^mi1_[0-9a-f]{64}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
 const REASON = /^[a-z][a-z0-9_]{1,63}$/;
 const TOOLCHAIN = /^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+$/;
@@ -225,6 +226,41 @@ export type WritableResultOwnerEvent =
   | ResultProblemRepairRequestedEvent
   | ResultRetractionRequestedEvent;
 
+type ModelIdentityOwnerEventType =
+  | "model_identity.requested"
+  | "model_identity.alias_assigned"
+  | "model_identity.renamed"
+  | "model_identity.consolidated";
+
+export type ModelIdentityOwnerEvent<
+  K extends ModelIdentityOwnerEventType = ModelIdentityOwnerEventType,
+> = Readonly<{
+  schema_version: 1;
+  event_id: string;
+  event_type: K;
+  occurred_at: string;
+  subject_id: string;
+  causation_event_id: string | null;
+  actor: Readonly<{ kind: "github"; login: string }>;
+  payload: Readonly<Record<string, unknown>>;
+}>;
+
+type WritableModelIdentityOwnerEvent = ModelIdentityOwnerEvent<
+  Exclude<ModelIdentityOwnerEventType, "model_identity.consolidated">
+>;
+type ModelIdentityConsolidationEvent = ModelIdentityOwnerEvent<"model_identity.consolidated">;
+
+export type ModelIdentityDecisionEvent = Readonly<{
+  schema_version: 1;
+  event_id: string;
+  event_type: "model_identity.approved" | "model_identity.rejected";
+  occurred_at: string;
+  subject_id: string;
+  causation_event_id: string;
+  actor: Readonly<{ kind: "system" }>;
+  payload: Readonly<Record<string, unknown>>;
+}>;
+
 /** State events the public submission Worker is authorized to append. */
 export type WritableStateEvent =
   | SystemInitializedEvent
@@ -234,7 +270,9 @@ export type WritableStateEvent =
   | SubmissionPublicationChangedEvent
   | WritableSubmissionLifecycleEvent
   | WritableResultLifecycleEvent
-  | WritableResultOwnerEvent;
+  | WritableResultOwnerEvent
+  | WritableModelIdentityOwnerEvent
+  | ModelIdentityDecisionEvent;
 
 type LifecycleEventType =
   | "archive.completed"
@@ -292,7 +330,8 @@ export type StateEvent =
   | WritableStateEvent
   | LifecycleStateEvent
   | ResultProblemRepairRequestedEvent
-  | ResultAmendmentSystemEvent;
+  | ResultAmendmentSystemEvent
+  | ModelIdentityConsolidationEvent;
 
 function object(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -328,10 +367,10 @@ function nonemptyString(value: unknown, label: string): asserts value is string 
   }
 }
 
-function containsControlCharacter(value: string): boolean {
+function containsControlOrSurrogate(value: string): boolean {
   for (const character of value) {
     const code = character.codePointAt(0) ?? 0;
-    if (code <= 0x1f || code === 0x7f) return true;
+    if (code <= 0x1f || code === 0x7f || (code >= 0xd800 && code <= 0xdfff)) return true;
   }
   return false;
 }
@@ -397,7 +436,7 @@ function validateSubmissionEvent(event: Record<string, unknown>): void {
   nonemptyString(payload.declared_model, "submission.received declared_model");
   if (
     new TextEncoder().encode(payload.declared_model).length > 256 ||
-    containsControlCharacter(payload.declared_model)
+    containsControlOrSurrogate(payload.declared_model)
   ) {
     throw new TypeError("submission.received declared_model must be control-free UTF-8 of at most 256 bytes");
   }
@@ -529,7 +568,7 @@ function validateResultOwnerEvent(event: Record<string, unknown>): void {
   nonemptyString(payload.declared_model, "result claim declared_model");
   if (
     new TextEncoder().encode(payload.declared_model).byteLength > 256 ||
-    containsControlCharacter(payload.declared_model)
+    containsControlOrSurrogate(payload.declared_model)
   ) {
     throw new TypeError("result claim declared_model must be control-free UTF-8 of at most 256 bytes");
   }
@@ -552,6 +591,57 @@ function validateResultOwnerEvent(event: Record<string, unknown>): void {
     !DIGEST.test(payload.canonical_record_sha256)
   ) {
     throw new TypeError("result claim source binding is invalid");
+  }
+}
+
+function validateModelIdentityEvent(event: Record<string, unknown>): void {
+  if (typeof event.subject_id !== "string" || !MODEL_ID.test(event.subject_id)) {
+    throw new TypeError("model identity event subject is invalid");
+  }
+  const payload = object(event.payload, "State event payload");
+  if (event.event_type === "model_identity.requested") {
+    if (event.causation_event_id !== null) throw new TypeError("model identity request must be a root event");
+    validateCanonicalActor(event);
+    exactFields(payload, ["display_name"], "State event payload");
+    nonemptyString(payload.display_name, "model identity display_name");
+    if (new TextEncoder().encode(payload.display_name).byteLength > 256 || containsControlOrSurrogate(payload.display_name)) {
+      throw new TypeError("model identity display_name is invalid");
+    }
+    return;
+  }
+  if (typeof event.causation_event_id !== "string" || !UUID_V7.test(event.causation_event_id)) {
+    throw new TypeError("model identity mutation cause is invalid");
+  }
+  if (event.event_type === "model_identity.approved" || event.event_type === "model_identity.rejected") {
+    const actor = object(event.actor, "State event actor");
+    exactFields(actor, ["kind"], "State event actor");
+    if (actor.kind !== "system") throw new TypeError("model identity decision actor must be system");
+    const fields = event.event_type === "model_identity.approved"
+      ? ["reviewer_login"]
+      : ["reason_code", "reviewer_login"];
+    exactFields(payload, fields, "State event payload");
+    if (typeof payload.reviewer_login !== "string" || !GITHUB_LOGIN.test(payload.reviewer_login)) {
+      throw new TypeError("model identity reviewer is invalid");
+    }
+    if ("reason_code" in payload && (typeof payload.reason_code !== "string" || !REASON.test(payload.reason_code))) {
+      throw new TypeError("model identity rejection reason is invalid");
+    }
+    return;
+  }
+  validateCanonicalActor(event);
+  const field = event.event_type === "model_identity.alias_assigned"
+    ? "alias"
+    : event.event_type === "model_identity.renamed" ? "display_name" : "target_model_id";
+  exactFields(payload, [field], "State event payload");
+  if (field === "target_model_id") {
+    if (typeof payload[field] !== "string" || !MODEL_ID.test(payload[field])) {
+      throw new TypeError("model identity consolidation target is invalid");
+    }
+  } else {
+    nonemptyString(payload[field], `model identity ${field}`);
+    if (new TextEncoder().encode(payload[field]).byteLength > 256 || containsControlOrSurrogate(payload[field])) {
+      throw new TypeError(`model identity ${field} is invalid`);
+    }
   }
 }
 
@@ -746,6 +836,15 @@ export function validateStateEvent(value: unknown): asserts value is StateEvent 
     event.event_type === "result.retraction_requested"
   ) {
     validateResultOwnerEvent(event);
+  } else if (
+    event.event_type === "model_identity.requested" ||
+    event.event_type === "model_identity.approved" ||
+    event.event_type === "model_identity.rejected" ||
+    event.event_type === "model_identity.alias_assigned" ||
+    event.event_type === "model_identity.renamed" ||
+    event.event_type === "model_identity.consolidated"
+  ) {
+    validateModelIdentityEvent(event);
   } else if (typeof event.event_type === "string" && event.event_type in LIFECYCLE_FIELDS) {
     validateLifecycleEvent(event, event.event_type as LifecycleEventType);
   } else if (

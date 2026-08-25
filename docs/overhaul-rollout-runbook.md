@@ -391,9 +391,21 @@ the immutable reservation-provenance event on a same-result revisit), for a
 closed bound of 369. This
 includes uncached contract proofs, every schema-bounded historical reference,
 candidate reservation read, tree/commit creation, duplicate ref-update retry,
-and reachability check. Before any owner or maintainer gate is enabled, confirm
-the deployed Workers plan allows at least 369 external subrequests per request;
-the 50-subrequest free allowance is insufficient.
+and reachability check. The tracked intake Worker now sets
+`limits.subrequests` to 400. Before any owner or maintainer gate is enabled,
+confirm protected deployment preserved that limit on the paid plan and repeat
+the maximal dark-path qualification; the 50-subrequest free allowance is
+insufficient.
+
+The separately gated model-identity request, decision, alias, and rename lanes
+have a conservative 171-request bound inside the same tracked 400-request
+limit. Both their owner and maintainer gates must remain false until protected
+deployment, rollback health, live OAuth and verified-agent session issuance,
+exact maintainer numeric-ID/login drift denial, and dark staging end-to-end
+qualification are recorded. Consolidation is not part of that enablement: its
+path is an unconditional 404 until protected State supplies a complete
+reverse-impact index and an atomic producer that rematerializes every affected
+transitive identity and alias view.
 
 This gate closed on 2026-08-25 against disabled deployed commit
 `d34aab279dd99380530b9d77c3aa199559849209`. Retry `32792905120` started at
