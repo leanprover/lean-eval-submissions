@@ -22,6 +22,7 @@ import {
   readJson,
   type ProductionMetadata,
   type PublicationChoice,
+  type IntakeSubmissionInput,
   type SubmissionInput,
 } from "./api-contract";
 import {
@@ -701,7 +702,7 @@ type PromotionCanaryMaterial = Readonly<{
   acceptedAtMilliseconds: number;
   evidenceEvent: WritableStateEvent;
   grant: SubmissionGrant;
-  input: SubmissionInput;
+  input: IntakeSubmissionInput;
 }>;
 
 function decodePromotionCanaryRequest(value: unknown): PromotionCanaryRequest {
@@ -799,7 +800,7 @@ async function promotionCanaryMaterial(
     issued_at: issuedAt,
     expires_at: issuedAt + 600,
   };
-  const input: SubmissionInput = {
+  const input: IntakeSubmissionInput = {
     problem_id: "two_plus_two",
     problem_group: "formalization-evaluation",
     statement_revision: 1,
@@ -1138,7 +1139,7 @@ async function acceptSubmission(
   dependencies: ApiDependencies,
   identity: GitHubIdentity,
   grant: SubmissionGrant | AgentChallenge,
-  input: SubmissionInput,
+  input: IntakeSubmissionInput,
   purpose: "agent" | "submission",
 ): Promise<Response> {
   requireDispatchConfiguration(env, dependencies);

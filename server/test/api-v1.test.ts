@@ -4,7 +4,10 @@ import {
   ApiDecodeError,
   assertSourcePolicy,
   decodeArchiveCompletion,
+  decodeBrowserSubmission,
+  decodeChallengeSubmission,
   decodeEmptyObject,
+  decodeIntakeSubmissionInput,
   decodeProblemRepairDecision,
   decodeResultRetractionDecision,
   decodeResultRetractionOverride,
@@ -523,7 +526,28 @@ describe("strict API contract", () => {
     expect(() => decodeSubmissionInput({ ...SUBMISSION, surprise: true })).toThrow(ApiDecodeError);
     expect(() => decodeSubmissionInput({ ...SUBMISSION, declared_model: "é".repeat(129) })).toThrow(/UTF-8 bytes/);
     expect(() => decodeSubmissionInput({ ...SUBMISSION, declared_model: "x".repeat(256) })).not.toThrow();
-    expect(() => assertSourcePolicy("open-conjectures", "private", true)).toThrow(/public/);
+    const historicalOpenConjecture = {
+      ...SUBMISSION,
+      problem_group: "open-conjectures",
+      source_visibility: "public",
+    };
+    expect(() => decodeSubmissionInput(historicalOpenConjecture)).not.toThrow();
+    expect(() => decodeIntakeSubmissionInput(historicalOpenConjecture)).toThrow(
+      /not accepted for new submissions/u,
+    );
+    expect(() => decodeBrowserSubmission({
+      grant: "signed-grant",
+      submission: historicalOpenConjecture,
+    })).toThrow(/not accepted for new submissions/u);
+    expect(() => decodeChallengeSubmission({
+      challenge: "signed-challenge",
+      submission: historicalOpenConjecture,
+    })).toThrow(/not accepted for new submissions/u);
+    expect(() => decodeIntakeSubmissionInput({
+      ...SUBMISSION,
+      source_visibility: "public",
+    })).toThrow(/source_visibility is not accepted/u);
+    expect(() => assertSourcePolicy("software-verification", "private", false)).toThrow(/visibility/u);
     expect(() => assertSourcePolicy("formalization-evaluation", "private", true)).not.toThrow();
     const request = new Request("https://submit.test/api/v1/test", {
       method: "POST",

@@ -36,19 +36,12 @@ export function browserPage(environment: "staging" | "production", intakeEnabled
         <select id="problem_group" name="problem_group">
           <option value="formalization-evaluation">formalization-evaluation</option>
           <option value="software-verification">software-verification</option>
-          <option value="open-conjectures">open-conjectures</option>
         </select>
       </label>
       <label>Statement revision <input id="statement_revision" name="statement_revision" required type="number" min="1" step="1" value="1"></label>
       <label>Declared model <input id="declared_model" name="declared_model" required maxlength="256"></label>
       <label>Source repository <input id="source_repository" name="source_repository" required placeholder="owner/repository"></label>
       <label>Exact source commit <input id="source_commit" name="source_commit" required pattern="[0-9a-f]{40}" minlength="40" maxlength="40"></label>
-      <label>Source visibility
-        <select id="source_visibility" name="source_visibility">
-          <option value="private">private</option>
-          <option value="public">public</option>
-        </select>
-      </label>
       <label>Publication choice
         <select id="publication_choice" name="publication_choice">
           <option value="withheld">withheld</option>
@@ -93,7 +86,7 @@ export function browserScript(): Response {
   const script = `"use strict";
 const form = document.querySelector("#submission-form");
 const result = document.querySelector("#result");
-const fieldNames = ["problem_id", "problem_group", "statement_revision", "declared_model", "source_repository", "source_commit", "source_visibility", "publication_choice", "production_metadata"];
+const fieldNames = ["problem_id", "problem_group", "statement_revision", "declared_model", "source_repository", "source_commit", "publication_choice", "production_metadata"];
 const saved = sessionStorage.getItem("lean-eval-pending-submission");
 const query = new URLSearchParams(location.search);
 for (const name of fieldNames) {
@@ -136,7 +129,7 @@ form?.addEventListener("submit", async (event) => {
           declared_model: values.declared_model,
           source_repository: values.source_repository,
           source_commit: values.source_commit,
-          source_visibility: values.source_visibility,
+          source_visibility: "private",
           publication_choice: values.publication_choice,
           production_metadata: metadata,
         },
