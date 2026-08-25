@@ -321,6 +321,29 @@
         "ref": "e0e980e27185bbf4a5c91eb6780c1aa9791b739d",
         "repo": "mlgraham/lean-eval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-25T02:42:01Z",
+      "benchmark_commit": "a910403b85a4f903d812538292393cc13ef6c801",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1363,
+        "kind": "issue"
+      },
+      "problem_id": "trace_cayley_hamilton_newton",
+      "production_metadata": {
+        "production_description": "Original proof of trace_cayley_hamilton_newton. Claude Fable 5 (Claude Code), under human\ndirection, from the Challenge, Mathlib source search, and compiler feedback only; no published\nlean-eval solution consulted. Method (Faddeev-LeVerrier): (1) Jacobi's formula for the\ncharacteristic polynomial, derivative (charpoly A) = trace (adjugate (charmatrix A)), proved by a\nTaylor shift chi(X+Y) = det((X.1 - A) + Y.1) over R[X] and a multilinear expansion of the\ndeterminant in the rows to read off the coefficient of Y (Submission/CharpolyDerivative.lean);\n(2) from (X.1 - A) * adjugate = chi * 1 in (Matrix n n R)[X] via matPolyEquiv, the coefficient\nrecursion D_j = A D_{j+1} + chi_{j+1} 1, D_j = 0 for j >= N, D_{N-1} = 1, A D_0 + chi_0 1 = 0;\n(3) the Faddeev matrices P_k = sum_{i<=k} c_i A^{k-i} equal D_{N-1-k} for k < N and vanish for\nk >= N, so taking traces gives the unified identity trace P_k = (N - k) c_k for every k, which is\nNewton's identity after reindexing (Submission/Newton.lean). No eigenvalues, no\nCayley-Hamilton needed. Slim imports. Cost: 5 + 3 compile iterations, ~2.5 hours of model loop\ntime. (Earlier workspaces on this branch are already recorded; results are sticky.)",
+        "solution_publication_date": "2026-08-24",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_47d82df35938dfadf6d62e9db1412dc5a9a105136480118280c0bea4d42dd094",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "c68e6fb9d931922277d20180a9839bdda53248d1",
+        "repo": "mlgraham/lean-eval-submission"
+      }
     }
   ],
   "schema_version": 2,
