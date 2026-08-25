@@ -25,6 +25,7 @@ from typing import NamedTuple
 STAGING_ORIGIN = "https://lean-eval-submission-server-staging.lean-eval.workers.dev"
 QUALIFICATION_PATH = "/internal/v1/model-identity-qualification"
 SHA = re.compile(r"[0-9a-f]{40}\Z")
+SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 RUN_ID = re.compile(r"[1-9][0-9]{0,19}\Z")
 LOGIN = re.compile(r"[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?\Z")
 JOURNAL_ID = re.compile(r"mqj_[0-9a-f]{64}\Z")
@@ -456,6 +457,9 @@ JOURNAL_FIELDS = {
     "deployed_commit",
     "environment",
     "foreign_commit_observed",
+    "fixture_evidence_class",
+    "fixture_id",
+    "fixture_manifest_digest",
     "initial_state_commit",
     "initial_state_tree",
     "journal_id",
@@ -512,6 +516,11 @@ def validate_journal(
         or body["owner_api_enabled"] is not False
         or body["maintainer_api_enabled"] is not False
         or body["foreign_commit_observed"] is not False
+        or body["fixture_evidence_class"] != "reviewed_live_fixture"
+        or not isinstance(body["fixture_id"], str)
+        or EVENT_ID.fullmatch(body["fixture_id"]) is None
+        or not isinstance(body["fixture_manifest_digest"], str)
+        or SHA256.fullmatch(body["fixture_manifest_digest"]) is None
     ):
         raise QualificationFailure("qualification journal boundary was not exact")
     if (

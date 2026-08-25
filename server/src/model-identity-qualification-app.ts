@@ -5,6 +5,7 @@ import type {
   QualificationOperation,
   QualificationRecoveryPlan,
   QualificationStepPlan,
+  QualificationFixtureEvidence,
 } from "./model-identity-qualification-journal";
 import {
   canonicalQualificationValue,
@@ -20,7 +21,10 @@ import {
   restoreQualificationState,
   verifyQualificationFixtureAtState,
 } from "./model-identity-qualification-state";
-import { reviewedQualificationFixtureManifest } from "./model-identity-qualification-fixture";
+import {
+  REVIEWED_QUALIFICATION_FIXTURE_DIGEST,
+  reviewedQualificationFixtureManifest,
+} from "./model-identity-qualification-fixture";
 import type { GitHubFetch } from "./github-state";
 import {
   AuthError,
@@ -66,7 +70,10 @@ export type ModelIdentityQualificationDependencies = Readonly<{
     occurredAtMilliseconds: number,
     context: QualificationExecutionContext,
   ) => Promise<Response>;
-  sourceTestOnlyFixtureVerification?: () => Promise<void>;
+  sourceTestOnlyFixtureVerification?: Readonly<{
+    evidence: QualificationFixtureEvidence;
+    verify: () => Promise<void>;
+  }>;
 }>;
 
 type QualificationExecutionContext = Readonly<{
@@ -247,6 +254,26 @@ async function acquire(
     typeof body.initial_state_tree !== "string" ||
     !SHA.test(body.initial_state_tree)
   ) throw new TypeError("qualification acquisition is invalid");
+  const sourceTestOnlyVerification = dependencies.sourceTestOnlyFixtureVerification;
+  const fixture = sourceTestOnlyVerification === undefined
+    ? await reviewedQualificationFixtureManifest()
+    : null;
+  let fixtureEvidence: QualificationFixtureEvidence;
+  if (sourceTestOnlyVerification !== undefined) {
+    if (sourceTestOnlyVerification.evidence.evidence_class !== "source_test_only") {
+      throw new TypeError("source-test-only fixture evidence is invalid");
+    }
+    fixtureEvidence = sourceTestOnlyVerification.evidence;
+  } else {
+    if (fixture === null || REVIEWED_QUALIFICATION_FIXTURE_DIGEST === null) {
+      throw new QualificationStateError("provider_unavailable");
+    }
+    fixtureEvidence = {
+      evidence_class: "reviewed_live_fixture",
+      fixture_id: fixture.fixture_id,
+      manifest_digest: REVIEWED_QUALIFICATION_FIXTURE_DIGEST,
+    };
+  }
   const acquisition = {
     schema_version: 2,
     run_id: runId,
@@ -255,6 +282,7 @@ async function acquire(
     initial_state_commit: body.initial_state_commit,
     initial_state_tree: body.initial_state_tree,
     intent: body.intent,
+    fixture_evidence: fixtureEvidence,
   };
   const begun = object(JSON.parse(
     await stub(env).beginAcquisitionVerification(acquisition),
@@ -267,10 +295,9 @@ async function acquire(
     !JOURNAL_ID.test(begun.journal_id)
   ) throw new QualificationStateError("provider_unavailable");
   try {
-    if (dependencies.sourceTestOnlyFixtureVerification !== undefined) {
-      await dependencies.sourceTestOnlyFixtureVerification();
+    if (sourceTestOnlyVerification !== undefined) {
+      await sourceTestOnlyVerification.verify();
     } else {
-      const fixture = await reviewedQualificationFixtureManifest();
       if (fixture === null) {
         throw new QualificationStateError("provider_unavailable");
       }
