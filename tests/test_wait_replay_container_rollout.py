@@ -7,7 +7,11 @@ import tempfile
 import unittest
 from unittest import mock
 
-from scripts.wait_replay_container_rollout import RolloutError, wait_for_rollout
+from scripts.wait_replay_container_rollout import (
+    RolloutError,
+    load_expected_container,
+    wait_for_rollout,
+)
 
 
 IMAGE = (
@@ -15,12 +19,29 @@ IMAGE = (
 )
 APPLICATION = "lean-eval-replay-executor-staging-replaysandbox-staging"
 APPLICATION_ID = "12345678-1234-1234-1234-123456789abc"
+HISTORICAL_IMAGE = (
+    "registry.cloudflare.com/"
+    + "1" * 32
+    + "/lean-eval-historical-public-v1:"
+    + "b" * 40
+    + "-"
+    + "c" * 40
+    + "@sha256:"
+    + "d" * 64
+)
+HISTORICAL_APPLICATION = (
+    "lean-eval-historical-public-replay-replaysandbox-production"
+)
 
 
-def application(image: str, version: int = 2) -> dict[str, object]:
+def application(
+    image: str,
+    version: int = 2,
+    name: str = APPLICATION,
+) -> dict[str, object]:
     return {
         "id": APPLICATION_ID,
-        "name": APPLICATION,
+        "name": name,
         "max_instances": 1,
         "configuration": {
             "image": image,
@@ -80,6 +101,92 @@ class WaitReplayContainerRolloutTests(unittest.TestCase):
             encoding="utf-8",
         )
         return path
+
+    def test_historical_public_family_is_explicit_and_digest_pinned(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            config = self.config(root)
+            value = json.loads(config.read_text(encoding="utf-8"))
+            value["env"]["production"]["containers"][0]["image"] = (
+                HISTORICAL_IMAGE
+            )
+            config.write_text(json.dumps(value), encoding="utf-8")
+            with self.assertRaisesRegex(RolloutError, "image is invalid"):
+                load_expected_container(config, "production")
+            self.assertEqual(
+                load_expected_container(
+                    config,
+                    "production",
+                    image_family="historical-public",
+                )["image"],
+                HISTORICAL_IMAGE,
+            )
+
+            value["env"]["production"]["containers"][0]["max_instances"] = 2
+            config.write_text(json.dumps(value), encoding="utf-8")
+            with self.assertRaisesRegex(RolloutError, "max_instances is invalid"):
+                load_expected_container(
+                    config,
+                    "production",
+                    image_family="historical-public",
+                )
+            value["env"]["production"]["containers"][0]["max_instances"] = 1
+
+            value["env"]["production"]["containers"][0]["image"] = (
+                HISTORICAL_IMAGE.split("@", 1)[0]
+            )
+            config.write_text(json.dumps(value), encoding="utf-8")
+            with self.assertRaisesRegex(RolloutError, "image is invalid"):
+                load_expected_container(
+                    config,
+                    "production",
+                    image_family="historical-public",
+                )
+
+    def test_historical_public_family_rejects_authoritative_images(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            self.assertRaisesRegex(RolloutError, "image is invalid"),
+        ):
+            load_expected_container(
+                self.config(pathlib.Path(directory)),
+                "production",
+                image_family="historical-public",
+            )
+
+    @mock.patch("scripts.wait_replay_container_rollout.subprocess.run")
+    def test_waits_for_exact_historical_production_image(
+        self, run: mock.Mock
+    ) -> None:
+        ready = application(HISTORICAL_IMAGE, name=HISTORICAL_APPLICATION)
+        run.side_effect = [
+            subprocess.CompletedProcess(
+                [],
+                0,
+                json.dumps(
+                    [{"id": APPLICATION_ID, "name": HISTORICAL_APPLICATION}]
+                ),
+                "",
+            ),
+            subprocess.CompletedProcess([], 0, json.dumps(ready), ""),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            config = self.config(root)
+            value = json.loads(config.read_text(encoding="utf-8"))
+            value["env"]["production"]["containers"][0]["image"] = (
+                HISTORICAL_IMAGE
+            )
+            config.write_text(json.dumps(value), encoding="utf-8")
+            result = wait_for_rollout(
+                config,
+                "production",
+                HISTORICAL_APPLICATION,
+                attempts=1,
+                interval_seconds=0,
+                image_family="historical-public",
+            )
+        self.assertEqual(result, ready)
 
     @mock.patch("scripts.wait_replay_container_rollout.time.sleep")
     @mock.patch("scripts.wait_replay_container_rollout.subprocess.run")

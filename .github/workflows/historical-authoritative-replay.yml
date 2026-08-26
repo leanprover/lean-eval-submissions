@@ -193,10 +193,11 @@ jobs:
           trap 'rm -f "$config"' EXIT
           (cd server && npx wrangler deploy \
             --config historical-production-wrangler.json --env production)
-          (cd server && python ../historical-public-qualification/wait_rollout.py \
+          (cd server && python ../scripts/wait_replay_container_rollout.py \
             --config historical-production-wrangler.json \
-            --application lean-eval-historical-public-replay-replaysandbox-production \
-            --output "$RUNNER_TEMP/historical-production-rollout.json")
+            --environment production \
+            --image-family historical-public \
+            --application lean-eval-historical-public-replay-replaysandbox-production)
           rm -f "$config"
           trap - EXIT
           echo 'deployed=true' >> "$GITHUB_OUTPUT"
