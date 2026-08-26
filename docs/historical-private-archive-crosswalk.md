@@ -43,9 +43,9 @@ The output is governed by
 `schemas/historical-private-archive-crosswalk-v1.schema.json`. It contains only
 public result IDs, migration submission UUIDs, domain-separated archive-plan
 entry commitments, schema/evidence classifications, the results/audit snapshot
-commits and aggregate digests. It never contains submitter names, repository
-names, private submission source commits, issue numbers, problem IDs, archive
-paths, legacy ciphertext digests, or plaintext evidence.
+commits and aggregate digests. It never contains submitter names, private
+source repository names or commits, issue numbers, problem IDs, archive paths,
+legacy ciphertext digests, or plaintext evidence.
 
 ## Classifications
 
@@ -86,3 +86,23 @@ JSON schema, exact counts, ordering, canonical bytes, source commits, input
 digests, output SHA-256, and absence of private locator keys. The workflow must
 not upload the audit checkout, migration plan, sidecars, ciphertext, or logs
 containing join values.
+
+## Retained canonical crosswalk
+
+The reviewed source-free crosswalk is stored at
+[`../evidence/historical-replay/private-crosswalks/dfdcbc0da3a3526f8a26e6a69cefa41cbcd92de7608752193b742fcd92b00a67.json`](../evidence/historical-replay/private-crosswalks/dfdcbc0da3a3526f8a26e6a69cefa41cbcd92de7608752193b742fcd92b00a67.json).
+It binds results commit `7fb2e762e5470ae1929dbe069dbcd0c8488b51d7`
+and store digest
+`9e998ab47ae719484e2ea283271086d2c66c95051837231014fd74392f4fb1c0`
+to audit commit `ad356e7bc5a2d650d9902ac3f6d352a0164360bc` and inventory
+digest
+`6b8867f41a13c3ba323746988058886e5dc73da7b509deaf01ccf9c36fe8d5d4`.
+It covers all 668 private results: 639 are bound and 29 are explicitly
+`archive_not_found`, with no ambiguity or metadata conflict. The missing
+archives remain pending; this artifact does not authorize migration, replay,
+or a State change.
+
+The filename is the exact SHA-256 of the canonical bytes. CI validates the
+schema, canonical encoding, ordering, complete private-result coverage from the
+frozen results commit, reviewed counts and digests, and absence of private
+locator keys.
