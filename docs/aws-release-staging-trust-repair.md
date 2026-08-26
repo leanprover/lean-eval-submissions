@@ -34,7 +34,7 @@ under the tracked stack definition.
 The reviewed release candidate for this operation is exact protected commit
 `e82d91aecdb64fa0d8932590aecdeb999c42a0f8`. The selected accepted archive is
 bound to staging State commit
-`52522d3e98702156c1d38526f16e7e82c54f4e75` and audit commit
+`58aef78b5c53e0e316e9edf8d0bb0e94110e1198` and audit commit
 `34e33e339eaac47a10c463abaedef47361c5abab`. Stop and re-review the packet if
 any of those protected heads changes before dispatch.
 
@@ -71,7 +71,7 @@ LEAN_EVAL_SUBMISSIONS_HEAD="$(gh api \
 LEAN_EVAL_RELEASE_COMMIT="$(gh api \
   repos/leanprover/lean-eval-releases/commits/main --jq .sha)"
 LEAN_EVAL_APPROVED_RELEASE_COMMIT=e82d91aecdb64fa0d8932590aecdeb999c42a0f8
-LEAN_EVAL_APPROVED_STAGING_STATE=52522d3e98702156c1d38526f16e7e82c54f4e75
+LEAN_EVAL_APPROVED_STAGING_STATE=58aef78b5c53e0e316e9edf8d0bb0e94110e1198
 LEAN_EVAL_APPROVED_AUDIT=34e33e339eaac47a10c463abaedef47361c5abab
 LEAN_EVAL_OIDC_PROVIDER_ARN=arn:aws:iam::161072922960:oidc-provider/token.actions.githubusercontent.com
 LEAN_EVAL_SUBMISSION_PREFIX=leanprover/lean-eval-submissions
