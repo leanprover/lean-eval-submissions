@@ -25,6 +25,16 @@ The legacy `LEAN_EVAL_{BOT,RECORDER,ARCHIVER}_APP_ID` secrets were
 superseded by the Client ID secrets on 2026-07-31. Delete each legacy
 secret after the first successful submission on the Client ID workflow.
 
+The three Apps in this document are owned by the personal account `kim-em`;
+Kim Morrison is their current credential custodian. For any App private-key
+rotation, generate one replacement key while the old key remains valid,
+replace only that App's `*_PRIVATE_KEY` repository secret, verify the matching
+protected workflow path with intake disabled or in staging, and then delete the
+old key in the App settings. Immediate revocation is deletion of the affected
+App key followed by removal or replacement of its repository secret. Do not
+reuse one App's key for another App. No alternate App custodian is currently
+recorded.
+
 To check the live state at any time:
 
 ```bash
@@ -269,6 +279,11 @@ authorizes on (per
 
 When rotating the PAT, update the copies in `leanprover/lean-eval` and
 `leanprover/lean-eval-leaderboard` together (see those repos' own docs).
+Replace all three copies before revoking the old token in its issuing GitHub
+account, then verify one dispatch from each caller. The repository APIs expose
+the secret names but not the PAT issuer or expiry; those two current facts are
+not recoverable from this repository and must not be guessed. Record them in
+the credential inventories at the next approved PAT rotation.
 
 ## Branch protection on `main` (Repository Ruleset)
 

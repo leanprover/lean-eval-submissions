@@ -1,0 +1,127 @@
+name: AWS production Wrap-only preflight
+
+# One-shot launch preflight for the production archive role. This workflow
+# creates no submission, archive object, State event, result, or artifact.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: aws-production-wrap-preflight
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Require an immutable protected dispatch tag
+        env:
+          EXACT_REF: refs/tags/lean-eval-dispatch/${{ github.sha }}
+        run: test "$GITHUB_REF" = "$EXACT_REF"
+
+  wrap-only:
+    needs: gate
+    environment: archive-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Require the exact configured production Wrap role
+        id: configuration
+        env:
+          CONFIGURED_ROLE_ARN: ${{ vars.AWS_WRAP_ROLE_ARN }}
+          EXPECTED_ROLE_ARN: arn:aws:iam::161072922960:role/lean-eval-archive-wrap-production
+        run: |
+          set -euo pipefail
+          if [ -z "$CONFIGURED_ROLE_ARN" ]; then
+            echo configured=false >> "$GITHUB_OUTPUT"
+            echo 'Production Wrap authority is not connected; no OIDC token or AWS call was made.' \
+              >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          test "$CONFIGURED_ROLE_ARN" = "$EXPECTED_ROLE_ARN"
+          echo configured=true >> "$GITHUB_OUTPUT"
+
+      # aws-actions/configure-aws-credentials pinned to v6.2.3.
+      - name: Assume the production Encrypt-only role
+        if: steps.configuration.outputs.configured == 'true'
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c
+        with:
+          role-to-assume: ${{ vars.AWS_WRAP_ROLE_ARN }}
+          aws-region: us-east-1
+          role-duration-seconds: 900
+          role-session-name: lean-eval-archive-production-preflight
+          mask-aws-account-id: true
+
+      - name: Encrypt one synthetic key and require decrypt denial
+        if: steps.configuration.outputs.configured == 'true'
+        env:
+          EXPECTED_KMS_KEY_ARN: arn:aws:kms:us-east-1:161072922960:key/219904f9-4952-400f-b60a-6f027c4d070b
+        run: |
+          set -euo pipefail
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          scratch="$RUNNER_TEMP/lean-eval-production-wrap-preflight"
+          plaintext="$scratch/synthetic-key"
+          ciphertext="$scratch/wrapped-key"
+          decrypt_output="$scratch/decrypt-output"
+          decrypt_error="$scratch/decrypt-error"
+          clear_authority() {
+            unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+            {
+              echo AWS_ACCESS_KEY_ID=
+              echo AWS_SECRET_ACCESS_KEY=
+              echo AWS_SESSION_TOKEN=
+            } >> "$GITHUB_ENV"
+          }
+          cleanup() {
+            clear_authority
+            rm -rf "$scratch"
+          }
+          trap cleanup EXIT
+
+          install -d -m 700 "$scratch"
+          umask 077
+          openssl rand 32 > "$plaintext"
+          submission_id=019b2a10-6c00-7000-8000-000000000001
+          age_recipient=age1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq
+          archive_digest=$(printf %s synthetic-production-wrap-preflight-archive \
+            | sha256sum | cut -d ' ' -f 1)
+          recipient_digest=$(printf %s "$age_recipient" | sha256sum | cut -d ' ' -f 1)
+          data_key_id="ak1_$(
+            printf 'lean-eval-archive-key-v1\0%s\0%s' "$submission_id" "$age_recipient" \
+              | sha256sum | cut -d ' ' -f 1
+          )"
+          context="contract=lean-eval-archive-key-v1,submission_id=$submission_id,archive_ciphertext_sha256=$archive_digest,data_key_id=$data_key_id,age_recipient_sha256=$recipient_digest"
+
+          aws kms encrypt \
+            --key-id "$EXPECTED_KMS_KEY_ARN" \
+            --plaintext "fileb://$plaintext" \
+            --encryption-algorithm SYMMETRIC_DEFAULT \
+            --encryption-context "$context" \
+            --query CiphertextBlob \
+            --output text | base64 --decode > "$ciphertext"
+          test -s "$ciphertext"
+
+          if aws kms decrypt \
+            --key-id "$EXPECTED_KMS_KEY_ARN" \
+            --ciphertext-blob "fileb://$ciphertext" \
+            --encryption-algorithm SYMMETRIC_DEFAULT \
+            --encryption-context "$context" \
+            --query Plaintext \
+            --output text > "$decrypt_output" 2> "$decrypt_error"; then
+            echo 'The production archive role unexpectedly decrypted the synthetic key.' >&2
+            exit 1
+          fi
+          grep -q 'AccessDeniedException' "$decrypt_error"
+          test ! -s "$decrypt_output"
+
+          cleanup
+          trap - EXIT
+          echo 'The exact production archive role encrypted one synthetic key and direct decrypt was denied.' \
+            >> "$GITHUB_STEP_SUMMARY"

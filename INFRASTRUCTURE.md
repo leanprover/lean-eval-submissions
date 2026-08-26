@@ -104,6 +104,16 @@ locations. The State token, authentication-signing secret, and OAuth
 credentials are Worker runtime secrets and are not copied into the GitHub
 deployment environment.
 
+Kim Morrison is the temporary custodian for the runtime secrets below. There
+is no alternate custodian recorded. Rotate each environment independently:
+
+| Credential | Current scope | Rotation and revocation |
+| --- | --- | --- |
+| `READINESS_TOKEN` | One intake Worker's protected readiness endpoints and the matching `cloudflare-*` environment | Replace the Worker secret and matching GitHub environment secret as one approved maintenance change, verify readiness, and retain no old value. Overwriting the Worker secret revokes the old token. |
+| `LIFECYCLE_CALLBACK_TOKEN` | One intake Worker's lifecycle callbacks and the matching source-free callback jobs | Replace both matching copies as one approved maintenance change, verify a source-free callback denial/success pair, and retain no old value. Overwriting the Worker secret revokes the old token. |
+| `AUTH_TOKEN_SECRET` | Session signing for one intake Worker only | Replace only the matching Worker secret. This intentionally invalidates all sessions in that environment; verify new OAuth and agent sessions before reopening intake. Overwriting it revokes every token signed only by the old value. |
+| `GITHUB_OAUTH_CLIENT_SECRET` | One environment's personal GitHub OAuth App and matching intake Worker | Generate a replacement in that App, replace only the matching Worker secret, verify OAuth, then revoke the old App secret. |
+
 | Token | Scope | Created / expiry | Rotation and revocation |
 | --- | --- | --- | --- |
 | `lean-eval-deploy-staging` | Dedicated `lean-eval` account: Workers Scripts Edit and Containers Edit; no zone/DNS permission | 2026-08-21 / none | Kim Morrison; replace only in `cloudflare-staging`, verify, then revoke old token |
@@ -138,7 +148,13 @@ grant gist or broad repository authority.
 ### Browser OAuth Apps
 
 Temporary owner: personal account `kim-em`, which is acceptable for initial
-launch. Recovery and rotation remain with Kim Morrison until transfer.
+launch. Recovery and rotation remain with Kim Morrison until transfer. The
+current recovery path is recovery of the `kim-em` GitHub account; there is no
+independent alternate OAuth-App custodian. If that account is unavailable,
+pause browser intake rather than changing callbacks or credentials without a
+new approval. The intended later transfer is both Apps to `leanprover`, keeping
+the same exact callbacks and `read:user` scope, followed by environment-by-
+environment client-secret rotation.
 
 | App | Application ID / client ID | Exact callback |
 | --- | --- | --- |
@@ -184,7 +200,12 @@ environment's State.
 Production release keys are installed, but publication remains impossible
 without the separate absent publication variable. Rotate or revoke a deploy key
 in its owning repository and matching protected environment; never reuse one
-key across roles.
+key across roles. Kim Morrison is the temporary operator for this deploy-key
+set. Rotation means adding a replacement public deploy key with the same
+read-only/read-write bit, replacing only the matching environment's private-key
+secret, verifying the protected read or disabled publication path, and deleting
+the old deploy key from its owning repository. For immediate revocation, delete
+the public deploy key first and then remove the matching environment secret.
 
 ## GitHub environments
 

@@ -220,6 +220,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "accepted-archive-replay-staging.yml",
                 "authoritative-replay-staging.yml",
                 "aws-key-adapter-staging-smoke.yml",
+                "aws-production-wrap-preflight.yml",
                 "historical-public-authority-preparation.yml",
                 "historical-public-image-qualification.yml",
                 "historical-public-replay-plan.yml",

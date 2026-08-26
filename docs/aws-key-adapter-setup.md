@@ -217,9 +217,51 @@ archive. The synthetic locator is never appended to State and is not evidence
 that an audit-repository object exists. No identity, plaintext source, AWS
 credential, State event, result, or release is uploaded.
 
-Do not wire the production archive workflow, enable private replay/release, or
-enable production intake merely because the stacks and this synthetic smoke
-exist.
+### Production Wrap-only launch preflight
+
+The production stack exists, but `archive-production` deliberately has no
+`AWS_WRAP_ROLE_ARN`. `AWS production Wrap-only preflight` is inert in that
+state: it enters the protected environment, reports that the role is not
+connected, and stops before requesting a GitHub OIDC token or calling AWS.
+
+Connecting the role is a credential-boundary mutation and requires the
+maintainer's explicit approval. Immediately before requesting that approval,
+read back the production stack output and role policy with a short-lived AWS
+administrator session. The only variable to add is:
+
+```text
+Repository:  leanprover/lean-eval-submissions
+Environment: archive-production
+Variable:    AWS_WRAP_ROLE_ARN
+Value:       arn:aws:iam::161072922960:role/lean-eval-archive-wrap-production
+```
+
+The role trust must name exactly
+`repo:leanprover/lean-eval-submissions:environment:archive-production`; its
+workload policy must contain only `kms:Encrypt` on production key
+`219904f9-4952-400f-b60a-6f027c4d070b`, conditioned on the five exact
+`lean-eval-archive-key-v1` encryption-context keys. It must not contain
+`kms:Decrypt`, Lambda, DynamoDB, IAM, GitHub, State, replay, or release
+authority.
+
+After the approved variable change, dispatch `AWS production Wrap-only
+preflight` from the immutable `lean-eval-dispatch/<workflow-commit>` tag that
+contains it. The workflow refuses any other role ARN, KMS-encrypts one
+temporary random 32-byte synthetic key with the exact contract/context, and
+requires direct decrypt to return `AccessDeniedException`. It uploads nothing,
+writes no repository, State, audit object, result, release, or submission, and
+removes the plaintext, ciphertext, AWS session, and OIDC request variables on
+exit. This is the bounded launch check, not a recurring qualification harness.
+
+Rollback is deletion of only `AWS_WRAP_ROLE_ARN` from `archive-production`,
+followed by cancellation of any queued or running archive/preflight jobs. An
+already-started job may retain its short-lived AWS session until it exits, so
+deleting the variable alone does not revoke that active session. Keep
+production intake disabled throughout the connection, preflight, and rollback
+decision.
+
+Do not connect production replay/release authority or enable production intake
+merely because the stacks and this bounded synthetic preflight exist.
 
 ## 5. Repair a transferred repository's release subject without widening trust
 

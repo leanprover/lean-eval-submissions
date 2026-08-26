@@ -1,7 +1,9 @@
 # Archive-key envelope and capability contract
 
-This contract freezes the provider-neutral boundary selected by D6. It does
-not enable decryption or provision AWS. The schemas and validator are:
+This contract freezes the provider-neutral archive-key boundary. The dedicated
+AWS account and environment-specific stacks now implement the initial adapter;
+production workload authority remains disconnected until its protected GitHub
+environment variable is explicitly approved. The schemas and validator are:
 
 - [`archive-key-envelope-v1.schema.json`](../schemas/archive-key-envelope-v1.schema.json)
 - [`unwrap-capability-v1.schema.json`](../schemas/unwrap-capability-v1.schema.json)
@@ -100,9 +102,12 @@ python3 scripts/archive_envelope.py \
   --adapter-name aws-kms-v1
 ```
 
-This tool is not yet wired into the submission workflow because no production
-root-key adapter or dedicated AWS account exists. The current workflow remains
-unchanged until those launch gates are satisfied.
+The reusable server archive workflow now invokes this tool before evaluation
+and persists the ciphertext with a schema-version-3 sidecar. Staging has its
+environment-specific Wrap role connected. The production
+`archive-production` environment deliberately has no `AWS_WRAP_ROLE_ARN`, so
+the server lane cannot acquire production Wrap authority until that single
+variable is explicitly approved and installed.
 
 ## Initial AWS adapter
 
@@ -135,12 +140,13 @@ GitHub OIDC to exact protected environment subjects: archive/replay in
 `lean-eval-submissions`, and release in `lean-eval-releases`. It grants no
 wildcard KMS, DynamoDB, or Lambda workload authority.
 
-The future workflow must put the Encrypt-only OIDC role in a trusted archive
-job, never in the job that runs untrusted Lean. The archive job independently
-fetches the exact source commit, encrypts and persists it, and finishes before
-evaluation. The evaluation job then fetches the same immutable commit again
-with only its short-lived read token. Plaintext source does not cross a job or
-artifact boundary, and `id-token: write` is absent from the evaluation job.
+The current reusable workflow puts the Encrypt-only OIDC role in a trusted
+archive job, never in the job that runs untrusted Lean. The archive job
+independently fetches the exact source commit, encrypts and persists it, and
+finishes before evaluation. The evaluation job then fetches the same immutable
+commit again with only its short-lived read token. Plaintext source does not
+cross a job or artifact boundary, and `id-token: write` is absent from the
+evaluation job.
 
 ## Single-use capability
 
@@ -168,7 +174,7 @@ recommends `EncryptionContextEquals` where possible:
 
 ## Launch boundary
 
-Before new production intake, the adapter must be provisioned and demonstrate:
+Before new production intake, the retained launch checks must demonstrate:
 
 1. the protected archive job can wrap one fresh identity with Encrypt-only
    authority;
@@ -179,7 +185,9 @@ Before new production intake, the adapter must be provisioned and demonstrate:
    closed;
 6. the controller receives only the one age identity, never the KMS key;
 7. the untrusted runner has no AWS credential or provider API access; and
-8. the live second-use, cross-archive, expiry, and rewrap checks pass.
+8. the bounded live staging binding and reuse-denial checks pass; and
+9. the exact production archive subject can encrypt a synthetic key but cannot
+   decrypt it, without creating a production submission or archive.
 
 GitHub Actions may use OIDC rather than a long-lived AWS secret. The AWS trust
 policy must match the exact repository and protected environment subject; an
