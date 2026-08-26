@@ -32,6 +32,7 @@ from replay_orchestrator import (
 )
 from results_schema import result_id as stable_result_id
 
+PLAN_COMMIT = "7eb77aa8c2ef7f4d598c77240ea9effbb248dce2"
 PLAN_SHA256 = "d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e"
 MATRIX_SHA256 = "a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c"
 RUNNER_CONTRACT_SHA256 = "6d341a642dfd6aa9092228269da6761000bf0818128ce3f35cb259bd8fb2303f"
@@ -56,6 +57,12 @@ MAX_JSON_BYTES = 16 * 1024 * 1024
 MAX_ARTIFACT_ZIP_BYTES = 4 * 1024 * 1024
 MAX_ARTIFACT_MEMBER_BYTES = 1024 * 1024
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
+BATCH_PROFILE_COUNT = 35
+BATCH_REQUEST_COUNT = 128
+BATCH_RESULT_COUNT = 194
+BATCH_EVENT_COUNT = BATCH_RESULT_COUNT * 3
+PINNED_STATE_EVENT_COUNT = 440
+BATCH_UUID_DOMAIN = b"lean-eval-historical-public-authority-batch-v1\0"
 
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
@@ -65,6 +72,9 @@ RESULT_ID = re.compile(r"r2_[0-9a-f]{64}\Z")
 REPLAY_ID = re.compile(r"rt1_[0-9a-f]{64}\Z")
 UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z"
+)
+PROFILE_PATH = re.compile(
+    r"evidence/public-replay/profiles/([0-9a-f]{64})\.json\Z"
 )
 TIMESTAMP = re.compile(
     r"(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z\Z"
@@ -111,6 +121,15 @@ def load_canonical(
     maximum: int = MAX_JSON_BYTES,
 ) -> tuple[dict[str, Any], bytes]:
     raw = _regular_bytes(path, maximum, label)
+    return parse_canonical(raw, label, expected_sha256=expected_sha256)
+
+
+def parse_canonical(
+    raw: bytes,
+    label: str,
+    *,
+    expected_sha256: str | None = None,
+) -> tuple[dict[str, Any], bytes]:
     if expected_sha256 is not None and sha256_bytes(raw) != expected_sha256:
         raise PreparationError(f"{label} digest changed")
     try:
@@ -1050,6 +1069,72 @@ def replay_task_id(result_id: str, measurement_digest: str) -> str:
     return "rt1_" + sha256_bytes(raw)
 
 
+def authority_event_payload(
+    request: dict[str, Any], result: dict[str, Any], plan_commit: str
+) -> dict[str, Any]:
+    return {
+        "request_id": request["request_id"],
+        "historical_accepted_at": request["historical_accepted_at"],
+        "owner_login": request["owner_login"],
+        "declared_model": request["declared_model"],
+        "problem_id": result["problem_id"],
+        "statement_revision": result["statement_revision"],
+        "results_repository": result["results_repository"],
+        "results_commit": result["results_commit"],
+        "results_path": result["results_path"],
+        "result_file_sha256": result["result_file_sha256"],
+        "result_tree_digest": result["result_tree_digest"],
+        "source_kind": request["source"]["kind"],
+        "source_repository": request["source"]["repository"],
+        "source_commit": request["source"]["commit"],
+        "source_visibility": "public",
+        "benchmark_repository": request["benchmark"]["repository"],
+        "benchmark_commit": request["benchmark"]["commit"],
+        "toolchain": request["benchmark"]["toolchain"],
+        "lean_toolchain_blob_sha256": request["benchmark"][
+            "lean_toolchain_blob_sha256"
+        ],
+        "workflow_run_identity_sha256": request["historical_evaluation"][
+            "workflow_run_identity_sha256"
+        ],
+        "authority_repository": SUBMISSIONS_REPOSITORY,
+        "authority_commit": plan_commit,
+        "authority_path": PLAN_PATH,
+        "authority_sha256": PLAN_SHA256,
+    }
+
+
+def profile_qualification_payload(
+    profile: dict[str, Any], profile_raw: bytes, qualification_commit: str | None
+) -> dict[str, Any]:
+    digest = profile["execution_profile_digest"]
+    payload = {
+        "toolchain": profile["execution_profile"]["toolchain"],
+        "benchmark_commit": profile["benchmark_commit"],
+        "measurement_config_digest": profile["measurement_config_digest"],
+        "execution_profile_digest": digest,
+        "checker": "nanoda",
+        "qualification_repository": SUBMISSIONS_REPOSITORY,
+        "qualification_path": f"evidence/public-replay/profiles/{digest}.json",
+        "qualification_sha256": sha256_bytes(profile_raw),
+    }
+    if qualification_commit is not None:
+        payload["qualification_commit"] = qualification_commit
+    return payload
+
+
+def replay_enqueue_payload(
+    result_id: str, profile: dict[str, Any]
+) -> dict[str, Any]:
+    return {
+        "result_id": result_id,
+        "measurement_config_digest": profile["measurement_config_digest"],
+        "execution_profile_digest": profile["execution_profile_digest"],
+        "checker": "nanoda",
+        "benchmark_commit": profile["benchmark_commit"],
+    }
+
+
 def prepare(args: argparse.Namespace) -> None:
     plan_commit = match(COMMIT, args.plan_commit, "plan commit")
     preparation_source_root = pathlib.Path(args.preparation_source_root)
@@ -1206,51 +1291,14 @@ def prepare(args: argparse.Namespace) -> None:
         "measurement_config": measurement_config,
         "measurement_config_digest": measurement_digest,
     }
-    profile_sha256 = sha256_bytes(canonical(profile))
+    profile_raw = canonical(profile)
+    profile_sha256 = sha256_bytes(profile_raw)
     profile_path = f"evidence/public-replay/profiles/{execution_profile_digest}.json"
-    authority_payload = {
-        "request_id": request["request_id"],
-        "historical_accepted_at": request["historical_accepted_at"],
-        "owner_login": request["owner_login"],
-        "declared_model": request["declared_model"],
-        "problem_id": result["problem_id"],
-        "statement_revision": result["statement_revision"],
-        "results_repository": result["results_repository"],
-        "results_commit": result["results_commit"],
-        "results_path": result["results_path"],
-        "result_file_sha256": result["result_file_sha256"],
-        "result_tree_digest": result["result_tree_digest"],
-        "source_kind": request["source"]["kind"],
-        "source_repository": request["source"]["repository"],
-        "source_commit": request["source"]["commit"],
-        "source_visibility": "public",
-        "benchmark_repository": request["benchmark"]["repository"],
-        "benchmark_commit": request["benchmark"]["commit"],
-        "toolchain": request["benchmark"]["toolchain"],
-        "lean_toolchain_blob_sha256": request["benchmark"]["lean_toolchain_blob_sha256"],
-        "workflow_run_identity_sha256": request["historical_evaluation"]["workflow_run_identity_sha256"],
-        "authority_repository": SUBMISSIONS_REPOSITORY,
-        "authority_commit": args.plan_commit,
-        "authority_path": PLAN_PATH,
-        "authority_sha256": PLAN_SHA256,
-    }
-    qualification_without_commit = {
-        "toolchain": entry["toolchain"],
-        "benchmark_commit": entry["benchmark_commit"],
-        "measurement_config_digest": measurement_digest,
-        "execution_profile_digest": execution_profile_digest,
-        "checker": "nanoda",
-        "qualification_repository": SUBMISSIONS_REPOSITORY,
-        "qualification_path": profile_path,
-        "qualification_sha256": profile_sha256,
-    }
-    enqueue_payload = {
-        "result_id": result["result_id"],
-        "measurement_config_digest": measurement_digest,
-        "execution_profile_digest": execution_profile_digest,
-        "checker": "nanoda",
-        "benchmark_commit": entry["benchmark_commit"],
-    }
+    authority_payload = authority_event_payload(request, result, args.plan_commit)
+    qualification_without_commit = profile_qualification_payload(
+        profile, profile_raw, None
+    )
+    enqueue_payload = replay_enqueue_payload(result["result_id"], profile)
     task_id = replay_task_id(result["result_id"], measurement_digest)
     preparation = {
         "schema_version": 2,
@@ -1400,6 +1448,370 @@ def finalize(args: argparse.Namespace) -> None:
     write_relative(output_root, "historical-public-state-append-candidate.json", manifest)
 
 
+def load_batch_inputs(
+    repository_root: pathlib.Path, qualification_commit: str
+) -> tuple[
+    dict[str, Any],
+    dict[str, tuple[dict[str, Any], bytes, str]],
+    list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
+]:
+    verify_checkout(
+        repository_root,
+        SUBMISSIONS_REPOSITORY,
+        qualification_commit,
+        label="qualification source",
+    )
+    _git(
+        repository_root,
+        "merge-base",
+        "--is-ancestor",
+        PLAN_COMMIT,
+        qualification_commit,
+        maximum=1,
+    )
+    plan_raw = _git_optional_blob(repository_root, PLAN_COMMIT, PLAN_PATH)
+    matrix_raw = _git_optional_blob(repository_root, PLAN_COMMIT, MATRIX_PATH)
+    if plan_raw is None or matrix_raw is None:
+        raise PreparationError("final plan or profile matrix Git blob is unavailable")
+    plan, _ = parse_canonical(
+        plan_raw, "final historical replay plan", expected_sha256=PLAN_SHA256
+    )
+    matrix, _ = parse_canonical(
+        matrix_raw, "final historical profile matrix", expected_sha256=MATRIX_SHA256
+    )
+    requests = plan.get("requests")
+    images = matrix.get("images")
+    if (
+        plan.get("resolved_request_count") != BATCH_REQUEST_COUNT
+        or plan.get("resolved_result_count") != BATCH_RESULT_COUNT
+        or not isinstance(requests, list)
+        or len(requests) != BATCH_REQUEST_COUNT
+        or matrix.get("image_count") != BATCH_PROFILE_COUNT
+        or matrix.get("request_count") != BATCH_REQUEST_COUNT
+        or matrix.get("result_count") != BATCH_RESULT_COUNT
+        or not isinstance(images, list)
+        or len(images) != BATCH_PROFILE_COUNT
+    ):
+        raise PreparationError("final plan or matrix counts changed")
+    selections = []
+    result_ids = []
+    for request in requests:
+        for result in request.get("results", []):
+            selection = _find_selection(
+                plan, matrix, request["request_id"], result["result_id"]
+            )
+            if result["result_id"] != stable_result_id(
+                request["owner_login"],
+                request["declared_model"],
+                result["problem_id"],
+                result["statement_revision"],
+            ):
+                raise PreparationError("final historical result identity changed")
+            selections.append(selection)
+            result_ids.append(result["result_id"])
+    if (
+        len(selections) != BATCH_RESULT_COUNT
+        or len(set(result_ids)) != BATCH_RESULT_COUNT
+    ):
+        raise PreparationError("final plan does not contain exactly 194 unique Results")
+    entries = {entry["benchmark_commit"]: entry for entry in matrix["images"]}
+    profile_paths = _git(
+        repository_root,
+        "ls-tree",
+        "-r",
+        "--name-only",
+        qualification_commit,
+        "evidence/public-replay/profiles",
+        maximum=1024 * 1024,
+    ).decode().splitlines()
+    profiles: dict[str, tuple[dict[str, Any], bytes, str]] = {}
+    try:
+        from historical_replay_controller import HistoricalReplayControllerError, validate_qualification
+    except ImportError as error:
+        raise PreparationError("historical qualification validator is unavailable") from error
+    for relative in profile_paths:
+        path_match = PROFILE_PATH.fullmatch(relative)
+        if path_match is None:
+            raise PreparationError("qualification profile Git path is not canonical")
+        raw = _git_optional_blob(repository_root, qualification_commit, relative)
+        if raw is None:
+            raise PreparationError("qualification profile Git blob is unavailable")
+        profile, _ = parse_canonical(raw, f"qualification profile {relative}")
+        if (
+            profile.get("plan_sha256") != PLAN_SHA256
+            or profile.get("profile_matrix_sha256") != MATRIX_SHA256
+        ):
+            continue
+        try:
+            validate_qualification(profile, raw)
+        except HistoricalReplayControllerError as error:
+            raise PreparationError("current qualification profile is invalid") from error
+        benchmark_commit = profile["benchmark_commit"]
+        if benchmark_commit not in entries:
+            raise PreparationError("qualification profile benchmark is not in the matrix")
+        if (
+            path_match.group(1) != profile["execution_profile_digest"]
+            or profile["plan_commit"] != PLAN_COMMIT
+            or profile["plan_path"] != PLAN_PATH
+            or profile["runner_contract_sha256"] != RUNNER_CONTRACT_SHA256
+            or profile["qualification_contract_sha256"]
+            != QUALIFICATION_CONTRACT_SHA256
+            or benchmark_commit in profiles
+        ):
+            raise PreparationError("qualification profile identity binding changed")
+        profiles[benchmark_commit] = (profile, raw, relative)
+    if len(profiles) != BATCH_PROFILE_COUNT or set(profiles) != set(entries):
+        raise PreparationError("qualification commit does not contain exactly 35 current profiles")
+    return matrix, profiles, selections
+
+
+def deterministic_batch_uuid7(
+    timestamp: int, seed: str, result_id: str, event_type: str
+) -> str:
+    if not 0 <= timestamp < 2**48:
+        raise PreparationError("batch event timestamp exceeds UUIDv7 range")
+    identity = (
+        BATCH_UUID_DOMAIN
+        + bytes.fromhex(seed)
+        + b"\0"
+        + result_id.encode()
+        + b"\0"
+        + event_type.encode()
+    )
+    random_bits = int.from_bytes(hashlib.sha256(identity).digest()[:10], "big") & (
+        2**74 - 1
+    )
+    random_a = random_bits >> 62
+    random_b = random_bits & (2**62 - 1)
+    value = (
+        (timestamp << 80)
+        | (0x7 << 76)
+        | (random_a << 64)
+        | (0b10 << 62)
+        | random_b
+    )
+    encoded = f"{value:032x}"
+    return (
+        f"{encoded[:8]}-{encoded[8:12]}-{encoded[12:16]}-"
+        f"{encoded[16:20]}-{encoded[20:]}"
+    )
+
+
+def timestamp_from_ms(value: int) -> str:
+    try:
+        timestamp = dt.datetime(1970, 1, 1, tzinfo=dt.timezone.utc) + dt.timedelta(
+            milliseconds=value
+        )
+    except (OverflowError, ValueError) as error:
+        raise PreparationError("batch event timestamp is outside canonical UTC") from error
+    return timestamp.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def build_batch_events(
+    matrix: dict[str, Any],
+    selections: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
+    profiles: dict[str, tuple[dict[str, Any], bytes, str]],
+    qualification_commit: str,
+    first_occurred_at: str,
+    event_id_seed: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    try:
+        from historical_replay_controller import (
+            HistoricalReplayControllerError,
+            _validate_selected_matrix_entry,
+        )
+    except ImportError as error:
+        raise PreparationError("historical matrix validator is unavailable") from error
+    match(TIMESTAMP, first_occurred_at, "first batch event timestamp")
+    match(DIGEST, event_id_seed, "batch event id seed")
+    first_timestamp = timestamp_ms(first_occurred_at)
+    events: list[dict[str, Any]] = []
+    expected_tasks: list[dict[str, Any]] = []
+    for request, result, entry in selections:
+        profile, profile_raw, _ = profiles[entry["benchmark_commit"]]
+        result_id = result["result_id"]
+        authority_payload = authority_event_payload(request, result, PLAN_COMMIT)
+        try:
+            _validate_selected_matrix_entry(authority_payload, profile, matrix)
+        except HistoricalReplayControllerError as error:
+            raise PreparationError(
+                "historical matrix and qualification profile binding changed"
+            ) from error
+        qualification_payload = profile_qualification_payload(
+            profile, profile_raw, qualification_commit
+        )
+        enqueue_payload = replay_enqueue_payload(result_id, profile)
+        replay_id = replay_task_id(
+            result_id, profile["measurement_config_digest"]
+        )
+        chain: list[dict[str, Any]] = []
+        for event_type, subject_id, payload in (
+            ("historical_result.replay_authorized", result_id, authority_payload),
+            (
+                "historical_result.replay_profile_qualified",
+                result_id,
+                qualification_payload,
+            ),
+            ("replay.enqueued", replay_id, enqueue_payload),
+        ):
+            event_timestamp = first_timestamp + len(events)
+            occurred_at = timestamp_from_ms(event_timestamp)
+            event_id = deterministic_batch_uuid7(
+                event_timestamp, event_id_seed, result_id, event_type
+            )
+            event = {
+                "schema_version": 1,
+                "event_id": event_id,
+                "event_type": event_type,
+                "occurred_at": occurred_at,
+                "subject_id": subject_id,
+                "causation_event_id": None if not chain else chain[-1]["event_id"],
+                "actor": {"kind": "system"},
+                "payload": payload,
+            }
+            chain.append(event)
+            events.append(event)
+        expected_tasks.append(
+            {
+                "replay_task_id": replay_id,
+                **enqueue_payload,
+                **authority_payload,
+                "authority_event_id": chain[0]["event_id"],
+                "authorized_at": chain[0]["occurred_at"],
+                **qualification_payload,
+                "qualification_event_id": chain[1]["event_id"],
+                "qualified_at": chain[1]["occurred_at"],
+                "status": "queued",
+                "attempt": 0,
+                "event_id": chain[2]["event_id"],
+                "occurred_at": chain[2]["occurred_at"],
+            }
+        )
+    ids = [event["event_id"] for event in events]
+    times = [event["occurred_at"] for event in events]
+    if (
+        len(events) != BATCH_EVENT_COUNT
+        or len(ids) != len(set(ids))
+        or ids != sorted(ids)
+        or times != sorted(times)
+        or len(times) != len(set(times))
+        or any(
+            uuid7_timestamp_ms(event_id) != timestamp_ms(occurred_at)
+            for event_id, occurred_at in zip(ids, times, strict=True)
+        )
+    ):
+        raise PreparationError("batch State event identities are not exact and increasing")
+    expected_tasks.sort(key=lambda task: task["replay_task_id"])
+    if (
+        len(expected_tasks) != BATCH_RESULT_COUNT
+        or len({task["replay_task_id"] for task in expected_tasks})
+        != BATCH_RESULT_COUNT
+    ):
+        raise PreparationError("batch replay task identities are not exactly unique")
+    return events, expected_tasks
+
+
+def finalize_batch(args: argparse.Namespace) -> None:
+    qualification_commit = match(
+        COMMIT, args.qualification_commit, "qualification commit"
+    )
+    repository_root = pathlib.Path(args.qualification_repository_root)
+    matrix, profiles, selections = load_batch_inputs(
+        repository_root, qualification_commit
+    )
+    events, expected_tasks = build_batch_events(
+        matrix,
+        selections,
+        profiles,
+        qualification_commit,
+        args.first_occurred_at,
+        args.event_id_seed,
+    )
+    latest_state_time, queue = load_and_validate_pinned_state(
+        pathlib.Path(args.state_root), events
+    )
+    if events[0]["occurred_at"] <= latest_state_time:
+        raise PreparationError("candidate events do not follow the pinned State time window")
+    if (
+        queue.get("schema_version") != 2
+        or queue.get("environment") != "production"
+        or queue.get("source_event_count")
+        != PINNED_STATE_EVENT_COUNT + BATCH_EVENT_COUNT
+        or queue.get("tasks") != expected_tasks
+    ):
+        raise PreparationError(
+            "pinned State did not materialize exactly 194 queued historical tasks"
+        )
+    event_files = []
+    for event in events:
+        event_id = event["event_id"]
+        relative = f"events/{event_id.replace('-', '')[:2]}/{event_id}.json"
+        event_files.append(
+            {
+                "path": relative,
+                "sha256": sha256_bytes(canonical_state_event(event)),
+            }
+        )
+    profile_files = [
+        {"path": relative, "sha256": sha256_bytes(raw)}
+        for _, raw, relative in sorted(profiles.values(), key=lambda item: item[2])
+    ]
+    output_root = pathlib.Path(args.output_directory)
+    create_output_root(output_root)
+    for event, descriptor in zip(events, event_files, strict=True):
+        write_relative(
+            output_root,
+            descriptor["path"],
+            event,
+            state_event=True,
+        )
+    manifest = {
+        "schema_version": 1,
+        "kind": "historical_public_state_append_batch_candidate",
+        "activation_status": (
+            "blocked_pending_external_state_validation_and_append_authorization"
+        ),
+        "state_contract": {
+            "repository": "leanprover/lean-eval-state",
+            "commit": STATE_COMMIT,
+            "tree": STATE_TREE,
+            "event_schema_sha256": STATE_EVENT_SCHEMA_SHA256,
+            "historical_queue_schema_sha256": STATE_HISTORICAL_QUEUE_SCHEMA_SHA256,
+            "validator_sha256": STATE_VALIDATOR_SHA256,
+            "materializer_sha256": STATE_MATERIALIZER_SHA256,
+        },
+        "qualification_repository": SUBMISSIONS_REPOSITORY,
+        "qualification_commit": qualification_commit,
+        "plan_commit": PLAN_COMMIT,
+        "plan_path": PLAN_PATH,
+        "plan_sha256": PLAN_SHA256,
+        "profile_matrix_path": MATRIX_PATH,
+        "profile_matrix_sha256": MATRIX_SHA256,
+        "profile_count": BATCH_PROFILE_COUNT,
+        "request_count": BATCH_REQUEST_COUNT,
+        "result_count": BATCH_RESULT_COUNT,
+        "event_count": BATCH_EVENT_COUNT,
+        "authority_event_count": BATCH_RESULT_COUNT,
+        "qualification_event_count": BATCH_RESULT_COUNT,
+        "enqueue_event_count": BATCH_RESULT_COUNT,
+        "replay_task_count": BATCH_RESULT_COUNT,
+        "event_id_seed": args.event_id_seed,
+        "first_event_id": events[0]["event_id"],
+        "last_event_id": events[-1]["event_id"],
+        "first_occurred_at": events[0]["occurred_at"],
+        "last_occurred_at": events[-1]["occurred_at"],
+        "pinned_state_latest_occurred_at": latest_state_time,
+        "profile_set_sha256": sha256_bytes(canonical(profile_files)),
+        "event_set_sha256": sha256_bytes(canonical(event_files)),
+        "materialized_task_set_sha256": sha256_bytes(canonical(expected_tasks)),
+    }
+    write_relative(
+        output_root,
+        "historical-public-state-append-batch-candidate.json",
+        manifest,
+    )
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     commands = result.add_subparsers(dest="command", required=True)
@@ -1444,6 +1856,14 @@ def parser() -> argparse.ArgumentParser:
     finalize_command.add_argument("--enqueue-event-id", required=True)
     finalize_command.add_argument("--enqueue-occurred-at", required=True)
     finalize_command.add_argument("--output-directory", required=True)
+
+    batch_command = commands.add_parser("finalize-batch")
+    batch_command.add_argument("--qualification-commit", required=True)
+    batch_command.add_argument("--qualification-repository-root", required=True)
+    batch_command.add_argument("--state-root", required=True)
+    batch_command.add_argument("--first-occurred-at", required=True)
+    batch_command.add_argument("--event-id-seed", required=True)
+    batch_command.add_argument("--output-directory", required=True)
     return result
 
 
@@ -1455,6 +1875,8 @@ def main() -> int:
         prepare(args)
     elif args.command == "finalize":
         finalize(args)
+    elif args.command == "finalize-batch":
+        finalize_batch(args)
     else:
         raise AssertionError(args.command)
     return 0

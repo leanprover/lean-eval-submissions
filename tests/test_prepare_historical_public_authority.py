@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import importlib.util
 import json
 import pathlib
@@ -881,6 +882,275 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
             "REPLAY_ENABLED=true", "INTAKE_ENABLED=true", "PUBLICATION_ENABLED=true",
         ):
             self.assertNotIn(forbidden, workflow)
+
+
+class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.matrix = json.loads(MATRIX.read_text())
+        cls.template = json.loads(
+            (
+                ROOT
+                / "evidence/public-replay/profiles/"
+                "0886d3624de67d0ba1cb00657f66c5f7304743773a024509fceda6ae8f4ff660.json"
+            ).read_text()
+        )
+
+    def synthetic_profile(
+        self, entry: dict[str, object], *, salt: str = "primary"
+    ) -> dict[str, object]:
+        profile = copy.deepcopy(self.template)
+        benchmark_commit = str(entry["benchmark_commit"])
+        profile_lock = entry["profile_lock"]
+        self.assertIsInstance(profile_lock, dict)
+        image_digest = "sha256:" + hashlib.sha256(
+            f"batch-profile-fixture\0{benchmark_commit}\0{salt}".encode()
+        ).hexdigest()
+        execution_profile = {
+            "schema_version": 1,
+            "runner_profile": profile_lock["runner_profile"],
+            "vm_image_digest": image_digest,
+            "toolchain": profile_lock["toolchain"],
+            "go_toolchain": profile_lock["go_toolchain"],
+            "rust_toolchain": profile_lock["rust_toolchain"],
+            "cpu_model": "batch-fixture-cpu",
+            "architecture": "x86_64",
+            "kernel_release": "batch-fixture-kernel",
+            "cache_state": profile_lock["cache_state"],
+            "measurement_command": profile_lock["measurement_command"],
+            "components": profile_lock["components"],
+        }
+        profile.update(
+            benchmark_commit=benchmark_commit,
+            benchmark_tree=entry["benchmark_tree"],
+            plan_commit=authority.PLAN_COMMIT,
+            plan_path=authority.PLAN_PATH,
+            plan_sha256=authority.PLAN_SHA256,
+            profile_matrix_path=authority.MATRIX_PATH,
+            profile_matrix_sha256=authority.MATRIX_SHA256,
+            runner_contract_path=authority.RUNNER_CONTRACT_PATH,
+            runner_contract_sha256=authority.RUNNER_CONTRACT_SHA256,
+            qualification_contract_path=authority.QUALIFICATION_CONTRACT_PATH,
+            qualification_contract_sha256=authority.QUALIFICATION_CONTRACT_SHA256,
+            controller_source_commit=authority.PLAN_COMMIT,
+            image_source_commit=authority.PLAN_COMMIT,
+            registry_tag=f"{benchmark_commit}-{authority.PLAN_COMMIT}",
+            registry_manifest_digest=image_digest,
+            execution_profile=execution_profile,
+            execution_profile_digest=authority.config_digest(
+                "lean-eval-replay-execution-profile-v1", execution_profile
+            ),
+        )
+        return profile
+
+    def exact_git_inputs(self) -> tuple[dict[str, bytes], list[str]]:
+        blobs = {
+            authority.PLAN_PATH: PLAN.read_bytes(),
+            authority.MATRIX_PATH: MATRIX.read_bytes(),
+        }
+        paths = []
+        for entry in self.matrix["images"]:
+            profile = self.synthetic_profile(entry)
+            relative = (
+                "evidence/public-replay/profiles/"
+                f"{profile['execution_profile_digest']}.json"
+            )
+            blobs[relative] = authority.canonical(profile)
+            paths.append(relative)
+        return blobs, paths
+
+    def load_inputs(
+        self, blobs: dict[str, bytes], paths: list[str]
+    ) -> tuple[dict[str, object], dict[str, tuple[dict[str, object], bytes, str]], list[object]]:
+        def git(_root: pathlib.Path, *arguments: str, **_kwargs: object) -> bytes:
+            if arguments[:4] == ("ls-tree", "-r", "--name-only", "f" * 40):
+                return ("\n".join(paths) + "\n").encode()
+            return b""
+
+        def blob(_root: pathlib.Path, _commit: str, relative: str) -> bytes | None:
+            return blobs.get(relative)
+
+        with (
+            mock.patch.object(authority, "verify_checkout"),
+            mock.patch.object(authority, "_git", side_effect=git),
+            mock.patch.object(authority, "_git_optional_blob", side_effect=blob),
+        ):
+            return authority.load_batch_inputs(pathlib.Path("fixture"), "f" * 40)
+
+    def materialized_queue(
+        self, _root: pathlib.Path, events: list[dict[str, object]]
+    ) -> tuple[str, dict[str, object]]:
+        self.assertEqual(len(events), authority.BATCH_EVENT_COUNT)
+        tasks = []
+        for index in range(0, len(events), 3):
+            authorized, qualified, enqueued = events[index : index + 3]
+            self.assertEqual(
+                [authorized["event_type"], qualified["event_type"], enqueued["event_type"]],
+                [
+                    "historical_result.replay_authorized",
+                    "historical_result.replay_profile_qualified",
+                    "replay.enqueued",
+                ],
+            )
+            self.assertEqual(qualified["causation_event_id"], authorized["event_id"])
+            self.assertEqual(enqueued["causation_event_id"], qualified["event_id"])
+            tasks.append(
+                {
+                    "replay_task_id": enqueued["subject_id"],
+                    **enqueued["payload"],
+                    **authorized["payload"],
+                    "authority_event_id": authorized["event_id"],
+                    "authorized_at": authorized["occurred_at"],
+                    **qualified["payload"],
+                    "qualification_event_id": qualified["event_id"],
+                    "qualified_at": qualified["occurred_at"],
+                    "status": "queued",
+                    "attempt": 0,
+                    "event_id": enqueued["event_id"],
+                    "occurred_at": enqueued["occurred_at"],
+                }
+            )
+        tasks.sort(key=lambda task: task["replay_task_id"])
+        return "2026-08-26T05:59:59.999Z", {
+            "schema_version": 2,
+            "environment": "production",
+            "source_event_count": (
+                authority.PINNED_STATE_EVENT_COUNT + authority.BATCH_EVENT_COUNT
+            ),
+            "source_digest": "0" * 64,
+            "tasks": tasks,
+        }
+
+    def test_batch_finalization_is_complete_deterministic_and_create_only(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            blobs, paths = self.exact_git_inputs()
+            matrix, profiles, selections = self.load_inputs(blobs, paths)
+            events, tasks = authority.build_batch_events(
+                matrix,
+                selections,
+                profiles,
+                "f" * 40,
+                "2026-08-26T06:00:00.000Z",
+                "5" * 64,
+            )
+            self.assertEqual((len(profiles), len(selections), len(events), len(tasks)), (35, 194, 582, 194))
+            args = argparse.Namespace(
+                qualification_commit="f" * 40,
+                qualification_repository_root="fixture",
+                state_root="fixture-state",
+                first_occurred_at="2026-08-26T06:00:00.000Z",
+                event_id_seed="5" * 64,
+                output_directory=str(root / "candidate"),
+            )
+            with (
+                mock.patch.object(
+                    authority,
+                    "load_batch_inputs",
+                    return_value=(matrix, profiles, selections),
+                ),
+                mock.patch.object(
+                    authority,
+                    "load_and_validate_pinned_state",
+                    side_effect=self.materialized_queue,
+                ),
+            ):
+                authority.finalize_batch(args)
+            output = pathlib.Path(args.output_directory)
+            event_paths = sorted((output / "events").glob("*/*.json"))
+            self.assertEqual(len(event_paths), authority.BATCH_EVENT_COUNT)
+            manifest = json.loads(
+                (output / "historical-public-state-append-batch-candidate.json").read_text()
+            )
+            self.assertEqual(
+                (
+                    manifest["profile_count"],
+                    manifest["request_count"],
+                    manifest["result_count"],
+                    manifest["event_count"],
+                    manifest["replay_task_count"],
+                ),
+                (35, 128, 194, 582, 194),
+            )
+            repeated, _ = authority.build_batch_events(
+                matrix, selections, profiles, "f" * 40,
+                args.first_occurred_at, args.event_id_seed,
+            )
+            self.assertEqual(
+                [authority.canonical_state_event(event) for event in events],
+                [authority.canonical_state_event(event) for event in repeated],
+            )
+            with (
+                mock.patch.object(
+                    authority,
+                    "load_batch_inputs",
+                    return_value=(matrix, profiles, selections),
+                ),
+                mock.patch.object(
+                    authority,
+                    "load_and_validate_pinned_state",
+                    side_effect=self.materialized_queue,
+                ),
+                self.assertRaisesRegex(authority.PreparationError, "overwrite"),
+            ):
+                authority.finalize_batch(args)
+
+    def test_batch_requires_every_exact_fully_valid_profile(self) -> None:
+        blobs, paths = self.exact_git_inputs()
+        with self.assertRaisesRegex(authority.PreparationError, "exactly 35"):
+            self.load_inputs(blobs, paths[:-1])
+        invalid = json.loads(blobs[paths[0]])
+        invalid["registry_tag"] = "invalid"
+        blobs[paths[0]] = authority.canonical(invalid)
+        with self.assertRaisesRegex(authority.PreparationError, "profile is invalid"):
+            self.load_inputs(blobs, paths)
+
+    def test_batch_translates_matrix_profile_binding_failure(self) -> None:
+        blobs, paths = self.exact_git_inputs()
+        matrix, profiles, selections = self.load_inputs(blobs, paths)
+        benchmark_commit = selections[0][2]["benchmark_commit"]
+        profile, raw, relative = profiles[benchmark_commit]
+        changed = copy.deepcopy(profile)
+        changed["execution_profile"]["toolchain"] = "leanprover/lean4:invalid"
+        profiles[benchmark_commit] = (changed, raw, relative)
+        with self.assertRaisesRegex(authority.PreparationError, "binding changed"):
+            authority.build_batch_events(
+                matrix,
+                selections,
+                profiles,
+                "f" * 40,
+                "2026-08-26T06:00:00.000Z",
+                "5" * 64,
+            )
+
+    def test_seeded_uuid7_is_deterministic_and_time_bound(self) -> None:
+        timestamp = authority.timestamp_ms("2026-08-26T06:00:00.000Z")
+        first = authority.deterministic_batch_uuid7(
+            timestamp,
+            "a" * 64,
+            "r2_" + "b" * 64,
+            "historical_result.replay_authorized",
+        )
+        self.assertEqual(
+            first,
+            authority.deterministic_batch_uuid7(
+                timestamp,
+                "a" * 64,
+                "r2_" + "b" * 64,
+                "historical_result.replay_authorized",
+            ),
+        )
+        self.assertRegex(first, authority.UUID7)
+        self.assertEqual(authority.uuid7_timestamp_ms(first), timestamp)
+        self.assertNotEqual(
+            first,
+            authority.deterministic_batch_uuid7(
+                timestamp,
+                "c" * 64,
+                "r2_" + "b" * 64,
+                "historical_result.replay_authorized",
+            ),
+        )
 
 
 if __name__ == "__main__":
