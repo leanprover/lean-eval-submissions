@@ -217,7 +217,7 @@ the public deploy key first and then remove the matching environment secret.
 | submissions / `replay-production` | `EN_kwDOSh7OzM8AAAAEu8r3MQ` | protected branches | Production replay variable absent |
 | submissions / `archive-migration-production` | `EN_kwDOSh7OzM8AAAAEwLDSMQ` | protected branches | Ordinary production Wrap role recorded but incompatible with this environment's OIDC subject; unusable |
 | releases / `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | protected branches | Staging release invoker role set; live trust repair pending |
-| releases / `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | protected branches | Production release invoker and Git keys set; publication variable absent |
+| releases / `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | protected branches | Production release invoker and Git keys set; live release trust repair pending; publication variable absent |
 
 Environment protection/policy IDs, in the same order, are:
 
@@ -271,10 +271,13 @@ before decrypt and enforces reuse refusal.
 Current GitHub OIDC subject prefixes are
 `repo:leanprover/lean-eval-submissions` and
 `repo:leanprover@7233018/lean-eval-releases@1340741242`. The live release roles
-still trust the obsolete release subject. The reviewed staging-only repair is
-documented in
+still trust the obsolete release subject. Their separately approval-gated
+repairs are documented in
 [`docs/aws-release-staging-trust-repair.md`](docs/aws-release-staging-trust-repair.md)
-and must not be applied without explicit approval.
+and
+[`docs/aws-release-production-trust-repair.md`](docs/aws-release-production-trust-repair.md).
+The production procedure reuses the live template so it cannot also provision
+the deferred migration role. Neither repair is authorized by this inventory.
 
 The historical migration role
 `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`

@@ -58,7 +58,8 @@ LEAN_EVAL_STAGING_STACK=lean-eval-key-adapter-staging
 LEAN_EVAL_PRODUCTION_STACK=lean-eval-key-adapter-production
 LEAN_EVAL_SUBMISSIONS_COMMIT="$(gh api \
   repos/leanprover/lean-eval-submissions/commits/main --jq .sha)"
-LEAN_EVAL_RELEASE_COMMIT=90dadc872d624b8e6d171caf439313d185fc3e7f
+LEAN_EVAL_RELEASE_COMMIT="$(gh api \
+  repos/leanprover/lean-eval-releases/commits/main --jq .sha)"
 LEAN_EVAL_OIDC_PROVIDER_ARN=arn:aws:iam::161072922960:oidc-provider/token.actions.githubusercontent.com
 LEAN_EVAL_SUBMISSION_PREFIX=leanprover/lean-eval-submissions
 LEAN_EVAL_RELEASE_PREFIX=leanprover@7233018/lean-eval-releases@1340741242
@@ -329,11 +330,11 @@ test "$(gh api repos/leanprover/lean-eval-releases/actions/variables \
   --jq '[.variables[] | select(.name=="PUBLICATION_ENABLED")] | length')" = 0
 ```
 
-The machine checks require exact release head
-`90dadc872d624b8e6d171caf439313d185fc3e7f`, overall success, and exactly the
-successful `prepare-one` and `unwrap-one` jobs. Open the exact URL recorded in
-`run.json` and retain the `unwrap-one` job summary; GitHub does not reliably
-return Actions job-summary text through its check-run API. The summary must say
+The machine checks require the exact protected release head captured before
+the operation, overall success, and exactly the successful `prepare-one` and
+`unwrap-one` jobs. Open the exact URL recorded in `run.json` and retain the
+`unwrap-one` job summary; GitHub does not reliably return Actions job-summary
+text through its check-run API. The summary must say
 `Credentialed staging release boundary passed` and identify submission
 `01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584`, audit commit
 `92b95c162ad9bf38d027e11193683ca61ed2a994`, and exact ciphertext digest

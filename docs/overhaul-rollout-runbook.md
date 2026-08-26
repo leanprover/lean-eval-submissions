@@ -135,7 +135,9 @@ separate approvals:
 2. run one credentialed, publication-disabled staging unwrap/reconstruction;
 3. connect the production archive Wrap-only role and prove it cannot unwrap;
 4. reverify production release trust and scope without decrypting or
-   publishing production source.
+   publishing production source, following the separate
+   [`aws-release-production-trust-repair.md`](aws-release-production-trust-repair.md)
+   procedure only after its explicit approval.
 
 For the staging trust request, present the exact role, OIDC subject, policy
 diff, selected staging archive, absent production/publication authority, and

@@ -260,20 +260,26 @@ deleting the variable alone does not revoke that active session. Keep
 production intake disabled throughout the connection, preflight, and rollback
 decision.
 
-Do not connect production replay/release authority or enable production intake
-merely because the stacks and this bounded synthetic preflight exist.
+Do not connect production replay authority or enable production intake or
+publication merely because the stacks and this bounded synthetic preflight
+exist.
 
-## 5. Repair a transferred repository's release subject without widening trust
+## 5. Repair transferred-repository release subjects without widening trust
 
 The release repository was transferred after GitHub's immutable-subject
 rollout. The current source template pins the API-reported ID-bearing subject,
-but the live staging stack still trusts the obsolete name-only subject. Do not
-disable immutable subjects or edit the IAM role directly. Follow
-[`aws-release-staging-trust-repair.md`](aws-release-staging-trust-repair.md) to
-prepare a staging-only CloudFormation change set, require that it modifies
-exactly the non-replacing staging `ReleaseInvokerRole`, leave the production
-stack untouched with an unchanged `LastUpdatedTime`, and run the
-publication-disabled credentialed smoke.
+but both live release roles still trust the obsolete name-only subject. Do not
+disable immutable subjects or edit either IAM role directly.
+
+Follow
+[`aws-release-staging-trust-repair.md`](aws-release-staging-trust-repair.md) for
+the separately approved staging repair and credentialed reconstruction. For
+the later production trust-only repair, follow
+[`aws-release-production-trust-repair.md`](aws-release-production-trust-repair.md).
+The production procedure deliberately reuses the live stack template: applying
+the current full template would also provision the deferred migration role.
+Each repair must modify only its non-replacing `ReleaseInvokerRole` and leave
+the other stack unchanged.
 
 ## Why this is one-use
 
