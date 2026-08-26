@@ -20,16 +20,17 @@ python scripts/migrate_archive_envelopes.py inventory \
   --output /private/path/migration-plan.json
 ```
 
-The current protected snapshot, at audit commit
-`ad356e7bc5a2d650d9902ac3f6d352a0164360bc`, contains 1,045 pairs:
-1,043 requiring migration and two retained schema-version-3 objects. Its
-canonical inventory digest is
+The retained reviewed baseline used by the canonical private-result crosswalk,
+at audit commit `ad356e7bc5a2d650d9902ac3f6d352a0164360bc`, contains
+1,045 pairs: 1,043 requiring migration and two retained schema-version-3
+objects. Its canonical inventory digest is
 `6b8867f41a13c3ba323746988058886e5dc73da7b509deaf01ccf9c36fe8d5d4`.
-The credential-free planner can reproduce that count and digest using only an
-audit-repository read credential; it does not need the legacy identity, an AWS
-role, plaintext, or write authority. Intake changes the source commit and can
-change the inventory, so operators must freeze and review fresh counts and a
-fresh digest immediately before apply.
+This is a pinned input, not a claim about the moving audit `main`. The
+credential-free planner can reproduce the pinned count and digest using only
+an audit-repository read credential; it does not need the legacy identity, an
+AWS role, plaintext, or write authority. Intake changes the source commit and
+inventory, so operators must freeze and review fresh counts and a fresh digest
+immediately before apply.
 
 The migration plan alone cannot correlate an accepted private result with an
 archive because it intentionally omits repository and ref metadata. Before
