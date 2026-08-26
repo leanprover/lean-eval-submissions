@@ -264,6 +264,8 @@ jobs:
           assert body["intake_configured_enabled"] is False
           assert body["intake_effective_enabled"] is False
           assert body["intake_enabled"] is False
+          assert body["legacy_result_owner_api_enabled"] is False
+          assert body["result_amendment_owner_api_enabled"] is False
           assert body["result_amendment_maintainer_api_enabled"] is False
           assert body["model_identity_owner_api_enabled"] is False
           assert body["model_identity_maintainer_api_enabled"] is False
@@ -373,6 +375,14 @@ jobs:
             --config wrangler.jsonc \
             --environment production)
           echo "enabled=$intake_enabled" >> "$GITHUB_OUTPUT"
+      - name: Read reviewed production lifecycle state
+        id: production-lifecycle
+        run: |
+          set -euo pipefail
+          lifecycle_enabled=$(python ../scripts/worker_lifecycle_configuration.py \
+            --config wrangler.jsonc \
+            --environment production)
+          echo "enabled=$lifecycle_enabled" >> "$GITHUB_OUTPUT"
       - name: Verify reviewed production replay image manifest
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -396,6 +406,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_LIFECYCLE_ENABLED: ${{ steps.production-lifecycle.outputs.enabled }}
         run: |
           set -euo pipefail
           plan_dir="$RUNNER_TEMP/lean-eval-production-finalization"
@@ -426,13 +437,19 @@ jobs:
           assert body["intake_enabled"] is False
           assert body["intake_enablement_mode"] == "disabled"
           assert body["intake_lease_expires_at"] is None
-          assert body["result_amendment_maintainer_api_enabled"] is False
-          assert body["model_identity_owner_api_enabled"] is False
-          assert body["model_identity_maintainer_api_enabled"] is False
+          lifecycle_enabled = os.environ["EXPECTED_LIFECYCLE_ENABLED"] == "true"
+          for field in (
+              "legacy_result_owner_api_enabled",
+              "result_amendment_owner_api_enabled",
+              "result_amendment_maintainer_api_enabled",
+              "model_identity_owner_api_enabled",
+              "model_identity_maintainer_api_enabled",
+              "release_opt_out_api_enabled",
+          ):
+              assert body[field] is lifecycle_enabled, field
           assert body["model_identity_consolidation_api_enabled"] is False
           assert body["model_identity_write_max_subrequests"] == 400
           assert body["model_identity_consolidation_api"] == "atomic_reverse_impact_v1"
-          assert body["release_opt_out_api_enabled"] is False
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY
@@ -654,6 +671,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_COMMIT: ${{ github.sha }}
           INTAKE_LEASE_EXPIRES_AT: ${{ steps.intake-lease.outputs.expires_at }}
+          EXPECTED_LIFECYCLE_ENABLED: ${{ steps.production-lifecycle.outputs.enabled }}
           QUALIFIED_STATE_COMMIT: ${{ steps.production-state.outputs.commit }}
           READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
         run: |
@@ -686,13 +704,19 @@ jobs:
           assert body["intake_enabled"] is True
           assert body["intake_enablement_mode"] == "leased"
           assert body["intake_lease_expires_at"] == int(os.environ["INTAKE_LEASE_EXPIRES_AT"])
-          assert body["result_amendment_maintainer_api_enabled"] is False
-          assert body["model_identity_owner_api_enabled"] is False
-          assert body["model_identity_maintainer_api_enabled"] is False
+          lifecycle_enabled = os.environ["EXPECTED_LIFECYCLE_ENABLED"] == "true"
+          for field in (
+              "legacy_result_owner_api_enabled",
+              "result_amendment_owner_api_enabled",
+              "result_amendment_maintainer_api_enabled",
+              "model_identity_owner_api_enabled",
+              "model_identity_maintainer_api_enabled",
+              "release_opt_out_api_enabled",
+          ):
+              assert body[field] is lifecycle_enabled, field
           assert body["model_identity_consolidation_api_enabled"] is False
           assert body["model_identity_write_max_subrequests"] == 400
           assert body["model_identity_consolidation_api"] == "atomic_reverse_impact_v1"
-          assert body["release_opt_out_api_enabled"] is False
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY
@@ -767,6 +791,7 @@ jobs:
         if: steps.production-intake.outputs.enabled == 'false'
         env:
           EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_LIFECYCLE_ENABLED: ${{ steps.production-lifecycle.outputs.enabled }}
           READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
         run: |
           set -euo pipefail
@@ -781,13 +806,19 @@ jobs:
           assert body["intake_effective_enabled"] is False
           assert body["intake_enablement_mode"] == "disabled"
           assert body["intake_lease_expires_at"] is None
-          assert body["result_amendment_maintainer_api_enabled"] is False
-          assert body["model_identity_owner_api_enabled"] is False
-          assert body["model_identity_maintainer_api_enabled"] is False
+          lifecycle_enabled = os.environ["EXPECTED_LIFECYCLE_ENABLED"] == "true"
+          for field in (
+              "legacy_result_owner_api_enabled",
+              "result_amendment_owner_api_enabled",
+              "result_amendment_maintainer_api_enabled",
+              "model_identity_owner_api_enabled",
+              "model_identity_maintainer_api_enabled",
+              "release_opt_out_api_enabled",
+          ):
+              assert body[field] is lifecycle_enabled, field
           assert body["model_identity_consolidation_api_enabled"] is False
           assert body["model_identity_write_max_subrequests"] == 400
           assert body["model_identity_consolidation_api"] == "atomic_reverse_impact_v1"
-          assert body["release_opt_out_api_enabled"] is False
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY

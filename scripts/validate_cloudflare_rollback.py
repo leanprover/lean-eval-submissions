@@ -84,6 +84,18 @@ INTAKE_LEASE_BINDINGS = {
     "INTAKE_LEASE_STATE_COMMIT",
     "INTAKE_LEASE_TARGET_COMMIT",
 }
+DISABLED_LAUNCH_GATE_BINDINGS = {
+    "LEGACY_RESULT_OWNER_API_ENABLED": "false",
+    "RESULT_AMENDMENT_OWNER_API_ENABLED": "false",
+    "RESULT_AMENDMENT_MAINTAINER_API_ENABLED": "false",
+    "RESULT_AMENDMENT_MAINTAINERS": "[]",
+    "MODEL_IDENTITY_OWNER_API_ENABLED": "false",
+    "MODEL_IDENTITY_MAINTAINER_API_ENABLED": "false",
+    "MODEL_IDENTITY_MAINTAINERS": "[]",
+    "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED": "false",
+    "RELEASE_OPT_OUT_API_ENABLED": "false",
+    "PROMOTION_CANARY_ENABLED": "false",
+}
 MAINTAINER_LOGIN = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\Z")
 MAX_MAINTAINERS = 16
 MAX_MAINTAINER_CONFIGURATION_BYTES = 2048
@@ -1039,6 +1051,12 @@ def validate_component(args: argparse.Namespace) -> None:
         if args.require_intake_disabled:
             expected["INTAKE_ENABLED"] = "false"
             expected["INTAKE_ENABLEMENT_MODE"] = "disabled"
+        if getattr(args, "require_launch_gates_disabled", False):
+            if not args.require_intake_disabled:
+                raise RollbackValidationError(
+                    "all-false launch recovery must also require disabled intake"
+                )
+            expected.update(DISABLED_LAUNCH_GATE_BINDINGS)
         intake_lease_bindings = getattr(args, "intake_lease_bindings", None)
         if intake_lease_bindings is not None:
             if args.require_intake_disabled:
@@ -1133,6 +1151,66 @@ def active_version(status: dict[str, Any]) -> str:
     if not isinstance(version_id, str) or not VERSION_ID.fullmatch(version_id):
         raise RollbackValidationError("deployment version ID is not a canonical UUID")
     return version_id
+
+
+def launch_recovery_source(
+    status: dict[str, Any],
+    version: dict[str, Any],
+    *,
+    config: dict[str, Any] | None = None,
+    expected_commit: str | None = None,
+) -> dict[str, Any]:
+    """Resolve one exact active intake version without depending on public health."""
+    version_id = active_version(status)
+    if version.get("id") != version_id:
+        raise RollbackValidationError(
+            "active intake deployment and version payload differ"
+        )
+    bindings = _plain_bindings(version, "intake")
+    commit = bindings.get("DEPLOYED_COMMIT")
+    if not isinstance(commit, str) or FULL_COMMIT.fullmatch(commit) is None:
+        raise RollbackValidationError(
+            "active intake version has no exact DEPLOYED_COMMIT"
+        )
+    if bindings.get("DEPLOYMENT_ENVIRONMENT") != "production":
+        raise RollbackValidationError(
+            "active intake version is not bound to production"
+        )
+    if bindings.get("DISPATCH_WORKFLOW_REF") != f"lean-eval-dispatch/{commit}":
+        raise RollbackValidationError(
+            "active intake version has no exact dispatch ref"
+        )
+    if expected_commit is not None:
+        if FULL_COMMIT.fullmatch(expected_commit) is None or commit != expected_commit:
+            raise RollbackValidationError(
+                "active intake version differs from the expected live commit"
+            )
+        if config is None:
+            raise RollbackValidationError(
+                "expected live commit requires its exact intake config"
+            )
+    if config is not None:
+        if expected_commit is None:
+            raise RollbackValidationError(
+                "intake config validation requires the expected live commit"
+            )
+        _validate_intake_service(config, version, "production")
+        _validate_capabilities("intake", config, version, "production")
+
+    all_false = {
+        "INTAKE_ENABLED": "false",
+        "INTAKE_ENABLEMENT_MODE": "disabled",
+        **DISABLED_LAUNCH_GATE_BINDINGS,
+    }
+    needed = any(bindings.get(name) != value for name, value in all_false.items())
+    if any(name.startswith("INTAKE_LEASE_") for name in bindings):
+        needed = True
+    return {
+        "schema_version": 1,
+        "version_id": version_id,
+        "deployed_commit": commit,
+        "needed": needed,
+    }
 
 
 def validate_health(
@@ -1472,6 +1550,7 @@ def parser() -> argparse.ArgumentParser:
     component.add_argument("--version", type=pathlib.Path, required=True)
     component.add_argument("--version-id", required=True)
     component.add_argument("--require-intake-disabled", action="store_true")
+    component.add_argument("--require-launch-gates-disabled", action="store_true")
     component.add_argument("--intake-lease-bindings", type=pathlib.Path)
 
     lease = commands.add_parser("lease-bindings")
@@ -1484,6 +1563,13 @@ def parser() -> argparse.ArgumentParser:
 
     active = commands.add_parser("active-version")
     active.add_argument("--status", type=pathlib.Path, required=True)
+
+    recovery_source = commands.add_parser("launch-recovery-source")
+    recovery_source.add_argument("--status", type=pathlib.Path, required=True)
+    recovery_source.add_argument("--version", type=pathlib.Path, required=True)
+    recovery_source.add_argument("--config", type=pathlib.Path)
+    recovery_source.add_argument("--expected-commit")
+    recovery_source.add_argument("--output", type=pathlib.Path, required=True)
 
     compatible = commands.add_parser("compatible-capabilities")
     compatible.add_argument(
@@ -1532,6 +1618,17 @@ def main() -> int:
             validate_status(_object(args.status), args.target_version)
         elif args.command == "active-version":
             print(active_version(_object(args.status)))
+        elif args.command == "launch-recovery-source":
+            source = launch_recovery_source(
+                _object(args.status),
+                _object(args.version),
+                config=_object(args.config) if args.config is not None else None,
+                expected_commit=args.expected_commit,
+            )
+            args.output.write_text(
+                json.dumps(source, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
         elif args.command == "compatible-capabilities":
             validate_compatible_capabilities(
                 args.component,

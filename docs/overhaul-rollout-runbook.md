@@ -57,7 +57,8 @@ runtime deployment path. It:
    creates or verifies `lean-eval-dispatch/<commit>`;
 3. deploys and verifies staging replay, broker, and intake components;
 4. runs the staging promotion canary; and
-5. deploys and verifies production, keeping tracked disabled features off.
+5. deploys and verifies production against the exact tracked intake and
+   lifecycle state.
 
 The dispatch-tag ruleset rejects tag update and deletion. Never move or reuse a
 dispatch tag. Workflow-only changes use
@@ -100,9 +101,11 @@ documentation cleanup, replay expansion, or other feature changes.
 
 Emergency pause uses
 [`intake-disable-recovery.yml`](../.github/workflows/intake-disable-recovery.yml).
-It can only deploy and verify disabled intake. If an enablement workflow fails
-or is cancelled, verify public health and run this disable-only recovery before
-any later production change.
+It can only deploy and verify the all-false launch state: intake, every public
+lifecycle family, model consolidation, and the promotion canary are disabled,
+and both maintainer arrays are empty. If an enablement workflow fails or is
+cancelled, verify public health and run this disable-only recovery before any
+later production change.
 
 ## 5. Lifecycle API gates
 
@@ -150,6 +153,28 @@ prevent that recovery step: immediately re-dispatch the same exact tag with
 `state=disabled` and both maintainer arrays equal to `[]`, then verify every
 launch field is false in public health. Do not use the enabled state outside
 the approved bounded smoke.
+
+Production uses no free-form lifecycle toggle. The six launch flags and the two
+closed maintainer arrays in `server/wrangler.jsonc` form one reviewed rollout
+state. [`worker_lifecycle_configuration.py`](../scripts/worker_lifecycle_configuration.py)
+requires all six launch flags to be identical, requires exactly one canonical
+maintainer identity per maintainer family when enabled and none when disabled,
+and always rejects model-consolidation enablement. The normal protected
+deployment controller reads that state, binds it to the immutable dispatch tag,
+enters `cloudflare-production`, and verifies every effective public health
+field. After the production go/no-go, enable these APIs only with a
+single-purpose configuration change; do not combine it with intake enablement,
+release publication, refactoring, or unrelated documentation.
+
+The same disable-only recovery used for intake also returns every lifecycle
+gate to false. It validates the exact recovered Worker version against explicit
+all-false bindings and then verifies all effective health fields. Its arming
+decision comes from the exact 100%-active production version metadata, not the
+tracked desired state. Public health is optional before mutation and mandatory
+after it; unavailable or invalid pre-mutation health conservatively arms the
+recovery. Configuration drift, a stray effective intake lease, and a failed
+deployment that broke health therefore remain recoverable. It cannot enable a
+capability.
 
 ## 6. Archive and release boundary
 
@@ -233,7 +258,9 @@ coherent reviewed unit. Never mix target commits.
 ## 10. Monitoring and reconciliation
 
 [`lifecycle-readiness-monitor.yml`](../.github/workflows/lifecycle-readiness-monitor.yml)
-checks public endpoint state and binds it to a recent successful protected
+checks intake, every lifecycle gate, model consolidation, general and
+historical replay, and the remaining public endpoint contract against tracked
+configuration, then binds that state to a recent successful protected
 deployment. A queued/running rollout is suppressed only for its bounded grace
 period; an older rollout becomes `deployment_rollout_stuck`. The bot-owned
 canonical incident is `lean-eval-submissions#1310`.

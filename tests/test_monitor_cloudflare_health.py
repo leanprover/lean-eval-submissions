@@ -70,6 +70,31 @@ class CloudflareHealthMonitorTests(unittest.TestCase):
         with self.assertRaisesRegex(monitor.MonitorError, "canonical boolean"):
             monitor.expected_health(intake, self.replay, "production")
 
+    def test_rejects_lifecycle_health_drift_and_consolidation_enablement(self) -> None:
+        responses = self.responses()
+        endpoints = monitor.tracked_endpoints(self.intake, self.replay)
+        responses[endpoints["production"]["intake"]][
+            "release_opt_out_api_enabled"
+        ] = True
+        with self.assertRaisesRegex(monitor.MonitorError, "health differs"):
+            monitor.verify_snapshot(self.intake, self.replay, lambda url: responses[url])
+
+        intake = copy.deepcopy(self.intake)
+        intake["env"]["production"]["vars"][
+            "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED"
+        ] = "true"
+        with self.assertRaisesRegex(monitor.MonitorError, "must remain disabled"):
+            monitor.expected_health(intake, self.replay, "production")
+
+    def test_rejects_historical_replay_health_drift(self) -> None:
+        responses = self.responses()
+        endpoints = monitor.tracked_endpoints(self.intake, self.replay)
+        responses[endpoints["production"]["replay"]][
+            "historical_public_replay_enabled"
+        ] = True
+        with self.assertRaisesRegex(monitor.MonitorError, "health differs"):
+            monitor.verify_snapshot(self.intake, self.replay, lambda url: responses[url])
+
     def test_rejects_incoherent_mode_or_tracked_lease_material(self) -> None:
         intake = copy.deepcopy(self.intake)
         intake["env"]["production"]["vars"]["INTAKE_ENABLEMENT_MODE"] = "durable"
