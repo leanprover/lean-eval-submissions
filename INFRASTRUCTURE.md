@@ -105,14 +105,16 @@ credentials are Worker runtime secrets and are not copied into the GitHub
 deployment environment.
 
 Kim Morrison is the temporary custodian for the runtime secrets below. There
-is no alternate custodian recorded. Rotate each environment independently:
+is no alternate custodian recorded. Rotate each environment independently.
+GitHub exposes the creation and update time of an environment-secret container,
+not the identity, installation time, or expiry of the matching Worker secret.
 
-| Credential | Current scope | Rotation and revocation |
-| --- | --- | --- |
-| `READINESS_TOKEN` | One intake Worker's protected readiness endpoints and the matching `cloudflare-*` environment | Replace the Worker secret and matching GitHub environment secret as one approved maintenance change, verify readiness, and retain no old value. Overwriting the Worker secret revokes the old token. |
-| `LIFECYCLE_CALLBACK_TOKEN` | One intake Worker's lifecycle callbacks and the matching source-free callback jobs | Replace both matching copies as one approved maintenance change, verify a source-free callback denial/success pair, and retain no old value. Overwriting the Worker secret revokes the old token. |
-| `AUTH_TOKEN_SECRET` | Session signing for one intake Worker only | Replace only the matching Worker secret. This intentionally invalidates all sessions in that environment; verify new OAuth and agent sessions before reopening intake. Overwriting it revokes every token signed only by the old value. |
-| `GITHUB_OAUTH_CLIENT_SECRET` | One environment's personal GitHub OAuth App and matching intake Worker | Generate a replacement in that App, replace only the matching Worker secret, verify OAuth, then revoke the old App secret. |
+| Credential | Current scope | Current age / expiry | Rotation, revocation, and recovery |
+| --- | --- | --- | --- |
+| `READINESS_TOKEN` | One intake Worker's protected readiness endpoints and the matching `cloudflare-*` environment | GitHub copies created 2026-08-20; Worker installation date unknown; no application-enforced expiry | Replace the Worker secret and matching GitHub environment secret as one approved maintenance change, verify readiness, and retain no old value. Overwriting both copies revokes the old token. If custody is lost, keep intake disabled and install a new random value in both locations. |
+| `LIFECYCLE_CALLBACK_TOKEN` | One intake Worker's lifecycle callbacks and the matching source-free callback jobs | Both pairs installed 2026-08-21; no application-enforced expiry | Replace both matching copies as one approved maintenance change, verify a source-free callback denial/success pair, and retain no old value. Overwriting both copies revokes the old token. If custody is lost, keep intake disabled and install a new random value in both locations. |
+| `AUTH_TOKEN_SECRET` | Session signing for one intake Worker only | Installation date unknown; no application-enforced expiry | Replace only the matching Worker secret. This intentionally invalidates all sessions in that environment; verify new OAuth and agent sessions before reopening intake. Overwriting it revokes every token signed only by the old value. If custody is lost, keep intake disabled and install a new random value. |
+| `GITHUB_OAUTH_CLIENT_SECRET` | One environment's personal GitHub OAuth App and matching intake Worker | Creation and expiry are not recorded and are not exposed by the available GitHub APIs | Generate a replacement in that App, replace only the matching Worker secret, verify OAuth, then revoke the old App secret. Recovery requires access to the owning `kim-em` account; otherwise pause browser intake. |
 
 | Token | Scope | Created / expiry | Rotation and revocation |
 | --- | --- | --- | --- |
@@ -130,6 +132,16 @@ then deploys production with tracked capabilities disabled. The protected
 `21094118` rejects update or deletion of
 `refs/tags/lean-eval-dispatch/*` and has no bypass.
 
+`DISPATCH_PROMOTION_APPROVAL_GUARD` must be 64 lowercase hexadecimal
+characters. It is a fail-closed configuration guard, not an independent
+external credential: the protected environment review and the job's scoped
+`GITHUB_TOKEN` provide the authority. Kim Morrison is its temporary
+custodian. The current GitHub secret was created on 2026-08-20; it has no
+application-enforced expiry. Rotation replaces only that environment secret
+with a fresh value and verifies the next protected promotion. Deleting it
+revokes the guard and makes promotion fail closed; recovery is installation of
+a fresh value through an explicitly approved credential change.
+
 ## GitHub applications and State access
 
 ### GitHub Apps
@@ -141,9 +153,15 @@ then deploys production with tracked capabilities disabled. The protected
 
 Both Apps are owned by `leanprover`, subscribe to no events, and have no
 webhook. Each broker environment holds its matching App IDs and private keys.
-Rotate a key by installing the replacement in both broker environments,
-verifying staging then disabled production, and deleting the old key. Do not
-grant gist or broad repository authority.
+Kim Morrison is the temporary private-key custodian; organization ownership is
+the recovery path if that custody is lost. No current private-key creation date,
+expiry, or fingerprint is recorded, and repository and public App APIs do not
+expose which App key the Worker secret contains. Rotate a key by creating one
+replacement under the same App, installing it in both broker environments,
+verifying staging then disabled production, and deleting the old App key.
+Immediate revocation deletes the App key and both matching Worker secrets; keep
+headless intake paused until an organization owner installs a replacement. Do
+not grant gist or broad repository authority.
 
 ### Browser OAuth Apps
 
@@ -176,6 +194,7 @@ Both State repositories are private append-only ledgers.
 | Repository | `leanprover/lean-eval-state-staging` | `leanprover/lean-eval-state` |
 | Ruleset | `21094006` | `21094005` |
 | Fine-grained PAT | `lean-eval-state-writer-staging` (`18528992`) | `lean-eval-state-writer-production` (`18529041`) |
+| Issuer / custodian | Issuer not independently recorded / Kim Morrison | Issuer not independently recorded / Kim Morrison |
 | Scope | Metadata read, Contents read/write on this repository only | Metadata read, Contents read/write on this repository only |
 | Created / expires | 2026-08-21 / 2026-11-19 | 2026-08-21 / 2026-11-19 |
 | Rotation owner / deadline | Kim Morrison / 2026-11-05 | Kim Morrison / 2026-11-05 |
@@ -185,6 +204,15 @@ Rulesets reject deletion and non-fast-forward history and require strict
 remove it when those credentials retire. The internet-facing Worker must not
 write workflows, repository settings, the submissions repository, or the other
 environment's State.
+
+Rotate each token separately before its deadline: create a replacement with
+the same one-repository scope under an approved principal, replace only the
+matching Worker's `GITHUB_STATE_TOKEN`, run the protected write preflight with
+intake disabled, and then revoke the old token in its issuing account. If the
+principal changes, update the matching State ruleset bypass only as a separate
+approved ruleset change. Immediate revocation removes the token in its issuing
+account and keeps that environment's intake disabled until a replacement has
+passed the same preflight.
 
 ### Deploy keys
 
@@ -201,11 +229,15 @@ Production release keys are installed, but publication remains impossible
 without the separate absent publication variable. Rotate or revoke a deploy key
 in its owning repository and matching protected environment; never reuse one
 key across roles. Kim Morrison is the temporary operator for this deploy-key
-set. Rotation means adding a replacement public deploy key with the same
-read-only/read-write bit, replacing only the matching environment's private-key
-secret, verifying the protected read or disabled publication path, and deleting
-the old deploy key from its owning repository. For immediate revocation, delete
-the public deploy key first and then remove the matching environment secret.
+set. GitHub deploy keys have no provider-enforced expiry; no separate rotation
+deadline is recorded. Rotation means adding a replacement public deploy key
+with the same read-only/read-write bit, replacing only the matching
+environment's private-key secret, verifying the protected read or disabled
+publication path, and deleting the old deploy key from its owning repository.
+For immediate revocation, delete the public deploy key first and then remove the
+matching environment secret. If the private half is lost, remove the public key,
+keep the dependent workflow disabled, and generate a new pair rather than
+trying to recover the old private material.
 
 ## GitHub environments
 
