@@ -191,10 +191,10 @@ environment's State.
 | Use | Key IDs / scope |
 | --- | --- |
 | Leaderboard production State projection | `160968617`, read-only production State |
-| Release staging | audit `161041215`; State `161041214` |
+| Release staging | audit `161041215` as `AUDIT_READ_KEY`; State `161041214` as `STAGING_STATE_READ_KEY` |
 | Release production | audit `161041000`; State controller `161040898`; release publisher `161040897` |
 | Historical migration | audit `161041934`; read-only |
-| Accepted-archive replay | State `161043118`; audit `161043119`; read-only |
+| Accepted-archive replay | State `161043118` as `STAGING_STATE_READ_KEY`; audit `161043119` as `AUDIT_READ_KEY`; read-only |
 | Staging authoritative replay | State writer `161051584`; private half only as `STAGING_STATE_WRITE_KEY` in `replay-staging` |
 
 Production release keys are installed, but publication remains impossible
