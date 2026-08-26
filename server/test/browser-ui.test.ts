@@ -16,7 +16,9 @@ describe("browser intake page", () => {
     expect(body).not.toContain('<option value="public">');
     expect(body).toContain('<option value="scheduled">scheduled release (default)</option>');
     expect(body.indexOf('value="scheduled"')).toBeLessThan(body.indexOf('value="withheld"'));
-    expect(body).toContain("release after two calendar months unless you opt out");
+    expect(body).toContain("authorized to license the submitted source under the Apache License 2.0");
+    expect(body).toContain("exactly two UTC calendar months after acceptance");
+    expect(body).toContain("Choose withheld to opt out");
     expect(body).not.toContain("<script>");
   });
 

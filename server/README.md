@@ -121,6 +121,11 @@ contract testing:
   `lean-eval-proof.txt` gist owned by that identity to contain the exact signed
   challenge and the prescribed tag to resolve directly to the submitted
   commit (annotated tags are dereferenced once).
+- For both browser and headless intake, choosing `publication_choice=scheduled`
+  confirms that the submitter is authorized to license the submitted source
+  under the Apache License 2.0. Accepted source is released under that license
+  exactly two UTC calendar months after acceptance. Choosing `withheld` opts
+  out of release.
 - `GET /api/v1/submissions/<uuid>`,
   `PATCH /api/v1/submissions/<uuid>/metadata`, and
   `PUT /api/v1/submissions/<uuid>/publication` require the base record's

@@ -47,7 +47,7 @@ export function browserPage(environment: "staging" | "production", intakeEnabled
           <option value="scheduled">scheduled release (default)</option>
           <option value="withheld">withheld (opt out)</option>
         </select>
-        <small>Accepted source is scheduled for release after two calendar months unless you opt out.</small>
+        <small>Choosing scheduled release confirms that you are authorized to license the submitted source under the Apache License 2.0. Accepted source is released under that license exactly two UTC calendar months after acceptance. Choose withheld to opt out.</small>
       </label>
       <label>Production metadata JSON <textarea id="production_metadata" name="production_metadata" rows="5">{}</textarea></label>
       <button type="submit">Submit exact commit</button>
