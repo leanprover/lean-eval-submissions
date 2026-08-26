@@ -111,9 +111,10 @@ These are bounded smoke cases, not a combinatorial staging matrix.
 - [ ] Reconcile every accepted Result as public-source replayable,
       private-archive replayable, or reviewed unavailable.
 - [ ] Freeze the exact historical-public execution profiles. Thirty-four of
-      thirty-five matrix profiles are complete; benchmark
-      `9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66` still requires the separately
-      approved, source-free isolated Cloudflare staging probe.
+      thirty-five matrix profiles are frozen; benchmark
+      `9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66` remains unqualified and requires
+      separate exact Cloudflare approval for its source-free isolated staging
+      probe.
 - [x] Provide one offline, create-only batch finalizer for the existing
       authorize, qualify, and enqueue State events across the exact final
       public corpus. Appending its output remains separately approval-gated.
