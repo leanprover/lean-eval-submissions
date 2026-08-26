@@ -148,10 +148,10 @@ const RESULT_OWNER_CONTRACTS: Readonly<Record<string, ResultOwnerContract>> = {
   [STAGING_STATE_REPOSITORY]: {
     commit: STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT,
     rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "e40d0e92b0125786a64c27a17bff8b322a3d0a95" },
-      docs: { mode: "040000", type: "tree", sha: "7a5088cee94a70da22656406d680a23bc3c9b9f4" },
-      schema: { mode: "040000", type: "tree", sha: "e4b815a07b1634f64c7a5618ad6a5b8fe8a1f09a" },
-      scripts: { mode: "040000", type: "tree", sha: "43399faa2c733a956568c225acff0d9a614f1590" },
+      "README.md": { mode: "100644", type: "blob", sha: "e546715f76d4c0977d6b940681b71f4324aff9b9" },
+      docs: { mode: "040000", type: "tree", sha: "39e94ccf460181e98692da31a59ffb31a2a63b54" },
+      schema: { mode: "040000", type: "tree", sha: "13d5853b5c1bf7227e90d697c86d42c7ce232102" },
+      scripts: { mode: "040000", type: "tree", sha: "de1017d55eaf9740358ae38908c77c168a25e8de" },
     },
   },
 };
@@ -168,10 +168,10 @@ const MODEL_IDENTITY_CONTRACTS: Readonly<Record<string, ModelIdentityContract>> 
   [STAGING_STATE_REPOSITORY]: {
     commit: STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
     rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "e40d0e92b0125786a64c27a17bff8b322a3d0a95" },
-      docs: { mode: "040000", type: "tree", sha: "7a5088cee94a70da22656406d680a23bc3c9b9f4" },
-      schema: { mode: "040000", type: "tree", sha: "e4b815a07b1634f64c7a5618ad6a5b8fe8a1f09a" },
-      scripts: { mode: "040000", type: "tree", sha: "43399faa2c733a956568c225acff0d9a614f1590" },
+      "README.md": { mode: "100644", type: "blob", sha: "e546715f76d4c0977d6b940681b71f4324aff9b9" },
+      docs: { mode: "040000", type: "tree", sha: "39e94ccf460181e98692da31a59ffb31a2a63b54" },
+      schema: { mode: "040000", type: "tree", sha: "13d5853b5c1bf7227e90d697c86d42c7ce232102" },
+      scripts: { mode: "040000", type: "tree", sha: "de1017d55eaf9740358ae38908c77c168a25e8de" },
     },
   },
 };
