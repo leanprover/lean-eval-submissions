@@ -234,6 +234,35 @@ jobs:
           echo "staging lifecycle health payload did not converge" >&2
           exit 1
 
+      - name: Verify unauthenticated browser mutation is denied
+        if: inputs.state == 'enabled'
+        run: |
+          set -euo pipefail
+          body_file=$(mktemp)
+          trap 'rm -f "$body_file"' EXIT
+          http_status=$(curl --silent --show-error --max-time 10 \
+            --output "$body_file" \
+            --write-out '%{http_code}' \
+            --request POST \
+            https://lean-eval-submission-server-staging.lean-eval.workers.dev/api/v1/browser/submission-grants)
+          BROWSER_DENIAL_BODY_FILE="$body_file" \
+          BROWSER_DENIAL_HTTP_STATUS="$http_status" \
+          python - <<'PY'
+          import json
+          import os
+
+          with open("../configuration/staging-lifecycle-smoke-v1.json", encoding="utf-8") as stream:
+              fixture = json.load(stream)
+          case = fixture["browser_unauthenticated_request"]
+          assert case["method"] == "POST"
+          assert case["path"] == "/api/v1/browser/submission-grants"
+          assert case["authentication"] == "none"
+          assert int(os.environ["BROWSER_DENIAL_HTTP_STATUS"]) == case["expected_http_status"]
+          with open(os.environ["BROWSER_DENIAL_BODY_FILE"], encoding="utf-8") as stream:
+              body = json.load(stream)
+          assert body == {"error": case["expected_error"]}
+          PY
+
       - name: Restore all launch gates to disabled after a failed mutation
         if: failure() && steps.armed.outputs.ready == 'true'
         env:
