@@ -134,6 +134,17 @@ immutable source inputs are in
 Values listed under `runtime_allocated` are recorded from the live responses
 and cannot be fixed in advance.
 
+When the enabled state converges, the controller itself makes the fixture's
+single unauthenticated browser grant request and requires the exact `401`
+`authentication_failed` response. It supplies neither a cookie nor an
+authorization header, and a mismatch invokes the same all-false recovery as
+any other failed enabled-state check.
+
+The metadata-backfill denial is not an empty-patch validation case. The
+authenticated staging operator sends the fixture's valid, nonempty patch for
+the stable `eohjelle`-owned Result named there and requires the owner-hiding
+`404 not_found` response. A denial must not create a State event.
+
 For the authenticated non-maintainer cases, first enable with the fixture's
 closed denial profiles and make only the two expected `404` decision requests.
 Then re-dispatch the same exact commit with the success profiles before the

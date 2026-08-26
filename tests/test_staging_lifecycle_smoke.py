@@ -76,6 +76,33 @@ class StagingLifecycleSmokeTests(unittest.TestCase):
                 self.assertIn(f'"{field}"', self.text)
         self.assertIn('body["model_identity_consolidation_api_enabled"] is False', self.text)
 
+    def test_controller_runs_the_exact_unauthenticated_browser_case(self) -> None:
+        case = self.fixture["browser_unauthenticated_request"]
+        self.assertEqual(
+            case,
+            {
+                "method": "POST",
+                "path": "/api/v1/browser/submission-grants",
+                "authentication": "none",
+                "expected_http_status": 401,
+                "expected_error": "authentication_failed",
+            },
+        )
+        self.assertIn("Verify unauthenticated browser mutation is denied", self.text)
+        self.assertIn("if: inputs.state == 'enabled'", self.text)
+        self.assertIn(
+            "https://lean-eval-submission-server-staging.lean-eval.workers.dev"
+            "/api/v1/browser/submission-grants",
+            self.text,
+        )
+        self.assertIn('case = fixture["browser_unauthenticated_request"]', self.text)
+        self.assertIn('body == {"error": case["expected_error"]}', self.text)
+        denial_step = self.text.split(
+            "      - name: Verify unauthenticated browser mutation is denied\n", 1
+        )[1].split("\n      - name:", 1)[0]
+        self.assertNotIn("authorization", denial_step.lower())
+        self.assertNotIn("cookie", denial_step.lower())
+
     def test_fixture_is_bounded_and_freezes_only_preexisting_inputs(self) -> None:
         fixture = self.fixture
         self.assertEqual(fixture["schema_version"], 1)
@@ -110,6 +137,27 @@ class StagingLifecycleSmokeTests(unittest.TestCase):
         self.assertEqual(
             backfill["claim"]["results_commit"], "runtime_staging_results_commit"
         )
+        denial = backfill["non_owner_denial"]
+        self.assertEqual(denial["target"], "stable_other_owned_result")
+        self.assertEqual(denial["method"], "PATCH")
+        self.assertEqual(denial["authenticated_login"], source["owner_login"])
+        self.assertNotEqual(denial["authenticated_login"], denial["owner_login"])
+        self.assertEqual(
+            denial["path"], f'/api/v1/results/{denial["result_id"]}/metadata'
+        )
+        self.assertEqual(denial["expected_http_status"], 404)
+        self.assertEqual(denial["expected_error"], "not_found")
+        self.assertEqual(denial["expected_state_event_delta"], 0)
+        self.assertTrue(denial["patch"]["production_metadata"])
+        records = json.loads((ROOT / denial["results_path"]).read_text(encoding="utf-8"))
+        self.assertEqual(records["schema_version"], 2)
+        matching = [
+            record
+            for record in records["results"]
+            if record["result_id"] == denial["result_id"]
+        ]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(denial["owner_login"], "eohjelle")
         self.assertEqual(
             fixture["maintainer_profiles"]["success"],
             [{"github_id": 477956, "login": "kim-em"}],

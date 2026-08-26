@@ -19,6 +19,13 @@
       "human_involvement": "Selected and submitted by the staging operator"
     }
   },
+  "browser_unauthenticated_request": {
+    "method": "POST",
+    "path": "/api/v1/browser/submission-grants",
+    "authentication": "none",
+    "expected_http_status": 401,
+    "expected_error": "authentication_failed"
+  },
   "headless_submission": {
     "problem_id": "two_plus_two",
     "problem_group": "formalization-evaluation",
@@ -51,10 +58,23 @@
           "notes": "bounded exact-version staging metadata backfill"
         }
       },
-      "denial_patch": {
-        "production_metadata": {}
-      },
-      "denial_http_status": 400
+      "non_owner_denial": {
+        "target": "stable_other_owned_result",
+        "method": "PATCH",
+        "authenticated_login": "kim-em",
+        "owner_login": "eohjelle",
+        "results_path": "results/eohjelle.json",
+        "result_id": "r2_3c33fe88436f5f34c5a5a7f1018706a69b0890085ee82edf86755049f9c06f30",
+        "path": "/api/v1/results/r2_3c33fe88436f5f34c5a5a7f1018706a69b0890085ee82edf86755049f9c06f30/metadata",
+        "patch": {
+          "production_metadata": {
+            "notes": "must not be written by the staging operator"
+          }
+        },
+        "expected_http_status": 404,
+        "expected_error": "not_found",
+        "expected_state_event_delta": 0
+      }
     },
     "problem_repair": {
       "target": "browser_result",
