@@ -28,9 +28,11 @@ Ready-to-edit announcement:
 > Server-path submissions use authenticated, exact-ref intake and the approved
 > publication policy. Evaluation-group source starts private; when the recorded
 > publication choice is `scheduled`, accepted source is scheduled for release
-> two UTC calendar months after acceptance under the contributor's recorded
-> acknowledgement. Amendments, model-alias changes, publication choices, and
-> lifecycle status are available through the server path. Issue-path
+> under the Apache License 2.0 exactly two UTC calendar months after acceptance.
+> Choosing `scheduled` confirms that the submitter is authorized to grant that
+> license; choosing `withheld` opts out. Amendments, model-alias changes,
+> publication choices, and lifecycle status are available through the server
+> path. Issue-path
 > submissions retain their existing policy during the transition.
 >
 > Please try the server path and report problems at **<incident/support URL>**.
