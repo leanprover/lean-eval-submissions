@@ -142,6 +142,25 @@ frozen inputs, reviewed candidate bytes, and exact review registry by replacing
 `--dispositions`, and otherwise supplying the same arguments. Verification
 requires byte-for-byte equality with a fresh deterministic finalization.
 
+## Reviewed frozen baseline
+
+The complete source-free review registry for the exact `ba5f5784427621f8b9be7396dd45a0938792707d`
+Results baseline is
+`evidence/public-replay/unavailability-review-registry-v1/b2187b1ec749087ed532bec3216f7f31c7fdf97a2a84a05e19cb69aac117757a.json`.
+It covers all 187 retained requests exactly once and adopts the documented
+`source_ref_permanently_unavailable` reason with the
+`accepted_immutable_source_ref_unavailable_without_archive` rationale for all
+439 bound Results. The corresponding deterministic source-free disposition is
+`evidence/public-replay/unavailability-dispositions-v1/afe3c3d1f8657ee3f7c6bad05fc72f5a5d6f8f0a609f25fdce35c8d0edcc3321.json`.
+
+These artifacts finalize only the retained 1,301-Result baseline. They are not
+the final issue-intake cutoff: the separately documented three-Result delta at
+`7eb77aa8c2ef7f4d598c77240ea9effbb248dce2` and every later acceptance remain
+outside this review and require their own inventory, classification, and
+terminal disposition. A complete baseline review also does not authorize a
+State append, create replay work, claim replay execution, or establish corpus
+completion. Those claims remain false in the disposition artifact.
+
 ## Remaining State boundary
 
 The current historical State queue contains only authorized, qualified replay
