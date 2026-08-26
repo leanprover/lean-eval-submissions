@@ -45,6 +45,16 @@ from tests.test_resolve_public_replay_github_evidence import (  # noqa: E402
 )
 
 SOURCE_COMMIT = "4" * 40
+BASELINE_SOURCE_COMMIT = "ba5f5784427621f8b9be7396dd45a0938792707d"
+BASELINE_MANIFEST_SHA256 = (
+    "0177bec519a803e52652368572ec06b5bcdd3fdc3591c06e2e25b14cf5ff725e"
+)
+BASELINE_REVIEW_SHA256 = (
+    "b2187b1ec749087ed532bec3216f7f31c7fdf97a2a84a05e19cb69aac117757a"
+)
+BASELINE_DISPOSITION_SHA256 = (
+    "afe3c3d1f8657ee3f7c6bad05fc72f5a5d6f8f0a609f25fdce35c8d0edcc3321"
+)
 
 
 class PublicReplayUnavailabilityTests(unittest.TestCase):
@@ -448,16 +458,15 @@ class PublicReplayUnavailabilityTests(unittest.TestCase):
             ).validate(value)
 
     def test_committed_candidate_evidence_is_exact_and_pending(self) -> None:
-        digest = "0177bec519a803e52652368572ec06b5bcdd3fdc3591c06e2e25b14cf5ff725e"
         bundle = ROOT / "evidence/public-replay/unavailability-candidate-bundle-v1"
-        path = bundle / f"{digest}.json"
+        path = bundle / f"{BASELINE_MANIFEST_SHA256}.json"
         raw = path.read_bytes()
         manifest = json.loads(raw)
         shard_bytes = {
             shard_path.stem: shard_path.read_bytes()
             for shard_path in (bundle / "shards").iterdir()
         }
-        self.assertEqual(hashlib.sha256(raw).hexdigest(), digest)
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), BASELINE_MANIFEST_SHA256)
         self.assertLess(len(raw), 500_000)
         self.assertTrue(all(len(shard) < 500_000 for shard in shard_bytes.values()))
         self.assertEqual(manifest["candidate_request_count"], 187)
@@ -472,14 +481,24 @@ class PublicReplayUnavailabilityTests(unittest.TestCase):
         )
 
     def test_committed_bundle_rederives_from_frozen_inputs(self) -> None:
-        source_commit = "ba5f5784427621f8b9be7396dd45a0938792707d"
         bundle = ROOT / "evidence/public-replay/unavailability-candidate-bundle-v1"
-        manifest_path = next(path for path in bundle.glob("*.json"))
+        manifest_path = bundle / f"{BASELINE_MANIFEST_SHA256}.json"
+        review_path = (
+            ROOT
+            / "evidence/public-replay/unavailability-review-registry-v1"
+            / f"{BASELINE_REVIEW_SHA256}.json"
+        )
+        disposition_path = (
+            ROOT
+            / "evidence/public-replay/unavailability-dispositions-v1"
+            / f"{BASELINE_DISPOSITION_SHA256}.json"
+        )
+        review_value = json.loads(review_path.read_bytes())
         with tempfile.TemporaryDirectory() as directory:
             results_root = materialize_results_tree(
-                source_commit, pathlib.Path(directory)
+                BASELINE_SOURCE_COMMIT, pathlib.Path(directory)
             )
-            inventory_value = inventory(results_root, source_commit)
+            inventory_value = inventory(results_root, BASELINE_SOURCE_COMMIT)
             inventory_raw = canonical_document_bytes(inventory_value)
             requests_value = prepare(
                 inventory_value,
@@ -501,24 +520,156 @@ class PublicReplayUnavailabilityTests(unittest.TestCase):
             legacy, legacy_raw = load(
                 "configuration/public-replay-legacy-adjudications-v1.json"
             )
-            manifest, shards = build_candidate_bundle(
-                inventory_value=inventory_value,
-                inventory_raw=inventory_raw,
-                requests_value=requests_value,
-                requests_raw=requests_raw,
-                aggregate=aggregate,
-                aggregate_raw=aggregate_raw,
-                workflow_registry=workflow,
-                workflow_registry_raw=workflow_raw,
-                legacy_registry=legacy,
-                legacy_registry_raw=legacy_raw,
-                results_root=results_root,
+            trusted_arguments = {
+                "inventory_value": inventory_value,
+                "inventory_raw": inventory_raw,
+                "requests_value": requests_value,
+                "requests_raw": requests_raw,
+                "aggregate": aggregate,
+                "aggregate_raw": aggregate_raw,
+                "workflow_registry": workflow,
+                "workflow_registry_raw": workflow_raw,
+                "legacy_registry": legacy,
+                "legacy_registry_raw": legacy_raw,
+                "results_root": results_root,
+            }
+            manifest, shards = build_candidate_bundle(**trusted_arguments)
+            dispositions = finalize(
+                manifest=manifest,
+                manifest_raw=canonical_document_bytes(manifest),
+                shard_bytes=shards,
+                review_value=review_value,
+                trusted_arguments=trusted_arguments,
             )
         self.assertEqual(canonical_document_bytes(manifest), manifest_path.read_bytes())
         self.assertEqual(
             shards,
             {path.stem: path.read_bytes() for path in (bundle / "shards").iterdir()},
         )
+        self.assertEqual(
+            canonical_document_bytes(dispositions), disposition_path.read_bytes()
+        )
+
+    def test_committed_baseline_review_is_closed_complete_and_source_free(
+        self,
+    ) -> None:
+        candidate_bundle = (
+            ROOT / "evidence/public-replay/unavailability-candidate-bundle-v1"
+        )
+        manifest_path = candidate_bundle / f"{BASELINE_MANIFEST_SHA256}.json"
+        manifest_raw = manifest_path.read_bytes()
+        manifest = json.loads(manifest_raw)
+        shards = {
+            path.stem: path.read_bytes()
+            for path in (candidate_bundle / "shards").iterdir()
+        }
+        candidates = validate_candidate_bundle(manifest, shards)
+        review_path = (
+            ROOT
+            / "evidence/public-replay/unavailability-review-registry-v1"
+            / f"{BASELINE_REVIEW_SHA256}.json"
+        )
+        disposition_path = (
+            ROOT
+            / "evidence/public-replay/unavailability-dispositions-v1"
+            / f"{BASELINE_DISPOSITION_SHA256}.json"
+        )
+        review_raw = review_path.read_bytes()
+        disposition_raw = disposition_path.read_bytes()
+        reviews = json.loads(review_raw)
+        dispositions = json.loads(disposition_raw)
+
+        self.assertEqual(hashlib.sha256(review_raw).hexdigest(), BASELINE_REVIEW_SHA256)
+        self.assertEqual(
+            hashlib.sha256(disposition_raw).hexdigest(),
+            BASELINE_DISPOSITION_SHA256,
+        )
+        expected_reviews = {
+            "schema_version": 1,
+            "kind": "historical_public_replay_unavailability_reviews",
+            "candidate_manifest_sha256": BASELINE_MANIFEST_SHA256,
+            "reviews": [
+                {
+                    "request_id": candidate["request_id"],
+                    "candidate_sha256": candidate["candidate_sha256"],
+                    "decision": "permanently_unavailable",
+                    "reason_code": PERMANENT_REASON,
+                    "rationale_code": RATIONALE,
+                }
+                for candidate in candidates
+            ],
+        }
+        self.assertEqual(review_raw, canonical_document_bytes(expected_reviews))
+        validate_dispositions(
+            dispositions,
+            manifest=manifest,
+            manifest_raw=manifest_raw,
+            shard_bytes=shards,
+        )
+        self.assertEqual(manifest["source_commit"], BASELINE_SOURCE_COMMIT)
+        self.assertEqual(dispositions["candidate_request_count"], 187)
+        self.assertEqual(dispositions["candidate_result_count"], 439)
+        self.assertEqual(dispositions["request_count"], 187)
+        self.assertEqual(dispositions["result_count"], 439)
+        self.assertEqual(dispositions["deferred_request_count"], 0)
+        self.assertEqual(dispositions["deferred_result_count"], 0)
+        self.assertEqual(dispositions["review_status"], "complete")
+        self.assertEqual(
+            dispositions["activation_status"],
+            "blocked_on_state_contract_and_append_authorization",
+        )
+        self.assertEqual(
+            dispositions["claims"],
+            {
+                "state_append_authorized": False,
+                "replay_executed": False,
+                "unavailability_review_complete": True,
+                "corpus_complete": False,
+            },
+        )
+        result_ids = [
+            result_id_value
+            for disposition in dispositions["dispositions"]
+            for result_id_value in disposition["result_ids"]
+        ]
+        self.assertEqual(len(result_ids), 439)
+        self.assertEqual(len(set(result_ids)), 439)
+
+        forbidden_context_fields = {
+            "owner_login",
+            "declared_model",
+            "source",
+            "repository",
+            "commit",
+            "issue",
+            "historical_evaluation",
+            "results_path",
+            "result_file_sha256",
+            "result_tree_digest",
+        }
+
+        def keys(value):
+            if isinstance(value, dict):
+                yield from value
+                for child in value.values():
+                    yield from keys(child)
+            elif isinstance(value, list):
+                for child in value:
+                    yield from keys(child)
+
+        self.assertFalse(forbidden_context_fields.intersection(keys(reviews)))
+        self.assertFalse(forbidden_context_fields.intersection(keys(dispositions)))
+
+        for schema_name, value in (
+            ("public-replay-unavailability-reviews-v1.schema.json", reviews),
+            (
+                "public-replay-unavailability-dispositions-v1.schema.json",
+                dispositions,
+            ),
+        ):
+            schema = json.loads((ROOT / "schemas" / schema_name).read_bytes())
+            jsonschema.Draft202012Validator.check_schema(schema)
+            jsonschema.Draft202012Validator(schema).validate(value)
 
     def test_candidate_validator_revalidates_counts_and_order(self) -> None:
         def duplicate_candidate(value):
