@@ -95,7 +95,6 @@ Promoting that clean tree and expiring the historical shared identity is a
 separate destructive authorization point because retaining old Git history
 would retain every shared-recipient ciphertext.
 
-The historical RSA private key is not present in the Codex workspace as of
-2026-08-23. Do not substitute another key, weaken digest checks, retain
-plaintext as an artifact, or claim the migration has run until the matching
-identity is supplied by its custodian.
+The migration requires the matching historical RSA private key from its
+custodian. Do not substitute another key, weaken digest checks, retain plaintext
+as an artifact, or claim the migration has run without that identity.
