@@ -344,6 +344,28 @@
         "ref": "c68e6fb9d931922277d20180a9839bdda53248d1",
         "repo": "mlgraham/lean-eval-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-26T20:09:29Z",
+      "benchmark_commit": "9b82c4083e71e93c7d6aa43a960cd492ae53a35d",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1444,
+        "kind": "issue"
+      },
+      "problem_id": "coc_strong_normalization",
+      "production_metadata": {
+        "production_description": "Original proof of all six `coc_strong_normalization` holes. Claude Fable 5 (Claude Code) under\nhuman direction, from the Challenge, the published mathematics, and compiler feedback only; no\nlean-eval solution to this problem exists.\n\nMethod: a Melliès–Werner Λ-set model (INRIA RR-3548, §6.3, which treats ECC as a PTS whose sorts,\naxioms and rules are literally this benchmark's `Srt`/`Ax`/`Rl`) built inside Mathlib's `ZFSet`,\nso no axioms beyond Lean's own. Saturated sets of terms; Λ-sets as ZFC sets of carrier/realizer\npairs; degenerated Λ-sets for the impredicative sort, whose collapse gives Condition 1(3) for\n`(s, prop, prop)` — the rule the problem notes single out. Universe elements carry their index\nand level as tags, and the two ε-relations (`carRel` on carriers, `elemRel` on elements) are one\nwell-founded recursion on `ZFSet.rank`; a universe's carrier relation *is* the element relation of\nits members. Predicative universes are built in stages with a level discipline in which a\nproduct's minimal stage equals its recorded level, which is what makes \"same level\" enough to\nplace two products at a common stage.\n\nThe interpretation of judgements is proof-irrelevant (any term at a proposition has value `∅`)\nand its conversion rule is semantically aligned (the annotation may change only to a type with\nthe same interpretation). That pair of choices breaks the circularity between conversion\ninvariance and β-preservation that blocks the textbook presentation, and it makes weakening,\nsubstitution and single-step preservation ordinary lemmas about raw derivations rather than\nfacts entangled with soundness.\n\nSoundness is a single mutual induction over `Typing`/`Wf`. The motive carries soundness,\nuniformity in the valuation (Melliès–Werner Theorem 1, clause 2 — needed to place a product at a\nstage), the type's own soundness, and the Π-components of both the term and its type; the last\nis recursive on the type and required semantic weakening and substitution at arbitrary depth.\nConsistency is then syntactic and rests on the SN theorem: a normal form exists, subject\nreduction preserves the type, and in a context whose entries are convertible to sorts a normal\nterm of product type must be an abstraction — so no normal inhabitant of `Π P:Prop. P` exists.\n\nRoughly 22 working sittings of model loop time under continuous human direction; ~11k lines of\nLean across 22 solver-owned modules. `#print axioms` for the six holes gives, respectively:\n`propext`; `propext`; none; `propext, Quot.sound`; `propext, Classical.choice, Quot.sound`;\n`propext, Classical.choice, Quot.sound`. `Classical.choice` enters only through `ZFSet` and\n`Classical.epsilon` choices of designated carriers.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_ad4b37494886e99975de97190cf1fd3047f03eacb74fa80a6eee5bdfdc516ed8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c82122b6741bf68a344a4f480bb0bf9031f84083",
+        "repo": "mlgraham/lean-eval-coc"
+      }
     }
   ],
   "schema_version": 2,
