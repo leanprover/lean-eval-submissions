@@ -1,10 +1,11 @@
 # CI secrets and access control for `leanprover/lean-eval-submissions`
 
-This document is the source of truth for every CI credential and branch-
-protection setting the submission pipeline depends on. It is written so
-that, on a fresh clone or a brand-new repo, you can reconstruct the
-entire CI auth posture from this file alone — no UI screenshots, no
-tribal knowledge.
+This document is the source of truth for the repository-level GitHub Apps,
+personal access token, and branch-protection settings described below. It does
+not inventory the complete runtime authentication posture. The current Worker,
+GitHub-environment, deploy-key, OAuth, and AWS credential boundaries are in
+[`INFRASTRUCTURE.md`](../INFRASTRUCTURE.md). Read both documents before changing
+the authentication posture; neither records secret values.
 
 The benchmark repository `leanprover/lean-eval` has its own
 `docs/ci-secrets.md` covering its `lean-eval-regenerator` App; that one
@@ -21,10 +22,6 @@ is unrelated to this pipeline.
 | Ruleset `main protection` | Repository Ruleset | (config in this file, applied via API) | branch protection on `main` |
 | Ruleset `Protect staging Results` | Repository Ruleset | (config in this file, applied via API) | branch protection on `staging-results` |
 
-The legacy `LEAN_EVAL_{BOT,RECORDER,ARCHIVER}_APP_ID` secrets were
-superseded by the Client ID secrets on 2026-07-31. Delete each legacy
-secret after the first successful submission on the Client ID workflow.
-
 The three Apps in this document are owned by the personal account `kim-em`;
 Kim Morrison is their current credential custodian. For any App private-key
 rotation, generate one replacement key while the old key remains valid,
@@ -33,7 +30,10 @@ protected workflow path with intake disabled or in staging, and then delete the
 old key in the App settings. Immediate revocation is deletion of the affected
 App key followed by removal or replacement of its repository secret. Do not
 reuse one App's key for another App. No alternate App custodian is currently
-recorded.
+recorded. No current key expiry, key ID, or fingerprint is recorded: GitHub's
+repository-secret and public App APIs do not expose which App key a stored
+private-key secret contains. Do not infer those facts from a repository-secret
+creation or update timestamp.
 
 To check the live state at any time:
 
