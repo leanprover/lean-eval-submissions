@@ -58,7 +58,7 @@ HISTORICAL_AUTHORITY_PREPARATION = (
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
     def test_deploy_and_rollback_bind_current_state_and_atomic_model_health(self) -> None:
-        expected = "b0a30e3a64aa5c05660040405b32135dea4b7f1d"
+        expected = "15a96673efd44d3b198890c1e94581b33c2a1a87"
         self.assertEqual(QUALIFICATION["state_main_commit"], expected)
         self.assertGreaterEqual(DEPLOY.count(expected), 2)
         self.assertEqual(
@@ -938,7 +938,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 expected_contract = (
                     "f00055ed2ba9b4252f04e096d27aadd5beef0ed4"
                     if environment == "staging"
-                    else "b0a30e3a64aa5c05660040405b32135dea4b7f1d"
+                    else "15a96673efd44d3b198890c1e94581b33c2a1a87"
                 )
                 self.assertEqual(
                     configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],
