@@ -1,0 +1,28 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-08-26T09:07:19Z",
+      "benchmark_commit": "96a09300f9debeef864d8037635d6e0248c43960",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1439,
+        "kind": "issue"
+      },
+      "problem_id": "coc_strong_normalization",
+      "production_metadata": {
+        "solution_publication_date": "2026-09-30",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_035b48da777b4f50519b836ff7ec9f55d05efa86981337703c08640899a968c3",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "788ebbd09335f25fe9e57e18d3cc99774767061c",
+        "repo": "juihuichung/lean-eval-submissions-private"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "juihuichung"
+}
