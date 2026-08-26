@@ -196,6 +196,29 @@ def parse_issue_body(body_text: str) -> dict[str, str | None]:
     return fields
 
 
+def validate_issue_metadata(event_payload: object) -> dict[str, str | None]:
+    """Validate issue-supplied fields without contacting the source host.
+
+    The archive workflow uses this before its authenticated source fetch so a
+    malformed form value can be reported as a submission-input error instead
+    of being misdiagnosed as a repository/App-access failure.
+    """
+    if not isinstance(event_payload, dict):
+        raise FetchError("Event payload must be a JSON object.")
+    issue = event_payload.get("issue")
+    if not isinstance(issue, dict):
+        raise FetchError("Event payload is missing the `issue` object.")
+    body = issue.get("body")
+    if not isinstance(body, str) or not body.strip():
+        raise FetchError("Issue body is empty.")
+    fields = parse_issue_body(body)
+    source_url = fields["source_url"]
+    if not isinstance(source_url, str):
+        raise FetchError("`Submission URL` must be a string.")
+    parse_source_url(source_url)
+    return fields
+
+
 def parse_source_url(url: str) -> SourceDescriptor:
     """Normalize and validate a submission URL.
 
@@ -772,8 +795,13 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=pathlib.Path,
-        required=True,
+        default=None,
         help="Directory to write source.tar.gz and metadata.json.",
+    )
+    parser.add_argument(
+        "--validate-issue-metadata-only",
+        action="store_true",
+        help="Validate issue-form metadata locally without fetching its source.",
     )
     parser.add_argument(
         "--dry-run",
@@ -794,6 +822,17 @@ def main(argv: list[str] | None = None) -> int:
                 "No event payload path provided. Set $GITHUB_EVENT_PATH or pass --event-path."
             )
         event_payload = json.loads(event_path.read_text(encoding="utf-8"))
+        if args.validate_issue_metadata_only:
+            if args.server_dispatch:
+                raise FetchError(
+                    "--validate-issue-metadata-only cannot be used with "
+                    "--server-dispatch."
+                )
+            fields = validate_issue_metadata(event_payload)
+            print(f"validated issue metadata for model {fields['model']!r}")
+            return 0
+        if args.output_dir is None:
+            raise FetchError("--output-dir is required when fetching a submission.")
         app_token = os.environ.get("APP_INSTALLATION_TOKEN") or None
         if args.server_dispatch:
             inputs = event_payload.get("inputs")

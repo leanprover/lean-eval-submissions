@@ -496,6 +496,7 @@ jobs:
       contents: read
       issues: write
     outputs:
+      submission_metadata_valid: ${{ steps.metadata_status.outputs.valid }}
       fetch_succeeded: ${{ steps.fetch_status.outputs.succeeded }}
       size_within_cap: ${{ steps.size_status.outputs.within_cap }}
       audit_ciphertext_ready: ${{ steps.audit_status.outputs.ready }}
@@ -552,6 +553,47 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: '3.11.10'
+
+      # Parse and validate only user-supplied fields before any authenticated
+      # source access. This keeps impossible dates and malformed form values
+      # distinct from repository/App-access failures.
+      - name: Validate submitted metadata
+        id: submission_metadata
+        run: |
+          python scripts/fetch_submission.py \
+            --event-path "$GITHUB_EVENT_PATH" \
+            --validate-issue-metadata-only \
+            2> /tmp/submission-metadata-error.txt
+
+      - name: Record submitted metadata status
+        id: metadata_status
+        if: always()
+        run: |
+          if [ "${{ steps.submission_metadata.outcome }}" = "success" ]; then
+            echo "valid=true" >> "$GITHUB_OUTPUT"
+          elif [ "${{ steps.submission_metadata.outcome }}" = "failure" ]; then
+            echo "valid=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "valid=not_attempted" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment on invalid submitted metadata
+        if: failure() && steps.submission_metadata.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ERROR=$(python - <<'PY'
+          from pathlib import Path
+
+          raw = Path("/tmp/submission-metadata-error.txt").read_text(encoding="utf-8")
+          print(" ".join(raw.split())[:2000])
+          PY
+          )
+          gh issue comment ${{ github.event.issue.number }} \
+            --repo "${{ github.repository }}" \
+            --body "❌ Submission rejected before archival: the submitted metadata is invalid. ${ERROR}"
+          gh issue close ${{ github.event.issue.number }} \
+            --repo "${{ github.repository }}" --reason "not planned" || true
 
       - name: Extract source owner from issue body
         id: archive_owner
@@ -791,6 +833,7 @@ jobs:
     timeout-minutes: 5
     permissions: {}
     outputs:
+      submission_metadata_valid: ${{ steps.select.outputs.submission_metadata_valid }}
       fetch_succeeded: ${{ steps.select.outputs.fetch_succeeded }}
       size_within_cap: ${{ steps.select.outputs.size_within_cap }}
       audit_ciphertext_ready: ${{ steps.select.outputs.audit_ciphertext_ready }}
@@ -802,12 +845,14 @@ jobs:
         id: select
         env:
           EVENT_NAME: ${{ github.event_name }}
+          ISSUE_SUBMISSION_METADATA_VALID: ${{ needs.archive_issue.outputs.submission_metadata_valid }}
           ISSUE_FETCH_SUCCEEDED: ${{ needs.archive_issue.outputs.fetch_succeeded }}
           ISSUE_SIZE_WITHIN_CAP: ${{ needs.archive_issue.outputs.size_within_cap }}
           ISSUE_AUDIT_CIPHERTEXT_READY: ${{ needs.archive_issue.outputs.audit_ciphertext_ready }}
           ISSUE_SOURCE_METADATA_SHA256: ${{ needs.archive_issue.outputs.source_metadata_sha256 }}
           ISSUE_BENCHMARK_COMMIT: ${{ needs.archive_issue.outputs.benchmark_commit }}
           ISSUE_TOOLCHAIN: ${{ needs.archive_issue.outputs.toolchain }}
+          SERVER_SUBMISSION_METADATA_VALID: not_applicable
           SERVER_FETCH_SUCCEEDED: ${{ needs.archive_server.outputs.fetch_succeeded }}
           SERVER_SIZE_WITHIN_CAP: ${{ needs.archive_server.outputs.size_within_cap }}
           SERVER_AUDIT_CIPHERTEXT_READY: ${{ needs.archive_server.outputs.audit_ciphertext_ready }}
@@ -821,7 +866,7 @@ jobs:
           else
             prefix=ISSUE
           fi
-          for name in FETCH_SUCCEEDED SIZE_WITHIN_CAP AUDIT_CIPHERTEXT_READY SOURCE_METADATA_SHA256 BENCHMARK_COMMIT TOOLCHAIN; do
+          for name in SUBMISSION_METADATA_VALID FETCH_SUCCEEDED SIZE_WITHIN_CAP AUDIT_CIPHERTEXT_READY SOURCE_METADATA_SHA256 BENCHMARK_COMMIT TOOLCHAIN; do
             variable="${prefix}_${name}"
             printf '%s=%s\n' "$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')" "${!variable}" >> "$GITHUB_OUTPUT"
           done
@@ -1476,10 +1521,15 @@ jobs:
   # do not duplicate those dedicated archive-job comments. A pre-fetch
   # infrastructure failure remains operator-visible.
   notify:
-    needs: [evaluate, archive, record]
+    needs: [intake, evaluate, archive, record]
     if: |
       always()
       && github.event_name == 'issues'
+      && (
+        (github.event.action == 'labeled' && github.event.label.name == 'submission')
+        || (github.event.action == 'opened' && needs.intake.outputs.evaluate == 'true')
+      )
+      && needs.archive.outputs.submission_metadata_valid != 'false'
       && needs.archive.outputs.fetch_succeeded != 'false'
       && needs.archive.outputs.size_within_cap != 'false'
       && (
