@@ -68,9 +68,9 @@ It remains explicitly blocked on all five steps recorded in the artifact:
 5. Separately authorize the State append and replay enqueue.
 
 The offline `finalize` command enforces those conditions mechanically. It
-requires clean exact checkouts of the qualification commit and hardened
-production State commit `b0a30e3a64aa5c05660040405b32135dea4b7f1d`, after
-State PRs `#19`, `#20`, `#22`, and `#23`. The command proves the
+requires clean exact checkouts of the qualification commit and production
+State commit `15a96673efd44d3b198890c1e94581b33c2a1a87`, including the retained
+baseline's reviewed source-unavailability dispositions. The command proves the
 qualification blob with `git show`, reconstructs the State event and script
 inputs from exact commit objects, validates the authority → qualification →
 enqueue chain with the pinned State validator, and requires the materializer to
