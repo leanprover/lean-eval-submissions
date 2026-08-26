@@ -214,6 +214,17 @@ approved ruleset change. Immediate revocation removes the token in its issuing
 account and keeps that environment's intake disabled until a replacement has
 passed the same preflight.
 
+### Audit repository rulesets
+
+`leanprover/lean-eval-audit` is private. Its default branch is `main`, currently
+at `34e33e339eaac47a10c463abaedef47361c5abab`, and GitHub reports that branch as
+protected. Four rules are effective on the default branch:
+
+| Ruleset | Enforcement and target | Rules | Bypass |
+| --- | --- | --- | --- |
+| `21529167` — Require reviewed main changes | Active; default branch | Pull requests require one approval, dismiss stale approvals on new commits, require all review threads to be resolved, and permit squash or rebase merges. `require_extra_approval_for_unattributed_changes` is false. | Integration `3856297` (`lean-eval-archiver`), always |
+| `21529184` — Protect main history | Active; default branch | Reject deletion and non-fast-forward updates; require linear history. | None |
+
 ### Deploy keys
 
 | Use | Key IDs / scope |
