@@ -4472,6 +4472,28 @@
         "ref": "a714dd7f43fbb427f1a432d782017697e9a9cdb3",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-08-26T01:54:20Z",
+      "benchmark_commit": "16945dfb367f77eaffaf167bbf70d57796e1bf08",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1406,
+        "kind": "issue"
+      },
+      "problem_id": "annals_large_value_estimates",
+      "production_metadata": {
+        "solution_publication_date": "2026-09-30",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_afa60b55630557e1f0369755b6f0eb5f1abbb5b853314a65ac9f8e55dbe0c37a",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5ed358be74e9c288e250394c81cc680231900bdf",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
