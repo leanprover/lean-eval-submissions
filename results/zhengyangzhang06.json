@@ -4494,6 +4494,28 @@
         "ref": "5ed358be74e9c288e250394c81cc680231900bdf",
         "repo": "humanfia/lean-eval"
       }
+    },
+    {
+      "accepted_at": "2026-08-26T01:59:18Z",
+      "benchmark_commit": "16945dfb367f77eaffaf167bbf70d57796e1bf08",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1413,
+        "kind": "issue"
+      },
+      "problem_id": "rcf_quantifier_elimination",
+      "production_metadata": {
+        "solution_publication_date": "2026-09-30",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_7fb063a77c4e680ed8bdc47b3fb45bd488f04fe761a2cb1119f0276f9ab35cab",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "37cca6c27a04ad2ef6985b51f5de17b6ceadc99b",
+        "repo": "humanfia/lean-eval"
+      }
     }
   ],
   "schema_version": 2,
