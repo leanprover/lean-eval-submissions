@@ -77,7 +77,10 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         # Archive and evaluation deliberately fetch independently. The archive
         # must persist first; evaluation must refetch the frozen identity on
         # its own runner, never receive source through a workflow artifact.
-        self.assertEqual(self.text.count("python scripts/fetch_submission.py"), 2)
+        # One local metadata-only validation plus the two independent source
+        # fetches. The validation mode performs no source-host request.
+        self.assertEqual(self.text.count("python scripts/fetch_submission.py"), 3)
+        self.assertEqual(self.text.count("--validate-issue-metadata-only"), 1)
         self.assertEqual(self.text.count("python scripts/evaluate_submission.py"), 1)
         # Job headers are the 2-space-indented keys after the top-level
         # `jobs:` line. Slice from there so `on:`/`concurrency:` sub-keys
@@ -197,6 +200,34 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         notify = self.text.split("\n  notify:", 1)[1]
         self.assertIn('CLOSE="$BLAMES_SUBMISSION"', notify)
         self.assertIn('if [ "$CLOSE" = "true" ]; then', notify)
+
+    def test_notify_ignores_non_processing_opened_event(self) -> None:
+        # Issue Forms can emit both `opened` and `labeled`. If the label is
+        # already visible to the opened-event run, intake and all processing
+        # jobs intentionally skip; that run must not report an infrastructure
+        # failure while the labeled-event run performs the submission.
+        notify = self.text.split("\n  notify:", 1)[1]
+        self.assertIn("needs: [intake, evaluate, archive, record]", notify)
+        self.assertIn("github.event.action == 'labeled'", notify)
+        self.assertIn("github.event.label.name == 'submission'", notify)
+        self.assertIn("github.event.action == 'opened'", notify)
+        self.assertIn("needs.intake.outputs.evaluate == 'true'", notify)
+
+    def test_invalid_metadata_is_reported_before_source_fetch(self) -> None:
+        archive = self.text.split("\n  archive_issue:", 1)[1].split(
+            "\n  archive_server:", 1
+        )[0]
+        self.assertLess(
+            archive.index("Validate submitted metadata"),
+            archive.index("Mint lean-eval-bot installation token for archival fetch"),
+        )
+        self.assertIn("--validate-issue-metadata-only", archive)
+        self.assertIn("Comment on invalid submitted metadata", archive)
+        self.assertIn("the submitted metadata is invalid", archive)
+        notify = self.text.split("\n  notify:", 1)[1]
+        self.assertIn(
+            "needs.archive.outputs.submission_metadata_valid != 'false'", notify
+        )
 
     def test_evaluate_job_permissions_stay_minimal(self) -> None:
         # An explicit permissions block sets every unlisted scope, including

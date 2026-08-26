@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import pathlib
 import subprocess
@@ -7,6 +8,7 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from unittest.mock import patch
 
 
@@ -165,6 +167,41 @@ class ParseIssueBodyTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(fs.FetchError, "valid calendar date"):
             fs.parse_issue_body(body)
+
+    def test_metadata_only_validation_rejects_invalid_date_without_fetch(self) -> None:
+        body = with_publication_fields(
+            SAMPLE_BODY,
+            status="Private, but publication is planned",
+            intended_date="2026-09-31",
+        )
+        event = {"issue": {"body": body}}
+        with patch.object(fs, "resolve_ref") as resolve_ref:
+            with self.assertRaisesRegex(fs.FetchError, "valid calendar date"):
+                fs.validate_issue_metadata(event)
+        resolve_ref.assert_not_called()
+
+    def test_metadata_only_cli_does_not_require_output_directory(self) -> None:
+        body = with_publication_fields(
+            SAMPLE_BODY,
+            status="Private, but publication is planned",
+            intended_date="2026-09-31",
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            event_path = pathlib.Path(tmp) / "event.json"
+            event_path.write_text(
+                json.dumps({"issue": {"body": body}}), encoding="utf-8"
+            )
+            stderr = io.StringIO()
+            with redirect_stderr(stderr):
+                status = fs.main(
+                    [
+                        "--event-path",
+                        str(event_path),
+                        "--validate-issue-metadata-only",
+                    ]
+                )
+        self.assertEqual(status, 1)
+        self.assertIn("valid calendar date", stderr.getvalue())
 
 
 class ParseSourceUrlTests(unittest.TestCase):
