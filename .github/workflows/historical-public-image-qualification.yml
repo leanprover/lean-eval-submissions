@@ -434,7 +434,7 @@ jobs:
           created_publication="$RUNNER_TEMP/created-publication.json"
           trap 'rm -f "$run_metadata" "$artifact_metadata" "$artifact_zip" "$created_publication"' ERR
           gh api \
-            "repos/$GITHUB_REPOSITORY/actions/runs/$CREATED_RUN_ID/attempts/$CREATED_RUN_ATTEMPT" \
+            "repos/$GITHUB_REPOSITORY/actions/runs/$CREATED_RUN_ID" \
             > "$run_metadata"
           gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$CREATED_ARTIFACT_ID" \
             > "$artifact_metadata"

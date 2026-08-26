@@ -260,6 +260,7 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
             "path": ".github/workflows/historical-public-image-qualification.yml",
             "status": "completed",
             "conclusion": "success",
+            "created_at": "2026-08-25T00:30:00Z",
             "run_started_at": "2026-08-25T01:00:00Z",
             "updated_at": "2026-08-25T02:00:00Z",
         }
@@ -299,7 +300,7 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
                     "name": "historical-public-image-candidate",
                     "expired": False,
                     "digest": "sha256:" + hashlib.sha256(raw).hexdigest(),
-                    "created_at": "2026-08-25T01:30:00Z",
+                    "created_at": "2026-08-25T00:45:00Z",
                     "workflow_run": {
                         "id": 123,
                         "head_sha": source_commit,
@@ -332,6 +333,13 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
                 )
 
             self.assertEqual(validate(), publication)
+            artifact = write_artifact(publication)
+            artifact["created_at"] = "2026-08-25T00:29:59Z"
+            artifact_path.write_text(json.dumps(artifact), encoding="utf-8")
+            with self.assertRaisesRegex(
+                qualification.QualificationError, "metadata changed"
+            ):
+                validate()
             for field, hostile_value in (
                 ("path", ".github/workflows/other.yml"),
                 ("head_sha", "9" * 40),
@@ -511,7 +519,8 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
         self.assertIn('test -z "$CREATED_RUN_ID"', workflow)
         self.assertIn('[[ "$CREATED_RUN_ID" =~ ^[1-9][0-9]{0,15}$ ]]', workflow)
         self.assertIn("      actions: read\n      contents: read", workflow)
-        self.assertIn("/attempts/$CREATED_RUN_ATTEMPT", workflow)
+        self.assertIn("actions/runs/$CREATED_RUN_ID\"", workflow)
+        self.assertNotIn("/attempts/$CREATED_RUN_ATTEMPT", workflow)
         self.assertIn("validate-created-publication", workflow)
         self.assertIn(
             'cp "$RUNNER_TEMP/created-publication.json" '
