@@ -1,0 +1,292 @@
+name: Set bounded staging lifecycle smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      state:
+        description: 'Desired bounded staging lifecycle state'
+        required: true
+        type: choice
+        options:
+          - disabled
+          - enabled
+      expected_commit:
+        description: 'Exact protected-main commit to deploy'
+        required: true
+        type: string
+      result_amendment_maintainers:
+        description: 'Closed JSON array containing exactly one staging maintainer when enabled; [] when disabled'
+        required: true
+        type: string
+        default: '[]'
+      model_identity_maintainers:
+        description: 'Closed JSON array containing exactly one staging maintainer when enabled; [] when disabled'
+        required: true
+        type: string
+        default: '[]'
+      confirm_staging_lifecycle_smoke:
+        description: 'Confirm the bounded staging intake and lifecycle APIs may be changed'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: submission-worker-main
+  cancel-in-progress: false
+
+jobs:
+  set-staging-lifecycle-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: cloudflare-staging
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.6.0'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Verify exact reviewed staging deployment
+        env:
+          CONFIRM_STAGING_LIFECYCLE_SMOKE: ${{ inputs.confirm_staging_lifecycle_smoke }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          if [ "$CONFIRM_STAGING_LIFECYCLE_SMOKE" != true ]; then
+            echo "bounded staging lifecycle acknowledgement is required" >&2
+            exit 1
+          fi
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || [ "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]; then
+            echo "expected_commit must equal the selected immutable dispatch commit" >&2
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT" ]; then
+            echo "workflow must run from the exact immutable dispatch tag" >&2
+            exit 1
+          fi
+          resolved=$(git rev-parse "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT^{commit}")
+          if [ "$resolved" != "$EXPECTED_COMMIT" ]; then
+            echo "immutable dispatch tag does not match the selected commit" >&2
+            exit 1
+          fi
+
+          verified=false
+          for attempt in $(seq 1 5); do
+            body=$(curl --fail --silent --show-error --max-time 10 \
+              https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz) || body=""
+            if HEALTH_BODY="$body" python - <<'PY'
+          import json
+          import os
+
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["status"] == "ok"
+          assert body["service"] == "lean-eval-submission"
+          assert body["environment"] == "staging"
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          PY
+            then
+              verified=true
+              break
+            fi
+            if [ "$attempt" -lt 5 ]; then sleep 2; fi
+          done
+          if [ "$verified" != true ]; then
+            echo "selected dispatch tag is not the exact live staging deployment" >&2
+            exit 1
+          fi
+
+      - name: Validate closed maintainer inputs
+        id: maintainers
+        env:
+          DESIRED_STATE: ${{ inputs.state }}
+          MODEL_IDENTITY_MAINTAINERS: ${{ inputs.model_identity_maintainers }}
+          RESULT_AMENDMENT_MAINTAINERS: ${{ inputs.result_amendment_maintainers }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import re
+
+          login = re.compile(r"[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?")
+
+          def closed(name: str) -> str:
+              value = json.loads(os.environ[name])
+              desired = os.environ["DESIRED_STATE"]
+              expected_length = 1 if desired == "enabled" else 0
+              if not isinstance(value, list) or len(value) != expected_length:
+                  raise SystemExit(
+                      f"{name} must contain exactly {expected_length} maintainer identities"
+                  )
+              for identity in value:
+                  if not isinstance(identity, dict) or set(identity) != {"github_id", "login"}:
+                      raise SystemExit(f"{name} is not a closed maintainer array")
+                  github_id = identity["github_id"]
+                  canonical_login = identity["login"]
+                  if (
+                      isinstance(github_id, bool)
+                      or not isinstance(github_id, int)
+                      or github_id < 1
+                      or github_id > 9_007_199_254_740_991
+                      or not isinstance(canonical_login, str)
+                      or login.fullmatch(canonical_login) is None
+                  ):
+                      raise SystemExit(f"{name} contains an invalid maintainer identity")
+              return json.dumps(value, separators=(",", ":"), ensure_ascii=True)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as stream:
+              stream.write(f"result={closed('RESULT_AMENDMENT_MAINTAINERS')}\n")
+              stream.write(f"model={closed('MODEL_IDENTITY_MAINTAINERS')}\n")
+          PY
+
+      - run: npm ci
+
+      - name: Arm exact staging mutation
+        id: armed
+        run: echo 'ready=true' >> "$GITHUB_OUTPUT"
+
+      - name: Deploy bounded staging lifecycle state
+        id: deploy
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DESIRED_STATE: ${{ inputs.state }}
+          MODEL_IDENTITY_MAINTAINERS: ${{ steps.maintainers.outputs.model }}
+          RESULT_AMENDMENT_MAINTAINERS: ${{ steps.maintainers.outputs.result }}
+        run: |
+          set -euo pipefail
+          case "$DESIRED_STATE" in
+            enabled) enabled=true; intake_mode=durable ;;
+            disabled) enabled=false; intake_mode=disabled ;;
+            *) echo "unsupported staging lifecycle state" >&2; exit 1 ;;
+          esac
+          npx wrangler deploy --env staging \
+            --var "DEPLOYED_COMMIT:$GITHUB_SHA" \
+            --var "DISPATCH_WORKFLOW_REF:lean-eval-dispatch/$GITHUB_SHA" \
+            --var "INTAKE_ENABLED:$enabled" \
+            --var "INTAKE_ENABLEMENT_MODE:$intake_mode" \
+            --var "LEGACY_RESULT_OWNER_API_ENABLED:$enabled" \
+            --var "RESULT_AMENDMENT_OWNER_API_ENABLED:$enabled" \
+            --var "RESULT_AMENDMENT_MAINTAINER_API_ENABLED:$enabled" \
+            --var "RESULT_AMENDMENT_MAINTAINERS:$RESULT_AMENDMENT_MAINTAINERS" \
+            --var "MODEL_IDENTITY_OWNER_API_ENABLED:$enabled" \
+            --var "MODEL_IDENTITY_MAINTAINER_API_ENABLED:$enabled" \
+            --var "MODEL_IDENTITY_MAINTAINERS:$MODEL_IDENTITY_MAINTAINERS" \
+            --var "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED:false" \
+            --var "RELEASE_OPT_OUT_API_ENABLED:$enabled"
+
+      - name: Verify bounded staging lifecycle state
+        env:
+          DESIRED_STATE: ${{ inputs.state }}
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 13); do
+            body=$(curl --fail --silent --show-error --max-time 10 \
+              https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz) || body=""
+            if HEALTH_BODY="$body" python - <<'PY'
+          import json
+          import os
+
+          body = json.loads(os.environ["HEALTH_BODY"])
+          enabled = os.environ["DESIRED_STATE"] == "enabled"
+          assert body["status"] == "ok"
+          assert body["service"] == "lean-eval-submission"
+          assert body["environment"] == "staging"
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          for field in (
+              "intake_configured_enabled",
+              "intake_effective_enabled",
+              "intake_enabled",
+              "legacy_result_owner_api_enabled",
+              "result_amendment_owner_api_enabled",
+              "result_amendment_maintainer_api_enabled",
+              "model_identity_owner_api_enabled",
+              "model_identity_maintainer_api_enabled",
+              "release_opt_out_api_enabled",
+          ):
+              assert body[field] is enabled, field
+          assert body["model_identity_consolidation_api_enabled"] is False
+          assert body["intake_enablement_mode"] == ("durable" if enabled else "disabled")
+          assert body["intake_lease_expires_at"] is None
+          PY
+            then
+              exit 0
+            fi
+            if [ "$attempt" -lt 13 ]; then sleep 5; fi
+          done
+          echo "staging lifecycle health payload did not converge" >&2
+          exit 1
+
+      - name: Restore all launch gates to disabled after a failed mutation
+        if: failure() && steps.armed.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --env staging \
+            --var "DEPLOYED_COMMIT:$GITHUB_SHA" \
+            --var "DISPATCH_WORKFLOW_REF:lean-eval-dispatch/$GITHUB_SHA" \
+            --var "INTAKE_ENABLED:false" \
+            --var "INTAKE_ENABLEMENT_MODE:disabled" \
+            --var "LEGACY_RESULT_OWNER_API_ENABLED:false" \
+            --var "RESULT_AMENDMENT_OWNER_API_ENABLED:false" \
+            --var "RESULT_AMENDMENT_MAINTAINER_API_ENABLED:false" \
+            --var 'RESULT_AMENDMENT_MAINTAINERS:[]' \
+            --var "MODEL_IDENTITY_OWNER_API_ENABLED:false" \
+            --var "MODEL_IDENTITY_MAINTAINER_API_ENABLED:false" \
+            --var 'MODEL_IDENTITY_MAINTAINERS:[]' \
+            --var "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED:false" \
+            --var "RELEASE_OPT_OUT_API_ENABLED:false"
+          for attempt in $(seq 1 13); do
+            body=$(curl --fail --silent --show-error --max-time 10 \
+              https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz) || body=""
+            if HEALTH_BODY="$body" python - <<'PY'
+          import json
+          import os
+
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["status"] == "ok"
+          assert body["service"] == "lean-eval-submission"
+          assert body["environment"] == "staging"
+          assert body["deployed_commit"] == os.environ["GITHUB_SHA"]
+          for field in (
+              "intake_configured_enabled",
+              "intake_effective_enabled",
+              "intake_enabled",
+              "legacy_result_owner_api_enabled",
+              "result_amendment_owner_api_enabled",
+              "result_amendment_maintainer_api_enabled",
+              "model_identity_owner_api_enabled",
+              "model_identity_maintainer_api_enabled",
+              "model_identity_consolidation_api_enabled",
+              "release_opt_out_api_enabled",
+          ):
+              assert body[field] is False, field
+          assert body["intake_enablement_mode"] == "disabled"
+          assert body["intake_lease_expires_at"] is None
+          PY
+            then
+              exit 0
+            fi
+            if [ "$attempt" -lt 13 ]; then sleep 5; fi
+          done
+          echo "failed staging lifecycle mutation could not verify all-false recovery" >&2
+          exit 1

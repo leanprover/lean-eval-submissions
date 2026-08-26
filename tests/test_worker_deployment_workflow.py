@@ -230,6 +230,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "public-replay-github-evidence.yml",
                 "server-archive.yml",
                 "set-staging-intake.yml",
+                "set-staging-lifecycle-smoke.yml",
                 "submission.yml",
                 "promotion-canary.yml",
             },
@@ -268,6 +269,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "accepted-archive-replay-staging.yml",
             "authoritative-replay-staging.yml",
             "set-staging-intake.yml",
+            "set-staging-lifecycle-smoke.yml",
         }
         promotion_push = WORKFLOW_PROMOTION.split("  push:", 1)[1].split(
             "permissions:", 1
@@ -291,6 +293,10 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                     self.assertNotIn(path, pull_request)
                     self.assertNotIn(path, push)
                     self.assertIn(path, promotion_push)
+        for trigger in (pull_request, push):
+            self.assertIn(
+                "'configuration/staging-lifecycle-smoke-v1.json'", trigger
+            )
         self.assertIn(
             "'.github/workflows/promote-workflow-dispatch-ref.yml'",
             promotion_push,
