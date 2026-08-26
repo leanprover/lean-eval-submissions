@@ -1,4 +1,4 @@
-name: Force production intake disabled
+name: Force production launch gates disabled
 
 on:
   workflow_run:
@@ -35,7 +35,7 @@ jobs:
           test "$EVENT_REPOSITORY" = leanprover/lean-eval-submissions
           test "$EVENT_REF" = refs/heads/main
 
-  disable-production-intake:
+  disable-production-launch-gates:
     needs: authorize-manual
     if: >-
       always() &&
@@ -69,39 +69,135 @@ jobs:
         with:
           python-version: '3.11.10'
 
+      - run: npm ci --ignore-scripts
+
+      - name: Resolve the exact active production intake version
+        id: active
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          plan_dir="$RUNNER_TEMP/launch-disable-recovery"
+          if [ -e "$plan_dir" ]; then exit 1; fi
+          mkdir -p "$plan_dir"
+          npx wrangler deployments status --config wrangler.jsonc \
+            --env production --json > "$plan_dir/intake-status.json"
+          version=$(python ../scripts/validate_cloudflare_rollback.py \
+            active-version --status "$plan_dir/intake-status.json")
+          npx wrangler versions view "$version" --config wrangler.jsonc \
+            --env production --json > "$plan_dir/intake-version.json"
+          python ../scripts/validate_cloudflare_rollback.py launch-recovery-source \
+            --status "$plan_dir/intake-status.json" \
+            --version "$plan_dir/intake-version.json" \
+            --output "$plan_dir/source.json"
+          read -r commit needed < <(SOURCE="$plan_dir/source.json" python - <<'PY'
+          import json
+          import os
+
+          with open(os.environ["SOURCE"], encoding="utf-8") as stream:
+              source = json.load(stream)
+          print(source["deployed_commit"], str(source["needed"]).lower())
+          PY
+          )
+
+          # Public health is useful corroboration, but recovery must still work
+          # when a partial failed deployment made the endpoint unavailable.
+          health_needed=false
+          if curl --fail --silent --show-error --proto '=https' --max-redirs 0 \
+            --max-time 10 --retry 2 --retry-all-errors --retry-max-time 30 \
+            --output "$plan_dir/pre-mutation-health.json" \
+            https://lean-eval-submission-server.lean-eval.workers.dev/healthz; then
+            if observed=$(EXPECTED_COMMIT="$commit" HEALTH="$plan_dir/pre-mutation-health.json" \
+              python - <<'PY'
+          import json
+          import os
+          import re
+
+          with open(os.environ["HEALTH"], encoding="utf-8") as stream:
+              body = json.load(stream)
+          assert body["status"] == "ok"
+          assert body["service"] == "lean-eval-submission"
+          assert body["environment"] == "production"
+          assert re.fullmatch(r"[0-9a-f]{40}", body["deployed_commit"])
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          fields = (
+              "intake_configured_enabled",
+              "intake_effective_enabled",
+              "legacy_result_owner_api_enabled",
+              "result_amendment_owner_api_enabled",
+              "result_amendment_maintainer_api_enabled",
+              "model_identity_owner_api_enabled",
+              "model_identity_maintainer_api_enabled",
+              "model_identity_consolidation_api_enabled",
+              "release_opt_out_api_enabled",
+              "promotion_canary_configured_enabled",
+              "promotion_canary_enabled",
+          )
+          for field in fields:
+              assert type(body[field]) is bool, field
+          print(str(any(body[field] for field in fields)).lower())
+          PY
+            ); then
+              health_needed="$observed"
+            else
+              echo "pre-mutation health was not exact; using active version metadata" >&2
+              needed=true
+            fi
+          else
+            echo "pre-mutation health unavailable; using active version metadata" >&2
+            needed=true
+          fi
+          if [ "$health_needed" = true ]; then needed=true; fi
+          {
+            echo "commit=$commit"
+            echo "needed=$needed"
+            echo "version=$version"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Derive the exact eligible controller without operator pairing
         id: controller
         env:
-          EVENT_NAME: ${{ github.event_name }}
           EVENT_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
           EVENT_COMMIT: ${{ github.event.workflow_run.head_sha }}
           EVENT_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          EVENT_NAME: ${{ github.event_name }}
           EVENT_RUN_ID: ${{ github.event.workflow_run.id }}
           GH_TOKEN: ${{ github.token }}
+          LIVE_COMMIT: ${{ steps.active.outputs.commit }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = workflow_dispatch ]; then
-            controller=$(timeout 30s gh api \
-              "repos/$REPOSITORY/actions/workflows/deploy-worker.yml/runs?branch=main&per_page=100" \
-              --jq '.workflow_runs | max_by(.run_number) | [.id, .run_attempt, .head_sha, .status, (.conclusion // "")] | @tsv')
-            IFS=$'\t' read -r run_id run_attempt commit status conclusion <<< "$controller"
-            if [ "$status" != completed ]; then
-              echo "latest protected deploy controller is not completed" >&2
+          if [ "$EVENT_NAME" != workflow_dispatch ]; then
+            if [[ ! "$EVENT_RUN_ID" =~ ^[1-9][0-9]*$ ]] ||
+               [[ ! "$EVENT_ATTEMPT" =~ ^[1-9][0-9]*$ ]] ||
+               [[ ! "$EVENT_COMMIT" =~ ^[0-9a-f]{40}$ ]] ||
+               [[ ! "$EVENT_CONCLUSION" =~ ^(cancelled|failure|startup_failure|timed_out)$ ]]; then
+              echo "automatic recovery trigger has no exact failed controller" >&2
               exit 1
             fi
-            allowed_conclusion='^(success|cancelled|failure|startup_failure|timed_out)$'
-          else
-            run_id="$EVENT_RUN_ID"
-            run_attempt="$EVENT_ATTEMPT"
-            commit="$EVENT_COMMIT"
-            conclusion="$EVENT_CONCLUSION"
-            allowed_conclusion='^(cancelled|failure|startup_failure|timed_out)$'
+            trigger=$(timeout 30s gh api \
+              "repos/$REPOSITORY/actions/runs/$EVENT_RUN_ID" \
+              --jq '[.id, .run_attempt, .head_sha, .path, .event, .status, (.conclusion // "")] | @tsv')
+            if [ "$trigger" != "$EVENT_RUN_ID"$'\t'"$EVENT_ATTEMPT"$'\t'"$EVENT_COMMIT"$'\t.github/workflows/deploy-worker.yml\tpush\tcompleted\t'"$EVENT_CONCLUSION" ] &&
+               [ "$trigger" != "$EVENT_RUN_ID"$'\t'"$EVENT_ATTEMPT"$'\t'"$EVENT_COMMIT"$'\t.github/workflows/deploy-worker.yml\tworkflow_dispatch\tcompleted\t'"$EVENT_CONCLUSION" ]; then
+              echo "automatic recovery trigger read-back differs" >&2
+              exit 1
+            fi
+          fi
+          controller=$(timeout 30s gh api \
+            "repos/$REPOSITORY/actions/workflows/deploy-worker.yml/runs?branch=main&head_sha=$LIVE_COMMIT&per_page=100" \
+            --jq '.workflow_runs | max_by(.run_number) | [.id, .run_attempt, .head_sha, .status, (.conclusion // "")] | @tsv')
+          IFS=$'\t' read -r run_id run_attempt commit status conclusion <<< "$controller"
+          if [ "$status" != completed ]; then
+            echo "latest exact-live deploy controller is not completed" >&2
+            exit 1
           fi
           if [[ ! "$run_id" =~ ^[1-9][0-9]*$ ]] ||
              [[ ! "$run_attempt" =~ ^[1-9][0-9]*$ ]] ||
              [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]] ||
-             [[ ! "$conclusion" =~ $allowed_conclusion ]]; then
+             [ "$commit" != "$LIVE_COMMIT" ] ||
+             [[ ! "$conclusion" =~ ^(success|cancelled|failure|startup_failure|timed_out)$ ]]; then
             echo "recovery controller identity is not an exact eligible deploy" >&2
             exit 1
           fi
@@ -136,7 +232,7 @@ jobs:
             echo "run_id=$run_id"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Prepare only the controller's exact Worker code
+      - name: Prepare only the controller's exact Worker code and validate tracked state
         id: target
         env:
           TARGET_COMMIT: ${{ steps.controller.outputs.commit }}
@@ -146,62 +242,59 @@ jobs:
           if [ -e "$target" ]; then exit 1; fi
           git worktree add --detach "$target" "$TARGET_COMMIT"
           npm ci --ignore-scripts --prefix "$target/server"
-          enabled=$(python ../scripts/worker_intake_configuration.py \
+          intake_enabled=$(python ../scripts/worker_intake_configuration.py \
             --config "$target/server/wrangler.jsonc" --environment production)
-          echo "enabled=$enabled" >> "$GITHUB_OUTPUT"
+          lifecycle_enabled=$(python ../scripts/worker_lifecycle_configuration.py \
+            --config "$target/server/wrangler.jsonc" --environment production)
+          plan_dir="$RUNNER_TEMP/launch-disable-recovery"
+          python ../scripts/validate_cloudflare_rollback.py launch-recovery-source \
+            --status "$plan_dir/intake-status.json" \
+            --version "$plan_dir/intake-version.json" \
+            --config "$target/server/wrangler.jsonc" \
+            --expected-commit "$TARGET_COMMIT" \
+            --output "$plan_dir/validated-source.json"
+          cmp --silent "$plan_dir/source.json" "$plan_dir/validated-source.json"
+          {
+            echo "intake_enabled=$intake_enabled"
+            echo "lifecycle_enabled=$lifecycle_enabled"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Prove production currently runs this controller's enabled code
-        if: steps.target.outputs.enabled == 'true'
-        id: live
-        env:
-          TARGET_COMMIT: ${{ steps.controller.outputs.commit }}
-        run: |
-          set -euo pipefail
-          body=$(curl --fail --silent --show-error --proto '=https' --max-redirs 0 \
-            --max-time 10 --retry 2 --retry-all-errors --retry-max-time 30 \
-            https://lean-eval-submission-server.lean-eval.workers.dev/healthz)
-          needed=$(HEALTH_BODY="$body" python - <<'PY'
-          import json, os, re
-          body = json.loads(os.environ["HEALTH_BODY"])
-          assert body["status"] == "ok"
-          assert body["service"] == "lean-eval-submission"
-          assert body["environment"] == "production"
-          assert re.fullmatch(r"[0-9a-f]{40}", body["deployed_commit"])
-          assert type(body["intake_configured_enabled"]) is bool
-          assert type(body["intake_effective_enabled"]) is bool
-          assert body["intake_enabled"] is body["intake_effective_enabled"]
-          assert body["promotion_canary_configured_enabled"] is False
-          assert body["promotion_canary_enabled"] is False
-          assert body["intake_enablement_mode"] in {"disabled", "durable", "invalid", "leased"}
-          expiry = body["intake_lease_expires_at"]
-          assert expiry is None or type(expiry) is int
-          print(str(
-              body["deployed_commit"] == os.environ["TARGET_COMMIT"]
-              and body["intake_configured_enabled"]
-          ).lower())
-          PY
-          )
-          echo "needed=$needed" >> "$GITHUB_OUTPUT"
-
-      - name: Force the exact controller code to disabled mode
-        if: steps.target.outputs.enabled == 'true' && steps.live.outputs.needed == 'true'
+      - name: Force the exact controller code to all-false launch mode
+        if: steps.active.outputs.needed == 'true'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          EXPECTED_ACTIVE_VERSION: ${{ steps.active.outputs.version }}
           TARGET_COMMIT: ${{ steps.controller.outputs.commit }}
         run: |
           set -euo pipefail
           target="$RUNNER_TEMP/intake-disable-recovery/server"
+          "$target/node_modules/.bin/wrangler" deployments status \
+            --config "$target/wrangler.jsonc" --env production --json \
+            > "$RUNNER_TEMP/launch-disable-recovery/pre-mutation-status.json"
+          python ../scripts/validate_cloudflare_rollback.py status \
+            --status "$RUNNER_TEMP/launch-disable-recovery/pre-mutation-status.json" \
+            --target-version "$EXPECTED_ACTIVE_VERSION"
           timeout --signal=TERM --kill-after=10s 150s \
             "$target/node_modules/.bin/wrangler" deploy \
             --config "$target/wrangler.jsonc" --env production \
             --var "DEPLOYED_COMMIT:$TARGET_COMMIT" \
             --var "DISPATCH_WORKFLOW_REF:lean-eval-dispatch/$TARGET_COMMIT" \
             --var "INTAKE_ENABLED:false" \
-            --var "INTAKE_ENABLEMENT_MODE:disabled"
+            --var "INTAKE_ENABLEMENT_MODE:disabled" \
+            --var "LEGACY_RESULT_OWNER_API_ENABLED:false" \
+            --var "RESULT_AMENDMENT_OWNER_API_ENABLED:false" \
+            --var "RESULT_AMENDMENT_MAINTAINER_API_ENABLED:false" \
+            --var 'RESULT_AMENDMENT_MAINTAINERS:[]' \
+            --var "MODEL_IDENTITY_OWNER_API_ENABLED:false" \
+            --var "MODEL_IDENTITY_MAINTAINER_API_ENABLED:false" \
+            --var 'MODEL_IDENTITY_MAINTAINERS:[]' \
+            --var "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED:false" \
+            --var "RELEASE_OPT_OUT_API_ENABLED:false" \
+            --var "PROMOTION_CANARY_ENABLED:false"
 
-      - name: Verify the exact disabled recovery version
-        if: steps.target.outputs.enabled == 'true' && steps.live.outputs.needed == 'true'
+      - name: Verify the exact all-false recovery version
+        if: steps.active.outputs.needed == 'true'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -218,7 +311,8 @@ jobs:
           python ../scripts/validate_cloudflare_rollback.py component \
             --component intake --expected-commit "$TARGET_COMMIT" --environment production \
             --config "$target/wrangler.jsonc" --version "$RUNNER_TEMP/recovery-version.json" \
-            --version-id "$version" --require-intake-disabled
+            --version-id "$version" --require-intake-disabled \
+            --require-launch-gates-disabled
           body=$(curl --fail --silent --show-error --proto '=https' --max-redirs 0 \
             --max-time 10 --retry 12 --retry-all-errors --retry-max-time 120 \
             https://lean-eval-submission-server.lean-eval.workers.dev/healthz)
@@ -230,6 +324,16 @@ jobs:
           assert body["intake_effective_enabled"] is False
           assert body["intake_enablement_mode"] == "disabled"
           assert body["intake_lease_expires_at"] is None
+          for field in (
+              "legacy_result_owner_api_enabled",
+              "result_amendment_owner_api_enabled",
+              "result_amendment_maintainer_api_enabled",
+              "model_identity_owner_api_enabled",
+              "model_identity_maintainer_api_enabled",
+              "model_identity_consolidation_api_enabled",
+              "release_opt_out_api_enabled",
+          ):
+              assert body[field] is False, field
           assert body["promotion_canary_configured_enabled"] is False
           assert body["promotion_canary_enabled"] is False
           PY

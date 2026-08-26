@@ -76,9 +76,10 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             4,
         )
         self.assertEqual(
-            DEPLOY.count('body["release_opt_out_api_enabled"] is False'),
-            4,
+            DEPLOY.count('"release_opt_out_api_enabled",'),
+            3,
         )
+        self.assertIn('body["release_opt_out_api_enabled"] is False', DEPLOY)
         self.assertIn("state-proof.json", ROLLBACK)
         self.assertIn('"RESULT_OWNER_STATE_CONTRACT_COMMIT"', ROLLBACK_VALIDATOR)
 
@@ -181,6 +182,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "scripts/validate_cloudflare_rollback.py",
             "scripts/wait_replay_container_rollout.py",
             "scripts/worker_intake_configuration.py",
+            "scripts/worker_lifecycle_configuration.py",
         }
         for trigger in (pull_request, push):
             self.assertIn("'scripts/**'", trigger)
@@ -701,6 +703,35 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('body["intake_enabled"] is False', provisional)
         self.assertIn('body["intake_enabled"] is False', staging)
 
+    def test_production_lifecycle_uses_one_reviewed_tracked_state(self) -> None:
+        production = DEPLOY.split("\n  deploy-production:", 1)[1]
+        state_step = production.split(
+            "- name: Read reviewed production lifecycle state", 1
+        )[1].split("\n      - name:", 1)[0]
+        self.assertIn("python ../scripts/worker_lifecycle_configuration.py", state_step)
+        self.assertIn("--config wrangler.jsonc", state_step)
+        self.assertIn("--environment production", state_step)
+        self.assertEqual(
+            production.count(
+                "EXPECTED_LIFECYCLE_ENABLED: ${{ steps.production-lifecycle.outputs.enabled }}"
+            ),
+            3,
+        )
+        for field in (
+            "legacy_result_owner_api_enabled",
+            "result_amendment_owner_api_enabled",
+            "result_amendment_maintainer_api_enabled",
+            "model_identity_owner_api_enabled",
+            "model_identity_maintainer_api_enabled",
+            "release_opt_out_api_enabled",
+        ):
+            with self.subTest(field=field):
+                self.assertEqual(production.count(f'"{field}",'), 3)
+        self.assertEqual(
+            production.count('body["model_identity_consolidation_api_enabled"] is False'),
+            3,
+        )
+
     def test_production_version_reads_wait_for_cloudflare_convergence(self) -> None:
         production = DEPLOY.split("\n  deploy-production:", 1)[1]
         self.assertEqual(
@@ -716,11 +747,11 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
     def test_deployments_require_the_dark_maintainer_gate_without_exposing_allowlist(
         self,
     ) -> None:
-        self.assertGreaterEqual(
-            DEPLOY.count(
-                'body["result_amendment_maintainer_api_enabled"] is False'
-            ),
-            4,
+        self.assertIn(
+            'body["result_amendment_maintainer_api_enabled"] is False', DEPLOY
+        )
+        self.assertEqual(
+            DEPLOY.count('"result_amendment_maintainer_api_enabled",'), 3
         )
         self.assertNotIn('body["RESULT_AMENDMENT_MAINTAINERS"]', DEPLOY)
         self.assertNotIn('body["result_amendment_maintainers"]', DEPLOY)
@@ -827,22 +858,34 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertNotIn("actions: write", RECOVERY)
         self.assertNotIn("contents: write", RECOVERY)
         self.assertIn("max_by(.run_number)", RECOVERY)
+        self.assertIn("head_sha=$LIVE_COMMIT", RECOVERY)
         self.assertIn("github.event.workflow_run.run_attempt", RECOVERY)
         self.assertIn("github.event.workflow_run.head_sha", RECOVERY)
+        self.assertIn("github.event.workflow_run.conclusion", RECOVERY)
+        self.assertIn("github.event.workflow_run.id", RECOVERY)
+        self.assertIn("automatic recovery trigger read-back differs", RECOVERY)
         self.assertIn("branches/main", RECOVERY)
         self.assertIn("protected main", RECOVERY)
         self.assertIn("controller dispatch tag does not resolve exactly", RECOVERY)
-        live = RECOVERY.index("Prove production currently runs this controller's enabled code")
-        mutation = RECOVERY.index("Force the exact controller code to disabled mode")
-        self.assertLess(live, mutation)
-        self.assertIn('body["deployed_commit"] == os.environ["TARGET_COMMIT"]', RECOVERY)
-        self.assertIn('body["intake_configured_enabled"]', RECOVERY)
-        self.assertIn("steps.live.outputs.needed == 'true'", RECOVERY[mutation:])
+        active = RECOVERY.index("Resolve the exact active production intake version")
+        mutation = RECOVERY.index(
+            "Force the exact controller code to all-false launch mode"
+        )
+        self.assertLess(active, mutation)
+        self.assertEqual(RECOVERY.count("launch-recovery-source"), 2)
+        self.assertIn("pre-mutation health unavailable", RECOVERY)
+        self.assertIn("steps.active.outputs.needed == 'true'", RECOVERY[mutation:])
+        self.assertIn("--target-version \"$EXPECTED_ACTIVE_VERSION\"", RECOVERY[mutation:])
+        self.assertNotIn("steps.live.outputs.needed", RECOVERY)
+        self.assertNotIn("steps.target.outputs.needed", RECOVERY)
         self.assertIn("success|cancelled|failure|startup_failure|timed_out", RECOVERY)
-        self.assertIn("cancelled|failure|startup_failure|timed_out", RECOVERY)
         self.assertIn('--var "INTAKE_ENABLED:false"', RECOVERY)
         self.assertIn('--var "INTAKE_ENABLEMENT_MODE:disabled"', RECOVERY)
         self.assertIn("--require-intake-disabled", RECOVERY)
+        self.assertIn("--require-launch-gates-disabled", RECOVERY)
+        self.assertIn("worker_lifecycle_configuration.py", RECOVERY)
+        self.assertIn('--var "RELEASE_OPT_OUT_API_ENABLED:false"', RECOVERY)
+        self.assertIn('--var "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED:false"', RECOVERY)
         self.assertNotIn("INTAKE_ENABLED:true", RECOVERY)
         self.assertNotIn("intake-finalization-failsafe", RECOVERY)
 

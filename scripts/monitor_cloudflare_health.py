@@ -149,6 +149,24 @@ def expected_health(
     except (KeyError, TypeError, ValueError) as error:
         raise MonitorError(f"tracked {environment} health contract is invalid") from error
     intake_enabled = _boolean_variable(intake_vars, "INTAKE_ENABLED", environment)
+    lifecycle_enabled = {
+        name: _boolean_variable(intake_vars, name, environment)
+        for name in (
+            "LEGACY_RESULT_OWNER_API_ENABLED",
+            "RESULT_AMENDMENT_OWNER_API_ENABLED",
+            "RESULT_AMENDMENT_MAINTAINER_API_ENABLED",
+            "MODEL_IDENTITY_OWNER_API_ENABLED",
+            "MODEL_IDENTITY_MAINTAINER_API_ENABLED",
+            "RELEASE_OPT_OUT_API_ENABLED",
+        )
+    }
+    model_consolidation_enabled = _boolean_variable(
+        intake_vars, "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED", environment
+    )
+    if model_consolidation_enabled:
+        raise MonitorError(
+            f"tracked {environment} model consolidation must remain disabled"
+        )
     promotion_canary_enabled = _boolean_variable(
         intake_vars, "PROMOTION_CANARY_ENABLED", environment
     )
@@ -183,12 +201,36 @@ def expected_health(
         ),
         "intake_enablement_mode": intake_mode,
         "intake_lease_expires_at": None,
+        "legacy_result_owner_api_enabled": lifecycle_enabled[
+            "LEGACY_RESULT_OWNER_API_ENABLED"
+        ],
+        "result_amendment_owner_api_enabled": lifecycle_enabled[
+            "RESULT_AMENDMENT_OWNER_API_ENABLED"
+        ],
+        "result_amendment_maintainer_api_enabled": lifecycle_enabled[
+            "RESULT_AMENDMENT_MAINTAINER_API_ENABLED"
+        ],
+        "model_identity_owner_api_enabled": lifecycle_enabled[
+            "MODEL_IDENTITY_OWNER_API_ENABLED"
+        ],
+        "model_identity_maintainer_api_enabled": lifecycle_enabled[
+            "MODEL_IDENTITY_MAINTAINER_API_ENABLED"
+        ],
+        "model_identity_consolidation_api_enabled": False,
+        "model_identity_write_max_subrequests": 400,
+        "model_identity_consolidation_api": "atomic_reverse_impact_v1",
+        "release_opt_out_api_enabled": lifecycle_enabled[
+            "RELEASE_OPT_OUT_API_ENABLED"
+        ],
     }
     replay = {
         "status": "ok",
         "service": replay_service,
         "environment": environment,
         "replay_enabled": replay_enabled,
+        "historical_public_replay_enabled": _boolean_variable(
+            replay_vars, "HISTORICAL_PUBLIC_REPLAY_ENABLED", environment
+        ),
         "staging_acceptance_enabled": staging_enabled,
         "staging_memory_limit_bytes": memory,
         "production_memory_gate_bytes": gate,

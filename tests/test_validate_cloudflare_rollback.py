@@ -414,6 +414,103 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         arguments.state_proof = self.paths["state_proof"]
         return arguments
 
+    @staticmethod
+    def _active_intake_status() -> dict[str, object]:
+        return {
+            "versions": [
+                {"version_id": INTAKE_VERSION, "percentage": 100}
+            ]
+        }
+
+    def test_launch_recovery_source_is_exact_and_all_false(self) -> None:
+        source = rollback.launch_recovery_source(
+            self._active_intake_status(),
+            self.versions["intake"],
+            config=self.configs["intake"],
+            expected_commit=COMMIT,
+        )
+        self.assertEqual(
+            source,
+            {
+                "schema_version": 1,
+                "version_id": INTAKE_VERSION,
+                "deployed_commit": COMMIT,
+                "needed": False,
+            },
+        )
+
+    def test_launch_recovery_source_arms_for_drift_or_residual_lease(self) -> None:
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED":
+                binding["text"] = "true"
+        source = rollback.launch_recovery_source(
+            self._active_intake_status(), self.versions["intake"]
+        )
+        self.assertIs(source["needed"], True)
+
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED":
+                binding["text"] = "false"
+        self.versions["intake"]["resources"]["bindings"].append(
+            {
+                "type": "plain_text",
+                "name": "INTAKE_LEASE_EXPIRES_AT",
+                "text": "1787710000",
+            }
+        )
+        source = rollback.launch_recovery_source(
+            self._active_intake_status(), self.versions["intake"]
+        )
+        self.assertIs(source["needed"], True)
+
+    def test_launch_recovery_source_rejects_ambiguous_or_mixed_versions(self) -> None:
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "one active version"
+        ):
+            rollback.launch_recovery_source(
+                {
+                    "versions": [
+                        {"version_id": INTAKE_VERSION, "percentage": 50},
+                        {"version_id": BROKER_VERSION, "percentage": 50},
+                    ]
+                },
+                self.versions["intake"],
+            )
+        self.versions["intake"]["id"] = BROKER_VERSION
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "version payload differ"
+        ):
+            rollback.launch_recovery_source(
+                self._active_intake_status(), self.versions["intake"]
+            )
+
+    def test_launch_recovery_source_requires_exact_commit_ref_and_capabilities(
+        self,
+    ) -> None:
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "DISPATCH_WORKFLOW_REF":
+                binding["text"] = f"lean-eval-dispatch/{'b' * 40}"
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "exact dispatch ref"
+        ):
+            rollback.launch_recovery_source(
+                self._active_intake_status(), self.versions["intake"]
+            )
+        for binding in self.versions["intake"]["resources"]["bindings"]:
+            if binding.get("name") == "DISPATCH_WORKFLOW_REF":
+                binding["text"] = f"lean-eval-dispatch/{COMMIT}"
+            if binding.get("type") == "service":
+                binding["service"] = "wrong-broker"
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "service bindings differ"
+        ):
+            rollback.launch_recovery_source(
+                self._active_intake_status(),
+                self.versions["intake"],
+                config=self.configs["intake"],
+                expected_commit=COMMIT,
+            )
+
     def test_builds_exact_commit_coherent_plan(self) -> None:
         plan = rollback.build_plan(self._arguments())
         self.assertEqual(plan["expected_commit"], COMMIT)
@@ -919,6 +1016,50 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             encoding="utf-8",
         )
         with self.assertRaisesRegex(rollback.RollbackValidationError, "UUIDv7"):
+            rollback.validate_component(arguments)
+
+    def test_all_false_launch_recovery_overrides_enabled_tracked_state(self) -> None:
+        intake = self.configs["intake"]
+        variables = intake["env"]["production"]["vars"]
+        variables["INTAKE_ENABLED"] = "true"
+        variables["INTAKE_ENABLEMENT_MODE"] = "durable"
+        for name in rollback.DISABLED_LAUNCH_GATE_BINDINGS:
+            if name == "PROMOTION_CANARY_ENABLED":
+                variables[name] = "false"
+            elif name.endswith("_MAINTAINERS"):
+                variables[name] = '[{"github_id":477956,"login":"kim-em"}]'
+            elif name == "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED":
+                variables[name] = "false"
+            else:
+                variables[name] = "true"
+        self._write(self.paths["intake_config"], intake)
+
+        arguments = argparse.Namespace(
+            component="intake",
+            expected_commit=COMMIT,
+            environment="production",
+            config=self.paths["intake_config"],
+            version=self.paths["intake_version"],
+            version_id=INTAKE_VERSION,
+            require_intake_disabled=True,
+            require_launch_gates_disabled=True,
+            intake_lease_bindings=None,
+        )
+        rollback.validate_component(arguments)
+
+        arguments.require_intake_disabled = False
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "must also require disabled intake"
+        ):
+            rollback.validate_component(arguments)
+
+        arguments.require_intake_disabled = True
+        version = self.versions["intake"]
+        for binding in version["resources"]["bindings"]:
+            if binding.get("name") == "RELEASE_OPT_OUT_API_ENABLED":
+                binding["text"] = "true"
+        self._write(self.paths["intake_version"], version)
+        with self.assertRaisesRegex(rollback.RollbackValidationError, "bindings differ"):
             rollback.validate_component(arguments)
 
     def test_emergency_target_may_track_durable_intake_but_must_disable_replay(
