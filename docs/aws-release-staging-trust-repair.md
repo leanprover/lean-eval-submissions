@@ -34,9 +34,12 @@ under the tracked stack definition.
 The reviewed release candidate for this operation is exact protected commit
 `e82d91aecdb64fa0d8932590aecdeb999c42a0f8`. The selected accepted archive is
 bound to staging State commit
-`58aef78b5c53e0e316e9edf8d0bb0e94110e1198` and audit commit
-`34e33e339eaac47a10c463abaedef47361c5abab`. Stop and re-review the packet if
-any of those protected heads changes before dispatch.
+`58aef78b5c53e0e316e9edf8d0bb0e94110e1198` and exact audit archive commit
+`92b95c162ad9bf38d027e11193683ca61ed2a994`. The audit repository is
+append-only and may acquire unrelated later archives; require that exact
+archive commit to remain an ancestor and require the reviewed sidecar and
+ciphertext blob identities below. Stop and re-review the packet if the release
+or staging State head changes, or if any of those archive checks fails.
 
 The accepted change set has exactly one resource change:
 
@@ -72,7 +75,10 @@ LEAN_EVAL_RELEASE_COMMIT="$(gh api \
   repos/leanprover/lean-eval-releases/commits/main --jq .sha)"
 LEAN_EVAL_APPROVED_RELEASE_COMMIT=e82d91aecdb64fa0d8932590aecdeb999c42a0f8
 LEAN_EVAL_APPROVED_STAGING_STATE=58aef78b5c53e0e316e9edf8d0bb0e94110e1198
-LEAN_EVAL_APPROVED_AUDIT=34e33e339eaac47a10c463abaedef47361c5abab
+LEAN_EVAL_APPROVED_ARCHIVE_COMMIT=92b95c162ad9bf38d027e11193683ca61ed2a994
+LEAN_EVAL_APPROVED_ARCHIVE_SIDECAR_BLOB=7dd0948c18b6aaa924aa5ef2c394f171d345fb11
+LEAN_EVAL_APPROVED_ARCHIVE_CIPHERTEXT_BLOB=bc0ee85e8bb0698c5400cc7bdb0c10e72fa35baf
+LEAN_EVAL_APPROVED_ARCHIVE_PATH=archives/01/01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584.tar.age
 LEAN_EVAL_OIDC_PROVIDER_ARN=arn:aws:iam::161072922960:oidc-provider/token.actions.githubusercontent.com
 LEAN_EVAL_SUBMISSION_PREFIX=leanprover/lean-eval-submissions
 LEAN_EVAL_RELEASE_PREFIX=leanprover@7233018/lean-eval-releases@1340741242
@@ -278,7 +284,15 @@ LEAN_EVAL_SUBMISSIONS_BEFORE="$(gh api \
   --jq .object.sha)"
 test "$LEAN_EVAL_RELEASE_BEFORE" = "$LEAN_EVAL_RELEASE_COMMIT"
 test "$LEAN_EVAL_STAGING_STATE_BEFORE" = "$LEAN_EVAL_APPROVED_STAGING_STATE"
-test "$LEAN_EVAL_AUDIT_BEFORE" = "$LEAN_EVAL_APPROVED_AUDIT"
+test "$(gh api \
+  "repos/leanprover/lean-eval-audit/compare/$LEAN_EVAL_APPROVED_ARCHIVE_COMMIT...$LEAN_EVAL_AUDIT_BEFORE" \
+  --jq .merge_base_commit.sha)" = "$LEAN_EVAL_APPROVED_ARCHIVE_COMMIT"
+test "$(gh api \
+  "repos/leanprover/lean-eval-audit/contents/${LEAN_EVAL_APPROVED_ARCHIVE_PATH%.tar.age}.json?ref=$LEAN_EVAL_APPROVED_ARCHIVE_COMMIT" \
+  --jq .sha)" = "$LEAN_EVAL_APPROVED_ARCHIVE_SIDECAR_BLOB"
+test "$(gh api \
+  "repos/leanprover/lean-eval-audit/contents/$LEAN_EVAL_APPROVED_ARCHIVE_PATH?ref=$LEAN_EVAL_APPROVED_ARCHIVE_COMMIT" \
+  --jq .sha)" = "$LEAN_EVAL_APPROVED_ARCHIVE_CIPHERTEXT_BLOB"
 
 LEAN_EVAL_DISPATCHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
