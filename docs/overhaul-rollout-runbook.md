@@ -120,6 +120,37 @@ Before requesting production approval, run one owner/maintainer success and one
 authorization or validation denial for each family, then return every gate to
 disabled and verify effective public health. Keep model consolidation disabled.
 
+The bounded staging exercise uses
+[`set-staging-lifecycle-smoke.yml`](../.github/workflows/set-staging-lifecycle-smoke.yml)
+from the immutable `lean-eval-dispatch/<commit>` tag for the exact live staging
+commit. The enabled dispatch requires closed one-member result-amendment and
+model-identity maintainer arrays and turns on only staging intake and the five
+launch families; model consolidation remains disabled. The reviewed cases and
+immutable source inputs are in
+[`staging-lifecycle-smoke-v1.json`](../configuration/staging-lifecycle-smoke-v1.json).
+Values listed under `runtime_allocated` are recorded from the live responses
+and cannot be fixed in advance.
+
+For the authenticated non-maintainer cases, first enable with the fixture's
+closed denial profiles and make only the two expected `404` decision requests.
+Then re-dispatch the same exact commit with the success profiles before the
+owner and maintainer success cases. The headless success additionally requires
+the operator to create the returned secret-gist proof and exact
+`lean-eval/<submission-id>` source tag; those are separate external-repository
+actions and remain approval-gated. The source-mismatch denial is checked before
+either external lookup and needs neither mutation.
+
+Restore the same exact commit by dispatching the workflow with `state=disabled`,
+both maintainer arrays equal to `[]`, and the explicit confirmation selected.
+That single disable operation returns intake and every launch family to false,
+keeps model consolidation false, and verifies each effective health field. A
+failure after the workflow arms the mutation invokes the same all-false deploy
+automatically for an ordinary step failure. Cancellation after deployment may
+prevent that recovery step: immediately re-dispatch the same exact tag with
+`state=disabled` and both maintainer arrays equal to `[]`, then verify every
+launch field is false in public health. Do not use the enabled state outside
+the approved bounded smoke.
+
 ## 6. Archive and release boundary
 
 Every new server submission must complete archive persistence and the

@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "environment": "staging",
+  "source": {
+    "repository": "kim-em/lean-eval-intake-fixture",
+    "commit": "c1e504a3acce2da2ee77054ca45e6c251b143545",
+    "owner_login": "kim-em"
+  },
+  "browser_submission": {
+    "problem_id": "two_plus_two",
+    "problem_group": "formalization-evaluation",
+    "statement_revision": 1,
+    "declared_model": "LeanEval launch browser staging smoke",
+    "source_visibility": "private",
+    "publication_choice": "scheduled",
+    "production_metadata": {
+      "web_access": false,
+      "harness": "bounded staging lifecycle smoke",
+      "human_involvement": "Selected and submitted by the staging operator"
+    }
+  },
+  "headless_submission": {
+    "problem_id": "two_plus_two",
+    "problem_group": "formalization-evaluation",
+    "statement_revision": 1,
+    "declared_model": "LeanEval launch headless staging smoke",
+    "source_visibility": "private",
+    "publication_choice": "scheduled",
+    "production_metadata": {
+      "web_access": false,
+      "harness": "bounded staging lifecycle smoke",
+      "human_involvement": "Selected and submitted by the staging operator"
+    }
+  },
+  "headless_source_mismatch": {
+    "challenge_source_commit": "c1e504a3acce2da2ee77054ca45e6c251b143545",
+    "submitted_source_commit": "c1e504a3acce2da2ee77054ca45e6c251b143544",
+    "expected_http_status": 401,
+    "expected_error": "authentication_failed"
+  },
+  "lifecycle_cases": {
+    "metadata_backfill": {
+      "target": "claimed_legacy_result",
+      "claim": {
+        "result_id": "r2_1deabf543920a28c048f6c5636ba53c034772ae68ce60cf32d9aed52dcacf541",
+        "results_commit": "runtime_staging_results_commit"
+      },
+      "success_patch": {
+        "production_metadata": {
+          "web_access": false,
+          "notes": "bounded exact-version staging metadata backfill"
+        }
+      },
+      "denial_patch": {
+        "production_metadata": {}
+      },
+      "denial_http_status": 400
+    },
+    "problem_repair": {
+      "target": "browser_result",
+      "success_request": {
+        "corrected_problem_id": "list_append_singleton_length",
+        "corrected_statement_revision": 1,
+        "reason_code": "bounded_staging_validation"
+      },
+      "maintainer_decision": {
+        "decision": "reject",
+        "reason_code": "insufficient_comparator_evidence"
+      },
+      "denial_request": {
+        "corrected_problem_id": "not-canonical",
+        "corrected_statement_revision": 1,
+        "reason_code": "bounded_staging_validation"
+      },
+      "denial_http_status": 400
+    },
+    "release_opt_out": {
+      "target": "browser_submission",
+      "request": {
+        "publication_choice": "withheld"
+      },
+      "expected_release_status": "not_scheduled"
+    },
+    "model_alias_and_rename": {
+      "primary_display_name": "LeanEval launch staging model primary",
+      "secondary_display_name": "LeanEval launch staging model collision",
+      "alias": "lean-eval-launch-staging-alias",
+      "renamed_display_name": "LeanEval launch staging model renamed",
+      "collision_http_status": 409
+    }
+  },
+  "maintainer_profiles": {
+    "success": [
+      {
+        "github_id": 477956,
+        "login": "kim-em"
+      }
+    ],
+    "authenticated_non_maintainer_denial": [
+      {
+        "github_id": 9007199254740991,
+        "login": "lean-eval-staging-nonoperator"
+      }
+    ],
+    "denial_http_status": 404
+  },
+  "credentialed_release_boundary": {
+    "submission_id": "01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584",
+    "result_id": "r2_3f28ce10fd9bad352dc29394254ec7c414b57269757c3488cd108bd544186423",
+    "archive_commit": "92b95c162ad9bf38d027e11193683ca61ed2a994",
+    "archive_path": "archives/01/01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584.tar.age",
+    "archive_ciphertext_sha256": "58f9e6c60d4736d82a831d53a1b99b75e86eac5b34b2a27ed2afafe460ab7f22"
+  },
+  "runtime_allocated": [
+    "browser_submission_id",
+    "browser_result_id",
+    "headless_challenge",
+    "headless_gist_id",
+    "headless_submission_id",
+    "headless_tag",
+    "headless_result_id",
+    "idempotency_event_ids",
+    "model_identity_ids",
+    "staging_results_commit"
+  ]
+}
