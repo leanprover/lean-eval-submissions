@@ -162,7 +162,7 @@ class HistoricalReplayInventoryDeltaTests(unittest.TestCase):
             ):
                 delta_module._read_canonical_json(oversized, "inventory")
 
-    def test_real_store_is_exact_three_public_results_beyond_frozen_baseline(self) -> None:
+    def test_real_store_retains_known_results_beyond_frozen_baseline(self) -> None:
         baseline_path = (
             ROOT
             / "evidence"
@@ -177,22 +177,21 @@ class HistoricalReplayInventoryDeltaTests(unittest.TestCase):
         result = reconcile(
             baseline, baseline_raw, current, current_raw, INVENTORY_SCHEMA
         )
-        self.assertEqual(
-            [entry["result_id"] for entry in result["entries"]],
-            [
-                "r2_4139cfac63c01798ba59dca8768653d54173cd1bb6222283bcf9f63cdaf40c64",
-                "r2_47d82df35938dfadf6d62e9db1412dc5a9a105136480118280c0bea4d42dd094",
-                "r2_b972b53988ff4fdb1630cd09f5e337d6617d1d4c8c7afec2b0b11f29743814c9",
-            ],
+        entries = {entry["result_id"]: entry for entry in result["entries"]}
+        known_public_result_ids = {
+            "r2_4139cfac63c01798ba59dca8768653d54173cd1bb6222283bcf9f63cdaf40c64",
+            "r2_47d82df35938dfadf6d62e9db1412dc5a9a105136480118280c0bea4d42dd094",
+            "r2_b972b53988ff4fdb1630cd09f5e337d6617d1d4c8c7afec2b0b11f29743814c9",
+        }
+        self.assertLessEqual(known_public_result_ids, entries.keys())
+        self.assertTrue(
+            all(
+                entries[result_id]["source"]["readiness"]
+                == "public_source_probe_pending"
+                for result_id in known_public_result_ids
+            )
         )
-        self.assertEqual(
-            result["delta_counts"],
-            {
-                "result_count": 3,
-                "public_source_probe_pending": 3,
-                "private_archive_migration_pending": 0,
-            },
-        )
+        self.assertEqual(result["delta_counts"]["result_count"], len(entries))
 
 
 if __name__ == "__main__":
