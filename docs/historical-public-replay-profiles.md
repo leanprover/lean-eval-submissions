@@ -78,7 +78,7 @@ It consumes the exact version-2 qualification artifact ZIPs and remains blocked
 until the frozen profile is reviewed and committed; it never writes State or
 enqueues replay.
 
-## Known contract work before execution
+## Execution boundary
 
 The shared replay request models a modern result and requires a UUID submission
 ID. Historical public State tasks intentionally have no submission ID or
@@ -87,18 +87,18 @@ encrypted archive. The dedicated historical controller/runner therefore uses
 `schemas/historical-public-runner-handoff-v1.schema.json` and does not alter or
 reuse the private endpoint's request shape.
 
-The current authoritative Dockerfile, publication workflow, and configuration
-freezer are also one-profile implementations: they hard-code benchmark
-`b91d4757…`, Lean v4.33.0, its v4.33.0 `lean4export`, and 309 generated
-workspaces. They must be generalized behind the exact matrix entry (or replaced
-by generated per-entry inputs) before any historical image is published. A
-caller-supplied build argument without matrix verification is not a
-qualification boundary.
+`Dockerfile.historical-public-replay` and
+`historical-public-image-qualification.yml` now select exactly one unqualified
+matrix entry, recover its locked build inputs, bake its benchmark markers, and
+reject a caller-supplied commit that is not in the matrix. This satisfies the
+per-entry build-selection contract but does not qualify any entry: registry
+publication and the staging probe remain the separate requirements above.
 
 Exact prerelease toolchains are now admitted by the shared execution-profile
 validators, and the authoritative evaluator can read both historical and
-current manifest layouts. Those compatibility changes remove two build-time
-gaps; they do not satisfy the three qualification requirements above.
+current manifest layouts. Those compatibility paths and matrix-selected build
+inputs do not themselves satisfy the immutable publication and staging-probe
+requirements above.
 
 ## Local reconstruction
 
