@@ -8,7 +8,7 @@ must never be recorded here.
 Update current values in place after an infrastructure change. Git history and
 Actions retain run history; do not add rollout narratives or evidence tables.
 
-Last reconciled: **2026-08-25**
+Last reconciled: **2026-08-26**
 
 ## Current baseline
 
