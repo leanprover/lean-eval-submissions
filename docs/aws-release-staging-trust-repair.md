@@ -31,6 +31,13 @@ The current template and release workflow already use the correct ID-bearing
 contract, so the repair is limited to bringing that one live trust policy back
 under the tracked stack definition.
 
+The reviewed release candidate for this operation is exact protected commit
+`e82d91aecdb64fa0d8932590aecdeb999c42a0f8`. The selected accepted archive is
+bound to staging State commit
+`bb12184a9fbdf5cb4fd11420a16e874d07ae1938` and audit commit
+`34e33e339eaac47a10c463abaedef47361c5abab`. Stop and re-review the packet if
+any of those protected heads changes before dispatch.
+
 The accepted change set has exactly one resource change:
 
 - action `Modify`;
@@ -60,6 +67,9 @@ LEAN_EVAL_SUBMISSIONS_COMMIT="$(gh api \
   repos/leanprover/lean-eval-submissions/commits/main --jq .sha)"
 LEAN_EVAL_RELEASE_COMMIT="$(gh api \
   repos/leanprover/lean-eval-releases/commits/main --jq .sha)"
+LEAN_EVAL_APPROVED_RELEASE_COMMIT=e82d91aecdb64fa0d8932590aecdeb999c42a0f8
+LEAN_EVAL_APPROVED_STAGING_STATE=bb12184a9fbdf5cb4fd11420a16e874d07ae1938
+LEAN_EVAL_APPROVED_AUDIT=34e33e339eaac47a10c463abaedef47361c5abab
 LEAN_EVAL_OIDC_PROVIDER_ARN=arn:aws:iam::161072922960:oidc-provider/token.actions.githubusercontent.com
 LEAN_EVAL_SUBMISSION_PREFIX=leanprover/lean-eval-submissions
 LEAN_EVAL_RELEASE_PREFIX=leanprover@7233018/lean-eval-releases@1340741242
@@ -78,6 +88,7 @@ test "$(gh api repos/leanprover/lean-eval-submissions/commits/main --jq .sha)" =
   "$LEAN_EVAL_SUBMISSIONS_COMMIT"
 test "$(gh api repos/leanprover/lean-eval-releases/commits/main --jq .sha)" = \
   "$LEAN_EVAL_RELEASE_COMMIT"
+test "$LEAN_EVAL_RELEASE_COMMIT" = "$LEAN_EVAL_APPROVED_RELEASE_COMMIT"
 test "$(git -C "$LEAN_EVAL_SOURCE_REPOSITORY" rev-parse HEAD)" = \
   "$LEAN_EVAL_SUBMISSIONS_COMMIT"
 test -z "$(git -C "$LEAN_EVAL_SOURCE_REPOSITORY" status --porcelain)"
@@ -236,8 +247,11 @@ test "$(aws cloudformation describe-stacks \
 ## Run the publication-disabled release smoke
 
 The smoke enters only `release-staging`, invokes only the staging Lambda alias,
-uploads no artifact, discards plaintext, and exits before every production
-publication step.
+and uploads no artifact. It sends the same digest-bound request exactly twice,
+requires the second invocation to return the adapter's exact consumed-capability
+refusal, removes AWS/OIDC authority, reconstructs and validates the release from
+the first invocation, discards all sensitive and reconstructed scratch, and
+exits before every production publication step.
 
 ```sh
 test "$(gh api repos/leanprover/lean-eval-releases/actions/variables \
@@ -252,7 +266,12 @@ LEAN_EVAL_AUDIT_BEFORE="$(gh api \
 LEAN_EVAL_RELEASE_BEFORE="$(gh api \
   repos/leanprover/lean-eval-releases/git/ref/heads/main \
   --jq .object.sha)"
+LEAN_EVAL_SUBMISSIONS_BEFORE="$(gh api \
+  repos/leanprover/lean-eval-submissions/git/ref/heads/main \
+  --jq .object.sha)"
 test "$LEAN_EVAL_RELEASE_BEFORE" = "$LEAN_EVAL_RELEASE_COMMIT"
+test "$LEAN_EVAL_STAGING_STATE_BEFORE" = "$LEAN_EVAL_APPROVED_STAGING_STATE"
+test "$LEAN_EVAL_AUDIT_BEFORE" = "$LEAN_EVAL_APPROVED_AUDIT"
 
 LEAN_EVAL_DISPATCHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
@@ -321,6 +340,8 @@ test "$(gh api repos/leanprover/lean-eval-audit/git/ref/heads/main \
   --jq .object.sha)" = "$LEAN_EVAL_AUDIT_BEFORE"
 test "$(gh api repos/leanprover/lean-eval-releases/git/ref/heads/main \
   --jq .object.sha)" = "$LEAN_EVAL_RELEASE_BEFORE"
+test "$(gh api repos/leanprover/lean-eval-submissions/git/ref/heads/main \
+  --jq .object.sha)" = "$LEAN_EVAL_SUBMISSIONS_BEFORE"
 test "$(aws cloudformation describe-stacks \
   --stack-name "$LEAN_EVAL_PRODUCTION_STACK" \
   --region "$LEAN_EVAL_AWS_REGION" \
@@ -335,13 +356,16 @@ the operation, overall success, and exactly the successful `prepare-one` and
 `unwrap-one` jobs. Open the exact URL recorded in `run.json` and retain the
 `unwrap-one` job summary; GitHub does not reliably return Actions job-summary
 text through its check-run API. The summary must say
-`Credentialed staging release boundary passed` and identify submission
+`Credentialed staging release reconstruction passed`, state that the identical
+unwrap request was refused after its first successful use, and state that the
+public-only tree was reconstructed, validated, and discarded without
+publication, State/Git mutation, or artifact upload. It must identify submission
 `01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584`, audit commit
 `92b95c162ad9bf38d027e11193683ca61ed2a994`, and exact ciphertext digest
 `58f9e6c60d4736d82a831d53a1b99b75e86eac5b34b2a27ed2afafe460ab7f22`.
-The commands above independently require no uploaded artifact,
-unchanged staging State, audit, and release refs, the unchanged production
-stack timestamp, and an absent `PUBLICATION_ENABLED` variable.
+The commands above independently require no uploaded artifact; unchanged
+staging State, audit, release, and submissions refs; the unchanged production
+stack timestamp; and an absent `PUBLICATION_ENABLED` variable.
 
 ## Rollback
 
