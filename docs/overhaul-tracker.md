@@ -26,7 +26,8 @@ history, or replace the cross-repository execution runbook.
 - Automatic release publication is disabled in
   `leanprover/lean-eval-releases`.
 - Production archive Wrap and replay role variables are not connected.
-- The staging release role still needs the approval-gated OIDC trust repair.
+- The staging release OIDC trust repair is approved but not yet applied; it is
+  waiting for a short-lived authenticated AWS operator session.
 - Exact resource identifiers, credential custody, feature states, and rollback
   instructions are in [`../INFRASTRUCTURE.md`](../INFRASTRUCTURE.md).
 
@@ -78,7 +79,9 @@ not this summary.
 - [x] Prove that each launch gate returns to disabled and public health reports
       the effective state.
 - [ ] Prepare one browser and one source-bound headless staging submission at
-      the exact proposed launch commits.
+      the exact proposed launch commits. The final headless success requires
+      separate approval to refresh the external fixture's one-time proof and
+      immutable tag.
 - [ ] Complete one exact-version staging lifecycle from archive through State,
       Result, scheduled release, publication-disabled reconstruction, and
       rollback.
@@ -87,10 +90,12 @@ These are bounded smoke cases, not a combinatorial staging matrix.
 
 ### Approval-gated credential work
 
-- [ ] Present the exact staging release OIDC trust mutation, target role and
+- [x] Present and obtain approval for the exact staging release OIDC trust
+      mutation, target role and
       subject, absent publication/production authority, test archive, and
-      rollback for approval.
-- [ ] After approval, run one staging unwrap/reconstruction and verify
+      rollback.
+- [ ] Apply only that approved staging mutation, then run one staging
+      unwrap/reconstruction and verify
       consume-before-unwrap, reuse refusal, authority removal, source
       allowlisting, no plaintext artifact, and cleanup.
 - [ ] Present the production archive Wrap-only connection separately for
@@ -105,8 +110,15 @@ These are bounded smoke cases, not a combinatorial staging matrix.
       inventory delta.
 - [ ] Reconcile every accepted Result as public-source replayable,
       private-archive replayable, or reviewed unavailable.
+- [ ] Freeze the exact historical-public execution profiles. Thirty-four of
+      thirty-five matrix profiles are complete; benchmark
+      `9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66` still requires the separately
+      approved, source-free isolated Cloudflare staging probe.
+- [x] Provide one offline, create-only batch finalizer for the existing
+      authorize, qualify, and enqueue State events across the exact final
+      public corpus. Appending its output remains separately approval-gated.
 - [ ] Migrate recoverable legacy private envelopes only after the separate
-      infrastructure and credential approval.
+      migration-semantics decision and infrastructure/credential approval.
 - [ ] Run bounded official-Lean-plus-nanoda replay and record a terminal replay
       or unavailable disposition for every final-cutoff Result.
 
