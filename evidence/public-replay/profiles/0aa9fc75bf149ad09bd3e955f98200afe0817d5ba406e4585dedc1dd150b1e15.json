@@ -1,0 +1,96 @@
+{
+  "artifact_archive_bindings": [
+    {
+      "archive_sha256": "59be8ca5072d84eed9add8714b2e98adf9a47f87af1ca464a887c5bcf4eedeff",
+      "artifact_id": 9559612609,
+      "created_at": "2026-08-25T10:43:42Z",
+      "name": "historical-public-image-candidate",
+      "size_in_bytes": 3467
+    },
+    {
+      "archive_sha256": "e1cfa72c4165fdb491a55f9dbe61902996200b5b872fc5672c485f472c1da8f0",
+      "artifact_id": 9559657528,
+      "created_at": "2026-08-25T10:45:14Z",
+      "name": "historical-public-staging-qualification",
+      "size_in_bytes": 1210
+    }
+  ],
+  "artifact_file_sha256": {
+    "candidate-binding.json": "4909f0c4f4ecc8d4ff42c01ba44d3f269b222f40602157dcf143b580bb7625eb",
+    "historical-image-publication.json": "df80731c9aeeb638c349d4afebab92ff718bf21065b126320441b6e06a17a393",
+    "historical-public-staging-qualification.json": "a139655d40a40c60a490ed2859c6a2b1fbe7eaf10f5f73454d7e084b2496360b",
+    "historical-qualification-rollout.json": "0db9dc248eb760b44f6d8b60aeb1101ab593f3528579a14a3209c7bfa5987274"
+  },
+  "artifact_provenance_sha256": "e605615559bcf4183e4626bbe001744869cd8416f5a6625067ea322f3ab06bcd",
+  "benchmark_commit": "c31a4fb747a79fc50505196007ee7f666a773fc9",
+  "benchmark_repository": "leanprover/lean-eval",
+  "benchmark_tree": "c1821191744d1a96fc98cf6370aecf2160f2d10f",
+  "controller_source_commit": "7eb77aa8c2ef7f4d598c77240ea9effbb248dce2",
+  "execution_profile": {
+    "architecture": "x86_64",
+    "cache_state": "cold",
+    "components": {
+      "comparator": {
+        "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+        "repository": "leanprover/comparator"
+      },
+      "landrun": {
+        "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+        "repository": "zouuup/landrun"
+      },
+      "lean4export": {
+        "commit": "12581a6b680d8478175596338eb2d53383a323e3",
+        "repository": "leanprover/lean4export"
+      },
+      "nanoda": {
+        "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+        "repository": "robsimmons/nanoda_lib"
+      }
+    },
+    "cpu_model": "AMD EPYC",
+    "go_toolchain": "go1.25.12",
+    "kernel_release": "6.18.36-cloudflare-firecracker-2026.6.17",
+    "measurement_command": [
+      "/opt/lean-eval/replay-measure"
+    ],
+    "runner_profile": "cloudflare-sandbox-standard-4-v1",
+    "rust_toolchain": "rustc-1.89.0",
+    "schema_version": 1,
+    "toolchain": "leanprover/lean4:v4.30.0-rc2",
+    "vm_image_digest": "sha256:0cd9ca77422cbb7da08235b368fe0ef9da278d2a8b214ba6a76b2a76630bdfd1"
+  },
+  "execution_profile_digest": "0aa9fc75bf149ad09bd3e955f98200afe0817d5ba406e4585dedc1dd150b1e15",
+  "image_source_commit": "7eb77aa8c2ef7f4d598c77240ea9effbb248dce2",
+  "kind": "historical_public_replay_profile_qualification",
+  "measurement_config": {
+    "memory_limit_bytes": 12884901888,
+    "retired_instructions": {
+      "perf_event": "instructions:u",
+      "required": false
+    },
+    "schema_version": 1,
+    "wall_time_limit_ms": 19800000
+  },
+  "measurement_config_digest": "2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945",
+  "plan_commit": "7eb77aa8c2ef7f4d598c77240ea9effbb248dce2",
+  "plan_path": "evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json",
+  "plan_repository": "leanprover/lean-eval-submissions",
+  "plan_sha256": "d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e",
+  "profile_matrix_path": "configuration/historical-public-replay-profile-matrix-v1.json",
+  "profile_matrix_sha256": "a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c",
+  "qualification_contract_path": "historical-public-qualification/contract-v1.json",
+  "qualification_contract_sha256": "937a1ce9800350de47fb2ce0c3d276b6cddc38cd39820727c8b8687bea89dad0",
+  "qualification_controller_sha256": "d13edde113de5a8d45e967ebaef9bff864c9f076f0e7e7c09db3d48bcd95bcd7",
+  "qualification_status": "qualified",
+  "qualification_workflow_sha256": "39dd306ef71badded662cb25f4d040880822d4cea19285aa468fb75faf493bb5",
+  "registry_manifest_digest": "sha256:0cd9ca77422cbb7da08235b368fe0ef9da278d2a8b214ba6a76b2a76630bdfd1",
+  "registry_repository": "lean-eval-historical-public-v1",
+  "registry_tag": "c31a4fb747a79fc50505196007ee7f666a773fc9-7eb77aa8c2ef7f4d598c77240ea9effbb248dce2",
+  "runner_contract_path": "configuration/historical-public-runner-v1.json",
+  "runner_contract_sha256": "6d341a642dfd6aa9092228269da6761000bf0818128ce3f35cb259bd8fb2303f",
+  "schema_version": 1,
+  "workflow_path": ".github/workflows/historical-public-image-qualification.yml",
+  "workflow_repository": "leanprover/lean-eval-submissions",
+  "workflow_run_attempt": 1,
+  "workflow_run_id": 32838100949
+}
