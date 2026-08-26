@@ -374,6 +374,7 @@ def validate_created_publication_origin(
     if run_id == current_run_id:
         raise QualificationError("created publication cannot reference the current run")
     run = load_external(run_metadata_path)
+    run_created_at = run.get("created_at") if isinstance(run, dict) else None
     started_at = run.get("run_started_at") if isinstance(run, dict) else None
     completed_at = run.get("updated_at") if isinstance(run, dict) else None
     if (
@@ -387,17 +388,19 @@ def validate_created_publication_origin(
         != ".github/workflows/historical-public-image-qualification.yml"
         or run.get("status") != "completed"
         or run.get("conclusion") != "success"
+        or not isinstance(run_created_at, str)
+        or API_TIMESTAMP.fullmatch(run_created_at) is None
         or not isinstance(started_at, str)
         or API_TIMESTAMP.fullmatch(started_at) is None
         or not isinstance(completed_at, str)
         or API_TIMESTAMP.fullmatch(completed_at) is None
-        or started_at > completed_at
+        or not run_created_at <= started_at <= completed_at
     ):
         raise QualificationError("created publication run is not exact and successful")
     artifact = load_external(artifact_metadata_path)
     workflow_run = artifact.get("workflow_run") if isinstance(artifact, dict) else None
     digest = artifact.get("digest") if isinstance(artifact, dict) else None
-    created_at = artifact.get("created_at") if isinstance(artifact, dict) else None
+    artifact_created_at = artifact.get("created_at") if isinstance(artifact, dict) else None
     size = artifact.get("size_in_bytes") if isinstance(artifact, dict) else None
     if (
         not isinstance(artifact, dict)
@@ -411,9 +414,9 @@ def validate_created_publication_origin(
         != f"lean-eval-dispatch/{source_commit}"
         or not isinstance(digest, str)
         or OCI_DIGEST.fullmatch(digest) is None
-        or not isinstance(created_at, str)
-        or API_TIMESTAMP.fullmatch(created_at) is None
-        or not started_at <= created_at <= completed_at
+        or not isinstance(artifact_created_at, str)
+        or API_TIMESTAMP.fullmatch(artifact_created_at) is None
+        or not run_created_at <= artifact_created_at <= completed_at
         or type(size) is not int
         or not 1 <= size <= MAX_ARTIFACT_ZIP_BYTES
     ):

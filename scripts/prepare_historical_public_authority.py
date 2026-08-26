@@ -596,7 +596,8 @@ def write_provenance(args: argparse.Namespace) -> None:
     image_commit = match(COMMIT, args.image_source_commit, "image commit")
     run_id = integer(args.run_id, "workflow run id")
     run_attempt = integer(args.run_attempt, "workflow run attempt")
-    started_at = match(API_TIMESTAMP, run.get("run_started_at"), "workflow start time")
+    run_created_at = match(API_TIMESTAMP, run.get("created_at"), "workflow creation time")
+    started_at = match(API_TIMESTAMP, run.get("run_started_at"), "workflow attempt start time")
     completed_at = match(API_TIMESTAMP, run.get("updated_at"), "workflow completion time")
     if (
         run.get("id") != run_id
@@ -607,13 +608,14 @@ def write_provenance(args: argparse.Namespace) -> None:
         or run.get("path") != WORKFLOW_PATH
         or run.get("status") != "completed"
         or run.get("conclusion") != "success"
+        or not run_created_at <= started_at <= completed_at
     ):
         raise PreparationError("workflow run is not the exact successful qualification run")
 
     def artifact(value: dict[str, Any], artifact_id: int, name: str) -> dict[str, Any]:
         workflow_run = value.get("workflow_run")
         digest = value.get("digest")
-        created_at = value.get("created_at")
+        artifact_created_at = value.get("created_at")
         size = value.get("size_in_bytes")
         if (
             value.get("id") != artifact_id
@@ -625,9 +627,9 @@ def write_provenance(args: argparse.Namespace) -> None:
             or workflow_run.get("head_branch") != f"lean-eval-dispatch/{controller_commit}"
             or not isinstance(digest, str)
             or OCI_DIGEST.fullmatch(digest) is None
-            or not isinstance(created_at, str)
-            or API_TIMESTAMP.fullmatch(created_at) is None
-            or not started_at <= created_at <= completed_at
+            or not isinstance(artifact_created_at, str)
+            or API_TIMESTAMP.fullmatch(artifact_created_at) is None
+            or not run_created_at <= artifact_created_at <= completed_at
             or type(size) is not int
             or not 1 <= size <= MAX_ARTIFACT_ZIP_BYTES
         ):
@@ -635,7 +637,7 @@ def write_provenance(args: argparse.Namespace) -> None:
         return {
             "artifact_id": artifact_id,
             "archive_sha256": digest[7:],
-            "created_at": created_at,
+            "created_at": artifact_created_at,
             "name": name,
             "size_in_bytes": size,
         }
@@ -649,7 +651,7 @@ def write_provenance(args: argparse.Namespace) -> None:
         "historical-public-staging-qualification",
     )
     output = {
-        "schema_version": 1,
+        "schema_version": 2,
         "kind": "historical_public_qualification_artifact_provenance",
         "repository": SUBMISSIONS_REPOSITORY,
         "workflow_path": WORKFLOW_PATH,
@@ -657,6 +659,7 @@ def write_provenance(args: argparse.Namespace) -> None:
         "workflow_run_attempt": run_attempt,
         "workflow_event": "workflow_dispatch",
         "workflow_conclusion": "success",
+        "workflow_run_created_at": run_created_at,
         "workflow_run_started_at": started_at,
         "workflow_run_completed_at": completed_at,
         "dispatch_ref": f"lean-eval-dispatch/{controller_commit}",
@@ -674,7 +677,8 @@ def validate_provenance(value: Any) -> dict[str, Any]:
             "schema_version", "kind", "repository", "workflow_path",
             "workflow_run_id", "workflow_run_attempt", "workflow_event",
             "workflow_conclusion", "dispatch_ref", "controller_source_commit",
-            "image_source_commit", "workflow_run_started_at",
+            "image_source_commit", "workflow_run_created_at",
+            "workflow_run_started_at",
             "workflow_run_completed_at", "artifacts",
         },
         "qualification provenance",
@@ -682,7 +686,7 @@ def validate_provenance(value: Any) -> dict[str, Any]:
     controller = match(COMMIT, result["controller_source_commit"], "controller commit")
     match(COMMIT, result["image_source_commit"], "image commit")
     if (
-        result["schema_version"] != 1
+        result["schema_version"] != 2
         or result["kind"] != "historical_public_qualification_artifact_provenance"
         or result["repository"] != SUBMISSIONS_REPOSITORY
         or result["workflow_path"] != WORKFLOW_PATH
@@ -693,11 +697,14 @@ def validate_provenance(value: Any) -> dict[str, Any]:
         raise PreparationError("qualification provenance identity changed")
     integer(result["workflow_run_id"], "workflow run id")
     integer(result["workflow_run_attempt"], "workflow run attempt")
+    run_created_at = match(
+        API_TIMESTAMP, result["workflow_run_created_at"], "workflow creation time"
+    )
     started_at = match(API_TIMESTAMP, result["workflow_run_started_at"], "workflow start time")
     completed_at = match(
         API_TIMESTAMP, result["workflow_run_completed_at"], "workflow completion time"
     )
-    if started_at > completed_at:
+    if not run_created_at <= started_at <= completed_at:
         raise PreparationError("qualification workflow time window is invalid")
     artifacts = result["artifacts"]
     if not isinstance(artifacts, list) or len(artifacts) != 2:
@@ -711,10 +718,12 @@ def validate_provenance(value: Any) -> dict[str, Any]:
         )
         integer(item["artifact_id"], f"artifact {index} id")
         match(DIGEST, item["archive_sha256"], f"artifact {index} archive digest")
-        created_at = match(API_TIMESTAMP, item["created_at"], f"artifact {index} creation time")
+        artifact_created_at = match(
+            API_TIMESTAMP, item["created_at"], f"artifact {index} creation time"
+        )
         integer(item["size_in_bytes"], f"artifact {index} size")
-        if not started_at <= created_at <= completed_at:
-            raise PreparationError(f"artifact {index} is not from the exact run attempt window")
+        if not run_created_at <= artifact_created_at <= completed_at:
+            raise PreparationError(f"artifact {index} is not from the exact workflow run window")
         if item["size_in_bytes"] > MAX_ARTIFACT_ZIP_BYTES:
             raise PreparationError(f"artifact {index} exceeds its ZIP size boundary")
         names.append(item["name"])

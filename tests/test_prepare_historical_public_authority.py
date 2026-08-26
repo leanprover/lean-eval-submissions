@@ -108,7 +108,7 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
                 check=True,
             )
         provenance = {
-            "schema_version": 1,
+            "schema_version": 2,
             "kind": "historical_public_qualification_artifact_provenance",
             "repository": "leanprover/lean-eval-submissions",
             "workflow_path": ".github/workflows/historical-public-image-qualification.yml",
@@ -116,6 +116,7 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
             "workflow_run_attempt": 2,
             "workflow_event": "workflow_dispatch",
             "workflow_conclusion": "success",
+            "workflow_run_created_at": "2026-08-24T09:00:00Z",
             "workflow_run_started_at": "2026-08-24T10:00:00Z",
             "workflow_run_completed_at": "2026-08-24T11:00:00Z",
             "dispatch_ref": "lean-eval-dispatch/" + CONTROLLER_COMMIT,
@@ -593,7 +594,7 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
                     label="State source",
                 )
 
-    def test_provenance_accepts_only_exact_successful_run_and_artifact_ids(self) -> None:
+    def test_provenance_accepts_reused_job_artifacts_but_rejects_pre_run_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             run = {
@@ -605,15 +606,16 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
                 "path": authority.WORKFLOW_PATH,
                 "status": "completed",
                 "conclusion": "success",
+                "created_at": "2026-08-24T09:00:00Z",
                 "run_started_at": "2026-08-24T10:00:00Z",
                 "updated_at": "2026-08-24T11:00:00Z",
             }
-            artifact = lambda artifact_id, name, digest: {
+            artifact = lambda artifact_id, name, digest, created_at="2026-08-24T10:30:00Z": {
                 "id": artifact_id,
                 "name": name,
                 "expired": False,
                 "digest": "sha256:" + digest,
-                "created_at": "2026-08-24T10:30:00Z",
+                "created_at": created_at,
                 "workflow_run": {
                     "id": 123,
                     "head_sha": CONTROLLER_COMMIT,
@@ -627,7 +629,15 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
                 "staging": root / "staging.json",
             }
             write(paths["run"], run)
-            write(paths["candidate"], artifact(111, "historical-public-image-candidate", "4" * 64))
+            write(
+                paths["candidate"],
+                artifact(
+                    111,
+                    "historical-public-image-candidate",
+                    "4" * 64,
+                    "2026-08-24T09:30:00Z",
+                ),
+            )
             write(paths["staging"], artifact(222, "historical-public-staging-qualification", "5" * 64))
             args = argparse.Namespace(
                 run_metadata=str(paths["run"]),
@@ -644,6 +654,9 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
             authority.write_provenance(args)
             provenance, _ = authority.load_canonical(root / "provenance.json", "fixture provenance")
             self.assertEqual(authority.validate_provenance(provenance), provenance)
+            self.assertEqual(provenance["schema_version"], 2)
+            self.assertEqual(provenance["workflow_run_created_at"], run["created_at"])
+            self.assertEqual(provenance["workflow_run_started_at"], run["run_started_at"])
             failed = copy.deepcopy(run)
             failed["conclusion"] = "failure"
             write(root / "failed.json", failed)
@@ -652,7 +665,7 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
             with self.assertRaisesRegex(authority.PreparationError, "successful"):
                 authority.write_provenance(args)
             stale = artifact(222, "historical-public-staging-qualification", "5" * 64)
-            stale["created_at"] = "2026-08-24T09:59:59Z"
+            stale["created_at"] = "2026-08-24T08:59:59Z"
             write(root / "stale-artifact.json", stale)
             args.run_metadata = str(paths["run"])
             args.staging_artifact_metadata = str(root / "stale-artifact.json")
@@ -843,6 +856,8 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
         self.assertNotIn("environment:", workflow)
         self.assertIn("actions/artifacts/$CANDIDATE_ARTIFACT_ID/zip", workflow)
         self.assertIn("actions/artifacts/$STAGING_ARTIFACT_ID/zip", workflow)
+        self.assertIn('"$api/actions/runs/$RUN_ID"', workflow)
+        self.assertNotIn("/attempts/$RUN_ATTEMPT", workflow)
         self.assertEqual(workflow.count("--max-filesize 4194304"), 2)
         self.assertIn("--require-hashes -r requirements-jsonschema-workflow.txt", workflow)
         self.assertIn('--candidate-artifact-zip "$RUNNER_TEMP/candidate-artifact.zip"', workflow)
