@@ -171,6 +171,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "scripts/classify_historical_private_archives.py",
             "scripts/historical_replay_controller.py",
             "scripts/inventory_historical_replay.py",
+            "scripts/prepare_historical_public_authority.py",
             "scripts/prepare_public_replay_plan.py",
             "scripts/reconcile_historical_replay_inventory_delta.py",
             "scripts/resolve_public_replay_github_evidence.py",
@@ -304,6 +305,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "classify_historical_private_archives.py",
             "historical_replay_controller.py",
             "inventory_historical_replay.py",
+            "prepare_historical_public_authority.py",
             "prepare_public_replay_plan.py",
             "reconcile_historical_replay_inventory_delta.py",
             "resolve_public_replay_github_evidence.py",
@@ -777,12 +779,28 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertNotIn("lean-eval-state/", state_gate)
         self.assertNotIn("github.token", state_gate)
 
-    def test_state_schema_digest_is_cross_bound_across_runtime_and_controllers(self) -> None:
-        digest = QUALIFICATION["state_event_schema_sha256"]
-        self.assertEqual(WORKER_APP.count(f'"{digest}"'), 1)
-        self.assertEqual(DEPLOY.count(f'"{digest}"'), 2)
+    def test_runtime_and_historical_finalizer_bind_distinct_state_views(self) -> None:
+        state_commit = "15a96673efd44d3b198890c1e94581b33c2a1a87"
+        runtime_schema = QUALIFICATION["state_event_schema_sha256"]
+        complete_ledger_schema = (
+            "acbdd88fa233fe2bc64eb928a421c06521e58b113bbd3f1b90c8a8744c84395a"
+        )
+
+        # The deployed owner APIs remain rollback-qualified against their
+        # unchanged runtime projection, now read from the current State commit.
+        self.assertEqual(QUALIFICATION["state_main_commit"], state_commit)
+        self.assertEqual(WORKER_APP.count(f'"{runtime_schema}"'), 1)
+        self.assertEqual(DEPLOY.count(f'"{runtime_schema}"'), 2)
+
+        # The offline finalizer validates the complete State ledger, including
+        # system-only historical unavailability events outside that projection.
+        self.assertNotEqual(runtime_schema, complete_ledger_schema)
         self.assertIn(
-            f'STATE_EVENT_SCHEMA_SHA256 = "{digest}"',
+            f'STATE_COMMIT = "{state_commit}"',
+            HISTORICAL_AUTHORITY_PREPARATION,
+        )
+        self.assertIn(
+            f'STATE_EVENT_SCHEMA_SHA256 = "{complete_ledger_schema}"',
             HISTORICAL_AUTHORITY_PREPARATION,
         )
 
