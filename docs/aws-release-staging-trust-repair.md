@@ -52,9 +52,11 @@ replay role, production role, or any second resource. The production stack's
 
 ## Pin and validate the source
 
-Start in a clean checkout that contains the recorded submissions commit. Keep
-all generated operator evidence in a new mode-700 temporary directory and
-remove it after the evidence has been recorded.
+Start in a clean submissions checkout that contains the exact reviewed
+infrastructure-source commit. The checkout may be at a newer documentation-only
+head; the commands always archive the fixed source commit below. Keep all
+generated operator evidence in a new mode-700 temporary directory and remove it
+after the evidence has been recorded.
 
 ```sh
 set -euo pipefail
@@ -63,7 +65,8 @@ LEAN_EVAL_AWS_REGION=us-east-1
 LEAN_EVAL_AWS_ACCOUNT=161072922960
 LEAN_EVAL_STAGING_STACK=lean-eval-key-adapter-staging
 LEAN_EVAL_PRODUCTION_STACK=lean-eval-key-adapter-production
-LEAN_EVAL_SUBMISSIONS_COMMIT="$(gh api \
+LEAN_EVAL_SUBMISSIONS_COMMIT=cbbd30141a5079d5d8f7a28d8f3e091363f7051c
+LEAN_EVAL_SUBMISSIONS_HEAD="$(gh api \
   repos/leanprover/lean-eval-submissions/commits/main --jq .sha)"
 LEAN_EVAL_RELEASE_COMMIT="$(gh api \
   repos/leanprover/lean-eval-releases/commits/main --jq .sha)"
@@ -85,13 +88,17 @@ test "$(gh api \
   repos/leanprover/lean-eval-releases/actions/oidc/customization/sub \
   --jq .sub_claim_prefix)" = "repo:$LEAN_EVAL_RELEASE_PREFIX"
 test "$(gh api repos/leanprover/lean-eval-submissions/commits/main --jq .sha)" = \
-  "$LEAN_EVAL_SUBMISSIONS_COMMIT"
+  "$LEAN_EVAL_SUBMISSIONS_HEAD"
 test "$(gh api repos/leanprover/lean-eval-releases/commits/main --jq .sha)" = \
   "$LEAN_EVAL_RELEASE_COMMIT"
 test "$LEAN_EVAL_RELEASE_COMMIT" = "$LEAN_EVAL_APPROVED_RELEASE_COMMIT"
-test "$(git -C "$LEAN_EVAL_SOURCE_REPOSITORY" rev-parse HEAD)" = \
-  "$LEAN_EVAL_SUBMISSIONS_COMMIT"
 test -z "$(git -C "$LEAN_EVAL_SOURCE_REPOSITORY" status --porcelain)"
+git -C "$LEAN_EVAL_SOURCE_REPOSITORY" fetch --no-tags origin \
+  "$LEAN_EVAL_SUBMISSIONS_HEAD"
+git -C "$LEAN_EVAL_SOURCE_REPOSITORY" cat-file -e \
+  "$LEAN_EVAL_SUBMISSIONS_COMMIT^{commit}"
+git -C "$LEAN_EVAL_SOURCE_REPOSITORY" merge-base --is-ancestor \
+  "$LEAN_EVAL_SUBMISSIONS_COMMIT" "$LEAN_EVAL_SUBMISSIONS_HEAD"
 
 LEAN_EVAL_AWS_OPS="$(mktemp -d)"
 chmod 700 "$LEAN_EVAL_AWS_OPS"
