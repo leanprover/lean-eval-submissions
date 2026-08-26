@@ -43,6 +43,28 @@
         "ref": "33b1a55764e40600f421961b7b78d5c266f2f080",
         "repo": "juihuichung/lean-eval-submissions-private"
       }
+    },
+    {
+      "accepted_at": "2026-08-26T11:23:16Z",
+      "benchmark_commit": "9b82c4083e71e93c7d6aa43a960cd492ae53a35d",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1443,
+        "kind": "issue"
+      },
+      "problem_id": "neukirch_uchida",
+      "production_metadata": {
+        "solution_publication_date": "2026-09-30",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_f4c3c6a1fd5d6cd389ac31509515d2dd3c5dc93714e91c7a21092ba0f2cebd65",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6bfd9014bbf3bc1b628a6b73efefa546f5a145bf",
+        "repo": "juihuichung/lean-eval-submissions-private"
+      }
     }
   ],
   "schema_version": 2,
