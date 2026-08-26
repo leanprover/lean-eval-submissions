@@ -21,7 +21,13 @@ sys.modules[SPEC.name] = rollout
 SPEC.loader.exec_module(rollout)
 
 
-def load_expected(config_path: pathlib.Path, environment: str) -> dict[str, object]:
+def load_expected(
+    config_path: pathlib.Path,
+    environment: str,
+    image_family: str = "historical-public",
+) -> dict[str, object]:
+    if image_family != "historical-public":
+        raise rollout.RolloutError("qualification image family changed")
     try:
         config = json.loads(config_path.read_text(encoding="utf-8"))
         container = config["env"][environment]["containers"]
@@ -65,7 +71,12 @@ def main() -> int:
         raise rollout.RolloutError("refusing to overwrite rollout evidence")
     rollout.load_expected_container = load_expected
     value = rollout.wait_for_rollout(
-        args.config, "staging", args.application, args.attempts, args.interval_seconds,
+        args.config,
+        "staging",
+        args.application,
+        args.attempts,
+        args.interval_seconds,
+        image_family="historical-public",
     )
     configuration = value["configuration"]
     image = configuration["image"].split("/")[-1]

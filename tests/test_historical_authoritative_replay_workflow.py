@@ -75,6 +75,20 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertIn("reviewed_measurement_config_digest", WORKFLOW)
         self.assertIn("reviewed_vm_image_digest", WORKFLOW)
 
+    def test_production_rollout_uses_the_replay_owned_strict_helper(self) -> None:
+        deployment = WORKFLOW.split(
+            "Render and deploy only the exact qualified historical executor", 1
+        )[1].split("Require the exact enabled historical executor", 1)[0]
+        self.assertIn("scripts/wait_replay_container_rollout.py", deployment)
+        self.assertIn("--environment production", deployment)
+        self.assertIn("--image-family historical-public", deployment)
+        self.assertIn(
+            "--application "
+            "lean-eval-historical-public-replay-replaysandbox-production",
+            deployment,
+        )
+        self.assertNotIn("historical-public-qualification", deployment)
+
     def test_repository_and_gist_sources_use_distinct_exact_adapters(self) -> None:
         self.assertIn("https://github.com/$source_repository.git", WORKFLOW)
         self.assertIn("https://gist.github.com/$owner/$gist_id.git", WORKFLOW)

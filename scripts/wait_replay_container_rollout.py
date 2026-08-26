@@ -17,6 +17,17 @@ MAX_JSON_BYTES = 1024 * 1024
 INSTANCE_TYPES = {
     "standard-4": {"vcpu": 4, "memory_mib": 12 * 1024, "disk_size_mb": 20_000}
 }
+REVIEWED_IMAGE_FAMILIES = {
+    "authoritative": re.compile(
+        r"registry\.cloudflare\.com/[0-9a-f]{32}/"
+        r"lean-eval-authoritative:[0-9a-f]{40}"
+    ),
+    "historical-public": re.compile(
+        r"registry\.cloudflare\.com/[0-9a-f]{32}/"
+        r"lean-eval-historical-public-v1:[0-9a-f]{40}-[0-9a-f]{40}"
+        r"@sha256:[0-9a-f]{64}"
+    ),
+}
 
 
 class RolloutError(ValueError):
@@ -24,8 +35,13 @@ class RolloutError(ValueError):
 
 
 def load_expected_container(
-    config_path: pathlib.Path, environment: str
+    config_path: pathlib.Path,
+    environment: str,
+    image_family: str = "authoritative",
 ) -> dict[str, Any]:
+    image_pattern = REVIEWED_IMAGE_FAMILIES.get(image_family)
+    if image_pattern is None:
+        raise RolloutError("reviewed container image family is unsupported")
     try:
         raw = config_path.read_bytes()
         if not raw or len(raw) > MAX_JSON_BYTES:
@@ -42,17 +58,18 @@ def load_expected_container(
     if not isinstance(container, dict):
         raise RolloutError("reviewed container configuration is invalid")
     image = container.get("image")
-    if not isinstance(image, str) or re.fullmatch(
-        r"registry\.cloudflare\.com/[0-9a-f]{32}/lean-eval-authoritative:[0-9a-f]{40}",
-        image,
-    ) is None:
+    if not isinstance(image, str) or image_pattern.fullmatch(image) is None:
         raise RolloutError("reviewed container image is invalid")
     instance_type = container.get("instance_type")
     max_instances = container.get("max_instances")
     ssh = container.get("ssh")
     if instance_type not in INSTANCE_TYPES:
         raise RolloutError("reviewed container instance type is unsupported")
-    if type(max_instances) is not int or max_instances < 1:
+    if (
+        type(max_instances) is not int
+        or max_instances < 1
+        or (image_family == "historical-public" and max_instances != 1)
+    ):
         raise RolloutError("reviewed container max_instances is invalid")
     if ssh != {"enabled": False}:
         raise RolloutError("reviewed container must explicitly disable SSH")
@@ -127,9 +144,12 @@ def wait_for_rollout(
     interval_seconds: float,
     expected_image_config_path: pathlib.Path | None = None,
     command_timeout_seconds: float = 60,
+    image_family: str = "authoritative",
 ) -> dict[str, Any]:
     expected_container = load_expected_container(
-        expected_image_config_path or config_path, environment
+        expected_image_config_path or config_path,
+        environment,
+        image_family,
     )
     last_application: dict[str, Any] | None = None
     for attempt in range(1, attempts + 1):
@@ -250,6 +270,11 @@ def main() -> int:
     parser.add_argument("--attempts", type=int, default=80)
     parser.add_argument("--interval-seconds", type=float, default=15)
     parser.add_argument("--command-timeout-seconds", type=float, default=60)
+    parser.add_argument(
+        "--image-family",
+        choices=tuple(REVIEWED_IMAGE_FAMILIES),
+        default="authoritative",
+    )
     args = parser.parse_args()
     if (
         not 1 <= args.attempts <= 120
@@ -267,6 +292,7 @@ def main() -> int:
             args.interval_seconds,
             args.expected_image_config,
             args.command_timeout_seconds,
+            args.image_family,
         )
     except (RolloutError, OSError, subprocess.SubprocessError) as error:
         print(f"wait-replay-container-rollout: {error}", file=sys.stderr)
