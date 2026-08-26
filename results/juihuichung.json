@@ -65,6 +65,28 @@
         "ref": "6bfd9014bbf3bc1b628a6b73efefa546f5a145bf",
         "repo": "juihuichung/lean-eval-submissions-private"
       }
+    },
+    {
+      "accepted_at": "2026-08-26T12:41:33Z",
+      "benchmark_commit": "9b82c4083e71e93c7d6aa43a960cd492ae53a35d",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1442,
+        "kind": "issue"
+      },
+      "problem_id": "e8_irrep_tensor_square_decomp",
+      "production_metadata": {
+        "solution_publication_date": "2026-09-30",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_8af99cb5f3808733383e33917c97404432ee7023f08d108ee8bf8833c4bdaac1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "6cb9c709c83461323318156a74e6ee82b9bc257e",
+        "repo": "juihuichung/lean-eval-submissions-private"
+      }
     }
   ],
   "schema_version": 2,
