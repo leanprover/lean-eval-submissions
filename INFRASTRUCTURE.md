@@ -8,7 +8,7 @@ must never be recorded here.
 Update current values in place after an infrastructure change. Git history and
 Actions retain run history; do not add rollout narratives or evidence tables.
 
-Last reconciled: **2026-08-26**
+Last reconciled: **2026-08-27**
 
 ## Current baseline
 
@@ -32,8 +32,10 @@ Public structured health currently reports one coherent deployed commit with:
 
 Automatic release publication is disabled because `PUBLICATION_ENABLED` is
 absent. Production archive Wrap and replay role variables are absent. The
-staging release OIDC trust repair and credentialed reconstruction remain
-approval-gated.
+staging release role trusts the current ID-bearing GitHub OIDC subject, and its
+credentialed, publication-disabled reconstruction boundary is qualified. The
+production release trust repair and all production capability connections
+remain approval-gated.
 
 ## Cloudflare resources
 
@@ -259,7 +261,7 @@ trying to recover the old private material.
 | submissions / `replay-staging` | `EN_kwDOSh7OzM8AAAAEu8r21Q` | `main` and `lean-eval-dispatch/*` | Staging replay invoker role set |
 | submissions / `replay-production` | `EN_kwDOSh7OzM8AAAAEu8r3MQ` | protected branches | Production replay variable absent |
 | submissions / `archive-migration-production` | `EN_kwDOSh7OzM8AAAAEwLDSMQ` | protected branches | Ordinary production Wrap role recorded but incompatible with this environment's OIDC subject; unusable |
-| releases / `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | protected branches | Staging release invoker role set; live trust repair pending |
+| releases / `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | protected branches | Staging release invoker role set; live trust matches the current ID-bearing subject |
 | releases / `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | protected branches | Production release invoker and Git keys set; live release trust repair pending; publication variable absent |
 
 Environment protection/policy IDs, in the same order, are:
@@ -290,7 +292,7 @@ AWS supplies archive key custody and one-use unwrap, not evaluation compute.
 | Billing/administrator | Kim Morrison (temporary) |
 | GitHub OIDC provider | `arn:aws:iam::161072922960:oidc-provider/token.actions.githubusercontent.com` |
 | OIDC audience / thumbprint | `sts.amazonaws.com` / `ab9d0263244dd0326eb67015705a667e79cfe998` |
-| Staging stack | `lean-eval-key-adapter-staging`; `CREATE_COMPLETE`; `2251e410-9e15-11f1-a8ef-0eba172391bd` |
+| Staging stack | `lean-eval-key-adapter-staging`; `UPDATE_COMPLETE`; `2251e410-9e15-11f1-a8ef-0eba172391bd` |
 | Production stack | `lean-eval-key-adapter-production`; `CREATE_COMPLETE`; `6ab5d7c0-9e15-11f1-9a35-0affda52f513` |
 
 | Output | Staging | Production |
@@ -313,14 +315,14 @@ before decrypt and enforces reuse refusal.
 
 Current GitHub OIDC subject prefixes are
 `repo:leanprover/lean-eval-submissions` and
-`repo:leanprover@7233018/lean-eval-releases@1340741242`. The live release roles
-still trust the obsolete release subject. Their separately approval-gated
-repairs are documented in
-[`docs/aws-release-staging-trust-repair.md`](docs/aws-release-staging-trust-repair.md)
-and
+`repo:leanprover@7233018/lean-eval-releases@1340741242`. The staging release
+role trusts exact subject
+`repo:leanprover@7233018/lean-eval-releases@1340741242:environment:release-staging`.
+The production release role still trusts the obsolete name-only subject; its
+separately approval-gated repair is documented in
 [`docs/aws-release-production-trust-repair.md`](docs/aws-release-production-trust-repair.md).
-The production procedure reuses the live template so it cannot also provision
-the deferred migration role. Neither repair is authorized by this inventory.
+That procedure reuses the live production template so it cannot also provision
+the deferred migration role. This inventory does not authorize that repair.
 
 The historical migration role
 `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`

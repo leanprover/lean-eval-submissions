@@ -4,7 +4,6 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PROCEDURE = ROOT / "docs" / "aws-release-production-trust-repair.md"
-STAGING_PROCEDURE = ROOT / "docs" / "aws-release-staging-trust-repair.md"
 
 
 class ProductionReleaseTrustRepairTests(unittest.TestCase):
@@ -54,20 +53,6 @@ class ProductionReleaseTrustRepairTests(unittest.TestCase):
         self.assertEqual(self.procedure.count("list-role-policies"), 2)
         self.assertEqual(self.procedure.count("list-attached-role-policies"), 2)
         self.assertIn("LEAN_EVAL_STAGING_UPDATED_BEFORE", self.procedure)
-
-    def test_staging_procedure_captures_current_protected_release_head(self) -> None:
-        staging = STAGING_PROCEDURE.read_text()
-        self.assertIn(
-            'LEAN_EVAL_RELEASE_COMMIT="$(gh api \\\n'
-            "  repos/leanprover/lean-eval-releases/commits/main --jq .sha)",
-            staging,
-        )
-        self.assertNotIn(
-            "90dadc872d624b8e6d171caf439313d185fc3e7f", staging
-        )
-        self.assertIn("test \"$(gh api \\", staging)
-        self.assertIn('test "$LEAN_EVAL_RELEASE_BEFORE" =', staging)
-
 
 if __name__ == "__main__":
     unittest.main()

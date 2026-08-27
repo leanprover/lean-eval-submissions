@@ -195,24 +195,17 @@ sidecar is schema version 3 with a fresh per-submission envelope, strict
 submission/digest binding, and provider-neutral adapter fields.
 
 Current authority boundaries and environment variables are recorded in
-[`../INFRASTRUCTURE.md`](../INFRASTRUCTURE.md). The remaining external steps are
-separate approvals:
+[`../INFRASTRUCTURE.md`](../INFRASTRUCTURE.md). The staging release trust and
+credentialed reconstruction boundary are qualified. The remaining external
+steps are separate approvals:
 
-1. repair the staging release OIDC trust;
-2. run one credentialed, publication-disabled staging unwrap/reconstruction;
-3. connect the production archive Wrap-only role and prove it cannot unwrap;
-4. reverify production release trust and scope without decrypting or
+1. connect the production archive Wrap-only role and prove it cannot unwrap;
+2. reverify production release trust and scope without decrypting or
    publishing production source, following the separate
    [`aws-release-production-trust-repair.md`](aws-release-production-trust-repair.md)
    procedure only after its explicit approval.
 
-For the staging trust request, present the exact role, OIDC subject, policy
-diff, selected staging archive, absent production/publication authority, and
-rollback. Follow
-[`aws-release-staging-trust-repair.md`](aws-release-staging-trust-repair.md)
-only after approval.
-
-The credentialed staging check must prove:
+The qualified staging release boundary is limited to:
 
 - exact one-submission authority;
 - consume-before-unwrap and identical reuse refusal;
