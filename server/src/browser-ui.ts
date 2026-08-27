@@ -7,7 +7,7 @@ const PAGE_HEADERS = {
 } as const;
 
 const SCRIPT_HEADERS = {
-  "cache-control": "public, max-age=300",
+  "cache-control": "no-store",
   "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
   "content-type": "text/javascript; charset=utf-8",
   "referrer-policy": "no-referrer",
@@ -23,13 +23,24 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
+const BROWSER_FIELD_NAMES = [
+  "problem_id",
+  "problem_group",
+  "statement_revision",
+  "declared_model",
+  "source_repository",
+  "source_commit",
+  "publication_choice",
+  "production_metadata",
+] as const;
+
 export function browserPage(environment: "staging" | "production", intakeEnabled: boolean): Response {
   const title = environment === "staging" ? "LeanEval staging intake" : "LeanEval submissions";
   const status = intakeEnabled
     ? `<p class="notice">${escapeHtml(environment)} intake is enabled. Sign in with GitHub, review every field, and submit.</p>`
     : `<p class="notice disabled">${escapeHtml(environment)} intake is currently disabled.</p>`;
   const form = intakeEnabled ? `
-    <p><a class="button" href="/api/v1/oauth/start">Sign in with GitHub</a></p>
+    <p><a id="oauth-sign-in" class="button" href="/api/v1/oauth/start">Sign in with GitHub</a></p>
     <form id="submission-form">
       <label>Problem ID <input id="problem_id" name="problem_id" required pattern="[a-z][a-z0-9_]*"></label>
       <label>Problem group
@@ -77,7 +88,7 @@ export function browserPage(environment: "staging" | "production", intakeEnabled
   <h1>${escapeHtml(title)}</h1>
   ${status}
   ${form}
-  ${intakeEnabled ? '<script src="/intake.js" defer></script>' : ""}
+  ${intakeEnabled ? '<script src="/intake.js?v=prefill-v1" defer></script>' : ""}
 </body>
 </html>`;
   return new Response(body, { headers: PAGE_HEADERS });
@@ -87,14 +98,8 @@ export function browserScript(): Response {
   const script = `"use strict";
 const form = document.querySelector("#submission-form");
 const result = document.querySelector("#result");
-const fieldNames = ["problem_id", "problem_group", "statement_revision", "declared_model", "source_repository", "source_commit", "publication_choice", "production_metadata"];
+const fieldNames = ${JSON.stringify(BROWSER_FIELD_NAMES)};
 const saved = sessionStorage.getItem("lean-eval-pending-submission");
-const query = new URLSearchParams(location.search);
-for (const name of fieldNames) {
-  const element = document.querySelector("#" + name);
-  const value = query.get(name);
-  if (element && value !== null) element.value = value;
-}
 if (saved) {
   try {
     const values = JSON.parse(saved);
@@ -104,10 +109,19 @@ if (saved) {
     }
   } catch { sessionStorage.removeItem("lean-eval-pending-submission"); }
 }
+const query = new URLSearchParams(location.search);
+for (const name of fieldNames) {
+  const element = document.querySelector("#" + name);
+  const value = query.get(name);
+  if (element && value !== null) element.value = value;
+}
+const currentValues = () => Object.fromEntries(fieldNames.map((name) => [name, document.querySelector("#" + name)?.value ?? ""]));
+const saveCurrentValues = () => sessionStorage.setItem("lean-eval-pending-submission", JSON.stringify(currentValues()));
+document.querySelector("#oauth-sign-in")?.addEventListener("click", saveCurrentValues);
 form?.addEventListener("submit", async (event) => {
   event.preventDefault();
   result.textContent = "Preparing submission…";
-  const values = Object.fromEntries(fieldNames.map((name) => [name, document.querySelector("#" + name)?.value ?? ""]));
+  const values = currentValues();
   sessionStorage.setItem("lean-eval-pending-submission", JSON.stringify(values));
   try {
     const metadata = JSON.parse(values.production_metadata);
