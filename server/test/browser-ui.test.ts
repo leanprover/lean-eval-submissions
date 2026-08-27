@@ -10,7 +10,7 @@ describe("browser intake page", () => {
     expect(body).toContain("LeanEval staging intake");
     expect(body).toContain('href="/api/v1/oauth/start"');
     expect(body).toContain('id="submission-form"');
-    expect(body).toContain('src="/intake.js"');
+    expect(body).toContain('src="/intake.js?v=prefill-v1"');
     expect(body).not.toContain("open-conjectures");
     expect(body).not.toContain('id="source_visibility"');
     expect(body).not.toContain('<option value="public">');
@@ -33,9 +33,13 @@ describe("browser intake page", () => {
     const response = browserScript();
     const script = await response.text();
     expect(response.headers.get("content-type")).toContain("text/javascript");
+    expect(response.headers.get("cache-control")).toBe("no-store");
     expect(script).toContain("result.textContent");
     expect(script).not.toContain("innerHTML");
     expect(script).toContain("sessionStorage.removeItem");
+    expect(script.indexOf("if (saved)")).toBeLessThan(script.indexOf("const query ="));
+    expect(script).toContain('query.get(name)');
+    expect(script).toContain('querySelector("#oauth-sign-in")?.addEventListener("click", saveCurrentValues)');
     expect(script).toContain('source_visibility: "private"');
     expect(script).not.toContain('query.get("source_visibility")');
   });
