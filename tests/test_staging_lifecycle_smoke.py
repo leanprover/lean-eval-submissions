@@ -131,6 +131,15 @@ class StagingLifecycleSmokeTests(unittest.TestCase):
                 "model_alias_and_rename",
             },
         )
+        repair_denial = fixture["lifecycle_cases"]["problem_repair"]["denial_request"]
+        self.assertNotRegex(
+            repair_denial["corrected_problem_id"],
+            r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$",
+        )
+        self.assertEqual(
+            fixture["lifecycle_cases"]["problem_repair"]["denial_http_status"],
+            400,
+        )
         backfill = fixture["lifecycle_cases"]["metadata_backfill"]
         self.assertEqual(backfill["target"], "claimed_legacy_result")
         self.assertRegex(backfill["claim"]["result_id"], r"^r2_[0-9a-f]{64}$")

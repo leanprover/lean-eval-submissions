@@ -88,7 +88,7 @@
         "reason_code": "insufficient_comparator_evidence"
       },
       "denial_request": {
-        "corrected_problem_id": "not-canonical",
+        "corrected_problem_id": "-not-canonical",
         "corrected_statement_revision": 1,
         "reason_code": "bounded_staging_validation"
       },
