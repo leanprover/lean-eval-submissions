@@ -34,6 +34,9 @@ describe("browser intake page", () => {
     const script = await response.text();
     expect(response.headers.get("content-type")).toContain("text/javascript");
     expect(response.headers.get("cache-control")).toBe("no-store");
+    // Compile without invoking the generated browser program so malformed string escaping fails this test.
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    expect(() => new Function(script)).not.toThrow();
     expect(script).toContain("result.textContent");
     expect(script).not.toContain("innerHTML");
     expect(script).toContain("sessionStorage.removeItem");

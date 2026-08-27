@@ -155,7 +155,7 @@ form?.addEventListener("submit", async (event) => {
     if (!response.ok) throw new Error("Submission was rejected with HTTP " + response.status);
     sessionStorage.removeItem("lean-eval-pending-submission");
   } catch (error) {
-    result.textContent += "\n" + (error instanceof Error ? error.message : "Submission failed");
+    result.textContent += String.fromCharCode(10) + (error instanceof Error ? error.message : "Submission failed");
   }
 });`;
   return new Response(script, { headers: SCRIPT_HEADERS });
