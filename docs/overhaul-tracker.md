@@ -26,8 +26,9 @@ history, or replace the cross-repository execution runbook.
 - Automatic release publication is disabled in
   `leanprover/lean-eval-releases`.
 - Production archive Wrap and replay role variables are not connected.
-- The staging release OIDC trust repair is approved but not yet applied; it is
-  waiting for a short-lived authenticated AWS operator session.
+- The staging release role trusts the exact current ID-bearing GitHub OIDC
+  subject, and its credentialed, publication-disabled reconstruction boundary
+  is qualified.
 - Exact resource identifiers, credential custody, feature states, and rollback
   instructions are in [`../INFRASTRUCTURE.md`](../INFRASTRUCTURE.md).
 
@@ -94,8 +95,8 @@ These are bounded smoke cases, not a combinatorial staging matrix.
       mutation, target role and
       subject, absent publication/production authority, test archive, and
       rollback.
-- [ ] Apply only that approved staging mutation, then run one staging
-      unwrap/reconstruction and verify
+- [x] Apply only the approved staging trust mutation.
+- [x] Complete one staging unwrap/reconstruction and verify
       consume-before-unwrap, reuse refusal, authority removal, source
       allowlisting, no plaintext artifact, and cleanup.
 - [ ] Present the production archive Wrap-only connection separately for

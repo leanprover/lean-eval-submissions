@@ -264,21 +264,23 @@ Do not connect production replay authority or enable production intake or
 publication merely because the stacks and this bounded synthetic preflight
 exist.
 
-## 5. Repair transferred-repository release subjects without widening trust
+## 5. Keep transferred-repository release subjects current without widening trust
 
 The release repository was transferred after GitHub's immutable-subject
 rollout. The current source template pins the API-reported ID-bearing subject,
-but both live release roles still trust the obsolete name-only subject. Do not
-disable immutable subjects or edit either IAM role directly.
+and the live staging release role trusts that exact subject. The production
+release role still trusts the obsolete name-only subject. Do not disable
+immutable subjects or edit either IAM role directly.
 
-Follow
-[`aws-release-staging-trust-repair.md`](aws-release-staging-trust-repair.md) for
-the separately approved staging repair and credentialed reconstruction. For
-the later production trust-only repair, follow
+For the separately approval-gated production trust-only repair, follow
 [`aws-release-production-trust-repair.md`](aws-release-production-trust-repair.md).
 The production procedure deliberately reuses the live stack template: applying
 the current full template would also provision the deferred migration role.
-Each repair must modify only its non-replacing `ReleaseInvokerRole` and leave
+Any future staging drift repair must use CloudFormation, reconcile the live
+template and complete parameter set, and stop unless the change set contains
+exactly one resource change: a non-replacing `Modify` of
+`ReleaseInvokerRole` (`AWS::IAM::Role`). The production repair must meet the
+same resource-change whitelist and leave
 the other stack unchanged.
 
 ## Why this is one-use
