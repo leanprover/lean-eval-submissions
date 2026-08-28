@@ -6,8 +6,8 @@ production metadata. It never rewrites a Results record, changes its stable
 result ID, or reinterprets its grandfathered solution-publication policy.
 
 The implementation is bound to production State contract commit
-`3dcf596b696b9f1f11de2e3c6127664fd0504884` and staging contract commit
-`23852beaeb059c88caf043d22dad19b211c377b2`. Before an owner operation, the
+`c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` and staging contract commit
+`8ae11456f0a439f91ec5822ec36adb93b76b0d96`. Before an owner operation, the
 Worker resolves protected State `main`, proves that it equals or descends from
 the repository-specific commit, and checks the exact current root entries for
 `README.md`, `docs`, `schema`, and `scripts`. The three tree entries bind their
