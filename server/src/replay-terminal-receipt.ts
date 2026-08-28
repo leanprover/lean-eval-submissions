@@ -6,6 +6,7 @@ const ACTIVE_BINDING_KEY = "authoritative-active-binding:v1";
 const RECEIPT_KEY = "authoritative-terminal-receipt:v1";
 const RESERVATION_KEY = "historical-cleanup-reservation:v1";
 const CLEANUP_KEY = "authoritative-sandbox-cleanup:v1";
+const QUALIFICATION_CLAIM_KEY = "private-qualification-claim:v1";
 const CLEANUP_RETRY_MS = 5 * 60 * 1000;
 const SANDBOX_DESTROY_TIMEOUT_MS = 4 * 60 * 1000;
 const CONFIRMATION_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -114,6 +115,33 @@ function historicalBinding(value: unknown): boolean {
   return Object.hasOwn(binding, "request_id") || Object.hasOwn(binding, "result_id");
 }
 
+function requestDigest(value: unknown): string {
+  const digest = record(value, "qualification replay claim").request_sha256;
+  if (typeof digest !== "string" || !/^[0-9a-f]{64}$/.test(digest)) {
+    throw new Error("qualification request digest is invalid");
+  }
+  return digest;
+}
+
+function qualificationClaimBinding(value: unknown): Record<string, unknown> {
+  return record(record(value, "qualification replay claim").binding, "qualification replay binding");
+}
+
+function sameQualificationBinding(left: unknown, right: unknown): boolean {
+  const first = qualificationClaimBinding(left);
+  const second = qualificationClaimBinding(right);
+  return requestDigest(left) === requestDigest(right)
+    && [
+      "schema_version",
+      "runner_nonce",
+      "replay_task_id",
+      "attempt",
+      "execution_profile_digest",
+      "measurement_config_digest",
+      "vm_image_digest",
+    ].every((field) => first[field] === second[field]);
+}
+
 async function destroySandboxWithTimeout(
   sandbox: { destroy(): Promise<void> },
 ): Promise<void> {
@@ -169,6 +197,82 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
       await transaction.put(ACTIVE_BINDING_KEY, binding);
       await transaction.setAlarm(cleanupDeadline);
       return binding;
+    });
+  }
+
+  async claimQualificationBinding(claim: unknown): Promise<unknown> {
+    const binding = qualificationClaimBinding(claim);
+    requestDigest(claim);
+    const expiry = retainedUntil(binding);
+    const cleanupDeadline = cleanupAfter(binding);
+    if (cleanupDeadline >= expiry) throw new Error("durable replay cleanup window is invalid");
+    const identity = cleanupIdentity(binding);
+    return this.ctx.storage.transaction(async (transaction) => {
+      if (await transaction.get(CLEANUP_KEY) !== undefined) {
+        throw new Error("qualification replay was already cleaned up");
+      }
+      if (await transaction.get(RECEIPT_KEY) !== undefined) {
+        throw new Error("qualification replay already reached a terminal receipt");
+      }
+      const reservation = await transaction.get(RESERVATION_KEY);
+      if (
+        reservation === undefined
+        || !sameIdentity(cleanupIdentity(reservation), identity)
+      ) {
+        throw new Error("qualification cleanup identity was not reserved");
+      }
+      const existingBinding = await transaction.get(ACTIVE_BINDING_KEY);
+      const existingClaim = await transaction.get(QUALIFICATION_CLAIM_KEY);
+      if (existingBinding !== undefined || existingClaim !== undefined) {
+        if (
+          existingBinding === undefined
+          || existingClaim === undefined
+          || !sameQualificationBinding(existingClaim, claim)
+          || record(existingClaim, "qualification replay claim").state !== "running"
+          || qualificationClaimBinding(existingClaim).runner_nonce
+            !== record(existingBinding, "durable replay binding").runner_nonce
+        ) {
+          throw new Error("qualification replay claim is already bound");
+        }
+        return existingBinding;
+      }
+      await transaction.put(ACTIVE_BINDING_KEY, binding);
+      await transaction.put(QUALIFICATION_CLAIM_KEY, {
+        ...record(claim, "qualification replay claim"),
+        state: "claimed",
+      });
+      await transaction.setAlarm(cleanupDeadline);
+      return binding;
+    });
+  }
+
+  async confirmQualificationRunning(claim: unknown): Promise<unknown> {
+    qualificationClaimBinding(claim);
+    requestDigest(claim);
+    return this.ctx.storage.transaction(async (transaction) => {
+      if (
+        await transaction.get(CLEANUP_KEY) !== undefined
+        || await transaction.get(RECEIPT_KEY) !== undefined
+      ) {
+        throw new Error("qualification replay cannot enter running state");
+      }
+      const binding = await transaction.get(ACTIVE_BINDING_KEY);
+      const existing = await transaction.get(QUALIFICATION_CLAIM_KEY);
+      if (
+        binding === undefined
+        || existing === undefined
+        || !sameQualificationBinding(existing, claim)
+        || qualificationClaimBinding(existing).runner_nonce
+          !== record(binding, "durable replay binding").runner_nonce
+      ) {
+        throw new Error("qualification replay running claim is invalid");
+      }
+      const running = {
+        ...record(existing, "qualification replay claim"),
+        state: "running",
+      };
+      await transaction.put(QUALIFICATION_CLAIM_KEY, running);
+      return running;
     });
   }
 
@@ -342,7 +446,12 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
             attempt: marker.attempt,
             destruction_state: marker.destruction_state,
           } satisfies CleanupTombstone);
-          await transaction.delete([ACTIVE_BINDING_KEY, RECEIPT_KEY, RESERVATION_KEY]);
+          await transaction.delete([
+            ACTIVE_BINDING_KEY,
+            RECEIPT_KEY,
+            RESERVATION_KEY,
+            QUALIFICATION_CLAIM_KEY,
+          ]);
         });
       } else {
         await this.ctx.storage.setAlarm(marker.retained_until_epoch_ms);

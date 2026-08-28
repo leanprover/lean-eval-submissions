@@ -48,6 +48,11 @@ function cleanupResponse(value: unknown, expectedTaskId: string, expectedAttempt
   }, { headers: { "cache-control": "no-store" } });
 }
 
+async function sha256Hex(value: ArrayBuffer): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", value));
+  return [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export default {
   async fetch(request, env): Promise<Response> {
     const key = `${request.method} ${new URL(request.url).pathname}`;
@@ -107,6 +112,15 @@ export default {
         return Response.json(
           { error: "cleanup_failed" },
           { status: 500, headers: { "cache-control": "no-store" } },
+        );
+      }
+    }
+    if (key === "POST /api/v1/replay") {
+      const digest = await sha256Hex(await request.clone().arrayBuffer());
+      if (digest !== env.EXPECTED_QUALIFICATION_REQUEST_SHA256) {
+        return Response.json(
+          { error: "invalid_request" },
+          { status: 400, headers: { "cache-control": "no-store" } },
         );
       }
     }

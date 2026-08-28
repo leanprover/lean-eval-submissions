@@ -49,6 +49,7 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
   EXPECTED_RUNNER_NONCE?: string;
   EXPECTED_REPLAY_TASK_ID?: string;
   EXPECTED_REPLAY_ATTEMPT?: string;
+  EXPECTED_QUALIFICATION_REQUEST_SHA256?: string;
 };
 
 type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy"> &
@@ -56,8 +57,15 @@ type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy"> &
 
 type TerminalReceiptStore = Pick<
   ReplayTerminalReceipt,
-  "claimBinding" | "readBinding" | "readReceipt" | "prepareReceipt" | "confirmReceipt"
->;
+  | "claimBinding"
+  | "readBinding"
+  | "readReceipt"
+  | "prepareReceipt"
+  | "confirmReceipt"
+> & Partial<Pick<
+  ReplayTerminalReceipt,
+  "claimQualificationBinding" | "confirmQualificationRunning"
+>>;
 
 type HistoricalCleanupStore = Pick<
   ReplayTerminalReceipt,
@@ -138,6 +146,8 @@ function requireQualificationBinding(
     || !REPLAY_TASK_ID.test(env.EXPECTED_REPLAY_TASK_ID)
     || value.replay_task_id !== env.EXPECTED_REPLAY_TASK_ID
     || env.EXPECTED_REPLAY_ATTEMPT !== String(value.attempt)
+    || env.EXPECTED_QUALIFICATION_REQUEST_SHA256 === undefined
+    || !SHA256_DIGEST.test(env.EXPECTED_QUALIFICATION_REQUEST_SHA256)
   ) {
     throw new AuthoritativeReplayContractError("execution is not the reviewed one-use qualification binding");
   }
@@ -533,14 +543,48 @@ function rejectBindingMismatch(value: unknown): never {
 async function claimActiveBinding(
   store: TerminalReceiptStore,
   request: AuthoritativeReplayStatusRequest,
-): Promise<void> {
+  qualificationRequestSha256?: string,
+): Promise<AuthoritativeActiveBinding> {
   let value: unknown;
+  const binding = activeBinding(request);
   try {
-    value = await store.claimBinding(activeBinding(request));
+    if (
+      qualificationRequestSha256 !== undefined
+      && store.claimQualificationBinding === undefined
+    ) {
+      throw new Error("qualification claim store is unavailable");
+    }
+    value = qualificationRequestSha256 === undefined
+      ? await store.claimBinding(binding)
+      : await store.claimQualificationBinding?.({
+          schema_version: 1,
+          request_sha256: qualificationRequestSha256,
+          binding,
+        });
   } catch {
     throw new ReplayExecutorError("command_rpc_failed");
   }
   if (!sameActiveBinding(value, request)) rejectBindingMismatch(value);
+  return value;
+}
+
+async function confirmQualificationRunning(
+  store: TerminalReceiptStore,
+  binding: AuthoritativeActiveBinding,
+  requestSha256: string,
+): Promise<void> {
+  if (store.confirmQualificationRunning === undefined) {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
+  try {
+    await store.confirmQualificationRunning({
+      schema_version: 1,
+      request_sha256: requestSha256,
+      binding,
+    });
+  } catch {
+    throw new ReplayExecutorError("command_rpc_failed");
+  }
 }
 
 async function requireActiveBinding(
@@ -1699,7 +1743,13 @@ export async function handleReplayRequest(
       });
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
       const binding = statusBinding(input);
-      await claimActiveBinding(store, binding);
+      const claimedBinding = await claimActiveBinding(
+        store,
+        binding,
+        env.DEPLOYMENT_ENVIRONMENT === "private-qualification"
+          ? env.EXPECTED_QUALIFICATION_REQUEST_SHA256
+          : undefined,
+      );
       const existingReceipt = await readTerminalReceipt(store, binding);
       if (existingReceipt !== null) {
         return json({
@@ -1725,6 +1775,17 @@ export async function handleReplayRequest(
             await writeSandboxFile(sandbox, "/workspace/key-material.b64", input.plaintext_key_material_base64);
           }
         });
+        if (env.DEPLOYMENT_ENVIRONMENT === "private-qualification") {
+          const qualificationRequestSha256 = env.EXPECTED_QUALIFICATION_REQUEST_SHA256;
+          if (qualificationRequestSha256 === undefined) {
+            throw new ReplayExecutorError("command_rpc_failed");
+          }
+          await confirmQualificationRunning(
+            store,
+            claimedBinding,
+            qualificationRequestSha256,
+          );
+        }
       } catch (error) {
         if (!(error instanceof ProcessStartConflictError)) {
           await sandbox.destroy();

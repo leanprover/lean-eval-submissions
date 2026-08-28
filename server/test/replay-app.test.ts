@@ -1155,6 +1155,7 @@ describe("Cloudflare replay executor", () => {
       EXPECTED_RUNNER_NONCE: expectedNonce,
       EXPECTED_REPLAY_TASK_ID: (body.request as Record<string, unknown>).replay_task_id as string,
       EXPECTED_REPLAY_ATTEMPT: "1",
+      EXPECTED_QUALIFICATION_REQUEST_SHA256: "8".repeat(64),
     }, {
       authenticate: () => Promise.resolve(),
       sandbox: () => {

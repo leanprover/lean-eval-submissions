@@ -208,6 +208,10 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
             config = json.loads((output / "wrangler.json").read_bytes())
             request = json.loads((output / "request.json").read_bytes())
             self.assertEqual(config["name"], "lean-eval-private-q-123456-2")
+            self.assertEqual(context["container_application_name"], "le-q-123456-2")
+            self.assertEqual(
+                config["containers"][0]["name"], context["container_application_name"]
+            )
             self.assertEqual(config["workers_dev"], True)
             self.assertEqual(config["containers"][0]["max_instances"], 1)
             self.assertEqual(config["containers"][0]["ssh"], {"enabled": False})
@@ -225,6 +229,10 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
                 config["vars"]["EXPECTED_REPLAY_TASK_ID"], context["replay_task_id"]
             )
             self.assertEqual(config["vars"]["EXPECTED_REPLAY_ATTEMPT"], "1")
+            self.assertEqual(
+                config["vars"]["EXPECTED_QUALIFICATION_REQUEST_SHA256"],
+                hashlib.sha256(canonical(request)).hexdigest(),
+            )
             self.assertEqual(request["schema_version"], 2)
             self.assertEqual(request["key_material_type"], "age-file-key-v1")
             self.assertEqual(
@@ -258,6 +266,14 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
         self.assertIn("cleanup-only", executor.read_text(encoding="utf-8"))
         self.assertIn("private-qualification/reserve", executor.read_text(encoding="utf-8"))
         self.assertIn("wrangler delete", workflow)
+        self.assertIn("wrangler containers delete", workflow)
+        self.assertIn("container_application_name", workflow)
+        deletion = workflow.split(
+            "- name: Delete and verify absence of the disposable Worker", 1
+        )[1].split("- name: Render one canonical", 1)[0]
+        self.assertIn("if: always() && steps.deploy.outcome != 'skipped'", deletion)
+        self.assertNotIn("steps.sandbox_cleanup", deletion)
+        self.assertIn("container-applications-final.json", deletion)
         self.assertNotIn("lean-eval-replay-executor.lean-eval.workers.dev", workflow)
 
     def test_workflow_scopes_cloudflare_and_review_write_authority(self) -> None:

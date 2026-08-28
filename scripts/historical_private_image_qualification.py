@@ -585,9 +585,13 @@ def prepare_probe_inputs(
         "measurement_config_digest": measurement_digest,
         "vm_image_digest": manifest_digest,
     }
+    request_sha256 = sha256(canonical(outer))
     worker_name = f"lean-eval-private-q-{run_id}-{run_attempt}"
+    container_application_name = f"le-q-{run_id}-{run_attempt}"
     if len(worker_name) > 63:
         raise QualificationError("disposable Worker name is too long")
+    if len(container_application_name) > 32:
+        raise QualificationError("disposable Container application name is too long")
     config = {
         "$schema": "node_modules/wrangler/config-schema.json",
         "name": worker_name,
@@ -601,6 +605,7 @@ def prepare_probe_inputs(
         "preview_urls": False,
         "observability": {"enabled": False},
         "containers": [{
+            "name": container_application_name,
             "class_name": "PrivateQualificationSandbox",
             "image": (
                 f"registry.cloudflare.com/{CLOUDFLARE_ACCOUNT_ID}/"
@@ -633,6 +638,7 @@ def prepare_probe_inputs(
             "EXPECTED_RUNNER_NONCE": binding,
             "EXPECTED_REPLAY_TASK_ID": task_id,
             "EXPECTED_REPLAY_ATTEMPT": "1",
+            "EXPECTED_QUALIFICATION_REQUEST_SHA256": request_sha256,
             "STAGING_MEMORY_LIMIT_BYTES": str(MEASUREMENT_CONFIG["memory_limit_bytes"]),
             "PRODUCTION_MEMORY_GATE_BYTES": str(MEASUREMENT_CONFIG["memory_limit_bytes"]),
             "REVIEWED_EXECUTION_PROFILE_DIGEST": execution_digest,
@@ -645,10 +651,12 @@ def prepare_probe_inputs(
         "schema_version": 1,
         "worker_name": worker_name,
         "worker_url": f"https://{worker_name}.{CLOUDFLARE_WORKERS_SUBDOMAIN}",
+        "container_application_name": container_application_name,
         "registry_manifest_digest": manifest_digest,
         "benchmark_commit": candidate["benchmark_commit"],
         "runner_nonce": binding,
         "replay_task_id": task_id,
+        "request_sha256": request_sha256,
         "workflow_run_id": run_id,
         "workflow_run_attempt": run_attempt,
         "architecture": EXPECTED_ARCHITECTURE,

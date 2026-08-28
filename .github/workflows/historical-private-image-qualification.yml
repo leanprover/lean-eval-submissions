@@ -236,6 +236,8 @@ jobs:
           set -euo pipefail
           config="$RUNNER_TEMP/private-qualifier/wrangler.json"
           worker=$(jq -er .worker_name "$RUNNER_TEMP/private-qualifier/context.json")
+          application=$(jq -er .container_application_name \
+            "$RUNNER_TEMP/private-qualifier/context.json")
           test "$CLOUDFLARE_ACCOUNT_ID" = a46b90978a1c29cc4795f30677e7e4b8
           code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
             --max-time 30 --output "$RUNNER_TEMP/worker-preflight.json" \
@@ -243,6 +245,11 @@ jobs:
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$worker")
           test "$code" = 404
+          npx --prefix server wrangler containers list --json \
+            > "$RUNNER_TEMP/container-applications-before.json"
+          test "$(jq --arg name "$application" \
+            '[.[] | select(.name == $name)] | length' \
+            "$RUNNER_TEMP/container-applications-before.json")" = 0
           : > "$RUNNER_TEMP/qualifier-deploy-attempted"
           npx --prefix server wrangler deploy --config "$config" \
             --containers-rollout=immediate
@@ -284,9 +291,7 @@ jobs:
           fi
 
       - name: Delete and verify absence of the disposable Worker
-        if: >-
-          always() && steps.deploy.outcome != 'skipped' &&
-          steps.sandbox_cleanup.outcome == 'success'
+        if: always() && steps.deploy.outcome != 'skipped'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -294,6 +299,8 @@ jobs:
           set -euo pipefail
           config="$RUNNER_TEMP/private-qualifier/wrangler.json"
           worker=$(jq -er .worker_name "$RUNNER_TEMP/private-qualifier/context.json")
+          application=$(jq -er .container_application_name \
+            "$RUNNER_TEMP/private-qualifier/context.json")
           if test -f "$RUNNER_TEMP/qualifier-deploy-attempted"; then
             npx --prefix server wrangler delete "$worker" --config "$config" --force || true
           fi
@@ -303,6 +310,32 @@ jobs:
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$worker")
           test "$code" = 404
+          application_delete_requested=false
+          for _ in $(seq 1 10); do
+            npx --prefix server wrangler containers list --json \
+              > "$RUNNER_TEMP/container-applications-after.json"
+            matches=$(jq --arg name "$application" \
+              '[.[] | select(.name == $name)] | length' \
+              "$RUNNER_TEMP/container-applications-after.json")
+            test "$matches" -le 1
+            if test "$matches" = 0; then
+              break
+            fi
+            if test "$application_delete_requested" = false; then
+              application_id=$(jq -er --arg name "$application" \
+                '.[] | select(.name == $name) | .id' \
+                "$RUNNER_TEMP/container-applications-after.json")
+              [[ "$application_id" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+              npx --prefix server wrangler containers delete "$application_id"
+              application_delete_requested=true
+            fi
+            sleep 3
+          done
+          npx --prefix server wrangler containers list --json \
+            > "$RUNNER_TEMP/container-applications-final.json"
+          test "$(jq --arg name "$application" \
+            '[.[] | select(.name == $name)] | length' \
+            "$RUNNER_TEMP/container-applications-final.json")" = 0
 
       - name: Render one canonical content-addressed qualification profile
         id: render
@@ -351,7 +384,10 @@ jobs:
             "$RUNNER_TEMP/registry-images.json" \
             "$RUNNER_TEMP/registry-netrc" \
             "$RUNNER_TEMP/worker-preflight.json" \
-            "$RUNNER_TEMP/worker-after-delete.json"
+            "$RUNNER_TEMP/worker-after-delete.json" \
+            "$RUNNER_TEMP/container-applications-before.json" \
+            "$RUNNER_TEMP/container-applications-after.json" \
+            "$RUNNER_TEMP/container-applications-final.json"
 
   stage-isolated-review-branch:
     needs: qualify

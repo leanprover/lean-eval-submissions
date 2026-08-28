@@ -9,6 +9,7 @@ The deployment and deletion steps live separately in the manual workflow.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -39,10 +40,12 @@ CONTEXT_FIELDS = {
     "schema_version",
     "worker_name",
     "worker_url",
+    "container_application_name",
     "registry_manifest_digest",
     "benchmark_commit",
     "runner_nonce",
     "replay_task_id",
+    "request_sha256",
     "workflow_run_id",
     "workflow_run_attempt",
     "architecture",
@@ -87,6 +90,11 @@ def _load_inputs(
         or context.get("runner_nonce") != status.get("runner_nonce")
         or context.get("replay_task_id") != execution.get("replay_task_id")
         or context.get("replay_task_id") != status.get("replay_task_id")
+        or context.get("request_sha256") != hashlib.sha256(canonical(request)).hexdigest()
+        or DIGEST.fullmatch(str(context.get("request_sha256"))) is None
+        or not isinstance(context.get("container_application_name"), str)
+        or re.fullmatch(r"le-q-[1-9][0-9]{0,15}-[1-9][0-9]{0,6}", context["container_application_name"])
+        is None
         or not isinstance(context.get("worker_url"), str)
         or not context["worker_url"].startswith("https://lean-eval-private-q-")
         or not context["worker_url"].endswith(".lean-eval.workers.dev")
