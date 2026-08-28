@@ -16,7 +16,6 @@ import re
 import sys
 from typing import Any
 
-
 NAME = re.compile(r"[a-z0-9-]{1,128}\Z")
 BINDING_NAME = re.compile(r"[A-Z][A-Z0-9_]{0,127}\Z")
 NAMESPACE = re.compile(r"[0-9a-f]{32}\Z")

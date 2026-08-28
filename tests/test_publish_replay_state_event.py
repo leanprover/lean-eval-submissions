@@ -7,7 +7,6 @@ import subprocess
 import tempfile
 import unittest
 
-
 ROOT = pathlib.Path(__file__).parents[1]
 SCRIPT = ROOT / "scripts" / "publish_replay_state_event"
 
@@ -182,6 +181,7 @@ exec "$REAL_GIT" "$@"
             env=environment,
             text=True,
             capture_output=True,
+            check=False,
         )
         return result, publish, root / "remote.git"
 

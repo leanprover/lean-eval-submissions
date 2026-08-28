@@ -28,7 +28,6 @@ from replay_orchestrator import (
     validate_execution_request,
 )
 
-
 MATRIX_SHA256 = "54ad4c237d08e5d0e298dfc8f752b25c89ce30e79b396a2256b4216a1c0f772c"
 MATRIX_KIND = "historical_private_replay_image_matrix"
 CANDIDATE_KIND = "historical_private_image_qualification_candidate"
@@ -466,21 +465,27 @@ def create_probe_archive(candidate: dict[str, Any], output: pathlib.Path) -> Non
         "source/proof/Submission.lean": b"by\n  sorry\n",
         "source/proof/lakefile.toml": f'name = "{problem_id}"\n'.encode("ascii"),
     }
-    with output.open("xb") as raw_output:
-        with gzip.GzipFile(filename="", mode="wb", fileobj=raw_output, mtime=0) as compressed:
-            with tarfile.open(fileobj=compressed, mode="w", format=tarfile.GNU_FORMAT) as archive:
-                for directory in ("source", "source/proof"):
-                    info = tarfile.TarInfo(directory)
-                    info.type = tarfile.DIRTYPE
-                    info.mode = 0o755
-                    info.mtime = 0
-                    archive.addfile(info)
-                for name, body in sorted(members.items()):
-                    info = tarfile.TarInfo(name)
-                    info.mode = 0o644
-                    info.mtime = 0
-                    info.size = len(body)
-                    archive.addfile(info, io.BytesIO(body))
+    with (
+        output.open("xb") as raw_output,
+        gzip.GzipFile(
+            filename="", mode="wb", fileobj=raw_output, mtime=0
+        ) as compressed,
+        tarfile.open(
+            fileobj=compressed, mode="w", format=tarfile.GNU_FORMAT
+        ) as archive,
+    ):
+        for directory in ("source", "source/proof"):
+            info = tarfile.TarInfo(directory)
+            info.type = tarfile.DIRTYPE
+            info.mode = 0o755
+            info.mtime = 0
+            archive.addfile(info)
+        for name, body in sorted(members.items()):
+            info = tarfile.TarInfo(name)
+            info.mode = 0o644
+            info.mtime = 0
+            info.size = len(body)
+            archive.addfile(info, io.BytesIO(body))
 
 
 def _identity(domain: str, *parts: str) -> str:

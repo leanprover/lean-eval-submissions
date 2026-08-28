@@ -5,11 +5,10 @@ import pathlib
 import sys
 import unittest
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import verify_historical_private_executor_ownership as ownership  # noqa: E402
+import verify_historical_private_executor_ownership as ownership
 
 
 class HistoricalPrivateExecutorOwnershipTests(unittest.TestCase):

@@ -14,10 +14,9 @@ from referencing import Registry, Resource
 ROOT = pathlib.Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import historical_private_image_qualification as qualification  # noqa: E402
-from prepare_historical_private_replay import canonical  # noqa: E402
-from replay_orchestrator import config_digest  # noqa: E402
-
+import historical_private_image_qualification as qualification
+from prepare_historical_private_replay import canonical
+from replay_orchestrator import config_digest
 
 MATRIX = ROOT / "configuration/historical-private-replay-image-matrix-v1.json"
 SCHEMA = ROOT / "schemas/historical-private-profile-qualification-v1.schema.json"
@@ -252,7 +251,7 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
                 output,
             )
             self.assertEqual(
-                set(path.name for path in output.iterdir()),
+                {path.name for path in output.iterdir()},
                 {"context.json", "request.json", "status.json", "wrangler.json"},
             )
             config = json.loads((output / "wrangler.json").read_bytes())

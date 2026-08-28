@@ -15,11 +15,11 @@ from unittest import mock
 ROOT = pathlib.Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import historical_private_replay_controller as controller  # noqa: E402
-from prepare_historical_private_replay import entry_sha256  # noqa: E402
-from key_capability_contract import archive_file_key_id, capability_digest  # noqa: E402
-from replay_orchestrator import config_digest, replay_task_id  # noqa: E402
-from results_schema import result_id  # noqa: E402
+import historical_private_replay_controller as controller
+from key_capability_contract import archive_file_key_id, capability_digest
+from prepare_historical_private_replay import entry_sha256
+from replay_orchestrator import config_digest, replay_task_id
+from results_schema import result_id
 
 
 def recursive_keys(value: object) -> set[str]:
@@ -1561,15 +1561,14 @@ class HistoricalPrivateRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 controller.HistoricalPrivateReplayControllerError,
                 "differs from the running attempt",
+            ), mock.patch.object(
+                controller, "load_state_queue", return_value=state_binding
             ):
-                with mock.patch.object(
-                    controller, "load_state_queue", return_value=state_binding
-                ):
-                    controller.recover_running(
-                        state,
-                        "2026-10-21T14:00:03.000Z",
-                        cleanup_confirmation_value=wrong,
-                    )
+                controller.recover_running(
+                    state,
+                    "2026-10-21T14:00:03.000Z",
+                    cleanup_confirmation_value=wrong,
+                )
 
 
 if __name__ == "__main__":
