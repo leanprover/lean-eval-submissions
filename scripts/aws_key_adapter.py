@@ -21,12 +21,14 @@ from typing import Any
 try:
     from .key_capability_contract import (
         ADAPTER,
+        AGE_FILE_KEY_MATERIAL_TYPE,
         ARCHIVE_KEY_ID,
         BASE64,
         DIGEST,
         UUID7,
         ContractError,
         authorize_once,
+        file_key_envelope_binding_context,
         kms_encryption_context,
         validate_age_identity_bytes,
         validate_binding,
@@ -34,12 +36,14 @@ try:
 except ImportError:
     from key_capability_contract import (  # type: ignore[no-redef]
         ADAPTER,
+        AGE_FILE_KEY_MATERIAL_TYPE,
         ARCHIVE_KEY_ID,
         BASE64,
         DIGEST,
         UUID7,
         ContractError,
         authorize_once,
+        file_key_envelope_binding_context,
         kms_encryption_context,
         validate_age_identity_bytes,
         validate_binding,
@@ -48,19 +52,34 @@ except ImportError:
 
 MAX_REQUEST_BYTES = 32_768
 MAX_KMS_BLOB_BYTES = 16_384
-WRAP_FIELDS = {
+WRAP_V1_FIELDS = {
     "schema_version",
     "operation",
     "adapter",
     "context",
     "plaintext_identity_base64",
 }
-CONTEXT_FIELDS = {
+WRAP_V2_FIELDS = {
+    "schema_version",
+    "operation",
+    "adapter",
+    "context",
+    "key_material_type",
+    "plaintext_key_material_base64",
+}
+CONTEXT_V1_FIELDS = {
     "contract",
     "submission_id",
     "archive_ciphertext_sha256",
     "data_key_id",
     "age_recipient_sha256",
+}
+CONTEXT_V2_FIELDS = {
+    "contract",
+    "submission_id",
+    "archive_ciphertext_sha256",
+    "data_key_id",
+    "key_material_type",
 }
 UNWRAP_FIELDS = {
     "schema_version",
@@ -113,34 +132,70 @@ def _canonical_base64(value: Any, label: str, maximum_bytes: int) -> bytes:
     return decoded
 
 
-def validate_wrap_request(value: Any, *, expected_adapter: str) -> tuple[dict[str, Any], bytes]:
+def validate_wrap_request(
+    value: Any, *, expected_adapter: str
+) -> tuple[dict[str, Any], bytes]:
     request = _object(value, "wrap request")
-    _fields(request, WRAP_FIELDS, "wrap request")
-    if type(request["schema_version"]) is not int or request["schema_version"] != 1:
-        raise AwsAdapterError("wrap request schema_version must be integer 1")
+    schema_version = request.get("schema_version")
+    if type(schema_version) is not int or schema_version not in {1, 2}:
+        raise AwsAdapterError("wrap request schema_version must be integer 1 or 2")
+    _fields(
+        request,
+        WRAP_V1_FIELDS if schema_version == 1 else WRAP_V2_FIELDS,
+        "wrap request",
+    )
     if request["operation"] != "wrap":
         raise AwsAdapterError("wrap request operation must be wrap")
     _match(ADAPTER, expected_adapter, "expected adapter")
     if request["adapter"] != expected_adapter:
         raise AwsAdapterError("wrap request names a different adapter")
     context = _object(request["context"], "wrap request context")
-    _fields(context, CONTEXT_FIELDS, "wrap request context")
-    if context["contract"] != "lean-eval-archive-key-v1":
+    _fields(
+        context,
+        CONTEXT_V1_FIELDS if schema_version == 1 else CONTEXT_V2_FIELDS,
+        "wrap request context",
+    )
+    expected_contract = f"lean-eval-archive-key-v{schema_version}"
+    if context["contract"] != expected_contract:
         raise AwsAdapterError("wrap request context has the wrong contract")
     _match(UUID7, context["submission_id"], "context.submission_id")
     _match(DIGEST, context["archive_ciphertext_sha256"], "context archive digest")
     _match(ARCHIVE_KEY_ID, context["data_key_id"], "context data_key_id")
-    _match(DIGEST, context["age_recipient_sha256"], "context recipient digest")
-    identity = _canonical_base64(
-        request["plaintext_identity_base64"],
-        "plaintext_identity_base64",
-        4096,
-    )
+    if schema_version == 1:
+        _match(DIGEST, context["age_recipient_sha256"], "context recipient digest")
+        identity = _canonical_base64(
+            request["plaintext_identity_base64"],
+            "plaintext_identity_base64",
+            4096,
+        )
+        try:
+            validate_age_identity_bytes(identity)
+        except ContractError as error:
+            raise AwsAdapterError(str(error)) from error
+        return request, identity
+    if (
+        request["key_material_type"] != AGE_FILE_KEY_MATERIAL_TYPE
+        or context["key_material_type"] != AGE_FILE_KEY_MATERIAL_TYPE
+    ):
+        raise AwsAdapterError("wrap request key material type is not registered")
     try:
-        validate_age_identity_bytes(identity)
+        expected_context = file_key_envelope_binding_context(
+            context["submission_id"],
+            context["archive_ciphertext_sha256"],
+            context["data_key_id"],
+        )
     except ContractError as error:
         raise AwsAdapterError(str(error)) from error
-    return request, identity
+    if context != expected_context:
+        raise AwsAdapterError("wrap request file-key context is not canonical")
+    key_material = _canonical_base64(
+        request["plaintext_key_material_base64"],
+        "plaintext_key_material_base64",
+        16,
+    )
+    if len(key_material) != 16:
+        raise AwsAdapterError("age file key must contain exactly 16 bytes")
+    return request, key_material
 
 
 def validate_unwrap_request(
@@ -200,7 +255,11 @@ class DynamoOneUseStore:
             )
         except Exception as error:
             response = getattr(error, "response", {})
-            code = response.get("Error", {}).get("Code") if isinstance(response, dict) else None
+            code = (
+                response.get("Error", {}).get("Code")
+                if isinstance(response, dict)
+                else None
+            )
             if code == "ConditionalCheckFailedException":
                 return False
             raise
@@ -228,20 +287,28 @@ class AwsRootKeyAdapter:
         self.adapter_name = adapter_name
 
     def wrap(self, value: Any) -> dict[str, Any]:
-        request, identity = validate_wrap_request(value, expected_adapter=self.adapter_name)
+        request, key_material = validate_wrap_request(
+            value, expected_adapter=self.adapter_name
+        )
         response = self.kms.encrypt(
             KeyId=self.kms_key_id,
-            Plaintext=identity,
+            Plaintext=key_material,
             EncryptionContext=request["context"],
             EncryptionAlgorithm="SYMMETRIC_DEFAULT",
         )
         blob = response.get("CiphertextBlob") if isinstance(response, dict) else None
         if not isinstance(blob, bytes) or not blob or len(blob) > MAX_KMS_BLOB_BYTES:
             raise AwsAdapterError("KMS Encrypt returned an invalid ciphertext blob")
+        if request["schema_version"] == 1:
+            return {
+                "schema_version": 1,
+                "adapter": self.adapter_name,
+                "wrapped_identity": base64.b64encode(blob).decode("ascii"),
+            }
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "adapter": self.adapter_name,
-            "wrapped_identity": base64.b64encode(blob).decode("ascii"),
+            "wrapped_key_material": base64.b64encode(blob).decode("ascii"),
         }
 
     def unwrap(self, value: Any, *, now: dt.datetime) -> dict[str, Any]:
@@ -261,9 +328,14 @@ class AwsRootKeyAdapter:
             )
         except ContractError as error:
             raise AwsAdapterError(str(error)) from error
+        wrapped_field = (
+            "wrapped_identity"
+            if envelope["schema_version"] == 1
+            else "wrapped_key_material"
+        )
         ciphertext = _canonical_base64(
-            envelope["wrapped_identity"],
-            "envelope.wrapped_identity",
+            envelope[wrapped_field],
+            f"envelope.{wrapped_field}",
             MAX_KMS_BLOB_BYTES,
         )
         response = self.kms.decrypt(
@@ -272,20 +344,38 @@ class AwsRootKeyAdapter:
             EncryptionContext=kms_encryption_context(envelope),
             EncryptionAlgorithm="SYMMETRIC_DEFAULT",
         )
-        identity = response.get("Plaintext") if isinstance(response, dict) else None
-        try:
-            validated_identity = validate_age_identity_bytes(identity)
-        except ContractError as error:
-            # Consumption already succeeded. Fail closed; the controller may
-            # issue a fresh capability after investigating the provider error.
-            raise AwsAdapterError("KMS Decrypt returned an invalid age identity") from error
-        return {
-            "schema_version": 1,
+        plaintext = response.get("Plaintext") if isinstance(response, dict) else None
+        common = {
             "adapter": self.adapter_name,
             "request_id": capability["request_id"],
             "data_key_id": envelope["data_key_id"],
             "capability_digest": digest,
-            "plaintext_identity_base64": base64.b64encode(validated_identity).decode("ascii"),
+        }
+        if envelope["schema_version"] == 1:
+            try:
+                validated_identity = validate_age_identity_bytes(plaintext)
+            except ContractError as error:
+                # Consumption already succeeded. Fail closed; the controller may
+                # issue a fresh capability after investigating the provider error.
+                raise AwsAdapterError(
+                    "KMS Decrypt returned an invalid age identity"
+                ) from error
+            return {
+                "schema_version": 1,
+                **common,
+                "plaintext_identity_base64": base64.b64encode(
+                    validated_identity
+                ).decode("ascii"),
+            }
+        if not isinstance(plaintext, bytes) or len(plaintext) != 16:
+            raise AwsAdapterError("KMS Decrypt returned an invalid age file key")
+        return {
+            "schema_version": 2,
+            **common,
+            "key_material_type": AGE_FILE_KEY_MATERIAL_TYPE,
+            "plaintext_key_material_base64": base64.b64encode(plaintext).decode(
+                "ascii"
+            ),
         }
 
 
@@ -352,7 +442,11 @@ def main(argv: list[str] | None = None) -> int:
             table_name="not-used-by-wrap",
             adapter_name=os.environ.get("LEAN_EVAL_ADAPTER_NAME", "aws-kms-v1"),
         )
-        print(json.dumps(adapter.wrap(_read_request()), separators=(",", ":"), sort_keys=True))
+        print(
+            json.dumps(
+                adapter.wrap(_read_request()), separators=(",", ":"), sort_keys=True
+            )
+        )
     except (AwsAdapterError, ContractError, KeyError, OSError) as error:
         # Never echo the request: it contains the private age identity.
         print(f"error: {error}", file=sys.stderr)

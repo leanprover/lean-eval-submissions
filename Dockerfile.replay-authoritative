@@ -5,6 +5,15 @@ RUN CGO_ENABLED=0 go install \
     && strip /go/bin/landrun
 
 
+FROM docker.io/golang:1.25.12-bookworm@sha256:6359592445455f2dbe2412bed411336035bc019a50017720d77454ffdd6d0f82 AS age-file-key-builder
+
+COPY server/age-file-key/go.mod server/age-file-key/go.sum /build/age-file-key/
+RUN cd /build/age-file-key && go mod download
+COPY server/age-file-key/main.go /build/age-file-key/
+RUN cd /build/age-file-key \
+    && CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags='-s -w' -o /age-file-key .
+
+
 FROM docker.io/rust:1.89.0-bookworm@sha256:948f9b08a66e7fe01b03a98ef1c7568292e07ec2e4fe90d88c07bb14563c84ff AS nanoda-builder
 
 RUN apt-get update \
@@ -132,6 +141,7 @@ RUN apt-get update \
     && test "$(age --version)" = 'v1.3.1'
 
 COPY --from=landrun-builder /go/bin/landrun /usr/local/bin/landrun
+COPY --from=age-file-key-builder /age-file-key /opt/lean-eval/bin/age-file-key
 COPY --from=nanoda-builder /build/nanoda/target/release/nanoda_bin /opt/lean-eval/bin/nanoda_bin
 COPY --from=lean-builder /runtime/benchmark /opt/lean-eval/benchmark
 COPY --from=lean-builder /runtime/bin /opt/lean-eval/bin

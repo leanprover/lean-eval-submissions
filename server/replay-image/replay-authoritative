@@ -84,6 +84,9 @@ def sha256(path: pathlib.Path) -> str:
 
 def validate_expectation(value: Any, request: dict[str, Any]) -> dict[str, Any]:
     expectation = object_value(value, "archive expectation")
+    schema_version = expectation.get("schema_version")
+    if schema_version not in {1, 2} or isinstance(schema_version, bool):
+        raise AuthoritativeReplayError("archive expectation schema is invalid")
     exact_fields(
         expectation,
         {
@@ -92,7 +95,7 @@ def validate_expectation(value: Any, request: dict[str, Any]) -> dict[str, Any]:
             "archive_ciphertext_sha256",
             "plaintext_tar_sha256",
             "plaintext_tar_size",
-        },
+        } | ({"key_material_type"} if schema_version == 2 else set()),
         "archive expectation",
     )
     source = request["source"]
@@ -100,13 +103,15 @@ def validate_expectation(value: Any, request: dict[str, Any]) -> dict[str, Any]:
         raise AuthoritativeReplayError("authoritative archive replay requires private source")
     archive = source["archive"]
     expected = {
-        "schema_version": 1,
+        "schema_version": schema_version,
         "submission_id": request["result"]["submission_id"],
         "archive_ciphertext_sha256": archive["archive_ciphertext_sha256"],
     }
     for field, wanted in expected.items():
         if expectation.get(field) != wanted:
             raise AuthoritativeReplayError(f"archive expectation {field} mismatch")
+    if schema_version == 2 and expectation["key_material_type"] != "age-file-key-v1":
+        raise AuthoritativeReplayError("archive expectation key material type is invalid")
     size = expectation["plaintext_tar_size"]
     digest = expectation["plaintext_tar_sha256"]
     if (
@@ -574,8 +579,10 @@ def main() -> None:
     scratch = WORKSPACE / "authoritative"
     encoded_ciphertext = WORKSPACE / "archive.tar.gz.age.b64"
     encoded_identity = WORKSPACE / "identity.age.b64"
+    encoded_file_key = WORKSPACE / "key-material.b64"
     ciphertext = WORKSPACE / "accepted-source.tar.gz.age"
     identity = WORKSPACE / "accepted-source.identity.age"
+    file_key = WORKSPACE / "accepted-source.file-key"
     plaintext = WORKSPACE / "accepted-source.tar.gz"
     output = WORKSPACE / "replay-output"
     try:
@@ -594,12 +601,27 @@ def main() -> None:
         validate_runtime_profile(request, *platform_evidence())
         decode_file(encoded_ciphertext, ciphertext, MAX_CIPHERTEXT)
         encoded_ciphertext.unlink(missing_ok=True)
-        decode_file(encoded_identity, identity, 4096)
-        encoded_identity.unlink(missing_ok=True)
         if sha256(ciphertext) != expectation["archive_ciphertext_sha256"]:
             raise AuthoritativeReplayError("ciphertext digest mismatch")
+        if expectation["schema_version"] == 1:
+            decode_file(encoded_identity, identity, 4096)
+            encoded_identity.unlink(missing_ok=True)
+            decrypt_command = [
+                "age", "--decrypt", "--identity", str(identity),
+                "--output", str(plaintext), str(ciphertext),
+            ]
+        else:
+            decode_file(encoded_file_key, file_key, 16)
+            encoded_file_key.unlink(missing_ok=True)
+            if file_key.stat().st_size != 16:
+                raise AuthoritativeReplayError("age file key has an invalid size")
+            decrypt_command = [
+                str(INSTALL / "bin" / "age-file-key"), "decrypt",
+                "--file-key", str(file_key), "--input", str(ciphertext),
+                "--output", str(plaintext),
+            ]
         decrypt = subprocess.run(
-            ["age", "--decrypt", "--identity", str(identity), "--output", str(plaintext), str(ciphertext)],
+            decrypt_command,
             check=False,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -607,6 +629,7 @@ def main() -> None:
             env={"PATH": "/usr/local/bin:/usr/bin:/bin"},
         )
         identity.unlink(missing_ok=True)
+        file_key.unlink(missing_ok=True)
         if decrypt.returncode != 0 or not plaintext.is_file():
             raise AuthoritativeReplayError("archive decryption failed")
         if (
@@ -683,7 +706,9 @@ def main() -> None:
     finally:
         encoded_ciphertext.unlink(missing_ok=True)
         encoded_identity.unlink(missing_ok=True)
+        encoded_file_key.unlink(missing_ok=True)
         identity.unlink(missing_ok=True)
+        file_key.unlink(missing_ok=True)
         plaintext.unlink(missing_ok=True)
         ciphertext.unlink(missing_ok=True)
         METRICS.unlink(missing_ok=True)

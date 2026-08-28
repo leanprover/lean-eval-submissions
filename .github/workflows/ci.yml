@@ -1,7 +1,6 @@
-# CI for the submission pipeline. This repo is pure Python + workflows;
-# there is no Lean build here. The benchmark and the comparator/sandbox
-# integration live in leanprover/lean-eval and are exercised by that
-# repo's CI. See SECURITY.md.
+# CI for the submission pipeline. There is no Lean build here. The benchmark
+# and comparator/sandbox integration live in leanprover/lean-eval and are
+# exercised by that repo's CI. See SECURITY.md.
 name: CI
 
 on:
@@ -35,11 +34,9 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
         with:
           # setup-go v6+ sets GOTOOLCHAIN=local, so this exact version is
-          # the compiler used for the pinned Go tools below.
+          # the compiler used for the pinned Go tools and helper below.
           go-version: '1.25.12'
-          # This repository has no Go module dependency file for setup-go to
-          # hash; Go tools are installed at immutable revisions below.
-          cache: false
+          cache-dependency-path: server/age-file-key/go.sum
 
       - name: Install actionlint
         run: |
@@ -49,6 +46,10 @@ jobs:
 
       - name: Python syntax checks
         run: python -m py_compile scripts/*.py tests/*.py
+
+      - name: Test age file-key helper
+        working-directory: server/age-file-key
+        run: CGO_ENABLED=0 go test -mod=readonly ./...
 
       - name: Install pinned JSON Schema validator
         run: >-

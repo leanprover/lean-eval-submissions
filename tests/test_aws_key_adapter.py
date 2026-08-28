@@ -14,6 +14,7 @@ from scripts.aws_key_adapter import (
     handle_unwrap_event,
     validate_wrap_request,
 )
+from scripts.key_capability_contract import archive_file_key_id, capability_digest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 VECTOR = json.loads(
@@ -97,6 +98,38 @@ def wrap_request() -> dict[str, object]:
     }
 
 
+def file_key_envelope() -> dict[str, object]:
+    submission_id = VECTOR["envelope"]["submission_id"]
+    archive_digest = VECTOR["envelope"]["archive_ciphertext_sha256"]
+    return {
+        "schema_version": 2,
+        "submission_id": submission_id,
+        "archive_ciphertext_sha256": archive_digest,
+        "data_key_id": archive_file_key_id(submission_id, archive_digest),
+        "key_material_type": "age-file-key-v1",
+        "adapter": "aws-kms-v1",
+        "wrapped_key_material": base64.b64encode(b"kms-wrapped-fixture").decode(),
+    }
+
+
+def file_key_wrap_request() -> dict[str, object]:
+    envelope = file_key_envelope()
+    return {
+        "schema_version": 2,
+        "operation": "wrap",
+        "adapter": "aws-kms-v1",
+        "context": {
+            "contract": "lean-eval-archive-key-v2",
+            "submission_id": envelope["submission_id"],
+            "archive_ciphertext_sha256": envelope["archive_ciphertext_sha256"],
+            "data_key_id": envelope["data_key_id"],
+            "key_material_type": "age-file-key-v1",
+        },
+        "key_material_type": "age-file-key-v1",
+        "plaintext_key_material_base64": base64.b64encode(b"k" * 16).decode(),
+    }
+
+
 class AwsKeyAdapterTests(unittest.TestCase):
     def adapter(
         self,
@@ -150,7 +183,9 @@ class AwsKeyAdapterTests(unittest.TestCase):
                 "plaintext_identity_base64",
             },
         )
-        self.assertEqual(base64.b64decode(response["plaintext_identity_base64"]), IDENTITY)
+        self.assertEqual(
+            base64.b64decode(response["plaintext_identity_base64"]), IDENTITY
+        )
         self.assertEqual(response["capability_digest"], VECTOR["capability_digest"])
         self.assertEqual(
             dynamo.calls[0],
@@ -168,7 +203,9 @@ class AwsKeyAdapterTests(unittest.TestCase):
             kms.decrypt_calls[0],
             {
                 "KeyId": "arn:aws:kms:us-east-2:111122223333:key/test",
-                "CiphertextBlob": base64.b64decode(VECTOR["envelope"]["wrapped_identity"]),
+                "CiphertextBlob": base64.b64decode(
+                    VECTOR["envelope"]["wrapped_identity"]
+                ),
                 "EncryptionContext": VECTOR["kms_encryption_context"],
                 "EncryptionAlgorithm": "SYMMETRIC_DEFAULT",
             },
@@ -178,6 +215,60 @@ class AwsKeyAdapterTests(unittest.TestCase):
             adapter.unwrap(unwrap_request(), now=NOW)
         self.assertEqual(order, ["consume", "decrypt", "consume"])
         self.assertEqual(len(kms.decrypt_calls), 1)
+
+    def test_file_key_wrap_and_unwrap_use_the_versioned_exact_contract(self) -> None:
+        adapter, kms, _, order = self.adapter(kms=FakeKms([], plaintext=b"k" * 16))
+        wrapped = adapter.wrap(file_key_wrap_request())
+        self.assertEqual(
+            wrapped,
+            {
+                "schema_version": 2,
+                "adapter": "aws-kms-v1",
+                "wrapped_key_material": base64.b64encode(
+                    b"kms-wrapped-fixture"
+                ).decode(),
+            },
+        )
+        request = unwrap_request()
+        request["envelope"] = file_key_envelope()
+        request["capability"]["data_key_id"] = request["envelope"]["data_key_id"]
+        response = adapter.unwrap(request, now=NOW)
+        self.assertEqual(order, ["encrypt", "consume", "decrypt"])
+        self.assertEqual(response["schema_version"], 2)
+        self.assertEqual(response["key_material_type"], "age-file-key-v1")
+        self.assertEqual(
+            base64.b64decode(response["plaintext_key_material_base64"]), b"k" * 16
+        )
+        self.assertEqual(
+            response["capability_digest"], capability_digest(request["capability"])
+        )
+        self.assertEqual(
+            kms.decrypt_calls[0]["EncryptionContext"],
+            file_key_wrap_request()["context"],
+        )
+
+    def test_file_key_wrap_rejects_any_non_16_byte_material(self) -> None:
+        for material in (b"", b"short", b"k" * 17):
+            request = file_key_wrap_request()
+            request["plaintext_key_material_base64"] = base64.b64encode(
+                material
+            ).decode()
+            with self.assertRaisesRegex(
+                AwsAdapterError, "16 bytes|empty|invalid format"
+            ):
+                validate_wrap_request(request, expected_adapter="aws-kms-v1")
+
+    def test_invalid_provider_file_key_is_consumed_and_not_returned(self) -> None:
+        adapter, _, _, order = self.adapter(kms=FakeKms([], plaintext=b"short"))
+        request = unwrap_request()
+        request["envelope"] = file_key_envelope()
+        request["capability"]["data_key_id"] = request["envelope"]["data_key_id"]
+        with self.assertRaisesRegex(AwsAdapterError, "invalid age file key"):
+            adapter.unwrap(request, now=NOW)
+        self.assertEqual(order, ["consume", "decrypt"])
+        with self.assertRaisesRegex(AwsAdapterError, "already been consumed"):
+            adapter.unwrap(request, now=NOW)
+        self.assertEqual(order, ["consume", "decrypt", "consume"])
 
     def test_provider_failure_remains_fail_closed(self) -> None:
         failing = FailingKms([])
@@ -203,12 +294,16 @@ class AwsKeyAdapterTests(unittest.TestCase):
         self.assertEqual(kms.decrypt_calls, [])
 
     def test_invalid_provider_plaintext_is_consumed_and_not_returned(self) -> None:
-        adapter, _, _, order = self.adapter(kms=FakeKms([], plaintext=b"not an age key"))
+        adapter, _, _, order = self.adapter(
+            kms=FakeKms([], plaintext=b"not an age key")
+        )
         with self.assertRaisesRegex(AwsAdapterError, "invalid age identity"):
             adapter.unwrap(unwrap_request(), now=NOW)
         self.assertEqual(order, ["consume", "decrypt"])
 
-    def test_wrap_request_rejects_unknown_fields_and_plaintext_passthrough(self) -> None:
+    def test_wrap_request_rejects_unknown_fields_and_plaintext_passthrough(
+        self,
+    ) -> None:
         changed = wrap_request()
         changed["kms_key_arn"] = "forbidden"
         with self.assertRaisesRegex(AwsAdapterError, "extra"):

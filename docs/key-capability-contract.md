@@ -6,6 +6,7 @@ production workload authority remains disconnected until its protected GitHub
 environment variable is explicitly approved. The schemas and validator are:
 
 - [`archive-key-envelope-v1.schema.json`](../schemas/archive-key-envelope-v1.schema.json)
+- [`archive-key-envelope-v2.schema.json`](../schemas/archive-key-envelope-v2.schema.json)
 - [`unwrap-capability-v1.schema.json`](../schemas/unwrap-capability-v1.schema.json)
 - [`key_capability_contract.py`](../scripts/key_capability_contract.py)
 - [`archive_envelope.py`](../scripts/archive_envelope.py)
@@ -45,6 +46,28 @@ hybrid identity (`age-keygen -pq`) rather than depend on age's future default:
 - <https://docs.aws.amazon.com/kms/latest/APIReference/API_Encrypt.html>
 - <https://docs.aws.amazon.com/kms/latest/developerguide/encrypt_context.html>
 - <https://github.com/FiloSottile/age/blob/main/doc/age-keygen.1.ronn>
+
+Historical archives whose ciphertext must remain byte-for-byte stable use the
+small version-2 envelope variant. It wraps the existing 16-byte age file key,
+labels it `age-file-key-v1`, and derives `ak2_…` from the submission UUID,
+ciphertext digest, and material type. Its exact adapter context is:
+
+```text
+contract = lean-eval-archive-key-v2
+submission_id = <UUIDv7>
+archive_ciphertext_sha256 = <64 lowercase hex>
+data_key_id = <ak2_ plus 64 lowercase hex>
+key_material_type = age-file-key-v1
+```
+
+The v2 variant is only for compatible historical rewrap. New intake continues
+to use the unchanged version-1 native-identity envelope.
+
+The infrastructure template expresses v2 as separate, exact-context policy
+statements: Encrypt only on the production migration role and Decrypt only on
+the unwrap function role. Deploying those reviewed statements to each required
+stack is an explicit infrastructure approval. It is not the separate approval
+to connect production live-intake Wrap authority or release-controller trust.
 
 ## Trusted archive writer
 

@@ -10,15 +10,15 @@ import unittest
 
 from scripts.key_capability_contract import (
     ContractError,
-    authorize_once,
+    archive_file_key_id,
     archive_key_id,
+    authorize_once,
     capability_digest,
     kms_encryption_context,
     validate_binding,
     validate_capability,
     validate_envelope,
 )
-
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 VECTOR_PATH = ROOT / "tests" / "fixtures" / "archive-key-contract-v1.json"
@@ -33,12 +33,18 @@ class KeyCapabilityContractTests(unittest.TestCase):
     def test_language_neutral_vector(self) -> None:
         self.assertEqual(validate_envelope(self.envelope), self.envelope)
         self.assertEqual(validate_capability(self.capability), self.capability)
-        self.assertEqual(kms_encryption_context(self.envelope), self.vector["kms_encryption_context"])
         self.assertEqual(
-            archive_key_id(self.envelope["submission_id"], self.envelope["age_recipient"]),
+            kms_encryption_context(self.envelope), self.vector["kms_encryption_context"]
+        )
+        self.assertEqual(
+            archive_key_id(
+                self.envelope["submission_id"], self.envelope["age_recipient"]
+            ),
             self.envelope["data_key_id"],
         )
-        self.assertEqual(capability_digest(self.capability), self.vector["capability_digest"])
+        self.assertEqual(
+            capability_digest(self.capability), self.vector["capability_digest"]
+        )
 
     def test_authorize_once_consumes_before_provider_use(self) -> None:
         class Store:
@@ -151,6 +157,38 @@ class KeyCapabilityContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ContractError, "canonical base64"):
             validate_envelope(changed)
 
+    def test_file_key_envelope_is_strict_and_ciphertext_bound(self) -> None:
+        submission_id = self.envelope["submission_id"]
+        archive_digest = self.envelope["archive_ciphertext_sha256"]
+        envelope = {
+            "schema_version": 2,
+            "submission_id": submission_id,
+            "archive_ciphertext_sha256": archive_digest,
+            "data_key_id": archive_file_key_id(submission_id, archive_digest),
+            "key_material_type": "age-file-key-v1",
+            "adapter": "aws-kms-v1",
+            "wrapped_key_material": "d3JhcHBlZC1maWxlLWtleQ==",
+        }
+        self.assertEqual(validate_envelope(envelope), envelope)
+        self.assertEqual(
+            kms_encryption_context(envelope),
+            {
+                "contract": "lean-eval-archive-key-v2",
+                "submission_id": submission_id,
+                "archive_ciphertext_sha256": archive_digest,
+                "data_key_id": envelope["data_key_id"],
+                "key_material_type": "age-file-key-v1",
+            },
+        )
+        changed = copy.deepcopy(envelope)
+        changed["archive_ciphertext_sha256"] = "9" * 64
+        with self.assertRaisesRegex(ContractError, "does not match"):
+            validate_envelope(changed)
+        changed = copy.deepcopy(envelope)
+        changed["wrapped_identity"] = changed.pop("wrapped_key_material")
+        with self.assertRaisesRegex(ContractError, "fields are not canonical"):
+            validate_envelope(changed)
+
     def test_post_quantum_age_recipient_is_supported_and_bounded(self) -> None:
         changed = copy.deepcopy(self.envelope)
         changed["age_recipient"] = "age1pq1" + "q" * 1900
@@ -168,7 +206,12 @@ class KeyCapabilityContractTests(unittest.TestCase):
             (self.envelope, validate_envelope),
             (self.capability, validate_capability),
         ):
-            for forbidden in ("plaintext_identity", "kms_key_arn", "master_key", "private_key"):
+            for forbidden in (
+                "plaintext_identity",
+                "kms_key_arn",
+                "master_key",
+                "private_key",
+            ):
                 changed = copy.deepcopy(value)
                 changed[forbidden] = "secret"
                 with self.assertRaisesRegex(ContractError, "extra"):

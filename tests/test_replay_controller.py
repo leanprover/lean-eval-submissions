@@ -8,7 +8,11 @@ import pathlib
 import tempfile
 import unittest
 
-from scripts.key_capability_contract import archive_key_id, capability_digest
+from scripts.key_capability_contract import (
+    archive_file_key_id,
+    archive_key_id,
+    capability_digest,
+)
 from scripts.replay_controller import (
     ReplayControllerError,
     build_executor_request,
@@ -21,7 +25,6 @@ from scripts.replay_controller import (
     validate_executor_response,
 )
 from scripts.replay_orchestrator import plan_next
-
 
 ROOT = pathlib.Path(__file__).parents[1]
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -85,6 +88,20 @@ def sidecar() -> dict:
     }
 
 
+def file_key_sidecar() -> dict:
+    value = sidecar()
+    value["key_envelope"] = {
+        "schema_version": 2,
+        "submission_id": SUBMISSION_ID,
+        "archive_ciphertext_sha256": digest(CIPHERTEXT),
+        "data_key_id": archive_file_key_id(SUBMISSION_ID, digest(CIPHERTEXT)),
+        "key_material_type": "age-file-key-v1",
+        "adapter": "aws-kms-v1",
+        "wrapped_key_material": "cHJvdmlkZXItd3JhcHBlZC1maWxlLWtleQ==",
+    }
+    return value
+
+
 class ReplayControllerTests(unittest.TestCase):
     def test_started_and_terminal_events_are_exactly_queue_bound(self) -> None:
         queue, _, _, plan = inputs()
@@ -130,8 +147,14 @@ class ReplayControllerTests(unittest.TestCase):
             self.assertEqual(unwrap["capability"]["max_uses"], 1)
             self.assertEqual(unwrap["capability"]["purpose"], "lean-eval-replay")
             current = dt.datetime.now(dt.timezone.utc)
-            unwrap["capability"]["issued_at"] = current.isoformat(timespec="milliseconds").replace("+00:00", "Z")
-            unwrap["capability"]["expires_at"] = (current + dt.timedelta(minutes=5)).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            unwrap["capability"]["issued_at"] = current.isoformat(
+                timespec="milliseconds"
+            ).replace("+00:00", "Z")
+            unwrap["capability"]["expires_at"] = (
+                (current + dt.timedelta(minutes=5))
+                .isoformat(timespec="milliseconds")
+                .replace("+00:00", "Z")
+            )
             native_identity = b"AGE-SECRET-KEY-1FIXTURE\n"
             response = {
                 "schema_version": 1,
@@ -145,7 +168,10 @@ class ReplayControllerTests(unittest.TestCase):
                 unwrap_identity(unwrap, response, {"StatusCode": 200}),
                 native_identity,
             )
-            changed_response = {**response, "request_id": "0198abcd-0000-7000-8000-000000000009"}
+            changed_response = {
+                **response,
+                "request_id": "0198abcd-0000-7000-8000-000000000009",
+            }
             with self.assertRaisesRegex(ReplayControllerError, "exact request"):
                 unwrap_identity(unwrap, changed_response, {"StatusCode": 200})
             identity = root / "identity.age"
@@ -181,6 +207,59 @@ class ReplayControllerTests(unittest.TestCase):
         failed = failure_verdict(plan, "runner_lost")
         self.assertEqual(failed["execution_outcome"], "failed")
         self.assertIsNone(failed["checker_outcome"])
+
+    def test_file_key_handoff_preserves_v1_and_uses_a_strict_v2_variant(self) -> None:
+        _, _, _, plan = inputs()
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            ciphertext = root / "archive.tar.age"
+            ciphertext.write_bytes(CIPHERTEXT)
+            unwrap = prepare_unwrap(
+                plan,
+                file_key_sidecar(),
+                ciphertext,
+                "2026-08-23T07:00:00.000Z",
+                request_random=b"\x04" * 10,
+                runner_nonce="5" * 64,
+            )
+            current = dt.datetime.now(dt.timezone.utc)
+            unwrap["capability"]["issued_at"] = current.isoformat(
+                timespec="milliseconds"
+            ).replace("+00:00", "Z")
+            unwrap["capability"]["expires_at"] = (
+                (current + dt.timedelta(minutes=5))
+                .isoformat(timespec="milliseconds")
+                .replace("+00:00", "Z")
+            )
+            response = {
+                "schema_version": 2,
+                "adapter": "aws-kms-v1",
+                "request_id": unwrap["capability"]["request_id"],
+                "data_key_id": unwrap["envelope"]["data_key_id"],
+                "capability_digest": capability_digest(unwrap["capability"]),
+                "key_material_type": "age-file-key-v1",
+                "plaintext_key_material_base64": "a2tra2tra2tra2tra2traw==",
+            }
+            material = unwrap_identity(unwrap, response, {"StatusCode": 200})
+            self.assertEqual(material, b"k" * 16)
+            invalid_unwrap = copy.deepcopy(unwrap)
+            invalid_unwrap["envelope"]["schema_version"] = 3
+            with self.assertRaisesRegex(ReplayControllerError, "envelope is invalid"):
+                unwrap_identity(invalid_unwrap, response, {"StatusCode": 200})
+            material_path = root / "file-key"
+            material_path.write_bytes(material)
+            request = build_executor_request(
+                plan, file_key_sidecar(), ciphertext, unwrap, material_path
+            )
+            self.assertEqual(request["schema_version"], 2)
+            self.assertEqual(request["archive_expectation"]["schema_version"], 2)
+            self.assertEqual(request["key_material_type"], "age-file-key-v1")
+            self.assertNotIn("plaintext_identity_base64", request)
+            material_path.write_bytes(b"short")
+            with self.assertRaisesRegex(ReplayControllerError, "exactly 16 bytes"):
+                build_executor_request(
+                    plan, file_key_sidecar(), ciphertext, unwrap, material_path
+                )
 
     def test_stale_running_replay_recovers_as_retryable_runner_loss(self) -> None:
         queue, _, _, _ = inputs()

@@ -12,7 +12,7 @@ on:
         required: true
         type: string
       expected_migration_count:
-        description: Exact number of shared-recipient objects
+        description: Exact number of unique bound schema-1 archives (439)
         required: true
         type: string
       apply:
@@ -87,15 +87,16 @@ jobs:
           python scripts/migrate_archive_envelopes.py inventory \
             --audit-root audit \
             --source-commit "$AUDIT_COMMIT" \
+            --crosswalk evidence/historical-replay/private-crosswalks/dfdcbc0da3a3526f8a26e6a69cefa41cbcd92de7608752193b742fcd92b00a67.json \
             --output "$RUNNER_TEMP/archive-migration-plan.json"
           actual_digest=$(jq -r .inventory_digest "$RUNNER_TEMP/archive-migration-plan.json")
           actual_count=$(jq -r .migration_count "$RUNNER_TEMP/archive-migration-plan.json")
           test "$actual_digest" = "$EXPECTED_DIGEST"
           test "$actual_count" = "$EXPECTED_COUNT"
+          test "$actual_count" = 439
           {
             echo "digest=$actual_digest"
             echo "count=$actual_count"
-            echo "retained=$(jq -r .retained_count "$RUNNER_TEMP/archive-migration-plan.json")"
           } >> "$GITHUB_OUTPUT"
 
       - name: Require explicit apply confirmation
@@ -113,20 +114,31 @@ jobs:
           python -m pip install --disable-pip-version-check --require-hashes \
             -r infrastructure/aws-key-adapter/requirements-workflow.txt
 
-      - name: Install checksum-pinned age 1.3.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        if: inputs.apply == true
+        with:
+          go-version-file: server/age-file-key/go.mod
+          cache-dependency-path: server/age-file-key/go.sum
+
+      - name: Build the pinned detached-header helper
         if: inputs.apply == true
         run: |
           set -euo pipefail
           unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
-          curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
-            https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz \
-            --output "$RUNNER_TEMP/age.tar.gz"
-          echo "bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377  $RUNNER_TEMP/age.tar.gz" \
-            | sha256sum --check --strict
-          tar --extract --gzip --file "$RUNNER_TEMP/age.tar.gz" --directory "$RUNNER_TEMP"
-          echo "$RUNNER_TEMP/age" >> "$GITHUB_PATH"
-          test "$("$RUNNER_TEMP/age/age" --version)" = v1.3.1
-          rm -f "$RUNNER_TEMP/age.tar.gz"
+          cd server/age-file-key
+          test "$(go list -m -f '{{.Version}}' filippo.io/age)" = v1.3.1
+          CGO_ENABLED=0 go build -mod=readonly -trimpath \
+            -o "$RUNNER_TEMP/age-file-key" .
+          test -x "$RUNNER_TEMP/age-file-key"
+
+      - name: Require the exact dedicated migration role
+        if: inputs.apply == true
+        env:
+          AWS_WRAP_ROLE_ARN: ${{ vars.AWS_WRAP_ROLE_ARN }}
+        run: |
+          set -euo pipefail
+          test "$AWS_WRAP_ROLE_ARN" = \
+            arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production
 
       - name: Assume only the production Encrypt role
         if: inputs.apply == true
@@ -137,7 +149,7 @@ jobs:
           role-session-name: lean-eval-historical-envelope-migration
           mask-aws-account-id: true
 
-      - name: Re-encrypt every planned object into a clean tree
+      - name: Rewrap selected file keys and copy exact ciphertext bytes
         if: inputs.apply == true
         env:
           LEGACY_ARCHIVE_IDENTITY: ${{ secrets.LEGACY_ARCHIVE_IDENTITY }}
@@ -166,10 +178,6 @@ jobs:
           unset LEGACY_ARCHIVE_IDENTITY
           test -s /dev/shm/lean-eval-legacy-archive-identity
           output_root="$RUNNER_TEMP/migrated-audit"
-          python scripts/migrate_archive_envelopes.py seed-retained \
-            --plan "$RUNNER_TEMP/archive-migration-plan.json" \
-            --source-root audit \
-            --output-root "$output_root"
           jq -r '.entries[].source_path' "$RUNNER_TEMP/archive-migration-plan.json" \
             | while IFS= read -r source_path; do
                 python scripts/migrate_archive_envelopes.py migrate-one \
@@ -177,6 +185,7 @@ jobs:
                   --source-root audit \
                   --output-root "$output_root" \
                   --legacy-identity /dev/shm/lean-eval-legacy-archive-identity \
+                  --file-key-helper "$RUNNER_TEMP/age-file-key" \
                   --adapter-executable scripts/aws_key_adapter.py \
                   --source-path "$source_path"
               done
@@ -184,6 +193,7 @@ jobs:
           trap - EXIT
           python scripts/migrate_archive_envelopes.py validate-output \
             --plan "$RUNNER_TEMP/archive-migration-plan.json" \
+            --source-root audit \
             --output-root "$output_root" \
             --output "$RUNNER_TEMP/archive-migration-report.json"
 
@@ -234,7 +244,7 @@ jobs:
           persist-credentials: false
           token: ${{ steps.audit_token.outputs.token }}
 
-      - name: Push only an isolated orphan review branch
+      - name: Push only an isolated review branch
         if: inputs.apply == true
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
@@ -254,24 +264,25 @@ jobs:
           test -n "$AUDIT_TOKEN"
           audit_token=$AUDIT_TOKEN
           unset AUDIT_TOKEN
-          git -C audit switch --orphan archive-envelope-migration-v1
-          git -C audit rm -rf --ignore-unmatch .
+          git -C audit switch -c archive-file-key-rewrap-v1
+          jq -r '.entries[].source_path' "$RUNNER_TEMP/archive-migration-plan.json" \
+            | while IFS= read -r source_path; do
+                git -C audit rm -- "$source_path" "${source_path%.tar.age}.json"
+              done
           cp -a "$RUNNER_TEMP/migrated-audit/." audit/
-          cp "$RUNNER_TEMP/archive-migration-plan.json" audit/migration-plan-v1.json
-          cp "$RUNNER_TEMP/archive-migration-report.json" audit/migration-report-v1.json
           git -C audit config user.name lean-eval-archiver
           git -C audit config user.email lean-eval-archiver@users.noreply.github.com
           git -C audit add .
           git -C audit diff --cached --check
           test "$(git -C audit ls-files '*.tar.age' | wc -l)" = \
-            "$(( ${{ steps.inventory.outputs.count }} + ${{ steps.inventory.outputs.retained }} ))"
-          git -C audit commit -m "migration: stage per-submission archive envelopes"
+            "$(git -C audit ls-tree -r --name-only ${{ inputs.audit_commit }} '*.tar.age' | wc -l)"
+          git -C audit commit -m "migration: rewrap bound historical archive file keys"
           audit_basic_auth=$(printf 'x-access-token:%s' "$audit_token" | base64 -w0)
           unset audit_token
           GIT_CONFIG_COUNT=1 \
           GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
           GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $audit_basic_auth" \
-            git -C audit push origin HEAD:refs/heads/archive-envelope-migration-v1
+            git -C audit push origin HEAD:refs/heads/archive-file-key-rewrap-v1
           unset audit_basic_auth
           cleanup_writer
           trap - EXIT
@@ -292,7 +303,6 @@ jobs:
             echo
             echo "- source audit commit: \`${{ inputs.audit_commit }}\`"
             echo "- migration count: \`${{ steps.inventory.outputs.count }}\`"
-            echo "- retained schema-version-3 count: \`${{ steps.inventory.outputs.retained }}\`"
             echo "- inventory digest: \`${{ steps.inventory.outputs.digest }}\`"
             echo '- no identity, AWS role, plaintext, artifact, branch, or audit write was used'
           } >> "$GITHUB_STEP_SUMMARY"
@@ -300,7 +310,8 @@ jobs:
       - name: Remove migration scratch
         if: always()
         run: |
-          rm -rf "$RUNNER_TEMP/migrated-audit" "$RUNNER_TEMP/age"
+          rm -rf "$RUNNER_TEMP/migrated-audit"
+          rm -f "$RUNNER_TEMP/age-file-key"
           rm -f "$RUNNER_TEMP/archive-migration-plan.json" \
             "$RUNNER_TEMP/archive-migration-report.json" \
             /dev/shm/lean-eval-legacy-archive-identity

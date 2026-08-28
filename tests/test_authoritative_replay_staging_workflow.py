@@ -132,6 +132,10 @@ class AuthoritativeReplayStagingWorkflowTests(unittest.TestCase):
             '"$RUNNER_TEMP/executor-request.json"',
             self.text,
         )
+        final_cleanup = self.text.split("Remove all private and internal scratch", 1)[1]
+        self.assertIn(
+            'shred --remove "$RUNNER_TEMP/executor-request.json"', final_cleanup
+        )
 
     def test_actions_are_commit_pinned(self) -> None:
         pins = re.findall(r"uses:\s*[^\s@]+@([^\s#]+)", self.text)

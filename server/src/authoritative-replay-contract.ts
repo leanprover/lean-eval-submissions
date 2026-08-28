@@ -10,20 +10,28 @@ const MAX_IDENTITY_BYTES = 4096;
 const MAX_PLAINTEXT_BYTES = 10 * 1024 * 1024;
 const MAX_REPLAY_ATTEMPTS = 4;
 
-export type AuthoritativeReplayInput = {
-  schema_version: 1;
+type AuthoritativeReplayCommon = {
   runner_nonce: string;
   request: Record<string, unknown>;
   archive_expectation: {
-    schema_version: 1;
+    schema_version: 1 | 2;
     submission_id: string;
     archive_ciphertext_sha256: string;
     plaintext_tar_sha256: string;
     plaintext_tar_size: number;
+    key_material_type?: "age-file-key-v1";
   };
   ciphertext_base64: string;
-  plaintext_identity_base64: string;
 };
+
+export type AuthoritativeReplayInput = AuthoritativeReplayCommon & ({
+  schema_version: 1;
+  plaintext_identity_base64: string;
+} | {
+  schema_version: 2;
+  key_material_type: "age-file-key-v1";
+  plaintext_key_material_base64: string;
+});
 
 export type ReplayVerdict = {
   schema_version: 1;
@@ -146,17 +154,23 @@ export async function readAuthoritativeReplayRequest(
     throw new AuthoritativeReplayContractError("request is not one UTF-8 JSON object");
   }
   const outer = object(parsed, "request");
-  exactFields(outer, [
+  if (outer.schema_version !== 1 && outer.schema_version !== 2) {
+    throw new AuthoritativeReplayContractError("request schema_version must be integer 1 or 2");
+  }
+  const commonFields = [
     "schema_version",
     "runner_nonce",
     "request",
     "archive_expectation",
     "ciphertext_base64",
-    "plaintext_identity_base64",
-  ], "request");
-  if (outer.schema_version !== 1) {
-    throw new AuthoritativeReplayContractError("request schema_version must be integer 1");
-  }
+  ];
+  exactFields(
+    outer,
+    outer.schema_version === 1
+      ? [...commonFields, "plaintext_identity_base64"]
+      : [...commonFields, "key_material_type", "plaintext_key_material_base64"],
+    "request",
+  );
   const runnerNonce = text(outer.runner_nonce, "runner_nonce", 64);
   if (!DIGEST.test(runnerNonce)) throw new AuthoritativeReplayContractError("runner_nonce is invalid");
   const execution = object(outer.request, "execution request");
@@ -192,36 +206,55 @@ export async function readAuthoritativeReplayRequest(
     "archive_ciphertext_sha256",
     "plaintext_tar_sha256",
     "plaintext_tar_size",
+    ...(outer.schema_version === 2 ? ["key_material_type"] : []),
   ], "archive expectation");
   const plaintextDigest = text(expectation.plaintext_tar_sha256, "plaintext digest", 64);
   const plaintextSize = safeInteger(expectation.plaintext_tar_size, "plaintext size", MAX_PLAINTEXT_BYTES);
   if (
-    expectation.schema_version !== 1 ||
+    expectation.schema_version !== outer.schema_version ||
     expectation.submission_id !== submissionId ||
     expectation.archive_ciphertext_sha256 !== archiveDigest ||
     !DIGEST.test(plaintextDigest)
   ) {
     throw new AuthoritativeReplayContractError("archive expectation does not match execution request");
   }
+  if (outer.schema_version === 2 && expectation.key_material_type !== "age-file-key-v1") {
+    throw new AuthoritativeReplayContractError("archive expectation key material type is invalid");
+  }
   const ciphertext = canonicalBase64(outer.ciphertext_base64, "ciphertext_base64", MAX_CIPHERTEXT_BYTES);
-  const identity = canonicalBase64(outer.plaintext_identity_base64, "plaintext_identity_base64", MAX_IDENTITY_BYTES);
+  const keyMaterial = outer.schema_version === 1
+    ? canonicalBase64(outer.plaintext_identity_base64, "plaintext_identity_base64", MAX_IDENTITY_BYTES)
+    : canonicalBase64(outer.plaintext_key_material_base64, "plaintext_key_material_base64", 16);
+  if (outer.schema_version === 2 && outer.key_material_type !== "age-file-key-v1") {
+    throw new AuthoritativeReplayContractError("key material type is invalid");
+  }
+  if (outer.schema_version === 2 && (keyMaterial.length !== 24 || !keyMaterial.endsWith("=="))) {
+    throw new AuthoritativeReplayContractError("age file key must contain exactly 16 bytes");
+  }
   if (await sha256Base64(ciphertext) !== archiveDigest) {
     throw new AuthoritativeReplayContractError("ciphertext digest does not match execution request");
   }
-  return {
-    schema_version: 1,
+  const common: AuthoritativeReplayCommon = {
     runner_nonce: runnerNonce,
     request: execution,
     archive_expectation: {
-      schema_version: 1,
+      schema_version: outer.schema_version,
       submission_id: submissionId,
       archive_ciphertext_sha256: archiveDigest,
       plaintext_tar_sha256: plaintextDigest,
       plaintext_tar_size: plaintextSize,
+      ...(outer.schema_version === 2 ? { key_material_type: "age-file-key-v1" as const } : {}),
     },
     ciphertext_base64: ciphertext,
-    plaintext_identity_base64: identity,
   };
+  return outer.schema_version === 1
+    ? { schema_version: 1, ...common, plaintext_identity_base64: keyMaterial }
+    : {
+        schema_version: 2,
+        ...common,
+        key_material_type: "age-file-key-v1",
+        plaintext_key_material_base64: keyMaterial,
+      };
 }
 
 export async function readAuthoritativeReplayStatusRequest(

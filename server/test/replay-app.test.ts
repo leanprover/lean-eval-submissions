@@ -1078,6 +1078,41 @@ describe("Cloudflare replay executor", () => {
     expect(commands).toHaveLength(1);
   });
 
+  it("writes historical file-key material to its distinct sandbox input", async () => {
+    const body = await authoritativeInput();
+    body.schema_version = 2;
+    delete body.plaintext_identity_base64;
+    body.key_material_type = "age-file-key-v1";
+    body.plaintext_key_material_base64 = btoa("0123456789abcdef");
+    const expectation = body.archive_expectation as Record<string, unknown>;
+    expectation.schema_version = 2;
+    expectation.key_material_type = "age-file-key-v1";
+    const writes: string[] = [];
+    const response = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => ({
+        writeFile: (path) => {
+          writes.push(path);
+          return Promise.resolve({ success: true, path, timestamp: "fixture" });
+        },
+        exec: () => { throw new Error("blocking exec must remain unreachable"); },
+        getProcess: () => Promise.resolve(null),
+        startProcess: () => Promise.resolve({
+          getStatus: () => Promise.resolve("running" as const),
+          getLogs: () => Promise.resolve({ stdout: "", stderr: "" }),
+        } as never),
+        destroy: () => Promise.resolve(),
+      }),
+      receiptStore: () => terminalReceiptStore(),
+    });
+    expect(response.status).toBe(202);
+    expect(writes).toContain("/workspace/key-material.b64");
+    expect(writes).not.toContain("/workspace/identity.age.b64");
+  });
+
   it("persists the exact nonce binding before start and rejects a mismatched duplicate", async () => {
     const body = await authoritativeInput();
     const receipts = terminalReceiptStore();

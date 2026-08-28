@@ -28,6 +28,7 @@ if str(SCRIPT_DIRECTORY) not in sys.path:
 
 from archive_submission import _validate_sidecar  # noqa: E402
 from key_capability_contract import (  # noqa: E402
+    AGE_FILE_KEY_MATERIAL_TYPE,
     ContractError,
     capability_digest,
     validate_age_identity_bytes,
@@ -47,11 +48,11 @@ from replay_orchestrator import (  # noqa: E402
     validate_verdict,
 )
 
-
 DIGEST = re.compile(r"[0-9a-f]{64}")
 MAX_JSON_BYTES = 512 * 1024
 MAX_CIPHERTEXT_BYTES = 11 * 1024 * 1024
 MAX_IDENTITY_BYTES = 4096
+AGE_FILE_KEY_BYTES = 16
 MAX_PLAINTEXT_BYTES = 10 * 1024 * 1024
 RECOVERY_AFTER = dt.timedelta(hours=7)
 UNWRAP_FIELDS = {
@@ -96,7 +97,9 @@ def _load(path: pathlib.Path, label: str, maximum: int = MAX_JSON_BYTES) -> Any:
 def _write(path: pathlib.Path, value: Any) -> None:
     if path.exists() or path.is_symlink():
         raise ReplayControllerError(f"refusing to overwrite {path}")
-    encoded = (json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True) + "\n").encode()
+    encoded = (
+        json.dumps(value, ensure_ascii=True, indent=2, sort_keys=True) + "\n"
+    ).encode()
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "wb") as output:
         output.write(encoded)
@@ -133,7 +136,9 @@ def _parse_timestamp(value: Any, label: str) -> dt.datetime:
     try:
         parsed = dt.datetime.fromisoformat(value[:-1] + "+00:00")
     except ValueError as error:
-        raise ReplayControllerError(f"{label} is not canonical UTC milliseconds") from error
+        raise ReplayControllerError(
+            f"{label} is not canonical UTC milliseconds"
+        ) from error
     if _timestamp(parsed) != value:
         raise ReplayControllerError(f"{label} is not canonical UTC milliseconds")
     return parsed
@@ -173,7 +178,9 @@ def _validated_plan(plan_value: Any, queue_value: Any | None = None) -> dict[str
                 plan["request"]["measurement_config"],
             )
             if plan != expected:
-                raise ReplayControllerError("replay plan is not the next exact queue task")
+                raise ReplayControllerError(
+                    "replay plan is not the next exact queue task"
+                )
         return plan
     except (ReplayError, TypeError, ValueError) as error:
         if isinstance(error, ReplayControllerError):
@@ -187,7 +194,9 @@ def _validate_archive(
     request = plan["request"]
     source = request["source"]
     if source.get("visibility") != "private":
-        raise ReplayControllerError("credentialed controller requires a private replay plan")
+        raise ReplayControllerError(
+            "credentialed controller requires a private replay plan"
+        )
     archive = source["archive"]
     sidecar = _object(sidecar_value, "archive sidecar")
     try:
@@ -195,7 +204,9 @@ def _validate_archive(
     except SystemExit as error:
         raise ReplayControllerError(f"archive sidecar is invalid: {error}") from error
     if sidecar.get("schema_version") != 3:
-        raise ReplayControllerError("credentialed replay requires archive sidecar schema version 3")
+        raise ReplayControllerError(
+            "credentialed replay requires archive sidecar schema version 3"
+        )
     if not ciphertext_path.is_file() or ciphertext_path.is_symlink():
         raise ReplayControllerError("encrypted archive is not one regular file")
     size = ciphertext_path.stat().st_size
@@ -210,7 +221,9 @@ def _validate_archive(
         or sidecar.get("size_bytes_ciphertext") != size
         or sidecar.get("benchmark_commit") != request["benchmark"]["commit"]
     ):
-        raise ReplayControllerError("archive, sidecar, and replay plan are not exactly bound")
+        raise ReplayControllerError(
+            "archive, sidecar, and replay plan are not exactly bound"
+        )
     plaintext_size = sidecar.get("size_bytes_plaintext_tar")
     if (
         type(plaintext_size) is not int
@@ -218,7 +231,9 @@ def _validate_archive(
         or not isinstance(sidecar.get("sha256_plaintext_tar"), str)
         or DIGEST.fullmatch(sidecar["sha256_plaintext_tar"]) is None
     ):
-        raise ReplayControllerError("archive plaintext identity exceeds the executor contract")
+        raise ReplayControllerError(
+            "archive plaintext identity exceeds the executor contract"
+        )
     envelope = validate_envelope(sidecar.get("key_envelope"))
     if (
         envelope["submission_id"] != expected_submission
@@ -282,7 +297,7 @@ def build_executor_request(
     sidecar_value: Any,
     ciphertext_path: pathlib.Path,
     unwrap_value: Any,
-    identity_path: pathlib.Path,
+    key_material_path: pathlib.Path,
 ) -> dict[str, Any]:
     plan = _validated_plan(plan_value)
     sidecar, envelope = _validate_archive(plan, sidecar_value, ciphertext_path)
@@ -318,26 +333,44 @@ def build_executor_request(
     if any(capability.get(field) != expected for field, expected in expected_capability.items()):
         raise ReplayControllerError("unwrap capability differs from the execution plan")
     try:
-        identity = identity_path.read_bytes()
+        key_material = key_material_path.read_bytes()
         ciphertext = ciphertext_path.read_bytes()
     except OSError as error:
         raise ReplayControllerError("cannot read private executor input") from error
-    if not 0 < len(identity) <= MAX_IDENTITY_BYTES:
-        raise ReplayControllerError("plaintext identity exceeds its size limit")
-    validate_age_identity_bytes(identity)
-    return {
-        "schema_version": 1,
+    if envelope["schema_version"] == 1:
+        if not 0 < len(key_material) <= MAX_IDENTITY_BYTES:
+            raise ReplayControllerError("plaintext identity exceeds its size limit")
+        validate_age_identity_bytes(key_material)
+    elif len(key_material) != AGE_FILE_KEY_BYTES:
+        raise ReplayControllerError(
+            "plaintext age file key must contain exactly 16 bytes"
+        )
+    archive_expectation = {
+        "schema_version": envelope["schema_version"],
+        "submission_id": capability["submission_id"],
+        "archive_ciphertext_sha256": capability["archive_ciphertext_sha256"],
+        "plaintext_tar_sha256": sidecar["sha256_plaintext_tar"],
+        "plaintext_tar_size": sidecar["size_bytes_plaintext_tar"],
+    }
+    if envelope["schema_version"] == 2:
+        archive_expectation["key_material_type"] = AGE_FILE_KEY_MATERIAL_TYPE
+    common = {
         "runner_nonce": capability["runner_nonce"],
         "request": plan["request"],
-        "archive_expectation": {
-            "schema_version": 1,
-            "submission_id": capability["submission_id"],
-            "archive_ciphertext_sha256": capability["archive_ciphertext_sha256"],
-            "plaintext_tar_sha256": sidecar["sha256_plaintext_tar"],
-            "plaintext_tar_size": sidecar["size_bytes_plaintext_tar"],
-        },
+        "archive_expectation": archive_expectation,
         "ciphertext_base64": base64.b64encode(ciphertext).decode("ascii"),
-        "plaintext_identity_base64": base64.b64encode(identity).decode("ascii"),
+    }
+    if envelope["schema_version"] == 1:
+        return {
+            "schema_version": 1,
+            **common,
+            "plaintext_identity_base64": base64.b64encode(key_material).decode("ascii"),
+        }
+    return {
+        "schema_version": 2,
+        **common,
+        "key_material_type": AGE_FILE_KEY_MATERIAL_TYPE,
+        "plaintext_key_material_base64": base64.b64encode(key_material).decode("ascii"),
     }
 
 
@@ -351,37 +384,66 @@ def unwrap_identity(
     if metadata.get("StatusCode") != 200 or "FunctionError" in metadata:
         raise ReplayControllerError("unwrap Lambda did not return a successful invocation")
     response = _object(response_value, "unwrap response")
-    if set(response) != {
+    try:
+        envelope = validate_envelope(request.get("envelope"))
+    except ContractError as error:
+        raise ReplayControllerError("unwrap envelope is invalid") from error
+    if envelope["adapter"] != request.get("adapter"):
+        raise ReplayControllerError("unwrap envelope names a different adapter")
+    schema_version = envelope.get("schema_version")
+    expected_fields = {
         "schema_version",
         "adapter",
         "request_id",
         "data_key_id",
         "capability_digest",
-        "plaintext_identity_base64",
-    }:
+        "plaintext_identity_base64"
+        if schema_version == 1
+        else "plaintext_key_material_base64",
+    }
+    if schema_version == 2:
+        expected_fields.add("key_material_type")
+    if set(response) != expected_fields:
         raise ReplayControllerError("unwrap response fields are not canonical")
     capability = _object(request.get("capability"), "unwrap capability")
-    envelope = _object(request.get("envelope"), "unwrap envelope")
     expected_digest = capability_digest(capability)
     if (
-        response.get("schema_version") != 1
+        response.get("schema_version") != schema_version
         or response.get("adapter") != request.get("adapter")
         or response.get("request_id") != capability.get("request_id")
         or response.get("data_key_id") != envelope.get("data_key_id")
         or response.get("capability_digest") != expected_digest
     ):
         raise ReplayControllerError("unwrap response is not bound to the exact request")
-    encoded = response.get("plaintext_identity_base64")
-    if not isinstance(encoded, str) or len(encoded) > ((MAX_IDENTITY_BYTES + 2) // 3) * 4:
-        raise ReplayControllerError("unwrap response identity exceeds its encoded size limit")
+    if schema_version == 1:
+        encoded = response.get("plaintext_identity_base64")
+        maximum = MAX_IDENTITY_BYTES
+    else:
+        if response.get("key_material_type") != AGE_FILE_KEY_MATERIAL_TYPE:
+            raise ReplayControllerError("unwrap response key material type is invalid")
+        encoded = response.get("plaintext_key_material_base64")
+        maximum = AGE_FILE_KEY_BYTES
+    if not isinstance(encoded, str) or len(encoded) > ((maximum + 2) // 3) * 4:
+        raise ReplayControllerError(
+            "unwrap response key material exceeds its encoded size limit"
+        )
     try:
-        identity = base64.b64decode(encoded, validate=True)
+        material = base64.b64decode(encoded, validate=True)
     except ValueError as error:
-        raise ReplayControllerError("unwrap response identity is not canonical base64") from error
-    if base64.b64encode(identity).decode("ascii") != encoded:
-        raise ReplayControllerError("unwrap response identity is not canonical base64")
-    validate_age_identity_bytes(identity)
-    return identity
+        raise ReplayControllerError(
+            "unwrap response key material is not canonical base64"
+        ) from error
+    if base64.b64encode(material).decode("ascii") != encoded:
+        raise ReplayControllerError(
+            "unwrap response key material is not canonical base64"
+        )
+    if schema_version == 1:
+        validate_age_identity_bytes(material)
+    elif len(material) != AGE_FILE_KEY_BYTES:
+        raise ReplayControllerError(
+            "unwrap response age file key must contain exactly 16 bytes"
+        )
+    return material
 
 
 def validate_executor_response(response_value: Any, plan_value: Any) -> dict[str, Any]:
@@ -449,9 +511,16 @@ def terminal_event(
     started = _object(started_value, "replay.started event")
     transition = plan["started_transition"]
     if (
-        set(started) != {
-            "schema_version", "event_id", "event_type", "occurred_at", "subject_id",
-            "causation_event_id", "actor", "payload",
+        set(started)
+        != {
+            "schema_version",
+            "event_id",
+            "event_type",
+            "occurred_at",
+            "subject_id",
+            "causation_event_id",
+            "actor",
+            "payload",
         }
         or started.get("schema_version") != 1
         or started.get("event_type") != "replay.started"
@@ -460,7 +529,9 @@ def terminal_event(
         or started.get("actor") != {"kind": "system"}
         or started.get("payload") != transition["payload"]
     ):
-        raise ReplayControllerError("replay.started event does not match the execution plan")
+        raise ReplayControllerError(
+            "replay.started event does not match the execution plan"
+        )
     started_id = _match(UUID7, started.get("event_id"), "replay.started event_id")
     body = terminal_transition(plan, verdict_value, started_id)
     occurred = _event_time(trusted_now, started.get("occurred_at"))
@@ -488,14 +559,22 @@ def recover_running(domain_value: Any, trusted_now: str) -> dict[str, Any]:
     ]
     if not running:
         return {"schema_version": 1, "kind": "none"}
-    task = min(running, key=lambda item: (str(item.get("occurred_at")), str(item.get("replay_task_id"))))
+    task = min(
+        running,
+        key=lambda item: (
+            str(item.get("occurred_at")),
+            str(item.get("replay_task_id")),
+        ),
+    )
     now = _parse_timestamp(trusted_now, "trusted_now")
     started_at = _parse_timestamp(task.get("occurred_at"), "running replay occurred_at")
     if now - started_at < RECOVERY_AFTER:
         return {
             "schema_version": 1,
             "kind": "busy",
-            "replay_task_id": _match(REPLAY_ID, task.get("replay_task_id"), "replay_task_id"),
+            "replay_task_id": _match(
+                REPLAY_ID, task.get("replay_task_id"), "replay_task_id"
+            ),
         }
     attempt = task.get("attempt")
     if (

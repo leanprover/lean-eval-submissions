@@ -14,6 +14,10 @@ on:
       - 'server/replay-image/replay-measure'
       - 'server/replay-image/replay-profile-lock-v433.json'
       - 'server/replay-image/replay-staging-acceptance'
+      - 'server/age-file-key/go.mod'
+      - 'server/age-file-key/go.sum'
+      - 'server/age-file-key/main.go'
+      - 'server/age-file-key/main_test.go'
   workflow_dispatch:
 
 permissions:
@@ -79,6 +83,7 @@ jobs:
             test -x /opt/lean-eval/bin/comparator
             test -x /opt/lean-eval/bin/lean4export
             test -x /opt/lean-eval/bin/nanoda_bin
+            test -x /opt/lean-eval/bin/age-file-key
             test -x /opt/lean-eval/replay-authoritative
             test -x /opt/lean-eval/replay-staging-acceptance
             test -x /opt/lean-eval/replay-archive-acceptance

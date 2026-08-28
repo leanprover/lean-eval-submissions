@@ -492,13 +492,15 @@ jobs:
         if: always()
         run: |
           if [ -f "$RUNNER_TEMP/identity.age" ]; then shred --remove "$RUNNER_TEMP/identity.age"; fi
+          if [ -f "$RUNNER_TEMP/executor-request.json" ]; then
+            shred --remove "$RUNNER_TEMP/executor-request.json"
+          fi
           rm -rf audit "$RUNNER_TEMP/state-views"
           rm -f "$RUNNER_TEMP/archive.tar.age" \
             "$RUNNER_TEMP/archive-sidecar.json" \
             "$RUNNER_TEMP/unwrap-request.json" \
             "$RUNNER_TEMP/unwrap-response.json" \
             "$RUNNER_TEMP/unwrap-metadata.json" \
-            "$RUNNER_TEMP/executor-request.json" \
             "$RUNNER_TEMP/executor-status-request.json" \
             "$RUNNER_TEMP/executor-start-response.json" \
             "$RUNNER_TEMP/executor-poll-response.json" \
