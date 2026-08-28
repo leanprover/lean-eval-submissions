@@ -1834,16 +1834,13 @@ def _historical_replay_states(
     return states
 
 
-def recover_running(
+def current_historical_running(
     events_root: pathlib.Path,
-    trusted_now: str,
     *,
     state_validated: bool,
-    cleanup_confirmation_value: Any | None = None,
-    random_bytes: bytes | None = None,
     authority_event_type: str = "historical_result.replay_authorized",
-) -> dict[str, Any]:
-    """Project recovery only after the caller completed full State validation.
+) -> list[dict[str, Any]]:
+    """Project current running replays after authoritative State validation.
 
     This reducer defensively rechecks the historical transition subset that it
     consumes; it is not a replacement for lean-eval-state's authoritative
@@ -1871,7 +1868,30 @@ def recover_running(
         authorities,
         authority_event_type=authority_event_type,
     )
-    running = [state["event"] for state in states.values() if state["status"] == "running"]
+    return [
+        {"replay_task_id": task_id, **state}
+        for task_id, state in sorted(states.items())
+        if state["status"] == "running"
+    ]
+
+
+def recover_running(
+    events_root: pathlib.Path,
+    trusted_now: str,
+    *,
+    state_validated: bool,
+    cleanup_confirmation_value: Any | None = None,
+    random_bytes: bytes | None = None,
+    authority_event_type: str = "historical_result.replay_authorized",
+) -> dict[str, Any]:
+    """Project recovery only after the caller completed full State validation."""
+
+    running_states = current_historical_running(
+        events_root,
+        state_validated=state_validated,
+        authority_event_type=authority_event_type,
+    )
+    running = [state["event"] for state in running_states]
     if not running:
         return {"schema_version": 1, "kind": "none"}
     if len(running) != 1:

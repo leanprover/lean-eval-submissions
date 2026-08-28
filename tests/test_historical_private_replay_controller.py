@@ -388,7 +388,7 @@ class Fixture:
             controller.state_canonical_bytes(self.queue)
         )
         (self.state / "scripts/state.py").write_text(
-            "import argparse, pathlib, shutil\n"
+            "import argparse, json, pathlib\n"
             "parser = argparse.ArgumentParser()\n"
             "parser.add_argument('--root', type=pathlib.Path, required=True)\n"
             "commands = parser.add_subparsers(dest='command', required=True)\n"
@@ -398,10 +398,54 @@ class Fixture:
             "args = parser.parse_args()\n"
             "if args.command == 'materialize':\n"
             "    args.output.mkdir(parents=True)\n"
-            "    shutil.copyfile(args.root / 'fixture-queue.json', "
-            "args.output / 'historical-private-replay-queue.json')\n",
+            "    queue = json.loads((args.root / 'fixture-queue.json').read_text())\n"
+            "    events = [json.loads(path.read_text()) for path in "
+            "sorted((args.root / 'events').glob('*/*.json'))]\n"
+            "    if any(event['event_type'] == 'replay.started' for event in events):\n"
+            "        queue['tasks'] = []\n"
+            "    (args.output / 'historical-private-replay-queue.json').write_text("
+            "json.dumps(queue, ensure_ascii=True, indent=2, sort_keys=True) + '\\n')\n",
             encoding="utf-8",
         )
+        history = (
+            {
+                "schema_version": 1,
+                "event_id": self.task["authority_event_id"],
+                "event_type": controller.AUTHORITY_EVENT_TYPE,
+                "occurred_at": self.task["authorized_at"],
+                "subject_id": self.result_id,
+                "causation_event_id": None,
+                "actor": {"kind": "system"},
+                "payload": {},
+            },
+            {
+                "schema_version": 1,
+                "event_id": self.task["qualification_event_id"],
+                "event_type": "historical_archive_result.replay_profile_qualified",
+                "occurred_at": self.task["qualified_at"],
+                "subject_id": self.result_id,
+                "causation_event_id": self.task["authority_event_id"],
+                "actor": {"kind": "system"},
+                "payload": {},
+            },
+            {
+                "schema_version": 1,
+                "event_id": self.task["event_id"],
+                "event_type": "replay.enqueued",
+                "occurred_at": self.task["occurred_at"],
+                "subject_id": self.task["replay_task_id"],
+                "causation_event_id": self.task["qualification_event_id"],
+                "actor": {"kind": "system"},
+                "payload": {"result_id": self.result_id},
+            },
+        )
+        for event in history:
+            path = (
+                self.state / "events" / event["event_id"][:2]
+                / f"{event['event_id']}.json"
+            )
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(controller.state_canonical_bytes(event))
         self.state_head = self.commit_in(self.state, "Add exact protected State fixture")
         self.set_state_upstream()
         self.previous_state_minimum = controller.STATE_MINIMUM_COMMITS["production"]
@@ -479,6 +523,50 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.fixture.close()
+
+    def assert_post_start_actions_reject_terminal_history(
+        self, plan: dict[str, object], started: dict[str, object]
+    ) -> None:
+        self.assertEqual(controller.load_state_queue(self.fixture.state)[0]["tasks"], [])
+        verdict = {
+            "schema_version": 1,
+            "replay_task_id": self.fixture.task["replay_task_id"],
+            "attempt": 1,
+            "execution_outcome": "failed",
+            "checker_outcome": None,
+            "failure_reason": "runner_lost",
+            "statistics": None,
+        }
+        calls = (
+            lambda: controller.terminal_candidate(
+                plan,
+                started,
+                verdict,
+                self.fixture.state,
+                "2026-10-21T07:00:02.000Z",
+            ),
+            lambda: controller.prepare_unwrap(
+                plan,
+                self.fixture.state,
+                started,
+                self.fixture.audit,
+                "2026-10-21T07:00:02.000Z",
+            ),
+            lambda: controller.build_executor_request(
+                plan,
+                self.fixture.state,
+                started,
+                self.fixture.audit,
+                {},
+                pathlib.Path("unused-key-material"),
+            ),
+        )
+        for action in calls:
+            with self.assertRaisesRegex(
+                controller.HistoricalPrivateReplayControllerError,
+                "not the unique current running private replay",
+            ):
+                action()
 
     def test_queue_is_distinct_closed_schema_one_and_selects_first_sorted_task(self) -> None:
         queue = controller.validate_queue(self.fixture.queue)
@@ -772,6 +860,62 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 pathlib.Path("unused-key-material"),
             )
 
+    def test_accepted_terminal_cannot_reuse_committed_start_for_actions(self) -> None:
+        plan = self.fixture.plan()
+        started = controller.started_candidate(
+            plan,
+            self.fixture.state,
+            "2026-10-21T07:00:00.000Z",
+            random_bytes=b"\x0e" * 10,
+        )
+        self.fixture.commit_state_event(started["event"])
+        verdict = json.loads(
+            (ROOT / "tests/fixtures/replay-verdict-accepted-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        verdict["replay_task_id"] = self.fixture.task["replay_task_id"]
+        terminal = controller.terminal_candidate(
+            plan,
+            started,
+            verdict,
+            self.fixture.state,
+            "2026-10-21T07:00:01.000Z",
+            random_bytes=b"\x0d" * 10,
+        )
+        self.fixture.commit_state_event(terminal["event"])
+        self.assert_post_start_actions_reject_terminal_history(plan, started)
+
+    def test_failed_terminal_cannot_reuse_start_when_current_queue_is_empty(self) -> None:
+        plan = self.fixture.plan()
+        started = controller.started_candidate(
+            plan,
+            self.fixture.state,
+            "2026-10-21T07:00:00.000Z",
+            random_bytes=b"\x0f" * 10,
+        )
+        self.fixture.commit_state_event(started["event"])
+        verdict = {
+            "schema_version": 1,
+            "replay_task_id": self.fixture.task["replay_task_id"],
+            "attempt": 1,
+            "execution_outcome": "failed",
+            "checker_outcome": None,
+            "failure_reason": "verdict_invalid",
+            "statistics": None,
+        }
+        terminal = controller.terminal_candidate(
+            plan,
+            started,
+            verdict,
+            self.fixture.state,
+            "2026-10-21T07:00:01.000Z",
+            random_bytes=b"\x0d" * 10,
+        )
+        self.assertFalse(terminal["event"]["payload"]["retryable"])
+        self.fixture.commit_state_event(terminal["event"])
+        self.assert_post_start_actions_reject_terminal_history(plan, started)
+
     def test_authority_entry_and_profile_substitution_fail_closed(self) -> None:
         authority = copy.deepcopy(self.fixture.authority)
         authority["entries"][0]["archive_submission_id"] = (
@@ -869,14 +1013,23 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
             "statistics": None,
         }
         self.fixture.commit_state_event(started["event"])
-        terminal = controller.terminal_candidate(
-            plan,
-            started,
-            verdict,
-            self.fixture.state,
-            "2026-10-21T07:00:01.000Z",
-            random_bytes=b"\x04" * 10,
-        )
+        running = [{
+            "replay_task_id": self.fixture.task["replay_task_id"],
+            "status": "running",
+            "attempt": 4,
+            "event": started["event"],
+        }]
+        with mock.patch.object(
+            controller, "current_historical_running", return_value=running
+        ):
+            terminal = controller.terminal_candidate(
+                plan,
+                started,
+                verdict,
+                self.fixture.state,
+                "2026-10-21T07:00:01.000Z",
+                random_bytes=b"\x04" * 10,
+            )
         self.assertFalse(terminal["event"]["payload"]["retryable"])
         queue["tasks"][0]["attempt"] = 4
         with self.assertRaisesRegex(

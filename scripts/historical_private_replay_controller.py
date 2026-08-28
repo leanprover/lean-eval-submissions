@@ -50,6 +50,7 @@ from historical_replay_controller import (  # noqa: E402
     _timestamp,
     _write,
     canonical_bytes,
+    current_historical_running,
     recover_running as recover_historical_running,
     sha256_bytes,
     state_canonical_bytes,
@@ -1210,6 +1211,38 @@ def validate_started_history(
     if verified_head != current_head:
         raise HistoricalPrivateReplayControllerError(
             "protected State HEAD changed during history validation"
+        )
+    running = current_historical_running(
+        state_root / "events",
+        state_validated=True,
+        authority_event_type=AUTHORITY_EVENT_TYPE,
+    )
+    expected_attempt = plan["task"]["attempt"] + 1
+    if (
+        len(running) != 1
+        or running[0].get("replay_task_id") != plan["task"]["replay_task_id"]
+        or running[0].get("status") != "running"
+        or running[0].get("attempt") != expected_attempt
+        or running[0].get("event") != event
+        or event.get("event_id") != started["event"].get("event_id")
+        or event.get("payload") != {
+            "attempt": expected_attempt,
+            "runner_profile": plan["execution_plan"]["request"][
+                "execution_profile"
+            ]["runner_profile"],
+        }
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "supplied start is not the unique current running private replay"
+        )
+    final_head = _verify_checkout(
+        state_root,
+        plan["state"]["repository"],
+        minimum_commit=STATE_MINIMUM_COMMITS[plan["state"]["queue_environment"]],
+    )
+    if final_head != current_head:
+        raise HistoricalPrivateReplayControllerError(
+            "protected State HEAD changed during running-task validation"
         )
     return plan, started, current_head
 
