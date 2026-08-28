@@ -1,0 +1,12 @@
+**
+!Dockerfile.historical-private-replay
+!configuration/historical-private-replay-image-matrix-v1.json
+!scripts/evaluate_submission.py
+!scripts/prepare_historical_image_layers.py
+!scripts/replay_orchestrator.py
+!server/age-file-key/go.mod
+!server/age-file-key/go.sum
+!server/age-file-key/main.go
+!server/replay-image/comparator-71b52-phase-metrics.patch
+!server/replay-image/replay-authoritative
+!server/replay-image/replay-measure

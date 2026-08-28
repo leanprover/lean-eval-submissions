@@ -1,0 +1,225 @@
+FROM docker.io/golang:1.25.12-bookworm@sha256:6359592445455f2dbe2412bed411336035bc019a50017720d77454ffdd6d0f82 AS landrun-builder
+
+RUN CGO_ENABLED=0 go install \
+      github.com/zouuup/landrun/cmd/landrun@5ed4a3db3a4ad930d577215c6b9abaa19df7f99f \
+    && strip /go/bin/landrun
+
+
+FROM docker.io/golang:1.25.12-bookworm@sha256:6359592445455f2dbe2412bed411336035bc019a50017720d77454ffdd6d0f82 AS age-file-key-builder
+
+COPY server/age-file-key/go.mod server/age-file-key/go.sum /build/age-file-key/
+RUN cd /build/age-file-key && go mod download
+COPY server/age-file-key/main.go /build/age-file-key/
+RUN cd /build/age-file-key \
+    && CGO_ENABLED=0 go build -mod=readonly -trimpath -ldflags='-s -w' -o /age-file-key .
+
+
+FROM docker.io/rust:1.89.0-bookworm@sha256:948f9b08a66e7fe01b03a98ef1c7568292e07ec2e4fe90d88c07bb14563c84ff AS nanoda-builder
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates git \
+    && rm -rf /var/lib/apt/lists/* \
+    && git init /build/nanoda \
+    && git -C /build/nanoda remote add origin https://github.com/robsimmons/nanoda_lib.git \
+    && git -C /build/nanoda fetch --depth 1 origin 68d5ca9db226849b41a6fff59d796ff19d0a8840 \
+    && git -C /build/nanoda checkout --detach FETCH_HEAD \
+    && test "$(git -C /build/nanoda rev-parse HEAD)" = 68d5ca9db226849b41a6fff59d796ff19d0a8840 \
+    && cargo build --locked --release --manifest-path /build/nanoda/Cargo.toml \
+    && strip /build/nanoda/target/release/nanoda_bin
+
+
+FROM docker.io/cloudflare/sandbox:0.12.7@sha256:6d741713aef266e8ae0831a5709c6f2d7b77b4952ac79b549f4f4e380af86fbe AS lean-builder
+
+ARG BENCHMARK_COMMIT
+USER root
+ENV HOME=/opt/lean-eval/home
+ENV ELAN_HOME=/opt/lean-eval/home/.elan
+ENV PATH=/opt/lean-eval/home/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+COPY configuration/historical-private-replay-image-matrix-v1.json /tmp/private-image-matrix.json
+COPY server/replay-image/comparator-71b52-phase-metrics.patch /tmp/comparator-phase-metrics.patch
+COPY scripts/prepare_historical_image_layers.py /tmp/prepare-historical-image-layers.py
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# The build argument may select only one of the 63 closed source entries. No
+# qualification record or previously published image digest is an image input.
+RUN python3 - <<'PY'
+import hashlib
+import json
+import os
+import pathlib
+import re
+
+path = pathlib.Path("/tmp/private-image-matrix.json")
+raw = path.read_bytes()
+assert hashlib.sha256(raw).hexdigest() == "54ad4c237d08e5d0e298dfc8f752b25c89ce30e79b396a2256b4216a1c0f772c"
+matrix = json.loads(raw)
+commit = os.environ["BENCHMARK_COMMIT"]
+assert re.fullmatch(r"[0-9a-f]{40}", commit)
+assert matrix["kind"] == "historical_private_replay_image_matrix"
+assert matrix["image_count"] == len(matrix["images"]) == 63
+assert matrix["checker"] == "nanoda"
+matches = [item for item in matrix["images"] if item["benchmark_commit"] == commit]
+assert len(matches) == 1
+entry = matches[0]
+lock = entry["profile_lock"]
+values = {
+    "BENCHMARK_COMMIT": entry["benchmark_commit"],
+    "BENCHMARK_TREE": entry["benchmark_tree"],
+    "TOOLCHAIN": entry["toolchain"],
+    "TOOLCHAIN_BLOB_SHA256": entry["lean_toolchain_blob_sha256"],
+    "WORKSPACE_COUNT": str(entry["workspace_count"]),
+    "COMPARATOR_COMMIT": lock["components"]["comparator"]["commit"],
+    "LEAN4EXPORT_COMMIT": lock["components"]["lean4export"]["commit"],
+}
+patterns = {
+    "BENCHMARK_COMMIT": r"[0-9a-f]{40}", "BENCHMARK_TREE": r"[0-9a-f]{40}",
+    "TOOLCHAIN": r"leanprover/lean4:v[0-9]+\.[0-9]+\.[0-9]+(?:-rc[0-9]+)?",
+    "TOOLCHAIN_BLOB_SHA256": r"[0-9a-f]{64}", "WORKSPACE_COUNT": r"[1-9][0-9]{0,3}",
+    "COMPARATOR_COMMIT": r"[0-9a-f]{40}", "LEAN4EXPORT_COMMIT": r"[0-9a-f]{40}",
+}
+assert all(re.fullmatch(patterns[key], value) for key, value in values.items())
+pathlib.Path("/tmp/image.env").write_text("".join(f"{key}={value}\n" for key, value in values.items()))
+pathlib.Path("/tmp/profile-lock.json").write_text(json.dumps(lock, indent=2, sort_keys=True) + "\n")
+pathlib.Path("/tmp/private-image-entry.json").write_text(json.dumps(entry, indent=2, sort_keys=True) + "\n")
+PY
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends binutils ca-certificates curl git \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /opt/lean-eval/home /build \
+    && curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+      https://github.com/leanprover/elan/releases/download/v4.2.3/elan-x86_64-unknown-linux-gnu.tar.gz \
+      --output /tmp/elan.tar.gz \
+    && echo 'df0b2b3a439961ffcbb3985214365ffe40f49bc871df04dff268c7d8e21ca8b2  /tmp/elan.tar.gz' \
+      | sha256sum --check --strict \
+    && tar --extract --gzip --file /tmp/elan.tar.gz --directory /tmp elan-init \
+    && /tmp/elan-init -y --no-modify-path --default-toolchain none \
+    && rm -f /tmp/elan-init /tmp/elan.tar.gz \
+    && . /tmp/image.env \
+    && elan toolchain install leanprover/lean4:v4.30.0-rc2 \
+    && if [ "$TOOLCHAIN" != leanprover/lean4:v4.30.0-rc2 ]; then elan toolchain install "$TOOLCHAIN"; fi \
+    && elan run "$TOOLCHAIN" lean --version | grep -F "Lean (version ${TOOLCHAIN##*:v}"
+
+RUN . /tmp/image.env \
+    && git init /build/comparator \
+    && git -C /build/comparator remote add origin https://github.com/leanprover/comparator.git \
+    && git -C /build/comparator fetch --depth 1 origin "$COMPARATOR_COMMIT" \
+    && git -C /build/comparator checkout --detach FETCH_HEAD \
+    && test "$(git -C /build/comparator rev-parse HEAD)" = "$COMPARATOR_COMMIT" \
+    && git -C /build/comparator apply --check /tmp/comparator-phase-metrics.patch \
+    && git -C /build/comparator apply /tmp/comparator-phase-metrics.patch \
+    && cd /build/comparator \
+    && elan run leanprover/lean4:v4.30.0-rc2 lake build comparator \
+    && strip /build/comparator/.lake/build/bin/comparator
+
+RUN . /tmp/image.env \
+    && git init /build/lean4export \
+    && git -C /build/lean4export remote add origin https://github.com/leanprover/lean4export.git \
+    && git -C /build/lean4export fetch --depth 1 origin "$LEAN4EXPORT_COMMIT" \
+    && git -C /build/lean4export checkout --detach FETCH_HEAD \
+    && test "$(git -C /build/lean4export rev-parse HEAD)" = "$LEAN4EXPORT_COMMIT" \
+    && printf '%s\n' "$TOOLCHAIN" > /build/lean4export/lean-toolchain \
+    && cd /build/lean4export \
+    && lake build lean4export \
+    && strip /build/lean4export/.lake/build/bin/lean4export
+
+RUN . /tmp/image.env \
+    && git init /build/benchmark \
+    && git -C /build/benchmark remote add origin https://github.com/leanprover/lean-eval.git \
+    && git -C /build/benchmark fetch --depth 1 origin "$BENCHMARK_COMMIT" \
+    && git -C /build/benchmark checkout --detach FETCH_HEAD \
+    && test "$(git -C /build/benchmark rev-parse HEAD)" = "$BENCHMARK_COMMIT" \
+    && test "$(git -C /build/benchmark rev-parse 'HEAD^{tree}')" = "$BENCHMARK_TREE" \
+    && test "$(sha256sum /build/benchmark/lean-toolchain | cut -d' ' -f1)" = "$TOOLCHAIN_BLOB_SHA256" \
+    && test "$(cat /build/benchmark/lean-toolchain)" = "$TOOLCHAIN" \
+    && cd /build/benchmark \
+    && lake update \
+    && git diff --exit-code -- lake-manifest.json \
+    && lake exe cache get \
+    && lake build lean-eval \
+    && printf '%s\n' "$BENCHMARK_COMMIT" > .lean-eval-commit \
+    && printf '%s\n' "$BENCHMARK_TREE" > .lean-eval-tree \
+    && for workspace in generated/*; do \
+         if [ -f "$workspace/lakefile.toml" ]; then \
+           mkdir -p "$workspace/.lake"; \
+           ln -s /build/benchmark/.lake/packages "$workspace/.lake/packages"; \
+           (cd "$workspace" && lake update); \
+           rm "$workspace/.lake/packages"; \
+         fi; \
+       done \
+    && test "$(find generated -mindepth 2 -maxdepth 2 -name lake-manifest.json | wc -l)" = "$WORKSPACE_COUNT" \
+    && python3 -c 'import json, pathlib; root = pathlib.Path("/build/benchmark"); manifest = json.loads((root / "lake-manifest.json").read_text()); packages = [{"type": "path", "dir": "/opt/lean-eval/benchmark/.lake/packages/" + package["name"].removeprefix("«").removesuffix("»"), "name": package["name"], "manifestFile": package["manifestFile"], "inherited": package["inherited"], "configFile": package["configFile"]} for package in manifest["packages"]]; (root / ".lake/package-overrides.json").write_text(json.dumps({"version": manifest["version"], "packages": packages}, indent=2, ensure_ascii=False, sort_keys=True) + "\n")' \
+    && for workspace in generated/*; do \
+         if [ -f "$workspace/lake-manifest.json" ]; then \
+           cp .lake/package-overrides.json "$workspace/.lake/package-overrides.json"; \
+         fi; \
+       done \
+    && test "$(find generated -mindepth 3 -maxdepth 3 -path '*/.lake/package-overrides.json' | wc -l)" = "$WORKSPACE_COUNT" \
+    && find /build/benchmark -type d -name .git -prune -exec rm -rf '{}' + \
+    && strip /build/benchmark/.lake/build/bin/lean-eval \
+    && mkdir -p /runtime/benchmark /runtime/bin /runtime/home/.elan/toolchains /runtime/profile \
+    && cp -a /build/benchmark/. /runtime/benchmark/ \
+    && cp /build/comparator/.lake/build/bin/comparator /runtime/bin/comparator \
+    && cp /build/lean4export/.lake/build/bin/lean4export /runtime/bin/lean4export \
+    && cp -a "$ELAN_HOME/bin" /runtime/home/.elan/bin \
+    && cp -a "$ELAN_HOME/settings.toml" /runtime/home/.elan/settings.toml \
+    && toolchain_dir="leanprover--lean4---${TOOLCHAIN##*:}" \
+    && cp -a "$ELAN_HOME/toolchains/$toolchain_dir" /runtime/home/.elan/toolchains/ \
+    && cp /tmp/profile-lock.json /tmp/private-image-entry.json /runtime/profile/ \
+    && python3 /tmp/prepare-historical-image-layers.py --runtime-root /runtime
+
+
+FROM docker.io/cloudflare/sandbox:0.12.7-python@sha256:6dfa7301e69d3e5cd8e0404b92fd240026fe834ed7101ee29cb66337b0af0981
+
+USER root
+ENV HOME=/opt/lean-eval/home
+ENV ELAN_HOME=/opt/lean-eval/home/.elan
+ENV PATH=/opt/lean-eval/bin:/opt/lean-eval/home/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+LABEL org.lean-eval.image-family="lean-eval-authoritative-private-replay-v1" \
+      org.lean-eval.image-matrix-sha256="54ad4c237d08e5d0e298dfc8f752b25c89ce30e79b396a2256b4216a1c0f772c"
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+      https://github.com/FiloSottile/age/releases/download/v1.3.1/age-v1.3.1-linux-amd64.tar.gz \
+      --output /tmp/age-v1.3.1.tar.gz \
+    && echo 'bdc69c09cbdd6cf8b1f333d372a1f58247b3a33146406333e30c0f26e8f51377  /tmp/age-v1.3.1.tar.gz' \
+      | sha256sum --check --strict \
+    && tar --extract --gzip --file /tmp/age-v1.3.1.tar.gz --directory /tmp \
+    && install -m 0555 /tmp/age/age /usr/local/bin/age \
+    && rm -rf /tmp/age /tmp/age-v1.3.1.tar.gz \
+    && test "$(age --version)" = 'v1.3.1'
+
+COPY --from=landrun-builder /go/bin/landrun /usr/local/bin/landrun
+COPY --from=age-file-key-builder /age-file-key /opt/lean-eval/bin/age-file-key
+COPY --from=nanoda-builder /build/nanoda/target/release/nanoda_bin /opt/lean-eval/bin/nanoda_bin
+COPY --from=lean-builder --chown=0:0 /runtime/benchmark/ /opt/lean-eval/benchmark/
+COPY --from=lean-builder --chown=0:0 /runtime/benchmark-packages/ /opt/lean-eval/benchmark/.lake/packages/
+COPY --from=lean-builder --chown=0:0 /runtime/bin/ /opt/lean-eval/bin/
+COPY --from=lean-builder --chown=0:0 /runtime/home/ /opt/lean-eval/home/
+COPY --from=lean-builder --chown=0:0 /runtime/profile/profile-lock.json /opt/lean-eval/replay-profile-lock.json
+COPY --from=lean-builder --chown=0:0 /runtime/profile/private-image-entry.json /opt/lean-eval/historical-private-image-entry.json
+COPY scripts/evaluate_submission.py /opt/lean-eval/evaluate_submission.py
+COPY scripts/replay_orchestrator.py /opt/lean-eval/replay_orchestrator.py
+COPY server/replay-image/replay-authoritative /opt/lean-eval/replay-authoritative
+COPY server/replay-image/replay-measure /opt/lean-eval/replay-measure
+
+RUN chmod 0555 /usr/local/bin/landrun /opt/lean-eval/bin/* \
+      /opt/lean-eval/replay-authoritative \
+      /opt/lean-eval/replay-measure \
+    && mkdir -p -m 0700 /run/lean-eval /workspace \
+    && test -x /opt/lean-eval/bin/age-file-key \
+    && test -x /opt/lean-eval/bin/nanoda_bin \
+    && test "$(find /opt/lean-eval -type d -name .git -print -quit)" = '' \
+    && test -d /opt/lean-eval/benchmark/.lake/packages \
+    && test -f /opt/lean-eval/benchmark/.lake/package-overrides.json \
+    && python3 -c 'import json, pathlib; overrides = json.loads(pathlib.Path("/opt/lean-eval/benchmark/.lake/package-overrides.json").read_text()); packages = overrides["packages"]; assert packages and all(pathlib.Path(package["dir"]).is_dir() for package in packages)' \
+    && test "$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" = 3.11 \
+    && python3 -c 'import sys, tomllib; sys.path.insert(0, "/opt/lean-eval"); from evaluate_submission import detect_matches; from replay_orchestrator import validate_execution_request; assert callable(detect_matches) and callable(validate_execution_request)'
+
+EXPOSE 3000
