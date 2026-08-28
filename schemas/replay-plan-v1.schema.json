@@ -32,7 +32,7 @@
               "additionalProperties": false,
               "required": ["attempt", "runner_profile"],
               "properties": {
-                "attempt": { "type": "integer", "minimum": 1 },
+                "attempt": { "type": "integer", "minimum": 1, "maximum": 4 },
                 "runner_profile": { "type": "string", "minLength": 1 }
               }
             }

@@ -1,0 +1,16 @@
+{
+  "actor": {
+    "kind": "system"
+  },
+  "causation_event_id": "01a02d6b-4580-7101-8101-010101010101",
+  "event_id": "01a02d6b-4968-7202-8202-020202020202",
+  "event_type": "replay.failed",
+  "occurred_at": "2026-08-23T07:00:01.000Z",
+  "payload": {
+    "attempt": 4,
+    "reason_code": "runner_lost",
+    "retryable": false
+  },
+  "schema_version": 1,
+  "subject_id": "rt1_1a47104fb3031967bc3f23cb5501f72c4a322b4cc3e2ff9b4c6aabb299596965"
+}

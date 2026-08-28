@@ -36,6 +36,7 @@ from key_capability_contract import (  # noqa: E402
 )
 from replay_orchestrator import (  # noqa: E402
     FAILURE_REASONS,
+    MAX_REPLAY_ATTEMPTS,
     REPLAY_ID,
     UUID7,
     ReplayError,
@@ -497,7 +498,11 @@ def recover_running(domain_value: Any, trusted_now: str) -> dict[str, Any]:
             "replay_task_id": _match(REPLAY_ID, task.get("replay_task_id"), "replay_task_id"),
         }
     attempt = task.get("attempt")
-    if type(attempt) is not int or attempt < 1:
+    if (
+        type(attempt) is not int
+        or attempt < 1
+        or attempt > MAX_REPLAY_ATTEMPTS
+    ):
         raise ReplayControllerError("running replay attempt is invalid")
     event_id = _match(UUID7, task.get("event_id"), "running replay event_id")
     occurred = max(now, started_at + dt.timedelta(milliseconds=1))
@@ -509,7 +514,11 @@ def recover_running(domain_value: Any, trusted_now: str) -> dict[str, Any]:
         "subject_id": _match(REPLAY_ID, task.get("replay_task_id"), "replay_task_id"),
         "causation_event_id": event_id,
         "actor": {"kind": "system"},
-        "payload": {"attempt": attempt, "reason_code": "runner_lost", "retryable": True},
+        "payload": {
+            "attempt": attempt,
+            "reason_code": "runner_lost",
+            "retryable": attempt < MAX_REPLAY_ATTEMPTS,
+        },
     }
     return {"schema_version": 1, "kind": "failed", "event": terminal}
 

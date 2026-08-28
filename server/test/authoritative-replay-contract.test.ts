@@ -93,6 +93,39 @@ describe("authoritative replay boundary contract", () => {
       .toThrow("does not match");
   });
 
+  it("rejects execution and status attempt five", async () => {
+    const requestBody = await fixture();
+    const execution = requestBody.request as Record<string, unknown>;
+    execution.attempt = 5;
+    await expect(readAuthoritativeReplayRequest(new Request("https://example.test", {
+      method: "POST",
+      body: JSON.stringify(requestBody),
+    }), PROFILE_DIGEST, MEASUREMENT_DIGEST, VM_IMAGE_DIGEST)).rejects.toThrow(
+      "attempt is invalid",
+    );
+
+    const validBody = await fixture();
+    const validExecution = validBody.request as Record<string, unknown>;
+    const profile = validExecution.execution_profile as Record<string, unknown>;
+    await expect(readAuthoritativeReplayStatusRequest(new Request(
+      "https://example.test",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          schema_version: 1,
+          runner_nonce: validBody.runner_nonce,
+          replay_task_id: validExecution.replay_task_id,
+          attempt: 5,
+          execution_profile_digest: validExecution.execution_profile_digest,
+          measurement_config_digest: validExecution.measurement_config_digest,
+          vm_image_digest: profile.vm_image_digest,
+        }),
+      },
+    ), PROFILE_DIGEST, MEASUREMENT_DIGEST, VM_IMAGE_DIGEST)).rejects.toThrow(
+      "attempt is invalid",
+    );
+  });
+
   it("rejects placeholder reviewed digests before reading the request", async () => {
     const request = () => new Request("https://example.test", {
       method: "POST",

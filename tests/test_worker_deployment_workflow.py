@@ -58,7 +58,7 @@ HISTORICAL_AUTHORITY_PREPARATION = (
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
     def test_deploy_and_rollback_bind_current_state_and_atomic_model_health(self) -> None:
-        expected = "15a96673efd44d3b198890c1e94581b33c2a1a87"
+        expected = "3dcf596b696b9f1f11de2e3c6127664fd0504884"
         self.assertEqual(QUALIFICATION["state_main_commit"], expected)
         self.assertGreaterEqual(DEPLOY.count(expected), 2)
         self.assertEqual(
@@ -817,7 +817,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertNotIn("github.token", state_gate)
 
     def test_runtime_and_historical_finalizer_bind_distinct_state_views(self) -> None:
-        state_commit = "15a96673efd44d3b198890c1e94581b33c2a1a87"
+        state_commit = "3dcf596b696b9f1f11de2e3c6127664fd0504884"
+        historical_state_commit = "15a96673efd44d3b198890c1e94581b33c2a1a87"
         runtime_schema = QUALIFICATION["state_event_schema_sha256"]
         complete_ledger_schema = (
             "acbdd88fa233fe2bc64eb928a421c06521e58b113bbd3f1b90c8a8744c84395a"
@@ -829,11 +830,14 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertEqual(WORKER_APP.count(f'"{runtime_schema}"'), 1)
         self.assertEqual(DEPLOY.count(f'"{runtime_schema}"'), 2)
 
-        # The offline finalizer validates the complete State ledger, including
-        # system-only historical unavailability events outside that projection.
+        # The offline finalizer remains bound to the reviewed historical
+        # snapshot. It validates the complete ledger at that snapshot,
+        # including system-only historical unavailability events outside the
+        # runtime projection.
         self.assertNotEqual(runtime_schema, complete_ledger_schema)
+        self.assertNotEqual(state_commit, historical_state_commit)
         self.assertIn(
-            f'STATE_COMMIT = "{state_commit}"',
+            f'STATE_COMMIT = "{historical_state_commit}"',
             HISTORICAL_AUTHORITY_PREPARATION,
         )
         self.assertIn(
@@ -1003,9 +1007,9 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                     "false",
                 )
                 expected_contract = (
-                    "f00055ed2ba9b4252f04e096d27aadd5beef0ed4"
+                    "23852beaeb059c88caf043d22dad19b211c377b2"
                     if environment == "staging"
-                    else "15a96673efd44d3b198890c1e94581b33c2a1a87"
+                    else "3dcf596b696b9f1f11de2e3c6127664fd0504884"
                 )
                 self.assertEqual(
                     configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],

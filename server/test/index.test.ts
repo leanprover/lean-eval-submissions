@@ -74,7 +74,7 @@ describe("Worker routing", () => {
   });
 
   it("reports independently effective consolidation and release opt-out gates", async () => {
-    const contract = "f00055ed2ba9b4252f04e096d27aadd5beef0ed4";
+    const contract = "23852beaeb059c88caf043d22dad19b211c377b2";
     const enabled = await handleRequest(
       new Request("https://example.test/healthz"),
       {
@@ -117,7 +117,7 @@ describe("Worker routing", () => {
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: configured,
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "f00055ed2ba9b4252f04e096d27aadd5beef0ed4",
+          "23852beaeb059c88caf043d22dad19b211c377b2",
       },
       LIFECYCLE,
     );
@@ -132,14 +132,14 @@ describe("Worker routing", () => {
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: "[]",
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "f00055ed2ba9b4252f04e096d27aadd5beef0ed4",
+          "23852beaeb059c88caf043d22dad19b211c377b2",
       },
       {
         ...ENV,
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: "not-json",
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "f00055ed2ba9b4252f04e096d27aadd5beef0ed4",
+          "23852beaeb059c88caf043d22dad19b211c377b2",
       },
       {
         ...ENV,
@@ -260,13 +260,13 @@ describe("Worker routing", () => {
   });
 
   it("returns a closed protected-contract proof for production readiness", async () => {
-    const contract = "15a96673efd44d3b198890c1e94581b33c2a1a87";
+    const contract = "3dcf596b696b9f1f11de2e3c6127664fd0504884";
     const tree = "2".repeat(40);
     const rootEntries = [
-      { path: "README.md", mode: "100644", type: "blob", sha: "9def120f4d0aae84fc3b713a029832e86b9a961e" },
-      { path: "docs", mode: "040000", type: "tree", sha: "df80aab31568ba6d715895b4d058e2cf53178e33" },
-      { path: "schema", mode: "040000", type: "tree", sha: "d5ab8e25ce33cfc54e19cd8fae4c4bdcc0455045" },
-      { path: "scripts", mode: "040000", type: "tree", sha: "9e019a7b631b93df2b5d91bd2ba3d164838c290d" },
+      { path: "README.md", mode: "100644", type: "blob", sha: "7b62f1d8f6163fae029eba2c3bed2cdca306db5e" },
+      { path: "docs", mode: "040000", type: "tree", sha: "8cc8d870409577f51b57f332634928da8de32c36" },
+      { path: "schema", mode: "040000", type: "tree", sha: "68ab16a379276231dc2dd1cef137018eaf6187c3" },
+      { path: "scripts", mode: "040000", type: "tree", sha: "cb41e84264627f91deca3d2be52e99fc65d905f1" },
     ] as const;
     const replies = [
       Response.json({ permissions: { push: true } }),
@@ -310,7 +310,7 @@ describe("Worker routing", () => {
       state_contract_commit: contract,
       state_contract_verified: true,
       state_event_schema_sha256:
-        "bc79d44a8565dac415837ed2d7f1585f262f9b8cabcbfcde0c5b085d5da99b5f",
+        "2d19515da1b0798f00dd3e9809c3a2770fee8b27ce6323ac9b9e827db4c7ea27",
     });
     expect(upstream).toHaveBeenCalledTimes(7);
     upstream.mockRestore();

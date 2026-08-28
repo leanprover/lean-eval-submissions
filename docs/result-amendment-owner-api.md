@@ -2,8 +2,8 @@
 
 The submission Worker contains an authenticated, feature-disabled owner API for
 the append-only result amendment contract at production State commit
-`15a96673efd44d3b198890c1e94581b33c2a1a87` and the independently reviewed
-staging State contract `f00055ed2ba9b4252f04e096d27aadd5beef0ed4`.
+`3dcf596b696b9f1f11de2e3c6127664fd0504884` and the independently reviewed
+staging State contract `23852beaeb059c88caf043d22dad19b211c377b2`.
 
 Both staging and production keep:
 
@@ -198,8 +198,8 @@ State event as required review evidence but is not returned by the API.
 ## Protected State binding
 
 The production binding is protected State `main`
-`15a96673efd44d3b198890c1e94581b33c2a1a87`; staging is independently bound to
-its reviewed contract commit `f00055ed2ba9b4252f04e096d27aadd5beef0ed4`.
+`3dcf596b696b9f1f11de2e3c6127664fd0504884`; staging is independently bound to
+its reviewed contract commit `23852beaeb059c88caf043d22dad19b211c377b2`.
 Both contracts contain release-status schema version 2 and permanent
 effective-result reservations, but their repository-specific migration
 evidence and current graphs make their root subtree IDs intentionally
