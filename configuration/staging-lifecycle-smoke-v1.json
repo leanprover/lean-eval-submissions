@@ -135,7 +135,7 @@
     "submission_base_url": "https://lean-eval-submission-server-staging.lean-eval.workers.dev",
     "state_repository": "leanprover/lean-eval-state-staging",
     "state_branch": "main",
-    "state_contract_commit": "23852beaeb059c88caf043d22dad19b211c377b2",
+    "state_contract_commit": "8ae11456f0a439f91ec5822ec36adb93b76b0d96",
     "state_script_sha256": {
       "scripts/materialize_state.py": "405c6891045a46febabd801986731fabbf206ca1d373858abafc462409994130",
       "scripts/model_identity.py": "32843986791427bd3cdaf407a857b177031eace9549b6aef5a9a4bc6577ca07b",

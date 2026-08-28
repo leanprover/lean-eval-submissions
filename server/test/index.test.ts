@@ -74,7 +74,7 @@ describe("Worker routing", () => {
   });
 
   it("reports independently effective consolidation and release opt-out gates", async () => {
-    const contract = "23852beaeb059c88caf043d22dad19b211c377b2";
+    const contract = "8ae11456f0a439f91ec5822ec36adb93b76b0d96";
     const enabled = await handleRequest(
       new Request("https://example.test/healthz"),
       {
@@ -117,7 +117,7 @@ describe("Worker routing", () => {
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: configured,
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "23852beaeb059c88caf043d22dad19b211c377b2",
+          "8ae11456f0a439f91ec5822ec36adb93b76b0d96",
       },
       LIFECYCLE,
     );
@@ -132,14 +132,14 @@ describe("Worker routing", () => {
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: "[]",
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "23852beaeb059c88caf043d22dad19b211c377b2",
+          "8ae11456f0a439f91ec5822ec36adb93b76b0d96",
       },
       {
         ...ENV,
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: "not-json",
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "23852beaeb059c88caf043d22dad19b211c377b2",
+          "8ae11456f0a439f91ec5822ec36adb93b76b0d96",
       },
       {
         ...ENV,
@@ -260,12 +260,12 @@ describe("Worker routing", () => {
   });
 
   it("returns a closed protected-contract proof for production readiness", async () => {
-    const contract = "3dcf596b696b9f1f11de2e3c6127664fd0504884";
+    const contract = "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a";
     const tree = "2".repeat(40);
     const rootEntries = [
       { path: "README.md", mode: "100644", type: "blob", sha: "7b62f1d8f6163fae029eba2c3bed2cdca306db5e" },
-      { path: "docs", mode: "040000", type: "tree", sha: "8cc8d870409577f51b57f332634928da8de32c36" },
-      { path: "schema", mode: "040000", type: "tree", sha: "68ab16a379276231dc2dd1cef137018eaf6187c3" },
+      { path: "docs", mode: "040000", type: "tree", sha: "d86908a7a5dc214ec9e12b2049d1cb69c30161af" },
+      { path: "schema", mode: "040000", type: "tree", sha: "d391a2bcda4cffb883cc0b39dcc29f22bf8e4329" },
       { path: "scripts", mode: "040000", type: "tree", sha: "cb41e84264627f91deca3d2be52e99fc65d905f1" },
     ] as const;
     const replies = [
