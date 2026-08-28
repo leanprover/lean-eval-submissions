@@ -165,6 +165,40 @@ prevent that recovery step: immediately re-dispatch the same exact tag with
 launch field is false in public health. Do not use the enabled state outside
 the approved bounded smoke.
 
+The final exercise uses the temporary
+[`bounded-staging-lifecycle-watchdog.yml`](../.github/workflows/bounded-staging-lifecycle-watchdog.yml)
+and [`run_bounded_staging_lifecycle.py`](../scripts/run_bounded_staging_lifecycle.py).
+They are a bounded operator aid, not a qualification harness or deployment
+controller, and must be deleted with the staging fixture after one accepted
+run. The exact operator sequence is:
+
+1. run the driver's `preflight` command; it is read-only and must report zero
+   writes;
+2. dispatch the exact immutable tag through `set-staging-lifecycle-smoke.yml`
+   with the fixture's two denial maintainer arrays and `state=enabled`;
+3. start the exact-tag watchdog for at most 90 minutes;
+4. make one ordinary browser submission, wait for its Result, and click the
+   visible release opt-out control; no browser cookie, token, or DevTools value
+   is copied;
+5. after separate approval for the two named external-fixture mutations, run
+   the driver with the exact browser submission ID, Result ID, secret gist ID,
+   staging commit, and confirmation phrase;
+6. let the driver create only the generated immutable fixture tag and update
+   only `lean-eval-proof.txt` in the approved secret gist, then complete the
+   headless, denial, lifecycle, State, Results, redacted-projection, scheduling,
+   and publication-disabled reconstruction checks; and
+7. verify the driver's prompt disable dispatch and the independent watchdog's
+   eventual all-false health result. If either is interrupted, immediately use
+   the existing exact-tag disabled dispatch and verify public health.
+
+The driver keeps the signed challenge in process memory only. It must never be
+placed in workflow inputs, logs, summaries, artifacts, documentation, or a
+persistent runtime file. The two fixture writes require the literal
+`APPROVE_EXACT_STAGING_FIXTURE_GIST_AND_TAG`; any repository, source commit,
+gist owner/visibility, live staging commit, or immutable-tag mismatch is a hard
+stop. The driver may dispatch only the existing in-family publication-disabled
+staging reconstruction; it cannot publish a release.
+
 Production uses no free-form lifecycle toggle. The six launch flags and the two
 closed maintainer arrays in `server/wrangler.jsonc` form one reviewed rollout
 state. [`worker_lifecycle_configuration.py`](../scripts/worker_lifecycle_configuration.py)

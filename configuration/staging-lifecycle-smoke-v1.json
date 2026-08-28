@@ -131,6 +131,20 @@
     "archive_path": "archives/01/01a02cb4-5e7c-7fb3-a4ab-b6fabbb72584.tar.age",
     "archive_ciphertext_sha256": "58f9e6c60d4736d82a831d53a1b99b75e86eac5b34b2a27ed2afafe460ab7f22"
   },
+  "bounded_acceptance": {
+    "submission_base_url": "https://lean-eval-submission-server-staging.lean-eval.workers.dev",
+    "state_repository": "leanprover/lean-eval-state-staging",
+    "state_branch": "main",
+    "results_repository": "leanprover/lean-eval-submissions",
+    "results_branch": "staging-results",
+    "release_repository": "leanprover/lean-eval-releases",
+    "release_workflow": "credentialed-release-staging-smoke.yml",
+    "release_ref": "main",
+    "release_commit": "f7eea8b2c993dfcd0a450d8c8125a225bac07cc0",
+    "fixture_gist_file": "lean-eval-proof.txt",
+    "external_mutation_confirmation": "APPROVE_EXACT_STAGING_FIXTURE_GIST_AND_TAG",
+    "retire_after": "one accepted bounded staging lifecycle run"
+  },
   "runtime_allocated": [
     "browser_submission_id",
     "browser_result_id",
