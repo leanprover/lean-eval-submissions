@@ -293,6 +293,37 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
         )
         self.assertNotIn("lean-eval-state", workflow)
 
+    def test_teardown_never_deletes_an_unowned_colliding_application(self) -> None:
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        deploy = workflow.split(
+            "- name: Create only the isolated per-run qualifier Worker", 1
+        )[1].split("- name: Run exactly one official-entrypoint", 1)[0]
+        worker_absent = deploy.index('test "$code" = 404')
+        application_absent = deploy.index(
+            '"$RUNNER_TEMP/container-applications-before.json\")" = 0'
+        )
+        ownership_marker = deploy.index(
+            ': > "$RUNNER_TEMP/qualifier-deploy-attempted"'
+        )
+        self.assertLess(worker_absent, ownership_marker)
+        self.assertLess(application_absent, ownership_marker)
+
+        deletion = workflow.split(
+            "- name: Delete and verify absence of the disposable Worker", 1
+        )[1].split("- name: Render one canonical", 1)[0]
+        unowned, owned = deletion.split(
+            '          npx --prefix server wrangler delete "$worker"', 1
+        )
+        self.assertIn(
+            'if ! test -f "$RUNNER_TEMP/qualifier-deploy-attempted"; then',
+            unowned,
+        )
+        self.assertIn('test "$code" = 404', unowned)
+        self.assertIn("container-applications-final.json", unowned)
+        self.assertIn("exit 0\n          fi", unowned)
+        self.assertNotIn("wrangler containers delete", unowned)
+        self.assertIn("wrangler containers delete", owned)
+
 
 if __name__ == "__main__":
     unittest.main()

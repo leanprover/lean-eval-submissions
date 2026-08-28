@@ -301,9 +301,21 @@ jobs:
           worker=$(jq -er .worker_name "$RUNNER_TEMP/private-qualifier/context.json")
           application=$(jq -er .container_application_name \
             "$RUNNER_TEMP/private-qualifier/context.json")
-          if test -f "$RUNNER_TEMP/qualifier-deploy-attempted"; then
-            npx --prefix server wrangler delete "$worker" --config "$config" --force || true
+          if ! test -f "$RUNNER_TEMP/qualifier-deploy-attempted"; then
+            code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+              --max-time 30 --output "$RUNNER_TEMP/worker-after-delete.json" \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$worker")
+            test "$code" = 404
+            npx --prefix server wrangler containers list --json \
+              > "$RUNNER_TEMP/container-applications-final.json"
+            test "$(jq --arg name "$application" \
+              '[.[] | select(.name == $name)] | length' \
+              "$RUNNER_TEMP/container-applications-final.json")" = 0
+            exit 0
           fi
+          npx --prefix server wrangler delete "$worker" --config "$config" --force || true
           code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
             --max-time 30 --output "$RUNNER_TEMP/worker-after-delete.json" \
             --write-out '%{http_code}' \
