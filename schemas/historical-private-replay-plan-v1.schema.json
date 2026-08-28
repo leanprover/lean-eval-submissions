@@ -143,13 +143,13 @@
         }
       }
     },
-    "publicProfileLocator": {
+    "privateProfileLocator": {
       "type": "object", "additionalProperties": false,
       "required": ["repository", "commit", "path", "sha256"],
       "properties": {
         "repository": {"const": "leanprover/lean-eval-submissions"},
         "commit": {"$ref": "#/$defs/commit"},
-        "path": {"type": "string", "pattern": "^evidence/public-replay/profiles/[0-9a-f]{64}\\.json$"},
+        "path": {"type": "string", "pattern": "^evidence/private-replay/profiles/[0-9a-f]{64}\\.json$"},
         "sha256": {"$ref": "#/$defs/digest"}
       }
     },
@@ -158,7 +158,7 @@
       "required": [
         "benchmark_commit", "benchmark_tree", "toolchain",
         "lean_toolchain_blob_sha256", "checker", "measurement_config_digest",
-        "measurement_config", "execution_profile"
+        "measurement_config", "execution_profile", "private_profile"
       ],
       "properties": {
         "benchmark_commit": {"$ref": "#/$defs/commit"},
@@ -169,7 +169,7 @@
         "measurement_config_digest": {"$ref": "#/$defs/digest"},
         "measurement_config": {"$ref": "#/$defs/measurementConfig"},
         "execution_profile": {"$ref": "#/$defs/executionProfile"},
-        "reused_public_profile": {"$ref": "#/$defs/publicProfileLocator"}
+        "private_profile": {"$ref": "#/$defs/privateProfileLocator"}
       }
     },
     "resultBinding": {

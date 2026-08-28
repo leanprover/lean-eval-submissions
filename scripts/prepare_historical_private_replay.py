@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Prepare the source-free historical-private replay plan and State candidates.
 
-The ``plan`` mode is offline and needs no private archive checkout.  The later
-``state-events`` mode has two deliberately separate selections.  The
-``unavailable-only`` selection emits the terminal ``archive_not_found`` roots
-from an exact committed plan and validates them against an exact clean State
-checkout without requiring or reading an audit checkout.  The ``full``
-selection retains the credentialed archive-validation path for bound entries.
+The ``plan`` mode is offline and needs no private archive checkout.  It never
+promotes historical-public image evidence into private replay qualification;
+bound entries remain pending until exact private profile evidence is supplied.
+The later ``state-events`` mode has two deliberately separate selections.  The
+``unavailable-only`` selection retains the historical plan locator used by the
+terminal ``archive_not_found`` roots.  The ``full`` selection accepts only the
+protected State private-plan and private-profile locators and retains the
+credentialed archive-validation path for qualified bound entries.
 """
 
 from __future__ import annotations
@@ -43,10 +45,38 @@ from results_schema import (
 
 ROOT = pathlib.Path(__file__).parents[1]
 PLAN_SCHEMA = ROOT / "schemas/historical-private-replay-plan-v1.schema.json"
+PRIVATE_PROFILE_SCHEMA = (
+    ROOT / "schemas/historical-private-profile-qualification-v1.schema.json"
+)
 RESULTS_REPOSITORY = "leanprover/lean-eval-submissions"
 CROSSWALK_PREFIX = "evidence/historical-replay/private-crosswalks"
-PLAN_PREFIX = "evidence/historical-replay/private-plans"
-PUBLIC_PROFILE_PREFIX = "evidence/public-replay/profiles"
+UNAVAILABILITY_PLAN_PREFIX = "evidence/historical-replay/private-plans"
+PRIVATE_PLAN_PREFIX = "evidence/private-replay/plans"
+PRIVATE_PROFILE_PREFIX = "evidence/private-replay/profiles"
+PRIVATE_IMAGE_FAMILY = "lean-eval-authoritative-private-replay-v1"
+PRIVATE_IMAGE_REPOSITORY = "lean-eval-authoritative"
+PRIVATE_QUALIFICATION_KIND = "historical_private_replay_profile_qualification"
+PRIVATE_IMAGE_MATRIX_SHA256 = (
+    "54ad4c237d08e5d0e298dfc8f752b25c89ce30e79b396a2256b4216a1c0f772c"
+)
+LEGACY_UNAVAILABILITY_PLAN_SHA256 = (
+    "d9561ad62098e0542656678f207b3360b0b295be975c292cbf729dc48d03bd5e"
+)
+CANONICAL_RESULTS_REMOTE = "https://github.com/leanprover/lean-eval-submissions.git"
+PRIVATE_SOURCE_PATHS = {
+    "dockerfile": "Dockerfile.historical-private-replay",
+    "dockerignore": "Dockerfile.historical-private-replay.dockerignore",
+    "profile_matrix": "configuration/historical-private-replay-image-matrix-v1.json",
+    "evaluator": "scripts/evaluate_submission.py",
+    "orchestrator": "scripts/replay_orchestrator.py",
+    "layer_preparation": "scripts/prepare_historical_image_layers.py",
+    "runtime_helper": "server/replay-image/replay-authoritative",
+    "measurement_helper": "server/replay-image/replay-measure",
+    "comparator_patch": "server/replay-image/comparator-71b52-phase-metrics.patch",
+    "age_file_key_go_mod": "server/age-file-key/go.mod",
+    "age_file_key_go_sum": "server/age-file-key/go.sum",
+    "age_file_key_main": "server/age-file-key/main.go",
+}
 AUDIT_REPOSITORY = "leanprover/lean-eval-audit"
 BENCHMARK_REPOSITORY = "leanprover/lean-eval"
 ENTRY_DOMAIN = b"lean-eval-historical-private-replay-plan-entry-v1\0"
@@ -136,7 +166,7 @@ def load_json(path: pathlib.Path, label: str, *, canonical_input: bool = True) -
     return value, raw
 
 
-def validate_plan(value: dict[str, Any]) -> None:
+def _validate_plan(value: dict[str, Any], *, legacy_unavailability: bool) -> None:
     if set(value) != {
         "schema_version",
         "kind",
@@ -195,20 +225,19 @@ def validate_plan(value: dict[str, Any]) -> None:
     }:
         raise PrivateReplayPlanError("historical private replay plan counts are invalid")
     for digest, profile in profiles.items():
-        if set(profile) not in (
-            {
-                "benchmark_commit", "benchmark_tree", "toolchain",
-                "lean_toolchain_blob_sha256", "checker",
-                "measurement_config_digest", "measurement_config",
-                "execution_profile",
-            },
-            {
-                "benchmark_commit", "benchmark_tree", "toolchain",
-                "lean_toolchain_blob_sha256", "checker",
-                "measurement_config_digest", "measurement_config",
-                "execution_profile", "reused_public_profile",
-            },
-        ):
+        base_profile_fields = {
+            "benchmark_commit", "benchmark_tree", "toolchain",
+            "lean_toolchain_blob_sha256", "checker",
+            "measurement_config_digest", "measurement_config",
+            "execution_profile",
+        }
+        if legacy_unavailability:
+            permitted_profile_fields = (
+                base_profile_fields | {"reused_public_profile"},
+            )
+        else:
+            permitted_profile_fields = (base_profile_fields | {"private_profile"},)
+        if set(profile) not in permitted_profile_fields:
             raise PrivateReplayPlanError("historical private replay profile fields are invalid")
         actual, core = _profile_core({**profile, "execution_profile_digest": digest})
         if actual != digest or core != {
@@ -216,16 +245,30 @@ def validate_plan(value: dict[str, Any]) -> None:
             for key in core
         }:
             raise PrivateReplayPlanError("historical private replay profile registry is invalid")
-        locator = profile.get("reused_public_profile")
+        locator = profile.get("private_profile")
         if locator is not None and (
             not isinstance(locator, dict)
             or set(locator) != {"repository", "commit", "path", "sha256"}
             or locator["repository"] != RESULTS_REPOSITORY
-            or locator["path"] != f"{PUBLIC_PROFILE_PREFIX}/{digest}.json"
+            or locator["path"] != f"{PRIVATE_PROFILE_PREFIX}/{digest}.json"
             or COMMIT.fullmatch(locator["commit"]) is None
             or DIGEST.fullmatch(locator["sha256"]) is None
         ):
-            raise PrivateReplayPlanError("reused public profile locator is invalid")
+            raise PrivateReplayPlanError("private replay profile locator is invalid")
+        if legacy_unavailability and "reused_public_profile" in profile:
+            legacy = profile["reused_public_profile"]
+            if (
+                not isinstance(legacy, dict)
+                or set(legacy) != {"repository", "commit", "path", "sha256"}
+                or legacy["repository"] != RESULTS_REPOSITORY
+                or re.fullmatch(
+                    r"evidence/public-replay/profiles/[0-9a-f]{64}\.json",
+                    legacy["path"],
+                ) is None
+                or COMMIT.fullmatch(legacy["commit"]) is None
+                or DIGEST.fullmatch(legacy["sha256"]) is None
+            ):
+                raise PrivateReplayPlanError("legacy public profile locator is invalid")
     base_fields = {
         "result_id", "historical_accepted_at", "owner_login", "declared_model",
         "problem_id", "statement_revision", "benchmark_commit", "results_path",
@@ -276,6 +319,21 @@ def validate_plan(value: dict[str, Any]) -> None:
             raise PrivateReplayPlanError("historical private replay archive binding is invalid")
         if classification not in {"bound", "archive_not_found"}:
             raise PrivateReplayPlanError("historical private replay classification is invalid")
+
+
+def validate_plan(value: dict[str, Any]) -> None:
+    _validate_plan(value, legacy_unavailability=False)
+
+
+def validate_legacy_unavailability_plan(value: dict[str, Any], raw: bytes) -> None:
+    if (
+        sha256(raw) != LEGACY_UNAVAILABILITY_PLAN_SHA256
+        or canonical(value) != raw
+    ):
+        raise PrivateReplayPlanError(
+            "legacy unavailability plan is not the exact retained artifact"
+        )
+    _validate_plan(value, legacy_unavailability=True)
 
 
 def write_exclusive(path: pathlib.Path, value: Any, *, state_event: bool = False) -> None:
@@ -441,70 +499,366 @@ def _profile_core(value: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     return digest, profile
 
 
-def load_public_profiles(
-    directory: pathlib.Path,
-    profile_commit: str,
-    matrix_path: pathlib.Path,
-) -> dict[str, dict[str, Any]]:
-    matrix, matrix_raw = load_json(matrix_path, "profile matrix")
-    verify_blob_at_commit(matrix_path, matrix_raw, profile_commit, "profile matrix")
-    matrix_digest = sha256(matrix_raw)
-    if matrix.get("qualification_status") != "unqualified":
-        raise PrivateReplayPlanError("profile matrix status changed")
-    matrix_entries = {
-        entry["benchmark_commit"]: entry for entry in matrix.get("images", [])
-    }
-    profiles: dict[str, dict[str, Any]] = {}
-    benchmarks: set[str] = set()
-    for path in sorted(directory.glob("*.json")):
-        value, raw = load_json(path, "qualified public profile")
-        if value.get("profile_matrix_sha256") != matrix_digest:
-            continue
-        verify_blob_at_commit(path, raw, profile_commit, "qualified public profile")
-        matrix_entry = matrix_entries.get(value.get("benchmark_commit"))
-        if matrix_entry is None:
-            raise PrivateReplayPlanError("qualified public profile is absent from its matrix")
-        digest, core = _profile_core(
-            {
-                **value,
-                "checker": "nanoda",
-                "toolchain": matrix_entry["toolchain"],
-                "lean_toolchain_blob_sha256": matrix_entry[
-                    "lean_toolchain_blob_sha256"
-                ],
-            }
+def _checkout_root(path: pathlib.Path, label: str) -> pathlib.Path:
+    try:
+        return pathlib.Path(
+            _git(path, "rev-parse", "--show-toplevel", maximum=4096)
+            .decode()
+            .strip()
+        ).resolve()
+    except UnicodeError as error:
+        raise PrivateReplayPlanError(f"{label} checkout path is invalid") from error
+
+
+def _require_canonical_results_remote(root: pathlib.Path) -> None:
+    try:
+        remote = _git(root, "remote", "get-url", "origin", maximum=4096).decode().strip()
+    except UnicodeError as error:
+        raise PrivateReplayPlanError("submissions checkout remote is invalid") from error
+    if remote != CANONICAL_RESULTS_REMOTE:
+        raise PrivateReplayPlanError("submissions checkout remote is not canonical")
+
+
+def _blob_at_commit(
+    root: pathlib.Path, commit: str, relative: str, label: str
+) -> bytes:
+    if (
+        COMMIT.fullmatch(commit) is None
+        or re.fullmatch(r"[A-Za-z0-9_.@/+:-]+", relative) is None
+        or relative.startswith("/")
+        or ".." in pathlib.PurePosixPath(relative).parts
+    ):
+        raise PrivateReplayPlanError(f"{label} locator is invalid")
+    try:
+        return _git(root, "show", f"{commit}:{relative}")
+    except PrivateReplayPlanError as error:
+        raise PrivateReplayPlanError(f"{label} blob is unavailable") from error
+
+
+def _require_ancestor(
+    root: pathlib.Path, ancestor: str, descendant: str, label: str
+) -> None:
+    if COMMIT.fullmatch(ancestor) is None or COMMIT.fullmatch(descendant) is None:
+        raise PrivateReplayPlanError(f"{label} commit is invalid")
+    try:
+        completed = subprocess.run(
+            ["git", "-C", str(root), "merge-base", "--is-ancestor", ancestor, descendant],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=30,
+            env={"PATH": os.environ.get("PATH", "")},
         )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise PrivateReplayPlanError(f"{label} ancestry cannot be verified") from error
+    if completed.returncode != 0:
+        raise PrivateReplayPlanError(f"{label} is outside the selected history")
+
+
+def _public_image_digests(root: pathlib.Path, commit: str) -> set[str]:
+    try:
+        paths = _git(
+            root,
+            "ls-tree",
+            "-r",
+            "--name-only",
+            commit,
+            "evidence/public-replay/profiles",
+            maximum=256 * 1024,
+        ).decode().splitlines()
+    except UnicodeError as error:
+        raise PrivateReplayPlanError("public profile inventory is invalid") from error
+    if len(paths) > 1_000:
+        raise PrivateReplayPlanError("public profile inventory exceeds its bound")
+    digests: set[str] = set()
+    for relative in paths:
+        if re.fullmatch(
+            r"evidence/public-replay/profiles/[0-9a-f]{64}\.json", relative
+        ) is None:
+            continue
+        raw = _blob_at_commit(root, commit, relative, "public replay profile")
+        try:
+            value = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise PrivateReplayPlanError("public replay profile is invalid") from error
+        digest = value.get("registry_manifest_digest") if isinstance(value, dict) else None
+        if isinstance(digest, str) and re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+            digests.add(digest)
+    return digests
+
+
+def _private_source_blob(
+    value: Any, name: str, root: pathlib.Path, source_commit: str
+) -> bytes:
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"path", "sha256"}
+        or value.get("path") != PRIVATE_SOURCE_PATHS[name]
+        or not isinstance(value.get("sha256"), str)
+        or DIGEST.fullmatch(value["sha256"]) is None
+    ):
+        raise PrivateReplayPlanError("private image source provenance is invalid")
+    raw = _blob_at_commit(
+        root, source_commit, value["path"], f"private image {name}"
+    )
+    if sha256(raw) != value["sha256"]:
+        raise PrivateReplayPlanError("private image source provenance changed")
+    return raw
+
+
+def _validate_private_image_matrix(raw: bytes, core: dict[str, Any]) -> None:
+    try:
+        matrix = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise PrivateReplayPlanError("private image matrix is invalid") from error
+    top_fields = {
+        "schema_version", "kind", "benchmark_repository", "private_plan_sha256",
+        "historical_public_profile_matrix_sha256",
+        "historical_public_component_lock_sha256", "checker", "image_count",
+        "toolchain_count", "result_count", "reused_public_source_count",
+        "derived_exact_source_count", "images",
+    }
+    images = matrix.get("images") if isinstance(matrix, dict) else None
+    if (
+        not isinstance(matrix, dict)
+        or set(matrix) != top_fields
+        or matrix.get("schema_version") != 1
+        or matrix.get("kind") != "historical_private_replay_image_matrix"
+        or matrix.get("benchmark_repository") != BENCHMARK_REPOSITORY
+        or matrix.get("private_plan_sha256")
+        != "85c21beb341fbfe5ffd877b935149ffe577dc7312c9bb65506e270674c6453c4"
+        or matrix.get("checker") != "nanoda"
+        or matrix.get("image_count") != 63
+        or matrix.get("toolchain_count") != 5
+        or matrix.get("result_count") != 639
+        or matrix.get("reused_public_source_count") != 21
+        or matrix.get("derived_exact_source_count") != 42
+        or not isinstance(images, list)
+        or len(images) != 63
+        or any(
+            not isinstance(matrix.get(field), str)
+            or DIGEST.fullmatch(matrix[field]) is None
+            for field in (
+                "historical_public_profile_matrix_sha256",
+                "historical_public_component_lock_sha256",
+            )
+        )
+    ):
+        raise PrivateReplayPlanError("private image matrix envelope is invalid")
+    image_fields = {
+        "benchmark_commit", "benchmark_tree", "toolchain",
+        "lean_toolchain_blob_sha256", "manifest_layout", "workspace_count",
+        "result_count", "problem_ids", "profile_lock", "source_pin_origin",
+    }
+    matches = [
+        image
+        for image in images
+        if isinstance(image, dict)
+        and set(image) == image_fields
+        and image.get("benchmark_commit") == core["benchmark_commit"]
+        and image.get("benchmark_tree") == core["benchmark_tree"]
+        and image.get("toolchain") == core["toolchain"]
+        and image.get("lean_toolchain_blob_sha256")
+        == core["lean_toolchain_blob_sha256"]
+    ]
+    if len(matches) != 1:
+        raise PrivateReplayPlanError(
+            "private replay qualification is not one exact matrix image"
+        )
+    lock = matches[0]["profile_lock"]
+    profile = core["execution_profile"]
+    expected_lock = {
+        "schema_version": 1,
+        "benchmark_repository": BENCHMARK_REPOSITORY,
+        "benchmark_commit": core["benchmark_commit"],
+        "toolchain": core["toolchain"],
+        "runner_profile": profile["runner_profile"],
+        "go_toolchain": profile["go_toolchain"],
+        "rust_toolchain": profile["rust_toolchain"],
+        "cache_state": profile["cache_state"],
+        "measurement_command": profile["measurement_command"],
+        "components": profile["components"],
+    }
+    if lock != expected_lock:
+        raise PrivateReplayPlanError(
+            "private replay qualification differs from its matrix profile lock"
+        )
+
+
+def validate_private_qualification(
+    value: dict[str, Any],
+    raw: bytes,
+    *,
+    repository_root: pathlib.Path,
+    qualification_commit: str,
+    forbidden_public_digests: set[str],
+) -> tuple[str, dict[str, Any]]:
+    core_fields = {
+        "benchmark_commit", "benchmark_tree", "toolchain",
+        "lean_toolchain_blob_sha256", "checker", "measurement_config_digest",
+        "measurement_config", "execution_profile", "execution_profile_digest",
+    }
+    expected_fields = core_fields | {
+        "schema_version", "kind", "qualification_status", "image_family",
+        "registry_repository", "registry_manifest_digest",
+        "image_source_repository", "image_source_commit", "source_blobs",
+        "qualification",
+    }
+    if (
+        canonical(value) != raw
+        or set(value) != expected_fields
+        or value.get("schema_version") != 1
+        or value.get("kind") != PRIVATE_QUALIFICATION_KIND
+        or value.get("qualification_status") != "qualified"
+        or value.get("image_family") != PRIVATE_IMAGE_FAMILY
+        or value.get("registry_repository") != PRIVATE_IMAGE_REPOSITORY
+        or value.get("image_source_repository") != RESULTS_REPOSITORY
+        or not isinstance(value.get("image_source_commit"), str)
+        or COMMIT.fullmatch(value["image_source_commit"]) is None
+    ):
+        raise PrivateReplayPlanError("private replay qualification envelope is invalid")
+    digest, core = _profile_core(value)
+    manifest = value["registry_manifest_digest"]
+    if (
+        not isinstance(manifest, str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", manifest) is None
+        or manifest != core["execution_profile"]["vm_image_digest"]
+    ):
+        raise PrivateReplayPlanError("private replay qualification image is invalid")
+    source_blobs = value["source_blobs"]
+    if not isinstance(source_blobs, dict) or set(source_blobs) != set(PRIVATE_SOURCE_PATHS):
+        raise PrivateReplayPlanError("private image source provenance is invalid")
+    profile_matrix_blob = source_blobs["profile_matrix"]
+    if (
+        not isinstance(profile_matrix_blob, dict)
+        or profile_matrix_blob.get("sha256") != PRIVATE_IMAGE_MATRIX_SHA256
+    ):
+        raise PrivateReplayPlanError("private image matrix is not the closed corpus")
+    _require_ancestor(
+        repository_root,
+        value["image_source_commit"],
+        qualification_commit,
+        "private image source commit",
+    )
+    source_raw: dict[str, bytes] = {}
+    for name in sorted(PRIVATE_SOURCE_PATHS):
+        source_raw[name] = _private_source_blob(
+            source_blobs[name], name, repository_root, value["image_source_commit"]
+        )
+    _validate_private_image_matrix(source_raw["profile_matrix"], core)
+    qualification = value["qualification"]
+    qualification_fields = {
+        "workflow_repository", "workflow_commit", "workflow_path",
+        "workflow_sha256", "workflow_run_id", "workflow_run_attempt",
+        "private_archive_probe", "network_probe",
+    }
+    archive_probe = (
+        qualification.get("private_archive_probe")
+        if isinstance(qualification, dict)
+        else None
+    )
+    if (
+        not isinstance(qualification, dict)
+        or set(qualification) != qualification_fields
+        or qualification.get("workflow_repository") != RESULTS_REPOSITORY
+        or not isinstance(qualification.get("workflow_commit"), str)
+        or COMMIT.fullmatch(qualification["workflow_commit"]) is None
+        or qualification.get("workflow_path")
+        != ".github/workflows/historical-private-image-qualification.yml"
+        or not isinstance(qualification.get("workflow_sha256"), str)
+        or DIGEST.fullmatch(qualification["workflow_sha256"]) is None
+        or type(qualification.get("workflow_run_id")) is not int
+        or not 1 <= qualification["workflow_run_id"] <= 9_007_199_254_740_991
+        or type(qualification.get("workflow_run_attempt")) is not int
+        or not 1 <= qualification["workflow_run_attempt"] <= 9_007_199_254_740_991
+        or archive_probe != {
+            "archive_expectation_schema_version": 2,
+            "key_material_type": "age-file-key-v1",
+            "runner_entrypoint": "/opt/lean-eval/replay-authoritative",
+            "status": "passed",
+        }
+        or qualification.get("network_probe") != "blocked"
+    ):
+        raise PrivateReplayPlanError("private replay qualification proof is invalid")
+    workflow_raw = _blob_at_commit(
+        repository_root,
+        qualification["workflow_commit"],
+        qualification["workflow_path"],
+        "private qualification workflow",
+    )
+    _require_ancestor(
+        repository_root,
+        qualification["workflow_commit"],
+        qualification_commit,
+        "private qualification workflow commit",
+    )
+    if sha256(workflow_raw) != qualification["workflow_sha256"]:
+        raise PrivateReplayPlanError("private qualification workflow provenance changed")
+    historical_public_digests = set(forbidden_public_digests)
+    for commit in {
+        value["image_source_commit"],
+        qualification["workflow_commit"],
+        qualification_commit,
+    }:
+        historical_public_digests.update(_public_image_digests(repository_root, commit))
+    if manifest in historical_public_digests:
+        raise PrivateReplayPlanError("private replay qualification image is invalid")
+    return digest, core
+
+
+def repository_relative_path(path: pathlib.Path, label: str) -> str:
+    checkout = _checkout_root(path.parent, label)
+    try:
+        return path.resolve().relative_to(checkout).as_posix()
+    except ValueError as error:
+        raise PrivateReplayPlanError(f"{label} is outside its checkout") from error
+
+
+def load_private_profiles(
+    paths: list[pathlib.Path], profile_commit: str | None
+) -> dict[str, dict[str, Any]]:
+    if paths and (
+        not isinstance(profile_commit, str)
+        or COMMIT.fullmatch(profile_commit) is None
+    ):
+        raise PrivateReplayPlanError(
+            "private replay profiles require one exact qualification commit"
+        )
+    profiles: dict[str, dict[str, Any]] = {}
+    repository_root: pathlib.Path | None = None
+    public_digests: set[str] = set()
+    if paths:
+        repository_root = _checkout_root(paths[0].parent, "private replay profile")
+        _require_canonical_results_remote(repository_root)
+        assert profile_commit is not None
+        public_digests = _public_image_digests(repository_root, profile_commit)
+    for path in paths:
+        value, raw = load_json(path, "private replay profile")
+        assert repository_root is not None
+        if _checkout_root(path.parent, "private replay profile") != repository_root:
+            raise PrivateReplayPlanError("private replay profiles span checkouts")
+        digest, core = validate_private_qualification(
+            value,
+            raw,
+            repository_root=repository_root,
+            qualification_commit=profile_commit,
+            forbidden_public_digests=public_digests,
+        )
+        relative = f"{PRIVATE_PROFILE_PREFIX}/{digest}.json"
         if (
-            value.get("qualification_status") != "qualified"
-            or path.name != f"{digest}.json"
-            or value.get("benchmark_repository") != BENCHMARK_REPOSITORY
-            or value.get("benchmark_commit") != core["benchmark_commit"]
-            or value.get("benchmark_tree") != matrix_entry["benchmark_tree"]
-            or digest in profiles
-            or core["benchmark_commit"] in benchmarks
+            digest in profiles
+            or repository_relative_path(path, "private replay profile") != relative
         ):
-            raise PrivateReplayPlanError("qualified public profile is ambiguous or invalid")
-        relative = f"{PUBLIC_PROFILE_PREFIX}/{path.name}"
-        core["reused_public_profile"] = {
+            raise PrivateReplayPlanError("private replay profile locator is not canonical")
+        assert profile_commit is not None
+        verify_blob_at_commit(path, raw, profile_commit, "private replay profile")
+        core["private_profile"] = {
             "repository": RESULTS_REPOSITORY,
             "commit": profile_commit,
             "path": relative,
             "sha256": sha256(raw),
         }
-        profiles[digest] = core
-        benchmarks.add(core["benchmark_commit"])
-    if not profiles:
-        raise PrivateReplayPlanError("no current qualified public profiles were selected")
-    return profiles
-
-
-def load_private_profiles(paths: list[pathlib.Path]) -> dict[str, dict[str, Any]]:
-    profiles: dict[str, dict[str, Any]] = {}
-    for path in paths:
-        value, _raw = load_json(path, "private replay profile")
-        digest, core = _profile_core(value)
-        if set(value) != set(core) | {"execution_profile_digest"} or digest in profiles:
-            raise PrivateReplayPlanError("private replay profile fields are not closed")
         profiles[digest] = core
     return profiles
 
@@ -514,10 +868,8 @@ def build_plan(
     crosswalk_path: pathlib.Path,
     crosswalk_commit: str,
     results_root: pathlib.Path,
-    public_profile_directory: pathlib.Path,
-    public_profile_commit: str,
-    profile_matrix: pathlib.Path,
     private_profiles: list[pathlib.Path],
+    private_profile_commit: str | None,
 ) -> dict[str, Any]:
     crosswalk, crosswalk_raw = load_json(crosswalk_path, "private archive crosswalk")
     verify_blob_at_commit(
@@ -529,14 +881,7 @@ def build_plan(
     records = load_results(
         results_root, crosswalk["results_commit"], crosswalk["results_store_sha256"]
     )
-    profiles = load_public_profiles(
-        public_profile_directory, public_profile_commit, profile_matrix
-    )
-    private = load_private_profiles(private_profiles)
-    for digest, profile in private.items():
-        if digest in profiles and profiles[digest] != profile:
-            raise PrivateReplayPlanError("private and public profile digests conflict")
-        profiles[digest] = profile
+    profiles = load_private_profiles(private_profiles, private_profile_commit)
     profiles_by_benchmark: dict[str, str] = {}
     for digest, profile in profiles.items():
         benchmark = profile["benchmark_commit"]
@@ -630,6 +975,62 @@ def build_plan(
     }
     validate_plan(plan)
     return plan
+
+
+def validate_embedded_private_profiles(
+    plan: dict[str, Any], repository_root: pathlib.Path, authority_commit: str
+) -> None:
+    _require_canonical_results_remote(repository_root)
+    forbidden_public_digests = _public_image_digests(
+        repository_root, authority_commit
+    )
+    for digest, embedded in plan["profiles"].items():
+        locator = embedded["private_profile"]
+        expected_path = f"{PRIVATE_PROFILE_PREFIX}/{digest}.json"
+        if (
+            locator["repository"] != RESULTS_REPOSITORY
+            or locator["path"] != expected_path
+        ):
+            raise PrivateReplayPlanError(
+                "embedded private profile locator is not canonical"
+            )
+        raw = _blob_at_commit(
+            repository_root,
+            locator["commit"],
+            locator["path"],
+            "embedded private replay profile",
+        )
+        _require_ancestor(
+            repository_root,
+            locator["commit"],
+            authority_commit,
+            "embedded private replay profile commit",
+        )
+        if sha256(raw) != locator["sha256"]:
+            raise PrivateReplayPlanError(
+                "embedded private replay profile digest changed"
+            )
+        try:
+            value = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise PrivateReplayPlanError(
+                "embedded private replay profile is invalid"
+            ) from error
+        if not isinstance(value, dict):
+            raise PrivateReplayPlanError(
+                "embedded private replay profile is not an object"
+            )
+        actual_digest, core = validate_private_qualification(
+            value,
+            raw,
+            repository_root=repository_root,
+            qualification_commit=locator["commit"],
+            forbidden_public_digests=forbidden_public_digests,
+        )
+        if actual_digest != digest or embedded != {**core, "private_profile": locator}:
+            raise PrivateReplayPlanError(
+                "embedded private replay profile differs from exact evidence"
+            )
 
 
 def archive_binding(audit_root: pathlib.Path, audit_commit: str, entry: dict[str, Any]) -> dict[str, Any]:
@@ -730,7 +1131,9 @@ def _event_identity(occurred_at: dt.datetime, result_id: str, event_type: str) -
 def replay_task_id(result_id: str, measurement_digest: str) -> str:
     return "rt1_" + sha256(
         b"lean-eval-replay-task-v1\0"
-        + canonical_compact([result_id, measurement_digest])
+        + result_id.encode("ascii")
+        + b"\0"
+        + measurement_digest.encode("ascii")
     )
 
 
@@ -779,15 +1182,11 @@ def build_bound_events(
         **archive,
     }
     profile_digest = entry["execution_profile_digest"]
-    locator = profile.get("reused_public_profile")
+    locator = profile.get("private_profile")
     if locator is None:
-        qualification_path = plan_path
-        qualification_commit = plan_commit
-        qualification_sha256 = plan_sha256
-    else:
-        qualification_path = locator["path"]
-        qualification_commit = locator["commit"]
-        qualification_sha256 = locator["sha256"]
+        raise PrivateReplayPlanError(
+            "qualified private replay profile lacks private evidence"
+        )
     qualification_payload = {
         "toolchain": profile["toolchain"],
         "benchmark_commit": entry["benchmark_commit"],
@@ -795,9 +1194,9 @@ def build_bound_events(
         "execution_profile_digest": profile_digest,
         "checker": "nanoda",
         "qualification_repository": RESULTS_REPOSITORY,
-        "qualification_commit": qualification_commit,
-        "qualification_path": qualification_path,
-        "qualification_sha256": qualification_sha256,
+        "qualification_commit": locator["commit"],
+        "qualification_path": locator["path"],
+        "qualification_sha256": locator["sha256"],
     }
     kinds = (
         ("historical_archive_result.replay_authorized", result_id, authority_payload),
@@ -825,11 +1224,10 @@ def build_bound_events(
             "event_type": event_type,
             "occurred_at": timestamp_text,
             "subject_id": subject,
+            "causation_event_id": parent,
             "actor": {"kind": "system"},
             "payload": payload,
         }
-        if parent is not None:
-            event["causation_event_id"] = parent
         parent = event["event_id"]
         events.append(event)
     return events
@@ -1068,15 +1466,28 @@ def validate_state_candidates(
 def prepare_state_events(args: argparse.Namespace) -> int:
     plan_path = pathlib.Path(args.plan).resolve()
     plan, plan_raw = load_json(plan_path, "historical private replay plan")
-    validate_plan(plan)
-    plan_digest = sha256(plan_raw)
-    if plan_path.name != f"{plan_digest}.json":
-        raise PrivateReplayPlanError("plan filename is not its canonical SHA-256")
-    state_root = pathlib.Path(args.state_root).resolve()
     selection = args.selection
     if selection not in {"unavailable-only", "full"}:
         raise PrivateReplayPlanError("State event selection is invalid")
     unavailable_only = selection == "unavailable-only"
+    if unavailable_only:
+        validate_legacy_unavailability_plan(plan, plan_raw)
+    else:
+        validate_plan(plan)
+    plan_digest = sha256(plan_raw)
+    expected_plan_prefix = (
+        UNAVAILABILITY_PLAN_PREFIX if unavailable_only else PRIVATE_PLAN_PREFIX
+    )
+    expected_plan_path = f"{expected_plan_prefix}/{plan_digest}.json"
+    if (
+        plan_path.name != f"{plan_digest}.json"
+        or repository_relative_path(plan_path, "historical private replay plan")
+        != expected_plan_path
+    ):
+        raise PrivateReplayPlanError(
+            "plan is not at its canonical selection-specific path"
+        )
+    state_root = pathlib.Path(args.state_root).resolve()
     exact_output = args.append_ready or unavailable_only
     if COMMIT.fullmatch(args.authority_commit) is None:
         raise PrivateReplayPlanError("authority commit is invalid")
@@ -1087,8 +1498,17 @@ def prepare_state_events(args: argparse.Namespace) -> int:
             args.authority_commit,
             "historical private replay plan",
         )
+    if args.append_ready and not unavailable_only:
+        authority_root = _checkout_root(
+            plan_path.parent, "historical private replay plan"
+        )
+        verify_checkout(authority_root, args.authority_commit, "submissions")
+        _require_canonical_results_remote(authority_root)
+        validate_embedded_private_profiles(
+            plan, authority_root, args.authority_commit
+        )
     first = _parse_timestamp(args.first_occurred_at)
-    plan_relative = f"{PLAN_PREFIX}/{plan_path.name}"
+    plan_relative = expected_plan_path
     events: list[dict[str, Any]] = []
     archive_cache: dict[str, tuple[str, dict[str, Any]]] = {}
     if unavailable_only:
@@ -1112,17 +1532,8 @@ def prepare_state_events(args: argparse.Namespace) -> int:
         verify_checkout(audit_root, args.audit_commit, "audit")
         for entry in plan["entries"]:
             if entry["classification"] == "archive_not_found":
-                events.append(
-                    build_unavailable_event(
-                        entry=entry,
-                        plan_commit=args.authority_commit,
-                        plan_path=plan_relative,
-                        plan_sha256=plan_digest,
-                        results_commit=plan["results"]["commit"],
-                        crosswalk=plan["crosswalk"],
-                        occurred_at=first + dt.timedelta(milliseconds=len(events)),
-                    )
-                )
+                continue
+            if entry["replay_profile_status"] != "profile_qualified":
                 continue
             submission_id = entry["archive_submission_id"]
             cached = archive_cache.get(submission_id)
@@ -1135,8 +1546,6 @@ def prepare_state_events(args: argparse.Namespace) -> int:
                     raise PrivateReplayPlanError(
                         "shared migrated archive has conflicting benchmark bindings"
                     )
-            if entry["replay_profile_status"] != "profile_qualified":
-                continue
             profile = plan["profiles"][entry["execution_profile_digest"]]
             selected = build_bound_events(
                 entry=entry,
@@ -1183,10 +1592,8 @@ def main(argv: list[str] | None = None) -> int:
     plan_command.add_argument("--crosswalk", required=True)
     plan_command.add_argument("--crosswalk-commit", required=True)
     plan_command.add_argument("--results-root", required=True)
-    plan_command.add_argument("--public-profile-directory", required=True)
-    plan_command.add_argument("--public-profile-commit", required=True)
-    plan_command.add_argument("--profile-matrix", required=True)
     plan_command.add_argument("--private-profile", action="append", default=[])
+    plan_command.add_argument("--private-profile-commit")
     plan_command.add_argument("--output", required=True)
     events_command = commands.add_parser("state-events")
     events_command.add_argument("--plan", required=True)
@@ -1208,12 +1615,8 @@ def main(argv: list[str] | None = None) -> int:
                 crosswalk_path=pathlib.Path(args.crosswalk).resolve(),
                 crosswalk_commit=args.crosswalk_commit,
                 results_root=pathlib.Path(args.results_root).resolve(),
-                public_profile_directory=pathlib.Path(
-                    args.public_profile_directory
-                ).resolve(),
-                public_profile_commit=args.public_profile_commit,
-                profile_matrix=pathlib.Path(args.profile_matrix).resolve(),
                 private_profiles=[pathlib.Path(path).resolve() for path in args.private_profile],
+                private_profile_commit=args.private_profile_commit,
             )
             write_exclusive(pathlib.Path(args.output).resolve(), value)
             return 0
