@@ -23,15 +23,16 @@ SCRIPT_DIRECTORY = pathlib.Path(__file__).resolve().parent
 if str(SCRIPT_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIRECTORY))
 
-from historical_replay_controller import (  # noqa: E402
+from archive_submission import _validate_sidecar
+from historical_replay_controller import (
     COMMIT,
     DIGEST,
     LOGIN,
     MAX_REPLAY_ATTEMPTS,
     PROBLEM,
     REPLAY_ID,
-    RESULTS_PATH,
     RESULT_ID,
+    RESULTS_PATH,
     TOOLCHAIN,
     UUID7,
     HistoricalReplayControllerError,
@@ -51,35 +52,51 @@ from historical_replay_controller import (  # noqa: E402
     _write,
     canonical_bytes,
     current_historical_running,
-    recover_running as recover_historical_running,
     sha256_bytes,
     state_canonical_bytes,
 )
-from archive_submission import _validate_sidecar  # noqa: E402
-from key_capability_contract import validate_envelope  # noqa: E402
-from prepare_historical_private_replay import canonical_compact, entry_sha256  # noqa: E402
-from replay_controller import (  # noqa: E402
+from historical_replay_controller import (
+    recover_running as recover_historical_running,
+)
+from key_capability_contract import validate_envelope
+from prepare_historical_private_replay import (
+    canonical_compact,
+    entry_sha256,
+)
+from replay_controller import (
     _write_bytes,
-    build_executor_request as build_private_executor_request,
-    failure_verdict as build_private_failure_verdict,
-    prepare_unwrap as prepare_private_unwrap,
-    terminal_event as build_private_terminal_event,
     unwrap_identity,
+)
+from replay_controller import (
+    build_executor_request as build_private_executor_request,
+)
+from replay_controller import (
+    failure_verdict as build_private_failure_verdict,
+)
+from replay_controller import (
+    prepare_unwrap as prepare_private_unwrap,
+)
+from replay_controller import (
+    terminal_event as build_private_terminal_event,
+)
+from replay_controller import (
     validate_executor_response as validate_private_executor_response,
 )
-from replay_orchestrator import (  # noqa: E402
+from replay_orchestrator import (
     FAILURE_REASONS,
     RETRYABLE_FAILURES,
     ReplayError,
     canonical_archive_path,
     config_digest,
     replay_task_id,
-    validate_execution_plan as validate_private_execution_plan,
     validate_execution_profile,
     validate_measurement_config,
 )
-from results_schema import ResultsSchemaError  # noqa: E402
-from results_schema import result_id as stable_result_id  # noqa: E402
+from replay_orchestrator import (
+    validate_execution_plan as validate_private_execution_plan,
+)
+from results_schema import ResultsSchemaError
+from results_schema import result_id as stable_result_id
 
 HistoricalPrivateReplayControllerError = HistoricalReplayControllerError
 AUTHORITY_EVENT_TYPE = "historical_archive_result.replay_authorized"
@@ -88,6 +105,7 @@ PROFILE_PATH = re.compile(r"evidence/private-replay/profiles/[0-9a-f]{64}\.json\
 RECONFIGURATION_PATH = re.compile(
     r"evidence/private-replay/reconfigurations/[0-9a-f]{64}\.json\Z"
 )
+ACCOUNT_ID = re.compile(r"[0-9a-f]{32}\Z")
 
 TASK_FIELDS = {
     "replay_task_id", "result_id", "historical_accepted_at", "owner_login",
@@ -231,6 +249,96 @@ def _verify_checkout(
                 "protected Git HEAD lacks the required ancestry"
             ) from error
     return head
+
+
+def refresh_protected_state(state_root: pathlib.Path) -> str:
+    """Fetch and fast-forward one clean protected State checkout.
+
+    The State writer pushes through an explicit authenticated URL, which does
+    not update ``refs/remotes/origin/main``.  Consequently this function first
+    permits a clean local HEAD that is ahead of the stale tracking ref, then
+    fetches the configured read-only origin and proves that HEAD is protected
+    ancestry of the newly observed remote main before fast-forwarding.
+    """
+
+    environment = _state_environment(state_root)
+    repository = _state_repository(environment)
+    minimum = STATE_MINIMUM_COMMITS[environment]
+    try:
+        checkout = pathlib.Path(
+            _git_text(state_root, "rev-parse", "--show-toplevel")
+        ).resolve()
+    except OSError as error:
+        raise HistoricalPrivateReplayControllerError(
+            "State Git checkout is unavailable"
+        ) from error
+    remotes = _git_text(
+        state_root, "config", "--get-all", "remote.origin.url"
+    ).splitlines()
+    if (
+        checkout != state_root.resolve()
+        or len(remotes) != 1
+        or remotes[0] not in REPOSITORY_REMOTES[repository]
+        or _git_text(state_root, "status", "--porcelain=v1", "--untracked-files=all")
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "protected State checkout identity or cleanliness differs"
+        )
+    local_head = _match(
+        COMMIT, _git_text(state_root, "rev-parse", "HEAD"), "local State HEAD"
+    )
+    try:
+        subprocess.run(
+            [
+                "git", "-C", str(state_root), "merge-base", "--is-ancestor",
+                minimum, local_head,
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            [
+                "git", "-C", str(state_root), "fetch", "--no-tags", "origin",
+                "refs/heads/main:refs/remotes/origin/main",
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=120,
+        )
+        remote_head = _match(
+            COMMIT,
+            _git_text(state_root, "rev-parse", "refs/remotes/origin/main"),
+            "fresh protected State main",
+        )
+        subprocess.run(
+            [
+                "git", "-C", str(state_root), "merge-base", "--is-ancestor",
+                local_head, remote_head,
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            [
+                "git", "-C", str(state_root), "merge", "--ff-only",
+                "refs/remotes/origin/main",
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise HistoricalPrivateReplayControllerError(
+            "protected State refresh did not prove one forward-only main history"
+        ) from error
+    return _verify_checkout(state_root, repository, minimum_commit=minimum)
 
 
 def _verify_ancestor_of_upstream(root: pathlib.Path, commit: str, label: str) -> None:
@@ -1131,6 +1239,41 @@ def validate_plan_against_state(
     return _validate_plan_against_queue(plan_value, queue, queue_raw, state_head)
 
 
+def rebind_plan_to_current_state(
+    plan_value: Any, state_root: pathlib.Path
+) -> dict[str, Any]:
+    """Rebind only State CAS metadata after proving the exact task unchanged."""
+
+    plan = validate_execution_plan(plan_value)
+    historical_queue, historical_raw, _ = load_state_queue_at_commit(
+        state_root,
+        plan["state"]["expected_head"],
+        plan["state"]["repository"],
+    )
+    _validate_plan_against_queue(
+        plan,
+        historical_queue,
+        historical_raw,
+        plan["state"]["expected_head"],
+    )
+    queue, queue_raw, state_head = load_state_queue(state_root)
+    task = queue["tasks"][0] if queue["tasks"] else None
+    if task != plan["task"]:
+        raise HistoricalPrivateReplayControllerError(
+            "exact queued private replay changed while State advanced"
+        )
+    rebound = copy.deepcopy(plan)
+    rebound["state"] = {
+        "repository": _state_repository(queue["environment"]),
+        "expected_head": state_head,
+        "queue_environment": queue["environment"],
+        "queue_source_event_count": queue["source_event_count"],
+        "queue_source_digest": queue["source_digest"],
+        "task_sha256": sha256_bytes(state_canonical_bytes(task)),
+    }
+    return _validate_plan_against_queue(rebound, queue, queue_raw, state_head)
+
+
 def _state_append_candidate(event_value: Any, environment: str, expected_head: str) -> dict[str, Any]:
     event = _object(event_value, "State event candidate")
     if environment not in {"staging", "production"}:
@@ -1271,6 +1414,241 @@ def terminal_candidate(
     )
 
 
+def current_running_proof(
+    plan_value: Any,
+    started_candidate_value: Any,
+    state_root: pathlib.Path,
+) -> dict[str, Any]:
+    """Return a source-free proof of the one currently running exact task."""
+
+    plan, started, state_head = validate_started_history(
+        plan_value, started_candidate_value, state_root
+    )
+    return {
+        "schema_version": 1,
+        "kind": "historical_private_current_running_proof",
+        "state_repository": plan["state"]["repository"],
+        "state_head": state_head,
+        "replay_task_id": plan["task"]["replay_task_id"],
+        "attempt": plan["task"]["attempt"] + 1,
+        "started_event_id": started["event"]["event_id"],
+    }
+
+
+def terminal_committed_proof(
+    plan_value: Any,
+    started_candidate_value: Any,
+    terminal_candidate_value: Any,
+    state_root: pathlib.Path,
+) -> dict[str, Any]:
+    """Prove one exact terminal candidate is in fresh protected State."""
+
+    plan = validate_execution_plan(plan_value)
+    started = _object(started_candidate_value, "started State append candidate")
+    terminal = _object(terminal_candidate_value, "terminal State append candidate")
+    _fields(
+        terminal,
+        {"schema_version", "kind", "state_repository", "expected_head", "event"},
+        "terminal State append candidate",
+    )
+    event = _object(terminal["event"], "terminal State event")
+    started_event = _object(started.get("event"), "started State event")
+    expected_attempt = plan["task"]["attempt"] + 1
+    if (
+        terminal["schema_version"] != 1
+        or terminal["kind"] != "state_append_candidate"
+        or terminal["state_repository"] != plan["state"]["repository"]
+        or not isinstance(terminal.get("expected_head"), str)
+        or COMMIT.fullmatch(terminal["expected_head"]) is None
+        or event.get("event_type") not in {"replay.accepted", "replay.failed"}
+        or event.get("subject_id") != plan["task"]["replay_task_id"]
+        or event.get("causation_event_id") != started_event.get("event_id")
+        or event.get("actor") != {"kind": "system"}
+        or not isinstance(event.get("payload"), dict)
+        or event["payload"].get("attempt") != expected_attempt
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "terminal candidate differs from the exact started private replay"
+        )
+    head = _verify_state_event(state_root, event)
+    _verify_materialized_terminal_task(state_root, head, event)
+    try:
+        subprocess.run(
+            [
+                "git", "-C", str(state_root), "merge-base", "--is-ancestor",
+                terminal["expected_head"], head,
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise HistoricalPrivateReplayControllerError(
+            "terminal CAS parent is not protected State ancestry"
+        ) from error
+    running = current_historical_running(
+        state_root / "events",
+        state_validated=True,
+        authority_event_type=AUTHORITY_EVENT_TYPE,
+    )
+    if any(
+        item.get("replay_task_id") == plan["task"]["replay_task_id"]
+        and item.get("attempt") == expected_attempt
+        for item in running
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "terminal private replay remains current-running"
+        )
+    return {
+        "schema_version": 1,
+        "kind": "historical_private_terminal_committed_proof",
+        "state_repository": plan["state"]["repository"],
+        "state_head": head,
+        "terminal_event_id": event["event_id"],
+        "replay_task_id": plan["task"]["replay_task_id"],
+        "attempt": expected_attempt,
+    }
+
+
+def _verify_materialized_terminal_task(
+    state_root: pathlib.Path,
+    event_head: str,
+    event: dict[str, Any],
+) -> None:
+    """Bind an exact terminal event to the protected materialized queue."""
+
+    queue, _, queue_head = load_state_queue(state_root)
+    if queue_head != event_head:
+        raise HistoricalPrivateReplayControllerError(
+            "protected State changed during terminal materialization"
+        )
+    task_id = event["subject_id"]
+    matching = [
+        task for task in queue["tasks"] if task.get("replay_task_id") == task_id
+    ]
+    payload = _object(event.get("payload"), "terminal State event payload")
+    retryable_failure = (
+        event.get("event_type") == "replay.failed"
+        and payload.get("retryable") is True
+    )
+    if not retryable_failure:
+        if matching:
+            raise HistoricalPrivateReplayControllerError(
+                "terminal private replay unexpectedly remains queueable"
+            )
+        return
+    if len(matching) != 1:
+        raise HistoricalPrivateReplayControllerError(
+            "retryable terminal private replay is not uniquely materialized"
+        )
+    task = matching[0]
+    if (
+        task.get("status") != "failed"
+        or task.get("attempt") != payload.get("attempt")
+        or task.get("reason_code") != payload.get("reason_code")
+        or task.get("retryable") is not True
+        or task.get("event_id") != event.get("event_id")
+        or task.get("occurred_at") != event.get("occurred_at")
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "retryable terminal event differs from its materialized task"
+        )
+
+
+def recovery_committed_proof(
+    recovery_candidate_value: Any,
+    state_root: pathlib.Path,
+) -> dict[str, Any]:
+    """Prove an exact abandoned-run terminal event in fresh protected State."""
+
+    candidate = _object(recovery_candidate_value, "recovery candidate")
+    _fields(candidate, {"schema_version", "kind", "append"}, "recovery candidate")
+    append = _object(candidate.get("append"), "recovery append candidate")
+    _fields(
+        append,
+        {"schema_version", "kind", "state_repository", "expected_head", "event"},
+        "recovery append candidate",
+    )
+    event = _object(append.get("event"), "recovery State event")
+    payload = _object(event.get("payload"), "recovery State event payload")
+    _fields(
+        event,
+        {
+            "schema_version", "event_id", "event_type", "occurred_at",
+            "subject_id", "causation_event_id", "actor", "payload",
+        },
+        "recovery State event",
+    )
+    _fields(
+        payload,
+        {"attempt", "reason_code", "retryable"},
+        "recovery State event payload",
+    )
+    replay_task_id = _match(
+        REPLAY_ID, event.get("subject_id"), "recovery replay task id"
+    )
+    attempt = _integer(payload.get("attempt"), "recovery attempt", 1)
+    if (
+        candidate["schema_version"] != 1
+        or candidate["kind"] != "failed"
+        or append["schema_version"] != 1
+        or append["kind"] != "state_append_candidate"
+        or append["state_repository"]
+        != _state_repository(_state_environment(state_root))
+        or COMMIT.fullmatch(str(append.get("expected_head"))) is None
+        or event.get("event_type") != "replay.failed"
+        or event.get("actor") != {"kind": "system"}
+        or UUID7.fullmatch(str(event.get("causation_event_id"))) is None
+        or UUID7.fullmatch(str(event.get("event_id"))) is None
+        or _timestamp(event.get("occurred_at"), "recovery occurred_at") is None
+        or payload.get("reason_code") != "runner_lost"
+        or payload.get("retryable") is not (attempt < MAX_REPLAY_ATTEMPTS)
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "recovery candidate is not an abandoned-run terminal event"
+        )
+    head = _verify_state_event(state_root, event)
+    _verify_materialized_terminal_task(state_root, head, event)
+    try:
+        subprocess.run(
+            [
+                "git", "-C", str(state_root), "merge-base", "--is-ancestor",
+                append["expected_head"], head,
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise HistoricalPrivateReplayControllerError(
+            "recovery CAS parent is not protected State ancestry"
+        ) from error
+    running = current_historical_running(
+        state_root / "events",
+        state_validated=True,
+        authority_event_type=AUTHORITY_EVENT_TYPE,
+    )
+    if any(
+        item.get("replay_task_id") == replay_task_id
+        and item.get("attempt") == attempt
+        for item in running
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "recovered private replay remains current-running"
+        )
+    return {
+        "schema_version": 1,
+        "kind": "historical_private_recovery_committed_proof",
+        "state_repository": append["state_repository"],
+        "state_head": head,
+        "terminal_event_id": event["event_id"],
+        "replay_task_id": replay_task_id,
+        "attempt": attempt,
+    }
+
+
 def _verify_state_event(state_root: pathlib.Path, event_value: Any) -> str:
     event = _object(event_value, "committed State event")
     event_id = _match(UUID7, event.get("event_id"), "committed State event_id")
@@ -1340,6 +1718,119 @@ def validate_executor_response(response_value: Any, plan_value: Any) -> dict[str
     return validate_private_executor_response(response_value, plan["execution_plan"])
 
 
+def render_executor_config(
+    plan_value: Any,
+    repository_root: pathlib.Path,
+    account_id: str,
+    source_commit: str,
+) -> dict[str, Any]:
+    """Render one task-scoped, digest-pinned private replay Worker."""
+
+    plan = validate_execution_plan(plan_value)
+    _, _, profile, _ = load_reviewed_inputs(repository_root, plan["task"])
+    _match(ACCOUNT_ID, account_id, "Cloudflare account id")
+    _match(COMMIT, source_commit, "historical private executor source commit")
+    _verify_ancestor_of_upstream(repository_root, source_commit, "executor source commit")
+    task = plan["task"]
+    manifest = profile["registry_manifest_digest"]
+    if (
+        profile["registry_repository"] != "lean-eval-authoritative"
+        or manifest != plan["execution_plan"]["request"]["execution_profile"][
+            "vm_image_digest"
+        ]
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "private executor image differs from the qualified plan"
+        )
+    attempt = task["attempt"] + 1
+    if attempt > MAX_REPLAY_ATTEMPTS:
+        raise HistoricalPrivateReplayControllerError(
+            "historical private replay exceeds the attempt limit"
+        )
+    worker_name = f"hpr-{task['replay_task_id'][4:60]}-{attempt}"
+    container_application_name = (
+        f"le-hpr-{task['replay_task_id'][4:26]}-{attempt}"
+    )
+    image = (
+        f"registry.cloudflare.com/{account_id}/"
+        f"{profile['registry_repository']}@{manifest}"
+    )
+    ownership_tag = sha256_bytes(
+        canonical_bytes(
+            {
+                "schema_version": 1,
+                "kind": "historical_private_executor_ownership",
+                "source_commit": source_commit,
+                "replay_task_id": task["replay_task_id"],
+                "attempt": attempt,
+                "execution_profile_digest": task["execution_profile_digest"],
+                "measurement_config_digest": task["measurement_config_digest"],
+                "registry_manifest_digest": manifest,
+            }
+        )
+    )
+    return {
+        "$schema": "node_modules/wrangler/config-schema.json",
+        "name": worker_name,
+        "main": str(
+            (repository_root / "server/src/historical-private-replay-entry.ts").resolve()
+        ),
+        "account_id": account_id,
+        "compatibility_date": "2026-08-22",
+        "compatibility_flags": ["nodejs_compat"],
+        "workers_dev": True,
+        "preview_urls": False,
+        "observability": {"enabled": False},
+        "containers": [
+            {
+                "name": container_application_name,
+                "class_name": "ReplaySandbox",
+                "image": image,
+                "instance_type": "standard-4",
+                "max_instances": 1,
+                "ssh": {"enabled": False},
+            }
+        ],
+        "durable_objects": {
+            "bindings": [
+                {"name": "REPLAY_SANDBOX", "class_name": "ReplaySandbox"},
+                {
+                    "name": "REPLAY_TERMINAL_RECEIPT",
+                    "class_name": "ReplayTerminalReceipt",
+                },
+            ]
+        },
+        "migrations": [
+            {
+                "tag": "v1",
+                "new_sqlite_classes": ["ReplaySandbox", "ReplayTerminalReceipt"],
+            }
+        ],
+        "vars": {
+            "DEPLOYED_COMMIT": source_commit,
+            "DEPLOYMENT_ENVIRONMENT": "historical-private-replay",
+            "REPLAY_ENABLED": "true",
+            "HISTORICAL_PUBLIC_REPLAY_ENABLED": "false",
+            "STAGING_ACCEPTANCE_ENABLED": "false",
+            "GITHUB_OIDC_AUDIENCE": "lean-eval-historical-private-replay",
+            "GITHUB_OIDC_ENVIRONMENT": "replay-production",
+            "STAGING_MEMORY_LIMIT_BYTES": str(12 * 1024**3),
+            "PRODUCTION_MEMORY_GATE_BYTES": str(12 * 1024**3),
+            "REVIEWED_EXECUTION_PROFILE_DIGEST": task[
+                "execution_profile_digest"
+            ],
+            "REVIEWED_MEASUREMENT_CONFIG_DIGEST": task[
+                "measurement_config_digest"
+            ],
+            "REVIEWED_VM_IMAGE_DIGEST": manifest,
+            "EXPECTED_REPLAY_TASK_ID": task["replay_task_id"],
+            "EXPECTED_REPLAY_ATTEMPT": str(attempt),
+            "EXECUTOR_OWNERSHIP_TAG": ownership_tag,
+            "SANDBOX_TRANSPORT": "rpc",
+        },
+    }
+
+
 def recover_running(
     state_root: pathlib.Path,
     trusted_now: str,
@@ -1380,6 +1871,25 @@ def parser() -> argparse.ArgumentParser:
     started.add_argument("--state-root", required=True, type=pathlib.Path)
     started.add_argument("--trusted-now", required=True)
     started.add_argument("--output", required=True, type=pathlib.Path)
+    rebind = commands.add_parser("refresh-rebind-plan")
+    rebind.add_argument("--plan", required=True, type=pathlib.Path)
+    rebind.add_argument("--state-root", required=True, type=pathlib.Path)
+    rebind.add_argument("--output", required=True, type=pathlib.Path)
+    refresh = commands.add_parser("refresh-state")
+    refresh.add_argument("--state-root", required=True, type=pathlib.Path)
+    refresh.add_argument("--output", required=True, type=pathlib.Path)
+    proof = commands.add_parser("prove-running")
+    proof.add_argument("--plan", required=True, type=pathlib.Path)
+    proof.add_argument("--started-candidate", required=True, type=pathlib.Path)
+    proof.add_argument("--state-root", required=True, type=pathlib.Path)
+    proof.add_argument("--output", required=True, type=pathlib.Path)
+    refresh_proof = commands.add_parser("refresh-prove-running")
+    refresh_proof.add_argument("--plan", required=True, type=pathlib.Path)
+    refresh_proof.add_argument(
+        "--started-candidate", required=True, type=pathlib.Path
+    )
+    refresh_proof.add_argument("--state-root", required=True, type=pathlib.Path)
+    refresh_proof.add_argument("--output", required=True, type=pathlib.Path)
     terminal = commands.add_parser("terminal-candidate")
     terminal.add_argument("--plan", required=True, type=pathlib.Path)
     terminal.add_argument("--started-candidate", required=True, type=pathlib.Path)
@@ -1388,6 +1898,22 @@ def parser() -> argparse.ArgumentParser:
     terminal.add_argument("--state-root", required=True, type=pathlib.Path)
     terminal.add_argument("--trusted-now", required=True)
     terminal.add_argument("--output", required=True, type=pathlib.Path)
+    verify_terminal = commands.add_parser("refresh-verify-terminal")
+    verify_terminal.add_argument("--plan", required=True, type=pathlib.Path)
+    verify_terminal.add_argument(
+        "--started-candidate", required=True, type=pathlib.Path
+    )
+    verify_terminal.add_argument(
+        "--terminal-candidate", required=True, type=pathlib.Path
+    )
+    verify_terminal.add_argument("--state-root", required=True, type=pathlib.Path)
+    verify_terminal.add_argument("--output", required=True, type=pathlib.Path)
+    verify_recovery = commands.add_parser("refresh-verify-recovery")
+    verify_recovery.add_argument(
+        "--recovery-candidate", required=True, type=pathlib.Path
+    )
+    verify_recovery.add_argument("--state-root", required=True, type=pathlib.Path)
+    verify_recovery.add_argument("--output", required=True, type=pathlib.Path)
     unwrap = commands.add_parser("prepare-unwrap")
     for name in ("plan", "state-root", "started-candidate", "audit-root", "output"):
         unwrap.add_argument(f"--{name}", required=True, type=pathlib.Path)
@@ -1405,6 +1931,12 @@ def parser() -> argparse.ArgumentParser:
     response.add_argument("--plan", required=True, type=pathlib.Path)
     response.add_argument("--response", required=True, type=pathlib.Path)
     response.add_argument("--verdict-output", required=True, type=pathlib.Path)
+    render = commands.add_parser("render-executor-config")
+    render.add_argument("--plan", required=True, type=pathlib.Path)
+    render.add_argument("--repository-root", required=True, type=pathlib.Path)
+    render.add_argument("--account-id", required=True)
+    render.add_argument("--source-commit", required=True)
+    render.add_argument("--output", required=True, type=pathlib.Path)
     recovery = commands.add_parser("recover")
     recovery.add_argument("--state-root", required=True, type=pathlib.Path)
     recovery.add_argument("--trusted-now", required=True)
@@ -1430,6 +1962,48 @@ def main() -> int:
                 started_candidate(plan, args.state_root, args.trusted_now),
                 state_canonical_bytes,
             )
+        elif args.command == "refresh-rebind-plan":
+            plan, _ = _load_canonical(args.plan, "historical private plan")
+            refresh_protected_state(args.state_root)
+            _write(
+                args.output,
+                rebind_plan_to_current_state(plan, args.state_root),
+            )
+        elif args.command == "refresh-state":
+            head = refresh_protected_state(args.state_root)
+            queue, _, verified_head = load_state_queue(args.state_root)
+            if verified_head != head:
+                raise HistoricalPrivateReplayControllerError(
+                    "protected State changed during refreshed proof"
+                )
+            _write(
+                args.output,
+                {
+                    "schema_version": 1,
+                    "kind": "historical_private_refreshed_state_proof",
+                    "state_repository": _state_repository(queue["environment"]),
+                    "state_head": head,
+                },
+            )
+        elif args.command == "prove-running":
+            plan, _ = _load_canonical(args.plan, "historical private plan")
+            started, _ = _load_state_canonical(
+                args.started_candidate, "started append candidate"
+            )
+            _write(
+                args.output,
+                current_running_proof(plan, started, args.state_root),
+            )
+        elif args.command == "refresh-prove-running":
+            plan, _ = _load_canonical(args.plan, "historical private plan")
+            started, _ = _load_state_canonical(
+                args.started_candidate, "started append candidate"
+            )
+            refresh_protected_state(args.state_root)
+            _write(
+                args.output,
+                current_running_proof(plan, started, args.state_root),
+            )
         elif args.command == "terminal-candidate":
             plan, _ = _load_canonical(args.plan, "historical private plan")
             started, _ = _load_state_canonical(args.started_candidate, "started append candidate")
@@ -1450,6 +2024,30 @@ def main() -> int:
                     plan, started, verdict, args.state_root, args.trusted_now
                 ),
                 state_canonical_bytes,
+            )
+        elif args.command == "refresh-verify-terminal":
+            plan, _ = _load_canonical(args.plan, "historical private plan")
+            started, _ = _load_state_canonical(
+                args.started_candidate, "started append candidate"
+            )
+            terminal_value, _ = _load_state_canonical(
+                args.terminal_candidate, "terminal append candidate"
+            )
+            refresh_protected_state(args.state_root)
+            _write(
+                args.output,
+                terminal_committed_proof(
+                    plan, started, terminal_value, args.state_root
+                ),
+            )
+        elif args.command == "refresh-verify-recovery":
+            recovery_value, _ = _load_state_canonical(
+                args.recovery_candidate, "recovery candidate"
+            )
+            refresh_protected_state(args.state_root)
+            _write(
+                args.output,
+                recovery_committed_proof(recovery_value, args.state_root),
             )
         elif args.command == "prepare-unwrap":
             plan, _ = _load_canonical(args.plan, "historical private plan")
@@ -1483,6 +2081,17 @@ def main() -> int:
             plan, _ = _load_canonical(args.plan, "historical private plan")
             response, _ = _load_canonical(args.response, "private executor response")
             _write(args.verdict_output, validate_executor_response(response, plan))
+        elif args.command == "render-executor-config":
+            plan, _ = _load_canonical(args.plan, "historical private plan")
+            _write(
+                args.output,
+                render_executor_config(
+                    plan,
+                    args.repository_root,
+                    args.account_id,
+                    args.source_commit,
+                ),
+            )
         else:
             confirmation = (
                 None

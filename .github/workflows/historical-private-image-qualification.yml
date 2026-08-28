@@ -1,0 +1,500 @@
+name: Qualify one historical private replay image
+
+# TEMPORARY: after all reviewed profiles land, delete this workflow, its
+# disposable entry point/client/controller commands, and their focused tests in
+# a dedicated cleanup PR. It must never become a scheduled qualification service.
+
+on:
+  workflow_dispatch:
+    inputs:
+      benchmark_commit:
+        description: Exact benchmark commit from the canonical 63-image private matrix
+        required: true
+        type: string
+      confirm_registry_publication_and_qualification:
+        description: Publish and qualify exactly one immutable private replay image
+        required: true
+        type: boolean
+        default: false
+      confirm_temporary_cloudflare_resource_creation:
+        description: Create and then delete one isolated per-run qualifier Worker
+        required: true
+        type: boolean
+        default: false
+      apply_confirmation:
+        description: Type publish-and-qualify-one-private-image
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: historical-private-image-qualification
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    if: >-
+      inputs.confirm_registry_publication_and_qualification == true &&
+      inputs.confirm_temporary_cloudflare_resource_creation == true
+    environment: cloudflare-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      MATRIX: configuration/historical-private-replay-image-matrix-v1.json
+      CONTROLLER: scripts/historical_private_image_qualification.py
+      EXECUTOR: scripts/run_historical_private_cloudflare_probe
+      BENCHMARK_COMMIT: ${{ inputs.benchmark_commit }}
+      IMAGE_REPOSITORY: lean-eval-authoritative
+      IMAGE_LIMIT_BYTES: '21474836480'
+    outputs:
+      profile_name: ${{ steps.render.outputs.profile_name }}
+    steps:
+      - name: Require an explicit one-image apply confirmation
+        env:
+          APPLY_CONFIRMATION: ${{ inputs.apply_confirmation }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$APPLY_CONFIRMATION" = publish-and-qualify-one-private-image
+          [[ "$BENCHMARK_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.commit.sha, .protected] | @tsv')
+          test "$branch" = "$GITHUB_SHA"$'\ttrue'
+
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      # actions/setup-node pinned to v6.5.0.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.6.0'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - run: npm ci
+        working-directory: server
+
+      - name: Select exactly one closed matrix entry and its source-blob closure
+        run: |
+          set -euo pipefail
+          test -z "$(git status --short)"
+          python "$CONTROLLER" select \
+            --matrix "$MATRIX" \
+            --benchmark-commit "$BENCHMARK_COMMIT" \
+            --source-root . \
+            --source-commit "$GITHUB_SHA" \
+            --output "$RUNNER_TEMP/candidate.json"
+          test "$(jq -r .image_source_commit "$RUNNER_TEMP/candidate.json")" = "$GITHUB_SHA"
+          test "$(jq -r .benchmark_commit "$RUNNER_TEMP/candidate.json")" = "$BENCHMARK_COMMIT"
+          image_tag="private-v1-$BENCHMARK_COMMIT-$GITHUB_SHA"
+          candidate_sha256=$(sha256sum "$RUNNER_TEMP/candidate.json" | cut -d' ' -f1)
+          {
+            echo "IMAGE_TAG=$image_tag"
+            echo "IMAGE=$IMAGE_REPOSITORY:$image_tag"
+            echo "IMAGE_CLOSURE_SHA256=$candidate_sha256"
+          } >> "$GITHUB_ENV"
+
+      - name: Verify the disposable executor is present
+        run: test -x "$EXECUTOR"
+
+      # jlumbroso/free-disk-space pinned to v1.3.1.
+      - uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - name: Build and inspect only the selected dedicated image
+        run: |
+          set -euo pipefail
+          docker build --progress=plain \
+            --build-arg "BENCHMARK_COMMIT=$BENCHMARK_COMMIT" \
+            --build-arg "IMAGE_SOURCE_COMMIT=$GITHUB_SHA" \
+            --build-arg "IMAGE_CLOSURE_SHA256=$IMAGE_CLOSURE_SHA256" \
+            --tag "$IMAGE" \
+            --file Dockerfile.historical-private-replay .
+          image_size=$(docker image inspect "$IMAGE" --format '{{.Size}}')
+          test "$image_size" -le "$IMAGE_LIMIT_BYTES"
+          docker run --rm --network none --read-only \
+            --entrypoint /bin/sh "$IMAGE" -c '
+              set -eu
+              test "$(cat /opt/lean-eval/benchmark/.lean-eval-commit)" = "'"$BENCHMARK_COMMIT"'"
+              test -x /opt/lean-eval/replay-authoritative
+              test -x /opt/lean-eval/bin/age-file-key
+              test -x /opt/lean-eval/bin/nanoda_bin
+              test "$(find /opt/lean-eval -type d -name .git -print -quit)" = ""
+            '
+
+      - name: Publish once and resolve the immutable registry digest
+        id: registry
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          cleanup() {
+            unset registry_username registry_password
+            rm -f "$RUNNER_TEMP/registry-credentials.json" \
+              "$RUNNER_TEMP/registry-headers" \
+              "$RUNNER_TEMP/registry-manifest.json" \
+              "$RUNNER_TEMP/registry-image-config.json" \
+              "$RUNNER_TEMP/registry-images.json" \
+              "$RUNNER_TEMP/registry-netrc"
+          }
+          trap cleanup EXIT
+          timeout 60s npx --prefix server wrangler containers registries credentials \
+            registry.cloudflare.com --pull --expiration-minutes 5 --json \
+            > "$RUNNER_TEMP/registry-credentials.json"
+          registry_username=$(jq -er .username "$RUNNER_TEMP/registry-credentials.json")
+          registry_password=$(jq -er .password "$RUNNER_TEMP/registry-credentials.json")
+          echo "::add-mask::$registry_username"
+          echo "::add-mask::$registry_password"
+          printf 'machine registry.cloudflare.com login %s password %s\n' \
+            "$registry_username" "$registry_password" > "$RUNNER_TEMP/registry-netrc"
+          npx --prefix server wrangler containers images list \
+            --filter "^$IMAGE_REPOSITORY$" --json \
+            > "$RUNNER_TEMP/registry-images.json"
+          manifest_url="https://registry.cloudflare.com/v2/$CLOUDFLARE_ACCOUNT_ID/$IMAGE_REPOSITORY/manifests/$IMAGE_TAG"
+          manifest_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+            --max-time 30 --netrc-file "$RUNNER_TEMP/registry-netrc" \
+            --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+            "$manifest_url" --dump-header "$RUNNER_TEMP/registry-headers" \
+            --output "$RUNNER_TEMP/registry-manifest.json" \
+            --write-out '%{http_code}')
+          if test "$manifest_status" = 200; then
+            echo 'Exact immutable tag exists; verifying it before retry/resume.'
+          else
+            test "$manifest_status" = 404
+            test "$(jq --arg repository "$IMAGE_REPOSITORY" --arg tag "$IMAGE_TAG" \
+              '[.[] | select(.name == $repository and ((.tags // []) | any(. == $tag)))] | length' \
+              "$RUNNER_TEMP/registry-images.json")" = 0
+            branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+              --jq '[.commit.sha, .protected] | @tsv')
+            test "$branch" = "$GITHUB_SHA"$'\ttrue'
+            npx --prefix server wrangler containers push "$IMAGE"
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --max-time 30 --netrc-file "$RUNNER_TEMP/registry-netrc" \
+              --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+              "$manifest_url" --dump-header "$RUNNER_TEMP/registry-headers" \
+              --output "$RUNNER_TEMP/registry-manifest.json"
+          fi
+          image_digest=$(sed -n 's/^[Dd]ocker-[Cc]ontent-[Dd]igest:[[:space:]]*\(sha256:[0-9a-f]\{64\}\)[[:space:]\r]*$/\1/p' \
+            "$RUNNER_TEMP/registry-headers")
+          [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "$(printf '%s' "$image_digest" | wc -l)" = 0
+          config_digest=$(jq -er '.config.digest | select(test("^sha256:[0-9a-f]{64}$"))' \
+            "$RUNNER_TEMP/registry-manifest.json")
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 30 --netrc-file "$RUNNER_TEMP/registry-netrc" \
+            "https://registry.cloudflare.com/v2/$CLOUDFLARE_ACCOUNT_ID/$IMAGE_REPOSITORY/blobs/$config_digest" \
+            --output "$RUNNER_TEMP/registry-image-config.json"
+          verified=$(python "$CONTROLLER" validate-registry-image \
+            --candidate "$RUNNER_TEMP/candidate.json" \
+            --manifest-digest "$image_digest" \
+            --manifest "$RUNNER_TEMP/registry-manifest.json" \
+            --image-config "$RUNNER_TEMP/registry-image-config.json")
+          test "$verified" = "$image_digest"
+          echo "digest=$image_digest" >> "$GITHUB_OUTPUT"
+          cleanup
+          trap - EXIT
+
+      - name: Prepare one synthetic schema-v2 file-key probe
+        env:
+          REGISTRY_MANIFEST_DIGEST: ${{ steps.registry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          umask 077
+          mkdir "$RUNNER_TEMP/probe-material" "$RUNNER_TEMP/private-qualifier"
+          python "$CONTROLLER" create-probe-archive \
+            --candidate "$RUNNER_TEMP/candidate.json" \
+            --output "$RUNNER_TEMP/probe-material/source.tar.gz"
+          ssh-keygen -q -t ed25519 -N '' \
+            -f "$RUNNER_TEMP/probe-material/identity"
+          recipient=$(cat "$RUNNER_TEMP/probe-material/identity.pub")
+          docker run --rm --network none --read-only --user 0:0 \
+            --mount "type=bind,src=$RUNNER_TEMP/probe-material,dst=/probe" \
+            --entrypoint age "$IMAGE" \
+            --encrypt --recipient "$recipient" \
+            --output /probe/source.tar.gz.age /probe/source.tar.gz
+          docker run --rm --network none --read-only --user 0:0 \
+            --mount "type=bind,src=$RUNNER_TEMP/probe-material,dst=/probe" \
+            --entrypoint /opt/lean-eval/bin/age-file-key "$IMAGE" \
+            extract --identity /probe/identity --input /probe/source.tar.gz.age \
+            > "$RUNNER_TEMP/probe-material/file-key"
+          test "$(wc -c < "$RUNNER_TEMP/probe-material/file-key")" = 16
+          rm -f "$RUNNER_TEMP/probe-material/identity" \
+            "$RUNNER_TEMP/probe-material/identity.pub"
+          python "$CONTROLLER" prepare-probe \
+            --candidate "$RUNNER_TEMP/candidate.json" \
+            --plaintext "$RUNNER_TEMP/probe-material/source.tar.gz" \
+            --ciphertext "$RUNNER_TEMP/probe-material/source.tar.gz.age" \
+            --file-key "$RUNNER_TEMP/probe-material/file-key" \
+            --registry-manifest-digest "$REGISTRY_MANIFEST_DIGEST" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --output-directory "$RUNNER_TEMP/private-qualifier" \
+            > "$RUNNER_TEMP/private-qualifier-summary.json"
+
+      - name: Create only the isolated per-run qualifier Worker
+        id: deploy
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          config="$RUNNER_TEMP/private-qualifier/wrangler.json"
+          worker=$(jq -er .worker_name "$RUNNER_TEMP/private-qualifier/context.json")
+          application=$(jq -er .container_application_name \
+            "$RUNNER_TEMP/private-qualifier/context.json")
+          test "$CLOUDFLARE_ACCOUNT_ID" = a46b90978a1c29cc4795f30677e7e4b8
+          code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+            --max-time 30 --output "$RUNNER_TEMP/worker-preflight.json" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$worker")
+          test "$code" = 404
+          npx --prefix server wrangler containers list --json \
+            > "$RUNNER_TEMP/container-applications-before.json"
+          test "$(jq --arg name "$application" \
+            '[.[] | select(.name == $name)] | length' \
+            "$RUNNER_TEMP/container-applications-before.json")" = 0
+          : > "$RUNNER_TEMP/qualifier-deploy-attempted"
+          npx --prefix server wrangler deploy --config "$config" \
+            --containers-rollout=immediate
+          expected_image=$(jq -er .containers[0].image "$config")
+          npx --prefix server wrangler containers list --json \
+            > "$RUNNER_TEMP/container-applications-deployed.json"
+          jq -e --arg name "$application" --arg image "$expected_image" '
+            [.[] | select(.name == $name)] as $matches |
+            ($matches | length) == 1 and
+            $matches[0].image == $image and
+            ($matches[0].version != null) and
+            ($matches[0].created_at | type == "string" and
+              test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T"))
+          ' "$RUNNER_TEMP/container-applications-deployed.json" >/dev/null
+          : > "$RUNNER_TEMP/qualifier-deployed"
+
+      - name: Run exactly one official-entrypoint blocked-network probe
+        env:
+          REGISTRY_MANIFEST_DIGEST: ${{ steps.registry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          "$EXECUTOR" \
+            --candidate "$RUNNER_TEMP/candidate.json" \
+            --request "$RUNNER_TEMP/private-qualifier/request.json" \
+            --status "$RUNNER_TEMP/private-qualifier/status.json" \
+            --context "$RUNNER_TEMP/private-qualifier/context.json" \
+            --registry-manifest-digest "$REGISTRY_MANIFEST_DIGEST" \
+            --reservation-marker "$RUNNER_TEMP/qualification-reserved.json" \
+            --output "$RUNNER_TEMP/probe-receipt.json"
+
+      - name: Confirm destruction of any reserved sandbox
+        id: sandbox_cleanup
+        if: always() && steps.deploy.outcome != 'skipped'
+        env:
+          REGISTRY_MANIFEST_DIGEST: ${{ steps.registry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          if test -f "$RUNNER_TEMP/qualification-reserved.json"; then
+            "$EXECUTOR" \
+              --candidate "$RUNNER_TEMP/candidate.json" \
+              --request "$RUNNER_TEMP/private-qualifier/request.json" \
+              --status "$RUNNER_TEMP/private-qualifier/status.json" \
+              --context "$RUNNER_TEMP/private-qualifier/context.json" \
+              --registry-manifest-digest "$REGISTRY_MANIFEST_DIGEST" \
+              --cleanup-only
+          fi
+
+      - name: Delete and verify absence of the disposable Worker
+        if: always() && steps.deploy.outcome != 'skipped'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          config="$RUNNER_TEMP/private-qualifier/wrangler.json"
+          worker=$(jq -er .worker_name "$RUNNER_TEMP/private-qualifier/context.json")
+          application=$(jq -er .container_application_name \
+            "$RUNNER_TEMP/private-qualifier/context.json")
+          if ! test -f "$RUNNER_TEMP/qualifier-deploy-attempted"; then
+            code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+              --max-time 30 --output "$RUNNER_TEMP/worker-after-delete.json" \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$worker")
+            test "$code" = 404
+            npx --prefix server wrangler containers list --json \
+              > "$RUNNER_TEMP/container-applications-final.json"
+            test "$(jq --arg name "$application" \
+              '[.[] | select(.name == $name)] | length' \
+              "$RUNNER_TEMP/container-applications-final.json")" = 0
+            exit 0
+          fi
+          npx --prefix server wrangler delete "$worker" --config "$config" --force || true
+          code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+            --max-time 30 --output "$RUNNER_TEMP/worker-after-delete.json" \
+            --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$worker")
+          test "$code" = 404
+          application_delete_requested=false
+          for _ in $(seq 1 10); do
+            npx --prefix server wrangler containers list --json \
+              > "$RUNNER_TEMP/container-applications-after.json"
+            matches=$(jq --arg name "$application" \
+              '[.[] | select(.name == $name)] | length' \
+              "$RUNNER_TEMP/container-applications-after.json")
+            test "$matches" -le 1
+            if test "$matches" = 0; then
+              break
+            fi
+            if test "$application_delete_requested" = false; then
+              application_id=$(jq -er --arg name "$application" \
+                '.[] | select(.name == $name) | .id' \
+                "$RUNNER_TEMP/container-applications-after.json")
+              [[ "$application_id" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+              npx --prefix server wrangler containers delete "$application_id"
+              application_delete_requested=true
+            fi
+            sleep 3
+          done
+          npx --prefix server wrangler containers list --json \
+            > "$RUNNER_TEMP/container-applications-final.json"
+          test "$(jq --arg name "$application" \
+            '[.[] | select(.name == $name)] | length' \
+            "$RUNNER_TEMP/container-applications-final.json")" = 0
+
+      - name: Render one canonical content-addressed qualification profile
+        id: render
+        env:
+          REGISTRY_MANIFEST_DIGEST: ${{ steps.registry.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/profiles"
+          workflow_sha256=$(sha256sum .github/workflows/historical-private-image-qualification.yml | cut -d' ' -f1)
+          profile_path=$(python "$CONTROLLER" render-qualification \
+            --candidate "$RUNNER_TEMP/candidate.json" \
+            --receipt "$RUNNER_TEMP/probe-receipt.json" \
+            --registry-manifest-digest "$REGISTRY_MANIFEST_DIGEST" \
+            --workflow-commit "$GITHUB_SHA" \
+            --workflow-sha256 "$workflow_sha256" \
+            --workflow-run-id "$GITHUB_RUN_ID" \
+            --workflow-run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --output-directory "$RUNNER_TEMP/profiles")
+          profile_name=$(basename "$profile_path")
+          [[ "$profile_name" =~ ^[0-9a-f]{64}\.json$ ]]
+          test "$(find "$RUNNER_TEMP/profiles" -maxdepth 1 -type f | wc -l)" = 1
+          echo "profile_name=$profile_name" >> "$GITHUB_OUTPUT"
+
+      # actions/upload-artifact pinned to v7.0.1.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-private-profile
+          path: ${{ runner.temp }}/profiles/${{ steps.render.outputs.profile_name }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove source and credential scratch
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/profiles" \
+            "$RUNNER_TEMP/private-qualifier" \
+            "$RUNNER_TEMP/probe-material"
+          rm -f "$RUNNER_TEMP/candidate.json" \
+            "$RUNNER_TEMP/probe-receipt.json" \
+            "$RUNNER_TEMP/private-qualifier-summary.json" \
+            "$RUNNER_TEMP/qualification-reserved.json" \
+            "$RUNNER_TEMP/qualifier-deploy-attempted" \
+            "$RUNNER_TEMP/qualifier-deployed" \
+            "$RUNNER_TEMP/registry-credentials.json" \
+            "$RUNNER_TEMP/registry-headers" \
+            "$RUNNER_TEMP/registry-manifest.json" \
+            "$RUNNER_TEMP/registry-image-config.json" \
+            "$RUNNER_TEMP/registry-images.json" \
+            "$RUNNER_TEMP/registry-netrc" \
+            "$RUNNER_TEMP/container-applications-deployed.json" \
+            "$RUNNER_TEMP/worker-preflight.json" \
+            "$RUNNER_TEMP/worker-after-delete.json" \
+            "$RUNNER_TEMP/container-applications-before.json" \
+            "$RUNNER_TEMP/container-applications-after.json" \
+            "$RUNNER_TEMP/container-applications-final.json"
+
+  stage-isolated-review-branch:
+    needs: qualify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      SOURCE_COMMIT: ${{ github.sha }}
+      PROFILE_NAME: ${{ needs.qualify.outputs.profile_name }}
+      REVIEW_BRANCH: historical-private-profile-review-${{ github.sha }}
+    steps:
+      # actions/checkout pinned to v7.0.1.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # actions/download-artifact pinned to v8.0.1.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: historical-private-profile
+          path: ${{ runner.temp }}/profile
+
+      - name: Prepare only the content-addressed profile on an isolated branch
+        run: |
+          set -euo pipefail
+          [[ "$PROFILE_NAME" =~ ^[0-9a-f]{64}\.json$ ]]
+          profile="$RUNNER_TEMP/profile/$PROFILE_NAME"
+          test -f "$profile"
+          test "$(find "$RUNNER_TEMP/profile" -maxdepth 1 -type f | wc -l)" = 1
+          review_ref="refs/heads/$REVIEW_BRANCH"
+          if git ls-remote --exit-code origin "$review_ref" >/dev/null 2>&1; then
+            git fetch --no-tags origin "$review_ref"
+            git switch --detach FETCH_HEAD
+            git merge-base --is-ancestor "$SOURCE_COMMIT" HEAD
+          else
+            git switch --detach "$SOURCE_COMMIT"
+          fi
+          destination="evidence/private-replay/profiles/$PROFILE_NAME"
+          test ! -e "$destination"
+          mkdir -p evidence/private-replay/profiles
+          cp "$profile" "$destination"
+          git add "$destination"
+          test "$(git diff --cached --name-only)" = "$destination"
+          git -c user.name=lean-eval-automation \
+            -c user.email=lean-eval-automation@users.noreply.github.com \
+            commit -m "Stage historical private profile ${PROFILE_NAME%.json}"
+
+      - name: Push only the isolated review branch with job-scoped authority
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh auth setup-git
+          git push origin "HEAD:refs/heads/$REVIEW_BRANCH"

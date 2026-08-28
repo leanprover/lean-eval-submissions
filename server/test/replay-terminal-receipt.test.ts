@@ -5,6 +5,7 @@ import { ReplayTerminalReceipt } from "../src/replay-terminal-receipt";
 const ACTIVE_BINDING_KEY = "authoritative-active-binding:v1";
 const RESERVATION_KEY = "historical-cleanup-reservation:v1";
 const CLEANUP_KEY = "authoritative-sandbox-cleanup:v1";
+const QUALIFICATION_CLAIM_KEY = "private-qualification-claim:v1";
 
 type StorageFixture = {
   values: Map<string, unknown>;
@@ -65,12 +66,171 @@ function activeBinding(): Record<string, unknown> {
     runner_nonce: "1".repeat(64),
     replay_task_id: `rt1_${"2".repeat(64)}`,
     attempt: 1,
+    execution_profile_digest: "3".repeat(64),
+    measurement_config_digest: "4".repeat(64),
+    vm_image_digest: `sha256:${"5".repeat(64)}`,
     cleanup_after_epoch_ms: now + 7 * 60 * 60 * 1000,
     retained_until_epoch_ms: now + 24 * 60 * 60 * 1000,
   };
 }
 
+function qualificationClaim(
+  binding: Record<string, unknown>,
+  requestSha256 = "6".repeat(64),
+): Record<string, unknown> {
+  return {
+    schema_version: 1,
+    request_sha256: requestSha256,
+    binding,
+  };
+}
+
 describe("durable replay sandbox cleanup", () => {
+  it("atomically requires the exact reservation for private qualification", async () => {
+    const storage = storageFixture();
+    const instance = receiptFixture(storage, () => Promise.resolve());
+    const binding = activeBinding();
+    const identity = {
+      schema_version: 1 as const,
+      replay_task_id: binding.replay_task_id as string,
+      attempt: binding.attempt as number,
+    };
+    const claim = qualificationClaim(binding);
+
+    await expect(instance.claimQualificationBinding(claim)).rejects.toThrow(
+      "was not reserved",
+    );
+    await instance.reserveCleanupIdentity(identity);
+    expect(await instance.claimQualificationBinding(claim)).toEqual(binding);
+    await expect(instance.claimQualificationBinding(claim)).rejects.toThrow(
+      "already bound",
+    );
+    await instance.confirmQualificationRunning(claim);
+    expect(await instance.claimQualificationBinding({
+      ...claim,
+      binding: {
+        ...binding,
+        cleanup_after_epoch_ms: (binding.cleanup_after_epoch_ms as number) + 1,
+        retained_until_epoch_ms: (binding.retained_until_epoch_ms as number) + 1,
+      },
+    })).toEqual(binding);
+    await expect(instance.claimQualificationBinding(
+      qualificationClaim(binding, "7".repeat(64)),
+    )).rejects.toThrow("already bound");
+    await expect(instance.claimQualificationBinding(qualificationClaim({
+      ...binding,
+      execution_profile_digest: "8".repeat(64),
+    }))).rejects.toThrow("already bound");
+    expect(storage.values.get(QUALIFICATION_CLAIM_KEY)).toEqual({
+      ...claim,
+      state: "running",
+    });
+  });
+
+  it("rejects private replay after pre-binding cleanup", async () => {
+    const storage = storageFixture();
+    const instance = receiptFixture(storage, () => Promise.resolve());
+    const binding = activeBinding();
+    const identity = {
+      schema_version: 1 as const,
+      replay_task_id: binding.replay_task_id as string,
+      attempt: binding.attempt as number,
+    };
+
+    await instance.reserveCleanupIdentity(identity);
+    await instance.destroyBoundSandbox(identity);
+    await expect(instance.claimQualificationBinding(
+      qualificationClaim(binding),
+    )).rejects.toThrow("already cleaned up");
+    expect(storage.values.has(ACTIVE_BINDING_KEY)).toBe(false);
+  });
+
+  it("rejects private replay after active pre-terminal cleanup", async () => {
+    const storage = storageFixture();
+    let destroyCalls = 0;
+    const instance = receiptFixture(storage, () => {
+      destroyCalls += 1;
+      return Promise.resolve();
+    });
+    const binding = activeBinding();
+    const identity = {
+      schema_version: 1 as const,
+      replay_task_id: binding.replay_task_id as string,
+      attempt: binding.attempt as number,
+    };
+    const claim = qualificationClaim(binding);
+
+    await instance.reserveCleanupIdentity(identity);
+    await instance.claimQualificationBinding(claim);
+    await instance.confirmQualificationRunning(claim);
+    await instance.destroyBoundSandbox(identity);
+    await expect(instance.claimQualificationBinding(claim)).rejects.toThrow(
+      "already cleaned up",
+    );
+    expect(destroyCalls).toBe(1);
+  });
+
+  it("rejects a private claim whose reservation has another identity", async () => {
+    const storage = storageFixture();
+    const instance = receiptFixture(storage, () => Promise.resolve());
+    const binding = activeBinding();
+    await instance.reserveCleanupIdentity({
+      schema_version: 1,
+      replay_task_id: binding.replay_task_id as string,
+      attempt: 2,
+    });
+
+    await expect(instance.claimQualificationBinding(
+      qualificationClaim(binding),
+    )).rejects.toThrow("was not reserved");
+    expect(storage.values.has(ACTIVE_BINDING_KEY)).toBe(false);
+  });
+
+  it("leaves ordinary authoritative claims independent of qualification reservations", async () => {
+    const storage = storageFixture();
+    const instance = receiptFixture(storage, () => Promise.resolve());
+    const binding = activeBinding();
+
+    expect(await instance.claimBinding(binding)).toEqual(binding);
+    expect(storage.values.get(ACTIVE_BINDING_KEY)).toEqual(binding);
+    expect(storage.values.has(QUALIFICATION_CLAIM_KEY)).toBe(false);
+  });
+
+  it("can require a reservation for an authoritative private binding", async () => {
+    const storage = storageFixture();
+    const instance = receiptFixture(storage, () => Promise.resolve());
+    const binding = activeBinding();
+    const identity = {
+      schema_version: 1 as const,
+      replay_task_id: binding.replay_task_id as string,
+      attempt: binding.attempt as number,
+    };
+
+    await expect(instance.claimReservedBinding(binding)).rejects.toThrow("was not reserved");
+    expect(storage.values.has(ACTIVE_BINDING_KEY)).toBe(false);
+    await instance.reserveCleanupIdentity(identity);
+    expect(await instance.claimReservedBinding(binding)).toEqual(binding);
+    expect(storage.values.get(ACTIVE_BINDING_KEY)).toEqual(binding);
+  });
+
+  it("rejects a reserved authoritative claim after cleanup", async () => {
+    const storage = storageFixture();
+    const instance = receiptFixture(storage, () => Promise.resolve());
+    const binding = activeBinding();
+    const identity = {
+      schema_version: 1 as const,
+      replay_task_id: binding.replay_task_id as string,
+      attempt: binding.attempt as number,
+    };
+
+    await instance.reserveCleanupIdentity(identity);
+    await instance.destroyBoundSandbox(identity);
+    await expect(instance.claimReservedBinding(binding)).rejects.toThrow(
+      "already finalized",
+    );
+    expect(storage.values.has(ACTIVE_BINDING_KEY)).toBe(false);
+  });
+
   it("requires and atomically binds an exact historical cleanup reservation", async () => {
     const storage = storageFixture();
     const instance = receiptFixture(storage, () => Promise.resolve());

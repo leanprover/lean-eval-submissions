@@ -15,11 +15,11 @@ from unittest import mock
 ROOT = pathlib.Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import historical_private_replay_controller as controller  # noqa: E402
-from prepare_historical_private_replay import entry_sha256  # noqa: E402
-from key_capability_contract import archive_file_key_id, capability_digest  # noqa: E402
-from replay_orchestrator import config_digest, replay_task_id  # noqa: E402
-from results_schema import result_id  # noqa: E402
+import historical_private_replay_controller as controller
+from key_capability_contract import archive_file_key_id, capability_digest
+from prepare_historical_private_replay import entry_sha256
+from replay_orchestrator import config_digest, replay_task_id
+from results_schema import result_id
 
 
 def recursive_keys(value: object) -> set[str]:
@@ -401,8 +401,30 @@ class Fixture:
             "    queue = json.loads((args.root / 'fixture-queue.json').read_text())\n"
             "    events = [json.loads(path.read_text()) for path in "
             "sorted((args.root / 'events').glob('*/*.json'))]\n"
-            "    if any(event['event_type'] == 'replay.started' for event in events):\n"
-            "        queue['tasks'] = []\n"
+            "    task = queue['tasks'][0] if queue['tasks'] else None\n"
+            "    if task is not None:\n"
+            "        for event in events:\n"
+            "            if event['subject_id'] != task['replay_task_id']:\n"
+            "                continue\n"
+            "            kind = event['event_type']\n"
+            "            payload = event['payload']\n"
+            "            if kind == 'replay.started':\n"
+            "                task.update(status='running', **payload)\n"
+            "                task.pop('reason_code', None)\n"
+            "                task.pop('retryable', None)\n"
+            "            elif kind == 'replay.failed':\n"
+            "                task.update(status='failed', **payload)\n"
+            "                task.pop('runner_profile', None)\n"
+            "            elif kind in {'replay.accepted', 'replay.rejected', "
+            "'replay.unavailable'}:\n"
+            "                task.update(status=kind.split('.')[1], **payload)\n"
+            "                task.pop('runner_profile', None)\n"
+            "            else:\n"
+            "                continue\n"
+            "            task.update(event_id=event['event_id'], "
+            "occurred_at=event['occurred_at'])\n"
+            "        queue['tasks'] = [task] if (task['status'] == 'queued' or "
+            "(task['status'] == 'failed' and task.get('retryable') is True)) else []\n"
             "    (args.output / 'historical-private-replay-queue.json').write_text("
             "json.dumps(queue, ensure_ascii=True, indent=2, sort_keys=True) + '\\n')\n",
             encoding="utf-8",
@@ -969,6 +991,21 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
             "statistics": None,
         }
         self.fixture.commit_state_event(started["event"])
+        proof = controller.current_running_proof(
+            plan, started, self.fixture.state
+        )
+        self.assertEqual(
+            proof,
+            {
+                "schema_version": 1,
+                "kind": "historical_private_current_running_proof",
+                "state_repository": "leanprover/lean-eval-state",
+                "state_head": self.fixture.state_head,
+                "replay_task_id": self.fixture.task["replay_task_id"],
+                "attempt": 1,
+                "started_event_id": started["event"]["event_id"],
+            },
+        )
         terminal = controller.terminal_candidate(
             plan,
             started,
@@ -989,6 +1026,255 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
             controller.started_candidate(
                 stale_plan, self.fixture.state, "2026-10-21T07:00:00.000Z"
             )
+
+    def test_unrelated_remote_append_rebinds_only_latest_state_cas_metadata(self) -> None:
+        plan = self.fixture.plan()
+        with tempfile.TemporaryDirectory() as raw:
+            bare = pathlib.Path(raw) / "state.git"
+            writer = pathlib.Path(raw) / "writer"
+            subprocess.run(["git", "init", "--bare", "-q", str(bare)], check=True)
+            subprocess.run(
+                [
+                    "git", "-C", str(self.fixture.state), "push", "--quiet",
+                    str(bare), "HEAD:refs/heads/main",
+                ],
+                check=True,
+            )
+            remote = str(bare)
+            controller.REPOSITORY_REMOTES[
+                "leanprover/lean-eval-state"
+            ].add(remote)
+            try:
+                subprocess.run(
+                    [
+                        "git", "-C", str(self.fixture.state), "remote", "set-url",
+                        "origin", remote,
+                    ],
+                    check=True,
+                )
+                subprocess.run(
+                    ["git", "clone", "--quiet", "--branch", "main", remote, str(writer)],
+                    check=True,
+                )
+                (writer / "unrelated-live-intake-marker").write_text(
+                    "queue-neutral\n", encoding="utf-8"
+                )
+                unrelated_head = self.fixture.commit_in(
+                    writer, "Append unrelated State history"
+                )
+                subprocess.run(
+                    [
+                        "git", "-C", str(writer), "push", "--quiet", remote,
+                        "HEAD:refs/heads/main",
+                    ],
+                    check=True,
+                )
+                self.assertEqual(
+                    subprocess.run(
+                        ["git", "-C", str(self.fixture.state), "rev-parse", "HEAD"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    ).stdout.strip(),
+                    plan["state"]["expected_head"],
+                )
+                self.assertEqual(
+                    controller.refresh_protected_state(self.fixture.state),
+                    unrelated_head,
+                )
+                rebound = controller.rebind_plan_to_current_state(
+                    plan, self.fixture.state
+                )
+                self.assertEqual(rebound["task"], plan["task"])
+                self.assertEqual(rebound["execution_plan"], plan["execution_plan"])
+                self.assertEqual(rebound["state"]["expected_head"], unrelated_head)
+            finally:
+                controller.REPOSITORY_REMOTES[
+                    "leanprover/lean-eval-state"
+                ].discard(remote)
+
+    def test_url_push_stale_tracking_ref_is_refreshed_and_terminalization_wins(self) -> None:
+        plan = self.fixture.plan()
+        started = controller.started_candidate(
+            plan,
+            self.fixture.state,
+            "2026-10-21T07:00:00.000Z",
+            random_bytes=b"\x08" * 10,
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            bare = pathlib.Path(raw) / "state.git"
+            writer = pathlib.Path(raw) / "writer"
+            subprocess.run(["git", "init", "--bare", "-q", str(bare)], check=True)
+            subprocess.run(
+                [
+                    "git", "-C", str(self.fixture.state), "push", "--quiet",
+                    str(bare), "HEAD:refs/heads/main",
+                ],
+                check=True,
+            )
+            remote = str(bare)
+            controller.REPOSITORY_REMOTES[
+                "leanprover/lean-eval-state"
+            ].add(remote)
+            try:
+                subprocess.run(
+                    [
+                        "git", "-C", str(self.fixture.state), "remote", "set-url",
+                        "origin", remote,
+                    ],
+                    check=True,
+                )
+                subprocess.run(
+                    ["git", "clone", "--quiet", "--branch", "main", remote, str(writer)],
+                    check=True,
+                )
+                event_path = (
+                    writer / "events" / started["event"]["event_id"][:2]
+                    / f"{started['event']['event_id']}.json"
+                )
+                event_path.parent.mkdir(parents=True, exist_ok=True)
+                event_path.write_bytes(
+                    controller.state_canonical_bytes(started["event"])
+                )
+                started_head = self.fixture.commit_in(writer, "Push start by URL")
+                subprocess.run(
+                    [
+                        "git", "-C", str(writer), "push", "--quiet", remote,
+                        "HEAD:refs/heads/main",
+                    ],
+                    check=True,
+                )
+                self.assertEqual(
+                    subprocess.run(
+                        [
+                            "git", "-C", str(self.fixture.state), "rev-parse",
+                            "refs/remotes/origin/main",
+                        ],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    ).stdout.strip(),
+                    plan["state"]["expected_head"],
+                )
+                self.assertEqual(
+                    controller.refresh_protected_state(self.fixture.state),
+                    started_head,
+                )
+                proof = controller.current_running_proof(
+                    plan, started, self.fixture.state
+                )
+                self.assertEqual(proof["started_event_id"], started["event"]["event_id"])
+
+                (writer / "unrelated-live-intake-marker").write_text(
+                    "after-start\n", encoding="utf-8"
+                )
+                unrelated_head = self.fixture.commit_in(
+                    writer, "Append unrelated State history after start"
+                )
+                subprocess.run(
+                    [
+                        "git", "-C", str(writer), "push", "--quiet", remote,
+                        "HEAD:refs/heads/main",
+                    ],
+                    check=True,
+                )
+                self.assertEqual(
+                    controller.refresh_protected_state(self.fixture.state),
+                    unrelated_head,
+                )
+                controller.current_running_proof(plan, started, self.fixture.state)
+
+                verdict = {
+                    "schema_version": 1,
+                    "replay_task_id": self.fixture.task["replay_task_id"],
+                    "attempt": 1,
+                    "execution_outcome": "failed",
+                    "checker_outcome": None,
+                    "failure_reason": "runner_lost",
+                    "statistics": None,
+                }
+                terminal = controller.terminal_candidate(
+                    plan,
+                    started,
+                    verdict,
+                    self.fixture.state,
+                    "2026-10-21T07:00:01.000Z",
+                    random_bytes=b"\x09" * 10,
+                )
+                self.assertEqual(terminal["expected_head"], unrelated_head)
+                terminal_path = (
+                    writer / "events" / terminal["event"]["event_id"][:2]
+                    / f"{terminal['event']['event_id']}.json"
+                )
+                terminal_path.parent.mkdir(parents=True, exist_ok=True)
+                terminal_path.write_bytes(
+                    controller.state_canonical_bytes(terminal["event"])
+                )
+                terminal_head = self.fixture.commit_in(
+                    writer, "Terminalize exact running replay"
+                )
+                subprocess.run(
+                    [
+                        "git", "-C", str(writer), "push", "--quiet", remote,
+                        "HEAD:refs/heads/main",
+                    ],
+                    check=True,
+                )
+                controller.refresh_protected_state(self.fixture.state)
+                committed = controller.terminal_committed_proof(
+                    plan, started, terminal, self.fixture.state
+                )
+                self.assertEqual(committed["state_head"], terminal_head)
+                with self.assertRaisesRegex(
+                    controller.HistoricalPrivateReplayControllerError,
+                    "not the unique current running private replay",
+                ):
+                    controller.current_running_proof(
+                        plan, started, self.fixture.state
+                    )
+            finally:
+                controller.REPOSITORY_REMOTES[
+                    "leanprover/lean-eval-state"
+                ].discard(remote)
+
+    def test_recovery_proof_accepts_exact_event_below_unrelated_descendant(self) -> None:
+        plan = self.fixture.plan()
+        started = controller.started_candidate(
+            plan,
+            self.fixture.state,
+            "2026-10-21T07:00:00.000Z",
+            random_bytes=b"\x11" * 10,
+        )
+        self.fixture.commit_state_event(started["event"])
+        confirmation = {
+            "schema_version": 1,
+            "replay_task_id": self.fixture.task["replay_task_id"],
+            "attempt": 1,
+            "destruction": "confirmed",
+        }
+        recovery = controller.recover_running(
+            self.fixture.state,
+            "2026-10-21T15:00:01.000Z",
+            cleanup_confirmation_value=confirmation,
+            random_bytes=b"\x12" * 10,
+        )
+        self.assertEqual(recovery["kind"], "failed")
+        self.fixture.commit_state_event(recovery["append"]["event"])
+        (self.fixture.state / "unrelated-live-intake-marker").write_text(
+            "after-recovery\n", encoding="utf-8"
+        )
+        descendant = self.fixture.commit_in(
+            self.fixture.state, "Append unrelated State history after recovery"
+        )
+        self.fixture.state_head = descendant
+        self.fixture.set_state_upstream()
+        proof = controller.recovery_committed_proof(
+            recovery, self.fixture.state
+        )
+        self.assertEqual(proof["state_head"], descendant)
+        self.assertEqual(
+            proof["terminal_event_id"], recovery["append"]["event"]["event_id"]
+        )
 
     def test_fourth_attempt_is_terminal_and_fifth_attempt_is_refused(self) -> None:
         queue = copy.deepcopy(self.fixture.queue)
@@ -1074,6 +1360,60 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
             )
         self.assertEqual(value, {"request": "exact"})
         self.assertEqual(executor.call_args.args[0], plan["execution_plan"])
+
+    def test_executor_config_is_task_scoped_digest_only_and_private(self) -> None:
+        plan = self.fixture.plan()
+        rendered = controller.render_executor_config(
+            plan,
+            self.fixture.repository,
+            "a46b90978a1c29cc4795f30677e7e4b8",
+            self.fixture.authority_commit,
+        )
+        task = self.fixture.task["replay_task_id"]
+        self.assertEqual(rendered["name"], f"hpr-{task[4:60]}-1")
+        self.assertEqual(
+            rendered["main"],
+            str(
+                (
+                    self.fixture.repository
+                    / "server/src/historical-private-replay-entry.ts"
+                ).resolve()
+            ),
+        )
+        container = rendered["containers"][0]
+        self.assertEqual(container["name"], f"le-hpr-{task[4:26]}-1")
+        self.assertLessEqual(len(container["name"]), 32)
+        self.assertEqual(container["max_instances"], 1)
+        self.assertEqual(container["ssh"], {"enabled": False})
+        self.assertEqual(
+            container["image"],
+            "registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/"
+            f"lean-eval-authoritative@{self.fixture.execution_profile['vm_image_digest']}",
+        )
+        variables = rendered["vars"]
+        self.assertEqual(variables["REPLAY_ENABLED"], "true")
+        self.assertEqual(variables["EXPECTED_REPLAY_TASK_ID"], task)
+        self.assertEqual(variables["EXPECTED_REPLAY_ATTEMPT"], "1")
+        self.assertEqual(
+            variables["REVIEWED_EXECUTION_PROFILE_DIGEST"],
+            self.fixture.profile_digest,
+        )
+        self.assertEqual(
+            variables["GITHUB_OIDC_AUDIENCE"],
+            "lean-eval-historical-private-replay",
+        )
+
+        fifth = copy.deepcopy(plan)
+        fifth["task"]["attempt"] = 4
+        fifth["execution_plan"]["started_transition"]["payload"]["attempt"] = 5
+        fifth["execution_plan"]["request"]["attempt"] = 5
+        with self.assertRaises(controller.HistoricalPrivateReplayControllerError):
+            controller.render_executor_config(
+                fifth,
+                self.fixture.repository,
+                "a46b90978a1c29cc4795f30677e7e4b8",
+                self.fixture.authority_commit,
+            )
 
     def test_schema_v2_file_key_uses_strict_existing_handoff(self) -> None:
         plan = self.fixture.plan()
@@ -1221,15 +1561,14 @@ class HistoricalPrivateRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(
                 controller.HistoricalPrivateReplayControllerError,
                 "differs from the running attempt",
+            ), mock.patch.object(
+                controller, "load_state_queue", return_value=state_binding
             ):
-                with mock.patch.object(
-                    controller, "load_state_queue", return_value=state_binding
-                ):
-                    controller.recover_running(
-                        state,
-                        "2026-10-21T14:00:03.000Z",
-                        cleanup_confirmation_value=wrong,
-                    )
+                controller.recover_running(
+                    state,
+                    "2026-10-21T14:00:03.000Z",
+                    cleanup_confirmation_value=wrong,
+                )
 
 
 if __name__ == "__main__":

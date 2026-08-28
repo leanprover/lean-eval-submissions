@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Temporary historical replay cleanup. Delete with the private replay queue.
+set -euo pipefail
+
+if test "$#" -ne 2; then
+  echo "usage: delete_historical_private_executor WORKER APPLICATION" >&2
+  exit 2
+fi
+
+worker=$1
+application=$2
+if [[ ! "$worker" =~ ^hpr-[0-9a-f]{56}-[1-4]$ ]]; then
+  echo "historical private executor Worker name is invalid" >&2
+  exit 2
+fi
+if [[ ! "$application" =~ ^le-hpr-[0-9a-f]{22}-[1-4]$ ]]; then
+  echo "historical private executor Container application name is invalid" >&2
+  exit 2
+fi
+if test "${CLOUDFLARE_ACCOUNT_ID:-}" != a46b90978a1c29cc4795f30677e7e4b8; then
+  echo "historical private executor Cloudflare account is invalid" >&2
+  exit 2
+fi
+test -n "${CLOUDFLARE_API_TOKEN:-}"
+test -n "${RUNNER_TEMP:-}"
+
+scratch=$(mktemp -d "$RUNNER_TEMP/hpr-resource-delete.XXXXXX")
+cleanup() {
+  case "$scratch" in
+    "$RUNNER_TEMP"/hpr-resource-delete.*) rm -rf -- "$scratch" ;;
+    *) echo "refusing unsafe temporary cleanup" >&2; return 1 ;;
+  esac
+}
+trap cleanup EXIT
+
+worker_endpoint="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$worker"
+worker_absent=false
+for retry in 1 2 3 4; do
+  code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+    --max-time 30 --output "$scratch/worker-after.json" --write-out '%{http_code}' \
+    --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$worker_endpoint")
+  if test "$code" = 404; then
+    worker_absent=true
+    break
+  fi
+  test "$code" = 200
+  npx --prefix server wrangler delete "$worker" --force || true
+  test "$retry" -lt 4
+  sleep $((retry * 5))
+done
+test "$worker_absent" = true
+
+application_delete_requested=false
+application_absent=false
+for retry in $(seq 1 10); do
+  npx --prefix server wrangler containers list --json \
+    > "$scratch/container-applications.json"
+  matches=$(jq --arg name "$application" \
+    '[.[] | select(.name == $name)] | length' \
+    "$scratch/container-applications.json")
+  test "$matches" -le 1
+  if test "$matches" = 0; then
+    application_absent=true
+    break
+  fi
+  if test "$application_delete_requested" = false; then
+    application_id=$(jq -er --arg name "$application" \
+      '.[] | select(.name == $name) | .id' \
+      "$scratch/container-applications.json")
+    [[ "$application_id" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]
+    npx --prefix server wrangler containers delete "$application_id"
+    application_delete_requested=true
+  fi
+  sleep 3
+done
+test "$application_absent" = true
