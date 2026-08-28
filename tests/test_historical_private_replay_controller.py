@@ -1100,7 +1100,18 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
         )
         task = self.fixture.task["replay_task_id"]
         self.assertEqual(rendered["name"], f"hpr-{task[4:60]}-1")
+        self.assertEqual(
+            rendered["main"],
+            str(
+                (
+                    self.fixture.repository
+                    / "server/src/historical-private-replay-entry.ts"
+                ).resolve()
+            ),
+        )
         container = rendered["containers"][0]
+        self.assertEqual(container["name"], f"le-hpr-{task[4:26]}-1")
+        self.assertLessEqual(len(container["name"]), 32)
         self.assertEqual(container["max_instances"], 1)
         self.assertEqual(container["ssh"], {"enabled": False})
         self.assertEqual(
@@ -1109,8 +1120,9 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
             f"lean-eval-authoritative@{self.fixture.execution_profile['vm_image_digest']}",
         )
         variables = rendered["vars"]
-        self.assertEqual(variables["REPLAY_ENABLED"], "false")
-        self.assertEqual(variables["HISTORICAL_PRIVATE_REPLAY_ENABLED"], "true")
+        self.assertEqual(variables["REPLAY_ENABLED"], "true")
+        self.assertEqual(variables["EXPECTED_REPLAY_TASK_ID"], task)
+        self.assertEqual(variables["EXPECTED_REPLAY_ATTEMPT"], "1")
         self.assertEqual(
             variables["REVIEWED_EXECUTION_PROFILE_DIGEST"],
             self.fixture.profile_digest,

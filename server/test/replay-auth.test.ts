@@ -120,7 +120,72 @@ const PRIVATE_QUALIFICATION_CLAIMS = {
   run_attempt: PRIVATE_QUALIFICATION_ENV.QUALIFICATION_RUN_ATTEMPT,
 };
 
+const HISTORICAL_PRIVATE_ENV = {
+  DEPLOYED_COMMIT: "a".repeat(40),
+  DEPLOYMENT_ENVIRONMENT: "historical-private-replay",
+  GITHUB_OIDC_AUDIENCE: "lean-eval-historical-private-replay",
+  GITHUB_OIDC_ENVIRONMENT: "replay-production",
+};
+
+const HISTORICAL_PRIVATE_CLAIMS = {
+  aud: HISTORICAL_PRIVATE_ENV.GITHUB_OIDC_AUDIENCE,
+  sub: "repo:leanprover/lean-eval-submissions:environment:replay-production",
+  environment: "replay-production",
+  ref: "refs/heads/main",
+  sha: HISTORICAL_PRIVATE_ENV.DEPLOYED_COMMIT,
+  workflow_ref: "leanprover/lean-eval-submissions/.github/workflows/"
+    + "historical-private-replay.yml@refs/heads/main",
+  workflow_sha: HISTORICAL_PRIVATE_ENV.DEPLOYED_COMMIT,
+  event_name: "workflow_dispatch",
+};
+
 describe("GitHub OIDC replay authentication", () => {
+  it("binds historical private execution to its exact protected workflow", async () => {
+    for (const path of [
+      "/api/v1/replay",
+      "/api/v1/replay/status",
+      "/api/v1/historical-private-replay/reserve",
+      "/api/v1/historical-private-replay/cleanup",
+    ]) {
+      const { request, fetcher } = await signedRequest(HISTORICAL_PRIVATE_CLAIMS, path);
+      await expect(verifyGithubOidc(
+        request,
+        HISTORICAL_PRIVATE_ENV,
+        fetcher,
+        1_787_395_200,
+      )).resolves.toBeUndefined();
+    }
+
+    const advanced = {
+      ...HISTORICAL_PRIVATE_CLAIMS,
+      sha: "b".repeat(40),
+      workflow_sha: "b".repeat(40),
+    };
+    const cleanup = await signedRequest(
+      advanced,
+      "/api/v1/historical-private-replay/cleanup",
+    );
+    await expect(verifyGithubOidc(
+      cleanup.request,
+      HISTORICAL_PRIVATE_ENV,
+      cleanup.fetcher,
+      1_787_395_200,
+    )).resolves.toBeUndefined();
+    for (const path of [
+      "/api/v1/replay",
+      "/api/v1/replay/status",
+      "/api/v1/historical-private-replay/reserve",
+    ]) {
+      const request = await signedRequest(advanced, path);
+      await expect(verifyGithubOidc(
+        request.request,
+        HISTORICAL_PRIVATE_ENV,
+        request.fetcher,
+        1_787_395_200,
+      )).rejects.toThrow("immutable execution ref");
+    }
+  });
+
   it("binds private qualification to the exact protected workflow run", async () => {
     for (const path of [
       "/api/v1/replay",

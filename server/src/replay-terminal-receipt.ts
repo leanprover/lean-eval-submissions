@@ -140,13 +140,24 @@ export class ReplayTerminalReceipt extends DurableObject<ReplaySandboxEnvironmen
   }
 
   async claimBinding(binding: unknown): Promise<unknown> {
+    return this.claimBindingWithReservation(binding, historicalBinding(binding));
+  }
+
+  async claimReservedBinding(binding: unknown): Promise<unknown> {
+    return this.claimBindingWithReservation(binding, true);
+  }
+
+  private async claimBindingWithReservation(
+    binding: unknown,
+    reservationRequired: boolean,
+  ): Promise<unknown> {
     const expiry = retainedUntil(binding);
     const cleanupDeadline = cleanupAfter(binding);
     if (cleanupDeadline >= expiry) throw new Error("durable replay cleanup window is invalid");
     return this.ctx.storage.transaction(async (transaction) => {
       const existing = await transaction.get(ACTIVE_BINDING_KEY);
       if (existing !== undefined) return existing;
-      if (historicalBinding(binding)) {
+      if (reservationRequired) {
         const reservation = await transaction.get(RESERVATION_KEY);
         if (
           reservation === undefined

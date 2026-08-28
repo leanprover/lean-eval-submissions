@@ -71,6 +71,23 @@ function activeBinding(): Record<string, unknown> {
 }
 
 describe("durable replay sandbox cleanup", () => {
+  it("can require a reservation for an authoritative private binding", async () => {
+    const storage = storageFixture();
+    const instance = receiptFixture(storage, () => Promise.resolve());
+    const binding = activeBinding();
+    const identity = {
+      schema_version: 1 as const,
+      replay_task_id: binding.replay_task_id as string,
+      attempt: binding.attempt as number,
+    };
+
+    await expect(instance.claimReservedBinding(binding)).rejects.toThrow("was not reserved");
+    expect(storage.values.has(ACTIVE_BINDING_KEY)).toBe(false);
+    await instance.reserveCleanupIdentity(identity);
+    expect(await instance.claimReservedBinding(binding)).toEqual(binding);
+    expect(storage.values.get(ACTIVE_BINDING_KEY)).toEqual(binding);
+  });
+
   it("requires and atomically binds an exact historical cleanup reservation", async () => {
     const storage = storageFixture();
     const instance = receiptFixture(storage, () => Promise.resolve());

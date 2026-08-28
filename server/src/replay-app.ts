@@ -143,6 +143,23 @@ function requireQualificationBinding(
   }
 }
 
+function requireHistoricalPrivateBinding(
+  env: ReplayRuntimeEnv,
+  value: { replay_task_id: string; attempt: number },
+): void {
+  if (env.DEPLOYMENT_ENVIRONMENT !== "historical-private-replay") return;
+  if (
+    env.EXPECTED_REPLAY_TASK_ID === undefined
+    || !REPLAY_TASK_ID.test(env.EXPECTED_REPLAY_TASK_ID)
+    || value.replay_task_id !== env.EXPECTED_REPLAY_TASK_ID
+    || env.EXPECTED_REPLAY_ATTEMPT !== String(value.attempt)
+  ) {
+    throw new AuthoritativeReplayContractError(
+      "execution is not the exact historical private replay binding",
+    );
+  }
+}
+
 const ARCHIVE_COMMAND_FAILURES = new Map([
   ["expectation is invalid", "expectation_invalid"],
   ["expectation fields are invalid", "expectation_fields_invalid"],
@@ -1648,6 +1665,7 @@ export async function handleReplayRequest(
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
       requireQualificationBinding(env, input);
+      requireHistoricalPrivateBinding(env, input);
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
       await requireActiveBinding(store, input);
       sandbox = dependencies.sandbox(env, input.runner_nonce);
@@ -1672,6 +1690,10 @@ export async function handleReplayRequest(
       );
       requireQualificationBinding(env, {
         runner_nonce: input.runner_nonce,
+        replay_task_id: String(input.request.replay_task_id),
+        attempt: Number(input.request.attempt),
+      });
+      requireHistoricalPrivateBinding(env, {
         replay_task_id: String(input.request.replay_task_id),
         attempt: Number(input.request.attempt),
       });

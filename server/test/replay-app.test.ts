@@ -257,6 +257,34 @@ const REVIEWED_ENV = {
 } as ReplayRuntimeEnv;
 
 describe("Cloudflare replay executor", () => {
+  it("rejects a historical private request outside its rendered task binding", async () => {
+    const body = await authoritativeInput();
+    const execution = body.request as Record<string, unknown>;
+    const expectedTask = execution.replay_task_id as string;
+    execution.replay_task_id = `rt1_${"f".repeat(64)}`;
+    let receiptLookups = 0;
+    const response = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/replay",
+      { method: "POST", body: JSON.stringify(body) },
+    ), {
+      ...REVIEWED_ENV,
+      DEPLOYMENT_ENVIRONMENT: "historical-private-replay",
+      REPLAY_ENABLED: "true",
+      EXPECTED_REPLAY_TASK_ID: expectedTask,
+      EXPECTED_REPLAY_ATTEMPT: "1",
+    }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => { throw new Error("sandbox must remain unreachable"); },
+      receiptStore: () => {
+        receiptLookups += 1;
+        throw new Error("receipt store must remain unreachable");
+      },
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_request" });
+    expect(receiptLookups).toBe(0);
+  });
+
   it("refuses the authoritative route before authentication while disabled", async () => {
     let authenticated = false;
     const response = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {

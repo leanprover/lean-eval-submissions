@@ -1392,6 +1392,9 @@ def render_executor_config(
             "historical private replay exceeds the attempt limit"
         )
     worker_name = f"hpr-{task['replay_task_id'][4:60]}-{attempt}"
+    container_application_name = (
+        f"le-hpr-{task['replay_task_id'][4:26]}-{attempt}"
+    )
     image = (
         f"registry.cloudflare.com/{account_id}/"
         f"{profile['registry_repository']}@{manifest}"
@@ -1399,7 +1402,9 @@ def render_executor_config(
     return {
         "$schema": "node_modules/wrangler/config-schema.json",
         "name": worker_name,
-        "main": "src/replay-entry.ts",
+        "main": str(
+            (repository_root / "server/src/historical-private-replay-entry.ts").resolve()
+        ),
         "account_id": account_id,
         "compatibility_date": "2026-08-22",
         "compatibility_flags": ["nodejs_compat"],
@@ -1408,6 +1413,7 @@ def render_executor_config(
         "observability": {"enabled": False},
         "containers": [
             {
+                "name": container_application_name,
                 "class_name": "ReplaySandbox",
                 "image": image,
                 "instance_type": "standard-4",
@@ -1433,9 +1439,8 @@ def render_executor_config(
         "vars": {
             "DEPLOYED_COMMIT": source_commit,
             "DEPLOYMENT_ENVIRONMENT": "historical-private-replay",
-            "REPLAY_ENABLED": "false",
+            "REPLAY_ENABLED": "true",
             "HISTORICAL_PUBLIC_REPLAY_ENABLED": "false",
-            "HISTORICAL_PRIVATE_REPLAY_ENABLED": "true",
             "STAGING_ACCEPTANCE_ENABLED": "false",
             "GITHUB_OIDC_AUDIENCE": "lean-eval-historical-private-replay",
             "GITHUB_OIDC_ENVIRONMENT": "replay-production",
@@ -1448,6 +1453,8 @@ def render_executor_config(
                 "measurement_config_digest"
             ],
             "REVIEWED_VM_IMAGE_DIGEST": manifest,
+            "EXPECTED_REPLAY_TASK_ID": task["replay_task_id"],
+            "EXPECTED_REPLAY_ATTEMPT": str(attempt),
             "SANDBOX_TRANSPORT": "rpc",
         },
     }
