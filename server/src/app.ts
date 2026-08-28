@@ -99,6 +99,7 @@ import {
   type WritableStateEvent,
   type WritableResultLifecycleEvent,
   type WritableSubmissionLifecycleEvent,
+  newEventId,
 } from "./state-event";
 import {
   latestLifecycleEventId,
@@ -1809,6 +1810,21 @@ function idempotencyEventId(request: Request, nowMilliseconds: number): string {
   return value;
 }
 
+function nextSubmissionMutationIdentity(
+  currentEventId: string,
+  serverNowMilliseconds: number,
+): Readonly<{ eventId: string; occurredAt: string }> {
+  const currentMilliseconds = Number.parseInt(
+    `${currentEventId.slice(0, 8)}${currentEventId.slice(9, 13)}`,
+    16,
+  );
+  const eventMilliseconds = Math.max(serverNowMilliseconds, currentMilliseconds + 1);
+  return {
+    eventId: newEventId(eventMilliseconds),
+    occurredAt: canonicalMilliseconds(eventMilliseconds),
+  };
+}
+
 function modelInput<T>(decode: () => T): T {
   try {
     return decode();
@@ -1879,6 +1895,47 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const body = decodeBrowserSubmission(await readJson(request));
     const grant = await verifyToken<SubmissionGrant>(configuredSecret(env), body.grant, "submission_grant", now);
     return acceptSubmission(env, dependencies, { id: authenticated.github_id, login: authenticated.login }, grant, body.submission, "submission");
+  }
+  const browserPublicationOptOutMatch =
+    /^\/api\/v1\/browser\/submissions\/([0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/publication-opt-out$/.exec(url.pathname);
+  if (request.method === "POST" && browserPublicationOptOutMatch?.[1]) {
+    requireReleaseOptOutApi(env);
+    const authenticated = await session(request, env, dependencies);
+    const ledger = state(env, dependencies);
+    const submissionId = browserPublicationOptOutMatch[1];
+    const current = await ledger.readSubmission(submissionId);
+    if (current?.owner_login !== authenticated.login) return json({ error: "not_found" }, 404);
+    if (current.publication_choice === "withheld") {
+      return json({
+        submission_id: submissionId,
+        publication_choice: "withheld",
+        status: "already_withheld",
+      });
+    }
+    const identity = nextSubmissionMutationIdentity(current.mutation_event_id, nowMilliseconds);
+    const event: WritableStateEvent = {
+      schema_version: 1,
+      event_id: identity.eventId,
+      event_type: "submission.publication_changed",
+      occurred_at: identity.occurredAt,
+      subject_id: submissionId,
+      causation_event_id: current.mutation_event_id,
+      actor: { kind: "github", login: authenticated.login },
+      payload: { publication_choice: "withheld" },
+    };
+    const nextView: SubmissionView = {
+      ...current,
+      mutation_event_id: identity.eventId,
+      publication_event_id: identity.eventId,
+      submission: { ...current.submission, publication_choice: "withheld" },
+      publication_choice: "withheld",
+    };
+    await ledger.appendSubmissionMutation(event, current.mutation_event_id, nextView);
+    return json({
+      submission_id: submissionId,
+      publication_choice: "withheld",
+      status: "opted_out",
+    });
   }
   if (request.method === "POST" && url.pathname === "/api/v1/agent/challenges") {
     const challenge = makeAgentChallenge(decodeAgentChallengeInput(await readJson(request)), now);
@@ -2271,7 +2328,11 @@ export async function handleRequest(
   const url = new URL(request.url);
   const intake = currentIntake(env, dependencies);
   if (request.method === "GET" && url.pathname === "/") {
-    return browserPage(env.DEPLOYMENT_ENVIRONMENT, intake.effective);
+    return browserPage(
+      env.DEPLOYMENT_ENVIRONMENT,
+      intake.effective,
+      releaseOptOutApiEnabled(env),
+    );
   }
   if (request.method === "GET" && url.pathname === "/intake.js") {
     return browserScript();
@@ -2364,7 +2425,8 @@ export async function handleRequest(
   const modelIdentityMaintainerRoute =
     /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/decisions$/.test(url.pathname);
   const releaseOptOutRoute =
-    /^\/api\/v1\/submissions\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/publication$/.test(url.pathname);
+    /^\/api\/v1\/submissions\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/publication$/.test(url.pathname) ||
+    /^\/api\/v1\/browser\/submissions\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/publication-opt-out$/.test(url.pathname);
   if (legacyResultOwnerRoute && !resultOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (amendmentOwnerRoute && !resultAmendmentOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (amendmentMaintainerRoute && !resultAmendmentMaintainerApiEnabled(env)) return json({ error: "not_found" }, 404);
