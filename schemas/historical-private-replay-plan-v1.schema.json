@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lean-lang.org/schemas/lean-eval/historical-private-replay-plan-v1.schema.json",
+  "title": "LeanEval historical private replay plan schema version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "results", "crosswalk",
+    "classification_counts", "replay_readiness_counts", "profiles", "entries"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_private_replay_plan"},
+    "results": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repository", "commit", "store_sha256"],
+      "properties": {
+        "repository": {"const": "leanprover/lean-eval-submissions"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "store_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "crosswalk": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repository", "commit", "path", "sha256"],
+      "properties": {
+        "repository": {"const": "leanprover/lean-eval-submissions"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "path": {
+          "type": "string",
+          "pattern": "^evidence/historical-replay/private-crosswalks/[0-9a-f]{64}\\.json$"
+        },
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "classification_counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["archive_not_found", "bound"],
+      "properties": {
+        "archive_not_found": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "bound": {"type": "integer", "minimum": 0, "maximum": 10000}
+      }
+    },
+    "replay_readiness_counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["archive_not_found", "profile_pending", "profile_qualified"],
+      "properties": {
+        "archive_not_found": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "profile_pending": {"type": "integer", "minimum": 0, "maximum": 10000},
+        "profile_qualified": {"type": "integer", "minimum": 0, "maximum": 10000}
+      }
+    },
+    "profiles": {
+      "type": "object", "maxProperties": 1000,
+      "propertyNames": {"pattern": "^[0-9a-f]{64}$"},
+      "additionalProperties": {"$ref": "#/$defs/profile"}
+    },
+    "entries": {
+      "type": "array", "minItems": 1, "maxItems": 10000,
+      "items": {
+        "oneOf": [
+          {"$ref": "#/$defs/boundEntry"},
+          {"$ref": "#/$defs/notFoundEntry"}
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ociDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "uuid7": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "resultId": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
+    "login": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$"},
+    "problem": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$"},
+    "toolchain": {
+      "type": "string",
+      "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+(?:-(?:rc|beta)[0-9]+)?$"
+    },
+    "timestampSeconds": {
+      "type": "string",
+      "pattern": "^(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "component": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repository", "commit"],
+      "properties": {
+        "repository": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+        "commit": {"$ref": "#/$defs/commit"}
+      }
+    },
+    "executionProfile": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "schema_version", "runner_profile", "vm_image_digest", "toolchain",
+        "architecture", "cpu_model", "kernel_release", "cache_state",
+        "measurement_command", "go_toolchain", "rust_toolchain", "components"
+      ],
+      "properties": {
+        "schema_version": {"const": 1},
+        "runner_profile": {"type": "string", "minLength": 1},
+        "vm_image_digest": {"$ref": "#/$defs/ociDigest"},
+        "toolchain": {"$ref": "#/$defs/toolchain"},
+        "architecture": {"enum": ["x86_64", "aarch64"]},
+        "cpu_model": {"type": "string", "minLength": 1},
+        "kernel_release": {"type": "string", "minLength": 1},
+        "cache_state": {"enum": ["cold", "warm"]},
+        "measurement_command": {
+          "type": "array", "minItems": 1,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "go_toolchain": {"type": "string", "pattern": "^go[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "rust_toolchain": {"type": "string", "pattern": "^rustc-[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "components": {
+          "type": "object", "additionalProperties": false,
+          "required": ["comparator", "landrun", "lean4export", "nanoda"],
+          "properties": {
+            "comparator": {"$ref": "#/$defs/component"},
+            "landrun": {"$ref": "#/$defs/component"},
+            "lean4export": {"$ref": "#/$defs/component"},
+            "nanoda": {"$ref": "#/$defs/component"}
+          }
+        }
+      }
+    },
+    "measurementConfig": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "memory_limit_bytes", "wall_time_limit_ms", "retired_instructions"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "memory_limit_bytes": {"type": "integer", "minimum": 1},
+        "wall_time_limit_ms": {"type": "integer", "minimum": 1},
+        "retired_instructions": {
+          "type": "object", "additionalProperties": false,
+          "required": ["required", "perf_event"],
+          "properties": {
+            "required": {"type": "boolean"},
+            "perf_event": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "publicProfileLocator": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repository", "commit", "path", "sha256"],
+      "properties": {
+        "repository": {"const": "leanprover/lean-eval-submissions"},
+        "commit": {"$ref": "#/$defs/commit"},
+        "path": {"type": "string", "pattern": "^evidence/public-replay/profiles/[0-9a-f]{64}\\.json$"},
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "profile": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "benchmark_commit", "benchmark_tree", "toolchain",
+        "lean_toolchain_blob_sha256", "checker", "measurement_config_digest",
+        "measurement_config", "execution_profile"
+      ],
+      "properties": {
+        "benchmark_commit": {"$ref": "#/$defs/commit"},
+        "benchmark_tree": {"$ref": "#/$defs/commit"},
+        "toolchain": {"$ref": "#/$defs/toolchain"},
+        "lean_toolchain_blob_sha256": {"$ref": "#/$defs/digest"},
+        "checker": {"const": "nanoda"},
+        "measurement_config_digest": {"$ref": "#/$defs/digest"},
+        "measurement_config": {"$ref": "#/$defs/measurementConfig"},
+        "execution_profile": {"$ref": "#/$defs/executionProfile"},
+        "reused_public_profile": {"$ref": "#/$defs/publicProfileLocator"}
+      }
+    },
+    "resultBinding": {
+      "type": "object",
+      "required": [
+        "result_id", "historical_accepted_at", "owner_login", "declared_model",
+        "problem_id", "statement_revision", "benchmark_commit", "results_path",
+        "result_file_sha256", "result_tree_digest", "crosswalk_entry_sha256"
+      ],
+      "properties": {
+        "result_id": {"$ref": "#/$defs/resultId"},
+        "historical_accepted_at": {"$ref": "#/$defs/timestampSeconds"},
+        "owner_login": {"$ref": "#/$defs/login"},
+        "declared_model": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001f\\u007f]+$"},
+        "problem_id": {"$ref": "#/$defs/problem"},
+        "statement_revision": {"type": "integer", "minimum": 1, "maximum": 9007199254740991},
+        "benchmark_commit": {"$ref": "#/$defs/commit"},
+        "results_path": {"type": "string", "pattern": "^results/[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\\.json$"},
+        "result_file_sha256": {"$ref": "#/$defs/digest"},
+        "result_tree_digest": {"$ref": "#/$defs/digest"},
+        "crosswalk_entry_sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "boundEntry": {
+      "allOf": [
+        {"$ref": "#/$defs/resultBinding"},
+        {
+          "type": "object",
+          "required": [
+            "classification", "archive_submission_id", "archive_plan_entry_sha256",
+            "replay_profile_status"
+          ],
+          "properties": {
+            "classification": {"const": "bound"},
+            "archive_submission_id": {"$ref": "#/$defs/uuid7"},
+            "archive_plan_entry_sha256": {"$ref": "#/$defs/digest"},
+            "replay_profile_status": {"enum": ["profile_pending", "profile_qualified"]},
+            "execution_profile_digest": {"$ref": "#/$defs/digest"}
+          },
+          "allOf": [
+            {
+              "if": {"properties": {"replay_profile_status": {"const": "profile_qualified"}}},
+              "then": {"required": ["execution_profile_digest"]},
+              "else": {"not": {"required": ["execution_profile_digest"]}}
+            }
+          ]
+        }
+      ],
+      "unevaluatedProperties": false
+    },
+    "notFoundEntry": {
+      "allOf": [
+        {"$ref": "#/$defs/resultBinding"},
+        {
+          "type": "object",
+          "required": ["classification"],
+          "properties": {"classification": {"const": "archive_not_found"}}
+        }
+      ],
+      "unevaluatedProperties": false
+    }
+  }
+}
