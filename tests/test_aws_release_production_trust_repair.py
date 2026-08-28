@@ -131,8 +131,25 @@ class ProductionReleaseTrustRepairTests(unittest.TestCase):
         self.assertIn("LEAN_EVAL_STAGING_UPDATED_BEFORE", self.procedure)
 
     def test_pins_protected_release_main_and_exact_dispatch_input(self) -> None:
-        release_commit = "ff37a9d56aeb6906527cf7b75917907423d6f139"
-        self.assertIn(f"LEAN_EVAL_RELEASES_COMMIT={release_commit}", self.procedure)
+        self.assertNotRegex(
+            self.procedure,
+            r"LEAN_EVAL_RELEASES_COMMIT=[0-9a-f]{40}",
+        )
+        self.assertIn(
+            'LEAN_EVAL_RELEASES_COMMIT="$(gh api \\\n'
+            "  repos/leanprover/lean-eval-releases/branches/main \\\n"
+            "  --jq .commit.sha)\"",
+            self.procedure,
+        )
+        self.assertIn(
+            '[[ "$LEAN_EVAL_RELEASES_COMMIT" =~ ^[0-9a-f]{40}$ ]]',
+            self.procedure,
+        )
+        self.assertIn(
+            "printf 'reviewed_release_commit=%s\\n' "
+            '"$LEAN_EVAL_RELEASES_COMMIT"',
+            self.procedure,
+        )
         self.assertIn("--ref main", self.procedure)
         self.assertIn(
             '-f expected_release_commit="$LEAN_EVAL_RELEASES_COMMIT"',

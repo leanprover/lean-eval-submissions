@@ -64,7 +64,10 @@ LEAN_EVAL_OLD_PREFIX=leanprover/lean-eval-releases
 LEAN_EVAL_NEW_PREFIX=leanprover@7233018/lean-eval-releases@1340741242
 LEAN_EVAL_OIDC_PROVIDER_ARN=arn:aws:iam::161072922960:oidc-provider/token.actions.githubusercontent.com
 LEAN_EVAL_SUBMISSION_PREFIX=leanprover/lean-eval-submissions
-LEAN_EVAL_RELEASES_COMMIT=ff37a9d56aeb6906527cf7b75917907423d6f139
+LEAN_EVAL_RELEASES_COMMIT="$(gh api \
+  repos/leanprover/lean-eval-releases/branches/main \
+  --jq .commit.sha)"
+[[ "$LEAN_EVAL_RELEASES_COMMIT" =~ ^[0-9a-f]{40}$ ]]
 LEAN_EVAL_OPERATOR_TMP_ROOT="$(realpath -e -- "${TMPDIR:-/tmp}")"
 test -d "$LEAN_EVAL_OPERATOR_TMP_ROOT"
 LEAN_EVAL_AWS_OPS=
@@ -147,6 +150,7 @@ test "$(gh api repos/leanprover/lean-eval-releases/branches/main \
   --jq .commit.sha)" = "$LEAN_EVAL_RELEASES_COMMIT"
 test "$(gh api repos/leanprover/lean-eval-releases/branches/main \
   --jq .protected)" = true
+printf 'reviewed_release_commit=%s\n' "$LEAN_EVAL_RELEASES_COMMIT"
 
 LEAN_EVAL_AWS_OPS="$(mktemp -d \
   "$LEAN_EVAL_OPERATOR_TMP_ROOT/lean-eval-production-trust.XXXXXXXX")"
