@@ -9,6 +9,9 @@ fixture and watchdog after one accepted run.
 from __future__ import annotations
 
 import argparse
+import base64
+import datetime
+import hashlib
 import json
 import os
 import pathlib
@@ -20,10 +23,12 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from dataclasses import dataclass
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURE = ROOT / "configuration" / "staging-lifecycle-smoke-v1.json"
+EXPECTED_FIXTURE_SHA256 = "df550d596ea1266fcd136b27f6c1457893fef888beb81888f41c82b4d1f6450c"
 UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 )
@@ -34,6 +39,10 @@ REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 
 
 class AcceptanceError(RuntimeError):
+    pass
+
+
+class SubmissionTerminalError(AcceptanceError):
     pass
 
 
@@ -51,11 +60,16 @@ def require_match(pattern: re.Pattern[str], value: str, label: str) -> str:
 
 
 def run(
-    command: list[str], *, capture: bool = True, cwd: pathlib.Path | None = None
+    command: list[str],
+    *,
+    capture: bool = True,
+    cwd: pathlib.Path | None = None,
+    env: dict[str, str] | None = None,
 ) -> str:
     completed = subprocess.run(
         command,
         cwd=cwd,
+        env=env,
         check=False,
         text=True,
         stdout=subprocess.PIPE if capture else None,
@@ -176,11 +190,37 @@ def health(api: Api, commit: str, enabled: bool | None) -> bool:
     return enabled
 
 
+def verify_candidate_checkout(expected_commit: str, fixture: dict[str, Any]) -> None:
+    if run(["git", "rev-parse", "HEAD"], cwd=ROOT) != expected_commit:
+        raise AcceptanceError("driver checkout is not the exact expected candidate")
+    if run(["git", "status", "--porcelain"], cwd=ROOT):
+        raise AcceptanceError("driver checkout is not clean")
+    origin = run(["git", "remote", "get-url", "origin"], cwd=ROOT)
+    if origin not in {
+        "https://github.com/leanprover/lean-eval-submissions",
+        "https://github.com/leanprover/lean-eval-submissions.git",
+        "git@github.com:leanprover/lean-eval-submissions.git",
+    }:
+        raise AcceptanceError("driver checkout origin is not canonical")
+    tag = f"refs/tags/lean-eval-dispatch/{expected_commit}^{{commit}}"
+    if run(["git", "rev-parse", tag], cwd=ROOT) != expected_commit:
+        raise AcceptanceError("exact immutable dispatch tag is absent from the checkout")
+    raw = DEFAULT_FIXTURE.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != EXPECTED_FIXTURE_SHA256:
+        raise AcceptanceError("canonical staging fixture digest drifted")
+    canonical = (
+        json.dumps(fixture, ensure_ascii=True, indent=2, sort_keys=False) + "\n"
+    ).encode()
+    if raw != canonical:
+        raise AcceptanceError("staging fixture bytes are not canonical JSON")
+
+
 def fixture_preflight(
     fixture: dict[str, Any], gist_id: str, expected_commit: str
 ) -> None:
     source = fixture["source"]
     bounded = fixture["bounded_acceptance"]
+    verify_candidate_checkout(expected_commit, fixture)
     if source != {
         "repository": "kim-em/lean-eval-intake-fixture",
         "commit": "c1e504a3acce2da2ee77054ca45e6c251b143545",
@@ -193,20 +233,35 @@ def fixture_preflight(
         "submission_base_url": "https://lean-eval-submission-server-staging.lean-eval.workers.dev",
         "state_repository": "leanprover/lean-eval-state-staging",
         "state_branch": "main",
+        "state_contract_commit": "23852beaeb059c88caf043d22dad19b211c377b2",
         "results_repository": "leanprover/lean-eval-submissions",
         "results_branch": "staging-results",
         "release_repository": "leanprover/lean-eval-releases",
         "release_workflow": "credentialed-release-staging-smoke.yml",
         "release_ref": "main",
+        "release_commit": "c27928a56fb3fb6ec0506ac4de78fa6e732ccc02",
+        "release_run_name_prefix": "Reconstruct staging submission ",
         "fixture_gist_file": "lean-eval-proof.txt",
-        "external_mutation_confirmation": "APPROVE_EXACT_STAGING_FIXTURE_GIST_AND_TAG",
         "retire_after": "one accepted bounded staging lifecycle run",
     }
-    if set(bounded) != {*expected_bounded, "release_commit"} or any(
+    if set(bounded) != {*expected_bounded, "state_script_sha256"} or any(
         bounded.get(key) != value for key, value in expected_bounded.items()
     ):
         raise AcceptanceError("bounded staging acceptance authority drifted")
-    require_match(COMMIT, bounded["release_commit"], "release workflow commit")
+    scripts = bounded["state_script_sha256"]
+    if not isinstance(scripts, dict) or set(scripts) != {
+        "scripts/materialize_state.py",
+        "scripts/model_identity.py",
+        "scripts/probe_performance_counters.py",
+        "scripts/public_projection.py",
+        "scripts/result_amendments.py",
+        "scripts/result_effective_identities.py",
+        "scripts/result_owner_indexes.py",
+        "scripts/result_release_status.py",
+        "scripts/state.py",
+        "scripts/validate_state.py",
+    } or any(re.fullmatch(r"[0-9a-f]{64}", value) is None for value in scripts.values()):
+        raise AcceptanceError("reviewed State script digest set drifted")
     user = gh_json(["user"])
     if user.get("login", "").lower() != source["owner_login"]:
         raise AcceptanceError("gh must be authenticated as the exact fixture owner")
@@ -236,62 +291,254 @@ def fixture_preflight(
     health(Api(bounded["submission_base_url"]), expected_commit, None)
 
 
-def update_exact_proof_and_tag(
-    fixture: dict[str, Any],
-    gist_id: str,
-    challenge: str,
-    tag: str,
-    confirmation: str,
+def gh_json_or_authenticated_404(args: list[str]) -> Any | None:
+    completed = subprocess.run(
+        ["gh", "api", "--method", "GET", *args],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed.returncode == 0:
+        try:
+            return json.loads(completed.stdout)
+        except json.JSONDecodeError as error:
+            raise AcceptanceError("GitHub API success was not JSON") from error
+    diagnostic = completed.stderr.strip()
+    if diagnostic == "gh: Not Found (HTTP 404)":
+        return None
+    raise AcceptanceError(f"GitHub API lookup did not return exact 404: {diagnostic}")
+
+
+def verify_exact_tag_response(
+    value: Any, repository: str, tag: str, commit: str
 ) -> None:
-    bounded = fixture["bounded_acceptance"]
-    if confirmation != bounded["external_mutation_confirmation"]:
-        raise AcceptanceError("exact external-mutation confirmation was not supplied")
-    source = fixture["source"]
-    tag_path = f"repos/{source['repository']}/git/ref/tags/{tag}"
-    try:
-        gh_json([tag_path])
-    except AcceptanceError:
-        pass
+    if not isinstance(value, dict) or set(value) != {"ref", "node_id", "url", "object"}:
+        raise AcceptanceError(f"GitHub returned an inexact tag response for {repository}")
+    target = value.get("object")
+    if (
+        value.get("ref") != f"refs/tags/{tag}"
+        or not isinstance(value.get("node_id"), str)
+        or not isinstance(value.get("url"), str)
+        or not isinstance(target, dict)
+        or set(target) != {"sha", "type", "url"}
+        or target.get("sha") != commit
+        or target.get("type") != "commit"
+        or not isinstance(target.get("url"), str)
+    ):
+        raise AcceptanceError(f"GitHub returned an inexact tag response for {repository}")
+
+
+def gist_file_content(value: Any, gist_id: str, filename: str) -> tuple[bool, str | None]:
+    if (
+        not isinstance(value, dict)
+        or value.get("id") != gist_id
+        or value.get("public") is not False
+        or value.get("owner", {}).get("login", "").lower() != "kim-em"
+        or not isinstance(value.get("files"), dict)
+    ):
+        raise AcceptanceError("secret gist response identity drifted")
+    file = value["files"].get(filename)
+    if file is None:
+        return False, None
+    if (
+        not isinstance(file, dict)
+        or file.get("truncated") is not False
+        or not isinstance(file.get("content"), str)
+    ):
+        raise AcceptanceError("secret gist proof file is absent or truncated")
+    return True, file["content"]
+
+
+@dataclass
+class FixtureMutation:
+    gist_id: str
+    filename: str
+    repository: str
+    commit: str
+    tag: str
+    prior_file_present: bool
+    prior_file_content: str | None
+    gist_changed: bool = False
+    tag_created: bool = False
+
+    @property
+    def tag_endpoint(self) -> str:
+        return f"repos/{self.repository}/git/ref/tags/{self.tag}"
+
+    def describe_targets(self) -> str:
+        return (
+            f"gist={self.gist_id} file={self.filename}; "
+            f"repository={self.repository} tag=refs/tags/{self.tag} commit={self.commit}"
+        )
+
+
+def require_target_bound_approval(mutation: FixtureMutation) -> None:
+    confirmation = (
+        f"APPROVE GIST {mutation.gist_id}/{mutation.filename} AND TAG "
+        f"{mutation.repository}/refs/tags/{mutation.tag}@{mutation.commit} WITH EXACT CLEANUP"
+    )
+    print("\nExternal fixture approval is now required.")
+    print(f"Exact temporary targets: {mutation.describe_targets()}")
+    print("The proof value is intentionally not displayed.")
+    print("After obtaining explicit user approval, type this exact nonsecret line:")
+    print(confirmation)
+    supplied = input("> ")
+    if supplied != confirmation:
+        raise AcceptanceError("target-bound external approval was not supplied")
+
+
+def restore_gist(mutation: FixtureMutation) -> None:
+    if not mutation.gist_changed:
+        return
+    replacement: dict[str, Any] | None
+    if mutation.prior_file_present:
+        replacement = {"content": mutation.prior_file_content}
     else:
+        replacement = None
+    response = gh_json(
+        [f"gists/{mutation.gist_id}"],
+        method="PATCH",
+        fields={"files": {mutation.filename: replacement}},
+    )
+    present, content = gist_file_content(
+        response, mutation.gist_id, mutation.filename
+    )
+    if present != mutation.prior_file_present or content != mutation.prior_file_content:
+        raise AcceptanceError("secret gist proof-file restoration did not verify")
+    mutation.gist_changed = False
+
+
+def remove_created_tag(mutation: FixtureMutation) -> None:
+    if not mutation.tag_created:
+        return
+    current = gh_json_or_authenticated_404([mutation.tag_endpoint])
+    if current is None:
+        mutation.tag_created = False
+        return
+    verify_exact_tag_response(
+        current, mutation.repository, mutation.tag, mutation.commit
+    )
+    response = gh_json([mutation.tag_endpoint], method="DELETE")
+    if response is not None:
+        raise AcceptanceError("generated fixture tag deletion returned an inexact response")
+    if gh_json_or_authenticated_404([mutation.tag_endpoint]) is not None:
+        raise AcceptanceError("generated fixture tag deletion did not verify")
+    mutation.tag_created = False
+
+
+def cleanup_fixture_mutation(mutation: FixtureMutation, *, remove_tag: bool) -> None:
+    failures: list[str] = []
+    try:
+        restore_gist(mutation)
+    except BaseException as error:  # noqa: BLE001 -- cleanup must survive interrupts
+        failures.append(f"gist restoration: {error}")
+    if remove_tag:
+        try:
+            remove_created_tag(mutation)
+        except BaseException as error:  # noqa: BLE001 -- attempt both exact rollbacks
+            failures.append(f"tag removal: {error}")
+    if failures:
+        raise AcceptanceError("; ".join(failures))
+
+
+def apply_exact_proof_and_tag(
+    fixture: dict[str, Any], gist_id: str, challenge: str, tag: str
+) -> FixtureMutation:
+    bounded = fixture["bounded_acceptance"]
+    source = fixture["source"]
+    gist = gh_json([f"gists/{gist_id}"])
+    prior_present, prior_content = gist_file_content(
+        gist, gist_id, bounded["fixture_gist_file"]
+    )
+    mutation = FixtureMutation(
+        gist_id=gist_id,
+        filename=bounded["fixture_gist_file"],
+        repository=source["repository"],
+        commit=source["commit"],
+        tag=tag,
+        prior_file_present=prior_present,
+        prior_file_content=prior_content,
+    )
+    if gh_json_or_authenticated_404([mutation.tag_endpoint]) is not None:
         raise AcceptanceError(
             "generated source tag already exists; refusing to move or reuse it"
         )
-    gh_json(
-        [f"gists/{gist_id}"],
-        method="PATCH",
-        fields={"files": {bounded["fixture_gist_file"]: {"content": challenge}}},
-    )
-    gh_json(
-        [f"repos/{source['repository']}/git/refs"],
-        method="POST",
-        fields={"ref": f"refs/tags/{tag}", "sha": source["commit"]},
-    )
+    require_target_bound_approval(mutation)
+    print(f"Interruption rollback targets: {mutation.describe_targets()}")
+    try:
+        response = gh_json(
+            [f"gists/{gist_id}"],
+            method="PATCH",
+            fields={"files": {mutation.filename: {"content": challenge}}},
+        )
+        mutation.gist_changed = True
+        present, content = gist_file_content(response, gist_id, mutation.filename)
+        if not present or content != challenge:
+            raise AcceptanceError("secret gist proof update did not verify exactly")
+        tag_response = gh_json(
+            [f"repos/{source['repository']}/git/refs"],
+            method="POST",
+            fields={"ref": f"refs/tags/{tag}", "sha": source["commit"]},
+        )
+        verify_exact_tag_response(tag_response, source["repository"], tag, source["commit"])
+        mutation.tag_created = True
+        verify_exact_tag_response(
+            gh_json_or_authenticated_404([mutation.tag_endpoint]),
+            source["repository"],
+            tag,
+            source["commit"],
+        )
+        return mutation
+    except BaseException:
+        try:
+            ambiguous_tag = False
+            current_gist = gh_json([f"gists/{gist_id}"])
+            current_present, current_content = gist_file_content(
+                current_gist, gist_id, mutation.filename
+            )
+            if current_present and current_content == challenge:
+                mutation.gist_changed = (
+                    current_present != mutation.prior_file_present
+                    or current_content != mutation.prior_file_content
+                )
+            elif (
+                current_present != mutation.prior_file_present
+                or current_content != mutation.prior_file_content
+            ):
+                raise AcceptanceError(
+                    "proof gist changed to an unrecognized value; refusing broad cleanup"
+                )
+            current = gh_json_or_authenticated_404([mutation.tag_endpoint])
+            if current is not None:
+                verify_exact_tag_response(
+                    current, mutation.repository, mutation.tag, mutation.commit
+                )
+                if not mutation.tag_created:
+                    ambiguous_tag = True
+            cleanup_fixture_mutation(mutation, remove_tag=True)
+            if ambiguous_tag:
+                raise AcceptanceError(
+                    "generated tag creation outcome is ambiguous; refusing unproved deletion"
+                )
+        except BaseException as cleanup_error:  # noqa: BLE001 -- preserve original failure
+            print(
+                f"External cleanup still required: {mutation.describe_targets()} ({cleanup_error})",
+                file=sys.stderr,
+            )
+        raise
 
 
 def assert_state_event_absent(fixture: dict[str, Any], identifier: str) -> None:
     bounded = fixture["bounded_acceptance"]
-    command = [
-        "gh",
-        "api",
-        "--method",
-        "GET",
+    value = gh_json_or_authenticated_404(
+        [
         f"repos/{bounded['state_repository']}/contents/events/{identifier[:2]}/{identifier}.json",
         "-f",
         f"ref={bounded['state_branch']}",
-    ]
-    completed = subprocess.run(
-        command,
-        text=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        check=False,
+        ]
     )
-    if completed.returncode == 0:
+    if value is not None:
         raise AcceptanceError(f"denied operation created State event {identifier}")
-    if "HTTP 404" not in completed.stderr:
-        raise AcceptanceError(
-            f"could not prove State event absence: {completed.stderr.strip()}"
-        )
 
 
 def mutation(
@@ -397,6 +644,7 @@ def wait_for_workflow_run(
     workflow: str,
     expected_commit: str,
     previous: set[int],
+    expected_title: str | None = None,
     timeout: int = 1800,
 ) -> int:
     deadline = time.monotonic() + timeout
@@ -415,6 +663,7 @@ def wait_for_workflow_run(
             for item in runs.get("workflow_runs", [])
             if item.get("head_sha") == expected_commit
             and item.get("id") not in previous
+            and (expected_title is None or item.get("display_title") == expected_title)
         ]
         if candidates:
             latest = max(candidates, key=lambda item: item["created_at"])
@@ -426,20 +675,84 @@ def wait_for_workflow_run(
     raise AcceptanceError(f"timed out waiting for {repository} {workflow}")
 
 
+def validate_new_submission(
+    body: dict[str, Any],
+    submission_id: str,
+    expected_submission: dict[str, Any],
+    expected_commit: str,
+) -> str:
+    if set(body) != {
+        "submission_id",
+        "owner",
+        "received_at",
+        "submission",
+        "production_metadata",
+        "publication_choice",
+        "archive",
+        "evaluation",
+        "result_id",
+        "dispatch",
+    }:
+        raise AcceptanceError("submission status response fields drifted")
+    if body.get("submission_id") != submission_id or body.get("owner") != "kim-em":
+        raise AcceptanceError("submission status owner binding drifted")
+    if body.get("submission") != expected_submission:
+        raise AcceptanceError("submission status payload/source binding drifted")
+    if body.get("production_metadata") != expected_submission["production_metadata"]:
+        raise AcceptanceError("submission production metadata binding drifted")
+    if body.get("publication_choice") != expected_submission["publication_choice"]:
+        raise AcceptanceError("submission publication choice binding drifted")
+    dispatch = body.get("dispatch")
+    if (
+        not isinstance(dispatch, dict)
+        or dispatch.get("status") != "succeeded"
+        or dispatch.get("workflow_ref") != f"lean-eval-dispatch/{expected_commit}"
+    ):
+        raise AcceptanceError("submission dispatch is not bound to the exact candidate")
+    received = body.get("received_at")
+    if not isinstance(received, str):
+        raise AcceptanceError("submission received_at is absent")
+    try:
+        received_at = datetime.datetime.fromisoformat(received.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise AcceptanceError("submission received_at is not canonical") from error
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if received_at.tzinfo is None or not datetime.timedelta() <= now - received_at <= datetime.timedelta(hours=2):
+        raise AcceptanceError("submission is not attributable to this bounded run")
+    uuid_timestamp = int(submission_id[:8] + submission_id[9:13], 16) / 1000
+    if abs(received_at.timestamp() - uuid_timestamp) > 300:
+        raise AcceptanceError("submission UUID and received_at are not coherent")
+    result_id = body.get("result_id")
+    if not isinstance(result_id, str):
+        raise AcceptanceError("accepted submission lacks a Result")
+    return require_match(RESULT, result_id, "submission Result id")
+
+
 def wait_submission(
-    api: Api, token: str, submission_id: str, result_id: str, timeout: int = 1800
-) -> dict[str, Any]:
+    api: Api,
+    token: str,
+    submission_id: str,
+    expected_submission: dict[str, Any],
+    expected_commit: str,
+    timeout: int = 1800,
+) -> tuple[dict[str, Any], str]:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         body = api.request("GET", f"/api/v1/submissions/{submission_id}", bearer=token)
         archive = body.get("archive") or {}
         evaluation = body.get("evaluation") or {}
-        if (
-            body.get("result_id") == result_id
-            and archive.get("status") == "completed"
-            and evaluation.get("status") in {"accepted", "rejected"}
-        ):
-            return body
+        if archive.get("status") == "completed" and evaluation.get("status") == "accepted":
+            result_id = validate_new_submission(
+                body, submission_id, expected_submission, expected_commit
+            )
+            return body, result_id
+        if archive.get("status") == "failed" or evaluation.get("status") in {
+            "rejected",
+            "failed",
+        }:
+            raise SubmissionTerminalError(
+                f"submission {submission_id} terminated without acceptance"
+            )
         time.sleep(10)
     raise AcceptanceError(f"timed out waiting for {submission_id}")
 
@@ -462,17 +775,52 @@ def clone_and_assert_state(
                 bounded["state_repository"],
                 str(root),
                 "--",
-                "--depth=1",
                 "--branch",
                 bounded["state_branch"],
             ]
         )
+        if run(["git", "remote", "get-url", "origin"], cwd=root) not in {
+            "https://github.com/leanprover/lean-eval-state-staging.git",
+            "https://github.com/leanprover/lean-eval-state-staging",
+            "git@github.com:leanprover/lean-eval-state-staging.git",
+        }:
+            raise AcceptanceError("staging State checkout origin is not canonical")
+        if run(["git", "status", "--porcelain"], cwd=root):
+            raise AcceptanceError("staging State checkout is not clean")
         state_commit = run(["git", "rev-parse", "HEAD"], cwd=root)
         require_match(COMMIT, state_commit, "staging State commit")
+        run(
+            [
+                "git",
+                "merge-base",
+                "--is-ancestor",
+                bounded["state_contract_commit"],
+                state_commit,
+            ],
+            cwd=root,
+        )
+        scripts = {
+            path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in (root / "scripts").glob("*.py")
+            if path.is_file() and not path.is_symlink()
+        }
+        if scripts != bounded["state_script_sha256"]:
+            raise AcceptanceError("staging State reviewed script identity drifted")
+        operator_free_home = pathlib.Path(temporary) / "operator-free-home"
+        operator_free_home.mkdir(mode=0o700)
+        closed_env = {
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "HOME": str(operator_free_home),
+            "LANG": "C.UTF-8",
+            "LC_ALL": "C.UTF-8",
+            "PYTHONHASHSEED": "0",
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
         output = pathlib.Path(temporary) / "materialized"
         run(
             [
                 sys.executable,
+                "-I",
                 "scripts/state.py",
                 "--root",
                 str(root),
@@ -481,10 +829,12 @@ def clone_and_assert_state(
                 "validate",
             ],
             cwd=root,
+            env=closed_env,
         )
         run(
             [
                 sys.executable,
+                "-I",
                 "scripts/state.py",
                 "--root",
                 str(root),
@@ -495,6 +845,7 @@ def clone_and_assert_state(
                 str(output),
             ],
             cwd=root,
+            env=closed_env,
         )
         domain = closed_json(output / "domain.json")
         submissions = {item["submission_id"]: item for item in domain["submissions"]}
@@ -517,6 +868,7 @@ def clone_and_assert_state(
         run(
             [
                 sys.executable,
+                "-I",
                 "scripts/public_projection.py",
                 "--root",
                 str(root),
@@ -530,15 +882,18 @@ def clone_and_assert_state(
                 str(projection_path),
             ],
             cwd=root,
+            env=closed_env,
         )
         run(
             [
                 sys.executable,
+                "-I",
                 "scripts/public_projection.py",
                 "--validate",
                 str(projection_path),
             ],
             cwd=root,
+            env=closed_env,
         )
         projection = closed_json(projection_path)
         projected = {item["result_id"]: item for item in projection["results"]}
@@ -557,6 +912,8 @@ def clone_and_assert_state(
         redacted = projection_path.read_text(encoding="utf-8")
         if "source/Submission" in redacted or "theorem" in redacted:
             raise AcceptanceError("redacted projection contains source material")
+        if run(["git", "status", "--porcelain"], cwd=root):
+            raise AcceptanceError("State assertion scripts modified their checkout")
         return state_commit
 
 
@@ -590,8 +947,6 @@ def assert_results(fixture: dict[str, Any], result_ids: set[str]) -> str:
                 f"ref={commit}",
             ]
         )
-        import base64
-
         document = json.loads(base64.b64decode(content["content"]))
         for record in document.get("results", []):
             if record.get("result_id") in result_ids:
@@ -605,9 +960,6 @@ def assert_results(fixture: dict[str, Any], result_ids: set[str]) -> str:
 
 
 def assert_archive_sidecar(submission: dict[str, Any]) -> None:
-    import base64
-    import hashlib
-
     submission_id = require_match(
         UUID7, submission["submission_id"], "archive submission id"
     )
@@ -646,6 +998,45 @@ def assert_archive_sidecar(submission: dict[str, Any]) -> None:
         raise AcceptanceError("sidecar and ciphertext identities were conflated")
 
 
+def assert_disabled_routes(
+    api: Api,
+    token: str,
+    fixture: dict[str, Any],
+    browser_submission_id: str,
+    browser_result: str,
+) -> None:
+    cases = (
+        ("POST", "/api/v1/model-identities", {"display_name": "must remain disabled"}),
+        (
+            "POST",
+            f"/api/v1/results/{browser_result}/problem-repairs",
+            fixture["lifecycle_cases"]["problem_repair"]["success_request"],
+        ),
+        (
+            "PATCH",
+            f"/api/v1/results/{browser_result}/metadata",
+            {"production_metadata": {"notes": "must remain disabled"}},
+        ),
+        (
+            "PUT",
+            f"/api/v1/submissions/{browser_submission_id}/publication",
+            {"publication_choice": "withheld"},
+        ),
+    )
+    for method, path, body in cases:
+        denied = mutation(
+            api,
+            token,
+            method,
+            path,
+            body,
+            expected=404,
+            denial_fixture=fixture,
+        )
+        if denied != {"error": "not_found"}:
+            raise AcceptanceError(f"disabled route did not fail closed: {path}")
+
+
 def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
     bounded = fixture["bounded_acceptance"]
     api = Api(bounded["submission_base_url"])
@@ -664,6 +1055,27 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
         },
         expected=201,
     )
+    if (
+        set(mismatch_challenge)
+        != {
+            "challenge",
+            "expires_at",
+            "gist_id",
+            "gist_file",
+            "gist_content",
+            "submission_id",
+            "tag",
+        }
+        or mismatch_challenge.get("gist_id") != args.gist_id
+        or mismatch_challenge.get("gist_file") != bounded["fixture_gist_file"]
+        or mismatch_challenge.get("gist_content") != mismatch_challenge.get("challenge")
+        or mismatch_challenge.get("tag")
+        != f"lean-eval/{mismatch_challenge.get('submission_id')}"
+    ):
+        raise AcceptanceError("source-mismatch challenge bindings are not exact")
+    mismatch_id = require_match(
+        UUID7, mismatch_challenge["submission_id"], "mismatch submission id"
+    )
     denied_submission = {
         **fixture["headless_submission"],
         "source_repository": source["repository"],
@@ -677,7 +1089,8 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
     )
     if denied != {"error": mismatch["expected_error"]}:
         raise AcceptanceError("source mismatch did not fail closed")
-    assert_state_event_absent(fixture, mismatch_challenge["submission_id"])
+    mismatch_challenge.clear()
+    assert_state_event_absent(fixture, mismatch_id)
 
     challenge = api.request(
         "POST",
@@ -690,39 +1103,113 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
         },
         expected=201,
     )
+    if set(challenge) != {
+        "challenge",
+        "expires_at",
+        "gist_id",
+        "gist_file",
+        "gist_content",
+        "submission_id",
+        "tag",
+    }:
+        raise AcceptanceError("agent challenge response fields drifted")
     require_match(UUID7, challenge["submission_id"], "headless submission id")
     if (
         challenge["gist_id"] != args.gist_id
+        or challenge["gist_file"] != bounded["fixture_gist_file"]
+        or challenge["gist_content"] != challenge["challenge"]
         or challenge["tag"] != f"lean-eval/{challenge['submission_id']}"
     ):
         raise AcceptanceError("agent challenge bindings are not exact")
-    update_exact_proof_and_tag(
-        fixture,
-        args.gist_id,
-        challenge["challenge"],
-        challenge["tag"],
-        args.confirm_external_mutations,
+    signed_challenge = challenge["challenge"]
+    lease = apply_exact_proof_and_tag(
+        fixture, args.gist_id, signed_challenge, challenge["tag"]
     )
     accepted_submission = {
         **fixture["headless_submission"],
         "source_repository": source["repository"],
         "source_commit": source["commit"],
     }
-    accepted = api.request(
-        "POST",
-        "/api/v1/agent/submissions",
-        {"challenge": challenge["challenge"], "submission": accepted_submission},
-        expected=(200, 201, 202),
-    )
-    token = accepted.pop("session_token")
     headless_id = challenge["submission_id"]
+    headless_terminal = False
+    accepted_by_server = False
+    fixture_cleaned = False
+    try:
+        accepted = api.request(
+            "POST",
+            "/api/v1/agent/submissions",
+            {"challenge": signed_challenge, "submission": accepted_submission},
+            expected=202,
+        )
+        accepted_by_server = True
+        if (
+            set(accepted)
+            != {"submission_id", "status", "dispatch_status", "session_token"}
+            or accepted.get("submission_id") != headless_id
+            or accepted.get("status") != "queued"
+            or accepted.get("dispatch_status") != "succeeded"
+            or not isinstance(accepted.get("session_token"), str)
+        ):
+            raise AcceptanceError("headless acceptance response is not exact")
+        token = accepted["session_token"]
+        signed_challenge = ""
+        challenge.clear()
+        browser_expected = {
+            **fixture["browser_submission"],
+            "source_repository": source["repository"],
+            "source_commit": source["commit"],
+            "publication_choice": "withheld",
+        }
+        try:
+            headless, headless_result = wait_submission(
+                api,
+                token,
+                headless_id,
+                accepted_submission,
+                args.expected_commit,
+                timeout=args.evaluation_timeout,
+            )
+            headless_terminal = True
+            cleanup_fixture_mutation(lease, remove_tag=True)
+            fixture_cleaned = True
+        except SubmissionTerminalError:
+            headless_terminal = True
+            raise
+        browser, browser_result = wait_submission(
+            api,
+            token,
+            args.browser_submission_id,
+            browser_expected,
+            args.expected_commit,
+            timeout=args.evaluation_timeout,
+        )
+    finally:
+        if fixture_cleaned:
+            pass
+        elif accepted_by_server and not headless_terminal:
+            print(
+                f"External proof and tag must remain until terminal evaluation, then be restored/removed: {lease.describe_targets()}",
+                file=sys.stderr,
+            )
+        else:
+            try:
+                cleanup_fixture_mutation(lease, remove_tag=True)
+            except BaseException as cleanup_error:
+                print(
+                    f"External cleanup still required: {lease.describe_targets()} ({cleanup_error})",
+                    file=sys.stderr,
+                )
+                raise
+
+    assert_archive_sidecar(browser)
+    assert_archive_sidecar(headless)
 
     invalid = fixture["lifecycle_cases"]["problem_repair"]
     mutation(
         api,
         token,
         "POST",
-        f"/api/v1/results/{args.browser_result_id}/problem-repairs",
+        f"/api/v1/results/{browser_result}/problem-repairs",
         invalid["denial_request"],
         expected=invalid["denial_http_status"],
         denial_fixture=fixture,
@@ -731,7 +1218,7 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
         api,
         token,
         "POST",
-        f"/api/v1/results/{args.browser_result_id}/problem-repairs",
+        f"/api/v1/results/{browser_result}/problem-repairs",
         invalid["success_request"],
     )
     if requested.get("status") not in {
@@ -764,7 +1251,7 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
         api,
         token,
         "POST",
-        f"/api/v1/results/{args.browser_result_id}/problem-repairs/decisions",
+        f"/api/v1/results/{browser_result}/problem-repairs/decisions",
         invalid["maintainer_decision"],
         expected=fixture["maintainer_profiles"]["denial_http_status"],
         denial_fixture=fixture,
@@ -823,7 +1310,7 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
         api,
         token,
         "POST",
-        f"/api/v1/results/{args.browser_result_id}/problem-repairs/decisions",
+        f"/api/v1/results/{browser_result}/problem-repairs/decisions",
         invalid["maintainer_decision"],
     )
 
@@ -858,31 +1345,13 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
     if denied != {"error": nonowner["expected_error"]}:
         raise AcceptanceError("metadata non-owner denial was not owner-hiding")
 
-    browser = wait_submission(
-        api, token, args.browser_submission_id, args.browser_result_id
-    )
     if browser.get("publication_choice") != "withheld":
         raise AcceptanceError("browser submission was not visibly opted out")
-    deadline = time.monotonic() + args.evaluation_timeout
-    headless_result = ""
-    while time.monotonic() < deadline:
-        current = api.request("GET", f"/api/v1/submissions/{headless_id}", bearer=token)
-        if isinstance(current.get("result_id"), str):
-            headless_result = require_match(
-                RESULT, current["result_id"], "headless Result id"
-            )
-            break
-        time.sleep(10)
-    if not headless_result:
-        raise AcceptanceError("headless submission did not produce a Result")
-    headless = wait_submission(api, token, headless_id, headless_result)
-    assert_archive_sidecar(browser)
-    assert_archive_sidecar(headless)
-    assert_results(fixture, {args.browser_result_id, headless_result})
+    assert_results(fixture, {browser_result, headless_result})
     clone_and_assert_state(
         fixture,
         args.browser_submission_id,
-        args.browser_result_id,
+        browser_result,
         headless_id,
         headless_result,
     )
@@ -915,11 +1384,15 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
     )
     health(api, args.expected_commit, False)
     args.disabled = True
+    assert_disabled_routes(
+        api, token, fixture, args.browser_submission_id, browser_result
+    )
     release_run_id = wait_for_workflow_run(
         bounded["release_repository"],
         bounded["release_workflow"],
         bounded["release_commit"],
         previous_release_runs,
+        expected_title=bounded["release_run_name_prefix"] + headless_id,
         timeout=2400,
     )
     print(
@@ -927,7 +1400,7 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
             {
                 "status": "bounded_staging_acceptance_complete",
                 "browser_submission_id": args.browser_submission_id,
-                "browser_result_id": args.browser_result_id,
+                "browser_result_id": browser_result,
                 "headless_submission_id": headless_id,
                 "headless_result_id": headless_result,
                 "release_reconstruction": "completed_publication_disabled",
@@ -940,7 +1413,6 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
-    result.add_argument("--fixture", type=pathlib.Path, default=DEFAULT_FIXTURE)
     sub = result.add_subparsers(dest="command", required=True)
     for name in ("preflight", "run"):
         command = sub.add_parser(name)
@@ -948,8 +1420,6 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--gist-id", required=True)
         if name == "run":
             command.add_argument("--browser-submission-id", required=True)
-            command.add_argument("--browser-result-id", required=True)
-            command.add_argument("--confirm-external-mutations", required=True)
             command.add_argument("--evaluation-timeout", type=int, default=1800)
     return result
 
@@ -957,7 +1427,7 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = parser().parse_args()
     try:
-        fixture = closed_json(args.fixture)
+        fixture = closed_json(DEFAULT_FIXTURE)
         require_match(COMMIT, args.expected_commit, "expected staging commit")
         require_match(GIST, args.gist_id, "secret gist id")
         if args.command == "preflight":
@@ -965,7 +1435,6 @@ def main() -> int:
             print("bounded staging acceptance preflight: ok (zero writes)")
             return 0
         require_match(UUID7, args.browser_submission_id, "browser submission id")
-        require_match(RESULT, args.browser_result_id, "browser Result id")
         args.disabled = False
         try:
             execute(args, fixture)

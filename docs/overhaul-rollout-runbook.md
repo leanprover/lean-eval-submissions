@@ -174,30 +174,60 @@ run. The exact operator sequence is:
 
 1. run the driver's `preflight` command; it is read-only and must report zero
    writes;
-2. dispatch the exact immutable tag through `set-staging-lifecycle-smoke.yml`
-   with the fixture's two denial maintainer arrays and `state=enabled`;
-3. start the exact-tag watchdog for at most 90 minutes;
+2. start the exact-tag watchdog while public health is still all-false; it
+   verifies that state, prepares the recovery deployment, arms recovery, and
+   only then waits for enablement for at most 15 minutes;
+3. after the watchdog reports that recovery is armed, dispatch the exact
+   immutable tag through `set-staging-lifecycle-smoke.yml` with the fixture's
+   two denial maintainer arrays and `state=enabled`;
 4. make one ordinary browser submission, wait for its Result, and click the
    visible release opt-out control; no browser cookie, token, or DevTools value
    is copied;
-5. after separate approval for the two named external-fixture mutations, run
-   the driver with the exact browser submission ID, Result ID, secret gist ID,
-   staging commit, and confirmation phrase;
-6. let the driver create only the generated immutable fixture tag and update
-   only `lean-eval-proof.txt` in the approved secret gist, then complete the
-   headless, denial, lifecycle, State, Results, redacted-projection, scheduling,
-   and publication-disabled reconstruction checks; and
+5. run the driver with only the visible browser submission ID, secret gist ID,
+   and exact staging commit. It derives the browser Result through the
+   same-owner agent session and accepts no Result ID from the operator;
+6. when the driver pauses after receiving the headless challenge, obtain
+   separate user approval for the displayed nonsecret gist/file and
+   repository/tag/commit targets, then type the target-bound confirmation it
+   displays. Let the driver make only those writes and complete the headless,
+   denial, lifecycle, State, Results, redacted-projection, scheduling, uniquely
+   named publication-disabled reconstruction, and disabled-route checks. Once
+   headless evaluation is terminal, it restores the gist file to its exact
+   prior content (or absence) and deletes the generated exact tag; and
 7. verify the driver's prompt disable dispatch and the independent watchdog's
    eventual all-false health result. If either is interrupted, immediately use
    the existing exact-tag disabled dispatch and verify public health.
 
-The driver keeps the signed challenge in process memory only. It must never be
-placed in workflow inputs, logs, summaries, artifacts, documentation, or a
-persistent runtime file. The two fixture writes require the literal
-`APPROVE_EXACT_STAGING_FIXTURE_GIST_AND_TAG`; any repository, source commit,
-gist owner/visibility, live staging commit, or immutable-tag mismatch is a hard
-stop. The driver may dispatch only the existing in-family publication-disabled
-staging reconstruction; it cannot publish a release.
+The driver intentionally keeps the signed challenge only in ordinary process
+memory and clears its direct references after submission. This is not a
+hardened enclave: run it only on the trusted operator host, with core dumps and
+untrusted process inspection disabled; the host's swap and runtime may still
+copy process memory. The challenge must never be placed in workflow inputs,
+logs, summaries, artifacts, documentation, or a persistent runtime file. If
+interruption prevents exact fixture cleanup, the driver prints only the
+nonsecret rollback targets; do not remove the tag before headless evaluation is
+terminal. Its captured prior gist content remains only in process memory. Any
+repository, source commit, gist owner/visibility, live staging commit,
+canonical fixture digest, or immutable-tag mismatch is a hard stop. The driver
+may dispatch only the existing in-family publication-disabled staging
+reconstruction; it cannot publish a release.
+
+Cleanup is deliberately ownership-bounded. The driver restores only the gist
+file state it captured and deletes the tag only after an exact successful create
+response proved that this run created it. If the create response is lost and a
+tag appears, its ownership is ambiguous: the driver restores the proved gist
+change, refuses to delete the tag, and reports only the exact nonsecret rollback
+target for a new explicit decision.
+
+The final disabled-route assertions are transient response checks: each route
+must return the public owner-hiding `404 not_found`, and the driver proves its
+generated idempotency event is absent from State. Do not create a State event,
+durable evidence record, artifact, or run-history document for these denials.
+
+This lifecycle driver does not verify the public entry page. Separately perform
+the browser UI regression check at `lean-lang.org/eval/submit`: problem text,
+pre-filled form values, sign-in feedback, preparing spinner, submission status,
+and the visible opt-out control must all work without DevTools.
 
 Production uses no free-form lifecycle toggle. The six launch flags and the two
 closed maintainer arrays in `server/wrangler.jsonc` form one reviewed rollout
