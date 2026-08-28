@@ -103,21 +103,28 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn('profile["registry_repository"] != "lean-eval-authoritative"', CONTROLLER)
         self.assertIn('f"{profile[\'registry_repository\']}@{manifest}"', CONTROLLER)
         self.assertIn('profile["qualification_status"] != "qualified"', CONTROLLER)
+        preflight = step(
+            "Render and preflight only the exact qualified task executor",
+            "Deploy only the preflight-cleared exact task executor",
+        )
         deployment = step(
-            "Render and deploy only the exact qualified task executor",
+            "Deploy only the preflight-cleared exact task executor",
             "Reserve cleanup before State can become running",
         )
-        self.assertLess(deployment.index("worker-preflight.json"), deployment.index("wrangler deploy"))
+        self.assertIn("worker-preflight.json", preflight)
+        self.assertIn("container-applications-before.json", preflight)
+        self.assertIn(".containers[0].name", preflight)
+        self.assertNotIn("wrangler deploy", preflight)
+        self.assertIn("steps.resource_preflight.outputs.cleared == 'true'", deployment)
         self.assertLess(
-            deployment.index("container-applications-before.json"),
+            deployment.index("executor-deploy-attempted"),
             deployment.index("wrangler deploy"),
         )
-        self.assertIn(".containers[0].name", deployment)
 
     def test_only_official_lean_and_nanoda_checker_profile_is_accepted(self) -> None:
         planning = step(
             "Plan exactly one qualified private task",
-            "Render and deploy only the exact qualified task executor",
+            "Render and preflight only the exact qualified task executor",
         )
         self.assertIn(".task.checker", planning)
         self.assertIn("^leanprover/lean4:v[0-9]", planning)
@@ -246,6 +253,28 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("steps.cleanup.outputs.confirmed", WORKFLOW[: WORKFLOW.index(
             "Delete the terminal task's temporary executor"
         )])
+
+    def test_preexisting_collision_is_never_claimed_by_teardown(self) -> None:
+        preflight = step(
+            "Render and preflight only the exact qualified task executor",
+            "Deploy only the preflight-cleared exact task executor",
+        )
+        deployment = step(
+            "Deploy only the preflight-cleared exact task executor",
+            "Reserve cleanup before State can become running",
+        )
+        unused_delete = step(
+            "Delete an executor whose State start never committed",
+            "Destroy all private material, credentials, and temporary refs",
+        )
+        self.assertNotIn("delete_historical_private_executor", preflight)
+        self.assertNotIn("executor-deploy-attempted", preflight)
+        self.assertIn(": > \"$RUNNER_TEMP/executor-deploy-attempted\"", deployment)
+        self.assertIn("steps.resource_preflight.outputs.cleared == 'true'", unused_delete)
+        self.assertIn("steps.deploy.outcome != 'skipped'", unused_delete)
+        marker = unused_delete.index("test ! -f")
+        deletion = unused_delete.index("delete_historical_private_executor")
+        self.assertLess(marker, deletion)
 
     def test_artifact_is_redacted_source_free_and_not_modern_evidence(self) -> None:
         artifact = step(

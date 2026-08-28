@@ -238,8 +238,8 @@ jobs:
           esac
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
 
-      - name: Render and deploy only the exact qualified task executor
-        id: deploy
+      - name: Render and preflight only the exact qualified task executor
+        id: resource_preflight
         if: steps.plan.outputs.kind == 'historical_private_execution'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -267,9 +267,28 @@ jobs:
           test "$(jq --arg name "$application" \
             '[.[] | select(.name == $name)] | length' \
             "$RUNNER_TEMP/container-applications-before.json")" = 0
+          {
+            echo "worker=$worker"
+            echo "application=$application"
+            echo 'cleared=true'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Deploy only the preflight-cleared exact task executor
+        id: deploy
+        if: steps.resource_preflight.outputs.cleared == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          WORKER_NAME: ${{ steps.resource_preflight.outputs.worker }}
+        run: |
+          set -euo pipefail
+          umask 077
+          config="$RUNNER_TEMP/historical-private-wrangler.json"
+          test "$(jq -er .name "$config")" = "$WORKER_NAME"
+          : > "$RUNNER_TEMP/executor-deploy-attempted"
           npx --prefix server wrangler deploy --config "$config" \
             --containers-rollout=immediate
-          url="https://$worker.lean-eval.workers.dev"
+          url="https://$WORKER_NAME.lean-eval.workers.dev"
           deadline=$(( $(date +%s) + 900 ))
           until curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
             --max-time 30 "$url/healthz" --output "$RUNNER_TEMP/executor-health.json"; do
@@ -291,8 +310,6 @@ jobs:
             ' "$RUNNER_TEMP/executor-health.json" >/dev/null
           rm -f "$config"
           {
-            echo "worker=$worker"
-            echo "application=$application"
             echo "url=$url"
             echo 'deployed=true'
           } >> "$GITHUB_OUTPUT"
@@ -753,8 +770,8 @@ jobs:
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          WORKER_NAME: ${{ steps.deploy.outputs.worker }}
-          APPLICATION_NAME: ${{ steps.deploy.outputs.application }}
+          WORKER_NAME: ${{ steps.resource_preflight.outputs.worker }}
+          APPLICATION_NAME: ${{ steps.resource_preflight.outputs.application }}
         run: |
           set -euo pipefail
           scripts/delete_historical_private_executor \
@@ -762,15 +779,20 @@ jobs:
 
       - name: Delete an executor whose State start never committed
         if: >-
-          always() && steps.deploy.outputs.deployed == 'true' &&
+          always() && steps.resource_preflight.outputs.cleared == 'true' &&
+          steps.deploy.outcome != 'skipped' &&
           steps.started.outputs.appended != 'true'
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          WORKER_NAME: ${{ steps.deploy.outputs.worker }}
-          APPLICATION_NAME: ${{ steps.deploy.outputs.application }}
+          WORKER_NAME: ${{ steps.resource_preflight.outputs.worker }}
+          APPLICATION_NAME: ${{ steps.resource_preflight.outputs.application }}
         run: |
           set -euo pipefail
+          if test ! -f "$RUNNER_TEMP/executor-deploy-attempted"; then
+            echo 'No executor deployment was attempted; preserving any unowned collision.'
+            exit 0
+          fi
           scripts/delete_historical_private_executor \
             "$WORKER_NAME" "$APPLICATION_NAME"
 
@@ -798,6 +820,7 @@ jobs:
             "$RUNNER_TEMP"/private-replay-plan.json \
             "$RUNNER_TEMP"/replay-verdict.json \
             "$RUNNER_TEMP"/failure-reason \
+            "$RUNNER_TEMP"/executor-deploy-attempted \
             "$RUNNER_TEMP"/historical-private-wrangler.json \
             "$RUNNER_TEMP"/worker-preflight.json \
             "$RUNNER_TEMP"/container-applications-before.json \
