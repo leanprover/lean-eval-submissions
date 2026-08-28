@@ -5,6 +5,7 @@ import copy
 import hashlib
 import json
 import pathlib
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -13,11 +14,53 @@ from unittest import mock
 ROOT = pathlib.Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-import migrate_archive_envelopes as migration  # noqa: E402
-from key_capability_contract import archive_file_key_id, archive_key_id  # noqa: E402
+import migrate_archive_envelopes as migration
+from key_capability_contract import archive_file_key_id, archive_key_id
 
 SOURCE_COMMIT = "a" * 40
 LEGACY_PLAINTEXT = b"one exact historical source tar"
+
+
+def git(root: pathlib.Path, *args: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(root), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def committed_remote(root: pathlib.Path) -> tuple[pathlib.Path, pathlib.Path, str]:
+    remote = root / "remote.git"
+    writer = root / "writer"
+    selected = root / "selected"
+    subprocess.run(
+        ["git", "init", "--bare", str(remote)], check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "init", "-b", "main", str(writer)],
+        check=True,
+        capture_output=True,
+    )
+    git(writer, "config", "user.name", "Migration Test")
+    git(writer, "config", "user.email", "migration@example.com")
+    archive = writer / "nested/archive.tar.age"
+    archive.parent.mkdir(parents=True)
+    archive.write_bytes(b"ciphertext")
+    (writer / "nested/archive.json").write_text("{}\n", encoding="utf-8")
+    git(writer, "add", ".")
+    git(writer, "commit", "-m", "source")
+    source_commit = git(writer, "rev-parse", "HEAD")
+    git(writer, "remote", "add", "origin", str(remote))
+    git(writer, "push", "-u", "origin", "main")
+    subprocess.run(
+        ["git", "clone", "--no-checkout", str(remote), str(selected)],
+        check=True,
+        capture_output=True,
+    )
+    git(selected, "checkout", "--detach", source_commit)
+    return writer, selected, source_commit
 
 
 def digest(value: bytes) -> str:
@@ -269,6 +312,130 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
             post_authority.count('ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""'), 3
         )
         self.assertGreaterEqual(post_authority.count('AWS_ACCESS_KEY_ID: ""'), 3)
+
+    def test_workflow_binds_apply_to_exact_protected_commit_and_preflights_early(
+        self,
+    ) -> None:
+        workflow = (ROOT / ".github/workflows/migrate-archive-envelopes.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("expected_workflow_commit:", workflow)
+        self.assertIn('test "$EXPECTED_WORKFLOW_COMMIT" = "$EVENT_SHA"', workflow)
+        self.assertIn('test "$EVENT_REF_PROTECTED" = true', workflow)
+        self.assertIn("preflight-audit", workflow)
+        preflight_step = named_workflow_steps(workflow)[
+            "Prove a fresh review branch and non-overlapping audit main"
+        ]
+        self.assertIn(
+            "AUDIT_MIGRATION_READ_KEY: ${{ secrets.AUDIT_MIGRATION_READ_KEY }}",
+            preflight_step,
+        )
+        self.assertIn("StrictHostKeyChecking=yes", preflight_step)
+        self.assertIn("trap cleanup_read_key EXIT", preflight_step)
+        self.assertLess(
+            preflight_step.index("rm -f \"$read_key\" \"$known_hosts\""),
+            preflight_step.index("python scripts/migrate_archive_envelopes.py"),
+        )
+        self.assertIn("cleanup_read_key\n          trap - EXIT", preflight_step)
+        self.assertLess(
+            workflow.index(
+                "Prove a fresh review branch and non-overlapping audit main"
+            ),
+            workflow.index("Install hash-locked adapter dependencies"),
+        )
+        self.assertIn("count-archive-ciphertexts", workflow)
+        self.assertNotIn(
+            "ls-tree -r --name-only ${{ inputs.audit_commit }} '*.tar.age'",
+            workflow,
+        )
+        push_step = named_workflow_steps(workflow)[
+            "Push only an isolated review branch"
+        ]
+        self.assertIn("git -C audit rm --quiet --", push_step)
+        self.assertIn("git -C audit commit --quiet", push_step)
+
+    def test_archive_tree_count_finds_nested_ciphertexts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory) / "repository"
+            subprocess.run(
+                ["git", "init", "-b", "main", str(root)],
+                check=True,
+                capture_output=True,
+            )
+            git(root, "config", "user.name", "Migration Test")
+            git(root, "config", "user.email", "migration@example.com")
+            for relative in ("top.tar.age", "nested/deeper/archive.tar.age"):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(b"ciphertext")
+            (root / "nested/not-an-archive.txt").write_text("x\n", encoding="utf-8")
+            git(root, "add", ".")
+            git(root, "commit", "-m", "nested archives")
+            tree = git(root, "rev-parse", "HEAD^{tree}")
+            self.assertEqual(migration.count_archive_ciphertexts_in_tree(root, tree), 2)
+
+    def test_audit_preflight_is_retryable_until_review_branch_exists(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            writer, selected, source_commit = committed_remote(pathlib.Path(directory))
+            migration._require_remote_review_branch_absent(selected)
+            migration._require_remote_review_branch_absent(selected)
+            git(writer, "switch", "-c", "archive-file-key-rewrap-v1")
+            git(writer, "push", "origin", "HEAD:archive-file-key-rewrap-v1")
+            with self.assertRaisesRegex(
+                migration.MigrationError, "review branch already exists"
+            ):
+                migration._require_remote_review_branch_absent(selected)
+            self.assertRegex(source_commit, migration.COMMIT)
+
+    def test_audit_preflight_does_not_treat_remote_failure_as_absence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _, selected, _ = committed_remote(pathlib.Path(directory))
+            git(selected, "remote", "set-url", "origin", str(selected / "missing.git"))
+            with self.assertRaisesRegex(
+                migration.MigrationError,
+                "could not prove audit migration review branch absent",
+            ):
+                migration._require_remote_review_branch_absent(selected)
+
+    def test_audit_preflight_rejects_selected_path_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            writer, selected, source_commit = committed_remote(pathlib.Path(directory))
+            origin = git(selected, "remote", "get-url", "origin")
+            plan = {
+                "entries": [
+                    {
+                        "source_path": "nested/archive.tar.age",
+                        "target_path": (
+                            "archives/01/0198abcd-0000-7000-8000-000000000001.tar.age"
+                        ),
+                    }
+                ]
+            }
+            (writer / "README.md").write_text("unrelated\n", encoding="utf-8")
+            git(writer, "add", "README.md")
+            git(writer, "commit", "-m", "unrelated drift")
+            git(writer, "push", "origin", "main")
+            with mock.patch.object(migration, "AUDIT_ORIGINS", {origin}):
+                report = migration.preflight_audit_checkout(
+                    selected, source_commit, plan
+                )
+            self.assertEqual(report["overlap_count"], 0)
+
+            (writer / "nested/archive.json").write_text(
+                '{"changed":true}\n', encoding="utf-8"
+            )
+            git(writer, "add", "nested/archive.json")
+            git(writer, "commit", "-m", "overlapping drift")
+            git(writer, "push", "origin", "main")
+            with (
+                mock.patch.object(migration, "AUDIT_ORIGINS", {origin}),
+                self.assertRaisesRegex(
+                    migration.MigrationError,
+                    r"changed 1 migration-touched paths \(path-set digest [0-9a-f]{64}\)",
+                ) as caught,
+            ):
+                migration.preflight_audit_checkout(selected, source_commit, plan)
+            self.assertNotIn("nested/archive.json", str(caught.exception))
 
     def test_migrate_one_preserves_ciphertext_and_plaintext_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
