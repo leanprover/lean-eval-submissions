@@ -234,6 +234,96 @@ def _verify_checkout(
     return head
 
 
+def refresh_protected_state(state_root: pathlib.Path) -> str:
+    """Fetch and fast-forward one clean protected State checkout.
+
+    The State writer pushes through an explicit authenticated URL, which does
+    not update ``refs/remotes/origin/main``.  Consequently this function first
+    permits a clean local HEAD that is ahead of the stale tracking ref, then
+    fetches the configured read-only origin and proves that HEAD is protected
+    ancestry of the newly observed remote main before fast-forwarding.
+    """
+
+    environment = _state_environment(state_root)
+    repository = _state_repository(environment)
+    minimum = STATE_MINIMUM_COMMITS[environment]
+    try:
+        checkout = pathlib.Path(
+            _git_text(state_root, "rev-parse", "--show-toplevel")
+        ).resolve()
+    except OSError as error:
+        raise HistoricalPrivateReplayControllerError(
+            "State Git checkout is unavailable"
+        ) from error
+    remotes = _git_text(
+        state_root, "config", "--get-all", "remote.origin.url"
+    ).splitlines()
+    if (
+        checkout != state_root.resolve()
+        or len(remotes) != 1
+        or remotes[0] not in REPOSITORY_REMOTES[repository]
+        or _git_text(state_root, "status", "--porcelain=v1", "--untracked-files=all")
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "protected State checkout identity or cleanliness differs"
+        )
+    local_head = _match(
+        COMMIT, _git_text(state_root, "rev-parse", "HEAD"), "local State HEAD"
+    )
+    try:
+        subprocess.run(
+            [
+                "git", "-C", str(state_root), "merge-base", "--is-ancestor",
+                minimum, local_head,
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            [
+                "git", "-C", str(state_root), "fetch", "--no-tags", "origin",
+                "refs/heads/main:refs/remotes/origin/main",
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=120,
+        )
+        remote_head = _match(
+            COMMIT,
+            _git_text(state_root, "rev-parse", "refs/remotes/origin/main"),
+            "fresh protected State main",
+        )
+        subprocess.run(
+            [
+                "git", "-C", str(state_root), "merge-base", "--is-ancestor",
+                local_head, remote_head,
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            [
+                "git", "-C", str(state_root), "merge", "--ff-only",
+                "refs/remotes/origin/main",
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise HistoricalPrivateReplayControllerError(
+            "protected State refresh did not prove one forward-only main history"
+        ) from error
+    return _verify_checkout(state_root, repository, minimum_commit=minimum)
+
+
 def _verify_ancestor_of_upstream(root: pathlib.Path, commit: str, label: str) -> None:
     _match(COMMIT, commit, label)
     try:
@@ -1132,6 +1222,41 @@ def validate_plan_against_state(
     return _validate_plan_against_queue(plan_value, queue, queue_raw, state_head)
 
 
+def rebind_plan_to_current_state(
+    plan_value: Any, state_root: pathlib.Path
+) -> dict[str, Any]:
+    """Rebind only State CAS metadata after proving the exact task unchanged."""
+
+    plan = validate_execution_plan(plan_value)
+    historical_queue, historical_raw, _ = load_state_queue_at_commit(
+        state_root,
+        plan["state"]["expected_head"],
+        plan["state"]["repository"],
+    )
+    _validate_plan_against_queue(
+        plan,
+        historical_queue,
+        historical_raw,
+        plan["state"]["expected_head"],
+    )
+    queue, queue_raw, state_head = load_state_queue(state_root)
+    task = queue["tasks"][0] if queue["tasks"] else None
+    if task != plan["task"]:
+        raise HistoricalPrivateReplayControllerError(
+            "exact queued private replay changed while State advanced"
+        )
+    rebound = copy.deepcopy(plan)
+    rebound["state"] = {
+        "repository": _state_repository(queue["environment"]),
+        "expected_head": state_head,
+        "queue_environment": queue["environment"],
+        "queue_source_event_count": queue["source_event_count"],
+        "queue_source_digest": queue["source_digest"],
+        "task_sha256": sha256_bytes(state_canonical_bytes(task)),
+    }
+    return _validate_plan_against_queue(rebound, queue, queue_raw, state_head)
+
+
 def _state_append_candidate(event_value: Any, environment: str, expected_head: str) -> dict[str, Any]:
     event = _object(event_value, "State event candidate")
     if environment not in {"staging", "production"}:
@@ -1293,6 +1418,81 @@ def current_running_proof(
     }
 
 
+def terminal_committed_proof(
+    plan_value: Any,
+    started_candidate_value: Any,
+    terminal_candidate_value: Any,
+    state_root: pathlib.Path,
+) -> dict[str, Any]:
+    """Prove one exact terminal candidate is in fresh protected State."""
+
+    plan = validate_execution_plan(plan_value)
+    started = _object(started_candidate_value, "started State append candidate")
+    terminal = _object(terminal_candidate_value, "terminal State append candidate")
+    _fields(
+        terminal,
+        {"schema_version", "kind", "state_repository", "expected_head", "event"},
+        "terminal State append candidate",
+    )
+    event = _object(terminal["event"], "terminal State event")
+    started_event = _object(started.get("event"), "started State event")
+    expected_attempt = plan["task"]["attempt"] + 1
+    if (
+        terminal["schema_version"] != 1
+        or terminal["kind"] != "state_append_candidate"
+        or terminal["state_repository"] != plan["state"]["repository"]
+        or not isinstance(terminal.get("expected_head"), str)
+        or COMMIT.fullmatch(terminal["expected_head"]) is None
+        or event.get("event_type") not in {"replay.accepted", "replay.failed"}
+        or event.get("subject_id") != plan["task"]["replay_task_id"]
+        or event.get("causation_event_id") != started_event.get("event_id")
+        or event.get("actor") != {"kind": "system"}
+        or not isinstance(event.get("payload"), dict)
+        or event["payload"].get("attempt") != expected_attempt
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "terminal candidate differs from the exact started private replay"
+        )
+    head = _verify_state_event(state_root, event)
+    try:
+        subprocess.run(
+            [
+                "git", "-C", str(state_root), "merge-base", "--is-ancestor",
+                terminal["expected_head"], head,
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise HistoricalPrivateReplayControllerError(
+            "terminal CAS parent is not protected State ancestry"
+        ) from error
+    running = current_historical_running(
+        state_root / "events",
+        state_validated=True,
+        authority_event_type=AUTHORITY_EVENT_TYPE,
+    )
+    if any(
+        item.get("replay_task_id") == plan["task"]["replay_task_id"]
+        and item.get("attempt") == expected_attempt
+        for item in running
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "terminal private replay remains current-running"
+        )
+    return {
+        "schema_version": 1,
+        "kind": "historical_private_terminal_committed_proof",
+        "state_repository": plan["state"]["repository"],
+        "state_head": head,
+        "terminal_event_id": event["event_id"],
+        "replay_task_id": plan["task"]["replay_task_id"],
+        "attempt": expected_attempt,
+    }
+
+
 def _verify_state_event(state_root: pathlib.Path, event_value: Any) -> str:
     event = _object(event_value, "committed State event")
     event_id = _match(UUID7, event.get("event_id"), "committed State event_id")
@@ -1399,6 +1599,20 @@ def render_executor_config(
         f"registry.cloudflare.com/{account_id}/"
         f"{profile['registry_repository']}@{manifest}"
     )
+    ownership_tag = sha256_bytes(
+        canonical_bytes(
+            {
+                "schema_version": 1,
+                "kind": "historical_private_executor_ownership",
+                "source_commit": source_commit,
+                "replay_task_id": task["replay_task_id"],
+                "attempt": attempt,
+                "execution_profile_digest": task["execution_profile_digest"],
+                "measurement_config_digest": task["measurement_config_digest"],
+                "registry_manifest_digest": manifest,
+            }
+        )
+    )
     return {
         "$schema": "node_modules/wrangler/config-schema.json",
         "name": worker_name,
@@ -1455,6 +1669,7 @@ def render_executor_config(
             "REVIEWED_VM_IMAGE_DIGEST": manifest,
             "EXPECTED_REPLAY_TASK_ID": task["replay_task_id"],
             "EXPECTED_REPLAY_ATTEMPT": str(attempt),
+            "EXECUTOR_OWNERSHIP_TAG": ownership_tag,
             "SANDBOX_TRANSPORT": "rpc",
         },
     }
@@ -1500,11 +1715,25 @@ def parser() -> argparse.ArgumentParser:
     started.add_argument("--state-root", required=True, type=pathlib.Path)
     started.add_argument("--trusted-now", required=True)
     started.add_argument("--output", required=True, type=pathlib.Path)
+    rebind = commands.add_parser("refresh-rebind-plan")
+    rebind.add_argument("--plan", required=True, type=pathlib.Path)
+    rebind.add_argument("--state-root", required=True, type=pathlib.Path)
+    rebind.add_argument("--output", required=True, type=pathlib.Path)
+    refresh = commands.add_parser("refresh-state")
+    refresh.add_argument("--state-root", required=True, type=pathlib.Path)
+    refresh.add_argument("--output", required=True, type=pathlib.Path)
     proof = commands.add_parser("prove-running")
     proof.add_argument("--plan", required=True, type=pathlib.Path)
     proof.add_argument("--started-candidate", required=True, type=pathlib.Path)
     proof.add_argument("--state-root", required=True, type=pathlib.Path)
     proof.add_argument("--output", required=True, type=pathlib.Path)
+    refresh_proof = commands.add_parser("refresh-prove-running")
+    refresh_proof.add_argument("--plan", required=True, type=pathlib.Path)
+    refresh_proof.add_argument(
+        "--started-candidate", required=True, type=pathlib.Path
+    )
+    refresh_proof.add_argument("--state-root", required=True, type=pathlib.Path)
+    refresh_proof.add_argument("--output", required=True, type=pathlib.Path)
     terminal = commands.add_parser("terminal-candidate")
     terminal.add_argument("--plan", required=True, type=pathlib.Path)
     terminal.add_argument("--started-candidate", required=True, type=pathlib.Path)
@@ -1513,6 +1742,16 @@ def parser() -> argparse.ArgumentParser:
     terminal.add_argument("--state-root", required=True, type=pathlib.Path)
     terminal.add_argument("--trusted-now", required=True)
     terminal.add_argument("--output", required=True, type=pathlib.Path)
+    verify_terminal = commands.add_parser("refresh-verify-terminal")
+    verify_terminal.add_argument("--plan", required=True, type=pathlib.Path)
+    verify_terminal.add_argument(
+        "--started-candidate", required=True, type=pathlib.Path
+    )
+    verify_terminal.add_argument(
+        "--terminal-candidate", required=True, type=pathlib.Path
+    )
+    verify_terminal.add_argument("--state-root", required=True, type=pathlib.Path)
+    verify_terminal.add_argument("--output", required=True, type=pathlib.Path)
     unwrap = commands.add_parser("prepare-unwrap")
     for name in ("plan", "state-root", "started-candidate", "audit-root", "output"):
         unwrap.add_argument(f"--{name}", required=True, type=pathlib.Path)
@@ -1561,11 +1800,44 @@ def main() -> int:
                 started_candidate(plan, args.state_root, args.trusted_now),
                 state_canonical_bytes,
             )
+        elif args.command == "refresh-rebind-plan":
+            plan, _ = _load_canonical(args.plan, "historical private plan")
+            refresh_protected_state(args.state_root)
+            _write(
+                args.output,
+                rebind_plan_to_current_state(plan, args.state_root),
+            )
+        elif args.command == "refresh-state":
+            head = refresh_protected_state(args.state_root)
+            queue, _, verified_head = load_state_queue(args.state_root)
+            if verified_head != head:
+                raise HistoricalPrivateReplayControllerError(
+                    "protected State changed during refreshed proof"
+                )
+            _write(
+                args.output,
+                {
+                    "schema_version": 1,
+                    "kind": "historical_private_refreshed_state_proof",
+                    "state_repository": _state_repository(queue["environment"]),
+                    "state_head": head,
+                },
+            )
         elif args.command == "prove-running":
             plan, _ = _load_canonical(args.plan, "historical private plan")
             started, _ = _load_state_canonical(
                 args.started_candidate, "started append candidate"
             )
+            _write(
+                args.output,
+                current_running_proof(plan, started, args.state_root),
+            )
+        elif args.command == "refresh-prove-running":
+            plan, _ = _load_canonical(args.plan, "historical private plan")
+            started, _ = _load_state_canonical(
+                args.started_candidate, "started append candidate"
+            )
+            refresh_protected_state(args.state_root)
             _write(
                 args.output,
                 current_running_proof(plan, started, args.state_root),
@@ -1590,6 +1862,21 @@ def main() -> int:
                     plan, started, verdict, args.state_root, args.trusted_now
                 ),
                 state_canonical_bytes,
+            )
+        elif args.command == "refresh-verify-terminal":
+            plan, _ = _load_canonical(args.plan, "historical private plan")
+            started, _ = _load_state_canonical(
+                args.started_candidate, "started append candidate"
+            )
+            terminal_value, _ = _load_state_canonical(
+                args.terminal_candidate, "terminal append candidate"
+            )
+            refresh_protected_state(args.state_root)
+            _write(
+                args.output,
+                terminal_committed_proof(
+                    plan, started, terminal_value, args.state_root
+                ),
             )
         elif args.command == "prepare-unwrap":
             plan, _ = _load_canonical(args.plan, "historical private plan")

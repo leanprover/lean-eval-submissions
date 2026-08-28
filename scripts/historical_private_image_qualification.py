@@ -144,6 +144,54 @@ def matches(pattern: re.Pattern[str], value: Any) -> bool:
     return isinstance(value, str) and pattern.fullmatch(value) is not None
 
 
+def validate_registry_image(
+    candidate_value: dict[str, Any],
+    manifest_digest: str,
+    manifest_path: pathlib.Path,
+    config_path: pathlib.Path,
+) -> str:
+    """Verify an existing immutable tag is the exact reviewed image closure."""
+
+    candidate = validate_candidate(candidate_value)
+    if not matches(OCI_DIGEST, manifest_digest):
+        raise QualificationError("registry manifest digest is invalid")
+    try:
+        manifest_raw = manifest_path.read_bytes()
+        config_raw = config_path.read_bytes()
+        manifest = json.loads(manifest_raw)
+        image_config = json.loads(config_raw)
+    except (OSError, json.JSONDecodeError, UnicodeError) as error:
+        raise QualificationError("registry manifest or image config is invalid") from error
+    if (
+        not isinstance(manifest, dict)
+        or not isinstance(image_config, dict)
+        or manifest_digest != f"sha256:{sha256(manifest_raw)}"
+        or not isinstance(manifest.get("config"), dict)
+        or manifest["config"].get("digest") != f"sha256:{sha256(config_raw)}"
+    ):
+        raise QualificationError(
+            "registry manifest does not bind the fetched exact image config"
+        )
+    config = image_config.get("config")
+    labels = config.get("Labels") if isinstance(config, dict) else None
+    expected_labels = {
+        "org.lean-eval.image-family": IMAGE_FAMILY,
+        "org.lean-eval.image-matrix-sha256": MATRIX_SHA256,
+        "org.lean-eval.image-source-commit": candidate["image_source_commit"],
+        "org.lean-eval.benchmark-commit": candidate["benchmark_commit"],
+        "org.lean-eval.image-source-closure-sha256": sha256(
+            canonical(candidate)
+        ),
+    }
+    if not isinstance(labels, dict) or any(
+        labels.get(name) != value for name, value in expected_labels.items()
+    ):
+        raise QualificationError(
+            "registry image labels differ from the exact qualification candidate"
+        )
+    return manifest_digest
+
+
 def load_canonical(path: pathlib.Path, label: str) -> tuple[dict[str, Any], bytes]:
     try:
         raw = path.read_bytes()
@@ -713,6 +761,12 @@ def main() -> int:
     prepare.add_argument("--workflow-run-attempt", required=True, type=int)
     prepare.add_argument("--output-directory", required=True, type=pathlib.Path)
 
+    registry = subparsers.add_parser("validate-registry-image")
+    registry.add_argument("--candidate", required=True, type=pathlib.Path)
+    registry.add_argument("--manifest-digest", required=True)
+    registry.add_argument("--manifest", required=True, type=pathlib.Path)
+    registry.add_argument("--image-config", required=True, type=pathlib.Path)
+
     args = parser.parse_args()
     try:
         if args.command == "select":
@@ -741,6 +795,16 @@ def main() -> int:
         elif args.command == "create-probe-archive":
             candidate, _ = load_canonical(args.candidate, "qualification candidate")
             create_probe_archive(candidate, args.output)
+        elif args.command == "validate-registry-image":
+            candidate, _ = load_canonical(args.candidate, "qualification candidate")
+            print(
+                validate_registry_image(
+                    candidate,
+                    args.manifest_digest,
+                    args.manifest,
+                    args.image_config,
+                )
+            )
         else:
             candidate, _ = load_canonical(args.candidate, "qualification candidate")
             context = prepare_probe_inputs(

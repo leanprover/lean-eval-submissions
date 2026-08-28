@@ -71,6 +71,24 @@ jobs:
           persist-credentials: false
           ssh-key: ${{ secrets.AUDIT_READ_KEY }}
 
+      - name: Install one temporary read-only State refresh identity
+        env:
+          STATE_READ_KEY: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          state_key="$RUNNER_TEMP/historical-private-state-reader"
+          state_hosts="$RUNNER_TEMP/historical-private-state-known-hosts"
+          test -n "$STATE_READ_KEY"
+          printf '%s\n' "$STATE_READ_KEY" > "$state_key"
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$state_hosts"
+          chmod 0600 "$state_key" "$state_hosts"
+          ssh_command="ssh -i $state_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$state_hosts -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3"
+          git -C state config core.sshCommand "$ssh_command"
+          unset STATE_READ_KEY
+
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
           node-version: 22.22.0
@@ -100,6 +118,8 @@ jobs:
           test -z "$(git status --short)"
           test -z "$(git -C state status --short)"
           test -z "$(git -C audit status --short)"
+          python scripts/historical_private_replay_controller.py refresh-state \
+            --state-root state --output "$RUNNER_TEMP/refreshed-state.json"
           python state/scripts/state.py --root state validate
           python state/scripts/state.py --root state materialize \
             --output "$RUNNER_TEMP/state-views"
@@ -109,7 +129,6 @@ jobs:
             --output "$RUNNER_TEMP/recovery.json"
           kind=$(jq -er .kind "$RUNNER_TEMP/recovery.json")
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
-          echo "state_head=$(git -C state rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [ "$kind" = cleanup_required ]; then
             echo "replay_task_id=$(jq -er .replay_task_id "$RUNNER_TEMP/recovery.json")" \
               >> "$GITHUB_OUTPUT"
@@ -135,6 +154,21 @@ jobs:
           jq -n --arg task "$REPLAY_TASK_ID" --argjson attempt "$REPLAY_ATTEMPT" \
             '{schema_version:1,replay_task_id:$task,attempt:$attempt}' \
             > "$RUNNER_TEMP/recovery-cleanup-request.json"
+          prove_recovery() {
+            python scripts/historical_private_replay_controller.py refresh-state \
+              --state-root state --output "$RUNNER_TEMP/refreshed-state.json"
+            python scripts/historical_private_replay_controller.py recover \
+              --state-root state \
+              --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+              --output "$RUNNER_TEMP/recovery-current.json"
+            test "$(jq -er .kind "$RUNNER_TEMP/recovery-current.json")" = \
+              cleanup_required
+            test "$(jq -er .replay_task_id "$RUNNER_TEMP/recovery-current.json")" = \
+              "$REPLAY_TASK_ID"
+            test "$(jq -er .attempt "$RUNNER_TEMP/recovery-current.json")" = \
+              "$REPLAY_ATTEMPT"
+          }
+          prove_recovery
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
             --max-time 30 --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-private-replay" \
@@ -145,6 +179,7 @@ jobs:
             rm -f "$RUNNER_TEMP/recovery-oidc.json"
           }
           trap cleanup EXIT
+          prove_recovery
           status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
             --max-time 300 --retry 3 --retry-all-errors --retry-delay 2 \
             --header "Authorization: Bearer $token" \
@@ -153,6 +188,7 @@ jobs:
             "$url/api/v1/historical-private-replay/cleanup" \
             --output "$RUNNER_TEMP/recovery-cleanup-confirmation.json" \
             --write-out '%{http_code}')
+          prove_recovery
           test "$status" = 200
           jq -e --arg task "$REPLAY_TASK_ID" --argjson attempt "$REPLAY_ATTEMPT" \
             '. == {schema_version:1,replay_task_id:$task,attempt:$attempt,
@@ -173,21 +209,37 @@ jobs:
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
         run: |
           set -euo pipefail
-          python scripts/historical_private_replay_controller.py recover \
-            --state-root state \
-            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
-            --cleanup-confirmation "$RUNNER_TEMP/recovery-cleanup-confirmation.json" \
-            --output "$RUNNER_TEMP/recovery-confirmed.json"
-          test "$(jq -er .kind "$RUNNER_TEMP/recovery-confirmed.json")" = failed
-          expected=$(jq -er .append.expected_head "$RUNNER_TEMP/recovery-confirmed.json")
-          test "$expected" = "${{ steps.preflight.outputs.state_head }}"
-          jq .append.event "$RUNNER_TEMP/recovery-confirmed.json" \
-            > "$RUNNER_TEMP/recovery-event.json"
-          state_head=$(scripts/publish_replay_state_event --environment production \
-            --root state --event "$RUNNER_TEMP/recovery-event.json" \
-            --expected-head "$expected" \
-            --message "Recover abandoned historical private replay")
-          test "$(git -C state rev-parse HEAD)" = "$state_head"
+          published=false
+          for cas_attempt in $(seq 1 4); do
+            candidate="$RUNNER_TEMP/recovery-confirmed.cas-$cas_attempt.json"
+            event="$RUNNER_TEMP/recovery-event.cas-$cas_attempt.json"
+            publish_root="$RUNNER_TEMP/recovery-state-publish-$cas_attempt"
+            python scripts/historical_private_replay_controller.py refresh-state \
+              --state-root state --output "$RUNNER_TEMP/refreshed-state.json"
+            python scripts/historical_private_replay_controller.py recover \
+              --state-root state \
+              --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+              --cleanup-confirmation "$RUNNER_TEMP/recovery-cleanup-confirmation.json" \
+              --output "$candidate"
+            test "$(jq -er .kind "$candidate")" = failed
+            expected=$(jq -er .append.expected_head "$candidate")
+            jq .append.event "$candidate" > "$event"
+            git clone --quiet --no-hardlinks state "$publish_root"
+            if state_head=$(scripts/publish_replay_state_event \
+              --environment production --root "$publish_root" --event "$event" \
+              --expected-head "$expected" \
+              --message "Recover abandoned historical private replay"); then
+              mv "$candidate" "$RUNNER_TEMP/recovery-confirmed.json"
+              mv "$event" "$RUNNER_TEMP/recovery-event.json"
+              python scripts/historical_private_replay_controller.py refresh-state \
+                --state-root state --output "$RUNNER_TEMP/refreshed-state.json"
+              git -C state merge-base --is-ancestor "$state_head" \
+                "$(jq -er .state_head "$RUNNER_TEMP/refreshed-state.json")"
+              published=true
+              break
+            fi
+          done
+          test "$published" = true
           echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
           echo 'appended=true' >> "$GITHUB_OUTPUT"
 
@@ -200,8 +252,12 @@ jobs:
           APPLICATION_NAME: ${{ steps.recovery_cleanup.outputs.application }}
         run: |
           set -euo pipefail
+          python scripts/historical_private_replay_controller.py refresh-state \
+            --state-root state --output "$RUNNER_TEMP/refreshed-state.json"
           scripts/delete_historical_private_executor \
             "$WORKER_NAME" "$APPLICATION_NAME"
+          python scripts/historical_private_replay_controller.py refresh-state \
+            --state-root state --output "$RUNNER_TEMP/refreshed-state.json"
 
       - name: Report a non-stale running controller and stop
         if: steps.preflight.outputs.kind == 'busy'
@@ -249,6 +305,11 @@ jobs:
           umask 077
           test -z "${STATE_WRITE_KEY:-}"
           test "$CLOUDFLARE_ACCOUNT_ID" = a46b90978a1c29cc4795f30677e7e4b8
+          python scripts/historical_private_replay_controller.py refresh-rebind-plan \
+            --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+            --output "$RUNNER_TEMP/private-replay-plan.refreshed.json"
+          mv "$RUNNER_TEMP/private-replay-plan.refreshed.json" \
+            "$RUNNER_TEMP/private-replay-plan.json"
           config="$RUNNER_TEMP/historical-private-wrangler.json"
           python scripts/historical_private_replay_controller.py render-executor-config \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --repository-root . \
@@ -261,12 +322,120 @@ jobs:
             --write-out '%{http_code}' \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$worker")
-          test "$code" = 404
+          test "$code" = 200 -o "$code" = 404
           npx --prefix server wrangler containers list --json \
             > "$RUNNER_TEMP/container-applications-before.json"
-          test "$(jq --arg name "$application" \
+          application_matches=$(jq --arg name "$application" \
             '[.[] | select(.name == $name)] | length' \
-            "$RUNNER_TEMP/container-applications-before.json")" = 0
+            "$RUNNER_TEMP/container-applications-before.json")
+          test "$application_matches" -le 1
+          if test "$code" = 200 || test "$application_matches" = 1; then
+            expected_image=$(jq -er .containers[0].image "$config")
+            if test "$code" = 200; then
+              jq -e --arg worker "$worker" \
+                '.success == true and .result.id == $worker and
+                 .result.default_environment.environment == "production" and
+                 (.result.default_environment.script.tag | type == "string" and length > 0)' \
+                "$RUNNER_TEMP/worker-preflight.json" >/dev/null
+              worker_tag=$(jq -er .result.default_environment.script.tag \
+                "$RUNNER_TEMP/worker-preflight.json")
+              curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+                --max-time 30 \
+                --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker/settings" \
+                --output "$RUNNER_TEMP/worker-settings.json"
+              jq -e --slurpfile config "$config" '
+                . as $root |
+                .success == true and (.result.bindings | type == "array") and
+                .result.compatibility_date == $config[0].compatibility_date and
+                (.result.compatibility_flags | sort) ==
+                  ($config[0].compatibility_flags | sort) and
+                ([$root.result.bindings[] | select(.type == "plain_text") | .name]
+                  | sort) == ([$config[0].vars | keys[]] | sort) and
+                all($config[0].vars | to_entries[];
+                  . as $expected |
+                  any($root.result.bindings[];
+                    .type == "plain_text" and .name == $expected.key and
+                    .text == ($expected.value | tostring)))
+              ' "$RUNNER_TEMP/worker-settings.json" >/dev/null
+              curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+                --max-time 30 \
+                --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker/deployments" \
+                --output "$RUNNER_TEMP/worker-deployments.json"
+              active_version=$(jq -er '
+                .result.deployments[0].versions as $versions |
+                select(($versions | length) == 1 and $versions[0].percentage == 100) |
+                $versions[0].version_id
+              ' "$RUNNER_TEMP/worker-deployments.json")
+              [[ "$active_version" =~ ^[0-9a-fA-F-]{36}$ ]]
+              curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+                --max-time 30 \
+                --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker/versions/$active_version" \
+                --output "$RUNNER_TEMP/worker-version.json"
+              jq -e --arg version "$active_version" --arg tag "$worker_tag" '
+                .success == true and .result.id == $version and
+                (.result.metadata.created_on | type == "string") and
+                .result.annotations["workers/tag"] == $tag
+              ' "$RUNNER_TEMP/worker-version.json" >/dev/null
+              curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+                --max-time 30 "https://$worker.lean-eval.workers.dev/healthz" \
+                --output "$RUNNER_TEMP/orphan-health.json"
+              jq -e --arg commit "$GITHUB_SHA" \
+                --arg profile "$(jq -r .task.execution_profile_digest "$RUNNER_TEMP/private-replay-plan.json")" \
+                --arg measurement "$(jq -r .task.measurement_config_digest "$RUNNER_TEMP/private-replay-plan.json")" \
+                --arg image "$(jq -r .execution_plan.request.execution_profile.vm_image_digest "$RUNNER_TEMP/private-replay-plan.json")" \
+                --arg task "$(jq -r .task.replay_task_id "$RUNNER_TEMP/private-replay-plan.json")" \
+                --arg attempt "$(jq -r .execution_plan.started_transition.payload.attempt "$RUNNER_TEMP/private-replay-plan.json")" \
+                --arg ownership "$(jq -r .vars.EXECUTOR_OWNERSHIP_TAG "$config")" '
+                  .status == "ok" and .service == "lean-eval-replay-executor" and
+                  .environment == "historical-private-replay" and
+                  .deployed_commit == $commit and .replay_enabled == true and
+                  .historical_public_replay_enabled == false and
+                  .staging_acceptance_enabled == false and
+                  .reviewed_execution_profile_digest == $profile and
+                  .reviewed_measurement_config_digest == $measurement and
+                  .reviewed_vm_image_digest == $image and
+                  .expected_replay_task_id == $task and
+                  .expected_replay_attempt == $attempt and
+                  .executor_ownership_tag == $ownership
+                ' "$RUNNER_TEMP/orphan-health.json" >/dev/null
+            fi
+            if test "$application_matches" = 1; then
+              jq -e --arg name "$application" --arg image "$expected_image" '
+                [.[] | select(.name == $name)] as $matches |
+                ($matches | length) == 1 and
+                $matches[0].image == $image and
+                ($matches[0].version != null) and
+                ($matches[0].created_at | type == "string" and
+                  test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T"))
+              ' "$RUNNER_TEMP/container-applications-before.json" >/dev/null
+            fi
+            python scripts/historical_private_replay_controller.py refresh-rebind-plan \
+              --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+              --output "$RUNNER_TEMP/private-replay-plan.refreshed.json"
+            mv "$RUNNER_TEMP/private-replay-plan.refreshed.json" \
+              "$RUNNER_TEMP/private-replay-plan.json"
+            : > "$RUNNER_TEMP/verified-orphan-collision"
+            scripts/delete_historical_private_executor "$worker" "$application"
+            code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+              --max-time 30 --output "$RUNNER_TEMP/worker-after-orphan-recovery.json" \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$worker")
+            test "$code" = 404
+            npx --prefix server wrangler containers list --json \
+              > "$RUNNER_TEMP/container-applications-after-orphan-recovery.json"
+            test "$(jq --arg name "$application" \
+              '[.[] | select(.name == $name)] | length' \
+              "$RUNNER_TEMP/container-applications-after-orphan-recovery.json")" = 0
+          fi
+          python scripts/historical_private_replay_controller.py refresh-rebind-plan \
+            --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+            --output "$RUNNER_TEMP/private-replay-plan.refreshed.json"
+          mv "$RUNNER_TEMP/private-replay-plan.refreshed.json" \
+            "$RUNNER_TEMP/private-replay-plan.json"
           {
             echo "worker=$worker"
             echo "application=$application"
@@ -284,6 +453,11 @@ jobs:
           set -euo pipefail
           umask 077
           config="$RUNNER_TEMP/historical-private-wrangler.json"
+          python scripts/historical_private_replay_controller.py refresh-rebind-plan \
+            --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+            --output "$RUNNER_TEMP/private-replay-plan.refreshed.json"
+          mv "$RUNNER_TEMP/private-replay-plan.refreshed.json" \
+            "$RUNNER_TEMP/private-replay-plan.json"
           test "$(jq -er .name "$config")" = "$WORKER_NAME"
           : > "$RUNNER_TEMP/executor-deploy-attempted"
           npx --prefix server wrangler deploy --config "$config" \
@@ -298,7 +472,10 @@ jobs:
           jq -e --arg commit "$GITHUB_SHA" \
             --arg profile "$(jq -r .task.execution_profile_digest "$RUNNER_TEMP/private-replay-plan.json")" \
             --arg measurement "$(jq -r .task.measurement_config_digest "$RUNNER_TEMP/private-replay-plan.json")" \
-            --arg image "$(jq -r .execution_plan.request.execution_profile.vm_image_digest "$RUNNER_TEMP/private-replay-plan.json")" '
+            --arg image "$(jq -r .execution_plan.request.execution_profile.vm_image_digest "$RUNNER_TEMP/private-replay-plan.json")" \
+            --arg task "$(jq -r .task.replay_task_id "$RUNNER_TEMP/private-replay-plan.json")" \
+            --arg attempt "$(jq -r .execution_plan.started_transition.payload.attempt "$RUNNER_TEMP/private-replay-plan.json")" \
+            --arg ownership "$(jq -r .vars.EXECUTOR_OWNERSHIP_TAG "$config")" '
               .status == "ok" and .service == "lean-eval-replay-executor" and
               .environment == "historical-private-replay" and
               .deployed_commit == $commit and .replay_enabled == true and
@@ -306,8 +483,16 @@ jobs:
               .staging_acceptance_enabled == false and
               .reviewed_execution_profile_digest == $profile and
               .reviewed_measurement_config_digest == $measurement and
-              .reviewed_vm_image_digest == $image
+              .reviewed_vm_image_digest == $image and
+              .expected_replay_task_id == $task and
+              .expected_replay_attempt == $attempt and
+              .executor_ownership_tag == $ownership
             ' "$RUNNER_TEMP/executor-health.json" >/dev/null
+          python scripts/historical_private_replay_controller.py refresh-rebind-plan \
+            --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+            --output "$RUNNER_TEMP/private-replay-plan.refreshed.json"
+          mv "$RUNNER_TEMP/private-replay-plan.refreshed.json" \
+            "$RUNNER_TEMP/private-replay-plan.json"
           rm -f "$config"
           {
             echo "url=$url"
@@ -325,6 +510,14 @@ jobs:
           test -z "${STATE_WRITE_KEY:-}"
           test -z "${AWS_ACCESS_KEY_ID:-}"
           test -z "${CLOUDFLARE_API_TOKEN:-}"
+          refresh_queued() {
+            python scripts/historical_private_replay_controller.py refresh-rebind-plan \
+              --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+              --output "$RUNNER_TEMP/private-replay-plan.refreshed.json"
+            mv "$RUNNER_TEMP/private-replay-plan.refreshed.json" \
+              "$RUNNER_TEMP/private-replay-plan.json"
+          }
+          refresh_queued
           jq '{schema_version:1,replay_task_id:.task.replay_task_id,
                attempt:.execution_plan.started_transition.payload.attempt}' \
             "$RUNNER_TEMP/private-replay-plan.json" \
@@ -335,6 +528,7 @@ jobs:
             --output "$RUNNER_TEMP/reserve-oidc.json"
           token=$(jq -er .value "$RUNNER_TEMP/reserve-oidc.json")
           trap 'unset token; rm -f "$RUNNER_TEMP/reserve-oidc.json"' EXIT
+          refresh_queued
           status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
             --max-time 120 --retry 3 --retry-all-errors --retry-delay 2 \
             --header "Authorization: Bearer $token" \
@@ -345,6 +539,7 @@ jobs:
           unset token
           rm -f "$RUNNER_TEMP/reserve-oidc.json"
           trap - EXIT
+          refresh_queued
           test "$status" = 200
           jq -e --slurpfile request "$RUNNER_TEMP/cleanup-request.json" '
             . == ($request[0] + {status:"reserved"})
@@ -360,35 +555,58 @@ jobs:
           set -euo pipefail
           test -z "${AWS_ACCESS_KEY_ID:-}"
           test -z "${CLOUDFLARE_API_TOKEN:-}"
-          python scripts/historical_private_replay_controller.py started-candidate \
-            --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
-            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
-            --output "$RUNNER_TEMP/started-candidate.json"
-          expected=$(jq -er .expected_head "$RUNNER_TEMP/started-candidate.json")
-          test "$expected" = "${{ steps.preflight.outputs.state_head }}"
-          jq .event "$RUNNER_TEMP/started-candidate.json" \
-            > "$RUNNER_TEMP/started-event.json"
-          state_head=$(scripts/publish_replay_state_event --environment production \
-            --root state --event "$RUNNER_TEMP/started-event.json" \
-            --expected-head "$expected" \
-            --message "Start one historical private replay")
-          test "$(git -C state rev-parse HEAD)" = "$state_head"
+          published=false
+          for cas_attempt in $(seq 1 4); do
+            plan="$RUNNER_TEMP/private-replay-plan.cas-$cas_attempt.json"
+            candidate="$RUNNER_TEMP/started-candidate.cas-$cas_attempt.json"
+            event="$RUNNER_TEMP/started-event.cas-$cas_attempt.json"
+            publish_root="$RUNNER_TEMP/started-state-publish-$cas_attempt"
+            python scripts/historical_private_replay_controller.py refresh-rebind-plan \
+              --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
+              --output "$plan"
+            python scripts/historical_private_replay_controller.py started-candidate \
+              --plan "$plan" --state-root state \
+              --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+              --output "$candidate"
+            expected=$(jq -er .expected_head "$candidate")
+            jq .event "$candidate" > "$event"
+            git clone --quiet --no-hardlinks state "$publish_root"
+            if state_head=$(scripts/publish_replay_state_event \
+              --environment production --root "$publish_root" --event "$event" \
+              --expected-head "$expected" \
+              --message "Start one historical private replay"); then
+              mv "$plan" "$RUNNER_TEMP/private-replay-plan.json"
+              mv "$candidate" "$RUNNER_TEMP/started-candidate.json"
+              mv "$event" "$RUNNER_TEMP/started-event.json"
+              python scripts/historical_private_replay_controller.py \
+                refresh-prove-running \
+                --plan "$RUNNER_TEMP/private-replay-plan.json" \
+                --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+                --state-root state \
+                --output "$RUNNER_TEMP/running-after-start.json"
+              test "$(jq -er .started_event_id "$RUNNER_TEMP/running-after-start.json")" = \
+                "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
+              git -C state merge-base --is-ancestor "$state_head" \
+                "$(jq -er .state_head "$RUNNER_TEMP/running-after-start.json")"
+              published=true
+              break
+            fi
+          done
+          test "$published" = true
           echo runner_start_failed > "$RUNNER_TEMP/failure-reason"
           echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
           echo 'appended=true' >> "$GITHUB_OUTPUT"
 
       - name: Prove the exact task is currently running before unwrap
         if: steps.started.outputs.appended == 'true'
-        env:
-          STARTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
         run: |
           set -euo pipefail
-          python scripts/historical_private_replay_controller.py prove-running \
+          python scripts/historical_private_replay_controller.py refresh-prove-running \
             --plan "$RUNNER_TEMP/private-replay-plan.json" \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
             --state-root state --output "$RUNNER_TEMP/running-before-unwrap.json"
-          test "$(jq -er .state_head "$RUNNER_TEMP/running-before-unwrap.json")" = \
-            "$STARTED_STATE_HEAD"
+          test "$(jq -er .started_event_id "$RUNNER_TEMP/running-before-unwrap.json")" = \
+            "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
 
       - name: Prepare the exact five-minute one-use unwrap capability
         if: steps.started.outputs.appended == 'true'
@@ -417,8 +635,6 @@ jobs:
 
       - name: Consume unwrap once, prove reuse refusal, and drop AWS authority
         if: steps.started.outputs.appended == 'true'
-        env:
-          STARTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
         run: |
           set -euo pipefail
           umask 077
@@ -434,12 +650,12 @@ jobs:
           }
           trap cleanup EXIT
           prove_running() {
-            python scripts/historical_private_replay_controller.py prove-running \
+            python scripts/historical_private_replay_controller.py refresh-prove-running \
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
               --state-root state --output "$RUNNER_TEMP/current-running.json"
-            test "$(jq -er .state_head "$RUNNER_TEMP/current-running.json")" = \
-              "$STARTED_STATE_HEAD"
+            test "$(jq -er .started_event_id "$RUNNER_TEMP/current-running.json")" = \
+              "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           }
           prove_running
           aws lambda invoke --function-name lean-eval-archive-unwrap-production \
@@ -465,20 +681,18 @@ jobs:
 
       - name: Build the credential-free exact executor request
         if: steps.started.outputs.appended == 'true'
-        env:
-          STARTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
         run: |
           set -euo pipefail
           umask 077
           test -z "${AWS_ACCESS_KEY_ID:-}"
           test -z "${AWS_SECRET_ACCESS_KEY:-}"
           test -z "${AWS_SESSION_TOKEN:-}"
-          python scripts/historical_private_replay_controller.py prove-running \
+          python scripts/historical_private_replay_controller.py refresh-prove-running \
             --plan "$RUNNER_TEMP/private-replay-plan.json" \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
             --state-root state --output "$RUNNER_TEMP/running-after-kms.json"
-          test "$(jq -er .state_head "$RUNNER_TEMP/running-after-kms.json")" = \
-            "$STARTED_STATE_HEAD"
+          test "$(jq -er .started_event_id "$RUNNER_TEMP/running-after-kms.json")" = \
+            "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           python scripts/historical_private_replay_controller.py build-executor-request \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
@@ -510,7 +724,6 @@ jobs:
         if: steps.started.outputs.appended == 'true'
         env:
           EXECUTOR_URL: ${{ steps.deploy.outputs.url }}
-          STARTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
         run: |
           set -euo pipefail
           umask 077
@@ -518,12 +731,12 @@ jobs:
           test -z "${STATE_WRITE_KEY:-}"
           test -z "${CLOUDFLARE_API_TOKEN:-}"
           prove_running() {
-            python scripts/historical_private_replay_controller.py prove-running \
+            python scripts/historical_private_replay_controller.py refresh-prove-running \
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
               --state-root state --output "$RUNNER_TEMP/current-running.json"
-            test "$(jq -er .state_head "$RUNNER_TEMP/current-running.json")" = \
-              "$STARTED_STATE_HEAD"
+            test "$(jq -er .started_event_id "$RUNNER_TEMP/current-running.json")" = \
+              "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           }
           mint_oidc() {
             rm -f "$RUNNER_TEMP/executor-oidc.json"
@@ -603,30 +816,29 @@ jobs:
         if: always() && steps.started.outputs.appended == 'true'
         env:
           EXECUTOR_URL: ${{ steps.deploy.outputs.url }}
-          STARTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
         run: |
           set -euo pipefail
           umask 077
           test -z "${AWS_ACCESS_KEY_ID:-}"
           test -z "${STATE_WRITE_KEY:-}"
-          python scripts/historical_private_replay_controller.py prove-running \
+          python scripts/historical_private_replay_controller.py refresh-prove-running \
             --plan "$RUNNER_TEMP/private-replay-plan.json" \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
             --state-root state --output "$RUNNER_TEMP/running-before-cleanup.json"
-          test "$(jq -er .state_head "$RUNNER_TEMP/running-before-cleanup.json")" = \
-            "$STARTED_STATE_HEAD"
+          test "$(jq -er .started_event_id "$RUNNER_TEMP/running-before-cleanup.json")" = \
+            "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
             --max-time 30 --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-private-replay" \
             --output "$RUNNER_TEMP/cleanup-oidc.json"
           token=$(jq -er .value "$RUNNER_TEMP/cleanup-oidc.json")
           trap 'unset token; rm -f "$RUNNER_TEMP/cleanup-oidc.json"' EXIT
-          python scripts/historical_private_replay_controller.py prove-running \
+          python scripts/historical_private_replay_controller.py refresh-prove-running \
             --plan "$RUNNER_TEMP/private-replay-plan.json" \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
             --state-root state --output "$RUNNER_TEMP/running-after-cleanup-oidc.json"
-          test "$(jq -er .state_head "$RUNNER_TEMP/running-after-cleanup-oidc.json")" = \
-            "$STARTED_STATE_HEAD"
+          test "$(jq -er .started_event_id "$RUNNER_TEMP/running-after-cleanup-oidc.json")" = \
+            "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
             --max-time 300 --retry 3 --retry-all-errors --retry-delay 2 \
             --header "Authorization: Bearer $token" \
@@ -642,12 +854,12 @@ jobs:
           jq -e --slurpfile expected "$RUNNER_TEMP/cleanup-request.json" '
             . == ($expected[0] + {destruction:"confirmed"})
           ' "$RUNNER_TEMP/cleanup-confirmation.json" >/dev/null
-          python scripts/historical_private_replay_controller.py prove-running \
+          python scripts/historical_private_replay_controller.py refresh-prove-running \
             --plan "$RUNNER_TEMP/private-replay-plan.json" \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
             --state-root state --output "$RUNNER_TEMP/running-after-cleanup.json"
-          test "$(jq -er .state_head "$RUNNER_TEMP/running-after-cleanup.json")" = \
-            "$STARTED_STATE_HEAD"
+          test "$(jq -er .started_event_id "$RUNNER_TEMP/running-after-cleanup.json")" = \
+            "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           echo 'confirmed=true' >> "$GITHUB_OUTPUT"
 
       - name: Derive the exact terminal candidate after destruction
@@ -670,16 +882,47 @@ jobs:
         if: steps.terminal_candidate.outputs.ready == 'true'
         env:
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
-          EXPECTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
         run: |
           set -euo pipefail
-          test "$(jq -er .expected_head "$RUNNER_TEMP/terminal-candidate.json")" = \
-            "$EXPECTED_STATE_HEAD"
-          state_head=$(scripts/publish_replay_state_event --environment production \
-            --root state --event "$RUNNER_TEMP/terminal-event.json" \
-            --expected-head "$EXPECTED_STATE_HEAD" \
-            --message "Record historical private replay outcome")
-          test "$(git -C state rev-parse HEAD)" = "$state_head"
+          published=false
+          for cas_attempt in $(seq 1 4); do
+            candidate="$RUNNER_TEMP/terminal-candidate.cas-$cas_attempt.json"
+            event="$RUNNER_TEMP/terminal-event.cas-$cas_attempt.json"
+            publish_root="$RUNNER_TEMP/terminal-state-publish-$cas_attempt"
+            python scripts/historical_private_replay_controller.py \
+              refresh-prove-running \
+              --plan "$RUNNER_TEMP/private-replay-plan.json" \
+              --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+              --state-root state --output "$RUNNER_TEMP/running-before-terminal.json"
+            python scripts/historical_private_replay_controller.py terminal-candidate \
+              --plan "$RUNNER_TEMP/private-replay-plan.json" \
+              --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+              --verdict "$RUNNER_TEMP/replay-verdict.json" --state-root state \
+              --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+              --output "$candidate"
+            expected=$(jq -er .expected_head "$candidate")
+            jq .event "$candidate" > "$event"
+            git clone --quiet --no-hardlinks state "$publish_root"
+            if state_head=$(scripts/publish_replay_state_event \
+              --environment production --root "$publish_root" --event "$event" \
+              --expected-head "$expected" \
+              --message "Record historical private replay outcome"); then
+              mv "$candidate" "$RUNNER_TEMP/terminal-candidate.json"
+              mv "$event" "$RUNNER_TEMP/terminal-event.json"
+              python scripts/historical_private_replay_controller.py \
+                refresh-verify-terminal \
+                --plan "$RUNNER_TEMP/private-replay-plan.json" \
+                --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+                --terminal-candidate "$RUNNER_TEMP/terminal-candidate.json" \
+                --state-root state \
+                --output "$RUNNER_TEMP/terminal-committed-proof.json"
+              git -C state merge-base --is-ancestor "$state_head" \
+                "$(jq -er .state_head "$RUNNER_TEMP/terminal-committed-proof.json")"
+              published=true
+              break
+            fi
+          done
+          test "$published" = true
           echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
           echo 'appended=true' >> "$GITHUB_OUTPUT"
 
@@ -691,32 +934,55 @@ jobs:
           steps.cleanup.outputs.confirmed == 'true'
         env:
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
-          EXPECTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
         run: |
           set -euo pipefail
           reason=$(cat "$RUNNER_TEMP/failure-reason")
-          python scripts/historical_private_replay_controller.py terminal-candidate \
-            --plan "$RUNNER_TEMP/private-replay-plan.json" \
-            --started-candidate "$RUNNER_TEMP/started-candidate.json" \
-            --failure-reason "$reason" --state-root state \
-            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
-            --output "$RUNNER_TEMP/failure-candidate.json"
-          test "$(jq -er .expected_head "$RUNNER_TEMP/failure-candidate.json")" = \
-            "$EXPECTED_STATE_HEAD"
-          jq .event "$RUNNER_TEMP/failure-candidate.json" \
-            > "$RUNNER_TEMP/failure-event.json"
-          state_head=$(scripts/publish_replay_state_event --environment production \
-            --root state --event "$RUNNER_TEMP/failure-event.json" \
-            --expected-head "$EXPECTED_STATE_HEAD" \
-            --message "Record historical private replay failure")
-          test "$(git -C state rev-parse HEAD)" = "$state_head"
+          published=false
+          for cas_attempt in $(seq 1 4); do
+            candidate="$RUNNER_TEMP/failure-candidate.cas-$cas_attempt.json"
+            event="$RUNNER_TEMP/failure-event.cas-$cas_attempt.json"
+            publish_root="$RUNNER_TEMP/failure-state-publish-$cas_attempt"
+            python scripts/historical_private_replay_controller.py \
+              refresh-prove-running \
+              --plan "$RUNNER_TEMP/private-replay-plan.json" \
+              --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+              --state-root state --output "$RUNNER_TEMP/running-before-failure.json"
+            python scripts/historical_private_replay_controller.py terminal-candidate \
+              --plan "$RUNNER_TEMP/private-replay-plan.json" \
+              --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+              --failure-reason "$reason" --state-root state \
+              --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+              --output "$candidate"
+            expected=$(jq -er .expected_head "$candidate")
+            jq .event "$candidate" > "$event"
+            git clone --quiet --no-hardlinks state "$publish_root"
+            if state_head=$(scripts/publish_replay_state_event \
+              --environment production --root "$publish_root" --event "$event" \
+              --expected-head "$expected" \
+              --message "Record historical private replay failure"); then
+              mv "$candidate" "$RUNNER_TEMP/failure-candidate.json"
+              mv "$event" "$RUNNER_TEMP/failure-event.json"
+              python scripts/historical_private_replay_controller.py \
+                refresh-verify-terminal \
+                --plan "$RUNNER_TEMP/private-replay-plan.json" \
+                --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+                --terminal-candidate "$RUNNER_TEMP/failure-candidate.json" \
+                --state-root state \
+                --output "$RUNNER_TEMP/failure-committed-proof.json"
+              git -C state merge-base --is-ancestor "$state_head" \
+                "$(jq -er .state_head "$RUNNER_TEMP/failure-committed-proof.json")"
+              published=true
+              break
+            fi
+          done
+          test "$published" = true
           echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
           echo 'appended=true' >> "$GITHUB_OUTPUT"
 
       - name: Write one redacted source-free terminal artifact
         if: steps.terminal.outputs.appended == 'true' || steps.failure.outputs.appended == 'true'
         env:
-          STARTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
+          START_EVENT_COMMIT: ${{ steps.started.outputs.state_head }}
           TERMINAL_STATE_HEAD: ${{ steps.terminal.outputs.state_head }}
           FAILURE_STATE_HEAD: ${{ steps.failure.outputs.state_head }}
         run: |
@@ -744,7 +1010,7 @@ jobs:
               "started_event_id": json.loads((temporary / "started-event.json").read_text())["event_id"],
               "terminal_event_id": event["event_id"],
               "terminal_event_type": event["event_type"],
-              "started_state_commit": os.environ["STARTED_STATE_HEAD"],
+              "started_state_commit": os.environ["START_EVENT_COMMIT"],
               "terminal_state_commit": os.environ["TERMINAL_STATE_HEAD"] or os.environ["FAILURE_STATE_HEAD"],
               "sandbox_destruction": "confirmed",
               "network_policy": "blocked",
@@ -774,8 +1040,22 @@ jobs:
           APPLICATION_NAME: ${{ steps.resource_preflight.outputs.application }}
         run: |
           set -euo pipefail
+          terminal_candidate="$RUNNER_TEMP/terminal-candidate.json"
+          if test ! -f "$terminal_candidate"; then
+            terminal_candidate="$RUNNER_TEMP/failure-candidate.json"
+          fi
+          prove_terminal() {
+            python scripts/historical_private_replay_controller.py \
+              refresh-verify-terminal \
+              --plan "$RUNNER_TEMP/private-replay-plan.json" \
+              --started-candidate "$RUNNER_TEMP/started-candidate.json" \
+              --terminal-candidate "$terminal_candidate" --state-root state \
+              --output "$RUNNER_TEMP/terminal-before-resource-delete.json"
+          }
+          prove_terminal
           scripts/delete_historical_private_executor \
             "$WORKER_NAME" "$APPLICATION_NAME"
+          prove_terminal
 
       - name: Delete an executor whose State start never committed
         if: >-
@@ -809,7 +1089,19 @@ jobs:
             "$RUNNER_TEMP/executor-request.json"; do
             if [ -f "$path" ]; then shred --remove "$path"; fi
           done
-          rm -rf audit state "$RUNNER_TEMP/state-views"
+          if [ -d state ]; then
+            git -C state config --unset-all core.sshCommand || true
+          fi
+          for path in \
+            "$RUNNER_TEMP/historical-private-state-reader" \
+            "$RUNNER_TEMP/historical-private-state-known-hosts"; do
+            if [ -f "$path" ]; then shred --remove "$path"; fi
+          done
+          rm -rf audit state "$RUNNER_TEMP/state-views" \
+            "$RUNNER_TEMP"/started-state-publish-* \
+            "$RUNNER_TEMP"/terminal-state-publish-* \
+            "$RUNNER_TEMP"/failure-state-publish-* \
+            "$RUNNER_TEMP"/recovery-state-publish-*
           rm -f "$RUNNER_TEMP"/*oidc*.json \
             "$RUNNER_TEMP"/*cleanup*.json \
             "$RUNNER_TEMP"/*reservation*.json \
@@ -817,12 +1109,20 @@ jobs:
             "$RUNNER_TEMP"/*running*.json \
             "$RUNNER_TEMP"/*event.json \
             "$RUNNER_TEMP"/*candidate.json \
+            "$RUNNER_TEMP"/*.cas-*.json \
             "$RUNNER_TEMP"/private-replay-plan.json \
+            "$RUNNER_TEMP"/private-replay-plan.refreshed.json \
+            "$RUNNER_TEMP"/refreshed-state.json \
             "$RUNNER_TEMP"/replay-verdict.json \
             "$RUNNER_TEMP"/failure-reason \
             "$RUNNER_TEMP"/executor-deploy-attempted \
+            "$RUNNER_TEMP"/verified-orphan-collision \
             "$RUNNER_TEMP"/historical-private-wrangler.json \
             "$RUNNER_TEMP"/worker-preflight.json \
+            "$RUNNER_TEMP"/worker-settings.json \
+            "$RUNNER_TEMP"/worker-deployments.json \
+            "$RUNNER_TEMP"/worker-version.json \
+            "$RUNNER_TEMP"/orphan-health.json \
             "$RUNNER_TEMP"/container-applications-before.json \
             historical-private-replay-redacted.json
           test ! -e "$RUNNER_TEMP/archive-plaintext.tar"

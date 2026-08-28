@@ -50,6 +50,7 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
   EXPECTED_REPLAY_TASK_ID?: string;
   EXPECTED_REPLAY_ATTEMPT?: string;
   EXPECTED_QUALIFICATION_REQUEST_SHA256?: string;
+  EXECUTOR_OWNERSHIP_TAG?: string;
 };
 
 type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy"> &
@@ -1523,6 +1524,11 @@ function health(env: ReplayRuntimeEnv): Response {
     reviewed_execution_profile_digest: env.REVIEWED_EXECUTION_PROFILE_DIGEST,
     reviewed_measurement_config_digest: env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
     reviewed_vm_image_digest: env.REVIEWED_VM_IMAGE_DIGEST,
+    ...(env.EXECUTOR_OWNERSHIP_TAG === undefined ? {} : {
+      executor_ownership_tag: env.EXECUTOR_OWNERSHIP_TAG,
+      expected_replay_task_id: env.EXPECTED_REPLAY_TASK_ID,
+      expected_replay_attempt: env.EXPECTED_REPLAY_ATTEMPT,
+    }),
   });
 }
 

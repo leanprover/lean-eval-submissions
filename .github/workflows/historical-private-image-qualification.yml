@@ -57,16 +57,18 @@ jobs:
       - name: Require an explicit one-image apply confirmation
         env:
           APPLY_CONFIRMATION: ${{ inputs.apply_confirmation }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test "$APPLY_CONFIRMATION" = publish-and-qualify-one-private-image
           [[ "$BENCHMARK_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
           test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
           [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
-          remote_main=$(timeout 30s git ls-remote \
-            https://github.com/leanprover/lean-eval-submissions.git \
-            refs/heads/main | cut -f1)
-          test "$remote_main" = "$GITHUB_SHA"
+          branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.commit.sha, .protected] | @tsv')
+          test "$branch" = "$GITHUB_SHA"$'\ttrue'
 
       # actions/checkout pinned to v7.0.1.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -97,9 +99,11 @@ jobs:
           test "$(jq -r .image_source_commit "$RUNNER_TEMP/candidate.json")" = "$GITHUB_SHA"
           test "$(jq -r .benchmark_commit "$RUNNER_TEMP/candidate.json")" = "$BENCHMARK_COMMIT"
           image_tag="private-v1-$BENCHMARK_COMMIT-$GITHUB_SHA"
+          candidate_sha256=$(sha256sum "$RUNNER_TEMP/candidate.json" | cut -d' ' -f1)
           {
             echo "IMAGE_TAG=$image_tag"
             echo "IMAGE=$IMAGE_REPOSITORY:$image_tag"
+            echo "IMAGE_CLOSURE_SHA256=$candidate_sha256"
           } >> "$GITHUB_ENV"
 
       - name: Verify the disposable executor is present
@@ -121,6 +125,8 @@ jobs:
           set -euo pipefail
           docker build --progress=plain \
             --build-arg "BENCHMARK_COMMIT=$BENCHMARK_COMMIT" \
+            --build-arg "IMAGE_SOURCE_COMMIT=$GITHUB_SHA" \
+            --build-arg "IMAGE_CLOSURE_SHA256=$IMAGE_CLOSURE_SHA256" \
             --tag "$IMAGE" \
             --file Dockerfile.historical-private-replay .
           image_size=$(docker image inspect "$IMAGE" --format '{{.Size}}')
@@ -140,6 +146,7 @@ jobs:
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           umask 077
@@ -147,24 +154,12 @@ jobs:
             unset registry_username registry_password
             rm -f "$RUNNER_TEMP/registry-credentials.json" \
               "$RUNNER_TEMP/registry-headers" \
+              "$RUNNER_TEMP/registry-manifest.json" \
+              "$RUNNER_TEMP/registry-image-config.json" \
               "$RUNNER_TEMP/registry-images.json" \
               "$RUNNER_TEMP/registry-netrc"
           }
           trap cleanup EXIT
-          npx --prefix server wrangler containers images list \
-            --filter "^$IMAGE_REPOSITORY$" --json \
-            > "$RUNNER_TEMP/registry-images.json"
-          if jq -e --arg repository "$IMAGE_REPOSITORY" --arg tag "$IMAGE_TAG" \
-            'any(.[]; .name == $repository and ((.tags // []) | any(. == $tag)))' \
-            "$RUNNER_TEMP/registry-images.json" >/dev/null; then
-            echo "immutable registry tag already exists; refusing overwrite" >&2
-            exit 1
-          fi
-          current_main=$(timeout 30s git ls-remote \
-            https://github.com/leanprover/lean-eval-submissions.git \
-            refs/heads/main | cut -f1)
-          test "$current_main" = "$GITHUB_SHA"
-          npx --prefix server wrangler containers push "$IMAGE"
           timeout 60s npx --prefix server wrangler containers registries credentials \
             registry.cloudflare.com --pull --expiration-minutes 5 --json \
             > "$RUNNER_TEMP/registry-credentials.json"
@@ -174,16 +169,49 @@ jobs:
           echo "::add-mask::$registry_password"
           printf 'machine registry.cloudflare.com login %s password %s\n' \
             "$registry_username" "$registry_password" > "$RUNNER_TEMP/registry-netrc"
-          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+          npx --prefix server wrangler containers images list \
+            --filter "^$IMAGE_REPOSITORY$" --json \
+            > "$RUNNER_TEMP/registry-images.json"
+          manifest_url="https://registry.cloudflare.com/v2/$CLOUDFLARE_ACCOUNT_ID/$IMAGE_REPOSITORY/manifests/$IMAGE_TAG"
+          manifest_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
             --max-time 30 --netrc-file "$RUNNER_TEMP/registry-netrc" \
             --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
-            --head \
-            "https://registry.cloudflare.com/v2/$CLOUDFLARE_ACCOUNT_ID/$IMAGE_REPOSITORY/manifests/$IMAGE_TAG" \
-            --dump-header "$RUNNER_TEMP/registry-headers" --output /dev/null
+            "$manifest_url" --dump-header "$RUNNER_TEMP/registry-headers" \
+            --output "$RUNNER_TEMP/registry-manifest.json" \
+            --write-out '%{http_code}')
+          if test "$manifest_status" = 200; then
+            echo 'Exact immutable tag exists; verifying it before retry/resume.'
+          else
+            test "$manifest_status" = 404
+            test "$(jq --arg repository "$IMAGE_REPOSITORY" --arg tag "$IMAGE_TAG" \
+              '[.[] | select(.name == $repository and ((.tags // []) | any(. == $tag)))] | length' \
+              "$RUNNER_TEMP/registry-images.json")" = 0
+            branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+              --jq '[.commit.sha, .protected] | @tsv')
+            test "$branch" = "$GITHUB_SHA"$'\ttrue'
+            npx --prefix server wrangler containers push "$IMAGE"
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --max-time 30 --netrc-file "$RUNNER_TEMP/registry-netrc" \
+              --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+              "$manifest_url" --dump-header "$RUNNER_TEMP/registry-headers" \
+              --output "$RUNNER_TEMP/registry-manifest.json"
+          fi
           image_digest=$(sed -n 's/^[Dd]ocker-[Cc]ontent-[Dd]igest:[[:space:]]*\(sha256:[0-9a-f]\{64\}\)[[:space:]\r]*$/\1/p' \
             "$RUNNER_TEMP/registry-headers")
           [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
           test "$(printf '%s' "$image_digest" | wc -l)" = 0
+          config_digest=$(jq -er '.config.digest | select(test("^sha256:[0-9a-f]{64}$"))' \
+            "$RUNNER_TEMP/registry-manifest.json")
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 30 --netrc-file "$RUNNER_TEMP/registry-netrc" \
+            "https://registry.cloudflare.com/v2/$CLOUDFLARE_ACCOUNT_ID/$IMAGE_REPOSITORY/blobs/$config_digest" \
+            --output "$RUNNER_TEMP/registry-image-config.json"
+          verified=$(python "$CONTROLLER" validate-registry-image \
+            --candidate "$RUNNER_TEMP/candidate.json" \
+            --manifest-digest "$image_digest" \
+            --manifest "$RUNNER_TEMP/registry-manifest.json" \
+            --image-config "$RUNNER_TEMP/registry-image-config.json")
+          test "$verified" = "$image_digest"
           echo "digest=$image_digest" >> "$GITHUB_OUTPUT"
           cleanup
           trap - EXIT
@@ -253,6 +281,17 @@ jobs:
           : > "$RUNNER_TEMP/qualifier-deploy-attempted"
           npx --prefix server wrangler deploy --config "$config" \
             --containers-rollout=immediate
+          expected_image=$(jq -er .containers[0].image "$config")
+          npx --prefix server wrangler containers list --json \
+            > "$RUNNER_TEMP/container-applications-deployed.json"
+          jq -e --arg name "$application" --arg image "$expected_image" '
+            [.[] | select(.name == $name)] as $matches |
+            ($matches | length) == 1 and
+            $matches[0].image == $image and
+            ($matches[0].version != null) and
+            ($matches[0].created_at | type == "string" and
+              test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T"))
+          ' "$RUNNER_TEMP/container-applications-deployed.json" >/dev/null
           : > "$RUNNER_TEMP/qualifier-deployed"
 
       - name: Run exactly one official-entrypoint blocked-network probe
@@ -393,8 +432,11 @@ jobs:
             "$RUNNER_TEMP/qualifier-deployed" \
             "$RUNNER_TEMP/registry-credentials.json" \
             "$RUNNER_TEMP/registry-headers" \
+            "$RUNNER_TEMP/registry-manifest.json" \
+            "$RUNNER_TEMP/registry-image-config.json" \
             "$RUNNER_TEMP/registry-images.json" \
             "$RUNNER_TEMP/registry-netrc" \
+            "$RUNNER_TEMP/container-applications-deployed.json" \
             "$RUNNER_TEMP/worker-preflight.json" \
             "$RUNNER_TEMP/worker-after-delete.json" \
             "$RUNNER_TEMP/container-applications-before.json" \

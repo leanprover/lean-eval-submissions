@@ -67,7 +67,11 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertLess(reserve, started)
         self.assertGreaterEqual(WORKFLOW.count("--expected-head"), 4)
         self.assertGreaterEqual(WORKFLOW.count("state_head=$(scripts/publish_replay_state_event"), 4)
-        self.assertGreaterEqual(WORKFLOW.count('git -C state rev-parse HEAD)" = "$state_head"'), 4)
+        self.assertGreaterEqual(WORKFLOW.count("git clone --quiet --no-hardlinks state"), 4)
+        self.assertGreaterEqual(WORKFLOW.count("for cas_attempt in $(seq 1 4)"), 4)
+        self.assertGreaterEqual(WORKFLOW.count("refresh-prove-running"), 8)
+        self.assertNotIn("EXPECTED_STATE_HEAD", WORKFLOW)
+        self.assertNotIn("STARTED_STATE_HEAD", WORKFLOW)
 
     def test_abandoned_recovery_requires_exact_destruction_first(self) -> None:
         cleanup = WORKFLOW.index(
@@ -93,7 +97,14 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
     def test_exact_qualified_digest_only_executor_precedes_start(self) -> None:
         render = WORKFLOW.index("render-executor-config")
         deploy = WORKFLOW.index("wrangler deploy --config")
-        health = WORKFLOW.index("reviewed_vm_image_digest == $image")
+        deployment = step(
+            "Deploy only the preflight-cleared exact task executor",
+            "Reserve cleanup before State can become running",
+        )
+        health = WORKFLOW.index(
+            "reviewed_vm_image_digest == $image",
+            WORKFLOW.index("Deploy only the preflight-cleared exact task executor"),
+        )
         reserve = WORKFLOW.index("Reserve cleanup before State can become running")
         started = WORKFLOW.index("Append the exact replay.started candidate with CAS")
         self.assertLess(render, deploy)
@@ -106,10 +117,6 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         preflight = step(
             "Render and preflight only the exact qualified task executor",
             "Deploy only the preflight-cleared exact task executor",
-        )
-        deployment = step(
-            "Deploy only the preflight-cleared exact task executor",
-            "Reserve cleanup before State can become running",
         )
         self.assertIn("worker-preflight.json", preflight)
         self.assertIn("container-applications-before.json", preflight)
@@ -221,6 +228,9 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         ):
             self.assertIn(value, cleanup)
         self.assertIn("shred --remove", cleanup)
+        self.assertIn("historical-private-state-reader", cleanup)
+        self.assertIn("historical-private-state-known-hosts", cleanup)
+        self.assertIn("config --unset-all core.sshCommand", cleanup)
         self.assertIn("rm -rf audit state", cleanup)
         self.assertIn("test ! -e \"$RUNNER_TEMP/archive-plaintext.tar\"", cleanup)
         build = step(
@@ -254,7 +264,7 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
             "Delete the terminal task's temporary executor"
         )])
 
-    def test_preexisting_collision_is_never_claimed_by_teardown(self) -> None:
+    def test_only_exact_owned_orphans_and_this_runs_deploy_are_deleted(self) -> None:
         preflight = step(
             "Render and preflight only the exact qualified task executor",
             "Deploy only the preflight-cleared exact task executor",
@@ -267,7 +277,16 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
             "Delete an executor whose State start never committed",
             "Destroy all private material, credentials, and temporary refs",
         )
-        self.assertNotIn("delete_historical_private_executor", preflight)
+        self.assertIn("verified-orphan-collision", preflight)
+        self.assertIn("worker-settings.json", preflight)
+        self.assertIn("worker-deployments.json", preflight)
+        self.assertIn("worker-version.json", preflight)
+        self.assertIn("executor_ownership_tag == $ownership", preflight)
+        self.assertIn("expected_replay_task_id == $task", preflight)
+        self.assertIn("$matches[0].image == $image", preflight)
+        ownership = preflight.index("verified-orphan-collision")
+        orphan_delete = preflight.index("delete_historical_private_executor")
+        self.assertLess(ownership, orphan_delete)
         self.assertNotIn("executor-deploy-attempted", preflight)
         self.assertIn(": > \"$RUNNER_TEMP/executor-deploy-attempted\"", deployment)
         self.assertIn("steps.resource_preflight.outputs.cleared == 'true'", unused_delete)

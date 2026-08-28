@@ -98,6 +98,56 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
         ):
             qualification.select_candidate(MATRIX, "0" * 40, ROOT, self.source_commit)
 
+    def test_existing_immutable_tag_resumes_only_for_the_exact_image(self) -> None:
+        labels = {
+            "org.lean-eval.image-family": qualification.IMAGE_FAMILY,
+            "org.lean-eval.image-matrix-sha256": qualification.MATRIX_SHA256,
+            "org.lean-eval.image-source-commit": self.source_commit,
+            "org.lean-eval.benchmark-commit": self.entry["benchmark_commit"],
+            "org.lean-eval.image-source-closure-sha256": hashlib.sha256(
+                canonical(self.candidate)
+            ).hexdigest(),
+        }
+        config_raw = json.dumps(
+            {"config": {"Labels": labels}}, separators=(",", ":")
+        ).encode()
+        manifest_raw = json.dumps(
+            {
+                "schemaVersion": 2,
+                "config": {
+                    "digest": "sha256:" + hashlib.sha256(config_raw).hexdigest()
+                },
+                "layers": [],
+            },
+            separators=(",", ":"),
+        ).encode()
+        digest = "sha256:" + hashlib.sha256(manifest_raw).hexdigest()
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            manifest = root / "manifest.json"
+            config = root / "config.json"
+            manifest.write_bytes(manifest_raw)
+            config.write_bytes(config_raw)
+            self.assertEqual(
+                qualification.validate_registry_image(
+                    self.candidate, digest, manifest, config
+                ),
+                digest,
+            )
+            changed = json.loads(config_raw)
+            changed["config"]["Labels"][
+                "org.lean-eval.image-source-commit"
+            ] = "0" * 40
+            changed_raw = json.dumps(changed, separators=(",", ":")).encode()
+            config.write_bytes(changed_raw)
+            with self.assertRaisesRegex(
+                qualification.QualificationError,
+                "manifest does not bind|labels differ",
+            ):
+                qualification.validate_registry_image(
+                    self.candidate, digest, manifest, config
+                )
+
     def test_renderer_produces_the_final_private_profile_schema_shape(self) -> None:
         manifest = "sha256:" + "2" * 64
         workflow_sha = hashlib.sha256(WORKFLOW.read_bytes()).hexdigest()
@@ -275,6 +325,19 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
         self.assertNotIn("steps.sandbox_cleanup", deletion)
         self.assertIn("container-applications-final.json", deletion)
         self.assertNotIn("lean-eval-replay-executor.lean-eval.workers.dev", workflow)
+        self.assertIn('test "$GITHUB_REF_PROTECTED" = true', workflow)
+        self.assertIn("[.commit.sha, .protected] | @tsv", workflow)
+        self.assertLess(
+            workflow.index('test "$GITHUB_REF_PROTECTED" = true'),
+            workflow.index("CLOUDFLARE_API_TOKEN: ${{ secrets."),
+        )
+        self.assertIn("validate-registry-image", workflow)
+        self.assertIn("Exact immutable tag exists; verifying it", workflow)
+        self.assertNotIn(
+            "immutable registry tag already exists; refusing overwrite", workflow
+        )
+        self.assertIn("container-applications-deployed.json", workflow)
+        self.assertIn("$matches[0].image == $image", workflow)
 
     def test_workflow_scopes_cloudflare_and_review_write_authority(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")

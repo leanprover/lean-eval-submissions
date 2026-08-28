@@ -175,12 +175,18 @@ RUN . /tmp/image.env \
 
 FROM docker.io/cloudflare/sandbox:0.12.7-python@sha256:6dfa7301e69d3e5cd8e0404b92fd240026fe834ed7101ee29cb66337b0af0981
 
+ARG BENCHMARK_COMMIT
+ARG IMAGE_SOURCE_COMMIT
+ARG IMAGE_CLOSURE_SHA256
 USER root
 ENV HOME=/opt/lean-eval/home
 ENV ELAN_HOME=/opt/lean-eval/home/.elan
 ENV PATH=/opt/lean-eval/bin:/opt/lean-eval/home/.elan/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 LABEL org.lean-eval.image-family="lean-eval-authoritative-private-replay-v1" \
-      org.lean-eval.image-matrix-sha256="54ad4c237d08e5d0e298dfc8f752b25c89ce30e79b396a2256b4216a1c0f772c"
+      org.lean-eval.image-matrix-sha256="54ad4c237d08e5d0e298dfc8f752b25c89ce30e79b396a2256b4216a1c0f772c" \
+      org.lean-eval.image-source-commit="$IMAGE_SOURCE_COMMIT" \
+      org.lean-eval.benchmark-commit="$BENCHMARK_COMMIT" \
+      org.lean-eval.image-source-closure-sha256="$IMAGE_CLOSURE_SHA256"
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates curl \

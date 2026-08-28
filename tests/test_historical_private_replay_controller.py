@@ -1005,6 +1005,216 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 stale_plan, self.fixture.state, "2026-10-21T07:00:00.000Z"
             )
 
+    def test_unrelated_remote_append_rebinds_only_latest_state_cas_metadata(self) -> None:
+        plan = self.fixture.plan()
+        with tempfile.TemporaryDirectory() as raw:
+            bare = pathlib.Path(raw) / "state.git"
+            writer = pathlib.Path(raw) / "writer"
+            subprocess.run(["git", "init", "--bare", "-q", str(bare)], check=True)
+            subprocess.run(
+                [
+                    "git", "-C", str(self.fixture.state), "push", "--quiet",
+                    str(bare), "HEAD:refs/heads/main",
+                ],
+                check=True,
+            )
+            remote = str(bare)
+            controller.REPOSITORY_REMOTES[
+                "leanprover/lean-eval-state"
+            ].add(remote)
+            try:
+                subprocess.run(
+                    [
+                        "git", "-C", str(self.fixture.state), "remote", "set-url",
+                        "origin", remote,
+                    ],
+                    check=True,
+                )
+                subprocess.run(
+                    ["git", "clone", "--quiet", "--branch", "main", remote, str(writer)],
+                    check=True,
+                )
+                (writer / "unrelated-live-intake-marker").write_text(
+                    "queue-neutral\n", encoding="utf-8"
+                )
+                unrelated_head = self.fixture.commit_in(
+                    writer, "Append unrelated State history"
+                )
+                subprocess.run(
+                    [
+                        "git", "-C", str(writer), "push", "--quiet", remote,
+                        "HEAD:refs/heads/main",
+                    ],
+                    check=True,
+                )
+                self.assertEqual(
+                    subprocess.run(
+                        ["git", "-C", str(self.fixture.state), "rev-parse", "HEAD"],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    ).stdout.strip(),
+                    plan["state"]["expected_head"],
+                )
+                self.assertEqual(
+                    controller.refresh_protected_state(self.fixture.state),
+                    unrelated_head,
+                )
+                rebound = controller.rebind_plan_to_current_state(
+                    plan, self.fixture.state
+                )
+                self.assertEqual(rebound["task"], plan["task"])
+                self.assertEqual(rebound["execution_plan"], plan["execution_plan"])
+                self.assertEqual(rebound["state"]["expected_head"], unrelated_head)
+            finally:
+                controller.REPOSITORY_REMOTES[
+                    "leanprover/lean-eval-state"
+                ].discard(remote)
+
+    def test_url_push_stale_tracking_ref_is_refreshed_and_terminalization_wins(self) -> None:
+        plan = self.fixture.plan()
+        started = controller.started_candidate(
+            plan,
+            self.fixture.state,
+            "2026-10-21T07:00:00.000Z",
+            random_bytes=b"\x08" * 10,
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            bare = pathlib.Path(raw) / "state.git"
+            writer = pathlib.Path(raw) / "writer"
+            subprocess.run(["git", "init", "--bare", "-q", str(bare)], check=True)
+            subprocess.run(
+                [
+                    "git", "-C", str(self.fixture.state), "push", "--quiet",
+                    str(bare), "HEAD:refs/heads/main",
+                ],
+                check=True,
+            )
+            remote = str(bare)
+            controller.REPOSITORY_REMOTES[
+                "leanprover/lean-eval-state"
+            ].add(remote)
+            try:
+                subprocess.run(
+                    [
+                        "git", "-C", str(self.fixture.state), "remote", "set-url",
+                        "origin", remote,
+                    ],
+                    check=True,
+                )
+                subprocess.run(
+                    ["git", "clone", "--quiet", "--branch", "main", remote, str(writer)],
+                    check=True,
+                )
+                event_path = (
+                    writer / "events" / started["event"]["event_id"][:2]
+                    / f"{started['event']['event_id']}.json"
+                )
+                event_path.parent.mkdir(parents=True, exist_ok=True)
+                event_path.write_bytes(
+                    controller.state_canonical_bytes(started["event"])
+                )
+                started_head = self.fixture.commit_in(writer, "Push start by URL")
+                subprocess.run(
+                    [
+                        "git", "-C", str(writer), "push", "--quiet", remote,
+                        "HEAD:refs/heads/main",
+                    ],
+                    check=True,
+                )
+                self.assertEqual(
+                    subprocess.run(
+                        [
+                            "git", "-C", str(self.fixture.state), "rev-parse",
+                            "refs/remotes/origin/main",
+                        ],
+                        check=True,
+                        capture_output=True,
+                        text=True,
+                    ).stdout.strip(),
+                    plan["state"]["expected_head"],
+                )
+                self.assertEqual(
+                    controller.refresh_protected_state(self.fixture.state),
+                    started_head,
+                )
+                proof = controller.current_running_proof(
+                    plan, started, self.fixture.state
+                )
+                self.assertEqual(proof["started_event_id"], started["event"]["event_id"])
+
+                (writer / "unrelated-live-intake-marker").write_text(
+                    "after-start\n", encoding="utf-8"
+                )
+                unrelated_head = self.fixture.commit_in(
+                    writer, "Append unrelated State history after start"
+                )
+                subprocess.run(
+                    [
+                        "git", "-C", str(writer), "push", "--quiet", remote,
+                        "HEAD:refs/heads/main",
+                    ],
+                    check=True,
+                )
+                self.assertEqual(
+                    controller.refresh_protected_state(self.fixture.state),
+                    unrelated_head,
+                )
+                controller.current_running_proof(plan, started, self.fixture.state)
+
+                verdict = {
+                    "schema_version": 1,
+                    "replay_task_id": self.fixture.task["replay_task_id"],
+                    "attempt": 1,
+                    "execution_outcome": "failed",
+                    "checker_outcome": None,
+                    "failure_reason": "runner_lost",
+                    "statistics": None,
+                }
+                terminal = controller.terminal_candidate(
+                    plan,
+                    started,
+                    verdict,
+                    self.fixture.state,
+                    "2026-10-21T07:00:01.000Z",
+                    random_bytes=b"\x09" * 10,
+                )
+                self.assertEqual(terminal["expected_head"], unrelated_head)
+                terminal_path = (
+                    writer / "events" / terminal["event"]["event_id"][:2]
+                    / f"{terminal['event']['event_id']}.json"
+                )
+                terminal_path.parent.mkdir(parents=True, exist_ok=True)
+                terminal_path.write_bytes(
+                    controller.state_canonical_bytes(terminal["event"])
+                )
+                terminal_head = self.fixture.commit_in(
+                    writer, "Terminalize exact running replay"
+                )
+                subprocess.run(
+                    [
+                        "git", "-C", str(writer), "push", "--quiet", remote,
+                        "HEAD:refs/heads/main",
+                    ],
+                    check=True,
+                )
+                controller.refresh_protected_state(self.fixture.state)
+                committed = controller.terminal_committed_proof(
+                    plan, started, terminal, self.fixture.state
+                )
+                self.assertEqual(committed["state_head"], terminal_head)
+                with self.assertRaisesRegex(
+                    controller.HistoricalPrivateReplayControllerError,
+                    "not the unique current running private replay",
+                ):
+                    controller.current_running_proof(
+                        plan, started, self.fixture.state
+                    )
+            finally:
+                controller.REPOSITORY_REMOTES[
+                    "leanprover/lean-eval-state"
+                ].discard(remote)
+
     def test_fourth_attempt_is_terminal_and_fifth_attempt_is_refused(self) -> None:
         queue = copy.deepcopy(self.fixture.queue)
         queue["tasks"][0].update(
