@@ -473,6 +473,29 @@
         "ref": "c1e504a3acce2da2ee77054ca45e6c251b143545",
         "repo": "kim-em/lean-eval-intake-fixture"
       }
+    },
+    {
+      "accepted_at": "2026-08-28T01:08:11Z",
+      "benchmark_commit": "99982448e0f3bc74714ec334d50eb7f7b8478ae5",
+      "declared_model": "LeanEval launch browser staging smoke",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a045bc-aca1-7805-9951-e6ddcca66534"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "harness": "bounded staging lifecycle smoke",
+        "human_involvement": "Selected and submitted by the staging operator",
+        "web_access": false
+      },
+      "result_id": "r2_99691cbadd8d50598a2b25646d3086a855a242702866c9efa007236129ed6cc2",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c1e504a3acce2da2ee77054ca45e6c251b143545",
+        "repo": "kim-em/lean-eval-intake-fixture"
+      }
     }
   ],
   "schema_version": 2,
