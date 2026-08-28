@@ -366,6 +366,29 @@
         "ref": "c82122b6741bf68a344a4f480bb0bf9031f84083",
         "repo": "mlgraham/lean-eval-coc"
       }
+    },
+    {
+      "accepted_at": "2026-08-28T15:23:40Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (Claude Fable 5)",
+      "intake": {
+        "issue_number": 1474,
+        "kind": "issue"
+      },
+      "problem_id": "dimitrov",
+      "production_metadata": {
+        "production_description": "Original proof of dimitrov (Dimitrov's refined form of the Schinzel–Zassenhaus conjecture;\nMcKee–Smyth, Around the Unit Circle, Theorem 4.1). Claude Opus 5 (Claude Code), under human\ndirection, from the Challenge, Mathlib source search, the published literature, and compiler\nfeedback only. No lean-eval solution was consulted; none exists for this problem.\n\n86 modules, 13,167 lines, no `sorry`; `#print axioms dimitrov` reports exactly propext,\nClassical.choice, Quot.sound. No vendored or third-party code — every line is original to this\nsubmission. Mathlib pinned at 6f1ef4e5dd604a435bddba4747b13970cd65d2a1, toolchain v4.33.0.\nVerified from a fresh clone: `lake exe cache get && lake build` completes 8798 jobs, and the\n`pp.all` type of the proved theorem is identical to that of Challenge.dimitrov.\n\nMethod, in the order the obstructions fell:\n\n- The Archimedean input is supplied by formalising the Konyagin–Lev conjecture (2003) from\n  fedja's MathOverflow proof — Jensen's formula, the maximum principle, log-concavity and a\n  rearrangement — rather than by Dubinin's theorem, to which it is equivalent.\n- Eremenko's explicit hedgehog Riemann map is identified with the tree's own `lift`, so the\n  exterior map needs no branch surgery; univalence follows from the Noshiro–Warschawski\n  criterion in the log coordinate, where the exterior is a convex half-plane.\n- The remaining geometric input — that the max–min arm configuration equalises — is proved by a\n  polynomial root count on cotangent rows, since Mathlib has no Brouwer, no topological degree\n  and no total positivity. Writing cot((θ−x)/2) in the circle variable turns a vanishing\n  combination of active rows into a polynomial identity with more roots than its degree.\n- The capacity-comparison layer is then unnecessary: the hedgehog is shown to sit inside\n  house(α)^4 · 4^(−1/N) · (an omitted set of an exterior map), whose conformal map is an explicit\n  formula of derivative exactly that factor, so the Pólya rationality argument runs there and no\n  Riemann mapping theorem is invoked anywhere.",
+        "solution_publication_date": "2026-08-27",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_67557c6c16ecace1e7087bc01575772bf549b8fad53fdd6d6c8252f75650ca19",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "661e66a9fb0830eea5084f2b6ca88a10813749df",
+        "repo": "mlgraham/lean-eval-dimitrov-submission"
+      }
     }
   ],
   "schema_version": 2,
