@@ -1454,6 +1454,7 @@ def terminal_committed_proof(
             "terminal candidate differs from the exact started private replay"
         )
     head = _verify_state_event(state_root, event)
+    _verify_materialized_terminal_task(state_root, head, event)
     try:
         subprocess.run(
             [
@@ -1490,6 +1491,144 @@ def terminal_committed_proof(
         "terminal_event_id": event["event_id"],
         "replay_task_id": plan["task"]["replay_task_id"],
         "attempt": expected_attempt,
+    }
+
+
+def _verify_materialized_terminal_task(
+    state_root: pathlib.Path,
+    event_head: str,
+    event: dict[str, Any],
+) -> None:
+    """Bind an exact terminal event to the protected materialized queue."""
+
+    queue, _, queue_head = load_state_queue(state_root)
+    if queue_head != event_head:
+        raise HistoricalPrivateReplayControllerError(
+            "protected State changed during terminal materialization"
+        )
+    task_id = event["subject_id"]
+    matching = [
+        task for task in queue["tasks"] if task.get("replay_task_id") == task_id
+    ]
+    payload = _object(event.get("payload"), "terminal State event payload")
+    retryable_failure = (
+        event.get("event_type") == "replay.failed"
+        and payload.get("retryable") is True
+    )
+    if not retryable_failure:
+        if matching:
+            raise HistoricalPrivateReplayControllerError(
+                "terminal private replay unexpectedly remains queueable"
+            )
+        return
+    if len(matching) != 1:
+        raise HistoricalPrivateReplayControllerError(
+            "retryable terminal private replay is not uniquely materialized"
+        )
+    task = matching[0]
+    if (
+        task.get("status") != "failed"
+        or task.get("attempt") != payload.get("attempt")
+        or task.get("reason_code") != payload.get("reason_code")
+        or task.get("retryable") is not True
+        or task.get("event_id") != event.get("event_id")
+        or task.get("occurred_at") != event.get("occurred_at")
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "retryable terminal event differs from its materialized task"
+        )
+
+
+def recovery_committed_proof(
+    recovery_candidate_value: Any,
+    state_root: pathlib.Path,
+) -> dict[str, Any]:
+    """Prove an exact abandoned-run terminal event in fresh protected State."""
+
+    candidate = _object(recovery_candidate_value, "recovery candidate")
+    _fields(candidate, {"schema_version", "kind", "append"}, "recovery candidate")
+    append = _object(candidate.get("append"), "recovery append candidate")
+    _fields(
+        append,
+        {"schema_version", "kind", "state_repository", "expected_head", "event"},
+        "recovery append candidate",
+    )
+    event = _object(append.get("event"), "recovery State event")
+    payload = _object(event.get("payload"), "recovery State event payload")
+    _fields(
+        event,
+        {
+            "schema_version", "event_id", "event_type", "occurred_at",
+            "subject_id", "causation_event_id", "actor", "payload",
+        },
+        "recovery State event",
+    )
+    _fields(
+        payload,
+        {"attempt", "reason_code", "retryable"},
+        "recovery State event payload",
+    )
+    replay_task_id = _match(
+        REPLAY_ID, event.get("subject_id"), "recovery replay task id"
+    )
+    attempt = _integer(payload.get("attempt"), "recovery attempt", 1)
+    if (
+        candidate["schema_version"] != 1
+        or candidate["kind"] != "failed"
+        or append["schema_version"] != 1
+        or append["kind"] != "state_append_candidate"
+        or append["state_repository"]
+        != _state_repository(_state_environment(state_root))
+        or COMMIT.fullmatch(str(append.get("expected_head"))) is None
+        or event.get("event_type") != "replay.failed"
+        or event.get("actor") != {"kind": "system"}
+        or UUID7.fullmatch(str(event.get("causation_event_id"))) is None
+        or UUID7.fullmatch(str(event.get("event_id"))) is None
+        or _timestamp(event.get("occurred_at"), "recovery occurred_at") is None
+        or payload.get("reason_code") != "runner_lost"
+        or payload.get("retryable") is not (attempt < MAX_REPLAY_ATTEMPTS)
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "recovery candidate is not an abandoned-run terminal event"
+        )
+    head = _verify_state_event(state_root, event)
+    _verify_materialized_terminal_task(state_root, head, event)
+    try:
+        subprocess.run(
+            [
+                "git", "-C", str(state_root), "merge-base", "--is-ancestor",
+                append["expected_head"], head,
+            ],
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise HistoricalPrivateReplayControllerError(
+            "recovery CAS parent is not protected State ancestry"
+        ) from error
+    running = current_historical_running(
+        state_root / "events",
+        state_validated=True,
+        authority_event_type=AUTHORITY_EVENT_TYPE,
+    )
+    if any(
+        item.get("replay_task_id") == replay_task_id
+        and item.get("attempt") == attempt
+        for item in running
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "recovered private replay remains current-running"
+        )
+    return {
+        "schema_version": 1,
+        "kind": "historical_private_recovery_committed_proof",
+        "state_repository": append["state_repository"],
+        "state_head": head,
+        "terminal_event_id": event["event_id"],
+        "replay_task_id": replay_task_id,
+        "attempt": attempt,
     }
 
 
@@ -1752,6 +1891,12 @@ def parser() -> argparse.ArgumentParser:
     )
     verify_terminal.add_argument("--state-root", required=True, type=pathlib.Path)
     verify_terminal.add_argument("--output", required=True, type=pathlib.Path)
+    verify_recovery = commands.add_parser("refresh-verify-recovery")
+    verify_recovery.add_argument(
+        "--recovery-candidate", required=True, type=pathlib.Path
+    )
+    verify_recovery.add_argument("--state-root", required=True, type=pathlib.Path)
+    verify_recovery.add_argument("--output", required=True, type=pathlib.Path)
     unwrap = commands.add_parser("prepare-unwrap")
     for name in ("plan", "state-root", "started-candidate", "audit-root", "output"):
         unwrap.add_argument(f"--{name}", required=True, type=pathlib.Path)
@@ -1877,6 +2022,15 @@ def main() -> int:
                 terminal_committed_proof(
                     plan, started, terminal_value, args.state_root
                 ),
+            )
+        elif args.command == "refresh-verify-recovery":
+            recovery_value, _ = _load_state_canonical(
+                args.recovery_candidate, "recovery candidate"
+            )
+            refresh_protected_state(args.state_root)
+            _write(
+                args.output,
+                recovery_committed_proof(recovery_value, args.state_root),
             )
         elif args.command == "prepare-unwrap":
             plan, _ = _load_canonical(args.plan, "historical private plan")

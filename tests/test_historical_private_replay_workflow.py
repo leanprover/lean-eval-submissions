@@ -18,6 +18,9 @@ CONTROLLER = (
 RESOURCE_DELETE = (
     ROOT / "scripts/delete_historical_private_executor"
 ).read_text(encoding="utf-8")
+OWNERSHIP = (
+    ROOT / "scripts/verify_historical_private_executor_ownership.py"
+).read_text(encoding="utf-8")
 
 
 def step(name: str, following_name: str) -> str:
@@ -72,6 +75,41 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertGreaterEqual(WORKFLOW.count("refresh-prove-running"), 8)
         self.assertNotIn("EXPECTED_STATE_HEAD", WORKFLOW)
         self.assertNotIn("STARTED_STATE_HEAD", WORKFLOW)
+
+    def test_each_append_refreshes_and_proves_its_exact_event_before_teardown(self) -> None:
+        recovery = step(
+            "Publish only a destruction-confirmed abandoned-run recovery",
+            "Delete a recovered task's temporary executor",
+        )
+        started = step(
+            "Append the exact replay.started candidate with CAS",
+            "Use the exact one-use KMS unwrap capability",
+        )
+        terminal = step(
+            "Append the exact reported terminal outcome",
+            "Attempt an explicit failure terminal after safe cleanup",
+        )
+        failure = step(
+            "Attempt an explicit failure terminal after safe cleanup",
+            "Write one redacted source-free terminal artifact",
+        )
+        for append_step, proof_command in (
+            (recovery, "refresh-verify-recovery"),
+            (started, "refresh-prove-running"),
+            (terminal, "refresh-verify-terminal"),
+            (failure, "refresh-verify-terminal"),
+        ):
+            publish = append_step.index("publish_replay_state_event")
+            proof = append_step.index(proof_command, publish)
+            ancestry = append_step.index("merge-base --is-ancestor", proof)
+            self.assertLess(publish, proof)
+            self.assertLess(proof, ancestry)
+        recovered_delete = WORKFLOW.index(
+            "Delete a recovered task's temporary executor"
+        )
+        self.assertLess(
+            WORKFLOW.index("recovery-committed-proof.json"), recovered_delete
+        )
 
     def test_abandoned_recovery_requires_exact_destruction_first(self) -> None:
         cleanup = WORKFLOW.index(
@@ -281,9 +319,12 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("worker-settings.json", preflight)
         self.assertIn("worker-deployments.json", preflight)
         self.assertIn("worker-version.json", preflight)
-        self.assertIn("executor_ownership_tag == $ownership", preflight)
-        self.assertIn("expected_replay_task_id == $task", preflight)
-        self.assertIn("$matches[0].image == $image", preflight)
+        self.assertIn("verify_historical_private_executor_ownership.py", preflight)
+        self.assertIn("Refusing to delete an application-only collision", preflight)
+        self.assertIn("settings_inventory != expected_inventory", OWNERSHIP)
+        self.assertIn("version_inventory != expected_inventory", OWNERSHIP)
+        self.assertIn("health != expected_health", OWNERSHIP)
+        self.assertIn("configuration != expected_configuration", OWNERSHIP)
         ownership = preflight.index("verified-orphan-collision")
         orphan_delete = preflight.index("delete_historical_private_executor")
         self.assertLess(ownership, orphan_delete)

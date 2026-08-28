@@ -66,8 +66,10 @@ new_commit=$(git -C "$state_root" rev-parse HEAD)
 
 key_file=$(mktemp "$RUNNER_TEMP/replay-state-writer.XXXXXX")
 known_hosts=$(mktemp "$RUNNER_TEMP/replay-state-known-hosts.XXXXXX")
+reconciled_ref=refs/replay-controller/reconciled-main
 cleanup() {
   unset STATE_WRITE_KEY
+  git -C "$state_root" update-ref -d "$reconciled_ref" >/dev/null 2>&1 || true
   if [ -f "$key_file" ]; then shred --remove "$key_file"; fi
   if [ -f "$known_hosts" ]; then shred --remove "$known_hosts"; fi
 }
@@ -80,11 +82,22 @@ printf '%s\n' \
   'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
   > "$known_hosts"
 ssh_command="ssh -i $key_file -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3"
-if ! GIT_SSH_COMMAND="$ssh_command" git -C "$state_root" push --porcelain "$remote" HEAD:refs/heads/main >&2; then
-  remote_head=$(GIT_SSH_COMMAND="$ssh_command" git ls-remote "$remote" refs/heads/main | cut -f1 || true)
-  if [ "$remote_head" != "$new_commit" ]; then
-    echo "State reference update failed and the new commit is not the remote head" >&2
-    exit 1
-  fi
+git -C "$state_root" update-ref -d "$reconciled_ref"
+# A transport error can hide a successful reference update.  Always fetch the
+# authoritative reference with the same isolated writer identity: equality is
+# insufficient because another valid State append may already follow ours.
+GIT_SSH_COMMAND="$ssh_command" \
+  git -C "$state_root" push --porcelain "$remote" HEAD:refs/heads/main >&2 || true
+if ! GIT_SSH_COMMAND="$ssh_command" git -C "$state_root" fetch \
+  --no-tags "$remote" "+refs/heads/main:$reconciled_ref" >&2; then
+  echo "State main could not be fetched after the reference update attempt" >&2
+  exit 1
 fi
-printf '%s\n' "$new_commit"
+remote_head=$(git -C "$state_root" rev-parse "$reconciled_ref")
+if ! git -C "$state_root" merge-base --is-ancestor "$new_commit" "$remote_head"; then
+  echo "State reference update was not reconciled into fetched remote main" >&2
+  exit 1
+fi
+git -C "$state_root" merge --ff-only "$remote_head" >/dev/null
+git -C "$state_root" update-ref -d "$reconciled_ref"
+printf '%s\n' "$remote_head"

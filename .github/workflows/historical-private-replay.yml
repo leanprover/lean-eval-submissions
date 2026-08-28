@@ -231,10 +231,16 @@ jobs:
               --message "Recover abandoned historical private replay"); then
               mv "$candidate" "$RUNNER_TEMP/recovery-confirmed.json"
               mv "$event" "$RUNNER_TEMP/recovery-event.json"
-              python scripts/historical_private_replay_controller.py refresh-state \
-                --state-root state --output "$RUNNER_TEMP/refreshed-state.json"
+              python scripts/historical_private_replay_controller.py \
+                refresh-verify-recovery \
+                --recovery-candidate "$RUNNER_TEMP/recovery-confirmed.json" \
+                --state-root state \
+                --output "$RUNNER_TEMP/recovery-committed-proof.json"
               git -C state merge-base --is-ancestor "$state_head" \
-                "$(jq -er .state_head "$RUNNER_TEMP/refreshed-state.json")"
+                "$(jq -er .state_head "$RUNNER_TEMP/recovery-committed-proof.json")"
+              test "$(jq -er .terminal_event_id \
+                "$RUNNER_TEMP/recovery-committed-proof.json")" = \
+                "$(jq -er .event.event_id "$RUNNER_TEMP/recovery-confirmed.json")"
               published=true
               break
             fi
@@ -329,35 +335,17 @@ jobs:
             '[.[] | select(.name == $name)] | length' \
             "$RUNNER_TEMP/container-applications-before.json")
           test "$application_matches" -le 1
+          if test "$code" = 404 && test "$application_matches" = 1; then
+            echo 'Refusing to delete an application-only collision without Worker ownership.' >&2
+            exit 1
+          fi
           if test "$code" = 200 || test "$application_matches" = 1; then
-            expected_image=$(jq -er .containers[0].image "$config")
             if test "$code" = 200; then
-              jq -e --arg worker "$worker" \
-                '.success == true and .result.id == $worker and
-                 .result.default_environment.environment == "production" and
-                 (.result.default_environment.script.tag | type == "string" and length > 0)' \
-                "$RUNNER_TEMP/worker-preflight.json" >/dev/null
-              worker_tag=$(jq -er .result.default_environment.script.tag \
-                "$RUNNER_TEMP/worker-preflight.json")
               curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
                 --max-time 30 \
                 --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
                 "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker/settings" \
                 --output "$RUNNER_TEMP/worker-settings.json"
-              jq -e --slurpfile config "$config" '
-                . as $root |
-                .success == true and (.result.bindings | type == "array") and
-                .result.compatibility_date == $config[0].compatibility_date and
-                (.result.compatibility_flags | sort) ==
-                  ($config[0].compatibility_flags | sort) and
-                ([$root.result.bindings[] | select(.type == "plain_text") | .name]
-                  | sort) == ([$config[0].vars | keys[]] | sort) and
-                all($config[0].vars | to_entries[];
-                  . as $expected |
-                  any($root.result.bindings[];
-                    .type == "plain_text" and .name == $expected.key and
-                    .text == ($expected.value | tostring)))
-              ' "$RUNNER_TEMP/worker-settings.json" >/dev/null
               curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
                 --max-time 30 \
                 --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
@@ -374,43 +362,27 @@ jobs:
                 --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
                 "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$worker/versions/$active_version" \
                 --output "$RUNNER_TEMP/worker-version.json"
-              jq -e --arg version "$active_version" --arg tag "$worker_tag" '
-                .success == true and .result.id == $version and
-                (.result.metadata.created_on | type == "string") and
-                .result.annotations["workers/tag"] == $tag
-              ' "$RUNNER_TEMP/worker-version.json" >/dev/null
               curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
                 --max-time 30 "https://$worker.lean-eval.workers.dev/healthz" \
                 --output "$RUNNER_TEMP/orphan-health.json"
-              jq -e --arg commit "$GITHUB_SHA" \
-                --arg profile "$(jq -r .task.execution_profile_digest "$RUNNER_TEMP/private-replay-plan.json")" \
-                --arg measurement "$(jq -r .task.measurement_config_digest "$RUNNER_TEMP/private-replay-plan.json")" \
-                --arg image "$(jq -r .execution_plan.request.execution_profile.vm_image_digest "$RUNNER_TEMP/private-replay-plan.json")" \
-                --arg task "$(jq -r .task.replay_task_id "$RUNNER_TEMP/private-replay-plan.json")" \
-                --arg attempt "$(jq -r .execution_plan.started_transition.payload.attempt "$RUNNER_TEMP/private-replay-plan.json")" \
-                --arg ownership "$(jq -r .vars.EXECUTOR_OWNERSHIP_TAG "$config")" '
-                  .status == "ok" and .service == "lean-eval-replay-executor" and
-                  .environment == "historical-private-replay" and
-                  .deployed_commit == $commit and .replay_enabled == true and
-                  .historical_public_replay_enabled == false and
-                  .staging_acceptance_enabled == false and
-                  .reviewed_execution_profile_digest == $profile and
-                  .reviewed_measurement_config_digest == $measurement and
-                  .reviewed_vm_image_digest == $image and
-                  .expected_replay_task_id == $task and
-                  .expected_replay_attempt == $attempt and
-                  .executor_ownership_tag == $ownership
-                ' "$RUNNER_TEMP/orphan-health.json" >/dev/null
-            fi
-            if test "$application_matches" = 1; then
-              jq -e --arg name "$application" --arg image "$expected_image" '
-                [.[] | select(.name == $name)] as $matches |
-                ($matches | length) == 1 and
-                $matches[0].image == $image and
-                ($matches[0].version != null) and
-                ($matches[0].created_at | type == "string" and
-                  test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T"))
-              ' "$RUNNER_TEMP/container-applications-before.json" >/dev/null
+              python scripts/verify_historical_private_executor_ownership.py \
+                --config "$config" \
+                --worker-service "$RUNNER_TEMP/worker-preflight.json" \
+                --worker-settings "$RUNNER_TEMP/worker-settings.json" \
+                --worker-deployments "$RUNNER_TEMP/worker-deployments.json" \
+                --worker-version "$RUNNER_TEMP/worker-version.json" \
+                --worker-health "$RUNNER_TEMP/orphan-health.json" \
+                --container-applications \
+                  "$RUNNER_TEMP/container-applications-before.json" \
+                --output "$RUNNER_TEMP/orphan-ownership-proof.json"
+              jq -e --arg worker "$worker" --arg application "$application" \
+                --argjson application_owned "$application_matches" '
+                .schema_version == 1 and
+                .kind == "historical_private_executor_ownership_proof" and
+                .worker_name == $worker and .application_name == $application and
+                .worker_owned == true and
+                .application_owned == ($application_owned == 1)
+              ' "$RUNNER_TEMP/orphan-ownership-proof.json" >/dev/null
             fi
             python scripts/historical_private_replay_controller.py refresh-rebind-plan \
               --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \

@@ -401,8 +401,30 @@ class Fixture:
             "    queue = json.loads((args.root / 'fixture-queue.json').read_text())\n"
             "    events = [json.loads(path.read_text()) for path in "
             "sorted((args.root / 'events').glob('*/*.json'))]\n"
-            "    if any(event['event_type'] == 'replay.started' for event in events):\n"
-            "        queue['tasks'] = []\n"
+            "    task = queue['tasks'][0] if queue['tasks'] else None\n"
+            "    if task is not None:\n"
+            "        for event in events:\n"
+            "            if event['subject_id'] != task['replay_task_id']:\n"
+            "                continue\n"
+            "            kind = event['event_type']\n"
+            "            payload = event['payload']\n"
+            "            if kind == 'replay.started':\n"
+            "                task.update(status='running', **payload)\n"
+            "                task.pop('reason_code', None)\n"
+            "                task.pop('retryable', None)\n"
+            "            elif kind == 'replay.failed':\n"
+            "                task.update(status='failed', **payload)\n"
+            "                task.pop('runner_profile', None)\n"
+            "            elif kind in {'replay.accepted', 'replay.rejected', "
+            "'replay.unavailable'}:\n"
+            "                task.update(status=kind.split('.')[1], **payload)\n"
+            "                task.pop('runner_profile', None)\n"
+            "            else:\n"
+            "                continue\n"
+            "            task.update(event_id=event['event_id'], "
+            "occurred_at=event['occurred_at'])\n"
+            "        queue['tasks'] = [task] if (task['status'] == 'queued' or "
+            "(task['status'] == 'failed' and task.get('retryable') is True)) else []\n"
             "    (args.output / 'historical-private-replay-queue.json').write_text("
             "json.dumps(queue, ensure_ascii=True, indent=2, sort_keys=True) + '\\n')\n",
             encoding="utf-8",
@@ -1214,6 +1236,45 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 controller.REPOSITORY_REMOTES[
                     "leanprover/lean-eval-state"
                 ].discard(remote)
+
+    def test_recovery_proof_accepts_exact_event_below_unrelated_descendant(self) -> None:
+        plan = self.fixture.plan()
+        started = controller.started_candidate(
+            plan,
+            self.fixture.state,
+            "2026-10-21T07:00:00.000Z",
+            random_bytes=b"\x11" * 10,
+        )
+        self.fixture.commit_state_event(started["event"])
+        confirmation = {
+            "schema_version": 1,
+            "replay_task_id": self.fixture.task["replay_task_id"],
+            "attempt": 1,
+            "destruction": "confirmed",
+        }
+        recovery = controller.recover_running(
+            self.fixture.state,
+            "2026-10-21T15:00:01.000Z",
+            cleanup_confirmation_value=confirmation,
+            random_bytes=b"\x12" * 10,
+        )
+        self.assertEqual(recovery["kind"], "failed")
+        self.fixture.commit_state_event(recovery["append"]["event"])
+        (self.fixture.state / "unrelated-live-intake-marker").write_text(
+            "after-recovery\n", encoding="utf-8"
+        )
+        descendant = self.fixture.commit_in(
+            self.fixture.state, "Append unrelated State history after recovery"
+        )
+        self.fixture.state_head = descendant
+        self.fixture.set_state_upstream()
+        proof = controller.recovery_committed_proof(
+            recovery, self.fixture.state
+        )
+        self.assertEqual(proof["state_head"], descendant)
+        self.assertEqual(
+            proof["terminal_event_id"], recovery["append"]["event"]["event_id"]
+        )
 
     def test_fourth_attempt_is_terminal_and_fifth_attempt_is_refused(self) -> None:
         queue = copy.deepcopy(self.fixture.queue)
