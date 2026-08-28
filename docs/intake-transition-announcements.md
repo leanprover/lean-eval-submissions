@@ -51,7 +51,6 @@ Complete this evidence block before proposing closure:
 server enabled at: <UTC timestamp>
 planned overlap end: <UTC timestamp>
 selected closure date: <UTC timestamp>
-shorter-than-four-weeks decision and prior announcement: <link or N/A>
 unresolved severity-high server incidents: <zero or blocking links>
 five most active submitters in preceding 60 days: <private operator record>
 their server submission or no-dependency confirmation: <5/5 evidence summary>
@@ -65,8 +64,7 @@ maintainer approval to close: <link>
 
 Closure is allowed only when all of the following are true:
 
-1. four weeks have elapsed, unless a maintainer selected and announced a
-   shorter overlap before closure;
+1. at least four weeks have elapsed;
 2. no severity-high server incident remains unresolved;
 3. each of the five most active submitters from the preceding 60 days has made
    a server-path submission or explicitly confirmed no migration dependency;
