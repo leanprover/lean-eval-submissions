@@ -34,7 +34,11 @@ const BROWSER_FIELD_NAMES = [
   "production_metadata",
 ] as const;
 
-export function browserPage(environment: "staging" | "production", intakeEnabled: boolean): Response {
+export function browserPage(
+  environment: "staging" | "production",
+  intakeEnabled: boolean,
+  releaseOptOutEnabled: boolean,
+): Response {
   const title = environment === "staging" ? "LeanEval staging intake" : "LeanEval submissions";
   const status = intakeEnabled
     ? `<p class="notice">${escapeHtml(environment)} intake is enabled. Sign in with GitHub, review every field, and submit.</p>`
@@ -68,6 +72,15 @@ export function browserPage(environment: "staging" | "production", intakeEnabled
       </button>
     </form>
     <pre id="result" role="status" aria-live="polite"></pre>
+    ${releaseOptOutEnabled ? `<section id="release-opt-out" hidden>
+      <h2>Release choice</h2>
+      <p id="release-opt-out-help">This submission is scheduled for LeanEval automatic source release if accepted. Opting out changes its publication choice to withheld.</p>
+      <button id="release-opt-out-button" type="button" aria-busy="false" aria-describedby="release-opt-out-help">
+        <span id="release-opt-out-label">Opt out of LeanEval source release</span>
+        <span class="spinner" aria-hidden="true"></span>
+      </button>
+      <p id="release-opt-out-status" role="status" aria-live="polite"></p>
+    </section>` : ""}
   ` : "";
   const body = `<!doctype html>
 <html lang="en">
@@ -100,7 +113,7 @@ export function browserPage(environment: "staging" | "production", intakeEnabled
   <h1>${escapeHtml(title)}</h1>
   ${status}
   ${form}
-  ${intakeEnabled ? '<script src="/intake.js?v=auth-spinner-v1" defer></script>' : ""}
+  ${intakeEnabled ? '<script src="/intake.js?v=release-opt-out-v1" defer></script>' : ""}
 </body>
 </html>`;
   return new Response(body, { headers: PAGE_HEADERS });
@@ -114,8 +127,13 @@ const authStatus = document.querySelector("#auth-status");
 const oauthSignIn = document.querySelector("#oauth-sign-in");
 const submitButton = document.querySelector("#submit-button");
 const submitLabel = document.querySelector("#submit-label");
+const releaseOptOut = document.querySelector("#release-opt-out");
+const releaseOptOutButton = document.querySelector("#release-opt-out-button");
+const releaseOptOutLabel = document.querySelector("#release-opt-out-label");
+const releaseOptOutStatus = document.querySelector("#release-opt-out-status");
 const fieldNames = ${JSON.stringify(BROWSER_FIELD_NAMES)};
 const authExpiryKey = "lean-eval-github-session-expires-at";
+let releaseOptOutSubmissionId = null;
 const saved = sessionStorage.getItem("lean-eval-pending-submission");
 if (saved) {
   try {
@@ -151,6 +169,11 @@ const setSubmitting = (submitting, label) => {
   submitButton.disabled = submitting;
   submitButton.setAttribute("aria-busy", String(submitting));
   submitLabel.textContent = label;
+};
+const setReleaseOptOutPending = (pending, label) => {
+  releaseOptOutButton.disabled = pending;
+  releaseOptOutButton.setAttribute("aria-busy", String(pending));
+  releaseOptOutLabel.textContent = label;
 };
 oauthSignIn?.addEventListener("click", () => {
   saveCurrentValues();
@@ -197,9 +220,40 @@ form?.addEventListener("submit", async (event) => {
     sessionStorage.removeItem("lean-eval-pending-submission");
     setSubmitting(false, "Submission queued");
     submitButton.disabled = true;
+    if (
+      values.publication_choice === "scheduled" &&
+      typeof body.submission_id === "string" &&
+      releaseOptOut !== null &&
+      releaseOptOutStatus !== null
+    ) {
+      releaseOptOutSubmissionId = body.submission_id;
+      releaseOptOut.hidden = false;
+      releaseOptOutStatus.textContent = "LeanEval automatic source release remains scheduled.";
+    }
   } catch (error) {
     result.textContent += String.fromCharCode(10) + (error instanceof Error ? error.message : "Submission failed");
     setSubmitting(false, "Submit exact commit");
+  }
+});
+releaseOptOutButton?.addEventListener("click", async () => {
+  if (releaseOptOutSubmissionId === null) return;
+  setReleaseOptOutPending(true, "Opting out of source release…");
+  releaseOptOutStatus.textContent = "Saving release opt-out…";
+  try {
+    const response = await fetch("/api/v1/browser/submissions/" + encodeURIComponent(releaseOptOutSubmissionId) + "/publication-opt-out", {
+      method: "POST",
+      credentials: "same-origin",
+    });
+    const body = await response.json();
+    if (!response.ok || body.publication_choice !== "withheld") {
+      throw new Error("Release opt-out was rejected with HTTP " + response.status);
+    }
+    setReleaseOptOutPending(false, "Automatic source release opted out");
+    releaseOptOutButton.disabled = true;
+    releaseOptOutStatus.textContent = "LeanEval automatic source release is opted out while the publication choice remains withheld.";
+  } catch (error) {
+    setReleaseOptOutPending(false, "Opt out of LeanEval source release");
+    releaseOptOutStatus.textContent = error instanceof Error ? error.message : "Release opt-out failed";
   }
 });`;
   return new Response(script, { headers: SCRIPT_HEADERS });
