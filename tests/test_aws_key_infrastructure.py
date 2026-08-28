@@ -126,34 +126,46 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
             re.findall(r"^\s+Resource: (.+)$", policy, re.MULTILINE),
             ["!GetAtt ArchiveIdentityKey.Arn"],
         )
+        statements = policy.split("              - Effect: Allow\n")[1:]
+        self.assertEqual(len(statements), 1)
+        v2_statement = statements[0]
         self.assertIn(
-            "kms:EncryptionContext:contract: lean-eval-archive-key-v1",
-            policy,
+            "kms:EncryptionContext:contract: lean-eval-archive-key-v2",
+            v2_statement,
         )
-        context_keys = _section(
-            policy,
-            "                    kms:EncryptionContextKeys:\n",
-            '                  "Null":\n',
+        self.assertIn(
+            "kms:EncryptionContext:key_material_type: age-file-key-v1",
+            v2_statement,
         )
-        expected_context_keys = [
+        v2_context_keys = [
             "contract",
             "submission_id",
             "archive_ciphertext_sha256",
             "data_key_id",
-            "age_recipient_sha256",
+            "key_material_type",
         ]
         self.assertEqual(
-            re.findall(r"^\s+- ([a-z0-9_]+)$", context_keys, re.MULTILINE),
-            expected_context_keys,
+            re.findall(
+                r"^\s+- ([a-z0-9_]+)$",
+                _section(
+                    v2_statement,
+                    "                    kms:EncryptionContextKeys:\n",
+                    '                  "Null":\n',
+                ),
+                re.MULTILINE,
+            ),
+            v2_context_keys,
         )
         self.assertEqual(
             re.findall(
                 r"^\s+kms:EncryptionContext:([a-z0-9_]+): false$",
-                policy,
+                v2_statement,
                 re.MULTILINE,
             ),
-            expected_context_keys,
+            v2_context_keys,
         )
+        self.assertNotIn("age_recipient_sha256", v2_statement)
+        self.assertNotIn("lean-eval-archive-key-v1", policy)
         self.assertNotIn('Resource: "*"', policy)
         self.assertEqual(
             re.findall(r"^\s+Action: (\S+)$", role, re.MULTILINE),
@@ -187,6 +199,47 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
             "age_recipient_sha256",
         ):
             self.assertIn(f"kms:EncryptionContext:{name}: false", role)
+        decrypt_statements = [
+            statement
+            for statement in role.split("              - Effect: Allow\n")[1:]
+            if "Action: kms:Decrypt" in statement
+        ]
+        self.assertEqual(len(decrypt_statements), 2)
+        v1_statement, v2_statement = decrypt_statements
+        self.assertIn("lean-eval-archive-key-v1", v1_statement)
+        self.assertIn("lean-eval-archive-key-v2", v2_statement)
+        self.assertIn(
+            "kms:EncryptionContext:key_material_type: age-file-key-v1",
+            v2_statement,
+        )
+        v2_context_keys = [
+            "contract",
+            "submission_id",
+            "archive_ciphertext_sha256",
+            "data_key_id",
+            "key_material_type",
+        ]
+        self.assertEqual(
+            re.findall(
+                r"^\s+- ([a-z0-9_]+)$",
+                _section(
+                    v2_statement,
+                    "                    kms:EncryptionContextKeys:\n",
+                    '                  "Null":\n',
+                ),
+                re.MULTILINE,
+            ),
+            v2_context_keys,
+        )
+        self.assertEqual(
+            re.findall(
+                r"^\s+kms:EncryptionContext:([a-z0-9_]+): false$",
+                v2_statement,
+                re.MULTILINE,
+            ),
+            v2_context_keys,
+        )
+        self.assertNotIn("age_recipient_sha256", v2_statement)
         function = _section(self.template, "  UnwrapFunction:\n", "  ReplayInvokerRole:\n")
         # One-use is enforced atomically by DynamoDB, so correctness must not
         # depend on Lambda serialization or an account concurrency quota.

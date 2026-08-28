@@ -80,6 +80,29 @@ describe("authoritative replay boundary contract", () => {
     expect(validateReplayVerdict(zeroCounter, input).checker_outcome).toBe("accepted");
   });
 
+  it("accepts only the exact 16-byte historical file-key variant", async () => {
+    const body = await fixture();
+    body.schema_version = 2;
+    delete body.plaintext_identity_base64;
+    body.key_material_type = "age-file-key-v1";
+    body.plaintext_key_material_base64 = btoa("0123456789abcdef");
+    const expectation = body.archive_expectation as Record<string, unknown>;
+    expectation.schema_version = 2;
+    expectation.key_material_type = "age-file-key-v1";
+    const parsed = await readAuthoritativeReplayRequest(new Request("https://example.test", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }), PROFILE_DIGEST, MEASUREMENT_DIGEST, VM_IMAGE_DIGEST);
+    expect(parsed.schema_version).toBe(2);
+    if (parsed.schema_version !== 2) throw new Error("unexpected schema");
+    expect(atob(parsed.plaintext_key_material_base64)).toBe("0123456789abcdef");
+    body.plaintext_key_material_base64 = btoa("short");
+    await expect(readAuthoritativeReplayRequest(new Request("https://example.test", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }), PROFILE_DIGEST, MEASUREMENT_DIGEST, VM_IMAGE_DIGEST)).rejects.toThrow("exactly 16 bytes");
+  });
+
   it("rejects unreviewed profiles and verdict identity drift", async () => {
     await expect(readAuthoritativeReplayRequest(new Request("https://example.test", {
       method: "POST",

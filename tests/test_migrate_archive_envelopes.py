@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import hashlib
 import json
 import pathlib
@@ -9,13 +10,11 @@ import tempfile
 import unittest
 from unittest import mock
 
-
 ROOT = pathlib.Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import migrate_archive_envelopes as migration  # noqa: E402
-from key_capability_contract import archive_key_id  # noqa: E402
-
+from key_capability_contract import archive_file_key_id, archive_key_id  # noqa: E402
 
 SOURCE_COMMIT = "a" * 40
 LEGACY_PLAINTEXT = b"one exact historical source tar"
@@ -38,7 +37,9 @@ def envelope(submission_id: str, ciphertext: bytes) -> dict[str, object]:
     }
 
 
-def sidecar(schema: int, ciphertext: bytes, *, submission_id: str | None = None) -> dict[str, object]:
+def sidecar(
+    schema: int, ciphertext: bytes, *, submission_id: str | None = None
+) -> dict[str, object]:
     value: dict[str, object] = {
         "schema_version": schema,
         "submission_repo": "example/private-source",
@@ -67,12 +68,16 @@ def sidecar(schema: int, ciphertext: bytes, *, submission_id: str | None = None)
     return value
 
 
-def write_pair(root: pathlib.Path, relative: str, value: dict[str, object], ciphertext: bytes) -> None:
+def write_pair(
+    root: pathlib.Path, relative: str, value: dict[str, object], ciphertext: bytes
+) -> None:
     cipher_path = root.joinpath(*relative.split("/"))
     cipher_path.parent.mkdir(parents=True, exist_ok=True)
     cipher_path.write_bytes(ciphertext)
     sidecar_path = cipher_path.with_suffix("").with_suffix(".json")
-    sidecar_path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    sidecar_path.write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def named_workflow_steps(workflow: str) -> dict[str, str]:
@@ -129,7 +134,9 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
             self.assertEqual(first["migration_count"], 2)
             self.assertEqual(first["retained_count"], 1)
             self.assertEqual(first["retained"][0]["submission_id"], schema3_id)
-            by_schema = {entry["source_schema_version"]: entry for entry in first["entries"]}
+            by_schema = {
+                entry["source_schema_version"]: entry for entry in first["entries"]
+            }
             self.assertEqual(by_schema[2]["submission_id"], schema2_id)
             self.assertRegex(by_schema[1]["submission_id"], migration.UUID7)
             self.assertEqual(
@@ -147,19 +154,33 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
             with self.assertRaisesRegex(migration.MigrationError, "digest disagrees"):
                 migration.build_plan(root, SOURCE_COMMIT)
 
-    def test_workflow_is_manual_dry_by_default_and_stages_only_an_orphan_branch(self) -> None:
-        workflow = (
-            ROOT / ".github/workflows/migrate-archive-envelopes.yml"
-        ).read_text(encoding="utf-8")
+    def test_workflow_is_manual_dry_by_default_and_stages_normal_review_branch(
+        self,
+    ) -> None:
+        workflow = (ROOT / ".github/workflows/migrate-archive-envelopes.yml").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("workflow_dispatch:", workflow)
         self.assertIn("default: false", workflow)
         self.assertIn("environment: archive-migration-production", workflow)
         self.assertIn("secrets.AUDIT_MIGRATION_READ_KEY", workflow)
         self.assertIn("secrets.LEGACY_ARCHIVE_IDENTITY", workflow)
         self.assertIn("vars.AWS_WRAP_ROLE_ARN", workflow)
-        self.assertIn("test \"$CONFIRMATION\" = stage-envelope-migration", workflow)
-        self.assertIn("git -C audit switch --orphan archive-envelope-migration-v1", workflow)
-        self.assertIn("HEAD:refs/heads/archive-envelope-migration-v1", workflow)
+        self.assertIn(
+            "arn:aws:iam::161072922960:role/"
+            "lean-eval-archive-migration-wrap-production",
+            workflow,
+        )
+        self.assertIn('test "$CONFIRMATION" = stage-envelope-migration', workflow)
+        self.assertIn('test "$actual_count" = 439', workflow)
+        self.assertIn("--source-root audit", workflow)
+        self.assertIn(
+            "dfdcbc0da3a3526f8a26e6a69cefa41cbcd92de7608752193b742fcd92b00a67.json",
+            workflow,
+        )
+        self.assertIn("git -C audit switch -c archive-file-key-rewrap-v1", workflow)
+        self.assertIn("HEAD:refs/heads/archive-file-key-rewrap-v1", workflow)
+        self.assertNotIn("switch --orphan", workflow)
         self.assertNotIn("HEAD:main", workflow)
         self.assertNotIn("--force", workflow)
         self.assertNotIn("upload-artifact", workflow)
@@ -167,7 +188,9 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
         confirmation = workflow.index("Require explicit apply confirmation")
         dependencies = workflow.index("Install hash-locked adapter dependencies")
         aws = workflow.index("Assume only the production Encrypt role")
-        migration = workflow.index("Re-encrypt every planned object into a clean tree")
+        migration = workflow.index(
+            "Rewrap selected file keys and copy exact ciphertext bytes"
+        )
         authority_gone = workflow.index(
             "Prove decrypt and wrap authority is gone before audit write authority"
         )
@@ -175,7 +198,7 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
         writer_checkout = workflow.index(
             "Re-check out the exact audit source with branch-staging authority"
         )
-        push = workflow.index("Push only an isolated orphan review branch")
+        push = workflow.index("Push only an isolated review branch")
         self.assertLess(confirmation, dependencies)
         self.assertLess(dependencies, aws)
         self.assertLess(aws, migration)
@@ -183,18 +206,26 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
         self.assertLess(authority_gone, writer)
         self.assertLess(writer, writer_checkout)
         self.assertLess(writer_checkout, push)
-        self.assertIn('test ! -e /dev/shm/lean-eval-legacy-archive-identity', workflow)
+        exact_role = steps["Require the exact dedicated migration role"]
+        self.assertIn("AWS_WRAP_ROLE_ARN: ${{ vars.AWS_WRAP_ROLE_ARN }}", exact_role)
+        self.assertIn(
+            'test "$AWS_WRAP_ROLE_ARN" = \\\n'
+            "            arn:aws:iam::161072922960:role/"
+            "lean-eval-archive-migration-wrap-production",
+            exact_role,
+        )
+        self.assertIn("test ! -e /dev/shm/lean-eval-legacy-archive-identity", workflow)
         self.assertIn('test -z "${AWS_ACCESS_KEY_ID:-}"', workflow)
         self.assertIn("rm -rf audit\n          test ! -e audit", workflow)
-        migration_step = steps["Re-encrypt every planned object into a clean tree"]
+        migration_step = steps[
+            "Rewrap selected file keys and copy exact ciphertext bytes"
+        ]
         self.assertLess(
             migration_step.index("trap cleanup EXIT"),
             migration_step.index("printf '%s' \"$LEGACY_ARCHIVE_IDENTITY\""),
         )
         self.assertLess(
-            migration_step.index(
-                "rm -f /dev/shm/lean-eval-legacy-archive-identity"
-            ),
+            migration_step.index("rm -f /dev/shm/lean-eval-legacy-archive-identity"),
             migration_step.index("echo 'AWS_ACCESS_KEY_ID='"),
         )
         writer_checkout_step = steps[
@@ -202,13 +233,11 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
         ]
         self.assertIn("persist-credentials: false", writer_checkout_step)
         self.assertNotIn("persist-credentials: true", writer_checkout_step)
-        push_step = steps["Push only an isolated orphan review branch"]
-        self.assertIn(
-            "AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}", push_step
-        )
+        push_step = steps["Push only an isolated review branch"]
+        self.assertIn("AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}", push_step)
         self.assertIn("trap cleanup_writer EXIT", push_step)
         self.assertIn(
-            "test -n \"$AUDIT_TOKEN\"\n"
+            'test -n "$AUDIT_TOKEN"\n'
             "          audit_token=$AUDIT_TOKEN\n"
             "          unset AUDIT_TOKEN\n"
             "          git -C audit switch",
@@ -226,13 +255,13 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
         self.assertIn(
             "GIT_CONFIG_COUNT=1 \\\n"
             "          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \\\n"
-            "          GIT_CONFIG_VALUE_0=\"AUTHORIZATION: basic $audit_basic_auth\" \\\n"
+            '          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $audit_basic_auth" \\\n'
             "            git -C audit push origin "
-            "HEAD:refs/heads/archive-envelope-migration-v1",
+            "HEAD:refs/heads/archive-file-key-rewrap-v1",
             push_step,
         )
         self.assertNotIn("export GIT_CONFIG_", push_step)
-        self.assertIn('unset AUDIT_TOKEN audit_token audit_basic_auth', push_step)
+        self.assertIn("unset AUDIT_TOKEN audit_token audit_basic_auth", push_step)
         self.assertNotIn("git -C audit config --local", push_step)
         self.assertNotIn("http.https://github.com/.extraheader ||", push_step)
         post_authority = workflow[authority_gone:]
@@ -241,44 +270,61 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
         )
         self.assertGreaterEqual(post_authority.count('AWS_ACCESS_KEY_ID: ""'), 3)
 
-    def test_migrate_one_preserves_plaintext_evidence_and_rebinds_ciphertext(self) -> None:
+    def test_migrate_one_preserves_ciphertext_and_plaintext_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             source = root / "source"
             output = root / "output"
             self.fixture(source)
             plan = migration.build_plan(source, SOURCE_COMMIT)
-            entry = next(item for item in plan["entries"] if item["source_schema_version"] == 1)
+            entry = next(
+                item for item in plan["entries"] if item["source_schema_version"] == 1
+            )
             identity = root / "legacy-identity"
             identity.write_text("not read by the test\n", encoding="utf-8")
             adapter = root / "adapter"
             adapter.write_text("not executed by the test\n", encoding="utf-8")
 
-            def fake_decrypt(_identity: pathlib.Path, _ciphertext: pathlib.Path, plaintext: pathlib.Path) -> None:
-                plaintext.write_bytes(LEGACY_PLAINTEXT)
+            helper = root / "age-file-key"
+            helper.write_text("not executed by the test\n", encoding="utf-8")
+            source_bytes = source.joinpath(
+                *entry["source_path"].split("/")
+            ).read_bytes()
 
-            def fake_create(**kwargs: object) -> tuple[pathlib.Path, pathlib.Path]:
-                output_dir = pathlib.Path(kwargs["output_dir"])
-                submission_id = str(kwargs["submission_id"])
-                output_dir.mkdir()
-                ciphertext = output_dir / "source.tar.gz.age"
-                ciphertext.write_bytes(b"fresh-per-submission-ciphertext")
-                envelope_path = output_dir / "archive-key-envelope.json"
-                envelope_path.write_text(
-                    json.dumps(envelope(submission_id, ciphertext.read_bytes())) + "\n",
-                    encoding="utf-8",
-                )
-                return ciphertext, envelope_path
+            def fake_wrap(
+                _adapter: pathlib.Path,
+                submission_id: str,
+                ciphertext_digest: str,
+                file_key: bytes,
+            ) -> dict[str, object]:
+                self.assertEqual(file_key, b"k" * 16)
+                return {
+                    "schema_version": 2,
+                    "submission_id": submission_id,
+                    "archive_ciphertext_sha256": ciphertext_digest,
+                    "data_key_id": archive_file_key_id(
+                        submission_id, ciphertext_digest
+                    ),
+                    "key_material_type": "age-file-key-v1",
+                    "adapter": "aws-kms-v1",
+                    "wrapped_key_material": base64.b64encode(
+                        b"wrapped-file-key"
+                    ).decode(),
+                }
 
             with (
-                mock.patch.object(migration, "_run_age_decrypt", side_effect=fake_decrypt),
-                mock.patch.object(migration, "create_archive_envelope", side_effect=fake_create),
+                mock.patch.object(migration, "_require_canonical_selection"),
+                mock.patch.object(
+                    migration, "_extract_file_key", return_value=b"k" * 16
+                ),
+                mock.patch.object(migration, "_wrap_file_key", side_effect=fake_wrap),
             ):
                 migration.migrate_one(
                     plan,
                     source,
                     output,
                     identity,
+                    helper,
                     adapter,
                     entry["source_path"],
                 )
@@ -289,7 +335,37 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
             self.assertEqual(value["schema_version"], 3)
             self.assertEqual(value["submission_id"], entry["submission_id"])
             self.assertEqual(value["sha256_plaintext_tar"], digest(LEGACY_PLAINTEXT))
+            migrated_ciphertext = migrated_sidecar.with_suffix(".tar.age")
+            self.assertEqual(migrated_ciphertext.read_bytes(), source_bytes)
+            self.assertEqual(
+                value["sha256_ciphertext"], entry["source_ciphertext_sha256"]
+            )
+            self.assertEqual(value["key_envelope"]["schema_version"], 2)
             self.assertNotIn("issue", value)
+
+    def test_wrap_rejects_plaintext_file_key_passthrough(self) -> None:
+        file_key = b"k" * 16
+        response = {
+            "schema_version": 2,
+            "adapter": "aws-kms-v1",
+            "wrapped_key_material": base64.b64encode(file_key).decode("ascii"),
+        }
+        completed = mock.Mock(
+            returncode=0,
+            stdout=json.dumps(response).encode("utf-8"),
+        )
+        with (
+            mock.patch.object(migration.subprocess, "run", return_value=completed),
+            self.assertRaisesRegex(
+                migration.MigrationError, "returned the plaintext age file key"
+            ),
+        ):
+            migration._wrap_file_key(
+                ROOT / "adapter",
+                "0198abcd-0000-7000-8000-000000000001",
+                "d" * 64,
+                file_key,
+            )
 
     def test_complete_output_validation_rejects_legacy_or_missing_objects(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -298,13 +374,25 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
             output = root / "output"
             self.fixture(source)
             plan = migration.build_plan(source, SOURCE_COMMIT)
-            migration.seed_retained(plan, source, output)
-            with self.assertRaisesRegex(migration.MigrationError, "incomplete"):
-                migration.validate_output(plan, output)
+            plan["entries"] = [
+                entry
+                for entry in plan["entries"]
+                if entry["source_schema_version"] == 1
+            ]
+            plan["retained"] = []
+            plan["migration_count"] = len(plan["entries"])
+            plan["retained_count"] = 0
+            output.mkdir()
+            with (
+                mock.patch.object(migration, "_require_canonical_selection"),
+                self.assertRaisesRegex(migration.MigrationError, "incomplete"),
+            ):
+                migration.validate_output(plan, source, output)
             for entry in plan["entries"]:
                 ciphertext = output.joinpath(*entry["target_path"].split("/"))
                 ciphertext.parent.mkdir(parents=True, exist_ok=True)
-                content = ("fresh-" + entry["submission_id"]).encode()
+                source_ciphertext = source.joinpath(*entry["source_path"].split("/"))
+                content = source_ciphertext.read_bytes()
                 ciphertext.write_bytes(content)
                 old_sidecar_path = source.joinpath(*entry["source_path"].split("/"))
                 old_sidecar_path = old_sidecar_path.with_suffix("").with_suffix(".json")
@@ -319,14 +407,57 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
                     submission_id=entry["submission_id"],
                     sha256_ciphertext=digest(content),
                     size_bytes_ciphertext=len(content),
-                    key_envelope=envelope(entry["submission_id"], content),
+                    key_envelope={
+                        "schema_version": 2,
+                        "submission_id": entry["submission_id"],
+                        "archive_ciphertext_sha256": digest(content),
+                        "data_key_id": archive_file_key_id(
+                            entry["submission_id"], digest(content)
+                        ),
+                        "key_material_type": "age-file-key-v1",
+                        "adapter": "aws-kms-v1",
+                        "wrapped_key_material": base64.b64encode(
+                            b"wrapped-file-key"
+                        ).decode(),
+                    },
                 )
                 ciphertext.with_suffix("").with_suffix(".json").write_text(
                     json.dumps(value) + "\n", encoding="utf-8"
                 )
-            report = migration.validate_output(plan, output)
-            self.assertEqual(report["migration_count"], 2)
-            self.assertEqual(report["legacy_ciphertexts_retained"], 0)
+            with mock.patch.object(migration, "_require_canonical_selection"):
+                report = migration.validate_output(plan, source, output)
+            self.assertEqual(report["migration_count"], 1)
+            self.assertEqual(report["ciphertext_bytes_changed"], 0)
+
+            sidecar_path = ciphertext.with_suffix("").with_suffix(".json")
+            valid_sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
+            changed = copy.deepcopy(valid_sidecar)
+            changed["key_envelope"] = envelope(entry["submission_id"], content)
+            sidecar_path.write_text(json.dumps(changed) + "\n", encoding="utf-8")
+            with (
+                mock.patch.object(migration, "_require_canonical_selection"),
+                self.assertRaisesRegex(migration.MigrationError, "file-key envelope"),
+            ):
+                migration.validate_output(plan, source, output)
+
+            changed = copy.deepcopy(valid_sidecar)
+            changed["unexpected_legacy_metadata"] = True
+            sidecar_path.write_text(json.dumps(changed) + "\n", encoding="utf-8")
+            with (
+                mock.patch.object(migration, "_require_canonical_selection"),
+                self.assertRaisesRegex(migration.MigrationError, "metadata changed"),
+            ):
+                migration.validate_output(plan, source, output)
+
+    def test_chunkwise_ciphertext_comparison_detects_equal_size_difference(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            source = root / "source.tar.age"
+            migrated = root / "migrated.tar.age"
+            source.write_bytes(b"abc" * (1024 * 1024))
+            migrated.write_bytes(b"abd" + b"abc" * (1024 * 1024 - 1))
+            self.assertEqual(source.stat().st_size, migrated.stat().st_size)
+            self.assertFalse(migration._files_equal(source, migrated))
 
 
 if __name__ == "__main__":

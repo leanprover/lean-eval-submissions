@@ -121,7 +121,7 @@ Resources:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
                 token.actions.githubusercontent.com:sub: !Sub repo:${SubmissionGitHubSubjectPrefix}:environment:archive-migration-production
       Policies:
-        - PolicyName: EncryptOneArchiveIdentity
+        - PolicyName: EncryptOneArchiveFileKey
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -130,20 +130,21 @@ Resources:
                 Resource: !GetAtt ArchiveIdentityKey.Arn
                 Condition:
                   StringEquals:
-                    kms:EncryptionContext:contract: lean-eval-archive-key-v1
+                    kms:EncryptionContext:contract: lean-eval-archive-key-v2
+                    kms:EncryptionContext:key_material_type: age-file-key-v1
                   ForAllValues:StringEquals:
                     kms:EncryptionContextKeys:
                       - contract
                       - submission_id
                       - archive_ciphertext_sha256
                       - data_key_id
-                      - age_recipient_sha256
+                      - key_material_type
                   "Null":
                     kms:EncryptionContext:contract: false
                     kms:EncryptionContext:submission_id: false
                     kms:EncryptionContext:archive_ciphertext_sha256: false
                     kms:EncryptionContext:data_key_id: false
-                    kms:EncryptionContext:age_recipient_sha256: false
+                    kms:EncryptionContext:key_material_type: false
 
   UnwrapFunctionRole:
     Type: AWS::IAM::Role
@@ -193,6 +194,26 @@ Resources:
                     kms:EncryptionContext:archive_ciphertext_sha256: false
                     kms:EncryptionContext:data_key_id: false
                     kms:EncryptionContext:age_recipient_sha256: false
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: !GetAtt ArchiveIdentityKey.Arn
+                Condition:
+                  StringEquals:
+                    kms:EncryptionContext:contract: lean-eval-archive-key-v2
+                    kms:EncryptionContext:key_material_type: age-file-key-v1
+                  ForAllValues:StringEquals:
+                    kms:EncryptionContextKeys:
+                      - contract
+                      - submission_id
+                      - archive_ciphertext_sha256
+                      - data_key_id
+                      - key_material_type
+                  "Null":
+                    kms:EncryptionContext:contract: false
+                    kms:EncryptionContext:submission_id: false
+                    kms:EncryptionContext:archive_ciphertext_sha256: false
+                    kms:EncryptionContext:data_key_id: false
+                    kms:EncryptionContext:key_material_type: false
 
   UnwrapFunction:
     Type: AWS::Serverless::Function

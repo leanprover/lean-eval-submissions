@@ -16,7 +16,12 @@ ROOT = pathlib.Path(__file__).parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import prepare_historical_private_replay as private_replay  # noqa: E402
-from key_capability_contract import archive_key_id, canonical_archive_path  # noqa: E402
+from key_capability_contract import (  # noqa: E402
+    archive_file_key_id,
+    archive_key_id,
+    canonical_archive_path,
+)
+
 from tests.frozen_results_tree import materialize_results_tree  # noqa: E402
 
 CROSSWALK_SHA256 = "dfdcbc0da3a3526f8a26e6a69cefa41cbcd92de7608752193b742fcd92b00a67"
@@ -50,6 +55,19 @@ def envelope(submission_id: str, ciphertext: bytes) -> dict[str, object]:
         "age_recipient": recipient,
         "adapter": "aws-kms-v1",
         "wrapped_identity": base64.b64encode(b"wrapped fixture identity").decode(),
+    }
+
+
+def file_key_envelope(submission_id: str, ciphertext: bytes) -> dict[str, object]:
+    ciphertext_digest = hashlib.sha256(ciphertext).hexdigest()
+    return {
+        "schema_version": 2,
+        "submission_id": submission_id,
+        "archive_ciphertext_sha256": ciphertext_digest,
+        "data_key_id": archive_file_key_id(submission_id, ciphertext_digest),
+        "key_material_type": "age-file-key-v1",
+        "adapter": "aws-kms-v1",
+        "wrapped_key_material": base64.b64encode(b"wrapped fixture file key").decode(),
     }
 
 
@@ -287,14 +305,16 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
         self.assertNotIn(b"submission_repo", encoded)
         self.assertNotIn(b"submission_ref", encoded)
 
-    def test_schema_v3_binding_does_not_require_ciphertext_byte_preservation(self) -> None:
+    def test_schema_v3_binding_accepts_v1_and_v2_envelopes(self) -> None:
         submission_id = "019a0000-0000-7000-8000-000000000001"
         entry = {
             "archive_submission_id": submission_id,
             "benchmark_commit": "a" * 40,
         }
         bindings = []
-        for ciphertext in (b"first fresh ciphertext", b"second fresh ciphertext"):
+        for index, ciphertext in enumerate(
+            (b"first fresh ciphertext", b"second fresh ciphertext")
+        ):
             with tempfile.TemporaryDirectory() as directory:
                 root = pathlib.Path(directory)
                 relative = canonical_archive_path(submission_id)
@@ -317,7 +337,11 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
                     "archived_at": "2026-08-27T12:00:00Z",
                     "benchmark_commit": "a" * 40,
                     "archiver_workflow_run": "https://github.com/leanprover/lean-eval-submissions/actions/runs/123",
-                    "key_envelope": envelope(submission_id, ciphertext),
+                    "key_envelope": (
+                        envelope(submission_id, ciphertext)
+                        if index == 0
+                        else file_key_envelope(submission_id, ciphertext)
+                    ),
                 }
                 archive.with_suffix("").with_suffix(".json").write_text(
                     json.dumps(value, indent=2, sort_keys=True) + "\n",

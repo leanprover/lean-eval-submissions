@@ -15,8 +15,10 @@ RUNNER = ROOT / "server" / "replay-image" / "replay-authoritative"
 class AuthoritativeReplayImageTests(unittest.TestCase):
     def test_base_images_and_sources_are_immutable(self) -> None:
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")
-        from_lines = [line for line in dockerfile.splitlines() if line.startswith("FROM ")]
-        self.assertEqual(len(from_lines), 4)
+        from_lines = [
+            line for line in dockerfile.splitlines() if line.startswith("FROM ")
+        ]
+        self.assertEqual(len(from_lines), 5)
         for line in from_lines:
             self.assertRegex(line, r"@sha256:[0-9a-f]{64}(?: AS [a-z-]+)?$")
         self.assertIn(
@@ -33,6 +35,10 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
             "b91d4757aa0d7776c02540c9089df54fa0d0658a",
         ):
             self.assertIn(commit, dockerfile)
+        self.assertIn(
+            "filippo.io/age v1.3.1", (ROOT / "server/age-file-key/go.mod").read_text()
+        )
+        self.assertIn("test -x /opt/lean-eval/bin/age-file-key", WORKFLOW.read_text())
 
     def test_profile_lock_has_no_self_referential_image_digest(self) -> None:
         profile = json.loads(PROFILE.read_text(encoding="utf-8"))
@@ -58,7 +64,7 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
         self.assertEqual(
             replay_config.count(
                 '"image": "registry.cloudflare.com/'
-                'a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative:'
+                "a46b90978a1c29cc4795f30677e7e4b8/lean-eval-authoritative:"
                 '4026b18d5e679b07be1961d538a51ad689a9d8d4"'
             ),
             2,
@@ -79,6 +85,19 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
         self.assertIn("sys.executable", runner)
         self.assertNotIn('"/usr/bin/python3"', runner)
         self.assertRegex(runner, r'"--authoritative-checker",\s*"nanoda"')
+
+    def test_runner_unconditionally_removes_both_key_material_variants(self) -> None:
+        runner = RUNNER.read_text(encoding="utf-8")
+        cleanup = runner.split("    finally:\n", 1)[1].split(
+            '\n\n\nif __name__ == "__main__":', 1
+        )[0]
+        for name in (
+            "encoded_identity",
+            "identity",
+            "encoded_file_key",
+            "file_key",
+        ):
+            self.assertIn(f"{name}.unlink(missing_ok=True)", cleanup)
 
     def test_image_gates_the_authoritative_python_imports(self) -> None:
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")

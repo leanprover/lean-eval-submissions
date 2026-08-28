@@ -18,12 +18,11 @@ import re
 import sys
 from typing import Any, Protocol
 
-
 UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 )
 DIGEST = re.compile(r"[0-9a-f]{64}")
-ARCHIVE_KEY_ID = re.compile(r"ak1_[0-9a-f]{64}")
+ARCHIVE_KEY_ID = re.compile(r"ak[12]_[0-9a-f]{64}")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 COMMIT = re.compile(r"[0-9a-f]{40}")
 ADAPTER = re.compile(r"[a-z][a-z0-9-]{0,63}-v[1-9][0-9]*")
@@ -36,7 +35,7 @@ AGE_RECIPIENT = re.compile(r"age1[0-9a-z]{40,4090}")
 MAX_CAPABILITY_LIFETIME = dt.timedelta(minutes=10)
 MAX_AGE_IDENTITY_BYTES = 4096
 PURPOSES = {"lean-eval-release", "lean-eval-replay"}
-ENVELOPE_FIELDS = {
+ENVELOPE_V1_FIELDS = {
     "schema_version",
     "submission_id",
     "archive_ciphertext_sha256",
@@ -45,6 +44,16 @@ ENVELOPE_FIELDS = {
     "adapter",
     "wrapped_identity",
 }
+ENVELOPE_V2_FIELDS = {
+    "schema_version",
+    "submission_id",
+    "archive_ciphertext_sha256",
+    "data_key_id",
+    "key_material_type",
+    "adapter",
+    "wrapped_key_material",
+}
+AGE_FILE_KEY_MATERIAL_TYPE = "age-file-key-v1"
 CAPABILITY_FIELDS = {
     "schema_version",
     "purpose",
@@ -63,7 +72,7 @@ CAPABILITY_FIELDS = {
 
 
 class ContractError(ValueError):
-    """An archive-key object violates the stable schema-version-1 contract."""
+    """An archive-key object violates the stable versioned contract."""
 
 
 class OneUseStore(Protocol):
@@ -106,6 +115,18 @@ def archive_key_id(submission_id: str, age_recipient: str) -> str:
     return "ak1_" + hashlib.sha256(b"lean-eval-archive-key-v1\0" + payload).hexdigest()
 
 
+def archive_file_key_id(submission_id: str, archive_ciphertext_sha256: str) -> str:
+    _match(UUID7, submission_id, "submission_id")
+    _match(DIGEST, archive_ciphertext_sha256, "archive_ciphertext_sha256")
+    payload = (
+        f"{submission_id}\0{archive_ciphertext_sha256}\0{AGE_FILE_KEY_MATERIAL_TYPE}"
+    ).encode("ascii")
+    return (
+        "ak2_"
+        + hashlib.sha256(b"lean-eval-archive-file-key-v1\0" + payload).hexdigest()
+    )
+
+
 def validate_age_identity_bytes(identity: bytes) -> bytes:
     """Validate the one native age identity accepted by every root adapter."""
     if not isinstance(identity, bytes):
@@ -131,9 +152,10 @@ def capability_digest(capability_value: Any) -> str:
         separators=(",", ":"),
         sort_keys=True,
     ).encode("utf-8")
-    return "uc1_" + hashlib.sha256(
-        b"lean-eval-unwrap-capability-v1\0" + canonical
-    ).hexdigest()
+    return (
+        "uc1_"
+        + hashlib.sha256(b"lean-eval-unwrap-capability-v1\0" + canonical).hexdigest()
+    )
 
 
 def _timestamp(value: Any, label: str) -> dt.datetime:
@@ -149,28 +171,48 @@ def _timestamp(value: Any, label: str) -> dt.datetime:
 
 def validate_envelope(value: Any) -> dict[str, Any]:
     envelope = _object(value, "envelope")
-    _fields(envelope, ENVELOPE_FIELDS, "envelope")
-    if type(envelope["schema_version"]) is not int or envelope["schema_version"] != 1:
-        raise ContractError("envelope.schema_version must be integer 1")
+    schema_version = envelope.get("schema_version")
+    if type(schema_version) is not int or schema_version not in {1, 2}:
+        raise ContractError("envelope.schema_version must be integer 1 or 2")
+    _fields(
+        envelope,
+        ENVELOPE_V1_FIELDS if schema_version == 1 else ENVELOPE_V2_FIELDS,
+        "envelope",
+    )
     submission_id = _match(UUID7, envelope["submission_id"], "envelope.submission_id")
-    _match(DIGEST, envelope["archive_ciphertext_sha256"], "envelope.archive_ciphertext_sha256")
-    recipient = _match(AGE_RECIPIENT, envelope["age_recipient"], "envelope.age_recipient")
-    expected_key_id = archive_key_id(submission_id, recipient)
+    archive_digest = _match(
+        DIGEST,
+        envelope["archive_ciphertext_sha256"],
+        "envelope.archive_ciphertext_sha256",
+    )
+    if schema_version == 1:
+        recipient = _match(
+            AGE_RECIPIENT, envelope["age_recipient"], "envelope.age_recipient"
+        )
+        expected_key_id = archive_key_id(submission_id, recipient)
+        wrapped_field = "wrapped_identity"
+    else:
+        if envelope["key_material_type"] != AGE_FILE_KEY_MATERIAL_TYPE:
+            raise ContractError("envelope.key_material_type is not registered")
+        expected_key_id = archive_file_key_id(submission_id, archive_digest)
+        wrapped_field = "wrapped_key_material"
     if envelope["data_key_id"] != expected_key_id:
-        raise ContractError("envelope.data_key_id does not match submission and recipient")
+        raise ContractError(
+            "envelope.data_key_id does not match its archive key material"
+        )
     _match(ARCHIVE_KEY_ID, envelope["data_key_id"], "envelope.data_key_id")
     _match(ADAPTER, envelope["adapter"], "envelope.adapter")
-    wrapped = _match(BASE64, envelope["wrapped_identity"], "envelope.wrapped_identity")
+    wrapped = _match(BASE64, envelope[wrapped_field], f"envelope.{wrapped_field}")
     if len(wrapped) > 16_384 or len(wrapped) % 4 != 0:
-        raise ContractError("envelope.wrapped_identity is not bounded canonical base64")
+        raise ContractError(f"envelope.{wrapped_field} is not bounded canonical base64")
     try:
         decoded = base64.b64decode(wrapped, validate=True)
     except ValueError as error:
-        raise ContractError("envelope.wrapped_identity is not valid base64") from error
+        raise ContractError(f"envelope.{wrapped_field} is not valid base64") from error
     if not decoded:
-        raise ContractError("envelope.wrapped_identity must not be empty")
+        raise ContractError(f"envelope.{wrapped_field} must not be empty")
     if base64.b64encode(decoded).decode("ascii") != wrapped:
-        raise ContractError("envelope.wrapped_identity is not canonical base64")
+        raise ContractError(f"envelope.{wrapped_field} is not canonical base64")
     return envelope
 
 
@@ -277,8 +319,37 @@ def envelope_binding_context(
     }
 
 
+def file_key_envelope_binding_context(
+    submission_id: str,
+    archive_ciphertext_sha256: str,
+    data_key_identity: str,
+) -> dict[str, str]:
+    _match(UUID7, submission_id, "submission_id")
+    _match(DIGEST, archive_ciphertext_sha256, "archive_ciphertext_sha256")
+    _match(ARCHIVE_KEY_ID, data_key_identity, "data_key_id")
+    if data_key_identity != archive_file_key_id(
+        submission_id, archive_ciphertext_sha256
+    ):
+        raise ContractError(
+            "data_key_id does not match the historical archive file key"
+        )
+    return {
+        "contract": "lean-eval-archive-key-v2",
+        "submission_id": submission_id,
+        "archive_ciphertext_sha256": archive_ciphertext_sha256,
+        "data_key_id": data_key_identity,
+        "key_material_type": AGE_FILE_KEY_MATERIAL_TYPE,
+    }
+
+
 def kms_encryption_context(envelope_value: Any) -> dict[str, str]:
     envelope = validate_envelope(envelope_value)
+    if envelope["schema_version"] == 2:
+        return file_key_envelope_binding_context(
+            envelope["submission_id"],
+            envelope["archive_ciphertext_sha256"],
+            envelope["data_key_id"],
+        )
     return envelope_binding_context(
         envelope["submission_id"],
         envelope["archive_ciphertext_sha256"],
@@ -306,7 +377,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "validate-envelope":
             envelope = validate_envelope(_read(args.path))
-            print(json.dumps({"valid": True, "data_key_id": envelope["data_key_id"]}, sort_keys=True))
+            print(
+                json.dumps(
+                    {"valid": True, "data_key_id": envelope["data_key_id"]},
+                    sort_keys=True,
+                )
+            )
         else:
             now = _timestamp(args.now, "--now")
             envelope, capability = validate_binding(

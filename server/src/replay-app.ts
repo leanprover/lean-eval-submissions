@@ -1670,7 +1670,11 @@ export async function handleReplayRequest(
             JSON.stringify(input.archive_expectation),
           );
           await writeSandboxFile(sandbox, "/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
-          await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);
+          if (input.schema_version === 1) {
+            await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);
+          } else {
+            await writeSandboxFile(sandbox, "/workspace/key-material.b64", input.plaintext_key_material_base64);
+          }
         });
       } catch (error) {
         if (!(error instanceof ProcessStartConflictError)) {
