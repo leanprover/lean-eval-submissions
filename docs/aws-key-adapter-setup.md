@@ -226,8 +226,126 @@ connected, and stops before requesting a GitHub OIDC token or calling AWS.
 
 Connecting the role is a credential-boundary mutation and requires the
 maintainer's explicit approval. Immediately before requesting that approval,
-read back the production stack output and role policy with a short-lived AWS
-administrator session. The only variable to add is:
+run the repository's fail-closed, read-only boundary check with a short-lived
+AWS administrator session:
+
+```sh
+python3 scripts/preflight_production_wrap_role.py
+```
+
+It requires the exact account, stable production stack, stack outputs, role
+name and ARN, one exact OIDC trust statement, 3600-second role maximum, absence
+of a permissions boundary, managed policies and instance profiles, one exact
+inline policy, the production alias resolving to the exact KMS key, the
+root-only key policy, no KMS grants, and enabled annual rotation. The inline
+policy contains only `kms:Encrypt` on the
+production key with all five version-1 contexts present and no other context
+key. Any difference stops the operation; do not replace the check with a
+visual policy review.
+
+In a separately authenticated GitHub shell, require the current boundary to be
+disconnected and the environment's existing wildcard immutable-tag policy to
+be unchanged:
+
+```sh
+set -euo pipefail
+
+LEAN_EVAL_SUBMISSIONS=leanprover/lean-eval-submissions
+LEAN_EVAL_ARCHIVE_ENVIRONMENT=archive-production
+LEAN_EVAL_WRAP_ROLE_ARN=arn:aws:iam::161072922960:role/lean-eval-archive-wrap-production
+
+gh api \
+  repos/$LEAN_EVAL_SUBMISSIONS/actions/oidc/customization/sub \
+  | jq -e '. == {
+      use_default: true,
+      use_immutable_subject: false,
+      sub_claim_prefix: "repo:leanprover/lean-eval-submissions"
+    }'
+gh api \
+  repos/$LEAN_EVAL_SUBMISSIONS/environments/$LEAN_EVAL_ARCHIVE_ENVIRONMENT \
+  | jq -e '
+      .can_admins_bypass == true and
+      .deployment_branch_policy == {
+        protected_branches: false,
+        custom_branch_policies: true
+      } and
+      [.protection_rules[] | .type] == ["branch_policy"]
+    '
+gh api \
+  repos/$LEAN_EVAL_SUBMISSIONS/environments/$LEAN_EVAL_ARCHIVE_ENVIRONMENT/deployment-branch-policies \
+  | jq -e '
+      .total_count == 1 and
+      .branch_policies == [{
+        id: 57914846,
+        node_id: "MDE2OkdhdGVCcmFuY2hQb2xpY3k1NzkxNDg0Ng==",
+        name: "lean-eval-dispatch/*",
+        type: "tag"
+      }]
+    '
+test "$(gh api \
+  repos/$LEAN_EVAL_SUBMISSIONS/environments/$LEAN_EVAL_ARCHIVE_ENVIRONMENT/variables \
+  --jq .total_count)" = 0
+test "$(gh api \
+  repos/$LEAN_EVAL_SUBMISSIONS/environments/replay-production/variables \
+  --jq .total_count)" = 0
+test "$(gh api repos/leanprover/lean-eval-releases/actions/variables \
+  --jq '[.variables[] | select(.name=="PUBLICATION_ENABLED")] | length')" = 0
+
+LEAN_EVAL_WRAP_WORKFLOW_COMMIT="$(gh api \
+  repos/$LEAN_EVAL_SUBMISSIONS/branches/main \
+  --jq .commit.sha)"
+case "$LEAN_EVAL_WRAP_WORKFLOW_COMMIT" in
+  ''|*[!0-9a-f]*) exit 1 ;;
+esac
+test "${#LEAN_EVAL_WRAP_WORKFLOW_COMMIT}" -eq 40
+test "$(gh api \
+  repos/$LEAN_EVAL_SUBMISSIONS/branches/main \
+  --jq .protected)" = true
+
+LEAN_EVAL_HEALTH_DIR="$(mktemp -d)"
+chmod 700 "$LEAN_EVAL_HEALTH_DIR"
+python3 scripts/verify_production_capabilities_disabled.py \
+  --repository . \
+  --expected-commit "$LEAN_EVAL_WRAP_WORKFLOW_COMMIT" \
+  --output-directory "$LEAN_EVAL_HEALTH_DIR"
+python3 scripts/monitor_cloudflare_health.py \
+  --intake-config "$LEAN_EVAL_HEALTH_DIR/intake.jsonc" \
+  --replay-config "$LEAN_EVAL_HEALTH_DIR/replay.jsonc" \
+  --output "$LEAN_EVAL_HEALTH_DIR/health.json"
+jq -e --arg commit "$LEAN_EVAL_WRAP_WORKFLOW_COMMIT" '
+    .status == "ready" and
+    .deployed_commit == $commit and
+    .observations.production.capabilities == {
+      historical_public_replay_enabled: false,
+      intake_enabled: false,
+      legacy_result_owner_api_enabled: false,
+      model_identity_consolidation_api_enabled: false,
+      model_identity_maintainer_api_enabled: false,
+      model_identity_owner_api_enabled: false,
+      promotion_canary_enabled: false,
+      release_opt_out_api_enabled: false,
+      replay_enabled: false,
+      result_amendment_maintainer_api_enabled: false,
+      result_amendment_owner_api_enabled: false,
+      staging_acceptance_enabled: false
+    }
+  ' "$LEAN_EVAL_HEALTH_DIR/health.json"
+rm -rf "$LEAN_EVAL_HEALTH_DIR"
+```
+
+The fixed verifier reads both configs from that exact Git object, rejects every
+production intake, lifecycle, model-consolidation, canary, general-replay,
+historical-replay and production acceptance capability unless it is literal
+`false` (and the intake mode literal `disabled`), then gives those immutable
+blobs to the health monitor. The monitor requires the live production values
+to equal them and every live component to report that same selected commit.
+This is production-only: intentional staging acceptance and canary flags may
+remain enabled. Stop if any command fails.
+
+The exact environment readback also discloses and requires the existing
+`can_admins_bypass: true`: repository administrators can bypass its tag
+protection. This procedure does not change or hide that standing boundary.
+The only variable to add after exact approval is:
 
 ```text
 Repository:  leanprover/lean-eval-submissions
@@ -244,19 +362,179 @@ workload policy must contain only `kms:Encrypt` on production key
 `kms:Decrypt`, Lambda, DynamoDB, IAM, GitHub, State, replay, or release
 authority.
 
-After the approved variable change, dispatch `AWS production Wrap-only
-preflight` from the immutable `lean-eval-dispatch/<workflow-commit>` tag that
-contains it. The workflow refuses any other role ARN, KMS-encrypts one
-temporary random 32-byte synthetic key with the exact contract/context, and
-requires direct decrypt to return `AccessDeniedException`. It uploads nothing,
+The environment's `lean-eval-dispatch/*` policy is deliberately not changed by
+this operation. Consequently, connecting this variable is durable standing
+Wrap authority for the normal archive lane on every tag admitted by that
+policy, including historical immutable tags; it is not authority limited to
+the one synthetic preflight run. Each archive workflow independently requires
+its tag name, workflow commit input and `github.sha` to agree. Narrowing or
+otherwise changing the wildcard policy is a separate protected-environment
+design and approval, not part of this connection. Explain this durable effect
+in the approval request.
+
+After approval, add and read back only the exact variable, then rerun the AWS
+boundary check:
+
+```sh
+gh variable set AWS_WRAP_ROLE_ARN \
+  --repo "$LEAN_EVAL_SUBMISSIONS" \
+  --env "$LEAN_EVAL_ARCHIVE_ENVIRONMENT" \
+  --body "$LEAN_EVAL_WRAP_ROLE_ARN"
+test "$(gh api \
+  repos/$LEAN_EVAL_SUBMISSIONS/environments/$LEAN_EVAL_ARCHIVE_ENVIRONMENT/variables \
+  --jq '.variables | if length == 1 then .[0].name + "=" + .[0].value else "" end')" = \
+  "AWS_WRAP_ROLE_ARN=$LEAN_EVAL_WRAP_ROLE_ARN"
+python3 scripts/preflight_production_wrap_role.py
+```
+
+Select the exact final protected-main submission commit only after it has its
+immutable `lean-eval-dispatch/<workflow-commit>` tag. Require the remote tag to
+resolve to that commit before dispatch; do not select an older tag merely
+because it contains the same workflow file:
+
+```sh
+test "$(gh api \
+  repos/$LEAN_EVAL_SUBMISSIONS/branches/main \
+  --jq .commit.sha)" = "$LEAN_EVAL_WRAP_WORKFLOW_COMMIT"
+test "$(gh api \
+  repos/$LEAN_EVAL_SUBMISSIONS/branches/main \
+  --jq .protected)" = true
+test "$(gh api \
+  repos/$LEAN_EVAL_SUBMISSIONS/git/ref/tags/lean-eval-dispatch/$LEAN_EVAL_WRAP_WORKFLOW_COMMIT \
+  --jq .object.sha)" = "$LEAN_EVAL_WRAP_WORKFLOW_COMMIT"
+gh workflow run aws-production-wrap-preflight.yml \
+  --repo "$LEAN_EVAL_SUBMISSIONS" \
+  --ref "lean-eval-dispatch/$LEAN_EVAL_WRAP_WORKFLOW_COMMIT"
+```
+
+These immediate readbacks require the selected commit to remain the current
+protected `main` tip and its immutable dispatch tag to resolve to that same
+commit. The workflow refuses any other role ARN, assumes only the exact AWS
+account, KMS-encrypts one temporary random 32-byte synthetic key with the exact
+contract/context, and requires direct decrypt to return `AccessDeniedException`.
+It uploads nothing,
 writes no repository, State, audit object, result, release, or submission, and
-removes the plaintext, ciphertext, AWS session, and OIDC request variables on
-exit. This is the bounded launch check, not a recurring qualification harness.
+removes the plaintext, ciphertext, AWS session and OIDC request handles on
+exit. It then pins credential/config files to absent paths and requires an STS
+caller lookup to fail. This is the bounded launch check, not a recurring
+qualification harness.
 
 Rollback is deletion of only `AWS_WRAP_ROLE_ARN` from `archive-production`,
 followed by cancellation of any queued or running archive/preflight jobs. An
 already-started job may retain its short-lived AWS session until it exits, so
-deleting the variable alone does not revoke that active session. Keep
+deleting the variable alone does not revoke that active session. Use one shell
+for the following fail-closed rollback. The first block deletes the variable,
+cancels relevant runs, and records the first time at which no relevant run
+remains active:
+
+```sh
+set -euo pipefail
+
+LEAN_EVAL_WRAP_ROLLBACK_DIR="$(mktemp -d)"
+chmod 700 "$LEAN_EVAL_WRAP_ROLLBACK_DIR"
+
+active_wrap_runs() {
+  local all_ids response
+  all_ids=
+  for workflow in aws-production-wrap-preflight.yml submission.yml; do
+    for status in queued in_progress waiting requested pending; do
+      response="$(gh api --method GET \
+        "repos/$LEAN_EVAL_SUBMISSIONS/actions/workflows/$workflow/runs" \
+        -f status="$status" -f per_page=100 \
+        --paginate \
+        --jq '.workflow_runs[].id')" || return $?
+      if [ -n "$response" ]; then
+        all_ids+="$response"$'\n'
+      fi
+    done
+  done
+  if [ -n "$all_ids" ]; then
+    printf '%s' "$all_ids" | sort -u
+  fi
+}
+
+gh variable delete AWS_WRAP_ROLE_ARN \
+  --repo "$LEAN_EVAL_SUBMISSIONS" \
+  --env "$LEAN_EVAL_ARCHIVE_ENVIRONMENT"
+case "$LEAN_EVAL_WRAP_WORKFLOW_COMMIT" in
+  ''|*[!0-9a-f]*) exit 1 ;;
+esac
+test "${#LEAN_EVAL_WRAP_WORKFLOW_COMMIT}" -eq 40
+printf '%s\n' "$LEAN_EVAL_WRAP_WORKFLOW_COMMIT" > \
+  "$LEAN_EVAL_WRAP_ROLLBACK_DIR/selected-commit"
+active_ids="$(active_wrap_runs)"
+for run_id in $active_ids; do
+  gh run cancel "$run_id" --repo "$LEAN_EVAL_SUBMISSIONS"
+done
+active_ids="$(active_wrap_runs)"
+test -z "$active_ids"
+date -u +%s > "$LEAN_EVAL_WRAP_ROLLBACK_DIR/authority-quiet-at"
+```
+
+Cancellation is asynchronous; if the final assertion fails, recheck and
+cancel again, then record a new quiet timestamp only after the assertion
+passes. Do not proceed on a merely requested cancellation. Keep the shell and
+temporary directory. No earlier than 3600 seconds after that quiet timestamp,
+run the complete readback. This covers the preflight's requested 900-second
+session and the role's 3600-second maximum if a normal archive job had already
+assumed it before cancellation:
+
+```sh
+set -euo pipefail
+
+quiet_at="$(cat "$LEAN_EVAL_WRAP_ROLLBACK_DIR/authority-quiet-at")"
+case "$quiet_at" in ''|*[!0-9]*) exit 1 ;; esac
+selected_commit="$(cat "$LEAN_EVAL_WRAP_ROLLBACK_DIR/selected-commit")"
+case "$selected_commit" in
+  ''|*[!0-9a-f]*) exit 1 ;;
+esac
+test "${#selected_commit}" -eq 40
+test "$(( $(date -u +%s) - quiet_at ))" -ge 3600
+test "$(gh api \
+  repos/$LEAN_EVAL_SUBMISSIONS/environments/$LEAN_EVAL_ARCHIVE_ENVIRONMENT/variables \
+  --jq .total_count)" = 0
+test "$(gh api \
+  repos/$LEAN_EVAL_SUBMISSIONS/environments/replay-production/variables \
+  --jq .total_count)" = 0
+active_ids="$(active_wrap_runs)"
+test -z "$active_ids"
+test "$(gh api repos/leanprover/lean-eval-releases/actions/variables \
+  --jq '[.variables[] | select(.name=="PUBLICATION_ENABLED")] | length')" = 0
+
+mkdir -m 700 "$LEAN_EVAL_WRAP_ROLLBACK_DIR/exact-config"
+python3 scripts/verify_production_capabilities_disabled.py \
+  --repository . \
+  --expected-commit "$selected_commit" \
+  --output-directory "$LEAN_EVAL_WRAP_ROLLBACK_DIR/exact-config"
+python3 scripts/monitor_cloudflare_health.py \
+  --intake-config "$LEAN_EVAL_WRAP_ROLLBACK_DIR/exact-config/intake.jsonc" \
+  --replay-config "$LEAN_EVAL_WRAP_ROLLBACK_DIR/exact-config/replay.jsonc" \
+  --output "$LEAN_EVAL_WRAP_ROLLBACK_DIR/health.json"
+jq -e --arg commit "$selected_commit" '
+    .status == "ready" and
+    .deployed_commit == $commit and
+    .observations.production.capabilities == {
+      historical_public_replay_enabled: false,
+      intake_enabled: false,
+      legacy_result_owner_api_enabled: false,
+      model_identity_consolidation_api_enabled: false,
+      model_identity_maintainer_api_enabled: false,
+      model_identity_owner_api_enabled: false,
+      promotion_canary_enabled: false,
+      release_opt_out_api_enabled: false,
+      replay_enabled: false,
+      result_amendment_maintainer_api_enabled: false,
+      result_amendment_owner_api_enabled: false,
+      staging_acceptance_enabled: false
+    }
+  ' "$LEAN_EVAL_WRAP_ROLLBACK_DIR/health.json"
+python3 scripts/preflight_production_wrap_role.py
+rm -rf "$LEAN_EVAL_WRAP_ROLLBACK_DIR"
+```
+
+The final AWS check proves the standing role itself was not broadened while
+connected; the 3600-second delay and inactive-run check prove every possible
+session has expired, including every 900-second preflight session. Keep
 production intake disabled throughout the connection, preflight, and rollback
 decision.
 

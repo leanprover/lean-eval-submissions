@@ -313,6 +313,39 @@ def verify_snapshot(
                     "intake_enabled", expected.get("replay_enabled")
                 ),
             }
+        if environment == "production":
+            observations[environment]["capabilities"] = {
+                "historical_public_replay_enabled": expected_replay[
+                    "historical_public_replay_enabled"
+                ],
+                "intake_enabled": expected_intake["intake_enabled"],
+                "legacy_result_owner_api_enabled": expected_intake[
+                    "legacy_result_owner_api_enabled"
+                ],
+                "model_identity_consolidation_api_enabled": expected_intake[
+                    "model_identity_consolidation_api_enabled"
+                ],
+                "model_identity_maintainer_api_enabled": expected_intake[
+                    "model_identity_maintainer_api_enabled"
+                ],
+                "model_identity_owner_api_enabled": expected_intake[
+                    "model_identity_owner_api_enabled"
+                ],
+                "promotion_canary_enabled": expected_intake["promotion_canary_enabled"],
+                "release_opt_out_api_enabled": expected_intake[
+                    "release_opt_out_api_enabled"
+                ],
+                "replay_enabled": expected_replay["replay_enabled"],
+                "result_amendment_maintainer_api_enabled": expected_intake[
+                    "result_amendment_maintainer_api_enabled"
+                ],
+                "result_amendment_owner_api_enabled": expected_intake[
+                    "result_amendment_owner_api_enabled"
+                ],
+                "staging_acceptance_enabled": expected_replay[
+                    "staging_acceptance_enabled"
+                ],
+            }
     if len(commits) != 1:
         raise MonitorError("Cloudflare components do not share one deployed commit")
     return {
