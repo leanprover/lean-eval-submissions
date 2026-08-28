@@ -193,9 +193,8 @@ operations without changing submission IDs, State, or API routes.
 
 Static `GITHUB_VERIFICATION_TOKEN` and `GITHUB_DISPATCH_TOKEN` hooks remain only
 for local contract tests; they are not an approved production credential
-design. The two Apps and their broker secrets were provisioned on 2026-08-21;
-the Apps are owned by `leanprover`; transfers preserved their IDs and the
-dispatcher installation. The safe production default remains
+design. The Apps must remain organization-owned and least-scoped as documented
+in `INFRASTRUCTURE.md`. The safe production default remains
 `INTAKE_ENABLED=false`. Do not request
 broad OAuth `repo` scope as a shortcut; browser OAuth intentionally requests
 only `read:user`.

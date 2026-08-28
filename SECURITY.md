@@ -80,11 +80,8 @@ against the GitHub Actions API. Confidentiality of the source — and of
 the App installation token used to clone it — depends on several
 properties of `submission.yml`'s structure that we do not actively probe:
 
-- **fetch and evaluate share one job**, so the source never crosses a
-  runner boundary. An earlier design uploaded the cloned source as a
-  `submission-source` artifact for a separate `evaluate` job to pick up;
-  on a public repo anyone authenticated can download workflow artifacts,
-  which leaked private submissions. Do not re-split these jobs.
+- **fetch and evaluate share one job**, and private source must never be
+  uploaded as an artifact or cross a runner boundary. Do not split these jobs.
   (`tests/test_submission_workflow.py` asserts they stay merged.)
 - `APP_INSTALLATION_TOKEN` is scoped to the env of the single
   `Fetch submission` step.
