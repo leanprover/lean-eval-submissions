@@ -514,9 +514,22 @@ class PublicReplayUnavailabilityTests(unittest.TestCase):
             aggregate, aggregate_raw = load(
                 "evidence/historical-public-replay-github-evidence-ba5f578.json"
             )
-            workflow, workflow_raw = load(
+            workflow, _ = load(
                 "configuration/public-replay-workflow-definitions-v1.json"
             )
+            # Reconstruct the exact registry snapshot bound into this immutable
+            # baseline rather than rebinding it to later reviewed definitions.
+            workflow["contracts"] = [
+                entry
+                for entry in workflow["contracts"]
+                if entry["evaluator_commit"]
+                not in {
+                    "ae1a9714c5433b4c195b8fdfb5643893ecac8019",
+                    "e545a29504a9e207951ee74e446fe97c8755c648",
+                    "efca5d7ba6b88635ae9655726912a171df564e5a",
+                }
+            ]
+            workflow_raw = canonical_document_bytes(workflow)
             legacy, legacy_raw = load(
                 "configuration/public-replay-legacy-adjudications-v1.json"
             )
