@@ -235,8 +235,10 @@ state; transport failure alone never proves cleanup safe.
 
 Cleanup is deliberately ownership-bounded. The driver restores only the gist
 state it captured and deletes the source tag only after an exact successful
-create response proved that this run created it. Gist write and restoration use
-Git compare-and-swap on `refs/heads/master`, with exact `--force-with-lease`
+create response proved that this run created it. Gist write and restoration
+strictly discover the Gist's symbolic HEAD as `refs/heads/main` or the legacy
+`refs/heads/master`, bind its advertised commit to the API snapshot, and use
+Git compare-and-swap on that unchanged ref with exact `--force-with-lease`
 heads. The only checkout and object database live in a mode-`0700` directory on
 verified `/dev/shm` tmpfs; the Git subprocess environment is closed and omits
 all debug/trace variables and unrelated credentials. The driver accepts at
