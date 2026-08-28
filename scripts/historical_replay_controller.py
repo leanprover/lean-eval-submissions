@@ -1610,8 +1610,21 @@ def _event_files(root: pathlib.Path) -> list[pathlib.Path]:
 
 
 def _historical_replay_states(
-    events: list[dict[str, Any]], authorities: set[str]
+    events: list[dict[str, Any]],
+    authorities: set[str],
+    *,
+    authority_event_type: str = "historical_result.replay_authorized",
 ) -> dict[str, dict[str, Any]]:
+    if authority_event_type not in {
+        "historical_result.replay_authorized",
+        "historical_archive_result.replay_authorized",
+    }:
+        raise HistoricalReplayControllerError(
+            "historical replay authority event type is invalid"
+        )
+    event_prefix = authority_event_type.removesuffix("replay_authorized")
+    qualification_event_type = event_prefix + "replay_profile_qualified"
+    reconfiguration_event_type = event_prefix + "replay_reconfigured"
     ordered: list[dict[str, Any]] = []
     event_ids: set[str] = set()
     for event in events:
@@ -1666,7 +1679,7 @@ def _historical_replay_states(
         kind = event.get("event_type")
         subject = event.get("subject_id")
         payload_value = event.get("payload")
-        if kind == "historical_result.replay_reconfigured":
+        if kind == reconfiguration_event_type:
             payload = _object(payload_value, "historical replay reconfiguration payload")
             task_id = payload.get("replay_task_id")
             if task_id not in historical_tasks:
@@ -1675,7 +1688,7 @@ def _historical_replay_states(
             cause = parent(
                 event,
                 {
-                    "historical_result.replay_reconfigured",
+                    reconfiguration_event_type,
                     "replay.failed",
                     "replay.unavailable",
                 },
@@ -1684,11 +1697,11 @@ def _historical_replay_states(
                 state is None
                 or state["event"]["event_id"] != cause["event_id"]
                 or (
-                    cause["event_type"] == "historical_result.replay_reconfigured"
+                    cause["event_type"] == reconfiguration_event_type
                     and state["status"] != "reconfiguring"
                 )
                 or (
-                    cause["event_type"] != "historical_result.replay_reconfigured"
+                    cause["event_type"] != reconfiguration_event_type
                     and state["status"] not in {"failed", "unavailable"}
                 )
                 or event.get("subject_id") != historical_tasks[task_id]
@@ -1715,19 +1728,19 @@ def _historical_replay_states(
             cause = parent(
                 event,
                 {
-                    "historical_result.replay_profile_qualified",
-                    "historical_result.replay_reconfigured",
+                    qualification_event_type,
+                    reconfiguration_event_type,
                 },
             )
             if previous is None:
                 valid = (
-                    cause["event_type"] == "historical_result.replay_profile_qualified"
+                    cause["event_type"] == qualification_event_type
                     and cause.get("subject_id") == historical_tasks[task_id]
                 )
                 attempt = 0
             else:
                 valid = (
-                    cause["event_type"] == "historical_result.replay_reconfigured"
+                    cause["event_type"] == reconfiguration_event_type
                     and previous["status"] == "reconfiguring"
                     and previous["event"]["event_id"] == cause["event_id"]
                     and cause.get("subject_id") == historical_tasks[task_id]
@@ -1821,15 +1834,13 @@ def _historical_replay_states(
     return states
 
 
-def recover_running(
+def current_historical_running(
     events_root: pathlib.Path,
-    trusted_now: str,
     *,
     state_validated: bool,
-    cleanup_confirmation_value: Any | None = None,
-    random_bytes: bytes | None = None,
-) -> dict[str, Any]:
-    """Project recovery only after the caller completed full State validation.
+    authority_event_type: str = "historical_result.replay_authorized",
+) -> list[dict[str, Any]]:
+    """Project current running replays after authoritative State validation.
 
     This reducer defensively rechecks the historical transition subset that it
     consumes; it is not a replacement for lean-eval-state's authoritative
@@ -1848,12 +1859,39 @@ def recover_running(
         events.append(value)
     authorities = set()
     for event in events:
-        if event.get("event_type") == "historical_result.replay_authorized":
+        if event.get("event_type") == authority_event_type:
             authorities.add(
                 _match(RESULT_ID, event.get("subject_id"), "historical authority result_id")
             )
-    states = _historical_replay_states(events, authorities)
-    running = [state["event"] for state in states.values() if state["status"] == "running"]
+    states = _historical_replay_states(
+        events,
+        authorities,
+        authority_event_type=authority_event_type,
+    )
+    return [
+        {"replay_task_id": task_id, **state}
+        for task_id, state in sorted(states.items())
+        if state["status"] == "running"
+    ]
+
+
+def recover_running(
+    events_root: pathlib.Path,
+    trusted_now: str,
+    *,
+    state_validated: bool,
+    cleanup_confirmation_value: Any | None = None,
+    random_bytes: bytes | None = None,
+    authority_event_type: str = "historical_result.replay_authorized",
+) -> dict[str, Any]:
+    """Project recovery only after the caller completed full State validation."""
+
+    running_states = current_historical_running(
+        events_root,
+        state_validated=state_validated,
+        authority_event_type=authority_event_type,
+    )
+    running = [state["event"] for state in running_states]
     if not running:
         return {"schema_version": 1, "kind": "none"}
     if len(running) != 1:
