@@ -16,6 +16,7 @@ import json
 import os
 import pathlib
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -28,7 +29,9 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURE = ROOT / "configuration" / "staging-lifecycle-smoke-v1.json"
-EXPECTED_FIXTURE_SHA256 = "d38c85ace7594273bb3d465ff95aed1aa03f8fcb726499107a81a458b7a214bb"
+EXPECTED_FIXTURE_SHA256 = (
+    "bf3941a2641a5b599c2395e9250031559678709686990e708fa0c7cb0a3e985e"
+)
 UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 )
@@ -36,6 +39,8 @@ RESULT = re.compile(r"r2_[0-9a-f]{64}")
 COMMIT = re.compile(r"[0-9a-f]{40}")
 GIST = re.compile(r"[0-9a-f]{20,64}")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+MAX_GIST_FILES = 16
+MAX_GIST_BYTES = 1024 * 1024
 
 
 class AcceptanceError(RuntimeError):
@@ -204,7 +209,9 @@ def verify_candidate_checkout(expected_commit: str, fixture: dict[str, Any]) -> 
         raise AcceptanceError("driver checkout origin is not canonical")
     tag = f"refs/tags/lean-eval-dispatch/{expected_commit}^{{commit}}"
     if run(["git", "rev-parse", tag], cwd=ROOT) != expected_commit:
-        raise AcceptanceError("exact immutable dispatch tag is absent from the checkout")
+        raise AcceptanceError(
+            "exact immutable dispatch tag is absent from the checkout"
+        )
     raw = DEFAULT_FIXTURE.read_bytes()
     if hashlib.sha256(raw).hexdigest() != EXPECTED_FIXTURE_SHA256:
         raise AcceptanceError("canonical staging fixture digest drifted")
@@ -238,8 +245,8 @@ def fixture_preflight(
         "results_branch": "staging-results",
         "release_repository": "leanprover/lean-eval-releases",
         "release_workflow": "credentialed-release-staging-smoke.yml",
-        "release_ref": "lean-eval-staging-smoke/c27928a56fb3fb6ec0506ac4de78fa6e732ccc02",
-        "release_commit": "c27928a56fb3fb6ec0506ac4de78fa6e732ccc02",
+        "release_ref": "main",
+        "release_commit": "41a65cc7db88d5742fd804648ba9d550b8e86edb",
         "release_run_name_prefix": "Reconstruct staging submission ",
         "fixture_gist_file": "lean-eval-proof.txt",
         "retire_after": "one accepted bounded staging lifecycle run",
@@ -249,18 +256,25 @@ def fixture_preflight(
     ):
         raise AcceptanceError("bounded staging acceptance authority drifted")
     scripts = bounded["state_script_sha256"]
-    if not isinstance(scripts, dict) or set(scripts) != {
-        "scripts/materialize_state.py",
-        "scripts/model_identity.py",
-        "scripts/probe_performance_counters.py",
-        "scripts/public_projection.py",
-        "scripts/result_amendments.py",
-        "scripts/result_effective_identities.py",
-        "scripts/result_owner_indexes.py",
-        "scripts/result_release_status.py",
-        "scripts/state.py",
-        "scripts/validate_state.py",
-    } or any(re.fullmatch(r"[0-9a-f]{64}", value) is None for value in scripts.values()):
+    if (
+        not isinstance(scripts, dict)
+        or set(scripts)
+        != {
+            "scripts/materialize_state.py",
+            "scripts/model_identity.py",
+            "scripts/probe_performance_counters.py",
+            "scripts/public_projection.py",
+            "scripts/result_amendments.py",
+            "scripts/result_effective_identities.py",
+            "scripts/result_owner_indexes.py",
+            "scripts/result_release_status.py",
+            "scripts/state.py",
+            "scripts/validate_state.py",
+        }
+        or any(
+            re.fullmatch(r"[0-9a-f]{64}", value) is None for value in scripts.values()
+        )
+    ):
         raise AcceptanceError("reviewed State script digest set drifted")
     user = gh_json(["user"])
     if user.get("login", "").lower() != source["owner_login"]:
@@ -273,25 +287,16 @@ def fixture_preflight(
         raise AcceptanceError("gist is not owned by the exact fixture owner")
     if gist.get("public") is not False:
         raise AcceptanceError("proof gist must be secret")
+    gist_git_snapshot(gist, gist_id, bounded["fixture_gist_file"])
     release = gh_json(
         [f"repos/{bounded['release_repository']}/commits/{bounded['release_ref']}"]
     )
     if release.get("sha") != bounded["release_commit"]:
         raise AcceptanceError("publication-disabled release workflow commit drifted")
-    release_tag = gh_json(
-        [
-            f"repos/{bounded['release_repository']}/git/ref/tags/{bounded['release_ref']}"
-        ]
-    )
-    verify_exact_tag_response(
-        release_tag,
-        bounded["release_repository"],
-        bounded["release_ref"],
-        bounded["release_commit"],
-    )
     for repository_key, branch_key in (
         ("state_repository", "state_branch"),
         ("results_repository", "results_branch"),
+        ("release_repository", "release_ref"),
     ):
         branch = gh_json(
             [f"repos/{bounded[repository_key]}/branches/{bounded[branch_key]}"]
@@ -323,7 +328,9 @@ def verify_exact_tag_response(
     value: Any, repository: str, tag: str, commit: str
 ) -> None:
     if not isinstance(value, dict) or set(value) != {"ref", "node_id", "url", "object"}:
-        raise AcceptanceError(f"GitHub returned an inexact tag response for {repository}")
+        raise AcceptanceError(
+            f"GitHub returned an inexact tag response for {repository}"
+        )
     target = value.get("object")
     if (
         value.get("ref") != f"refs/tags/{tag}"
@@ -335,10 +342,14 @@ def verify_exact_tag_response(
         or target.get("type") != "commit"
         or not isinstance(target.get("url"), str)
     ):
-        raise AcceptanceError(f"GitHub returned an inexact tag response for {repository}")
+        raise AcceptanceError(
+            f"GitHub returned an inexact tag response for {repository}"
+        )
 
 
-def gist_file_content(value: Any, gist_id: str, filename: str) -> tuple[bool, str | None]:
+def gist_file_content(
+    value: Any, gist_id: str, filename: str
+) -> tuple[bool, str | None]:
     if (
         not isinstance(value, dict)
         or value.get("id") != gist_id
@@ -347,16 +358,182 @@ def gist_file_content(value: Any, gist_id: str, filename: str) -> tuple[bool, st
         or not isinstance(value.get("files"), dict)
     ):
         raise AcceptanceError("secret gist response identity drifted")
-    file = value["files"].get(filename)
+    files = value["files"]
+    if len(files) > MAX_GIST_FILES:
+        raise AcceptanceError("secret gist exceeds the bounded file count")
+    total_bytes = 0
+    for name, candidate in files.items():
+        if (
+            not isinstance(name, str)
+            or pathlib.PurePosixPath(name).name != name
+            or not isinstance(candidate, dict)
+            or candidate.get("truncated") is not False
+            or not isinstance(candidate.get("content"), str)
+        ):
+            raise AcceptanceError("secret gist contains an unsupported file")
+        total_bytes += len(candidate["content"].encode())
+        if total_bytes > MAX_GIST_BYTES:
+            raise AcceptanceError("secret gist exceeds the bounded content size")
+    file = files.get(filename)
     if file is None:
         return False, None
-    if (
-        not isinstance(file, dict)
-        or file.get("truncated") is not False
-        or not isinstance(file.get("content"), str)
-    ):
-        raise AcceptanceError("secret gist proof file is absent or truncated")
     return True, file["content"]
+
+
+def gist_git_snapshot(
+    value: Any, gist_id: str, filename: str
+) -> tuple[str, bool, str | None]:
+    present, content = gist_file_content(value, gist_id, filename)
+    if value.get("git_pull_url") != f"https://gist.github.com/{gist_id}.git":
+        raise AcceptanceError("secret gist Git authority drifted")
+    history = value.get("history")
+    if (
+        not isinstance(history, list)
+        or not history
+        or not isinstance(history[0], dict)
+        or not isinstance(history[0].get("version"), str)
+    ):
+        raise AcceptanceError("secret gist Git head is absent")
+    head = require_match(COMMIT, history[0]["version"], "secret gist Git head")
+    return head, present, content
+
+
+def secret_git_environment(temporary: pathlib.Path) -> dict[str, str]:
+    gh_config = pathlib.Path(
+        os.environ.get("GH_CONFIG_DIR", pathlib.Path.home() / ".config" / "gh")
+    ).resolve()
+    if not gh_config.is_dir():
+        raise AcceptanceError("gh configuration directory is unavailable")
+    isolated_home = temporary / "home"
+    isolated_home.mkdir(mode=0o700)
+    # This closed environment intentionally excludes GH_DEBUG, GIT_TRACE,
+    # GIT_CURL_VERBOSE, shell tracing, cloud credentials, and agent sockets.
+    return {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "HOME": str(isolated_home),
+        "GH_CONFIG_DIR": str(gh_config),
+        "GH_PROMPT_DISABLED": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_TERMINAL_PROMPT": "0",
+        "LANG": "C.UTF-8",
+        "LC_ALL": "C.UTF-8",
+        "NO_COLOR": "1",
+    }
+
+
+def secret_git(
+    args: list[str], *, cwd: pathlib.Path, env: dict[str, str], label: str
+) -> str:
+    try:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        raise AcceptanceError(
+            f"secret Gist Git {label} timed out; diagnostics redacted"
+        ) from None
+    if completed.returncode != 0:
+        raise AcceptanceError(f"secret Gist Git {label} failed; diagnostics redacted")
+    return completed.stdout.strip()
+
+
+def prepare_gist_git(
+    gist_id: str, expected_head: str, *, depth: int
+) -> tuple[tempfile.TemporaryDirectory, pathlib.Path, dict[str, str]]:
+    if (
+        run(["findmnt", "--noheadings", "--output", "FSTYPE", "--target", "/dev/shm"])
+        != "tmpfs"
+    ):
+        raise AcceptanceError("secret Gist Git transport requires /dev/shm tmpfs")
+    temporary = tempfile.TemporaryDirectory(
+        prefix="lean-eval-gist-cas-", dir="/dev/shm"
+    )
+    root = pathlib.Path(temporary.name)
+    repository = root / "gist"
+    repository.mkdir(mode=0o700)
+    env = secret_git_environment(root)
+    try:
+        secret_git(["init", "--quiet"], cwd=repository, env=env, label="initialization")
+        for key, value in (
+            ("credential.helper", "!gh auth git-credential"),
+            ("credential.useHttpPath", "true"),
+            ("core.hooksPath", "/dev/null"),
+            ("user.name", "LeanEval bounded staging operator"),
+            ("user.email", "lean-eval-staging@users.noreply.github.com"),
+        ):
+            secret_git(
+                ["config", "--local", key, value],
+                cwd=repository,
+                env=env,
+                label="configuration",
+            )
+        secret_git(
+            ["remote", "add", "origin", f"https://gist.github.com/{gist_id}.git"],
+            cwd=repository,
+            env=env,
+            label="remote binding",
+        )
+        secret_git(
+            [
+                "fetch",
+                "--quiet",
+                "--no-tags",
+                f"--depth={depth}",
+                "origin",
+                "+refs/heads/master:refs/remotes/origin/master",
+            ],
+            cwd=repository,
+            env=env,
+            label="fetch",
+        )
+        actual = secret_git(
+            ["rev-parse", "refs/remotes/origin/master"],
+            cwd=repository,
+            env=env,
+            label="head verification",
+        )
+        if actual != expected_head:
+            raise AcceptanceError("secret gist changed before atomic update")
+        secret_git(
+            ["checkout", "--quiet", "--detach", expected_head],
+            cwd=repository,
+            env=env,
+            label="checkout",
+        )
+        return temporary, repository, env
+    except BaseException:
+        temporary.cleanup()
+        raise
+
+
+def verify_gist_worktree_file(
+    repository: pathlib.Path,
+    filename: str,
+    expected_present: bool,
+    expected_content: str | None,
+) -> None:
+    if pathlib.PurePosixPath(filename).name != filename:
+        raise AcceptanceError("secret gist proof filename is not a basename")
+    path = repository / filename
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        if expected_present:
+            raise AcceptanceError("secret gist proof file disappeared") from None
+        return
+    if not expected_present:
+        raise AcceptanceError("secret gist proof file appeared unexpectedly")
+    if not stat.S_ISREG(metadata.st_mode) or path.is_symlink():
+        raise AcceptanceError("secret gist proof file is not a regular file")
+    if path.read_text(encoding="utf-8") != expected_content:
+        raise AcceptanceError("secret gist proof file content drifted")
 
 
 @dataclass
@@ -368,6 +545,8 @@ class FixtureMutation:
     tag: str
     prior_file_present: bool
     prior_file_content: str | None
+    prior_gist_head: str | None = None
+    written_gist_head: str | None = None
     written_file_content: str | None = None
     written_file_sha256: str | None = None
     gist_changed: bool = False
@@ -380,14 +559,15 @@ class FixtureMutation:
 
     def describe_targets(self) -> str:
         return (
-            f"gist={self.gist_id} file={self.filename}; "
+            f"gist={self.gist_id} file={self.filename} "
+            f"head={self.prior_gist_head}; "
             f"repository={self.repository} tag=refs/tags/{self.tag} commit={self.commit}"
         )
 
 
 def require_target_bound_approval(mutation: FixtureMutation) -> None:
     confirmation = (
-        f"APPROVE GIST {mutation.gist_id}/{mutation.filename} AND TAG "
+        f"APPROVE GIST {mutation.gist_id}/{mutation.filename}@{mutation.prior_gist_head} AND TAG "
         f"{mutation.repository}/refs/tags/{mutation.tag}@{mutation.commit} WITH EXACT CLEANUP"
     )
     print("\nExternal fixture approval is now required.")
@@ -400,13 +580,92 @@ def require_target_bound_approval(mutation: FixtureMutation) -> None:
         raise AcceptanceError("target-bound external approval was not supplied")
 
 
+def gist_cas_write(mutation: FixtureMutation) -> None:
+    if (
+        mutation.prior_gist_head is None
+        or mutation.written_file_content is None
+        or mutation.written_file_sha256 is None
+    ):
+        raise AcceptanceError("secret gist CAS write identity is incomplete")
+    temporary, repository, env = prepare_gist_git(
+        mutation.gist_id, mutation.prior_gist_head, depth=1
+    )
+    try:
+        verify_gist_worktree_file(
+            repository,
+            mutation.filename,
+            mutation.prior_file_present,
+            mutation.prior_file_content,
+        )
+        path = repository / mutation.filename
+        path.write_text(mutation.written_file_content, encoding="utf-8")
+        path.chmod(0o600)
+        secret_git(
+            ["add", "--", mutation.filename],
+            cwd=repository,
+            env=env,
+            label="proof staging",
+        )
+        secret_git(
+            ["commit", "--quiet", "-m", "Temporary LeanEval agent proof"],
+            cwd=repository,
+            env=env,
+            label="proof commit",
+        )
+        written_head = secret_git(
+            ["rev-parse", "HEAD"],
+            cwd=repository,
+            env=env,
+            label="proof identity",
+        )
+        mutation.written_gist_head = require_match(
+            COMMIT, written_head, "written secret gist head"
+        )
+        secret_git(
+            [
+                "push",
+                "--quiet",
+                f"--force-with-lease=refs/heads/master:{mutation.prior_gist_head}",
+                "origin",
+                f"{mutation.written_gist_head}:refs/heads/master",
+            ],
+            cwd=repository,
+            env=env,
+            label="compare-and-swap write",
+        )
+        mutation.gist_changed = True
+    finally:
+        temporary.cleanup()
+    current = gh_json([f"gists/{mutation.gist_id}"])
+    head, present, content = gist_git_snapshot(
+        current, mutation.gist_id, mutation.filename
+    )
+    if (
+        head != mutation.written_gist_head
+        or not present
+        or content != mutation.written_file_content
+        or hashlib.sha256(content.encode()).hexdigest() != mutation.written_file_sha256
+    ):
+        raise AcceptanceError("secret gist CAS write did not verify exactly")
+
+
 def restore_gist(mutation: FixtureMutation) -> None:
     if not mutation.gist_changed:
         return
+    if (
+        mutation.prior_gist_head is None
+        or mutation.written_gist_head is None
+        or mutation.written_file_content is None
+        or mutation.written_file_sha256 is None
+    ):
+        raise AcceptanceError("secret gist CAS restore identity is incomplete")
     current = gh_json([f"gists/{mutation.gist_id}"])
-    present, content = gist_file_content(current, mutation.gist_id, mutation.filename)
+    head, present, content = gist_git_snapshot(
+        current, mutation.gist_id, mutation.filename
+    )
     if (
         mutation.gist_restore_started
+        and head == mutation.prior_gist_head
         and present == mutation.prior_file_present
         and content == mutation.prior_file_content
     ):
@@ -416,32 +675,57 @@ def restore_gist(mutation: FixtureMutation) -> None:
         mutation.written_file_sha256 = None
         return
     if (
-        not present
-        or mutation.written_file_content is None
-        or mutation.written_file_sha256 is None
+        head != mutation.written_gist_head
+        or not present
         or content != mutation.written_file_content
-        or hashlib.sha256(content.encode()).hexdigest()
-        != mutation.written_file_sha256
+        or hashlib.sha256(content.encode()).hexdigest() != mutation.written_file_sha256
     ):
         raise AcceptanceError(
-            "secret gist proof file changed after this run's write; refusing overwrite"
+            "secret gist changed after this run's write; refusing CAS restore"
         )
-    replacement: dict[str, Any] | None
-    if mutation.prior_file_present:
-        replacement = {"content": mutation.prior_file_content}
-    else:
-        replacement = None
-    mutation.gist_restore_started = True
-    response = gh_json(
-        [f"gists/{mutation.gist_id}"],
-        method="PATCH",
-        fields={"files": {mutation.filename: replacement}},
+    temporary, repository, env = prepare_gist_git(
+        mutation.gist_id, mutation.written_gist_head, depth=2
     )
-    present, content = gist_file_content(
-        response, mutation.gist_id, mutation.filename
+    try:
+        verify_gist_worktree_file(
+            repository,
+            mutation.filename,
+            True,
+            mutation.written_file_content,
+        )
+        parent = secret_git(
+            ["rev-parse", f"{mutation.written_gist_head}^"],
+            cwd=repository,
+            env=env,
+            label="prior head verification",
+        )
+        if parent != mutation.prior_gist_head:
+            raise AcceptanceError("secret gist proof commit parent drifted")
+        mutation.gist_restore_started = True
+        secret_git(
+            [
+                "push",
+                "--quiet",
+                f"--force-with-lease=refs/heads/master:{mutation.written_gist_head}",
+                "origin",
+                f"{mutation.prior_gist_head}:refs/heads/master",
+            ],
+            cwd=repository,
+            env=env,
+            label="compare-and-swap restore",
+        )
+    finally:
+        temporary.cleanup()
+    restored = gh_json([f"gists/{mutation.gist_id}"])
+    restored_head, restored_present, restored_content = gist_git_snapshot(
+        restored, mutation.gist_id, mutation.filename
     )
-    if present != mutation.prior_file_present or content != mutation.prior_file_content:
-        raise AcceptanceError("secret gist proof-file restoration did not verify")
+    if (
+        restored_head != mutation.prior_gist_head
+        or restored_present != mutation.prior_file_present
+        or restored_content != mutation.prior_file_content
+    ):
+        raise AcceptanceError("secret gist CAS restoration did not verify")
     mutation.gist_changed = False
     mutation.gist_restore_started = False
     mutation.written_file_content = None
@@ -460,7 +744,9 @@ def remove_created_tag(mutation: FixtureMutation) -> None:
     )
     response = gh_json([mutation.tag_endpoint], method="DELETE")
     if response is not None:
-        raise AcceptanceError("generated fixture tag deletion returned an inexact response")
+        raise AcceptanceError(
+            "generated fixture tag deletion returned an inexact response"
+        )
     if gh_json_or_authenticated_404([mutation.tag_endpoint]) is not None:
         raise AcceptanceError("generated fixture tag deletion did not verify")
     mutation.tag_created = False
@@ -493,7 +779,7 @@ def apply_exact_proof_and_tag(
     bounded = fixture["bounded_acceptance"]
     source = fixture["source"]
     gist = gh_json([f"gists/{gist_id}"])
-    prior_present, prior_content = gist_file_content(
+    prior_head, prior_present, prior_content = gist_git_snapshot(
         gist, gist_id, bounded["fixture_gist_file"]
     )
     mutation = FixtureMutation(
@@ -504,6 +790,7 @@ def apply_exact_proof_and_tag(
         tag=tag,
         prior_file_present=prior_present,
         prior_file_content=prior_content,
+        prior_gist_head=prior_head,
         written_file_content=challenge,
         written_file_sha256=hashlib.sha256(challenge.encode()).hexdigest(),
     )
@@ -514,21 +801,15 @@ def apply_exact_proof_and_tag(
     require_target_bound_approval(mutation)
     print(f"Interruption rollback targets: {mutation.describe_targets()}")
     try:
-        response = gh_json(
-            [f"gists/{gist_id}"],
-            method="PATCH",
-            fields={"files": {mutation.filename: {"content": challenge}}},
-        )
-        mutation.gist_changed = True
-        present, content = gist_file_content(response, gist_id, mutation.filename)
-        if not present or content != challenge:
-            raise AcceptanceError("secret gist proof update did not verify exactly")
+        gist_cas_write(mutation)
         tag_response = gh_json(
             [f"repos/{source['repository']}/git/refs"],
             method="POST",
             fields={"ref": f"refs/tags/{tag}", "sha": source["commit"]},
         )
-        verify_exact_tag_response(tag_response, source["repository"], tag, source["commit"])
+        verify_exact_tag_response(
+            tag_response, source["repository"], tag, source["commit"]
+        )
         mutation.tag_created = True
         verify_exact_tag_response(
             gh_json_or_authenticated_404([mutation.tag_endpoint]),
@@ -541,17 +822,22 @@ def apply_exact_proof_and_tag(
         try:
             ambiguous_tag = False
             current_gist = gh_json([f"gists/{gist_id}"])
-            current_present, current_content = gist_file_content(
+            current_head, current_present, current_content = gist_git_snapshot(
                 current_gist, gist_id, mutation.filename
             )
-            if current_present and current_content == challenge:
-                mutation.gist_changed = (
-                    current_present != mutation.prior_file_present
-                    or current_content != mutation.prior_file_content
-                )
-            elif (
-                current_present != mutation.prior_file_present
-                or current_content != mutation.prior_file_content
+            if (
+                mutation.written_gist_head is not None
+                and current_head == mutation.written_gist_head
+                and current_present
+                and current_content == challenge
+                and hashlib.sha256(current_content.encode()).hexdigest()
+                == mutation.written_file_sha256
+            ):
+                mutation.gist_changed = True
+            elif not (
+                current_head == mutation.prior_gist_head
+                and current_present == mutation.prior_file_present
+                and current_content == mutation.prior_file_content
             ):
                 raise AcceptanceError(
                     "proof gist changed to an unrecognized value; refusing broad cleanup"
@@ -580,13 +866,25 @@ def assert_state_event_absent(fixture: dict[str, Any], identifier: str) -> None:
     bounded = fixture["bounded_acceptance"]
     value = gh_json_or_authenticated_404(
         [
-        f"repos/{bounded['state_repository']}/contents/events/{identifier[:2]}/{identifier}.json",
-        "-f",
-        f"ref={bounded['state_branch']}",
+            f"repos/{bounded['state_repository']}/contents/events/{identifier[:2]}/{identifier}.json",
+            "-f",
+            f"ref={bounded['state_branch']}",
         ]
     )
     if value is not None:
         raise AcceptanceError(f"denied operation created State event {identifier}")
+
+
+def state_branch_commit(fixture: dict[str, Any]) -> str:
+    bounded = fixture["bounded_acceptance"]
+    branch = gh_json(
+        [f"repos/{bounded['state_repository']}/branches/{bounded['state_branch']}"]
+    )
+    if not isinstance(branch, dict) or not isinstance(branch.get("commit"), dict):
+        raise AcceptanceError("staging State branch response drifted")
+    return require_match(
+        COMMIT, branch["commit"].get("sha", ""), "staging State branch commit"
+    )
 
 
 def mutation(
@@ -723,12 +1021,12 @@ def wait_for_workflow_run(
     raise AcceptanceError(f"timed out waiting for {repository} {workflow}")
 
 
-def validate_new_submission(
+def validate_submission_binding(
     body: dict[str, Any],
     submission_id: str,
     expected_submission: dict[str, Any],
     expected_commit: str,
-) -> str:
+) -> None:
     if set(body) != {
         "submission_id",
         "owner",
@@ -765,11 +1063,25 @@ def validate_new_submission(
     except ValueError as error:
         raise AcceptanceError("submission received_at is not canonical") from error
     now = datetime.datetime.now(datetime.timezone.utc)
-    if received_at.tzinfo is None or not datetime.timedelta() <= now - received_at <= datetime.timedelta(hours=2):
+    if (
+        received_at.tzinfo is None
+        or not datetime.timedelta() <= now - received_at <= datetime.timedelta(hours=2)
+    ):
         raise AcceptanceError("submission is not attributable to this bounded run")
     uuid_timestamp = int(submission_id[:8] + submission_id[9:13], 16) / 1000
     if abs(received_at.timestamp() - uuid_timestamp) > 300:
         raise AcceptanceError("submission UUID and received_at are not coherent")
+
+
+def validate_new_submission(
+    body: dict[str, Any],
+    submission_id: str,
+    expected_submission: dict[str, Any],
+    expected_commit: str,
+) -> str:
+    validate_submission_binding(
+        body, submission_id, expected_submission, expected_commit
+    )
     result_id = body.get("result_id")
     if not isinstance(result_id, str):
         raise AcceptanceError("accepted submission lacks a Result")
@@ -789,7 +1101,10 @@ def wait_submission(
         body = api.request("GET", f"/api/v1/submissions/{submission_id}", bearer=token)
         archive = body.get("archive") or {}
         evaluation = body.get("evaluation") or {}
-        if archive.get("status") == "completed" and evaluation.get("status") == "accepted":
+        if (
+            archive.get("status") == "completed"
+            and evaluation.get("status") == "accepted"
+        ):
             result_id = validate_new_submission(
                 body, submission_id, expected_submission, expected_commit
             )
@@ -798,6 +1113,9 @@ def wait_submission(
             "rejected",
             "failed",
         }:
+            validate_submission_binding(
+                body, submission_id, expected_submission, expected_commit
+            )
             raise SubmissionTerminalError(
                 f"submission {submission_id} terminated without acceptance"
             )
@@ -848,7 +1166,9 @@ def clone_and_assert_state(
             cwd=root,
         )
         scripts = {
-            path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+            path.relative_to(root).as_posix(): hashlib.sha256(
+                path.read_bytes()
+            ).hexdigest()
             for path in (root / "scripts").glob("*.py")
             if path.is_file() and not path.is_symlink()
         }
@@ -1055,7 +1375,7 @@ def assert_disabled_routes(
     model_id: str,
 ) -> None:
     source = fixture["source"]
-    intake_identifier = event_id()
+    state_before_intake_probe = state_branch_commit(fixture)
     intake = api.request(
         "POST",
         "/api/v1/agent/challenges",
@@ -1065,12 +1385,12 @@ def assert_disabled_routes(
             "source_repository": source["repository"],
             "source_commit": source["commit"],
         },
-        idempotency_key=intake_identifier,
         expected=503,
     )
     if intake != {"error": "intake_disabled"}:
         raise AcceptanceError("disabled intake route did not fail closed")
-    assert_state_event_absent(fixture, intake_identifier)
+    if state_branch_commit(fixture) != state_before_intake_probe:
+        raise AcceptanceError("disabled intake probe changed staging State")
     cases = (
         ("POST", "/api/v1/model-identities", {"display_name": "must remain disabled"}),
         (
@@ -1453,6 +1773,8 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
             bounded["release_ref"],
             "-f",
             f"submission_id={headless_id}",
+            "-f",
+            f"expected_release_commit={bounded['release_commit']}",
             "-f",
             "confirm_staging_smoke=true",
         ]
