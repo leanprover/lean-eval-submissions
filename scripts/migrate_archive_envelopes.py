@@ -50,6 +50,13 @@ CANONICAL_BOUND_ARCHIVE_COUNT = 439
 CANONICAL_SELECTED_INVENTORY_DIGEST = (
     "a8913f1c8b5073e5b7ab309ba10481b615ca4fc00e629e41a9e57962f3afebd4"
 )
+AUDIT_REVIEW_BRANCH = "refs/heads/archive-file-key-rewrap-v1"
+AUDIT_MAIN_REF = "refs/remotes/origin/main"
+AUDIT_ORIGINS = {
+    "git@github.com:leanprover/lean-eval-audit.git",
+    "https://github.com/leanprover/lean-eval-audit",
+    "https://github.com/leanprover/lean-eval-audit.git",
+}
 PLAN_ENTRY_DIGEST_DOMAIN = b"lean-eval-private-archive-crosswalk-entry-v1\0"
 PRESERVED_FIELDS = {
     "submission_repo",
@@ -117,6 +124,142 @@ def _canonical_bytes(value: Any) -> bytes:
         separators=(",", ":"),
         sort_keys=True,
     ).encode("utf-8")
+
+
+def _git(
+    root: pathlib.Path,
+    *args: str,
+    check: bool = True,
+) -> subprocess.CompletedProcess[bytes]:
+    completed = subprocess.run(
+        ["git", "-C", str(root), *args],
+        check=False,
+        capture_output=True,
+    )
+    if check and completed.returncode != 0:
+        diagnostic = completed.stderr.decode("utf-8", errors="replace").strip()
+        raise MigrationError(f"git {args[0]} failed: {diagnostic}")
+    return completed
+
+
+def count_archive_ciphertexts_in_tree(root: pathlib.Path, tree: str) -> int:
+    if COMMIT.fullmatch(tree) is None:
+        raise MigrationError("audit tree identity must be a full Git object ID")
+    output = _git(root, "ls-tree", "-r", "--name-only", "-z", tree).stdout
+    return sum(
+        path.endswith(b".tar.age")
+        for path in output.split(b"\0")
+        if path
+    )
+
+
+def _require_remote_review_branch_absent(root: pathlib.Path) -> None:
+    result = _git(
+        root,
+        "ls-remote",
+        "--exit-code",
+        "origin",
+        AUDIT_REVIEW_BRANCH,
+        check=False,
+    )
+    if result.returncode == 0:
+        raise MigrationError("audit migration review branch already exists")
+    if result.returncode != 2 or result.stdout:
+        diagnostic = result.stderr.decode("utf-8", errors="replace").strip()
+        raise MigrationError(
+            f"could not prove audit migration review branch absent: {diagnostic}"
+        )
+
+
+def _migration_touched_paths(plan: dict[str, Any]) -> set[str]:
+    paths: set[str] = set()
+    entries = plan.get("entries")
+    if not isinstance(entries, list):
+        raise MigrationError("migration plan entries are invalid")
+    for entry in entries:
+        if not isinstance(entry, dict):
+            raise MigrationError("migration plan entry is invalid")
+        for field in ("source_path", "target_path"):
+            path = entry.get(field)
+            if not isinstance(path, str) or not path.endswith(".tar.age"):
+                raise MigrationError("migration plan archive path is invalid")
+            paths.add(path)
+            paths.add(path.removesuffix(".tar.age") + ".json")
+    if len(paths) != len(entries) * 4:
+        raise MigrationError("migration plan touched paths are not unique")
+    return paths
+
+
+def preflight_audit_checkout(
+    root: pathlib.Path,
+    source_commit: str,
+    plan: dict[str, Any],
+) -> dict[str, Any]:
+    if COMMIT.fullmatch(source_commit) is None:
+        raise MigrationError("audit source commit must be a full commit ID")
+    origin = _git(root, "remote", "get-url", "origin").stdout.decode().strip()
+    if origin not in AUDIT_ORIGINS:
+        raise MigrationError("audit checkout origin is not canonical")
+    if _git(root, "rev-parse", "HEAD").stdout.decode().strip() != source_commit:
+        raise MigrationError("audit checkout is not at the selected source commit")
+    if _git(root, "status", "--porcelain").stdout:
+        raise MigrationError("audit source checkout is not clean")
+    _require_remote_review_branch_absent(root)
+    _git(
+        root,
+        "fetch",
+        "--no-tags",
+        "origin",
+        f"+refs/heads/main:{AUDIT_MAIN_REF}",
+    )
+    main_commit = _git(root, "rev-parse", AUDIT_MAIN_REF).stdout.decode().strip()
+    if COMMIT.fullmatch(main_commit) is None:
+        raise MigrationError("audit main did not resolve to a full commit ID")
+    ancestor = _git(
+        root,
+        "merge-base",
+        "--is-ancestor",
+        source_commit,
+        main_commit,
+        check=False,
+    )
+    if ancestor.returncode == 1:
+        raise MigrationError("selected audit commit is not an ancestor of audit main")
+    if ancestor.returncode != 0:
+        diagnostic = ancestor.stderr.decode("utf-8", errors="replace").strip()
+        raise MigrationError(
+            f"could not compare selected audit commit to main: {diagnostic}"
+        )
+    changed_raw = _git(
+        root,
+        "diff",
+        "--no-renames",
+        "--name-only",
+        "-z",
+        f"{source_commit}..{main_commit}",
+    ).stdout
+    changed = {
+        path.decode("utf-8")
+        for path in changed_raw.split(b"\0")
+        if path
+    }
+    touched = _migration_touched_paths(plan)
+    overlap = sorted(changed & touched)
+    if overlap:
+        overlap_digest = hashlib.sha256(
+            b"\0".join(path.encode("utf-8") for path in overlap)
+        ).hexdigest()
+        raise MigrationError(
+            f"audit main changed {len(overlap)} migration-touched paths "
+            f"(path-set digest {overlap_digest})"
+        )
+    return {
+        "audit_main_commit": main_commit,
+        "changed_path_count": len(changed),
+        "migration_touched_path_count": len(touched),
+        "overlap_count": 0,
+        "review_branch_absent": True,
+    }
 
 
 def _timestamp_milliseconds(value: Any) -> int:
@@ -752,6 +895,13 @@ def main(argv: list[str] | None = None) -> int:
     validate.add_argument("--source-root", required=True, type=pathlib.Path)
     validate.add_argument("--output-root", required=True, type=pathlib.Path)
     validate.add_argument("--output", required=True, type=pathlib.Path)
+    preflight = commands.add_parser("preflight-audit")
+    preflight.add_argument("--audit-root", required=True, type=pathlib.Path)
+    preflight.add_argument("--source-commit", required=True)
+    preflight.add_argument("--plan", required=True, type=pathlib.Path)
+    count = commands.add_parser("count-archive-ciphertexts")
+    count.add_argument("--audit-root", required=True, type=pathlib.Path)
+    count.add_argument("--tree", required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "inventory":
@@ -770,7 +920,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.adapter_executable.resolve(),
                 args.source_path,
             )
-        else:
+        elif args.command == "validate-output":
             _write(
                 args.output,
                 validate_output(
@@ -778,6 +928,25 @@ def main(argv: list[str] | None = None) -> int:
                     args.source_root.resolve(),
                     args.output_root.resolve(),
                 ),
+            )
+        elif args.command == "preflight-audit":
+            print(
+                json.dumps(
+                    preflight_audit_checkout(
+                        args.audit_root.resolve(),
+                        args.source_commit,
+                        _load_plan(args.plan),
+                    ),
+                    ensure_ascii=True,
+                    separators=(",", ":"),
+                    sort_keys=True,
+                )
+            )
+        else:
+            print(
+                count_archive_ciphertexts_in_tree(
+                    args.audit_root.resolve(), args.tree
+                )
             )
     except (MigrationError, OSError, ValueError, subprocess.SubprocessError) as error:
         print(f"error: {error}", file=sys.stderr)

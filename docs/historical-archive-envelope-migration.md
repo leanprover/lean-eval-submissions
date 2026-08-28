@@ -29,10 +29,16 @@ decrypts an archive payload and never validates plaintext outside the replay
 sandbox.
 
 The protected workflow is manual and dry by default. Apply requires the exact
-commit, selected-plan digest, count `439`, confirmation text
+audit commit, exact reviewed workflow commit, selected-plan digest, count
+`439`, confirmation text
 `stage-envelope-migration`, the historical RSA identity, the Encrypt-only
 migration role, and audit-repository credentials. It stages a normal review
 branch named `archive-file-key-rewrap-v1`; it does not update audit `main`.
+Before dependency installation or credential exposure, apply proves that the
+review branch is absent, fetches current audit `main`, and refuses any drift in
+the 439 selected source/sidecar or target/sidecar paths. A failed run is
+retryable only while the review branch is still absent; an existing branch or
+an inconclusive remote lookup is a hard stop.
 The reviewed template must first be applied, at a separate infrastructure
 approval gate, to every stack that must wrap or replay these archives. It adds
 only exact-context v2 Encrypt authority to the production migration role,
@@ -42,6 +48,13 @@ Applying this template is distinct from connecting the production live-intake
 Wrap role and from approving release
 controller trust. The repository workflow does not apply the stack or enable
 production capability.
+
+Before apply, prepare the paired retirement changes. After the reviewed audit
+branch is promoted, remove the one-shot workflow, migration-only environment
+variable and credentials, and the production migration Encrypt role and stack
+output. Retain v2 Decrypt in the replay unwrap role and retain the schema-3
+file-key replay implementation. The live archiver App credentials are shared
+with ordinary archive workflows and are not migration-only retirement targets.
 
 The legacy RSA stanza remains in each unchanged age header. After promotion,
 the custodian must destroy the historical RSA identity. Exact ciphertext

@@ -15,6 +15,10 @@ on:
         description: Exact number of unique bound schema-1 archives (439)
         required: true
         type: string
+      expected_workflow_commit:
+        description: Exact reviewed lean-eval-submissions workflow commit
+        required: true
+        type: string
       apply:
         description: Build and push the isolated migration review branch
         required: true
@@ -35,18 +39,27 @@ concurrency:
 
 jobs:
   authorize-manual:
-    permissions: {}
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 1
     steps:
       - name: Require an upstream protected-main dispatch
         env:
           EVENT_REF: ${{ github.ref }}
+          EVENT_REF_PROTECTED: ${{ github.ref_protected }}
           EVENT_REPOSITORY: ${{ github.repository }}
+          EVENT_SHA: ${{ github.sha }}
+          EXPECTED_WORKFLOW_COMMIT: ${{ inputs.expected_workflow_commit }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           test "$EVENT_REPOSITORY" = leanprover/lean-eval-submissions
           test "$EVENT_REF" = refs/heads/main
+          test "$EVENT_REF_PROTECTED" = true
+          [[ "$EXPECTED_WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$EXPECTED_WORKFLOW_COMMIT" = "$EVENT_SHA"
+          test "$(gh api repos/leanprover/lean-eval-submissions/branches/main --jq .protected)" = true
 
   migrate:
     needs: authorize-manual
@@ -106,6 +119,35 @@ jobs:
         run: |
           set -euo pipefail
           test "$CONFIRMATION" = stage-envelope-migration
+
+      - name: Prove a fresh review branch and non-overlapping audit main
+        if: inputs.apply == true
+        env:
+          AUDIT_COMMIT: ${{ inputs.audit_commit }}
+          AUDIT_MIGRATION_READ_KEY: ${{ secrets.AUDIT_MIGRATION_READ_KEY }}
+        run: |
+          set -euo pipefail
+          read_key=/dev/shm/lean-eval-audit-migration-read-key
+          known_hosts="$RUNNER_TEMP/lean-eval-audit-known-hosts"
+          cleanup_read_key() {
+            rm -f "$read_key" "$known_hosts"
+            unset AUDIT_MIGRATION_READ_KEY GIT_SSH_COMMAND
+          }
+          trap cleanup_read_key EXIT
+          test -n "$AUDIT_MIGRATION_READ_KEY"
+          umask 077
+          printf '%s\n' "$AUDIT_MIGRATION_READ_KEY" > "$read_key"
+          unset AUDIT_MIGRATION_READ_KEY
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$known_hosts"
+          GIT_SSH_COMMAND="ssh -i $read_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15" \
+            python scripts/migrate_archive_envelopes.py preflight-audit \
+              --audit-root audit \
+              --source-commit "$AUDIT_COMMIT" \
+              --plan "$RUNNER_TEMP/archive-migration-plan.json"
+          cleanup_read_key
+          trap - EXIT
 
       - name: Install hash-locked adapter dependencies
         if: inputs.apply == true
@@ -267,16 +309,24 @@ jobs:
           git -C audit switch -c archive-file-key-rewrap-v1
           jq -r '.entries[].source_path' "$RUNNER_TEMP/archive-migration-plan.json" \
             | while IFS= read -r source_path; do
-                git -C audit rm -- "$source_path" "${source_path%.tar.age}.json"
+                git -C audit rm --quiet -- \
+                  "$source_path" "${source_path%.tar.age}.json"
               done
           cp -a "$RUNNER_TEMP/migrated-audit/." audit/
           git -C audit config user.name lean-eval-archiver
           git -C audit config user.email lean-eval-archiver@users.noreply.github.com
           git -C audit add .
           git -C audit diff --cached --check
-          test "$(git -C audit ls-files '*.tar.age' | wc -l)" = \
-            "$(git -C audit ls-tree -r --name-only ${{ inputs.audit_commit }} '*.tar.age' | wc -l)"
-          git -C audit commit -m "migration: rewrap bound historical archive file keys"
+          staged_tree=$(git -C audit write-tree)
+          before_count=$(python scripts/migrate_archive_envelopes.py \
+            count-archive-ciphertexts --audit-root audit \
+            --tree ${{ inputs.audit_commit }})
+          after_count=$(python scripts/migrate_archive_envelopes.py \
+            count-archive-ciphertexts --audit-root audit \
+            --tree "$staged_tree")
+          test "$after_count" = "$before_count"
+          git -C audit commit --quiet \
+            -m "migration: rewrap bound historical archive file keys"
           audit_basic_auth=$(printf 'x-access-token:%s' "$audit_token" | base64 -w0)
           unset audit_token
           GIT_CONFIG_COUNT=1 \

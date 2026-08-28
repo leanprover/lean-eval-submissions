@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 import pathlib
 import re
 import unittest
-
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
@@ -35,7 +36,19 @@ class ManualDispatchRefGuardTests(unittest.TestCase):
 
     def test_archive_migration_wrong_ref_fails_before_protected_job(self) -> None:
         source = workflow("migrate-archive-envelopes.yml")
-        self.assert_permission_free_main_guard(source)
+        authorization = job(source, "authorize-manual")
+        self.assertIn("contents: read", authorization)
+        self.assertIn('test "$EVENT_REF" = refs/heads/main', authorization)
+        self.assertIn('test "$EVENT_REF_PROTECTED" = true', authorization)
+        self.assertIn(
+            'test "$EXPECTED_WORKFLOW_COMMIT" = "$EVENT_SHA"', authorization
+        )
+        self.assertIn(
+            "gh api repos/leanprover/lean-eval-submissions/branches/main",
+            authorization,
+        )
+        self.assertNotIn("secrets.", authorization)
+        self.assertNotIn("environment:", authorization)
         migration = job(source, "migrate")
         self.assertIn("needs: authorize-manual", migration)
         self.assertNotIn("if: github.ref == 'refs/heads/main'", migration)
