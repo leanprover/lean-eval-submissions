@@ -28,7 +28,7 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURE = ROOT / "configuration" / "staging-lifecycle-smoke-v1.json"
-EXPECTED_FIXTURE_SHA256 = "df550d596ea1266fcd136b27f6c1457893fef888beb81888f41c82b4d1f6450c"
+EXPECTED_FIXTURE_SHA256 = "d38c85ace7594273bb3d465ff95aed1aa03f8fcb726499107a81a458b7a214bb"
 UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 )
@@ -144,7 +144,7 @@ class Api:
         accepted = (expected,) if isinstance(expected, int) else expected
         if status not in accepted:
             raise AcceptanceError(
-                f"{method} {path}: expected {accepted}, got {status}: {payload}"
+                f"{method} {path}: expected HTTP {accepted}, got {status}; response redacted"
             )
         if not isinstance(payload, dict):
             raise AcceptanceError(f"{method} {path}: response was not an object")
@@ -238,7 +238,7 @@ def fixture_preflight(
         "results_branch": "staging-results",
         "release_repository": "leanprover/lean-eval-releases",
         "release_workflow": "credentialed-release-staging-smoke.yml",
-        "release_ref": "main",
+        "release_ref": "lean-eval-staging-smoke/c27928a56fb3fb6ec0506ac4de78fa6e732ccc02",
         "release_commit": "c27928a56fb3fb6ec0506ac4de78fa6e732ccc02",
         "release_run_name_prefix": "Reconstruct staging submission ",
         "fixture_gist_file": "lean-eval-proof.txt",
@@ -278,10 +278,20 @@ def fixture_preflight(
     )
     if release.get("sha") != bounded["release_commit"]:
         raise AcceptanceError("publication-disabled release workflow commit drifted")
+    release_tag = gh_json(
+        [
+            f"repos/{bounded['release_repository']}/git/ref/tags/{bounded['release_ref']}"
+        ]
+    )
+    verify_exact_tag_response(
+        release_tag,
+        bounded["release_repository"],
+        bounded["release_ref"],
+        bounded["release_commit"],
+    )
     for repository_key, branch_key in (
         ("state_repository", "state_branch"),
         ("results_repository", "results_branch"),
-        ("release_repository", "release_ref"),
     ):
         branch = gh_json(
             [f"repos/{bounded[repository_key]}/branches/{bounded[branch_key]}"]
@@ -358,7 +368,10 @@ class FixtureMutation:
     tag: str
     prior_file_present: bool
     prior_file_content: str | None
+    written_file_content: str | None = None
+    written_file_sha256: str | None = None
     gist_changed: bool = False
+    gist_restore_started: bool = False
     tag_created: bool = False
 
     @property
@@ -390,11 +403,35 @@ def require_target_bound_approval(mutation: FixtureMutation) -> None:
 def restore_gist(mutation: FixtureMutation) -> None:
     if not mutation.gist_changed:
         return
+    current = gh_json([f"gists/{mutation.gist_id}"])
+    present, content = gist_file_content(current, mutation.gist_id, mutation.filename)
+    if (
+        mutation.gist_restore_started
+        and present == mutation.prior_file_present
+        and content == mutation.prior_file_content
+    ):
+        mutation.gist_changed = False
+        mutation.gist_restore_started = False
+        mutation.written_file_content = None
+        mutation.written_file_sha256 = None
+        return
+    if (
+        not present
+        or mutation.written_file_content is None
+        or mutation.written_file_sha256 is None
+        or content != mutation.written_file_content
+        or hashlib.sha256(content.encode()).hexdigest()
+        != mutation.written_file_sha256
+    ):
+        raise AcceptanceError(
+            "secret gist proof file changed after this run's write; refusing overwrite"
+        )
     replacement: dict[str, Any] | None
     if mutation.prior_file_present:
         replacement = {"content": mutation.prior_file_content}
     else:
         replacement = None
+    mutation.gist_restore_started = True
     response = gh_json(
         [f"gists/{mutation.gist_id}"],
         method="PATCH",
@@ -406,6 +443,9 @@ def restore_gist(mutation: FixtureMutation) -> None:
     if present != mutation.prior_file_present or content != mutation.prior_file_content:
         raise AcceptanceError("secret gist proof-file restoration did not verify")
     mutation.gist_changed = False
+    mutation.gist_restore_started = False
+    mutation.written_file_content = None
+    mutation.written_file_sha256 = None
 
 
 def remove_created_tag(mutation: FixtureMutation) -> None:
@@ -441,6 +481,12 @@ def cleanup_fixture_mutation(mutation: FixtureMutation, *, remove_tag: bool) -> 
         raise AcceptanceError("; ".join(failures))
 
 
+def fixture_cleanup_is_proved_safe(
+    *, headless_post_started: bool, headless_terminal: bool
+) -> bool:
+    return not headless_post_started or headless_terminal
+
+
 def apply_exact_proof_and_tag(
     fixture: dict[str, Any], gist_id: str, challenge: str, tag: str
 ) -> FixtureMutation:
@@ -458,6 +504,8 @@ def apply_exact_proof_and_tag(
         tag=tag,
         prior_file_present=prior_present,
         prior_file_content=prior_content,
+        written_file_content=challenge,
+        written_file_sha256=hashlib.sha256(challenge.encode()).hexdigest(),
     )
     if gh_json_or_authenticated_404([mutation.tag_endpoint]) is not None:
         raise AcceptanceError(
@@ -1004,13 +1052,41 @@ def assert_disabled_routes(
     fixture: dict[str, Any],
     browser_submission_id: str,
     browser_result: str,
+    model_id: str,
 ) -> None:
+    source = fixture["source"]
+    intake_identifier = event_id()
+    intake = api.request(
+        "POST",
+        "/api/v1/agent/challenges",
+        {
+            "login": source["owner_login"],
+            "gist_id": "0" * 20,
+            "source_repository": source["repository"],
+            "source_commit": source["commit"],
+        },
+        idempotency_key=intake_identifier,
+        expected=503,
+    )
+    if intake != {"error": "intake_disabled"}:
+        raise AcceptanceError("disabled intake route did not fail closed")
+    assert_state_event_absent(fixture, intake_identifier)
     cases = (
         ("POST", "/api/v1/model-identities", {"display_name": "must remain disabled"}),
         (
             "POST",
+            f"/api/v1/model-identities/{model_id}/decisions",
+            {"decision": "approve"},
+        ),
+        (
+            "POST",
             f"/api/v1/results/{browser_result}/problem-repairs",
             fixture["lifecycle_cases"]["problem_repair"]["success_request"],
+        ),
+        (
+            "POST",
+            f"/api/v1/results/{browser_result}/problem-repairs/decisions",
+            fixture["lifecycle_cases"]["problem_repair"]["maintainer_decision"],
         ),
         (
             "PATCH",
@@ -1132,16 +1208,19 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
     }
     headless_id = challenge["submission_id"]
     headless_terminal = False
-    accepted_by_server = False
+    headless_post_started = False
     fixture_cleaned = False
     try:
+        # From this point until a terminal status is observed, transport failure
+        # is an unknown acceptance outcome. The server may have committed and
+        # dispatched even when this process receives no response.
+        headless_post_started = True
         accepted = api.request(
             "POST",
             "/api/v1/agent/submissions",
             {"challenge": signed_challenge, "submission": accepted_submission},
             expected=202,
         )
-        accepted_by_server = True
         if (
             set(accepted)
             != {"submission_id", "status", "dispatch_status", "session_token"}
@@ -1186,9 +1265,12 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
     finally:
         if fixture_cleaned:
             pass
-        elif accepted_by_server and not headless_terminal:
+        elif not fixture_cleanup_is_proved_safe(
+            headless_post_started=headless_post_started,
+            headless_terminal=headless_terminal,
+        ):
             print(
-                f"External proof and tag must remain until terminal evaluation, then be restored/removed: {lease.describe_targets()}",
+                f"Headless acceptance outcome may be committed; external proof and tag must remain until terminal evaluation is reconciled, then be restored/removed: {lease.describe_targets()}",
                 file=sys.stderr,
             )
         else:
@@ -1385,7 +1467,7 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
     health(api, args.expected_commit, False)
     args.disabled = True
     assert_disabled_routes(
-        api, token, fixture, args.browser_submission_id, browser_result
+        api, token, fixture, args.browser_submission_id, browser_result, primary
     )
     release_run_id = wait_for_workflow_run(
         bounded["release_repository"],

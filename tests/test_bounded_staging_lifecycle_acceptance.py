@@ -90,6 +90,10 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             },
         )
         self.assertEqual(bounded["release_commit"], "c27928a56fb3fb6ec0506ac4de78fa6e732ccc02")
+        self.assertEqual(
+            bounded["release_ref"],
+            "lean-eval-staging-smoke/c27928a56fb3fb6ec0506ac4de78fa6e732ccc02",
+        )
         self.assertEqual(bounded["state_contract_commit"], "23852beaeb059c88caf043d22dad19b211c377b2")
         self.assertEqual(len(bounded["state_script_sha256"]), 10)
         self.assertEqual(
@@ -148,6 +152,24 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             ), self.assertRaises(self.driver.AcceptanceError):
                 self.driver.gh_json_or_authenticated_404(["target"])
 
+    def test_unexpected_api_status_never_echoes_secret_response_payload(self) -> None:
+        secret = "signed-session-token-must-not-leak"
+        response = io.BytesIO(
+            json.dumps({"session_token": secret, "challenge": "also-secret"}).encode()
+        )
+        response.status = 200
+        with (
+            mock.patch.object(self.driver.urllib.request, "urlopen", return_value=response),
+            self.assertRaises(self.driver.AcceptanceError) as raised,
+        ):
+            self.driver.Api("https://submit.test").request(
+                "POST", "/api/v1/agent/submissions", {}, expected=202
+            )
+        diagnostic = str(raised.exception)
+        self.assertNotIn(secret, diagnostic)
+        self.assertNotIn("also-secret", diagnostic)
+        self.assertIn("response redacted", diagnostic)
+
     def test_exact_tag_response_and_idempotent_owned_cleanup(self) -> None:
         mutation = self.mutation()
         response = {
@@ -194,6 +216,8 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             if calls == 3:
                 return changed
             if calls == 4:
+                return changed
+            if calls == 5:
                 self.assertEqual(method, "PATCH")
                 self.assertEqual(fields, {"files": {mutation.filename: None}})
                 return initial
@@ -210,7 +234,7 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             self.driver.apply_exact_proof_and_tag(
                 self.fixture, mutation.gist_id, challenge, mutation.tag
             )
-        self.assertEqual(calls, 4)
+        self.assertEqual(calls, 5)
 
     def test_cleanup_attempts_exact_tag_removal_even_if_gist_restore_fails(self) -> None:
         mutation = self.mutation()
@@ -257,6 +281,8 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             if api_calls == 4:
                 return changed
             if api_calls == 5:
+                return changed
+            if api_calls == 6:
                 self.assertEqual(method, "PATCH")
                 return initial
             self.fail((args, method, fields))
@@ -276,9 +302,76 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             self.driver.apply_exact_proof_and_tag(
                 self.fixture, mutation.gist_id, challenge, mutation.tag
             )
-        self.assertEqual(api_calls, 5)
+        self.assertEqual(api_calls, 6)
         self.assertIn("refusing unproved deletion", diagnostics.getvalue())
         self.assertIn(mutation.describe_targets(), diagnostics.getvalue())
+
+    def test_gist_restore_refuses_intervening_edit_or_deletion(self) -> None:
+        mutation = self.mutation()
+        mutation.gist_changed = True
+        mutation.written_file_content = "signed-secret"
+        mutation.written_file_sha256 = hashlib.sha256(b"signed-secret").hexdigest()
+        intervening = {
+            "id": mutation.gist_id, "public": False,
+            "owner": {"login": "kim-em"},
+            "files": {
+                mutation.filename: {"truncated": False, "content": "operator edit"}
+            },
+        }
+        with (
+            mock.patch.object(self.driver, "gh_json", return_value=intervening) as github,
+            self.assertRaisesRegex(self.driver.AcceptanceError, "refusing overwrite"),
+        ):
+            self.driver.restore_gist(mutation)
+        github.assert_called_once_with([f"gists/{mutation.gist_id}"])
+
+    def test_lost_restore_response_reconciles_only_exact_prior_state(self) -> None:
+        mutation = self.mutation()
+        mutation.gist_changed = True
+        mutation.written_file_content = "signed-secret"
+        mutation.written_file_sha256 = hashlib.sha256(b"signed-secret").hexdigest()
+        written = {
+            "id": mutation.gist_id, "public": False,
+            "owner": {"login": "kim-em"},
+            "files": {
+                mutation.filename: {"truncated": False, "content": "signed-secret"}
+            },
+        }
+        prior = {
+            "id": mutation.gist_id, "public": False,
+            "owner": {"login": "kim-em"}, "files": {},
+        }
+        with (
+            mock.patch.object(
+                self.driver, "gh_json",
+                side_effect=(written, self.driver.AcceptanceError("lost response")),
+            ),
+            self.assertRaisesRegex(self.driver.AcceptanceError, "lost response"),
+        ):
+            self.driver.restore_gist(mutation)
+        self.assertTrue(mutation.gist_restore_started)
+        with mock.patch.object(self.driver, "gh_json", return_value=prior) as github:
+            self.driver.restore_gist(mutation)
+        github.assert_called_once_with([f"gists/{mutation.gist_id}"])
+        self.assertFalse(mutation.gist_changed)
+        self.assertIsNone(mutation.written_file_content)
+
+    def test_unknown_headless_post_outcome_never_permits_cleanup(self) -> None:
+        self.assertTrue(
+            self.driver.fixture_cleanup_is_proved_safe(
+                headless_post_started=False, headless_terminal=False
+            )
+        )
+        self.assertFalse(
+            self.driver.fixture_cleanup_is_proved_safe(
+                headless_post_started=True, headless_terminal=False
+            )
+        )
+        self.assertTrue(
+            self.driver.fixture_cleanup_is_proved_safe(
+                headless_post_started=True, headless_terminal=True
+            )
+        )
 
     def test_terminal_status_derives_result_and_rejects_wrong_dispatch(self) -> None:
         submission_id = self.driver.event_id()
@@ -328,8 +421,19 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
                 return {"owner": {"login": "kim-em"}, "public": False}
             if endpoint.endswith("/commits/" + self.fixture["source"]["commit"]):
                 return {"sha": self.fixture["source"]["commit"]}
-            if endpoint.endswith("/commits/main"):
+            if "/commits/" + bounded["release_ref"] in endpoint:
                 return {"sha": bounded["release_commit"]}
+            if "/git/ref/tags/" + bounded["release_ref"] in endpoint:
+                return {
+                    "ref": "refs/tags/" + bounded["release_ref"],
+                    "node_id": "node",
+                    "url": "https://api.github.test/ref",
+                    "object": {
+                        "sha": bounded["release_commit"],
+                        "type": "commit",
+                        "url": "https://api.github.test/commit",
+                    },
+                }
             if "/branches/" in endpoint:
                 return {"protected": True}
             self.fail(endpoint)
@@ -347,8 +451,9 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             'body.get("submission") != expected_submission',
             'expected_title=bounded["release_run_name_prefix"] + headless_id',
             'item.get("display_title") == expected_title',
-            'if accepted_by_server and not headless_terminal:',
+            'fixture_cleanup_is_proved_safe(',
             'cleanup_fixture_mutation(lease, remove_tag=True)',
+            'Headless acceptance outcome may be committed',
         ):
             self.assertIn(required, self.driver_text)
         self.assertNotIn('evaluation.get("status") in {"accepted", "rejected"}', self.driver_text)
@@ -367,6 +472,9 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
     def test_disabled_route_evidence_and_retirement_are_explicit(self) -> None:
         self.assertIn("assert_disabled_routes(", self.driver_text)
         self.assertIn("denial_fixture=fixture", self.driver_text)
+        self.assertIn('"/api/v1/agent/challenges"', self.driver_text)
+        self.assertIn('f"/api/v1/model-identities/{model_id}/decisions"', self.driver_text)
+        self.assertIn('f"/api/v1/results/{browser_result}/problem-repairs/decisions"', self.driver_text)
         self.assertIn("does not verify the public entry page", self.runbook)
         self.assertIn("ordinary process\nmemory", self.runbook)
         self.assertIn("nonsecret rollback targets", self.runbook)

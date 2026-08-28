@@ -172,6 +172,13 @@ They are a bounded operator aid, not a qualification harness or deployment
 controller, and must be deleted with the staging fixture after one accepted
 run. The exact operator sequence is:
 
+After this source candidate is reviewed and before preflight, create exactly the
+fixture's `lean-eval-staging-smoke/<commit>` tag in
+`leanprover/lean-eval-releases` at its locked release commit. Never move or
+reuse that tag. The driver requires the exact tag object and dispatches the
+release workflow from that immutable ref; release `main` is not an execution
+authority.
+
 1. run the driver's `preflight` command; it is read-only and must report zero
    writes;
 2. start the exact-tag watchdog while public health is still all-false; it
@@ -191,7 +198,8 @@ run. The exact operator sequence is:
    repository/tag/commit targets, then type the target-bound confirmation it
    displays. Let the driver make only those writes and complete the headless,
    denial, lifecycle, State, Results, redacted-projection, scheduling, uniquely
-   named publication-disabled reconstruction, and disabled-route checks. Once
+   named publication-disabled reconstruction from the fixture's reviewed
+   immutable release tag, and disabled-route checks. Once
    headless evaluation is terminal, it restores the gist file to its exact
    prior content (or absence) and deletes the generated exact tag; and
 7. verify the driver's prompt disable dispatch and the independent watchdog's
@@ -212,6 +220,13 @@ canonical fixture digest, or immutable-tag mismatch is a hard stop. The driver
 may dispatch only the existing in-family publication-disabled staging
 reconstruction; it cannot publish a release.
 
+Once the headless submission POST begins, a missing or malformed response is an
+unknown acceptance outcome: State acceptance and dispatch may already have
+completed. In that case the driver must retain both the exact proof file and tag
+and print only their nonsecret recovery targets. Restore/delete them only after
+the exact submission has been reconciled to a terminal archive/evaluation
+state; transport failure alone never proves cleanup safe.
+
 Cleanup is deliberately ownership-bounded. The driver restores only the gist
 file state it captured and deletes the tag only after an exact successful create
 response proved that this run created it. If the create response is lost and a
@@ -219,10 +234,14 @@ tag appears, its ownership is ambiguous: the driver restores the proved gist
 change, refuses to delete the tag, and reports only the exact nonsecret rollback
 target for a new explicit decision.
 
-The final disabled-route assertions are transient response checks: each route
-must return the public owner-hiding `404 not_found`, and the driver proves its
-generated idempotency event is absent from State. Do not create a State event,
-durable evidence record, artifact, or run-history document for these denials.
+The final disabled-route assertions are transient response checks. Intake must
+return `503 intake_disabled`; every launch lifecycle gate—including legacy
+result-owner, result-amendment owner and maintainer, model-identity owner and
+maintainer, and release opt-out—must return the public owner-hiding `404
+not_found`. Model consolidation stays excluded. For lifecycle probes the driver
+also proves its generated idempotency event is absent from State. Do not create
+a State event, durable evidence record, artifact, or run-history document for
+these denials.
 
 This lifecycle driver does not verify the public entry page. Separately perform
 the browser UI regression check at `lean-lang.org/eval/submit`: problem text,
