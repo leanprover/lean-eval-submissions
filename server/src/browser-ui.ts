@@ -41,6 +41,7 @@ export function browserPage(environment: "staging" | "production", intakeEnabled
     : `<p class="notice disabled">${escapeHtml(environment)} intake is currently disabled.</p>`;
   const form = intakeEnabled ? `
     <p><a id="oauth-sign-in" class="button" href="/api/v1/oauth/start">Sign in with GitHub</a></p>
+    <p id="auth-status" class="auth-status" role="status" aria-live="polite">GitHub sign-in is required before submission.</p>
     <form id="submission-form">
       <label>Problem ID <input id="problem_id" name="problem_id" required pattern="[a-z][a-z0-9_]*"></label>
       <label>Problem group
@@ -61,7 +62,10 @@ export function browserPage(environment: "staging" | "production", intakeEnabled
         <small>Choosing scheduled release confirms that you are authorized to license the submitted source under the Apache License 2.0. Accepted source is released under that license exactly two UTC calendar months after acceptance. Choose withheld to opt out.</small>
       </label>
       <label>Production metadata JSON <textarea id="production_metadata" name="production_metadata" rows="5">{}</textarea></label>
-      <button type="submit">Submit exact commit</button>
+      <button id="submit-button" type="submit" aria-busy="false">
+        <span id="submit-label">Submit exact commit</span>
+        <span id="submit-spinner" class="spinner" aria-hidden="true"></span>
+      </button>
     </form>
     <pre id="result" role="status" aria-live="polite"></pre>
   ` : "";
@@ -79,6 +83,14 @@ export function browserPage(environment: "staging" | "production", intakeEnabled
     input, select, textarea, button, .button { box-sizing: border-box; font: inherit; padding: .65rem; }
     textarea { font-family: ui-monospace, monospace; }
     button, .button { cursor: pointer; width: fit-content; }
+    button { display: inline-flex; align-items: center; gap: .55rem; }
+    button:disabled { cursor: not-allowed; opacity: .75; }
+    button[aria-busy="true"]:disabled { cursor: wait; }
+    .auth-status { font-weight: 600; }
+    .spinner { display: none; width: .9rem; height: .9rem; border: .16rem solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+    button[aria-busy="true"] .spinner { display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 1.5s; } }
     .notice { border-left: .3rem solid #2d7; padding: .75rem 1rem; }
     .disabled { border-left-color: #d75; }
     pre { overflow-wrap: anywhere; white-space: pre-wrap; }
@@ -88,7 +100,7 @@ export function browserPage(environment: "staging" | "production", intakeEnabled
   <h1>${escapeHtml(title)}</h1>
   ${status}
   ${form}
-  ${intakeEnabled ? '<script src="/intake.js?v=prefill-v1" defer></script>' : ""}
+  ${intakeEnabled ? '<script src="/intake.js?v=auth-spinner-v1" defer></script>' : ""}
 </body>
 </html>`;
   return new Response(body, { headers: PAGE_HEADERS });
@@ -98,7 +110,12 @@ export function browserScript(): Response {
   const script = `"use strict";
 const form = document.querySelector("#submission-form");
 const result = document.querySelector("#result");
+const authStatus = document.querySelector("#auth-status");
+const oauthSignIn = document.querySelector("#oauth-sign-in");
+const submitButton = document.querySelector("#submit-button");
+const submitLabel = document.querySelector("#submit-label");
 const fieldNames = ${JSON.stringify(BROWSER_FIELD_NAMES)};
+const authExpiryKey = "lean-eval-github-session-expires-at";
 const saved = sessionStorage.getItem("lean-eval-pending-submission");
 if (saved) {
   try {
@@ -115,11 +132,33 @@ for (const name of fieldNames) {
   const value = query.get(name);
   if (element && value !== null) element.value = value;
 }
+if (query.get("oauth") === "success") {
+  sessionStorage.setItem(authExpiryKey, String(Date.now() + 55 * 60 * 1000));
+  const cleanUrl = new URL(location.href);
+  cleanUrl.searchParams.delete("oauth");
+  history.replaceState(null, "", cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+}
+const authExpiresAt = Number(sessionStorage.getItem(authExpiryKey));
+if (Number.isFinite(authExpiresAt) && authExpiresAt > Date.now()) {
+  authStatus.textContent = "Signed in with GitHub.";
+  oauthSignIn.textContent = "Refresh GitHub sign-in";
+} else {
+  sessionStorage.removeItem(authExpiryKey);
+}
 const currentValues = () => Object.fromEntries(fieldNames.map((name) => [name, document.querySelector("#" + name)?.value ?? ""]));
 const saveCurrentValues = () => sessionStorage.setItem("lean-eval-pending-submission", JSON.stringify(currentValues()));
-document.querySelector("#oauth-sign-in")?.addEventListener("click", saveCurrentValues);
+const setSubmitting = (submitting, label) => {
+  submitButton.disabled = submitting;
+  submitButton.setAttribute("aria-busy", String(submitting));
+  submitLabel.textContent = label;
+};
+oauthSignIn?.addEventListener("click", () => {
+  saveCurrentValues();
+  authStatus.textContent = "Opening GitHub sign-in…";
+});
 form?.addEventListener("submit", async (event) => {
   event.preventDefault();
+  setSubmitting(true, "Preparing submission…");
   result.textContent = "Preparing submission…";
   const values = currentValues();
   sessionStorage.setItem("lean-eval-pending-submission", JSON.stringify(values));
@@ -127,6 +166,8 @@ form?.addEventListener("submit", async (event) => {
     const metadata = JSON.parse(values.production_metadata);
     const grantResponse = await fetch("/api/v1/browser/submission-grants", { method: "POST" });
     if (grantResponse.status === 401) {
+      sessionStorage.removeItem(authExpiryKey);
+      authStatus.textContent = "GitHub sign-in is required; redirecting…";
       location.assign("/api/v1/oauth/start");
       return;
     }
@@ -154,8 +195,11 @@ form?.addEventListener("submit", async (event) => {
     result.textContent = JSON.stringify(body, null, 2);
     if (!response.ok) throw new Error("Submission was rejected with HTTP " + response.status);
     sessionStorage.removeItem("lean-eval-pending-submission");
+    setSubmitting(false, "Submission queued");
+    submitButton.disabled = true;
   } catch (error) {
     result.textContent += String.fromCharCode(10) + (error instanceof Error ? error.message : "Submission failed");
+    setSubmitting(false, "Submit exact commit");
   }
 });`;
   return new Response(script, { headers: SCRIPT_HEADERS });
