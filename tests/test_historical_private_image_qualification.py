@@ -179,7 +179,63 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
                         1,
                     )
 
-    def test_workflow_is_manual_single_entry_and_fails_before_publication(self) -> None:
+    def test_probe_archive_and_disposable_config_are_closed_to_one_run(self) -> None:
+        manifest = "sha256:" + "2" * 64
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            archive = root / "source.tar.gz"
+            qualification.create_probe_archive(self.candidate, archive)
+            ciphertext = root / "source.tar.gz.age"
+            ciphertext.write_bytes(b"age-encryption.org/v1\nfixture")
+            key = root / "file-key"
+            key.write_bytes(b"0123456789abcdef")
+            output = root / "closed"
+            output.mkdir()
+            context = qualification.prepare_probe_inputs(
+                self.candidate,
+                archive,
+                ciphertext,
+                key,
+                manifest,
+                123456,
+                2,
+                output,
+            )
+            self.assertEqual(
+                set(path.name for path in output.iterdir()),
+                {"context.json", "request.json", "status.json", "wrangler.json"},
+            )
+            config = json.loads((output / "wrangler.json").read_bytes())
+            request = json.loads((output / "request.json").read_bytes())
+            self.assertEqual(config["name"], "lean-eval-private-q-123456-2")
+            self.assertEqual(config["workers_dev"], True)
+            self.assertEqual(config["containers"][0]["max_instances"], 1)
+            self.assertEqual(config["containers"][0]["ssh"], {"enabled": False})
+            self.assertEqual(
+                config["containers"][0]["image"],
+                f"registry.cloudflare.com/{qualification.CLOUDFLARE_ACCOUNT_ID}/"
+                f"lean-eval-authoritative@{manifest}",
+            )
+            self.assertEqual(config["vars"]["QUALIFICATION_RUN_ID"], "123456")
+            self.assertEqual(config["vars"]["QUALIFICATION_RUN_ATTEMPT"], "2")
+            self.assertEqual(
+                config["vars"]["EXPECTED_RUNNER_NONCE"], context["runner_nonce"]
+            )
+            self.assertEqual(
+                config["vars"]["EXPECTED_REPLAY_TASK_ID"], context["replay_task_id"]
+            )
+            self.assertEqual(config["vars"]["EXPECTED_REPLAY_ATTEMPT"], "1")
+            self.assertEqual(request["schema_version"], 2)
+            self.assertEqual(request["key_material_type"], "age-file-key-v1")
+            self.assertEqual(
+                request["archive_expectation"]["schema_version"], 2
+            )
+            self.assertEqual(
+                request["request"]["network"]["untrusted_execution_phase"],
+                "disabled",
+            )
+
+    def test_workflow_is_manual_single_entry_and_disposable(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", workflow)
         self.assertNotIn("schedule:", workflow)
@@ -187,26 +243,32 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
         self.assertNotIn("strategy:", workflow)
         self.assertIn("environment: cloudflare-production", workflow)
         self.assertIn("confirm_registry_publication_and_qualification", workflow)
+        self.assertIn("confirm_temporary_cloudflare_resource_creation", workflow)
         self.assertIn("publish-and-qualify-one-private-image", workflow)
         self.assertIn("benchmark commit does not select exactly one of 63 images", (
             ROOT / "scripts/historical_private_image_qualification.py"
         ).read_text(encoding="utf-8"))
-        gate = workflow.index("if [ ! -x \"$EXECUTOR\" ]")
+        gate = workflow.index('test -x "$EXECUTOR"')
         build = workflow.index("docker build --progress=plain")
         publish = workflow.index("wrangler containers push")
         self.assertLess(gate, build)
         self.assertLess(gate, publish)
-        self.assertFalse((ROOT / "scripts/run_historical_private_cloudflare_probe").exists())
+        executor = ROOT / "scripts/run_historical_private_cloudflare_probe"
+        self.assertTrue(executor.exists())
+        self.assertIn("cleanup-only", executor.read_text(encoding="utf-8"))
+        self.assertIn("private-qualification/reserve", executor.read_text(encoding="utf-8"))
+        self.assertIn("wrangler delete", workflow)
+        self.assertNotIn("lean-eval-replay-executor.lean-eval.workers.dev", workflow)
 
     def test_workflow_scopes_cloudflare_and_review_write_authority(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertEqual(workflow.count("CLOUDFLARE_ACCOUNT_ID: ${{ secrets."), 1)
-        self.assertEqual(workflow.count("CLOUDFLARE_API_TOKEN: ${{ secrets."), 1)
+        self.assertEqual(workflow.count("CLOUDFLARE_ACCOUNT_ID: ${{ secrets."), 3)
+        self.assertEqual(workflow.count("CLOUDFLARE_API_TOKEN: ${{ secrets."), 3)
         self.assertIn('test -z "${CLOUDFLARE_ACCOUNT_ID:-}"', workflow)
         self.assertIn('test -z "${CLOUDFLARE_API_TOKEN:-}"', workflow)
-        self.assertIn("archive-expectation-schema-version 2", workflow)
-        self.assertIn("key-material-type age-file-key-v1", workflow)
-        self.assertIn("--network disabled", workflow)
+        self.assertIn("create-probe-archive", workflow)
+        self.assertIn("prepare-probe", workflow)
+        self.assertIn("--cleanup-only", workflow)
         self.assertIn("stage-isolated-review-branch:", workflow)
         self.assertIn("contents: write", workflow)
         self.assertIn("historical-private-profile-review-${{ github.sha }}", workflow)

@@ -1,23 +1,32 @@
 #!/usr/bin/env python3
 """Select and render one historical-private image qualification artifact.
 
-This source-only helper deliberately does not provision or invoke a Cloudflare
-Container.  The manual workflow must supply a source-free receipt from a
-separately reviewed executor which actually ran the selected image.
+This source-only helper never provisions or invokes Cloudflare itself.  It
+closes the input, disposable Worker configuration, and source-free receipt for
+the separately reviewed manual workflow.
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
+import gzip
 import hashlib
+import io
 import json
 import pathlib
 import re
 import sys
+import tarfile
 from typing import Any
 
 from prepare_historical_private_replay import canonical
-from replay_orchestrator import config_digest
+from replay_orchestrator import (
+    canonical_archive_path,
+    config_digest,
+    replay_task_id,
+    validate_execution_request,
+)
 
 
 MATRIX_SHA256 = "54ad4c237d08e5d0e298dfc8f752b25c89ce30e79b396a2256b4216a1c0f772c"
@@ -30,6 +39,14 @@ IMAGE_REPOSITORY = "lean-eval-authoritative"
 SOURCE_REPOSITORY = "leanprover/lean-eval-submissions"
 WORKFLOW_PATH = ".github/workflows/historical-private-image-qualification.yml"
 RUNNER_ENTRYPOINT = "/opt/lean-eval/replay-authoritative"
+CLOUDFLARE_ACCOUNT_ID = "a46b90978a1c29cc4795f30677e7e4b8"
+CLOUDFLARE_WORKERS_SUBDOMAIN = "lean-eval.workers.dev"
+OIDC_AUDIENCE = "lean-eval-historical-private-qualification"
+OIDC_ENVIRONMENT = "cloudflare-production"
+EXPECTED_ARCHITECTURE = "x86_64"
+EXPECTED_CPU_MODEL = "AMD EPYC"
+EXPECTED_KERNEL_RELEASE = "6.18.36-cloudflare-firecracker-2026.6.17"
+PROBLEM_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z")
 
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
@@ -243,6 +260,7 @@ def select_candidate(
         "toolchain": entry["toolchain"],
         "lean_toolchain_blob_sha256": entry["lean_toolchain_blob_sha256"],
         "checker": "nanoda",
+        "probe_problem_id": entry["problem_ids"][0],
         "profile_lock": entry["profile_lock"],
         "source_blobs": source_blobs(source_root),
     }
@@ -252,8 +270,8 @@ def validate_candidate(value: dict[str, Any]) -> dict[str, Any]:
     fields = {
         "schema_version", "kind", "image_source_repository", "image_source_commit",
         "matrix_sha256", "matrix_entry_sha256", "benchmark_commit", "benchmark_tree",
-        "toolchain", "lean_toolchain_blob_sha256", "checker", "profile_lock",
-        "source_blobs",
+        "toolchain", "lean_toolchain_blob_sha256", "checker", "probe_problem_id",
+        "profile_lock", "source_blobs",
     }
     require_fields(value, fields, "qualification candidate")
     if (
@@ -267,6 +285,7 @@ def validate_candidate(value: dict[str, Any]) -> dict[str, Any]:
         or not matches(COMMIT, value.get("benchmark_tree"))
         or not matches(DIGEST, value.get("lean_toolchain_blob_sha256"))
         or value["checker"] != "nanoda"
+        or not matches(PROBLEM_ID, value.get("probe_problem_id"))
         or not isinstance(value["profile_lock"], dict)
         or set(value["profile_lock"]) != PROFILE_LOCK_FIELDS
         or value["profile_lock"].get("benchmark_commit") != value["benchmark_commit"]
@@ -389,6 +408,260 @@ def render_qualification(
     return execution_digest, value
 
 
+def create_probe_archive(candidate: dict[str, Any], output: pathlib.Path) -> None:
+    """Create a deterministic one-workspace archive with no historical source."""
+    candidate = validate_candidate(candidate)
+    if output.exists() or output.is_symlink() or not output.parent.is_dir():
+        raise QualificationError("probe archive output is not one new file")
+    problem_id = candidate["probe_problem_id"]
+    members = {
+        "source/proof/Submission.lean": b"by\n  sorry\n",
+        "source/proof/lakefile.toml": f'name = "{problem_id}"\n'.encode("ascii"),
+    }
+    with output.open("xb") as raw_output:
+        with gzip.GzipFile(filename="", mode="wb", fileobj=raw_output, mtime=0) as compressed:
+            with tarfile.open(fileobj=compressed, mode="w", format=tarfile.GNU_FORMAT) as archive:
+                for directory in ("source", "source/proof"):
+                    info = tarfile.TarInfo(directory)
+                    info.type = tarfile.DIRTYPE
+                    info.mode = 0o755
+                    info.mtime = 0
+                    archive.addfile(info)
+                for name, body in sorted(members.items()):
+                    info = tarfile.TarInfo(name)
+                    info.mode = 0o644
+                    info.mtime = 0
+                    info.size = len(body)
+                    archive.addfile(info, io.BytesIO(body))
+
+
+def _identity(domain: str, *parts: str) -> str:
+    body = domain.encode("ascii") + b"\0" + b"\0".join(
+        part.encode("ascii") for part in parts
+    )
+    return sha256(body)
+
+
+def _positive_safe_integer(value: int, label: str) -> int:
+    if isinstance(value, bool) or not 1 <= value <= 9_007_199_254_740_991:
+        raise QualificationError(f"{label} is invalid")
+    return value
+
+
+def prepare_probe_inputs(
+    candidate: dict[str, Any],
+    plaintext_path: pathlib.Path,
+    ciphertext_path: pathlib.Path,
+    key_path: pathlib.Path,
+    manifest_digest: str,
+    workflow_run_id: int,
+    workflow_run_attempt: int,
+    output_directory: pathlib.Path,
+) -> dict[str, Any]:
+    """Close one disposable Worker deployment and schema-v2 probe request."""
+    candidate = validate_candidate(candidate)
+    run_id = _positive_safe_integer(workflow_run_id, "workflow run ID")
+    run_attempt = _positive_safe_integer(workflow_run_attempt, "workflow run attempt")
+    if not matches(OCI_DIGEST, manifest_digest):
+        raise QualificationError("registry manifest digest is invalid")
+    if not output_directory.is_dir() or output_directory.is_symlink():
+        raise QualificationError("probe output directory is not one real directory")
+    if any(output_directory.iterdir()):
+        raise QualificationError("probe output directory is not empty")
+    try:
+        plaintext = plaintext_path.read_bytes()
+        ciphertext = ciphertext_path.read_bytes()
+        key = key_path.read_bytes()
+    except OSError as error:
+        raise QualificationError("probe archive material is unavailable") from error
+    if not plaintext or len(plaintext) > 10 * 1024 * 1024:
+        raise QualificationError("probe plaintext archive is invalid")
+    if not ciphertext or len(ciphertext) > 11 * 1024 * 1024 or len(key) != 16:
+        raise QualificationError("probe ciphertext or file key is invalid")
+
+    lock = candidate["profile_lock"]
+    execution_profile = {
+        "schema_version": 1,
+        "runner_profile": lock["runner_profile"],
+        "vm_image_digest": manifest_digest,
+        "toolchain": lock["toolchain"],
+        "architecture": EXPECTED_ARCHITECTURE,
+        "cpu_model": EXPECTED_CPU_MODEL,
+        "kernel_release": EXPECTED_KERNEL_RELEASE,
+        "cache_state": lock["cache_state"],
+        "measurement_command": lock["measurement_command"],
+        "go_toolchain": lock["go_toolchain"],
+        "rust_toolchain": lock["rust_toolchain"],
+        "components": lock["components"],
+    }
+    execution_digest = config_digest(
+        "lean-eval-replay-execution-profile-v1", execution_profile
+    )
+    measurement_digest = config_digest(
+        "lean-eval-replay-measurement-config-v1", MEASUREMENT_CONFIG
+    )
+    run_text = str(run_id)
+    attempt_text = str(run_attempt)
+    binding = _identity(
+        "lean-eval-private-qualification-binding-v1",
+        candidate["image_source_commit"],
+        candidate["benchmark_commit"],
+        manifest_digest,
+        run_text,
+        attempt_text,
+    )
+    submission_id = f"01800000-0000-7000-8000-{binding[:12]}"
+    result_id = "r2_" + _identity(
+        "lean-eval-private-qualification-result-v1", binding
+    )
+    task_id = replay_task_id(result_id, measurement_digest)
+    ciphertext_digest = sha256(ciphertext)
+    request = {
+        "schema_version": 1,
+        "replay_task_id": task_id,
+        "attempt": 1,
+        "source": {
+            "visibility": "private",
+            "archive": {
+                "schema_version": 1,
+                "submission_id": submission_id,
+                "archive_repository": SOURCE_REPOSITORY,
+                "archive_commit": candidate["image_source_commit"],
+                "archive_path": canonical_archive_path(submission_id),
+                "archive_ciphertext_sha256": ciphertext_digest,
+                "encrypted": True,
+            },
+        },
+        "benchmark": {
+            "repository": lock["benchmark_repository"],
+            "commit": candidate["benchmark_commit"],
+            "toolchain": candidate["toolchain"],
+        },
+        "result": {
+            "result_id": result_id,
+            "submission_id": submission_id,
+            "problem_id": candidate["probe_problem_id"],
+            "statement_revision": 1,
+            "commit": candidate["image_source_commit"],
+            "tree_digest": _identity(
+                "lean-eval-private-qualification-tree-v1", binding
+            ),
+        },
+        "checker": "nanoda",
+        "execution_profile_digest": execution_digest,
+        "measurement_config_digest": measurement_digest,
+        "execution_profile": execution_profile,
+        "measurement_config": MEASUREMENT_CONFIG,
+        "network": {
+            "fetch_phase": "controller_pinned_archive_only",
+            "untrusted_execution_phase": "disabled",
+        },
+        "untrusted_environment": {},
+    }
+    validate_execution_request(request)
+    expectation = {
+        "schema_version": 2,
+        "submission_id": submission_id,
+        "archive_ciphertext_sha256": ciphertext_digest,
+        "plaintext_tar_sha256": sha256(plaintext),
+        "plaintext_tar_size": len(plaintext),
+        "key_material_type": "age-file-key-v1",
+    }
+    outer = {
+        "schema_version": 2,
+        "runner_nonce": binding,
+        "request": request,
+        "archive_expectation": expectation,
+        "ciphertext_base64": base64.b64encode(ciphertext).decode("ascii"),
+        "key_material_type": "age-file-key-v1",
+        "plaintext_key_material_base64": base64.b64encode(key).decode("ascii"),
+    }
+    status = {
+        "schema_version": 1,
+        "runner_nonce": binding,
+        "replay_task_id": task_id,
+        "attempt": 1,
+        "execution_profile_digest": execution_digest,
+        "measurement_config_digest": measurement_digest,
+        "vm_image_digest": manifest_digest,
+    }
+    worker_name = f"lean-eval-private-q-{run_id}-{run_attempt}"
+    if len(worker_name) > 63:
+        raise QualificationError("disposable Worker name is too long")
+    config = {
+        "$schema": "node_modules/wrangler/config-schema.json",
+        "name": worker_name,
+        "main": (pathlib.Path.cwd() / "server/src/private-qualification-entry.ts")
+        .resolve()
+        .as_posix(),
+        "account_id": CLOUDFLARE_ACCOUNT_ID,
+        "compatibility_date": "2026-08-22",
+        "compatibility_flags": ["nodejs_compat"],
+        "workers_dev": True,
+        "preview_urls": False,
+        "observability": {"enabled": False},
+        "containers": [{
+            "class_name": "PrivateQualificationSandbox",
+            "image": (
+                f"registry.cloudflare.com/{CLOUDFLARE_ACCOUNT_ID}/"
+                f"{IMAGE_REPOSITORY}@{manifest_digest}"
+            ),
+            "instance_type": "standard-4",
+            "max_instances": 1,
+            "ssh": {"enabled": False},
+        }],
+        "durable_objects": {"bindings": [
+            {"name": "REPLAY_SANDBOX", "class_name": "PrivateQualificationSandbox"},
+            {"name": "REPLAY_TERMINAL_RECEIPT", "class_name": "ReplayTerminalReceipt"},
+        ]},
+        "migrations": [{
+            "tag": "v1",
+            "new_sqlite_classes": [
+                "PrivateQualificationSandbox", "ReplayTerminalReceipt"
+            ],
+        }],
+        "vars": {
+            "DEPLOYED_COMMIT": candidate["image_source_commit"],
+            "DEPLOYMENT_ENVIRONMENT": "private-qualification",
+            "REPLAY_ENABLED": "true",
+            "HISTORICAL_PUBLIC_REPLAY_ENABLED": "false",
+            "STAGING_ACCEPTANCE_ENABLED": "false",
+            "GITHUB_OIDC_AUDIENCE": OIDC_AUDIENCE,
+            "GITHUB_OIDC_ENVIRONMENT": OIDC_ENVIRONMENT,
+            "QUALIFICATION_RUN_ID": run_text,
+            "QUALIFICATION_RUN_ATTEMPT": attempt_text,
+            "EXPECTED_RUNNER_NONCE": binding,
+            "EXPECTED_REPLAY_TASK_ID": task_id,
+            "EXPECTED_REPLAY_ATTEMPT": "1",
+            "STAGING_MEMORY_LIMIT_BYTES": str(MEASUREMENT_CONFIG["memory_limit_bytes"]),
+            "PRODUCTION_MEMORY_GATE_BYTES": str(MEASUREMENT_CONFIG["memory_limit_bytes"]),
+            "REVIEWED_EXECUTION_PROFILE_DIGEST": execution_digest,
+            "REVIEWED_MEASUREMENT_CONFIG_DIGEST": measurement_digest,
+            "REVIEWED_VM_IMAGE_DIGEST": manifest_digest,
+            "SANDBOX_TRANSPORT": "rpc",
+        },
+    }
+    context = {
+        "schema_version": 1,
+        "worker_name": worker_name,
+        "worker_url": f"https://{worker_name}.{CLOUDFLARE_WORKERS_SUBDOMAIN}",
+        "registry_manifest_digest": manifest_digest,
+        "benchmark_commit": candidate["benchmark_commit"],
+        "runner_nonce": binding,
+        "replay_task_id": task_id,
+        "workflow_run_id": run_id,
+        "workflow_run_attempt": run_attempt,
+        "architecture": EXPECTED_ARCHITECTURE,
+        "kernel_release": EXPECTED_KERNEL_RELEASE,
+        "cpu_model": EXPECTED_CPU_MODEL,
+    }
+    write_exclusive(output_directory / "wrangler.json", config)
+    write_exclusive(output_directory / "request.json", outer)
+    write_exclusive(output_directory / "status.json", status)
+    write_exclusive(output_directory / "context.json", context)
+    return context
+
+
 def write_exclusive(path: pathlib.Path, value: dict[str, Any]) -> None:
     if path.exists() or path.is_symlink():
         raise QualificationError("output already exists")
@@ -418,6 +691,20 @@ def main() -> int:
     render.add_argument("--workflow-run-attempt", required=True, type=int)
     render.add_argument("--output-directory", required=True, type=pathlib.Path)
 
+    archive = subparsers.add_parser("create-probe-archive")
+    archive.add_argument("--candidate", required=True, type=pathlib.Path)
+    archive.add_argument("--output", required=True, type=pathlib.Path)
+
+    prepare = subparsers.add_parser("prepare-probe")
+    prepare.add_argument("--candidate", required=True, type=pathlib.Path)
+    prepare.add_argument("--plaintext", required=True, type=pathlib.Path)
+    prepare.add_argument("--ciphertext", required=True, type=pathlib.Path)
+    prepare.add_argument("--file-key", required=True, type=pathlib.Path)
+    prepare.add_argument("--registry-manifest-digest", required=True)
+    prepare.add_argument("--workflow-run-id", required=True, type=int)
+    prepare.add_argument("--workflow-run-attempt", required=True, type=int)
+    prepare.add_argument("--output-directory", required=True, type=pathlib.Path)
+
     args = parser.parse_args()
     try:
         if args.command == "select":
@@ -428,7 +715,7 @@ def main() -> int:
                 args.source_commit,
             )
             write_exclusive(args.output, value)
-        else:
+        elif args.command == "render-qualification":
             candidate, _ = load_canonical(args.candidate, "qualification candidate")
             receipt, _ = load_canonical(args.receipt, "qualification probe receipt")
             digest, value = render_qualification(
@@ -443,6 +730,22 @@ def main() -> int:
             output = args.output_directory / f"{digest}.json"
             write_exclusive(output, value)
             print(output.as_posix())
+        elif args.command == "create-probe-archive":
+            candidate, _ = load_canonical(args.candidate, "qualification candidate")
+            create_probe_archive(candidate, args.output)
+        else:
+            candidate, _ = load_canonical(args.candidate, "qualification candidate")
+            context = prepare_probe_inputs(
+                candidate,
+                args.plaintext,
+                args.ciphertext,
+                args.file_key,
+                args.registry_manifest_digest,
+                args.workflow_run_id,
+                args.workflow_run_attempt,
+                args.output_directory,
+            )
+            print(json.dumps(context, separators=(",", ":"), sort_keys=True))
     except (OSError, QualificationError, ValueError) as error:
         print(f"historical-private-image-qualification: {error}", file=sys.stderr)
         return 1

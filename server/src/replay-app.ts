@@ -46,6 +46,9 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
   REVIEWED_EXECUTION_PROFILE_DIGEST: string;
   REVIEWED_MEASUREMENT_CONFIG_DIGEST: string;
   REVIEWED_VM_IMAGE_DIGEST: string;
+  EXPECTED_RUNNER_NONCE?: string;
+  EXPECTED_REPLAY_TASK_ID?: string;
+  EXPECTED_REPLAY_ATTEMPT?: string;
 };
 
 type SandboxClient = Pick<Sandbox, "writeFile" | "exec" | "destroy"> &
@@ -120,6 +123,24 @@ function terminalReceiptStore(
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status, headers: { "cache-control": "no-store" } });
+}
+
+function requireQualificationBinding(
+  env: ReplayRuntimeEnv,
+  value: { runner_nonce: string; replay_task_id: string; attempt: number },
+): void {
+  if (env.DEPLOYMENT_ENVIRONMENT !== "private-qualification") return;
+  if (
+    env.EXPECTED_RUNNER_NONCE === undefined
+    || !SHA256_DIGEST.test(env.EXPECTED_RUNNER_NONCE)
+    || value.runner_nonce !== env.EXPECTED_RUNNER_NONCE
+    || env.EXPECTED_REPLAY_TASK_ID === undefined
+    || !REPLAY_TASK_ID.test(env.EXPECTED_REPLAY_TASK_ID)
+    || value.replay_task_id !== env.EXPECTED_REPLAY_TASK_ID
+    || env.EXPECTED_REPLAY_ATTEMPT !== String(value.attempt)
+  ) {
+    throw new AuthoritativeReplayContractError("execution is not the reviewed one-use qualification binding");
+  }
 }
 
 const ARCHIVE_COMMAND_FAILURES = new Map([
@@ -1626,6 +1647,7 @@ export async function handleReplayRequest(
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
+      requireQualificationBinding(env, input);
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
       await requireActiveBinding(store, input);
       sandbox = dependencies.sandbox(env, input.runner_nonce);
@@ -1648,6 +1670,11 @@ export async function handleReplayRequest(
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
+      requireQualificationBinding(env, {
+        runner_nonce: input.runner_nonce,
+        replay_task_id: String(input.request.replay_task_id),
+        attempt: Number(input.request.attempt),
+      });
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
       const binding = statusBinding(input);
       await claimActiveBinding(store, binding);

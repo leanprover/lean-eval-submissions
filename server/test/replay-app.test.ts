@@ -1113,6 +1113,32 @@ describe("Cloudflare replay executor", () => {
     expect(writes).not.toContain("/workspace/identity.age.b64");
   });
 
+  it("allows only the rendered one-use nonce in private qualification", async () => {
+    const body = await authoritativeInput();
+    const expectedNonce = body.runner_nonce as string;
+    let sandboxLookups = 0;
+    const response = await handleReplayRequest(new Request("https://example.test/api/v1/replay", {
+      method: "POST",
+      body: JSON.stringify({ ...body, runner_nonce: "9".repeat(64) }),
+    }), {
+      ...REVIEWED_ENV,
+      DEPLOYMENT_ENVIRONMENT: "private-qualification",
+      REPLAY_ENABLED: "true",
+      EXPECTED_RUNNER_NONCE: expectedNonce,
+      EXPECTED_REPLAY_TASK_ID: (body.request as Record<string, unknown>).replay_task_id as string,
+      EXPECTED_REPLAY_ATTEMPT: "1",
+    }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => {
+        sandboxLookups += 1;
+        throw new Error("sandbox must remain unreachable");
+      },
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_request" });
+    expect(sandboxLookups).toBe(0);
+  });
+
   it("persists the exact nonce binding before start and rejects a mismatched duplicate", async () => {
     const body = await authoritativeInput();
     const receipts = terminalReceiptStore();

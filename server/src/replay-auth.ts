@@ -15,6 +15,16 @@ const HISTORICAL_ROUTES = new Set([
   "/api/v1/historical-public-replay/cleanup-reservation",
 ]);
 const HISTORICAL_CLEANUP_ROUTE = "/api/v1/historical-public-replay/cleanup";
+const PRIVATE_QUALIFICATION_AUDIENCE = "lean-eval-historical-private-qualification";
+const PRIVATE_QUALIFICATION_ENVIRONMENT = "cloudflare-production";
+const PRIVATE_QUALIFICATION_WORKFLOW_REF = `${GITHUB_REPOSITORY}/.github/workflows/`
+  + "historical-private-image-qualification.yml@refs/heads/main";
+const PRIVATE_QUALIFICATION_ROUTES = new Set([
+  "/api/v1/replay",
+  "/api/v1/replay/status",
+  "/api/v1/private-qualification/cleanup",
+  "/api/v1/private-qualification/reserve",
+]);
 
 type JwtHeader = { alg: string; kid: string; typ: string };
 type JwtClaims = Record<string, unknown>;
@@ -24,6 +34,8 @@ export type ReplayAuthEnvironment = {
   DEPLOYMENT_ENVIRONMENT: string;
   GITHUB_OIDC_AUDIENCE: string;
   GITHUB_OIDC_ENVIRONMENT: string;
+  QUALIFICATION_RUN_ID?: string;
+  QUALIFICATION_RUN_ATTEMPT?: string;
 };
 
 export class ReplayAuthError extends Error {}
@@ -104,6 +116,19 @@ function isHistoricalProductionSurface(
     && env.GITHUB_OIDC_ENVIRONMENT === HISTORICAL_PRODUCTION_ENVIRONMENT;
 }
 
+function isPrivateQualificationSurface(
+  request: Request,
+  env: ReplayAuthEnvironment,
+): boolean {
+  return request.method === "POST"
+    && PRIVATE_QUALIFICATION_ROUTES.has(new URL(request.url).pathname)
+    && env.DEPLOYMENT_ENVIRONMENT === "private-qualification"
+    && env.GITHUB_OIDC_AUDIENCE === PRIVATE_QUALIFICATION_AUDIENCE
+    && env.GITHUB_OIDC_ENVIRONMENT === PRIVATE_QUALIFICATION_ENVIRONMENT
+    && /^[1-9][0-9]{0,15}$/.test(env.QUALIFICATION_RUN_ID ?? "")
+    && /^[1-9][0-9]{0,6}$/.test(env.QUALIFICATION_RUN_ATTEMPT ?? "");
+}
+
 function allowsHistoricalProtectedMain(
   request: Request,
   claims: JwtClaims,
@@ -123,6 +148,24 @@ function allowsHistoricalProtectedMain(
   // advanced; start and status retain the exact deployed-commit boundary.
   if (new URL(request.url).pathname === HISTORICAL_CLEANUP_ROUTE) return true;
   return COMMIT.test(env.DEPLOYED_COMMIT) && sha === env.DEPLOYED_COMMIT;
+}
+
+function allowsPrivateQualificationProtectedMain(
+  request: Request,
+  claims: JwtClaims,
+  env: ReplayAuthEnvironment,
+  ref: string,
+  sha: string,
+): boolean {
+  return isPrivateQualificationSurface(request, env)
+    && ref === "refs/heads/main"
+    && COMMIT.test(sha)
+    && sha === env.DEPLOYED_COMMIT
+    && claims.workflow_ref === PRIVATE_QUALIFICATION_WORKFLOW_REF
+    && claims.workflow_sha === sha
+    && claims.event_name === "workflow_dispatch"
+    && claims.run_id === env.QUALIFICATION_RUN_ID
+    && claims.run_attempt === env.QUALIFICATION_RUN_ATTEMPT;
 }
 
 function validateClaims(
@@ -152,7 +195,9 @@ function validateClaims(
   const immutableDispatch = match?.[1] === sha && COMMIT.test(sha);
   const refAllowed = isHistoricalProductionSurface(request, env)
     ? allowsHistoricalProtectedMain(request, claims, env, ref, sha)
-    : immutableDispatch;
+    : isPrivateQualificationSurface(request, env)
+      ? allowsPrivateQualificationProtectedMain(request, claims, env, ref, sha)
+      : immutableDispatch;
   if (!refAllowed) {
     throw new ReplayAuthError("token ref is not an allowed immutable execution ref");
   }
