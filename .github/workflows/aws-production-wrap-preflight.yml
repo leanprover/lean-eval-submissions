@@ -9,14 +9,12 @@ concurrency:
   group: aws-production-wrap-preflight
   cancel-in-progress: false
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   gate:
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
+    permissions: {}
     steps:
       - name: Require an immutable protected dispatch tag
         env:
@@ -29,7 +27,6 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
-      contents: read
       id-token: write
     steps:
       - name: Require the exact configured production Wrap role
@@ -57,6 +54,11 @@ jobs:
           aws-region: us-east-1
           role-duration-seconds: 900
           role-session-name: lean-eval-archive-production-preflight
+          retry-max-attempts: 4
+          allowed-account-ids: 161072922960
+          output-credentials: false
+          output-env-credentials: true
+          unset-current-credentials: true
           mask-aws-account-id: true
 
       - name: Encrypt one synthetic key and require decrypt denial
@@ -66,17 +68,27 @@ jobs:
         run: |
           set -euo pipefail
           unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
-          scratch="$RUNNER_TEMP/lean-eval-production-wrap-preflight"
+          scratch="${RUNNER_TEMP:?}/lean-eval-production-wrap-preflight"
           plaintext="$scratch/synthetic-key"
           ciphertext="$scratch/wrapped-key"
           decrypt_output="$scratch/decrypt-output"
           decrypt_error="$scratch/decrypt-error"
           clear_authority() {
             unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+            unset AWS_PROFILE AWS_DEFAULT_PROFILE AWS_WEB_IDENTITY_TOKEN_FILE
+            unset AWS_ROLE_ARN AWS_ROLE_SESSION_NAME
+            unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
             {
               echo AWS_ACCESS_KEY_ID=
               echo AWS_SECRET_ACCESS_KEY=
               echo AWS_SESSION_TOKEN=
+              echo AWS_PROFILE=
+              echo AWS_DEFAULT_PROFILE=
+              echo AWS_WEB_IDENTITY_TOKEN_FILE=
+              echo AWS_ROLE_ARN=
+              echo AWS_ROLE_SESSION_NAME=
+              echo ACTIONS_ID_TOKEN_REQUEST_TOKEN=
+              echo ACTIONS_ID_TOKEN_REQUEST_URL=
             } >> "$GITHUB_ENV"
           }
           cleanup() {
@@ -125,3 +137,44 @@ jobs:
           trap - EXIT
           echo 'The exact production archive role encrypted one synthetic key and direct decrypt was denied.' \
             >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Prove all production AWS authority was discarded
+        if: always()
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ''
+          ACTIONS_ID_TOKEN_REQUEST_URL: ''
+        run: |
+          set -euo pipefail
+          unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+          unset AWS_PROFILE AWS_DEFAULT_PROFILE AWS_WEB_IDENTITY_TOKEN_FILE
+          unset AWS_ROLE_ARN AWS_ROLE_SESSION_NAME
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
+          test -n "${RUNNER_TEMP:-}"
+          {
+            echo AWS_ACCESS_KEY_ID=
+            echo AWS_SECRET_ACCESS_KEY=
+            echo AWS_SESSION_TOKEN=
+            echo AWS_PROFILE=
+            echo AWS_DEFAULT_PROFILE=
+            echo AWS_WEB_IDENTITY_TOKEN_FILE=
+            echo AWS_ROLE_ARN=
+            echo AWS_ROLE_SESSION_NAME=
+            echo ACTIONS_ID_TOKEN_REQUEST_TOKEN=
+            echo ACTIONS_ID_TOKEN_REQUEST_URL=
+          } >> "$GITHUB_ENV"
+          rm -rf "$RUNNER_TEMP/lean-eval-production-wrap-preflight"
+          for variable in \
+            AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN \
+            AWS_PROFILE AWS_DEFAULT_PROFILE AWS_WEB_IDENTITY_TOKEN_FILE \
+            AWS_ROLE_ARN AWS_ROLE_SESSION_NAME \
+            ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL; do
+            test -z "${!variable:-}"
+          done
+          test ! -e "$RUNNER_TEMP/lean-eval-production-wrap-preflight"
+          export AWS_EC2_METADATA_DISABLED=true
+          export AWS_SHARED_CREDENTIALS_FILE="$RUNNER_TEMP/no-production-aws-credentials"
+          export AWS_CONFIG_FILE="$RUNNER_TEMP/no-production-aws-config"
+          if aws sts get-caller-identity >/dev/null 2>&1; then
+            echo 'AWS authority survived production Wrap preflight cleanup.' >&2
+            exit 1
+          fi

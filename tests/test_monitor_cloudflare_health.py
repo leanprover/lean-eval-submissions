@@ -47,6 +47,23 @@ class CloudflareHealthMonitorTests(unittest.TestCase):
         self.assertEqual(report["status"], "ready")
         self.assertEqual(report["deployed_commit"], COMMIT)
         self.assertEqual(set(report["observations"]), {"staging", "production"})
+        self.assertEqual(
+            report["observations"]["production"]["capabilities"],
+            {
+                "historical_public_replay_enabled": False,
+                "intake_enabled": False,
+                "legacy_result_owner_api_enabled": False,
+                "model_identity_consolidation_api_enabled": False,
+                "model_identity_maintainer_api_enabled": False,
+                "model_identity_owner_api_enabled": False,
+                "promotion_canary_enabled": False,
+                "release_opt_out_api_enabled": False,
+                "replay_enabled": False,
+                "result_amendment_maintainer_api_enabled": False,
+                "result_amendment_owner_api_enabled": False,
+                "staging_acceptance_enabled": False,
+            },
+        )
 
     def test_rejects_mixed_commits_or_wrong_enablement(self) -> None:
         responses = self.responses()
