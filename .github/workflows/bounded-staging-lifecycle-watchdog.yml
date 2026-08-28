@@ -1,0 +1,251 @@
+name: Bound and disable staging lifecycle acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_commit:
+        description: 'Exact live staging commit and immutable dispatch tag'
+        required: true
+        type: string
+      window_minutes:
+        description: 'Maximum acceptance window (15-90 minutes)'
+        required: true
+        type: number
+        default: 60
+      activation_timeout_minutes:
+        description: 'Maximum wait for the separately approved enable dispatch (5-15 minutes)'
+        required: true
+        type: number
+        default: 10
+      confirm_disable_watchdog:
+        description: 'Confirm this watchdog must restore every staging launch gate to false'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bounded-staging-lifecycle-disable-watchdog
+  cancel-in-progress: false
+
+jobs:
+  disable-watchdog:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 125
+    environment: cloudflare-staging
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24.6.0'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Verify exact tag and initial all-false staging state
+        env:
+          CONFIRM_DISABLE_WATCHDOG: ${{ inputs.confirm_disable_watchdog }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          WINDOW_MINUTES: ${{ inputs.window_minutes }}
+          ACTIVATION_TIMEOUT_MINUTES: ${{ inputs.activation_timeout_minutes }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRM_DISABLE_WATCHDOG" = true
+          if [[ ! "$EXPECTED_COMMIT" =~ ^[0-9a-f]{40}$ ]] || [ "$EXPECTED_COMMIT" != "$GITHUB_SHA" ]; then
+            echo "expected_commit must equal the selected immutable dispatch commit" >&2
+            exit 1
+          fi
+          if [ "$GITHUB_REF" != "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT" ]; then
+            echo "watchdog must run from the exact immutable dispatch tag" >&2
+            exit 1
+          fi
+          test "$(git rev-parse "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT^{commit}")" = "$EXPECTED_COMMIT"
+          if ! [[ "$WINDOW_MINUTES" =~ ^[0-9]+$ ]] || [ "$WINDOW_MINUTES" -lt 15 ] || [ "$WINDOW_MINUTES" -gt 90 ]; then
+            echo "window_minutes must be an integer from 15 through 90" >&2
+            exit 1
+          fi
+          if ! [[ "$ACTIVATION_TIMEOUT_MINUTES" =~ ^[0-9]+$ ]] || [ "$ACTIVATION_TIMEOUT_MINUTES" -lt 5 ] || [ "$ACTIVATION_TIMEOUT_MINUTES" -gt 15 ]; then
+            echo "activation_timeout_minutes must be an integer from 5 through 15" >&2
+            exit 1
+          fi
+          body=$(curl --fail --silent --show-error --max-time 10 \
+            https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz)
+          HEALTH_BODY="$body" python3 - <<'PY'
+          import json
+          import os
+
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["status"] == "ok"
+          assert body["environment"] == "staging"
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          for field in (
+              "intake_configured_enabled",
+              "intake_effective_enabled",
+              "intake_enabled",
+              "legacy_result_owner_api_enabled",
+              "result_amendment_owner_api_enabled",
+              "result_amendment_maintainer_api_enabled",
+              "model_identity_owner_api_enabled",
+              "model_identity_maintainer_api_enabled",
+              "release_opt_out_api_enabled",
+          ):
+              assert body[field] is False, field
+          assert body["model_identity_consolidation_api_enabled"] is False
+          assert body["intake_enablement_mode"] == "disabled"
+          assert body["intake_lease_expires_at"] is None
+          PY
+
+      - run: npm ci
+
+      - name: Arm all-false recovery from reverified dark state
+        id: armed
+        env:
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          body=$(curl --fail --silent --show-error --max-time 10 \
+            https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz)
+          HEALTH_BODY="$body" python3 - <<'PY'
+          import json
+          import os
+
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["status"] == "ok"
+          assert body["environment"] == "staging"
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          for field in (
+              "intake_configured_enabled",
+              "intake_effective_enabled",
+              "intake_enabled",
+              "legacy_result_owner_api_enabled",
+              "result_amendment_owner_api_enabled",
+              "result_amendment_maintainer_api_enabled",
+              "model_identity_owner_api_enabled",
+              "model_identity_maintainer_api_enabled",
+              "model_identity_consolidation_api_enabled",
+              "release_opt_out_api_enabled",
+          ):
+              assert body[field] is False, field
+          assert body["intake_enablement_mode"] == "disabled"
+          assert body["intake_lease_expires_at"] is None
+          PY
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the separately approved enabled state
+        env:
+          ACTIVATION_TIMEOUT_MINUTES: ${{ inputs.activation_timeout_minutes }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + ACTIVATION_TIMEOUT_MINUTES * 60))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            body=$(curl --fail --silent --show-error --max-time 10 \
+              https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz) || body=""
+            if HEALTH_BODY="$body" python3 - <<'PY'
+          import json
+          import os
+
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["status"] == "ok"
+          assert body["environment"] == "staging"
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          for field in (
+              "intake_configured_enabled",
+              "intake_effective_enabled",
+              "intake_enabled",
+              "legacy_result_owner_api_enabled",
+              "result_amendment_owner_api_enabled",
+              "result_amendment_maintainer_api_enabled",
+              "model_identity_owner_api_enabled",
+              "model_identity_maintainer_api_enabled",
+              "release_opt_out_api_enabled",
+          ):
+              assert body[field] is True, field
+          assert body["model_identity_consolidation_api_enabled"] is False
+          PY
+            then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "approved enabled staging state did not converge before the watchdog deadline" >&2
+          exit 1
+
+      - name: Hold the bounded acceptance window
+        env:
+          WINDOW_MINUTES: ${{ inputs.window_minutes }}
+        run: |
+          set -euo pipefail
+          remaining=$((WINDOW_MINUTES * 60))
+          while [ "$remaining" -gt 0 ]; do
+            interval=30
+            if [ "$remaining" -lt "$interval" ]; then interval=$remaining; fi
+            sleep "$interval"
+            remaining=$((remaining - interval))
+          done
+
+      - name: Restore and verify every staging launch gate is disabled
+        if: always() && steps.armed.outputs.ready == 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --env staging \
+            --var "DEPLOYED_COMMIT:$EXPECTED_COMMIT" \
+            --var "DISPATCH_WORKFLOW_REF:lean-eval-dispatch/$EXPECTED_COMMIT" \
+            --var "INTAKE_ENABLED:false" \
+            --var "INTAKE_ENABLEMENT_MODE:disabled" \
+            --var "LEGACY_RESULT_OWNER_API_ENABLED:false" \
+            --var "RESULT_AMENDMENT_OWNER_API_ENABLED:false" \
+            --var "RESULT_AMENDMENT_MAINTAINER_API_ENABLED:false" \
+            --var 'RESULT_AMENDMENT_MAINTAINERS:[]' \
+            --var "MODEL_IDENTITY_OWNER_API_ENABLED:false" \
+            --var "MODEL_IDENTITY_MAINTAINER_API_ENABLED:false" \
+            --var 'MODEL_IDENTITY_MAINTAINERS:[]' \
+            --var "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED:false" \
+            --var "RELEASE_OPT_OUT_API_ENABLED:false"
+          for attempt in $(seq 1 13); do
+            body=$(curl --fail --silent --show-error --max-time 10 \
+              https://lean-eval-submission-server-staging.lean-eval.workers.dev/healthz) || body=""
+            if HEALTH_BODY="$body" python3 - <<'PY'
+          import json
+          import os
+
+          body = json.loads(os.environ["HEALTH_BODY"])
+          assert body["status"] == "ok"
+          assert body["environment"] == "staging"
+          assert body["deployed_commit"] == os.environ["EXPECTED_COMMIT"]
+          for field in (
+              "intake_configured_enabled",
+              "intake_effective_enabled",
+              "intake_enabled",
+              "legacy_result_owner_api_enabled",
+              "result_amendment_owner_api_enabled",
+              "result_amendment_maintainer_api_enabled",
+              "model_identity_owner_api_enabled",
+              "model_identity_maintainer_api_enabled",
+              "model_identity_consolidation_api_enabled",
+              "release_opt_out_api_enabled",
+          ):
+              assert body[field] is False, field
+          assert body["intake_enablement_mode"] == "disabled"
+          assert body["intake_lease_expires_at"] is None
+          PY
+            then
+              exit 0
+            fi
+            if [ "$attempt" -lt 13 ]; then sleep 5; fi
+          done
+          echo "watchdog could not verify all-false staging recovery" >&2
+          exit 1

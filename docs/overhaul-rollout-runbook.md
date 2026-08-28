@@ -165,6 +165,120 @@ prevent that recovery step: immediately re-dispatch the same exact tag with
 launch field is false in public health. Do not use the enabled state outside
 the approved bounded smoke.
 
+The final exercise uses the temporary
+[`bounded-staging-lifecycle-watchdog.yml`](../.github/workflows/bounded-staging-lifecycle-watchdog.yml)
+and [`run_bounded_staging_lifecycle.py`](../scripts/run_bounded_staging_lifecycle.py).
+They are a bounded operator aid, not a qualification harness or deployment
+controller, and must be deleted with the staging fixture after one accepted
+run. The exact operator sequence is:
+
+The release reconstruction dispatch targets protected release `main` and sends
+the fixture's exact `expected_release_commit`. The release workflow itself
+requires protected `refs/heads/main` and rejects unless `github.sha` equals that
+input. Preflight also requires release `main` to equal the same reviewed commit;
+there is no movable or temporary release tag authority.
+
+1. run the driver's `preflight` command; it is read-only and must report zero
+   writes;
+2. start the exact-tag watchdog while public health is still all-false; it
+   verifies that state, prepares the recovery deployment, arms recovery, and
+   only then waits for enablement for at most 15 minutes;
+3. after the watchdog reports that recovery is armed, dispatch the exact
+   immutable tag through `set-staging-lifecycle-smoke.yml` with the fixture's
+   two denial maintainer arrays and `state=enabled`;
+4. make one ordinary browser submission, wait for its Result, and click the
+   visible release opt-out control; no browser cookie, token, or DevTools value
+   is copied;
+5. run the driver with only the visible browser submission ID, secret gist ID,
+   and exact staging commit. It derives the browser Result through the
+   same-owner agent session and accepts no Result ID from the operator;
+6. when the driver pauses after receiving the headless challenge, obtain
+   separate user approval for the displayed nonsecret gist/file and
+   repository/tag/commit targets, then type the target-bound confirmation it
+   displays. Let the driver make only those writes and complete the headless,
+   denial, lifecycle, State, Results, redacted-projection, scheduling, uniquely
+   named publication-disabled reconstruction from the fixture's guarded exact
+   release commit, and disabled-route checks. The release run is accepted only
+   when its untruncated job inventory is exactly `authorize-manual`,
+   `prepare-one`, and `unwrap-one`, all completed successfully; workflow-level
+   success alone is insufficient. Once
+   headless evaluation is terminal, it restores the gist file to its exact
+   prior content (or absence) and deletes the generated exact tag; and
+7. verify the driver's prompt disable dispatch and the independent watchdog's
+   eventual all-false health result. If either is interrupted, immediately use
+   the existing exact-tag disabled dispatch and verify public health.
+
+Before the approved proof write, the driver keeps the signed challenge only in
+ordinary process memory. During the exact approved mutation, its only other
+representations are the named secret Gist proof and a mode-`0700` Git checkout
+on verified tmpfs; the driver removes the checkout synchronously, clears request
+copies after submission, and retains one comparison value in memory only until
+exact cleanup. This is not a hardened enclave. Run it only on the trusted
+operator host, with core dumps and untrusted process
+inspection disabled; the host's swap and runtime may still copy process memory.
+The challenge must never be placed in workflow inputs, ordinary disk, logs,
+summaries, artifacts, or documentation. If
+interruption prevents exact fixture cleanup, the driver prints only the
+nonsecret rollback targets; do not remove the tag before headless evaluation is
+terminal. Its captured prior gist content remains only in process memory. Any
+repository, source commit, gist owner/visibility, live staging commit,
+canonical fixture digest, or immutable-tag mismatch is a hard stop. The driver
+may dispatch only the existing in-family publication-disabled staging
+reconstruction; it cannot publish a release.
+
+Once the headless submission POST begins, a missing or malformed response is an
+unknown acceptance outcome: State acceptance and dispatch may already have
+completed. In that case the driver must retain both the exact proof file and tag
+and print only their nonsecret recovery targets. Restore/delete them only after
+the exact submission has been reconciled to a terminal archive/evaluation
+state; transport failure alone never proves cleanup safe.
+
+Cleanup is deliberately ownership-bounded. The driver restores only the gist
+state it captured and deletes the source tag only after an exact successful
+create response proved that this run created it. Gist write and restoration use
+Git compare-and-swap on `refs/heads/master`, with exact `--force-with-lease`
+heads. The only checkout and object database live in a mode-`0700` directory on
+verified `/dev/shm` tmpfs; the Git subprocess environment is closed and omits
+all debug/trace variables and unrelated credentials. The driver accepts at
+most 16 complete Gist files and 1 MiB of current content, fetches only the exact
+branch with depth one for the write and depth two for restoration, and applies
+a timeout to every Git operation. Restoration first proves that the current
+head and file are still this run's exact challenge commit, then atomically
+returns the ref to the captured prior head. It never uses an undocumented
+conditional HTTP PATCH and never overwrites an intervening edit or deletion.
+If a source-tag create response is lost and a tag appears, its
+ownership is ambiguous: the driver restores the proved Gist change, refuses to
+delete the tag, and reports only the exact nonsecret rollback target for a new
+explicit decision.
+
+The final disabled-route assertions are transient response checks. Intake must
+return `503 intake_disabled`; every launch lifecycle gate—including legacy
+result-owner, result-amendment owner and maintainer, model-identity owner and
+maintainer, and release opt-out—must return the public owner-hiding `404
+not_found`. Model consolidation stays excluded. For lifecycle probes the driver
+also proves its generated idempotency event is absent from State. Do not create
+a State event, durable evidence record, artifact, or run-history document for
+these denials.
+
+This lifecycle driver does not verify the public entry page. Separately perform
+the browser UI regression check at `lean-lang.org/eval/submit`: problem text,
+pre-filled form values, sign-in feedback, preparing spinner, submission status,
+and the visible opt-out control must all work without DevTools.
+
+After the single accepted run and verified all-false recovery, retirement is a
+required source change, not optional cleanup. Delete this exact inventory:
+
+- `.github/workflows/bounded-staging-lifecycle-watchdog.yml`;
+- `.github/workflows/set-staging-lifecycle-smoke.yml`;
+- `configuration/staging-lifecycle-smoke-v1.json`;
+- `scripts/run_bounded_staging_lifecycle.py`;
+- `tests/test_bounded_staging_lifecycle_acceptance.py`; and
+- `tests/test_staging_lifecycle_smoke.py`.
+
+Remove this bounded-acceptance subsection and any tests or workflow inventories
+that reference those paths in the same retirement change. Retain no replacement
+qualification harness, run artifact, or history document.
+
 Production uses no free-form lifecycle toggle. The six launch flags and the two
 closed maintainer arrays in `server/wrangler.jsonc` form one reviewed rollout
 state. [`worker_lifecycle_configuration.py`](../scripts/worker_lifecycle_configuration.py)

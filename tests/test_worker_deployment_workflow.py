@@ -224,6 +224,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "authoritative-replay-staging.yml",
                 "aws-key-adapter-staging-smoke.yml",
                 "aws-production-wrap-preflight.yml",
+                "bounded-staging-lifecycle-watchdog.yml",
                 "historical-public-authority-preparation.yml",
                 "historical-public-image-qualification.yml",
                 "historical-public-replay-plan.yml",
@@ -270,6 +271,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         runtime_bound_dependencies = deployed_dependencies | {
             "accepted-archive-replay-staging.yml",
             "authoritative-replay-staging.yml",
+            "bounded-staging-lifecycle-watchdog.yml",
             "set-staging-intake.yml",
             "set-staging-lifecycle-smoke.yml",
         }
