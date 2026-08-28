@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lean-lang.org/schemas/lean-eval/historical-private-profile-qualification-v1.schema.json",
+  "title": "LeanEval historical private replay profile qualification version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "kind", "qualification_status", "image_family",
+    "registry_repository", "registry_manifest_digest", "image_source_repository",
+    "image_source_commit", "source_blobs", "qualification", "benchmark_commit",
+    "benchmark_tree", "toolchain", "lean_toolchain_blob_sha256", "checker",
+    "measurement_config_digest", "measurement_config", "execution_profile",
+    "execution_profile_digest"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "kind": {"const": "historical_private_replay_profile_qualification"},
+    "qualification_status": {"const": "qualified"},
+    "image_family": {"const": "lean-eval-authoritative-private-replay-v1"},
+    "registry_repository": {"const": "lean-eval-authoritative"},
+    "registry_manifest_digest": {"$ref": "#/$defs/ociDigest"},
+    "image_source_repository": {"const": "leanprover/lean-eval-submissions"},
+    "image_source_commit": {"$ref": "#/$defs/commit"},
+    "source_blobs": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "dockerfile", "dockerignore", "profile_matrix", "evaluator",
+        "orchestrator", "layer_preparation", "runtime_helper",
+        "measurement_helper", "comparator_patch",
+        "age_file_key_go_mod", "age_file_key_go_sum", "age_file_key_main"
+      ],
+      "properties": {
+        "dockerfile": {"$ref": "#/$defs/dockerfileBlob"},
+        "dockerignore": {"$ref": "#/$defs/dockerignoreBlob"},
+        "profile_matrix": {"$ref": "#/$defs/profileMatrixBlob"},
+        "evaluator": {"$ref": "#/$defs/evaluatorBlob"},
+        "orchestrator": {"$ref": "#/$defs/orchestratorBlob"},
+        "layer_preparation": {"$ref": "#/$defs/layerPreparationBlob"},
+        "runtime_helper": {"$ref": "#/$defs/runtimeHelperBlob"},
+        "measurement_helper": {"$ref": "#/$defs/measurementHelperBlob"},
+        "comparator_patch": {"$ref": "#/$defs/comparatorPatchBlob"},
+        "age_file_key_go_mod": {"$ref": "#/$defs/ageFileKeyGoModBlob"},
+        "age_file_key_go_sum": {"$ref": "#/$defs/ageFileKeyGoSumBlob"},
+        "age_file_key_main": {"$ref": "#/$defs/ageFileKeyMainBlob"}
+      }
+    },
+    "qualification": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "workflow_repository", "workflow_commit", "workflow_path",
+        "workflow_sha256", "workflow_run_id", "workflow_run_attempt",
+        "private_archive_probe", "network_probe"
+      ],
+      "properties": {
+        "workflow_repository": {"const": "leanprover/lean-eval-submissions"},
+        "workflow_commit": {"$ref": "#/$defs/commit"},
+        "workflow_path": {"const": ".github/workflows/historical-private-image-qualification.yml"},
+        "workflow_sha256": {"$ref": "#/$defs/digest"},
+        "workflow_run_id": {
+          "type": "integer", "minimum": 1, "maximum": 9007199254740991
+        },
+        "workflow_run_attempt": {
+          "type": "integer", "minimum": 1, "maximum": 9007199254740991
+        },
+        "private_archive_probe": {
+          "type": "object", "additionalProperties": false,
+          "required": [
+            "archive_expectation_schema_version", "key_material_type",
+            "runner_entrypoint", "status"
+          ],
+          "properties": {
+            "archive_expectation_schema_version": {"const": 2},
+            "key_material_type": {"const": "age-file-key-v1"},
+            "runner_entrypoint": {"const": "/opt/lean-eval/replay-authoritative"},
+            "status": {"const": "passed"}
+          }
+        },
+        "network_probe": {"const": "blocked"}
+      }
+    },
+    "benchmark_commit": {"$ref": "#/$defs/commit"},
+    "benchmark_tree": {"$ref": "#/$defs/commit"},
+    "toolchain": {"$ref": "#/$defs/toolchain"},
+    "lean_toolchain_blob_sha256": {"$ref": "#/$defs/digest"},
+    "checker": {"const": "nanoda"},
+    "measurement_config_digest": {"$ref": "#/$defs/digest"},
+    "measurement_config": {"$ref": "historical-private-replay-plan-v1.schema.json#/$defs/measurementConfig"},
+    "execution_profile": {"$ref": "historical-private-replay-plan-v1.schema.json#/$defs/executionProfile"},
+    "execution_profile_digest": {"$ref": "#/$defs/digest"}
+  },
+  "$defs": {
+    "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ociDigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "toolchain": {
+      "type": "string",
+      "pattern": "^leanprover/lean4:v[0-9]+\\.[0-9]+\\.[0-9]+(?:-(?:rc|beta)[0-9]+)?$"
+    },
+    "sourceBlob": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string"},
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "dockerfileBlob": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceBlob"},
+        {"properties": {"path": {"const": "Dockerfile.historical-private-replay"}}}
+      ]
+    },
+    "dockerignoreBlob": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceBlob"},
+        {"properties": {"path": {"const": "Dockerfile.historical-private-replay.dockerignore"}}}
+      ]
+    },
+    "profileMatrixBlob": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceBlob"},
+        {"properties": {"path": {"const": "configuration/historical-private-replay-image-matrix-v1.json"}}}
+      ]
+    },
+    "evaluatorBlob": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceBlob"},
+        {"properties": {"path": {"const": "scripts/evaluate_submission.py"}}}
+      ]
+    },
+    "orchestratorBlob": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceBlob"},
+        {"properties": {"path": {"const": "scripts/replay_orchestrator.py"}}}
+      ]
+    },
+    "layerPreparationBlob": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceBlob"},
+        {"properties": {"path": {"const": "scripts/prepare_historical_image_layers.py"}}}
+      ]
+    },
+    "runtimeHelperBlob": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceBlob"},
+        {"properties": {"path": {"const": "server/replay-image/replay-authoritative"}}}
+      ]
+    },
+    "measurementHelperBlob": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceBlob"},
+        {"properties": {"path": {"const": "server/replay-image/replay-measure"}}}
+      ]
+    },
+    "comparatorPatchBlob": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceBlob"},
+        {"properties": {"path": {"const": "server/replay-image/comparator-71b52-phase-metrics.patch"}}}
+      ]
+    },
+    "ageFileKeyGoModBlob": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceBlob"},
+        {"properties": {"path": {"const": "server/age-file-key/go.mod"}}}
+      ]
+    },
+    "ageFileKeyGoSumBlob": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceBlob"},
+        {"properties": {"path": {"const": "server/age-file-key/go.sum"}}}
+      ]
+    },
+    "ageFileKeyMainBlob": {
+      "allOf": [
+        {"$ref": "#/$defs/sourceBlob"},
+        {"properties": {"path": {"const": "server/age-file-key/main.go"}}}
+      ]
+    }
+  }
+}

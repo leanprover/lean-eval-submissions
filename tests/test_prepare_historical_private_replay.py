@@ -5,6 +5,7 @@ import collections
 import copy
 import hashlib
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -23,13 +24,20 @@ CROSSWALK_SHA256 = "dfdcbc0da3a3526f8a26e6a69cefa41cbcd92de7608752193b742fcd92b0
 CROSSWALK_COMMIT = "da421bf6a55f3234719151d8a2422da3b2febf23"
 RESULTS_COMMIT = "7fb2e762e5470ae1929dbe069dbcd0c8488b51d7"
 PROFILE_COMMIT = "faf631452b399ecbab3bd2981e8052390bac5a99"
-PLAN_SHA256 = "d9561ad62098e0542656678f207b3360b0b295be975c292cbf729dc48d03bd5e"
+UNAVAILABILITY_PLAN_SHA256 = "d9561ad62098e0542656678f207b3360b0b295be975c292cbf729dc48d03bd5e"
+PRIVATE_PLAN_SHA256 = "85c21beb341fbfe5ffd877b935149ffe577dc7312c9bb65506e270674c6453c4"
+PROTECTED_STATE_COMMIT = "3dcf596b696b9f1f11de2e3c6127664fd0504884"
 CROSSWALK = (
     ROOT
     / "evidence/historical-replay/private-crosswalks"
     / f"{CROSSWALK_SHA256}.json"
 )
-PLAN = ROOT / "evidence/historical-replay/private-plans" / f"{PLAN_SHA256}.json"
+UNAVAILABILITY_PLAN = (
+    ROOT
+    / private_replay.UNAVAILABILITY_PLAN_PREFIX
+    / f"{UNAVAILABILITY_PLAN_SHA256}.json"
+)
+PRIVATE_PLAN = ROOT / private_replay.PRIVATE_PLAN_PREFIX / f"{PRIVATE_PLAN_SHA256}.json"
 
 
 def recursive_keys(value: object) -> set[str]:
@@ -56,18 +64,215 @@ def envelope(submission_id: str, ciphertext: bytes) -> dict[str, object]:
 class HistoricalPrivateReplayPlanTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.raw = PLAN.read_bytes()
+        cls.raw = PRIVATE_PLAN.read_bytes()
         cls.plan = json.loads(cls.raw)
+        cls.unavailability_raw = UNAVAILABILITY_PLAN.read_bytes()
+        cls.unavailability_plan = json.loads(cls.unavailability_raw)
+
+    def qualified_fixture(self) -> tuple[dict[str, object], dict[str, object]]:
+        entry = copy.deepcopy(
+            next(
+                item
+                for item in self.unavailability_plan["entries"]
+                if item.get("replay_profile_status") == "profile_qualified"
+            )
+        )
+        digest = entry["execution_profile_digest"]
+        profile = copy.deepcopy(self.unavailability_plan["profiles"][digest])
+        profile.pop("reused_public_profile")
+        profile["private_profile"] = {
+            "repository": private_replay.RESULTS_REPOSITORY,
+            "commit": "2" * 40,
+            "path": f"{private_replay.PRIVATE_PROFILE_PREFIX}/{digest}.json",
+            "sha256": "3" * 64,
+        }
+        return entry, profile
+
+    @staticmethod
+    def archive_fixture(submission_id: str) -> dict[str, object]:
+        archive_path = canonical_archive_path(submission_id)
+        return {
+            "archive_repository": "leanprover/lean-eval-audit",
+            "archive_commit": "a" * 40,
+            "archive_path": archive_path,
+            "archive_sidecar_path": archive_path.removesuffix(".tar.age") + ".json",
+            "archive_ciphertext_sha256": "b" * 64,
+            "archive_sidecar_sha256": "c" * 64,
+            "archive_key_envelope_sha256": "d" * 64,
+            "archive_plaintext_tar_sha256": "e" * 64,
+            "archive_plaintext_tar_size": 4096,
+            "workflow_run_identity_sha256": "f" * 64,
+        }
+
+    @staticmethod
+    def commit_fixture(root: pathlib.Path, message: str) -> str:
+        subprocess.run(["git", "-C", str(root), "add", "."], check=True)
+        subprocess.run(
+            [
+                "git", "-C", str(root), "-c", "user.name=fixture", "-c",
+                "user.email=fixture@example.invalid", "commit", "-qm", message,
+            ],
+            check=True,
+        )
+        return subprocess.check_output(
+            ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+        ).strip()
+
+    def private_qualification_fixture(
+        self,
+        root: pathlib.Path,
+        *,
+        mark_digest_public: bool = False,
+        delete_public_before_qualification: bool = False,
+    ) -> tuple[pathlib.Path, str, dict[str, object]]:
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+        subprocess.run(
+            [
+                "git", "-C", str(root), "remote", "add", "origin",
+                private_replay.CANONICAL_RESULTS_REMOTE,
+            ],
+            check=True,
+        )
+        for name, relative in private_replay.PRIVATE_SOURCE_PATHS.items():
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"private {name} fixture\n", encoding="utf-8")
+        workflow = (
+            root
+            / ".github/workflows/historical-private-image-qualification.yml"
+        )
+        workflow.parent.mkdir(parents=True, exist_ok=True)
+        workflow.write_text("name: private qualification fixture\n", encoding="utf-8")
+
+        _entry, selected = self.qualified_fixture()
+        core = copy.deepcopy(selected)
+        core.pop("private_profile")
+        core["execution_profile"]["vm_image_digest"] = "sha256:" + "9" * 64
+        digest = private_replay.config_digest(
+            "lean-eval-replay-execution-profile-v1", core["execution_profile"]
+        )
+        profile_lock = {
+            "schema_version": 1,
+            "benchmark_repository": private_replay.BENCHMARK_REPOSITORY,
+            "benchmark_commit": core["benchmark_commit"],
+            "toolchain": core["toolchain"],
+            "runner_profile": core["execution_profile"]["runner_profile"],
+            "go_toolchain": core["execution_profile"]["go_toolchain"],
+            "rust_toolchain": core["execution_profile"]["rust_toolchain"],
+            "cache_state": core["execution_profile"]["cache_state"],
+            "measurement_command": core["execution_profile"]["measurement_command"],
+            "components": core["execution_profile"]["components"],
+        }
+        images = []
+        for index in range(63):
+            benchmark_commit = (
+                core["benchmark_commit"] if index == 0 else f"{index:040x}"
+            )
+            lock = copy.deepcopy(profile_lock)
+            lock["benchmark_commit"] = benchmark_commit
+            images.append(
+                {
+                    "benchmark_commit": benchmark_commit,
+                    "benchmark_tree": (
+                        core["benchmark_tree"] if index == 0 else f"{index + 100:040x}"
+                    ),
+                    "toolchain": core["toolchain"],
+                    "lean_toolchain_blob_sha256": core[
+                        "lean_toolchain_blob_sha256"
+                    ],
+                    "manifest_layout": {},
+                    "workspace_count": 1,
+                    "result_count": 10 if index else 19,
+                    "problem_ids": [],
+                    "profile_lock": lock,
+                    "source_pin_origin": "fixture",
+                }
+            )
+        matrix = {
+            "schema_version": 1,
+            "kind": "historical_private_replay_image_matrix",
+            "benchmark_repository": private_replay.BENCHMARK_REPOSITORY,
+            "private_plan_sha256": PRIVATE_PLAN_SHA256,
+            "historical_public_profile_matrix_sha256": "4" * 64,
+            "historical_public_component_lock_sha256": "5" * 64,
+            "checker": "nanoda",
+            "image_count": 63,
+            "toolchain_count": 5,
+            "result_count": 639,
+            "reused_public_source_count": 21,
+            "derived_exact_source_count": 42,
+            "images": images,
+        }
+        (root / private_replay.PRIVATE_SOURCE_PATHS["profile_matrix"]).write_bytes(
+            private_replay.canonical(matrix)
+        )
+        public: pathlib.Path | None = None
+        if mark_digest_public or delete_public_before_qualification:
+            public = root / "evidence/public-replay/profiles" / f"{'a' * 64}.json"
+            public.parent.mkdir(parents=True, exist_ok=True)
+            public.write_bytes(
+                private_replay.canonical(
+                    {"registry_manifest_digest": core["execution_profile"]["vm_image_digest"]}
+                )
+            )
+        source_commit = self.commit_fixture(root, "private image source fixture")
+        if delete_public_before_qualification:
+            assert public is not None
+            public.unlink()
+        source_blobs = {
+            name: {
+                "path": relative,
+                "sha256": hashlib.sha256((root / relative).read_bytes()).hexdigest(),
+            }
+            for name, relative in private_replay.PRIVATE_SOURCE_PATHS.items()
+        }
+        artifact = {
+            **core,
+            "execution_profile_digest": digest,
+            "schema_version": 1,
+            "kind": private_replay.PRIVATE_QUALIFICATION_KIND,
+            "qualification_status": "qualified",
+            "image_family": private_replay.PRIVATE_IMAGE_FAMILY,
+            "registry_repository": private_replay.PRIVATE_IMAGE_REPOSITORY,
+            "registry_manifest_digest": core["execution_profile"]["vm_image_digest"],
+            "image_source_repository": private_replay.RESULTS_REPOSITORY,
+            "image_source_commit": source_commit,
+            "source_blobs": source_blobs,
+            "qualification": {
+                "workflow_repository": private_replay.RESULTS_REPOSITORY,
+                "workflow_commit": source_commit,
+                "workflow_path": (
+                    ".github/workflows/historical-private-image-qualification.yml"
+                ),
+                "workflow_sha256": hashlib.sha256(workflow.read_bytes()).hexdigest(),
+                "workflow_run_id": 123,
+                "workflow_run_attempt": 1,
+                "private_archive_probe": {
+                    "archive_expectation_schema_version": 2,
+                    "key_material_type": "age-file-key-v1",
+                    "runner_entrypoint": "/opt/lean-eval/replay-authoritative",
+                    "status": "passed",
+                },
+                "network_probe": "blocked",
+            },
+        }
+        path = root / private_replay.PRIVATE_PROFILE_PREFIX / f"{digest}.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(private_replay.canonical(artifact))
+        profile_commit = self.commit_fixture(root, "private qualification fixture")
+        return path, profile_commit, artifact
 
     def test_committed_plan_is_canonical_content_addressed_and_schema_valid(self) -> None:
-        self.assertEqual(hashlib.sha256(self.raw).hexdigest(), PLAN_SHA256)
+        self.assertEqual(hashlib.sha256(self.raw).hexdigest(), PRIVATE_PLAN_SHA256)
         self.assertEqual(self.raw, private_replay.canonical(self.plan))
         private_replay.validate_plan(self.plan)
+        schema = json.loads(private_replay.PLAN_SCHEMA.read_bytes())
+        self.assertIn("private_profile", schema["$defs"]["profile"]["required"])
         result = subprocess.run(
             [
                 "npx", "--yes", "ajv-cli@5.0.0", "validate",
                 "--spec=draft2020", "--strict=false",
-                "-s", str(private_replay.PLAN_SCHEMA), "-d", str(PLAN),
+                "-s", str(private_replay.PLAN_SCHEMA), "-d", str(PRIVATE_PLAN),
             ],
             check=False,
             capture_output=True,
@@ -75,6 +280,42 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertNotIn("unknown format", result.stdout + result.stderr)
+
+    def test_legacy_plan_is_accepted_only_for_completed_unavailability_roots(self) -> None:
+        self.assertEqual(
+            hashlib.sha256(self.unavailability_raw).hexdigest(),
+            UNAVAILABILITY_PLAN_SHA256,
+        )
+        with self.assertRaisesRegex(
+            private_replay.PrivateReplayPlanError,
+            "profile fields are invalid",
+        ):
+            private_replay.validate_plan(self.unavailability_plan)
+        private_replay.validate_legacy_unavailability_plan(
+            self.unavailability_plan, self.unavailability_raw
+        )
+        schema_result = subprocess.run(
+            [
+                "npx", "--yes", "ajv-cli@5.0.0", "validate",
+                "--spec=draft2020", "--strict=false",
+                "-s", str(private_replay.PLAN_SCHEMA),
+                "-d", str(UNAVAILABILITY_PLAN),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(schema_result.returncode, 0)
+        tampered = self.unavailability_raw.replace(
+            b'"profile_qualified": 357', b'"profile_qualified": 358', 1
+        )
+        with self.assertRaisesRegex(
+            private_replay.PrivateReplayPlanError,
+            "exact retained artifact",
+        ):
+            private_replay.validate_legacy_unavailability_plan(
+                self.unavailability_plan, tampered
+            )
 
     def test_committed_plan_covers_the_exact_retained_private_corpus(self) -> None:
         self.assertEqual(
@@ -85,12 +326,12 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
             self.plan["replay_readiness_counts"],
             {
                 "archive_not_found": 29,
-                "profile_pending": 282,
-                "profile_qualified": 357,
+                "profile_pending": 639,
+                "profile_qualified": 0,
             },
         )
         self.assertEqual(len(self.plan["entries"]), 668)
-        self.assertEqual(len(self.plan["profiles"]), 21)
+        self.assertEqual(self.plan["profiles"], {})
         identifiers = [entry["result_id"] for entry in self.plan["entries"]]
         self.assertEqual(identifiers, sorted(set(identifiers)))
 
@@ -158,43 +399,108 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
                     crosswalk_path=CROSSWALK,
                     crosswalk_commit=CROSSWALK_COMMIT,
                     results_root=results,
-                    public_profile_directory=ROOT / "evidence/public-replay/profiles",
-                    public_profile_commit=PROFILE_COMMIT,
-                    profile_matrix=ROOT / "configuration/historical-public-replay-profile-matrix-v1.json",
                     private_profiles=[],
+                    private_profile_commit=None,
                 )
         self.assertEqual(private_replay.canonical(rebuilt), self.raw)
 
-    def test_state_compatibility_executes_validator_instead_of_searching_text(self) -> None:
+    def test_candidates_pass_the_exact_protected_state_contract(self) -> None:
+        repository = os.environ.get("LEAN_EVAL_PROTECTED_STATE_REPOSITORY")
+        if repository is None:
+            self.skipTest("set LEAN_EVAL_PROTECTED_STATE_REPOSITORY for contract test")
+        source = pathlib.Path(repository).resolve()
+        subprocess.run(
+            ["git", "-C", str(source), "cat-file", "-e", f"{PROTECTED_STATE_COMMIT}^{{commit}}"],
+            check=True,
+        )
+        entry, profile = self.qualified_fixture()
+        archive = self.archive_fixture(entry["archive_submission_id"])
+        events = private_replay.build_bound_events(
+            entry=entry,
+            profile=profile,
+            archive=archive,
+            plan_commit="1" * 40,
+            plan_path=f"{private_replay.PRIVATE_PLAN_PREFIX}/{PRIVATE_PLAN.name}",
+            plan_sha256=PRIVATE_PLAN_SHA256,
+            results_commit=self.plan["results"]["commit"],
+            crosswalk=self.plan["crosswalk"],
+            occurred_at=private_replay._parse_timestamp(
+                "2026-08-28T12:00:00.000Z"
+            ),
+        )
         with tempfile.TemporaryDirectory() as directory:
-            root = pathlib.Path(directory)
-            (root / "scripts").mkdir()
-            (root / "scripts/validate_state.py").write_text(
-                "# historical_archive_result.replay_authorized\n"
-                "# historical_archive_result.replay_profile_qualified\n"
-                "# historical_archive_result.replay_unavailable\n"
-                "# replay.enqueued\n"
-                "def validate_event_data(event, label):\n"
-                "    raise ValueError('unsupported')\n"
-                "def validate_semantics(events, environment):\n"
-                "    return None\n",
-                encoding="utf-8",
+            state_root = pathlib.Path(directory) / "State"
+            subprocess.run(
+                [
+                    "git", "-C", str(source), "worktree", "add", "--detach",
+                    str(state_root), PROTECTED_STATE_COMMIT,
+                ],
+                check=True,
+                capture_output=True,
             )
-            with self.assertRaisesRegex(
-                private_replay.PrivateReplayPlanError,
-                "fails the supplied validator",
-            ):
+            try:
+                environment, existing = private_replay._load_committed_state_events(
+                    state_root, PROTECTED_STATE_COMMIT
+                )
+                self.assertEqual(environment, "production")
+                self.assertEqual(
+                    sum(
+                        event["event_type"]
+                        == "historical_archive_result.replay_unavailable"
+                        for event in existing
+                    ),
+                    29,
+                )
+                unavailable = private_replay.build_unavailable_selection(
+                    plan=self.unavailability_plan,
+                    plan_commit="1" * 40,
+                    plan_path=(
+                        f"{private_replay.UNAVAILABILITY_PLAN_PREFIX}/"
+                        f"{UNAVAILABILITY_PLAN.name}"
+                    ),
+                    plan_sha256=UNAVAILABILITY_PLAN_SHA256,
+                    first_occurred_at=private_replay._parse_timestamp(
+                        "2026-08-28T11:00:00.000Z"
+                    ),
+                )
                 private_replay.validate_state_candidates(
-                    state_root=root,
+                    state_root=state_root,
                     state_commit=None,
-                    candidates=[{"event_type": "replay.enqueued"}],
+                    candidates=unavailable,
                     append_ready=False,
+                )
+                private_replay.validate_state_candidates(
+                    state_root=state_root,
+                    state_commit=PROTECTED_STATE_COMMIT,
+                    candidates=events,
+                    append_ready=True,
+                )
+                public_locator = copy.deepcopy(events)
+                public_locator[1]["payload"]["qualification_path"] = (
+                    "evidence/public-replay/profiles/"
+                    f"{entry['execution_profile_digest']}.json"
+                )
+                with self.assertRaisesRegex(
+                    private_replay.PrivateReplayPlanError,
+                    "fails the supplied validator",
+                ):
+                    private_replay.validate_state_candidates(
+                        state_root=state_root,
+                        state_commit=PROTECTED_STATE_COMMIT,
+                        candidates=public_locator,
+                        append_ready=True,
+                    )
+            finally:
+                subprocess.run(
+                    ["git", "-C", str(source), "worktree", "remove", "--force", str(state_root)],
+                    check=True,
+                    capture_output=True,
                 )
 
     def test_unavailable_candidates_cover_all_twenty_nine_terminal_entries(self) -> None:
         entries = [
             entry
-            for entry in self.plan["entries"]
+            for entry in self.unavailability_plan["entries"]
             if entry["classification"] == "archive_not_found"
         ]
         first = private_replay._parse_timestamp("2026-08-27T12:00:00.000Z")
@@ -202,10 +508,13 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
             private_replay.build_unavailable_event(
                 entry=entry,
                 plan_commit="1" * 40,
-                plan_path=f"{private_replay.PLAN_PREFIX}/{PLAN.name}",
-                plan_sha256=PLAN_SHA256,
-                results_commit=self.plan["results"]["commit"],
-                crosswalk=self.plan["crosswalk"],
+                plan_path=(
+                    f"{private_replay.UNAVAILABILITY_PLAN_PREFIX}/"
+                    f"{UNAVAILABILITY_PLAN.name}"
+                ),
+                plan_sha256=UNAVAILABILITY_PLAN_SHA256,
+                results_commit=self.unavailability_plan["results"]["commit"],
+                crosswalk=self.unavailability_plan["crosswalk"],
                 occurred_at=first + private_replay.dt.timedelta(milliseconds=index),
             )
             for index, entry in enumerate(entries)
@@ -237,34 +546,15 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
             self.assertNotIn(forbidden, encoded)
 
     def test_bound_state_candidate_uses_existing_event_chain(self) -> None:
-        entry = next(
-            item
-            for item in self.plan["entries"]
-            if item.get("replay_profile_status") == "profile_qualified"
-        )
-        profile = self.plan["profiles"][entry["execution_profile_digest"]]
-        archive = {
-            "archive_repository": "leanprover/lean-eval-audit",
-            "archive_commit": "a" * 40,
-            "archive_path": canonical_archive_path(entry["archive_submission_id"]),
-            "archive_sidecar_path": canonical_archive_path(
-                entry["archive_submission_id"]
-            ).removesuffix(".tar.age")
-            + ".json",
-            "archive_ciphertext_sha256": "b" * 64,
-            "archive_sidecar_sha256": "c" * 64,
-            "archive_key_envelope_sha256": "d" * 64,
-            "archive_plaintext_tar_sha256": "e" * 64,
-            "archive_plaintext_tar_size": 4096,
-            "workflow_run_identity_sha256": "f" * 64,
-        }
+        entry, profile = self.qualified_fixture()
+        archive = self.archive_fixture(entry["archive_submission_id"])
         events = private_replay.build_bound_events(
             entry=entry,
             profile=profile,
             archive=archive,
             plan_commit="1" * 40,
-            plan_path=f"{private_replay.PLAN_PREFIX}/{PLAN.name}",
-            plan_sha256=PLAN_SHA256,
+            plan_path=f"{private_replay.PRIVATE_PLAN_PREFIX}/{PRIVATE_PLAN.name}",
+            plan_sha256=PRIVATE_PLAN_SHA256,
             results_commit=self.plan["results"]["commit"],
             crosswalk=self.plan["crosswalk"],
             occurred_at=private_replay._parse_timestamp(
@@ -279,7 +569,7 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
                 "replay.enqueued",
             ],
         )
-        self.assertNotIn("causation_event_id", events[0])
+        self.assertIsNone(events[0]["causation_event_id"])
         self.assertEqual(events[1]["causation_event_id"], events[0]["event_id"])
         self.assertEqual(events[2]["causation_event_id"], events[1]["event_id"])
         self.assertEqual(events[0]["payload"]["crosswalk_path"], self.plan["crosswalk"]["path"])
@@ -350,7 +640,7 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             subprocess.run(["git", "init", "-q", str(root)], check=True)
-            path = root / private_replay.PLAN_PREFIX / PLAN.name
+            path = root / private_replay.PRIVATE_PLAN_PREFIX / PRIVATE_PLAN.name
             path.parent.mkdir(parents=True)
             path.write_bytes(self.raw)
             subprocess.run(["git", "-C", str(root), "add", "."], check=True)
@@ -382,7 +672,7 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
 
     def test_append_ready_checks_plan_commit_before_other_inputs(self) -> None:
         arguments = private_replay.argparse.Namespace(
-            plan=str(PLAN),
+            plan=str(PRIVATE_PLAN),
             authority_commit=PROFILE_COMMIT,
             selection="full",
             audit_commit="a" * 40,
@@ -407,9 +697,13 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
             output_root = fixture_root / "output"
 
             subprocess.run(["git", "init", "-q", str(authority_root)], check=True)
-            plan_path = authority_root / private_replay.PLAN_PREFIX / PLAN.name
+            plan_path = (
+                authority_root
+                / private_replay.UNAVAILABILITY_PLAN_PREFIX
+                / UNAVAILABILITY_PLAN.name
+            )
             plan_path.parent.mkdir(parents=True)
-            plan_path.write_bytes(self.raw)
+            plan_path.write_bytes(self.unavailability_raw)
             subprocess.run(["git", "-C", str(authority_root), "add", "."], check=True)
             subprocess.run(
                 [
@@ -496,7 +790,7 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
                 {event["subject_id"] for event in events},
                 {
                     entry["result_id"]
-                    for entry in self.plan["entries"]
+                    for entry in self.unavailability_plan["entries"]
                     if entry["classification"] == "archive_not_found"
                 },
             )
@@ -506,7 +800,7 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
 
     def test_full_selection_retains_the_credentialed_audit_boundary(self) -> None:
         arguments = private_replay.argparse.Namespace(
-            plan=str(PLAN),
+            plan=str(PRIVATE_PLAN),
             authority_commit="a" * 40,
             selection="full",
             audit_root=None,
@@ -605,17 +899,244 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
                     append_ready=True,
                 )
 
-    def test_private_profile_is_embedded_without_a_new_evidence_locator(self) -> None:
-        public_digest, public = next(iter(self.plan["profiles"].items()))
-        private = copy.deepcopy(public)
-        private.pop("reused_public_profile")
-        private["execution_profile_digest"] = public_digest
+    def test_private_profile_requires_and_records_exact_private_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            path = pathlib.Path(directory) / "profile.json"
-            path.write_bytes(private_replay.canonical(private))
-            loaded = private_replay.load_private_profiles([path])
-        self.assertEqual(set(loaded), {public_digest})
-        self.assertNotIn("reused_public_profile", loaded[public_digest])
+            root = pathlib.Path(directory)
+            path, commit, artifact = self.private_qualification_fixture(root)
+            digest = artifact["execution_profile_digest"]
+            with mock.patch.object(
+                private_replay,
+                "PRIVATE_IMAGE_MATRIX_SHA256",
+                artifact["source_blobs"]["profile_matrix"]["sha256"],
+            ):
+                loaded = private_replay.load_private_profiles([path], commit)
+            schema_result = subprocess.run(
+                [
+                    "npx", "--yes", "ajv-cli@5.0.0", "validate",
+                    "--spec=draft2020", "--strict=false",
+                    "-r", str(private_replay.PLAN_SCHEMA),
+                    "-s", str(private_replay.PRIVATE_PROFILE_SCHEMA),
+                    "-d", str(path),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                schema_result.returncode,
+                0,
+                schema_result.stdout + schema_result.stderr,
+            )
+        self.assertEqual(set(loaded), {digest})
+        self.assertEqual(
+            loaded[digest]["private_profile"]["path"],
+            f"{private_replay.PRIVATE_PROFILE_PREFIX}/{digest}.json",
+        )
+
+    def test_core_only_profile_cannot_be_laundered_by_private_path(self) -> None:
+        _entry, selected = self.qualified_fixture()
+        core = copy.deepcopy(selected)
+        core.pop("private_profile")
+        digest = core["execution_profile_digest"] = private_replay.config_digest(
+            "lean-eval-replay-execution-profile-v1", core["execution_profile"]
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(
+                [
+                    "git", "-C", str(root), "remote", "add", "origin",
+                    private_replay.CANONICAL_RESULTS_REMOTE,
+                ],
+                check=True,
+            )
+            path = root / private_replay.PRIVATE_PROFILE_PREFIX / f"{digest}.json"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(private_replay.canonical(core))
+            commit = self.commit_fixture(root, "core-only attack")
+            with self.assertRaisesRegex(
+                private_replay.PrivateReplayPlanError,
+                "qualification envelope is invalid",
+            ):
+                private_replay.load_private_profiles([path], commit)
+
+    def test_public_image_digest_cannot_be_relabelled_private(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            path, commit, artifact = self.private_qualification_fixture(
+                root, mark_digest_public=True
+            )
+            with mock.patch.object(
+                private_replay,
+                "PRIVATE_IMAGE_MATRIX_SHA256",
+                artifact["source_blobs"]["profile_matrix"]["sha256"],
+            ), self.assertRaisesRegex(
+                private_replay.PrivateReplayPlanError,
+                "qualification image is invalid",
+            ):
+                private_replay.load_private_profiles([path], commit)
+
+    def test_deleted_public_image_evidence_cannot_enable_private_relabelling(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            path, commit, artifact = self.private_qualification_fixture(
+                root, delete_public_before_qualification=True
+            )
+            self.assertEqual(
+                subprocess.check_output(
+                    [
+                        "git", "-C", str(root), "ls-tree", "-r", "--name-only",
+                        commit, "evidence/public-replay/profiles",
+                    ],
+                    text=True,
+                ),
+                "",
+            )
+            with mock.patch.object(
+                private_replay,
+                "PRIVATE_IMAGE_MATRIX_SHA256",
+                artifact["source_blobs"]["profile_matrix"]["sha256"],
+            ), self.assertRaisesRegex(
+                private_replay.PrivateReplayPlanError,
+                "qualification image is invalid",
+            ):
+                private_replay.load_private_profiles([path], commit)
+
+    def test_private_qualification_rejects_public_family_and_helper_mismatch(self) -> None:
+        for mutation, message in (
+            (
+                lambda artifact: artifact.__setitem__(
+                    "image_family", "historical-public-replay-v1"
+                ),
+                "qualification envelope is invalid",
+            ),
+            (
+                lambda artifact: artifact["source_blobs"]["runtime_helper"].__setitem__(
+                    "sha256", "0" * 64
+                ),
+                "source provenance changed",
+            ),
+            (
+                lambda artifact: artifact["qualification"][
+                    "private_archive_probe"
+                ].__setitem__(
+                    "runner_entrypoint",
+                    "/opt/lean-eval/replay-archive-acceptance",
+                ),
+                "qualification proof is invalid",
+            ),
+        ):
+            with self.subTest(message=message), tempfile.TemporaryDirectory() as directory:
+                root = pathlib.Path(directory)
+                path, _commit, artifact = self.private_qualification_fixture(root)
+                matrix_digest = artifact["source_blobs"]["profile_matrix"]["sha256"]
+                mutation(artifact)
+                path.write_bytes(private_replay.canonical(artifact))
+                commit = self.commit_fixture(root, "qualification laundering attack")
+                with mock.patch.object(
+                    private_replay, "PRIVATE_IMAGE_MATRIX_SHA256", matrix_digest
+                ), self.assertRaisesRegex(
+                    private_replay.PrivateReplayPlanError, message
+                ):
+                    private_replay.load_private_profiles([path], commit)
+
+    def test_private_profile_requires_canonical_repository_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            path, commit, _artifact = self.private_qualification_fixture(root)
+            subprocess.run(
+                [
+                    "git", "-C", str(root), "remote", "set-url", "origin",
+                    "https://github.com/example/forged-submissions.git",
+                ],
+                check=True,
+            )
+            with self.assertRaisesRegex(
+                private_replay.PrivateReplayPlanError,
+                "remote is not canonical",
+            ):
+                private_replay.load_private_profiles([path], commit)
+
+    def test_embedded_profile_is_reproduced_from_exact_qualification_blob(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            path, commit, artifact = self.private_qualification_fixture(root)
+            with mock.patch.object(
+                private_replay,
+                "PRIVATE_IMAGE_MATRIX_SHA256",
+                artifact["source_blobs"]["profile_matrix"]["sha256"],
+            ):
+                loaded = private_replay.load_private_profiles([path], commit)
+            digest = artifact["execution_profile_digest"]
+            plan = {"profiles": loaded}
+            with mock.patch.object(
+                private_replay,
+                "PRIVATE_IMAGE_MATRIX_SHA256",
+                artifact["source_blobs"]["profile_matrix"]["sha256"],
+            ):
+                private_replay.validate_embedded_private_profiles(plan, root, commit)
+            forged = copy.deepcopy(plan)
+            forged["profiles"][digest]["private_profile"]["sha256"] = "0" * 64
+            with self.assertRaisesRegex(
+                private_replay.PrivateReplayPlanError,
+                "profile digest changed",
+            ):
+                private_replay.validate_embedded_private_profiles(forged, root, commit)
+
+    def test_append_ready_rejects_nonexistent_embedded_private_profile(self) -> None:
+        selected_entry, profile = self.qualified_fixture()
+        plan = copy.deepcopy(self.plan)
+        entry = next(
+            item
+            for item in plan["entries"]
+            if item["result_id"] == selected_entry["result_id"]
+        )
+        entry["replay_profile_status"] = "profile_qualified"
+        entry["execution_profile_digest"] = selected_entry[
+            "execution_profile_digest"
+        ]
+        plan["replay_readiness_counts"] = {
+            "archive_not_found": 29,
+            "profile_pending": 638,
+            "profile_qualified": 1,
+        }
+        plan["profiles"] = {
+            selected_entry["execution_profile_digest"]: profile
+        }
+        private_replay.validate_plan(plan)
+        raw = private_replay.canonical(plan)
+        digest = hashlib.sha256(raw).hexdigest()
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            subprocess.run(
+                [
+                    "git", "-C", str(root), "remote", "add", "origin",
+                    private_replay.CANONICAL_RESULTS_REMOTE,
+                ],
+                check=True,
+            )
+            path = root / private_replay.PRIVATE_PLAN_PREFIX / f"{digest}.json"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(raw)
+            commit = self.commit_fixture(root, "nonexistent profile locator attack")
+            arguments = private_replay.argparse.Namespace(
+                plan=str(path),
+                authority_commit=commit,
+                selection="full",
+                audit_root="/not/reached",
+                audit_commit="a" * 40,
+                append_ready=True,
+                state_root="/not/reached",
+                state_commit="b" * 40,
+                first_occurred_at="2026-08-28T12:00:00.000Z",
+                output_directory="/not/reached",
+            )
+            with self.assertRaisesRegex(
+                private_replay.PrivateReplayPlanError,
+                "embedded private replay profile blob is unavailable",
+            ):
+                private_replay.prepare_state_events(arguments)
 
 
 if __name__ == "__main__":
