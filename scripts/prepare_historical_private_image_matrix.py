@@ -16,7 +16,7 @@ from prepare_historical_private_replay import (
     PrivateReplayPlanError,
     canonical,
     load_json,
-    validate_plan,
+    validate_legacy_unavailability_plan,
 )
 from prepare_historical_replay_profile_matrix import (
     COMMIT,
@@ -133,9 +133,14 @@ def _validate_public_matrix(
     return indexed
 
 
-def _private_bindings(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _private_bindings(
+    plan: dict[str, Any], plan_raw: bytes
+) -> dict[str, dict[str, Any]]:
     try:
-        validate_plan(plan)
+        # The closed image corpus is derived from the exact retained legacy
+        # plan because that artifact carries the already adjudicated source
+        # locks. New qualification never imports its public-profile locators.
+        validate_legacy_unavailability_plan(plan, plan_raw)
     except PrivateReplayPlanError as error:
         raise PrivateImageMatrixError(str(error)) from error
 
@@ -260,7 +265,7 @@ def build_matrix(
     component_lock_raw: bytes,
     benchmark_repository: pathlib.Path,
 ) -> dict[str, Any]:
-    bindings = _private_bindings(private_plan)
+    bindings = _private_bindings(private_plan, private_plan_raw)
     exact_toolchains = {
         image["toolchain"] for image in public_matrix.get("images", [])
         if isinstance(image, dict) and isinstance(image.get("toolchain"), str)
