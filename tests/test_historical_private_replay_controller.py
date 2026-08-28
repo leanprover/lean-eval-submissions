@@ -646,6 +646,132 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 with self.assertRaises(controller.HistoricalPrivateReplayControllerError):
                     controller.load_archive_inputs(self.fixture.audit, task)
 
+    def test_post_start_alternate_existing_archive_plan_is_rejected_by_history(self) -> None:
+        plan = self.fixture.plan()
+        started = controller.started_candidate(
+            plan,
+            self.fixture.state,
+            "2026-10-21T07:00:00.000Z",
+            random_bytes=b"\x0c" * 10,
+        )
+        self.fixture.commit_state_event(started["event"])
+
+        alternate_id = "019a0000-0000-7000-8000-000000000041"
+        ciphertext = b"age-encryption.org/v1\nalternate-private-fixture"
+        ciphertext_sha = hashlib.sha256(ciphertext).hexdigest()
+        sidecar = copy.deepcopy(self.fixture.sidecar)
+        sidecar.update(
+            submission_id=alternate_id,
+            sha256_ciphertext=ciphertext_sha,
+            size_bytes_ciphertext=len(ciphertext),
+            sha256_plaintext_tar="a" * 64,
+            size_bytes_plaintext_tar=8192,
+        )
+        sidecar["key_envelope"].update(
+            submission_id=alternate_id,
+            archive_ciphertext_sha256=ciphertext_sha,
+            data_key_id=archive_file_key_id(alternate_id, ciphertext_sha),
+        )
+        archive_path = f"archives/01/{alternate_id}.tar.age"
+        sidecar_path = f"archives/01/{alternate_id}.json"
+        (self.fixture.audit / archive_path).write_bytes(ciphertext)
+        sidecar_raw = json.dumps(
+            sidecar, ensure_ascii=True, indent=2, sort_keys=True
+        ).encode() + b"\n"
+        (self.fixture.audit / sidecar_path).write_bytes(sidecar_raw)
+        alternate_commit = self.fixture.commit_in(
+            self.fixture.audit, "Add second valid historical private archive"
+        )
+        subprocess.run(
+            [
+                "git", "-C", str(self.fixture.audit), "update-ref",
+                "refs/remotes/origin/main", alternate_commit,
+            ],
+            check=True,
+        )
+
+        substituted = copy.deepcopy(plan)
+        task = substituted["task"]
+        task.update(
+            archive_submission_id=alternate_id,
+            archive_commit=alternate_commit,
+            archive_path=archive_path,
+            archive_sidecar_path=sidecar_path,
+            archive_ciphertext_sha256=ciphertext_sha,
+            archive_sidecar_sha256=hashlib.sha256(sidecar_raw).hexdigest(),
+            archive_key_envelope_sha256=hashlib.sha256(
+                controller.canonical_compact(sidecar["key_envelope"])
+            ).hexdigest(),
+            archive_plaintext_tar_sha256=sidecar["sha256_plaintext_tar"],
+            archive_plaintext_tar_size=sidecar["size_bytes_plaintext_tar"],
+        )
+        substituted["archive_binding"] = {
+            "repository": task["archive_repository"],
+            "commit": alternate_commit,
+            "archive_path": archive_path,
+            "sidecar_path": sidecar_path,
+            "ciphertext_sha256": ciphertext_sha,
+            "sidecar_sha256": hashlib.sha256(sidecar_raw).hexdigest(),
+            "key_envelope_sha256": task["archive_key_envelope_sha256"],
+            "plaintext_tar_sha256": sidecar["sha256_plaintext_tar"],
+            "plaintext_tar_size": sidecar["size_bytes_plaintext_tar"],
+        }
+        request = substituted["execution_plan"]["request"]
+        request["source"]["archive"].update(
+            submission_id=alternate_id,
+            archive_commit=alternate_commit,
+            archive_path=archive_path,
+            archive_ciphertext_sha256=ciphertext_sha,
+        )
+        request["result"]["submission_id"] = alternate_id
+        substituted["state"]["task_sha256"] = hashlib.sha256(
+            controller.state_canonical_bytes(task)
+        ).hexdigest()
+        controller.validate_execution_plan(substituted)
+        with self.assertRaisesRegex(
+            controller.HistoricalPrivateReplayControllerError,
+            "next exact live queue task",
+        ):
+            controller.prepare_unwrap(
+                substituted,
+                self.fixture.state,
+                started,
+                self.fixture.audit,
+                "2026-10-21T07:00:01.000Z",
+            )
+        verdict = {
+            "schema_version": 1,
+            "replay_task_id": task["replay_task_id"],
+            "attempt": 1,
+            "execution_outcome": "failed",
+            "checker_outcome": None,
+            "failure_reason": "runner_lost",
+            "statistics": None,
+        }
+        with self.assertRaisesRegex(
+            controller.HistoricalPrivateReplayControllerError,
+            "next exact live queue task",
+        ):
+            controller.terminal_candidate(
+                substituted,
+                started,
+                verdict,
+                self.fixture.state,
+                "2026-10-21T07:00:01.000Z",
+            )
+        with self.assertRaisesRegex(
+            controller.HistoricalPrivateReplayControllerError,
+            "next exact live queue task",
+        ):
+            controller.build_executor_request(
+                substituted,
+                self.fixture.state,
+                started,
+                self.fixture.audit,
+                {},
+                pathlib.Path("unused-key-material"),
+            )
+
     def test_authority_entry_and_profile_substitution_fail_closed(self) -> None:
         authority = copy.deepcopy(self.fixture.authority)
         authority["entries"][0]["archive_submission_id"] = (
@@ -760,11 +886,20 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
 
     def test_existing_one_use_unwrap_and_executor_primitives_are_composed(self) -> None:
         plan = self.fixture.plan()
+        started = controller.started_candidate(
+            plan,
+            self.fixture.state,
+            "2026-10-21T07:00:00.000Z",
+            random_bytes=b"\x0a" * 10,
+        )
+        self.fixture.commit_state_event(started["event"])
         with mock.patch.object(
             controller, "prepare_private_unwrap", return_value={"unwrap": "exact"}
         ) as unwrap:
             value = controller.prepare_unwrap(
                 plan,
+                self.fixture.state,
+                started,
                 self.fixture.audit,
                 "2026-10-21T07:00:00.000Z",
             )
@@ -778,6 +913,8 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
         ) as executor:
             value = controller.build_executor_request(
                 plan,
+                self.fixture.state,
+                started,
                 self.fixture.audit,
                 {"unwrap": "exact"},
                 pathlib.Path("identity.txt"),
@@ -787,10 +924,19 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
 
     def test_schema_v2_file_key_uses_strict_existing_handoff(self) -> None:
         plan = self.fixture.plan()
+        started = controller.started_candidate(
+            plan,
+            self.fixture.state,
+            "2026-08-23T06:59:59.000Z",
+            random_bytes=b"\x0b" * 10,
+        )
+        self.fixture.commit_state_event(started["event"])
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             unwrap = controller.prepare_unwrap(
                 plan,
+                self.fixture.state,
+                started,
                 self.fixture.audit,
                 "2026-08-23T07:00:00.000Z",
                 request_random=b"\x06" * 10,
@@ -820,7 +966,12 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
             material_path = root / "file-key"
             material_path.write_bytes(material)
             request = controller.build_executor_request(
-                plan, self.fixture.audit, unwrap, material_path
+                plan,
+                self.fixture.state,
+                started,
+                self.fixture.audit,
+                unwrap,
+                material_path,
             )
         self.assertEqual(request["schema_version"], 2)
         self.assertEqual(request["key_material_type"], "age-file-key-v1")

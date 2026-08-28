@@ -172,6 +172,7 @@ REPOSITORY_REMOTES = {
     },
 }
 MAX_ARCHIVE_BYTES = 11 * 1024 * 1024
+MAX_STATE_EXPORT_BYTES = 512 * 1024 * 1024
 
 
 def _git_text(root: pathlib.Path, *arguments: str) -> str:
@@ -249,9 +250,7 @@ def _verify_ancestor_of_upstream(root: pathlib.Path, commit: str, label: str) ->
         ) from error
 
 
-def load_state_queue(
-    state_root: pathlib.Path,
-) -> tuple[dict[str, Any], bytes, str]:
+def _state_environment(state_root: pathlib.Path) -> str:
     try:
         state_value = json.loads((state_root / "state.json").read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -259,12 +258,16 @@ def load_state_queue(
     environment = state_value.get("environment") if isinstance(state_value, dict) else None
     if environment not in {"staging", "production"}:
         raise HistoricalPrivateReplayControllerError("State environment is invalid")
-    repository = _state_repository(environment)
-    head = _verify_checkout(
-        state_root,
-        repository,
-        minimum_commit=STATE_MINIMUM_COMMITS[environment],
-    )
+    return environment
+
+
+def _materialize_state_queue(
+    state_root: pathlib.Path, environment: str
+) -> tuple[dict[str, Any], bytes]:
+    if _state_environment(state_root) != environment:
+        raise HistoricalPrivateReplayControllerError(
+            "historical State environment changed across exact history"
+        )
     state_script = state_root / "scripts/state.py"
     if state_script.is_symlink() or not state_script.is_file():
         raise HistoricalPrivateReplayControllerError("protected State program is unavailable")
@@ -298,6 +301,112 @@ def load_state_queue(
         raise HistoricalPrivateReplayControllerError(
             "materialized historical private queue differs from protected State"
         )
+    return queue, raw
+
+
+def _export_exact_commit(
+    repository_root: pathlib.Path, commit: str, destination: pathlib.Path
+) -> None:
+    """Export regular Git blobs without trusting archive paths or symlinks."""
+
+    try:
+        listing = subprocess.run(
+            ["git", "-C", str(repository_root), "ls-tree", "-rz", "--full-tree", commit],
+            check=True,
+            capture_output=True,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError) as error:
+        raise HistoricalPrivateReplayControllerError(
+            "exact historical State tree is unavailable"
+        ) from error
+    total = 0
+    for record in listing.split(b"\0"):
+        if not record:
+            continue
+        try:
+            metadata, encoded_path = record.split(b"\t", 1)
+            mode, object_type, _ = metadata.decode("ascii").split(" ")
+            path = encoded_path.decode("utf-8")
+        except (ValueError, UnicodeError) as error:
+            raise HistoricalPrivateReplayControllerError(
+                "historical State tree entry is malformed"
+            ) from error
+        pure = pathlib.PurePosixPath(path)
+        if (
+            object_type != "blob"
+            or mode not in {"100644", "100755"}
+            or pure.is_absolute()
+            or not pure.parts
+            or any(part in {"", ".", ".."} for part in pure.parts)
+        ):
+            raise HistoricalPrivateReplayControllerError(
+                "historical State tree contains an unsafe entry"
+            )
+        raw = _git_blob(repository_root, commit, path)
+        total += len(raw)
+        if total > MAX_STATE_EXPORT_BYTES:
+            raise HistoricalPrivateReplayControllerError(
+                "historical State tree exceeds its export boundary"
+            )
+        target = destination.joinpath(*pure.parts)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _write_bytes(target, raw)
+        target.chmod(0o700 if mode == "100755" else 0o600)
+
+
+def load_state_queue_at_commit(
+    state_root: pathlib.Path,
+    commit: str,
+    expected_repository: str,
+) -> tuple[dict[str, Any], bytes, str]:
+    """Rederive a queue from one protected ancestor with its own exact code."""
+
+    environment = _state_environment(state_root)
+    repository = _state_repository(environment)
+    if repository != expected_repository:
+        raise HistoricalPrivateReplayControllerError(
+            "historical plan State repository differs from protected checkout"
+        )
+    minimum = STATE_MINIMUM_COMMITS[environment]
+    current_head = _verify_checkout(state_root, repository, minimum_commit=minimum)
+    exact_commit = _match(COMMIT, commit, "historical plan State head")
+    for ancestor, descendant in (
+        (minimum, exact_commit),
+        (exact_commit, current_head),
+    ):
+        try:
+            subprocess.run(
+                [
+                    "git", "-C", str(state_root), "merge-base", "--is-ancestor",
+                    ancestor, descendant,
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except (OSError, subprocess.CalledProcessError) as error:
+            raise HistoricalPrivateReplayControllerError(
+                "historical plan State head lacks protected ancestry"
+            ) from error
+    with tempfile.TemporaryDirectory() as directory:
+        exported = pathlib.Path(directory) / "state"
+        exported.mkdir()
+        _export_exact_commit(state_root, exact_commit, exported)
+        queue, raw = _materialize_state_queue(exported, environment)
+    return queue, raw, current_head
+
+
+def load_state_queue(
+    state_root: pathlib.Path,
+) -> tuple[dict[str, Any], bytes, str]:
+    environment = _state_environment(state_root)
+    repository = _state_repository(environment)
+    head = _verify_checkout(
+        state_root,
+        repository,
+        minimum_commit=STATE_MINIMUM_COMMITS[environment],
+    )
+    queue, raw = _materialize_state_queue(state_root, environment)
     return queue, raw, head
 
 
@@ -1059,6 +1168,52 @@ def started_candidate(
     )
 
 
+def validate_started_history(
+    plan_value: Any,
+    started_candidate_value: Any,
+    state_root: pathlib.Path,
+) -> tuple[dict[str, Any], dict[str, Any], str]:
+    """Prove a post-start action belongs to the exact pre-start queue history."""
+
+    plan = validate_execution_plan(plan_value)
+    queue, queue_raw, current_head = load_state_queue_at_commit(
+        state_root,
+        plan["state"]["expected_head"],
+        plan["state"]["repository"],
+    )
+    _validate_plan_against_queue(
+        plan, queue, queue_raw, plan["state"]["expected_head"]
+    )
+    started = _object(started_candidate_value, "started State append candidate")
+    _fields(
+        started,
+        {"schema_version", "kind", "state_repository", "expected_head", "event"},
+        "started State append candidate",
+    )
+    transition = plan["execution_plan"]["started_transition"]
+    event = _object(started["event"], "started State event")
+    if (
+        started["schema_version"] != 1
+        or started["kind"] != "state_append_candidate"
+        or started["state_repository"] != plan["state"]["repository"]
+        or started["expected_head"] != plan["state"]["expected_head"]
+        or event.get("event_type") != "replay.started"
+        or event.get("subject_id") != transition["subject_id"]
+        or event.get("causation_event_id") != transition["causation_event_id"]
+        or event.get("actor") != {"kind": "system"}
+        or event.get("payload") != transition["payload"]
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "started candidate differs from exact historical plan"
+        )
+    verified_head = _verify_state_event(state_root, event)
+    if verified_head != current_head:
+        raise HistoricalPrivateReplayControllerError(
+            "protected State HEAD changed during history validation"
+        )
+    return plan, started, current_head
+
+
 def terminal_candidate(
     plan_value: Any,
     started_candidate_value: Any,
@@ -1068,21 +1223,9 @@ def terminal_candidate(
     *,
     random_bytes: bytes | None = None,
 ) -> dict[str, Any]:
-    plan = validate_execution_plan(plan_value)
-    started = _object(started_candidate_value, "started State append candidate")
-    _fields(
-        started,
-        {"schema_version", "kind", "state_repository", "expected_head", "event"},
-        "started State append candidate",
+    plan, started, state_head = validate_started_history(
+        plan_value, started_candidate_value, state_root
     )
-    if (
-        started["schema_version"] != 1
-        or started["kind"] != "state_append_candidate"
-        or started["state_repository"] != plan["state"]["repository"]
-        or started["expected_head"] != plan["state"]["expected_head"]
-    ):
-        raise HistoricalPrivateReplayControllerError("started candidate differs from plan")
-    state_head = _verify_state_event(state_root, started["event"])
     event = build_private_terminal_event(
         plan["execution_plan"],
         verdict_value,
@@ -1098,18 +1241,7 @@ def terminal_candidate(
 def _verify_state_event(state_root: pathlib.Path, event_value: Any) -> str:
     event = _object(event_value, "committed State event")
     event_id = _match(UUID7, event.get("event_id"), "committed State event_id")
-    try:
-        state = json.loads((state_root / "state.json").read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise HistoricalPrivateReplayControllerError("State identity is unavailable") from error
-    environment = state.get("environment") if isinstance(state, dict) else None
-    if environment not in {"staging", "production"}:
-        raise HistoricalPrivateReplayControllerError("State environment is invalid")
-    head = _verify_checkout(
-        state_root,
-        _state_repository(environment),
-        minimum_commit=STATE_MINIMUM_COMMITS[environment],
-    )
+    _, _, head = load_state_queue(state_root)
     path = f"events/{event_id[:2]}/{event_id}.json"
     raw = _git_blob(state_root, head, path)
     if raw != state_canonical_bytes(event):
@@ -1121,13 +1253,17 @@ def _verify_state_event(state_root: pathlib.Path, event_value: Any) -> str:
 
 def prepare_unwrap(
     plan_value: Any,
+    state_root: pathlib.Path,
+    started_candidate_value: Any,
     audit_root: pathlib.Path,
     trusted_now: str,
     *,
     request_random: bytes | None = None,
     runner_nonce: str | None = None,
 ) -> dict[str, Any]:
-    plan = validate_execution_plan(plan_value)
+    plan, _, _ = validate_started_history(
+        plan_value, started_candidate_value, state_root
+    )
     sidecar, _, ciphertext, binding = load_archive_inputs(audit_root, plan["task"])
     if binding != plan["archive_binding"]:
         raise HistoricalPrivateReplayControllerError(
@@ -1144,11 +1280,15 @@ def prepare_unwrap(
 
 def build_executor_request(
     plan_value: Any,
+    state_root: pathlib.Path,
+    started_candidate_value: Any,
     audit_root: pathlib.Path,
     unwrap_value: Any,
     identity_path: pathlib.Path,
 ) -> dict[str, Any]:
-    plan = validate_execution_plan(plan_value)
+    plan, _, _ = validate_started_history(
+        plan_value, started_candidate_value, state_root
+    )
     sidecar, _, ciphertext, binding = load_archive_inputs(audit_root, plan["task"])
     if binding != plan["archive_binding"]:
         raise HistoricalPrivateReplayControllerError(
@@ -1216,11 +1356,14 @@ def parser() -> argparse.ArgumentParser:
     terminal.add_argument("--trusted-now", required=True)
     terminal.add_argument("--output", required=True, type=pathlib.Path)
     unwrap = commands.add_parser("prepare-unwrap")
-    for name in ("plan", "audit-root", "output"):
+    for name in ("plan", "state-root", "started-candidate", "audit-root", "output"):
         unwrap.add_argument(f"--{name}", required=True, type=pathlib.Path)
     unwrap.add_argument("--trusted-now", required=True)
     executor = commands.add_parser("build-executor-request")
-    for name in ("plan", "audit-root", "unwrap", "identity", "output"):
+    for name in (
+        "plan", "state-root", "started-candidate", "audit-root", "unwrap",
+        "identity", "output",
+    ):
         executor.add_argument(f"--{name}", required=True, type=pathlib.Path)
     identity = commands.add_parser("unwrap-identity")
     for name in ("request", "response", "metadata", "output"):
@@ -1277,13 +1420,26 @@ def main() -> int:
             )
         elif args.command == "prepare-unwrap":
             plan, _ = _load_canonical(args.plan, "historical private plan")
-            _write(args.output, prepare_unwrap(plan, args.audit_root, args.trusted_now))
+            started, _ = _load_state_canonical(
+                args.started_candidate, "started append candidate"
+            )
+            _write(
+                args.output,
+                prepare_unwrap(
+                    plan, args.state_root, started, args.audit_root, args.trusted_now
+                ),
+            )
         elif args.command == "build-executor-request":
             plan, _ = _load_canonical(args.plan, "historical private plan")
+            started, _ = _load_state_canonical(
+                args.started_candidate, "started append candidate"
+            )
             unwrap, _ = _load_canonical(args.unwrap, "private unwrap request")
             _write(
                 args.output,
-                build_executor_request(plan, args.audit_root, unwrap, args.identity),
+                build_executor_request(
+                    plan, args.state_root, started, args.audit_root, unwrap, args.identity
+                ),
             )
         elif args.command == "unwrap-identity":
             request, _ = _load_canonical(args.request, "private unwrap request")
