@@ -38,6 +38,7 @@ UUID7 = re.compile(
 RESULT = re.compile(r"r2_[0-9a-f]{64}")
 COMMIT = re.compile(r"[0-9a-f]{40}")
 GIST = re.compile(r"[0-9a-f]{20,64}")
+GIST_BRANCH = re.compile(r"refs/heads/(?:main|master)")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 MAX_GIST_FILES = 16
 MAX_GIST_BYTES = 1024 * 1024
@@ -445,9 +446,41 @@ def secret_git(
     return completed.stdout.strip()
 
 
+def gist_remote_branch(
+    repository: pathlib.Path,
+    env: dict[str, str],
+    expected_head: str,
+    *,
+    expected_branch: str | None = None,
+) -> str:
+    advertised = secret_git(
+        ["ls-remote", "--symref", "origin", "HEAD"],
+        cwd=repository,
+        env=env,
+        label="symbolic HEAD discovery",
+    ).splitlines()
+    if len(advertised) != 2:
+        raise AcceptanceError("secret Gist symbolic HEAD response drifted")
+    symbolic = re.fullmatch(r"ref: ([^\t]+)\tHEAD", advertised[0])
+    if (
+        symbolic is None
+        or GIST_BRANCH.fullmatch(symbolic.group(1)) is None
+        or advertised[1] != f"{expected_head}\tHEAD"
+    ):
+        raise AcceptanceError("secret Gist symbolic HEAD is not exactly snapshot-bound")
+    branch = symbolic.group(1)
+    if expected_branch is not None and branch != expected_branch:
+        raise AcceptanceError("secret Gist symbolic HEAD changed during CAS")
+    return branch
+
+
 def prepare_gist_git(
-    gist_id: str, expected_head: str, *, depth: int
-) -> tuple[tempfile.TemporaryDirectory, pathlib.Path, dict[str, str]]:
+    gist_id: str,
+    expected_head: str,
+    *,
+    depth: int,
+    expected_branch: str | None = None,
+) -> tuple[tempfile.TemporaryDirectory, pathlib.Path, dict[str, str], str]:
     if (
         run(["findmnt", "--noheadings", "--output", "FSTYPE", "--target", "/dev/shm"])
         != "tmpfs"
@@ -481,6 +514,9 @@ def prepare_gist_git(
             env=env,
             label="remote binding",
         )
+        branch = gist_remote_branch(
+            repository, env, expected_head, expected_branch=expected_branch
+        )
         secret_git(
             [
                 "fetch",
@@ -488,14 +524,14 @@ def prepare_gist_git(
                 "--no-tags",
                 f"--depth={depth}",
                 "origin",
-                "+refs/heads/master:refs/remotes/origin/master",
+                f"+{branch}:refs/remotes/origin/gist-head",
             ],
             cwd=repository,
             env=env,
             label="fetch",
         )
         actual = secret_git(
-            ["rev-parse", "refs/remotes/origin/master"],
+            ["rev-parse", "refs/remotes/origin/gist-head"],
             cwd=repository,
             env=env,
             label="head verification",
@@ -508,7 +544,7 @@ def prepare_gist_git(
             env=env,
             label="checkout",
         )
-        return temporary, repository, env
+        return temporary, repository, env, branch
     except BaseException:
         temporary.cleanup()
         raise
@@ -547,6 +583,7 @@ class FixtureMutation:
     prior_file_present: bool
     prior_file_content: str | None
     prior_gist_head: str | None = None
+    gist_branch: str | None = None
     written_gist_head: str | None = None
     written_file_content: str | None = None
     written_file_sha256: str | None = None
@@ -588,9 +625,10 @@ def gist_cas_write(mutation: FixtureMutation) -> None:
         or mutation.written_file_sha256 is None
     ):
         raise AcceptanceError("secret gist CAS write identity is incomplete")
-    temporary, repository, env = prepare_gist_git(
+    temporary, repository, env, branch = prepare_gist_git(
         mutation.gist_id, mutation.prior_gist_head, depth=1
     )
+    mutation.gist_branch = branch
     try:
         verify_gist_worktree_file(
             repository,
@@ -626,9 +664,9 @@ def gist_cas_write(mutation: FixtureMutation) -> None:
             [
                 "push",
                 "--quiet",
-                f"--force-with-lease=refs/heads/master:{mutation.prior_gist_head}",
+                f"--force-with-lease={branch}:{mutation.prior_gist_head}",
                 "origin",
-                f"{mutation.written_gist_head}:refs/heads/master",
+                f"{mutation.written_gist_head}:{branch}",
             ],
             cwd=repository,
             env=env,
@@ -656,6 +694,7 @@ def restore_gist(mutation: FixtureMutation) -> None:
     if (
         mutation.prior_gist_head is None
         or mutation.written_gist_head is None
+        or mutation.gist_branch is None
         or mutation.written_file_content is None
         or mutation.written_file_sha256 is None
     ):
@@ -674,6 +713,7 @@ def restore_gist(mutation: FixtureMutation) -> None:
         mutation.gist_restore_started = False
         mutation.written_file_content = None
         mutation.written_file_sha256 = None
+        mutation.gist_branch = None
         return
     if (
         head != mutation.written_gist_head
@@ -684,8 +724,11 @@ def restore_gist(mutation: FixtureMutation) -> None:
         raise AcceptanceError(
             "secret gist changed after this run's write; refusing CAS restore"
         )
-    temporary, repository, env = prepare_gist_git(
-        mutation.gist_id, mutation.written_gist_head, depth=2
+    temporary, repository, env, branch = prepare_gist_git(
+        mutation.gist_id,
+        mutation.written_gist_head,
+        depth=2,
+        expected_branch=mutation.gist_branch,
     )
     try:
         verify_gist_worktree_file(
@@ -707,9 +750,9 @@ def restore_gist(mutation: FixtureMutation) -> None:
             [
                 "push",
                 "--quiet",
-                f"--force-with-lease=refs/heads/master:{mutation.written_gist_head}",
+                f"--force-with-lease={branch}:{mutation.written_gist_head}",
                 "origin",
-                f"{mutation.prior_gist_head}:refs/heads/master",
+                f"{mutation.prior_gist_head}:{branch}",
             ],
             cwd=repository,
             env=env,
@@ -731,6 +774,7 @@ def restore_gist(mutation: FixtureMutation) -> None:
     mutation.gist_restore_started = False
     mutation.written_file_content = None
     mutation.written_file_sha256 = None
+    mutation.gist_branch = None
 
 
 def remove_created_tag(mutation: FixtureMutation) -> None:

@@ -262,7 +262,9 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         github.assert_not_called()
 
     def test_gist_transport_is_tmpfs_atomic_and_has_no_patch_or_debug_env(self) -> None:
-        self.assertIn('"--force-with-lease=refs/heads/master:', self.driver_text)
+        self.assertIn('["ls-remote", "--symref", "origin", "HEAD"]', self.driver_text)
+        self.assertIn('f"--force-with-lease={branch}:', self.driver_text)
+        self.assertIn("expected_branch=mutation.gist_branch", self.driver_text)
         self.assertIn('dir="/dev/shm"', self.driver_text)
         self.assertIn('!= "tmpfs"', self.driver_text)
         self.assertIn("MAX_GIST_FILES = 16", self.driver_text)
@@ -280,6 +282,252 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             "RUNNER_DEBUG",
         ):
             self.assertNotIn(f'"{debug_name}":', self.driver_text)
+
+    def test_gist_symbolic_head_accepts_only_snapshot_bound_main_or_master(
+        self,
+    ) -> None:
+        expected_head = "1" * 40
+        environment = {"PATH": "/usr/bin"}
+        for branch in ("refs/heads/main", "refs/heads/master"):
+            with mock.patch.object(
+                self.driver,
+                "secret_git",
+                return_value=f"ref: {branch}\tHEAD\n{expected_head}\tHEAD",
+            ):
+                self.assertEqual(
+                    self.driver.gist_remote_branch(
+                        ROOT, environment, expected_head
+                    ),
+                    branch,
+                )
+                self.assertEqual(
+                    self.driver.gist_remote_branch(
+                        ROOT,
+                        environment,
+                        expected_head,
+                        expected_branch=branch,
+                    ),
+                    branch,
+                )
+
+        rejected = (
+            f"ref: refs/heads/topic\tHEAD\n{expected_head}\tHEAD",
+            f"ref: refs/heads/main\tHEAD\n{'2' * 40}\tHEAD",
+            f"ref: refs/heads/main\tHEAD\n{expected_head}\tHEAD\nextra",
+            "",
+        )
+        for response in rejected:
+            with (
+                self.subTest(response=response),
+                mock.patch.object(self.driver, "secret_git", return_value=response),
+                self.assertRaises(self.driver.AcceptanceError),
+            ):
+                self.driver.gist_remote_branch(ROOT, environment, expected_head)
+
+        with (
+            mock.patch.object(
+                self.driver,
+                "secret_git",
+                return_value=(
+                    f"ref: refs/heads/main\tHEAD\n{expected_head}\tHEAD"
+                ),
+            ),
+            self.assertRaisesRegex(self.driver.AcceptanceError, "changed during CAS"),
+        ):
+            self.driver.gist_remote_branch(
+                ROOT,
+                environment,
+                expected_head,
+                expected_branch="refs/heads/master",
+            )
+
+    def test_gist_write_threads_discovered_branch_into_exact_lease(self) -> None:
+        mutation = self.mutation()
+        challenge = "signed-secret"
+        written_head = "2" * 40
+        mutation.written_file_content = challenge
+        mutation.written_file_sha256 = hashlib.sha256(challenge.encode()).hexdigest()
+        temporary = mock.Mock()
+        commands: list[list[str]] = []
+
+        def secret_git(args, **_kwargs):
+            commands.append(args)
+            return written_head if args == ["rev-parse", "HEAD"] else ""
+
+        with tempfile.TemporaryDirectory() as root:
+            repository = pathlib.Path(root)
+            changed = self.gist_response(mutation, written_head, challenge)
+            with (
+                mock.patch.object(
+                    self.driver,
+                    "prepare_gist_git",
+                    return_value=(
+                        temporary,
+                        repository,
+                        {"PATH": "/usr/bin"},
+                        "refs/heads/main",
+                    ),
+                ),
+                mock.patch.object(
+                    self.driver, "secret_git", side_effect=secret_git
+                ),
+                mock.patch.object(self.driver, "gh_json", return_value=changed),
+            ):
+                self.driver.gist_cas_write(mutation)
+
+        self.assertEqual(mutation.gist_branch, "refs/heads/main")
+        self.assertTrue(mutation.gist_changed)
+        self.assertIn(
+            [
+                "push",
+                "--quiet",
+                f"--force-with-lease=refs/heads/main:{mutation.prior_gist_head}",
+                "origin",
+                f"{written_head}:refs/heads/main",
+            ],
+            commands,
+        )
+        temporary.cleanup.assert_called_once_with()
+
+    def test_lost_gist_write_response_reconciles_only_exact_written_state(
+        self,
+    ) -> None:
+        mutation = self.mutation()
+        challenge = "signed-secret"
+        written_head = "2" * 40
+        prior = self.gist_response(mutation, mutation.prior_gist_head, None)
+        exact_written = self.gist_response(mutation, written_head, challenge)
+        inexact_written = self.gist_response(mutation, written_head, "other")
+
+        for current, should_restore in (
+            (exact_written, True),
+            (inexact_written, False),
+        ):
+            restored: list[object] = []
+            temporary = mock.Mock()
+
+            def secret_git(args, **_kwargs):
+                if args == ["rev-parse", "HEAD"]:
+                    return written_head
+                if args[0] == "push":
+                    raise self.driver.AcceptanceError("lost Gist push response")
+                return ""
+
+            def restore(lease):
+                self.assertTrue(lease.gist_changed)
+                self.assertEqual(lease.gist_branch, "refs/heads/main")
+                self.assertEqual(lease.written_gist_head, written_head)
+                self.assertEqual(lease.written_file_content, challenge)
+                restored.append(lease)
+                lease.gist_changed = False
+
+            with tempfile.TemporaryDirectory() as root:
+                repository = pathlib.Path(root)
+                diagnostics = io.StringIO()
+                with (
+                    self.subTest(should_restore=should_restore),
+                    mock.patch.object(
+                        self.driver,
+                        "gh_json",
+                        side_effect=(prior, current),
+                    ),
+                    mock.patch.object(
+                        self.driver,
+                        "gh_json_or_authenticated_404",
+                        side_effect=(None, None),
+                    ),
+                    mock.patch.object(
+                        self.driver,
+                        "prepare_gist_git",
+                        return_value=(
+                            temporary,
+                            repository,
+                            {"PATH": "/usr/bin"},
+                            "refs/heads/main",
+                        ),
+                    ),
+                    mock.patch.object(
+                        self.driver, "secret_git", side_effect=secret_git
+                    ),
+                    mock.patch.object(self.driver, "restore_gist", side_effect=restore),
+                    mock.patch.object(self.driver, "require_target_bound_approval"),
+                    contextlib.redirect_stderr(diagnostics),
+                    self.assertRaisesRegex(
+                        self.driver.AcceptanceError, "lost Gist push response"
+                    ),
+                ):
+                    self.driver.apply_exact_proof_and_tag(
+                        self.fixture, mutation.gist_id, challenge, mutation.tag
+                    )
+
+            self.assertEqual(bool(restored), should_restore)
+            if should_restore:
+                self.assertNotIn("External cleanup still required", diagnostics.getvalue())
+            else:
+                self.assertIn("unrecognized value", diagnostics.getvalue())
+            temporary.cleanup.assert_called_once_with()
+
+    def test_main_branch_restore_uses_exact_lease_and_destination(self) -> None:
+        mutation = self.mutation()
+        challenge = "signed-secret"
+        mutation.gist_changed = True
+        mutation.gist_branch = "refs/heads/main"
+        mutation.written_gist_head = "2" * 40
+        mutation.written_file_content = challenge
+        mutation.written_file_sha256 = hashlib.sha256(challenge.encode()).hexdigest()
+        changed = self.gist_response(mutation, mutation.written_gist_head, challenge)
+        restored = self.gist_response(mutation, mutation.prior_gist_head, None)
+        temporary = mock.Mock()
+        commands: list[list[str]] = []
+
+        def secret_git(args, **_kwargs):
+            commands.append(args)
+            if args == ["rev-parse", f"{mutation.written_gist_head}^"]:
+                return mutation.prior_gist_head
+            return ""
+
+        with tempfile.TemporaryDirectory() as root:
+            repository = pathlib.Path(root)
+            (repository / mutation.filename).write_text(challenge, encoding="utf-8")
+            with (
+                mock.patch.object(
+                    self.driver, "gh_json", side_effect=(changed, restored)
+                ),
+                mock.patch.object(
+                    self.driver,
+                    "prepare_gist_git",
+                    return_value=(
+                        temporary,
+                        repository,
+                        {"PATH": "/usr/bin"},
+                        "refs/heads/main",
+                    ),
+                ) as prepare,
+                mock.patch.object(
+                    self.driver, "secret_git", side_effect=secret_git
+                ),
+            ):
+                self.driver.restore_gist(mutation)
+
+        prepare.assert_called_once_with(
+            mutation.gist_id,
+            "2" * 40,
+            depth=2,
+            expected_branch="refs/heads/main",
+        )
+        self.assertIn(
+            [
+                "push",
+                "--quiet",
+                "--force-with-lease=refs/heads/main:" + "2" * 40,
+                "origin",
+                f"{mutation.prior_gist_head}:refs/heads/main",
+            ],
+            commands,
+        )
+        self.assertFalse(mutation.gist_changed)
+        self.assertIsNone(mutation.gist_branch)
+        temporary.cleanup.assert_called_once_with()
 
     def test_gist_snapshot_bounds_every_file_before_git_transport(self) -> None:
         mutation = self.mutation()
@@ -444,6 +692,7 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         mutation = self.mutation()
         mutation.gist_changed = True
         mutation.written_gist_head = "2" * 40
+        mutation.gist_branch = "refs/heads/main"
         mutation.written_file_content = "signed-secret"
         mutation.written_file_sha256 = hashlib.sha256(b"signed-secret").hexdigest()
         intervening = self.gist_response(mutation, "3" * 40, "operator edit")
@@ -460,6 +709,7 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         mutation = self.mutation()
         mutation.gist_changed = True
         mutation.written_gist_head = "2" * 40
+        mutation.gist_branch = "refs/heads/main"
         mutation.written_file_content = "signed-secret"
         mutation.written_file_sha256 = hashlib.sha256(b"signed-secret").hexdigest()
         mutation.gist_restore_started = True
@@ -468,6 +718,7 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             self.driver.restore_gist(mutation)
         github.assert_called_once_with([f"gists/{mutation.gist_id}"])
         self.assertFalse(mutation.gist_changed)
+        self.assertIsNone(mutation.gist_branch)
         self.assertIsNone(mutation.written_file_content)
 
     def test_unknown_headless_post_outcome_never_permits_cleanup(self) -> None:
