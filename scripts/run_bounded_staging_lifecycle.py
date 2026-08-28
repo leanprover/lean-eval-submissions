@@ -247,7 +247,7 @@ def fixture_preflight(
         "release_repository": "leanprover/lean-eval-releases",
         "release_workflow": "credentialed-release-staging-smoke.yml",
         "release_ref": "main",
-        "release_commit": "41a65cc7db88d5742fd804648ba9d550b8e86edb",
+        "release_commit": "ff37a9d56aeb6906527cf7b75917907423d6f139",
         "release_run_name_prefix": "Reconstruct staging submission ",
         "fixture_gist_file": "lean-eval-proof.txt",
         "retire_after": "one accepted bounded staging lifecycle run",
