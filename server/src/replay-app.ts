@@ -3,6 +3,7 @@ import type { Sandbox } from "@cloudflare/sandbox";
 import {
   canonicalHistoricalPublicHandoff,
   HistoricalPublicExecutorContractError,
+  MAX_REPLAY_ATTEMPTS,
   historicalPublicExecutorVerdictFromBinding,
   historicalPublicRunnerBinding,
   readHistoricalPublicExecutorRequest,
@@ -1256,7 +1257,7 @@ function validateHistoricalCleanupIdentity(value: unknown): HistoricalCleanupIde
     || !REPLAY_TASK_ID.test(identity.replay_task_id)
     || !Number.isSafeInteger(identity.attempt)
     || (identity.attempt as number) < 1
-    || (identity.attempt as number) > 3
+    || (identity.attempt as number) > MAX_REPLAY_ATTEMPTS
   ) {
     throw new HistoricalPublicExecutorContractError("cleanup identity is invalid");
   }

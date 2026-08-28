@@ -300,6 +300,97 @@ describe("Cloudflare replay executor", () => {
     }
   });
 
+  it("accepts attempt four and rejects attempt five across status and cleanup", async () => {
+    const fourthAttempt = await historicalPublicInput();
+    fourthAttempt.attempt = 4;
+    const fourthStatus = historicalStatusInput(fourthAttempt);
+    const fourthBinding = activeBindingForTest(
+      historicalProcessBindingInput(fourthAttempt),
+    );
+    let recoveryStoreLookups = 0;
+    let receiptStoreLookups = 0;
+    const enabled = { ...REVIEWED_ENV, HISTORICAL_PUBLIC_REPLAY_ENABLED: "true" };
+    const dependencies = {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => ({
+        writeFile: (path: string) => Promise.resolve({ success: true, path, timestamp: "fixture" }),
+        exec: () => { throw new Error("blocking exec must remain unreachable"); },
+        getProcess: () => Promise.resolve({
+          getStatus: () => Promise.resolve("running"),
+        } as never),
+        destroy: () => Promise.resolve(),
+      }),
+      receiptStore: () => {
+        receiptStoreLookups += 1;
+        return {
+          readBinding: () => Promise.resolve(fourthBinding),
+          claimBinding: (value: unknown) => Promise.resolve(value),
+          readReceipt: () => Promise.resolve(null),
+          prepareReceipt: (value: unknown) => Promise.resolve(value),
+          confirmReceipt: () => Promise.reject(new Error("receipt is unavailable")),
+        };
+      },
+      recoveryStore: () => {
+        recoveryStoreLookups += 1;
+        return {
+          reserveCleanupIdentity: (identity: unknown) => Promise.resolve(identity),
+          destroyBoundSandbox: (identity: unknown) => Promise.resolve({
+            ...(identity as Record<string, unknown>),
+            destruction_state: "confirmed",
+          }),
+        };
+      },
+    };
+    const cleanupIdentity = {
+      schema_version: 1,
+      replay_task_id: fourthAttempt.replay_task_id,
+      attempt: fourthAttempt.attempt,
+    };
+
+    const reservation = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/historical-public-replay/cleanup-reservation",
+      { method: "POST", body: JSON.stringify(cleanupIdentity) },
+    ), enabled, dependencies);
+    expect(reservation.status).toBe(200);
+    expect(await reservation.json()).toEqual({ ...cleanupIdentity, status: "reserved" });
+
+    const cleanup = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/historical-public-replay/cleanup",
+      { method: "POST", body: JSON.stringify(cleanupIdentity) },
+    ), enabled, dependencies);
+    expect(cleanup.status).toBe(200);
+    expect(await cleanup.json()).toEqual({ ...cleanupIdentity, destruction: "confirmed" });
+
+    const status = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/historical-public-replay/status",
+      { method: "POST", body: JSON.stringify(fourthStatus) },
+    ), enabled, dependencies);
+    expect(status.status).toBe(202);
+    expect(await status.json()).toEqual({
+      schema_version: 1,
+      replay_task_id: fourthAttempt.replay_task_id,
+      attempt: 4,
+      status: "running",
+    });
+
+    const fifthIdentity = { ...cleanupIdentity, attempt: 5 };
+    const fifthStatus = { ...fourthStatus, attempt: 5 };
+    for (const [path, body] of [
+      ["/api/v1/historical-public-replay/cleanup-reservation", fifthIdentity],
+      ["/api/v1/historical-public-replay/cleanup", fifthIdentity],
+      ["/api/v1/historical-public-replay/status", fifthStatus],
+    ] as const) {
+      const response = await handleReplayRequest(new Request(
+        `https://example.test${path}`,
+        { method: "POST", body: JSON.stringify(body) },
+      ), enabled, dependencies);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: "invalid_request" });
+    }
+    expect(recoveryStoreLookups).toBe(2);
+    expect(receiptStoreLookups).toBe(1);
+  });
+
   it("idempotently starts and polls one historical handoff through confirmed destruction", async () => {
     const body = await historicalPublicInput();
     const writes = new Map<string, string>();
