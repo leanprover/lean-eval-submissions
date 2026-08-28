@@ -63,6 +63,7 @@ import {
   type ResultAmendmentView,
 } from "../src/result-amendment";
 import {
+  newEventId,
   validateStateEvent,
   type WritableResultLifecycleEvent,
   type WritableStateEvent,
@@ -2095,6 +2096,127 @@ describe("browser OAuth and owner routes in workerd", () => {
     );
     expect(replay.status).toBe(401);
     expect(upstream).toHaveBeenCalledTimes(4);
+  });
+
+  it("provides a gated, owner-only, retry-safe browser publication opt-out", async () => {
+    const state = new MemoryState();
+    const submissionId = "019debcf-cb48-7000-8000-000000000001";
+    const maximumTail = new Uint8Array(16).fill(0xff);
+    const mutationHead = newEventId(NOW_MS, maximumTail);
+    state.views.set(submissionId, {
+      ...pendingView(submissionId, new Date(NOW_MS).toISOString()),
+      mutation_event_id: mutationHead,
+      metadata_event_id: mutationHead,
+    });
+    const alice: BrowserSession = {
+      kind: "browser_session",
+      login: "alice",
+      github_id: 42,
+      issued_at: Math.floor(NOW_MS / 1000),
+      expires_at: Math.floor(NOW_MS / 1000) + 3600,
+    };
+    const aliceToken = await signToken(SECRET, alice);
+    const bobToken = await signToken(SECRET, { ...alice, login: "bob" });
+    const path = `/api/v1/browser/submissions/${submissionId}/publication-opt-out`;
+    const request = (token?: string, origin = "https://submit.test") => new Request(
+      `https://submit.test${path}`,
+      {
+        method: "POST",
+        headers: {
+          ...(token === undefined ? {} : { cookie: `lean_eval_session=${token}` }),
+          origin,
+        },
+      },
+    );
+
+    const disabledPage = await handleRequest(
+      new Request("https://submit.test/"),
+      ENV,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(await disabledPage.text()).not.toContain('id="release-opt-out"');
+    const enabledPage = await handleRequest(
+      new Request("https://submit.test/"),
+      { ...ENV, RELEASE_OPT_OUT_API_ENABLED: "true" },
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(await enabledPage.text()).toContain('id="release-opt-out" hidden');
+
+    const disabled = await handleRequest(
+      request(aliceToken),
+      ENV,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(disabled.status).toBe(404);
+    expect(state.events).toHaveLength(0);
+
+    const releaseEnv: RuntimeEnv = {
+      ...ENV,
+      INTAKE_ENABLED: "false",
+      RELEASE_OPT_OUT_API_ENABLED: "true",
+    };
+    const unauthenticated = await handleRequest(
+      request(),
+      releaseEnv,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(unauthenticated.status).toBe(401);
+    const crossOrigin = await handleRequest(
+      request(aliceToken, "https://attacker.test"),
+      releaseEnv,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(crossOrigin.status).toBe(401);
+    const wrongOwner = await handleRequest(
+      request(bobToken),
+      releaseEnv,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(wrongOwner.status).toBe(404);
+    expect(state.events).toHaveLength(0);
+
+    const optedOut = await handleRequest(
+      request(aliceToken),
+      releaseEnv,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(optedOut.status).toBe(200);
+    await expect(optedOut.json()).resolves.toEqual({
+      submission_id: submissionId,
+      publication_choice: "withheld",
+      status: "opted_out",
+    });
+    expect(state.events).toHaveLength(1);
+    expect(state.events[0]).toMatchObject({
+      event_type: "submission.publication_changed",
+      occurred_at: new Date(NOW_MS + 1).toISOString(),
+      subject_id: submissionId,
+      causation_event_id: mutationHead,
+      actor: { kind: "github", login: "alice" },
+      payload: { publication_choice: "withheld" },
+    });
+    expect(state.events[0]?.event_id.localeCompare(mutationHead)).toBe(1);
+
+    const retryAfterLostResponse = await handleRequest(
+      request(aliceToken),
+      releaseEnv,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(retryAfterLostResponse.status).toBe(200);
+    await expect(retryAfterLostResponse.json()).resolves.toEqual({
+      submission_id: submissionId,
+      publication_choice: "withheld",
+      status: "already_withheld",
+    });
+    expect(state.events).toHaveLength(1);
   });
 
   it("returns owner status and appends linear idempotent metadata/publication events", async () => {
