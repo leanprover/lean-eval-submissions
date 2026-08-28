@@ -198,7 +198,10 @@ there is no movable or temporary release tag authority.
    displays. Let the driver make only those writes and complete the headless,
    denial, lifecycle, State, Results, redacted-projection, scheduling, uniquely
    named publication-disabled reconstruction from the fixture's guarded exact
-   release commit, and disabled-route checks. Once
+   release commit, and disabled-route checks. The release run is accepted only
+   when its untruncated job inventory is exactly `authorize-manual`,
+   `prepare-one`, and `unwrap-one`, all completed successfully; workflow-level
+   success alone is insufficient. Once
    headless evaluation is terminal, it restores the gist file to its exact
    prior content (or absence) and deletes the generated exact tag; and
 7. verify the driver's prompt disable dispatch and the independent watchdog's

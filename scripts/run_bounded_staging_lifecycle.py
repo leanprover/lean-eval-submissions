@@ -41,6 +41,7 @@ GIST = re.compile(r"[0-9a-f]{20,64}")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 MAX_GIST_FILES = 16
 MAX_GIST_BYTES = 1024 * 1024
+RELEASE_JOB_NAMES = frozenset({"authorize-manual", "prepare-one", "unwrap-one"})
 
 
 class AcceptanceError(RuntimeError):
@@ -1021,6 +1022,63 @@ def wait_for_workflow_run(
     raise AcceptanceError(f"timed out waiting for {repository} {workflow}")
 
 
+def verify_exact_release_jobs(
+    repository: str, run_id: int, expected_commit: str
+) -> None:
+    if repository != "leanprover/lean-eval-releases":
+        raise AcceptanceError("release job repository is not canonical")
+    if type(run_id) is not int or run_id < 1:
+        raise AcceptanceError("release workflow run id is not canonical")
+    require_match(COMMIT, expected_commit, "release workflow commit")
+    response = gh_json(
+        [
+            f"repos/{repository}/actions/runs/{run_id}/jobs",
+            "-f",
+            "filter=latest",
+            "-f",
+            "per_page=100",
+            "-f",
+            "page=1",
+        ]
+    )
+    if not isinstance(response, dict) or set(response) != {"total_count", "jobs"}:
+        raise AcceptanceError("release workflow jobs response fields drifted")
+    jobs = response["jobs"]
+    total = response["total_count"]
+    if (
+        type(total) is not int
+        or total != len(RELEASE_JOB_NAMES)
+        or not isinstance(jobs, list)
+        or len(jobs) != total
+    ):
+        raise AcceptanceError("release workflow jobs are truncated or paginated")
+    by_name: dict[str, dict[str, Any]] = {}
+    for value in jobs:
+        if not isinstance(value, dict) or not isinstance(value.get("name"), str):
+            raise AcceptanceError("release workflow job identity is malformed")
+        name = value["name"]
+        if name in by_name:
+            raise AcceptanceError("release workflow job identity is ambiguous")
+        by_name[name] = value
+    if set(by_name) != RELEASE_JOB_NAMES:
+        raise AcceptanceError("release workflow job set differs from the reviewed lane")
+    job_ids: set[int] = set()
+    for name, job in by_name.items():
+        job_id = job.get("id")
+        if (
+            type(job_id) is not int
+            or job_id < 1
+            or job_id in job_ids
+            or job.get("run_id") != run_id
+            or job.get("run_attempt") != 1
+            or job.get("head_sha") != expected_commit
+            or job.get("status") != "completed"
+            or job.get("conclusion") != "success"
+        ):
+            raise AcceptanceError(f"release workflow job did not succeed: {name}")
+        job_ids.add(job_id)
+
+
 def validate_submission_binding(
     body: dict[str, Any],
     submission_id: str,
@@ -1798,6 +1856,9 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
         previous_release_runs,
         expected_title=bounded["release_run_name_prefix"] + headless_id,
         timeout=2400,
+    )
+    verify_exact_release_jobs(
+        bounded["release_repository"], release_run_id, bounded["release_commit"]
     )
     print(
         json.dumps(

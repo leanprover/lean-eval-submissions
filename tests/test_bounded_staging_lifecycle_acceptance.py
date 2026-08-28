@@ -590,6 +590,100 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             self.driver.fixture_preflight(self.fixture, "a" * 20, "b" * 40)
         checkout.assert_called_once_with("b" * 40, self.fixture)
 
+    def test_release_jobs_require_the_exact_successful_untruncated_lane(self) -> None:
+        run_id = 123456
+        commit = "4" * 40
+        jobs = [
+            {
+                "id": index,
+                "name": name,
+                "run_id": run_id,
+                "run_attempt": 1,
+                "head_sha": commit,
+                "status": "completed",
+                "conclusion": "success",
+            }
+            for index, name in enumerate(
+                ("authorize-manual", "prepare-one", "unwrap-one"), start=1
+            )
+        ]
+        with mock.patch.object(
+            self.driver,
+            "gh_json",
+            return_value={"total_count": 3, "jobs": jobs},
+        ) as github:
+            self.driver.verify_exact_release_jobs(
+                "leanprover/lean-eval-releases", run_id, commit
+            )
+        github.assert_called_once_with(
+            [
+                f"repos/leanprover/lean-eval-releases/actions/runs/{run_id}/jobs",
+                "-f",
+                "filter=latest",
+                "-f",
+                "per_page=100",
+                "-f",
+                "page=1",
+            ]
+        )
+
+    def test_release_jobs_reject_skips_missing_extra_ambiguous_or_truncated(
+        self,
+    ) -> None:
+        run_id = 123456
+        commit = "4" * 40
+
+        def exact_jobs() -> list[dict[str, object]]:
+            return [
+                {
+                    "id": index,
+                    "name": name,
+                    "run_id": run_id,
+                    "run_attempt": 1,
+                    "head_sha": commit,
+                    "status": "completed",
+                    "conclusion": "success",
+                }
+                for index, name in enumerate(
+                    ("authorize-manual", "prepare-one", "unwrap-one"), start=1
+                )
+            ]
+
+        cases: dict[str, dict[str, object]] = {}
+        skipped = exact_jobs()
+        skipped[2]["conclusion"] = "skipped"
+        cases["skipped unwrap"] = {"total_count": 3, "jobs": skipped}
+        cases["missing unwrap"] = {"total_count": 2, "jobs": exact_jobs()[:2]}
+        cases["extra job"] = {
+            "total_count": 4,
+            "jobs": [*exact_jobs(), {**exact_jobs()[0], "name": "unexpected"}],
+        }
+        ambiguous = exact_jobs()
+        ambiguous[2]["name"] = "prepare-one"
+        cases["duplicate name"] = {"total_count": 3, "jobs": ambiguous}
+        cases["truncated page"] = {"total_count": 4, "jobs": exact_jobs()}
+        wrong_run = exact_jobs()
+        wrong_run[2]["run_id"] = run_id + 1
+        cases["wrong run"] = {"total_count": 3, "jobs": wrong_run}
+        wrong_commit = exact_jobs()
+        wrong_commit[2]["head_sha"] = "5" * 40
+        cases["wrong commit"] = {"total_count": 3, "jobs": wrong_commit}
+        rerun = exact_jobs()
+        rerun[2]["run_attempt"] = 2
+        cases["rerun attempt"] = {"total_count": 3, "jobs": rerun}
+        duplicate_id = exact_jobs()
+        duplicate_id[2]["id"] = duplicate_id[1]["id"]
+        cases["duplicate id"] = {"total_count": 3, "jobs": duplicate_id}
+        for label, response in cases.items():
+            with (
+                self.subTest(label=label),
+                mock.patch.object(self.driver, "gh_json", return_value=response),
+                self.assertRaises(self.driver.AcceptanceError),
+            ):
+                self.driver.verify_exact_release_jobs(
+                    "leanprover/lean-eval-releases", run_id, commit
+                )
+
     def test_driver_binds_payload_status_dispatch_and_unique_release_run(self) -> None:
         for required in (
             'evaluation.get("status") == "accepted"',
@@ -598,6 +692,7 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             'expected_title=bounded["release_run_name_prefix"] + headless_id',
             "f\"expected_release_commit={bounded['release_commit']}\"",
             'item.get("display_title") == expected_title',
+            "verify_exact_release_jobs(",
             "fixture_cleanup_is_proved_safe(",
             "cleanup_fixture_mutation(lease, remove_tag=True)",
             "Headless acceptance outcome may be committed",
@@ -639,6 +734,8 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         self.assertIn("does not verify the public entry page", self.runbook)
         self.assertIn("ordinary process memory", self.runbook)
         self.assertIn("nonsecret rollback targets", self.runbook)
+        self.assertIn("workflow-level", self.runbook)
+        self.assertIn("success alone is insufficient", self.runbook)
         self.assertIn(
             "must be deleted with the staging fixture after one accepted\nrun",
             self.runbook,
