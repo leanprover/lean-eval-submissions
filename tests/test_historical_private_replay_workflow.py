@@ -37,7 +37,8 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
             WORKFLOW,
         )
         self.assertIn("Temporary migration machinery. Delete this workflow", WORKFLOW)
-        self.assertIn("queue is empty and State proves", WORKFLOW)
+        self.assertIn("queue is empty, State proves", WORKFLOW)
+        self.assertIn("no `hpr-` Worker or `le-hpr-` application remains", WORKFLOW)
 
     def test_only_exact_protected_main_can_run(self) -> None:
         preflight = step(
@@ -215,6 +216,19 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("shred --remove", cleanup)
         self.assertIn("rm -rf audit state", cleanup)
         self.assertIn("test ! -e \"$RUNNER_TEMP/archive-plaintext.tar\"", cleanup)
+        build = step(
+            "Build the credential-free exact executor request",
+            "Invoke and poll the exact blocked-network executor",
+        )
+        self.assertGreaterEqual(build.count("shred --remove"), 2)
+        execute = step(
+            "Invoke and poll the exact blocked-network executor",
+            "Confirm exact sandbox destruction after every attempted start",
+        )
+        self.assertIn(
+            'shred --remove "$RUNNER_TEMP/executor-request.json"',
+            execute,
+        )
 
     def test_worker_and_container_app_are_verified_absent_after_safe_delete(self) -> None:
         self.assertIn("wrangler delete", RESOURCE_DELETE)

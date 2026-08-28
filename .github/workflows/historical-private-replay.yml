@@ -2,7 +2,8 @@ name: Consume one historical private replay (dark)
 
 # Temporary migration machinery. Delete this workflow, the task-scoped Worker
 # entry, and its controller renderer after the protected historical-private
-# queue is empty and State proves that no such replay is running.
+# queue is empty, State proves that no such replay is running, and Cloudflare
+# inventory proves that no `hpr-` Worker or `le-hpr-` application remains.
 on:
   workflow_dispatch:
     inputs:
@@ -479,8 +480,12 @@ jobs:
             "$RUNNER_TEMP/executor-request.json" \
             > "$RUNNER_TEMP/executor-status-request.json"
           shred --remove "$RUNNER_TEMP/archive-file-key"
-          rm -f "$RUNNER_TEMP/unwrap-request.json" \
-            "$RUNNER_TEMP/unwrap-response.json" "$RUNNER_TEMP/unwrap-metadata.json"
+          for path in \
+            "$RUNNER_TEMP/unwrap-request.json" \
+            "$RUNNER_TEMP/unwrap-response.json" \
+            "$RUNNER_TEMP/unwrap-metadata.json"; do
+            if [ -f "$path" ]; then shred --remove "$path"; fi
+          done
           echo runner_start_failed > "$RUNNER_TEMP/failure-reason"
 
       - name: Invoke and poll the exact blocked-network executor
@@ -535,6 +540,7 @@ jobs:
           jq -e --slurpfile expected "$RUNNER_TEMP/cleanup-request.json" '
             . == ($expected[0] + {status:"running"})
           ' "$RUNNER_TEMP/executor-start-response.json" >/dev/null
+          shred --remove "$RUNNER_TEMP/executor-request.json"
           prove_running
           deadline=$(( $(date +%s) + 20100 ))
           job_deadline=$(( REPLAY_JOB_STARTED_EPOCH + 20880 ))
