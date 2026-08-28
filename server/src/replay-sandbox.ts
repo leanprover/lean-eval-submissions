@@ -28,10 +28,11 @@ export function historicalReceiptObjectName(
   attempt: number,
 ): string {
   const match = /^rt1_([0-9a-f]{64})$/.exec(replayTaskId);
-  if (match?.[1] === undefined || !Number.isSafeInteger(attempt) || attempt < 1 || attempt > 3) {
+  if (match?.[1] === undefined || !Number.isSafeInteger(attempt) || attempt < 1 || attempt > 4) {
     throw new Error("historical cleanup identity is invalid");
   }
-  // State permits at most three attempts. Keeping 224 digest bits makes this
+  // State permits four total attempts (the initial execution and at most three
+  // retries). Keeping 224 digest bits makes this
   // DNS-label-safe without making cleanup depend on the cancelled runner nonce.
   return `h-${match[1].slice(0, 56)}-${String(attempt)}`;
 }

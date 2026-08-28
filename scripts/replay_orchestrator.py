@@ -47,6 +47,7 @@ RETRYABLE_FAILURES = {
     "runner_start_failed",
     "source_fetch_failed",
 }
+MAX_REPLAY_ATTEMPTS = 4
 UNAVAILABLE_REASONS = {
     "benchmark_ref_permanently_unavailable",
     "execution_profile_permanently_unavailable",
@@ -319,7 +320,11 @@ def _validate_task(value: Any, index: int) -> dict[str, Any]:
     if status == "queued" and attempt != 0:
         raise ReplayError(f"{label}: queued task must have attempt 0")
     if status == "failed":
-        if attempt < 1 or task["retryable"] is not True:
+        if (
+            attempt < 1
+            or attempt >= MAX_REPLAY_ATTEMPTS
+            or task["retryable"] is not True
+        ):
             raise ReplayError(f"{label}: failed queue task must be retryable after an attempt")
         if task["reason_code"] not in RETRYABLE_FAILURES:
             raise ReplayError(f"{label}.reason_code is not a retryable failure reason")
@@ -545,7 +550,11 @@ def validate_execution_request(value: Any) -> dict[str, Any]:
     if request["schema_version"] != 1 or isinstance(request["schema_version"], bool):
         raise ReplayError("request schema_version must be integer 1")
     task_identity = _match(REPLAY_ID, request["replay_task_id"], "request.replay_task_id")
-    _integer(request["attempt"], "request.attempt", 1)
+    attempt = _integer(request["attempt"], "request.attempt", 1)
+    if attempt > MAX_REPLAY_ATTEMPTS:
+        raise ReplayError(
+            f"request.attempt must be no greater than {MAX_REPLAY_ATTEMPTS}"
+        )
     source = _object(request["source"], "request.source")
     if source.get("visibility") == "public":
         _fields(source, {"repository", "commit", "visibility"}, "request.source")
@@ -740,7 +749,10 @@ def terminal_transition(
             "payload": {
                 "attempt": request["attempt"],
                 "reason_code": reason,
-                "retryable": reason in RETRYABLE_FAILURES,
+                "retryable": (
+                    reason in RETRYABLE_FAILURES
+                    and request["attempt"] < MAX_REPLAY_ATTEMPTS
+                ),
             },
         }
     statistics = verdict["statistics"]

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import attemptLimitEvent from "../../tests/fixtures/replay-failed-attempt-limit-v1.json";
+
 import {
   newEventId,
   stateEventPath,
@@ -17,6 +19,8 @@ const EVENT: StateEvent = {
   actor: { kind: "system" },
   payload: { environment: "staging" },
 };
+
+const ATTEMPT_LIMIT_EVENT: unknown = attemptLimitEvent;
 
 describe("State event contract", () => {
   it("validates the closed model identity producer event family", () => {
@@ -149,6 +153,22 @@ describe("State event contract", () => {
       ...terminal,
       payload: { ...terminal.payload, build_retired_instructions_unavailable_reason: "counter_not_reported" },
     })).toThrow(/measured counter/);
+  });
+
+  it("accepts the shared terminal fourth-attempt fixture and rejects attempt five", () => {
+    validateStateEvent(ATTEMPT_LIMIT_EVENT);
+    if (ATTEMPT_LIMIT_EVENT.event_type !== "replay.failed") {
+      throw new TypeError("attempt-limit fixture is not replay.failed");
+    }
+    expect(ATTEMPT_LIMIT_EVENT.payload).toEqual({
+      attempt: 4,
+      reason_code: "runner_lost",
+      retryable: false,
+    });
+    expect(() => validateStateEvent({
+      ...ATTEMPT_LIMIT_EVENT,
+      payload: { ...ATTEMPT_LIMIT_EVENT.payload, attempt: 5 },
+    })).toThrow(/attempt exceeds/u);
   });
 
   it("validates owner amendment requests and read-only maintainer decisions exactly", () => {

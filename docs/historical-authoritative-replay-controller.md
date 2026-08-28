@@ -47,8 +47,10 @@ identity, minting a fresh short-lived OIDC token for each bounded poll. Exact
 terminal receipts are replayable, while command-RPC and sandbox-destruction
 failures remain retryable until the executor can durably confirm destruction.
 
-The only remaining typed planning blocker is the reviewed three-attempt limit.
-An exhausted task remains in State and cannot starve a later eligible task.
+Historical-public and generic/private replay share one limit of four total
+execution attempts: the initial execution and at most three retries. Attempt
+four is terminal, and an exhausted task remains in State without starving a
+later eligible task.
 
 ## Serialized production workflow
 

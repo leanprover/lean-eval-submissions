@@ -8,6 +8,7 @@ const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
 const MAX_CIPHERTEXT_BYTES = 11 * 1024 * 1024;
 const MAX_IDENTITY_BYTES = 4096;
 const MAX_PLAINTEXT_BYTES = 10 * 1024 * 1024;
+const MAX_REPLAY_ATTEMPTS = 4;
 
 export type AuthoritativeReplayInput = {
   schema_version: 1;
@@ -161,7 +162,7 @@ export async function readAuthoritativeReplayRequest(
   const execution = object(outer.request, "execution request");
   const replayTaskId = text(execution.replay_task_id, "replay_task_id", 68);
   if (!REPLAY_ID.test(replayTaskId)) throw new AuthoritativeReplayContractError("replay_task_id is invalid");
-  safeInteger(execution.attempt, "attempt", Number.MAX_SAFE_INTEGER);
+  safeInteger(execution.attempt, "attempt", MAX_REPLAY_ATTEMPTS);
   if (execution.execution_profile_digest !== reviewedProfileDigest) {
     throw new AuthoritativeReplayContractError("execution profile is not reviewed");
   }
@@ -261,7 +262,7 @@ export async function readAuthoritativeReplayStatusRequest(
   ], "status request");
   const runnerNonce = text(status.runner_nonce, "runner_nonce", 64);
   const replayTaskId = text(status.replay_task_id, "replay_task_id", 68);
-  const attempt = safeInteger(status.attempt, "attempt", Number.MAX_SAFE_INTEGER);
+  const attempt = safeInteger(status.attempt, "attempt", MAX_REPLAY_ATTEMPTS);
   if (
     status.schema_version !== 1 ||
     !DIGEST.test(runnerNonce) ||

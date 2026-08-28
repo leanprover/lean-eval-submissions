@@ -52,7 +52,7 @@ MAX_JSON_BYTES = 16 * 1024 * 1024
 MAX_STATE_EVENT_FILES = 1_000_000
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 MAX_EXECUTOR_SOURCE_ARCHIVE_BYTES = 16 * 1024 * 1024
-MAX_REPLAY_ATTEMPTS = 3
+MAX_REPLAY_ATTEMPTS = 4
 RECOVERY_AFTER = dt.timedelta(hours=7)
 QUALIFICATION_WORKFLOW_PATH = ".github/workflows/historical-public-image-qualification.yml"
 QUALIFICATION_CONTROLLER_PATH = "historical-public-qualification/qualification.py"
@@ -522,6 +522,8 @@ def _validate_task(value: Any, index: int) -> dict[str, Any]:
     if task["checker"] != "nanoda":
         raise HistoricalReplayControllerError(f"{label}.checker is not nanoda")
     attempt = _integer(task["attempt"], f"{label}.attempt")
+    if attempt > MAX_REPLAY_ATTEMPTS:
+        raise HistoricalReplayControllerError(f"{label}.attempt exceeds the limit")
     if status == "queued":
         if attempt != 0 and "reconfiguration_event_id" not in task:
             raise HistoricalReplayControllerError(f"{label} queued initial attempt is not zero")
@@ -1092,7 +1094,10 @@ def _terminal_transition(
             "payload": {
                 "attempt": attempt,
                 "reason_code": failure_reason,
-                "retryable": failure_reason in RETRYABLE_FAILURES,
+                "retryable": (
+                    failure_reason in RETRYABLE_FAILURES
+                    and attempt < MAX_REPLAY_ATTEMPTS
+                ),
             },
         }
     if verdict_value is None:
@@ -1457,7 +1462,11 @@ def validate_executor_request(
     ):
         _match(DIGEST, request[field], f"historical executor request.{field}")
     _match(REPLAY_ID, request["replay_task_id"], "historical executor replay_task_id")
-    _integer(request["attempt"], "historical executor attempt", 1)
+    attempt = _integer(request["attempt"], "historical executor attempt", 1)
+    if attempt > MAX_REPLAY_ATTEMPTS:
+        raise HistoricalReplayControllerError(
+            "historical executor attempt exceeds the limit"
+        )
     vm_image = request["vm_image_digest"]
     if not isinstance(vm_image, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", vm_image) is None:
         raise HistoricalReplayControllerError(
@@ -1744,6 +1753,10 @@ def _historical_replay_states(
         if kind == "replay.started":
             payload = _object(payload_value, "historical replay.started payload")
             attempt = _integer(payload.get("attempt"), "historical replay attempt", 1)
+            if attempt > MAX_REPLAY_ATTEMPTS:
+                raise HistoricalReplayControllerError(
+                    "historical replay.started exceeds the attempt limit"
+                )
             cause = parent(event, {"replay.enqueued", "replay.failed"})
             retryable = (
                 state["status"] == "failed"
@@ -1767,6 +1780,10 @@ def _historical_replay_states(
         elif kind in terminal_types:
             payload = _object(payload_value, "historical replay terminal payload")
             attempt = _integer(payload.get("attempt"), "historical replay attempt", 1)
+            if attempt > MAX_REPLAY_ATTEMPTS:
+                raise HistoricalReplayControllerError(
+                    "historical replay terminal exceeds the attempt limit"
+                )
             cause = parent(event, {"replay.started"})
             if (
                 state["status"] != "running"
@@ -1858,6 +1875,10 @@ def recover_running(
         }
     payload = _object(started.get("payload"), "running historical payload")
     attempt = _integer(payload.get("attempt"), "running historical attempt", 1)
+    if attempt > MAX_REPLAY_ATTEMPTS:
+        raise HistoricalReplayControllerError(
+            "running historical attempt exceeds the limit"
+        )
     if cleanup_confirmation_value is None:
         return {
             "schema_version": 1,
@@ -1900,7 +1921,11 @@ def recover_running(
             "subject_id": started["subject_id"],
             "causation_event_id": started["event_id"],
             "actor": {"kind": "system"},
-            "payload": {"attempt": attempt, "reason_code": "runner_lost", "retryable": True},
+            "payload": {
+                "attempt": attempt,
+                "reason_code": "runner_lost",
+                "retryable": attempt < MAX_REPLAY_ATTEMPTS,
+            },
         },
     }
 

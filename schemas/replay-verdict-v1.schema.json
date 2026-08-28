@@ -11,7 +11,7 @@
   "properties": {
     "schema_version": { "const": 1 },
     "replay_task_id": { "type": "string", "pattern": "^rt1_[0-9a-f]{64}$" },
-    "attempt": { "type": "integer", "minimum": 1 },
+    "attempt": { "type": "integer", "minimum": 1, "maximum": 4 },
     "execution_outcome": { "enum": ["completed", "crashed", "timed_out", "failed"] },
     "checker_outcome": {
       "enum": ["accepted", "rejected", "declined", null]

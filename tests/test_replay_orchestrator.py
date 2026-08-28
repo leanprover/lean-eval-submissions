@@ -162,6 +162,37 @@ class ReplayOrchestratorTests(unittest.TestCase):
             task["event_id"],
         )
 
+    def test_fourth_attempt_is_terminal_and_fifth_attempt_is_impossible(self) -> None:
+        queue, profile, measurement = self.inputs()
+        task = queue["tasks"][0]
+        task.update(
+            status="failed",
+            attempt=3,
+            reason_code="runner_lost",
+            retryable=True,
+            event_id="0198abcd-0000-7000-8000-000000000009",
+        )
+        plan = plan_next(queue, profile, measurement)
+        verdict = load_fixture("replay-verdict-accepted-v1.json")
+        verdict.update(
+            attempt=4,
+            execution_outcome="failed",
+            checker_outcome=None,
+            failure_reason="runner_lost",
+            statistics=None,
+        )
+        terminal = terminal_transition(plan, verdict, STARTED_EVENT_ID)
+        self.assertEqual(terminal["event_type"], "replay.failed")
+        self.assertFalse(terminal["payload"]["retryable"])
+
+        task["attempt"] = 4
+        with self.assertRaisesRegex(ReplayError, "failed queue task"):
+            validate_queue(queue)
+        request = plan["request"]
+        request["attempt"] = 5
+        with self.assertRaisesRegex(ReplayError, "no greater than 4"):
+            validate_execution_request(request)
+
     def test_private_source_plans_the_exact_d6_archive_without_git_locator(self) -> None:
         queue, profile, measurement = self.inputs()
         task = queue["tasks"][0]
@@ -445,5 +476,46 @@ class ReplayOrchestratorTests(unittest.TestCase):
             {variant["properties"]["kind"]["const"] for variant in plan_schema["oneOf"]},
             {"empty", "execution"},
         )
+
+    def test_replay_schemas_enforce_attempt_ceiling(self) -> None:
+        queue_schema = json.loads(
+            (ROOT / "schemas/replay-queue-v1.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        request_schema = json.loads(
+            (ROOT / "schemas/replay-execution-request-v1.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        plan_schema = json.loads(
+            (ROOT / "schemas/replay-plan-v1.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        verdict_schema = json.loads(
+            (ROOT / "schemas/replay-verdict-v1.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            queue_schema["$defs"]["task"]["properties"]["attempt"]["maximum"],
+            3,
+        )
+        self.assertEqual(request_schema["properties"]["attempt"]["maximum"], 4)
+        execution_plan = next(
+            variant
+            for variant in plan_schema["oneOf"]
+            if variant["properties"]["kind"]["const"] == "execution"
+        )
+        started_properties = execution_plan["properties"]["started_transition"]
+        attempt_schema = started_properties["properties"]["payload"]["properties"]
+        self.assertEqual(
+            attempt_schema["attempt"]["maximum"],
+            4,
+        )
+        self.assertEqual(verdict_schema["properties"]["attempt"]["maximum"], 4)
+
+
 if __name__ == "__main__":
     unittest.main()

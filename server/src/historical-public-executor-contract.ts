@@ -8,6 +8,7 @@ const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$
 const ZERO_DIGEST = "0".repeat(64);
 const MAX_REQUEST_BYTES = 24 * 1024 * 1024;
 const MAX_SOURCE_ARCHIVE_BYTES = 16 * 1024 * 1024;
+const MAX_REPLAY_ATTEMPTS = 4;
 
 export type HistoricalPublicRunnerVerdict = {
   schema_version: 1;
@@ -159,6 +160,7 @@ function validateIdentity(
   const archiveDigest = text(value.source_archive_sha256, "source_archive_sha256", 64);
   if (
     value.schema_version !== 1
+    || attempt > MAX_REPLAY_ATTEMPTS
     || !DIGEST.test(runnerNonce)
     || !REPLAY_ID.test(replayTaskId)
     || !DIGEST.test(handoffDigest)

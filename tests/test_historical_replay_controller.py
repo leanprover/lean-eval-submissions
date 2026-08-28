@@ -371,12 +371,12 @@ class HistoricalReplayPlanTests(unittest.TestCase):
         task = queue["tasks"][0]
         task.update(
             status="failed",
-            attempt=2,
+            attempt=3,
             reason_code="runner_lost",
             retryable=True,
         )
         plan = self.fixture.plan(queue)
-        self.assertEqual(plan["started_transition"]["payload"]["attempt"], 3)
+        self.assertEqual(plan["started_transition"]["payload"]["attempt"], 4)
 
     def test_gist_adapter_is_eligible_and_attempt_limit_remains_typed(self) -> None:
         fixture = Fixture()
@@ -396,7 +396,7 @@ class HistoricalReplayPlanTests(unittest.TestCase):
         queue = copy.deepcopy(self.fixture.queue)
         queue["tasks"][0].update(
             status="failed",
-            attempt=3,
+            attempt=4,
             reason_code="runner_lost",
             retryable=True,
         )
@@ -430,7 +430,7 @@ class HistoricalReplayPlanTests(unittest.TestCase):
             request_id="prr_" + hashlib.sha256(model.encode()).hexdigest(),
             source_kind="gist",
             status="failed",
-            attempt=3,
+            attempt=4,
             reason_code="runner_lost",
             retryable=True,
             authority_event_id="01a035b4-d6ca-7000-8000-000000000001",
@@ -630,14 +630,14 @@ class HistoricalReplayPlanTests(unittest.TestCase):
         plan = self.fixture.plan()
         plan["task"].update(
             status="failed",
-            attempt=3,
+            attempt=4,
             reason_code="runner_lost",
             retryable=True,
         )
         plan["queue"]["task_sha256"] = sha256_bytes(
             state_canonical_bytes(plan["task"])
         )
-        plan["started_transition"]["payload"]["attempt"] = 4
+        plan["started_transition"]["payload"]["attempt"] = 5
         with self.assertRaisesRegex(HistoricalReplayControllerError, "attempt limit"):
             validate_execution_plan(plan)
 
@@ -796,6 +796,20 @@ class HistoricalReplayEventTests(unittest.TestCase):
         self.assertEqual(retryable["event_type"], "replay.failed")
         self.assertTrue(retryable["payload"]["retryable"])
         self.assertFalse(permanent["payload"]["retryable"])
+
+        queue = copy.deepcopy(self.fixture.queue)
+        queue["tasks"][0].update(
+            status="failed",
+            attempt=3,
+            reason_code="runner_lost",
+            retryable=True,
+        )
+        fourth_attempt = self.fixture.plan(queue)
+        exhausted = _terminal_transition(
+            fourth_attempt, None, "runner_lost"
+        )
+        self.assertEqual(exhausted["payload"]["attempt"], 4)
+        self.assertFalse(exhausted["payload"]["retryable"])
 
     def test_terminal_refuses_wrong_verdict_and_wrong_started_identity(self) -> None:
         with self.assertRaisesRegex(

@@ -76,7 +76,7 @@
         "measurement_config_digest": { "$ref": "#/$defs/digest" },
         "execution_profile_digest": { "$ref": "#/$defs/digest" },
         "status": { "enum": ["queued", "failed"] },
-        "attempt": { "type": "integer", "minimum": 0 },
+        "attempt": { "type": "integer", "minimum": 0, "maximum": 3 },
         "event_id": { "$ref": "#/$defs/uuid7" },
         "occurred_at": { "$ref": "#/$defs/timestamp" },
         "reason_code": {

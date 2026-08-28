@@ -12,6 +12,7 @@ const MODEL_ID = /^mi1_[0-9a-f]{64}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
 const REASON = /^[a-z][a-z0-9_]{1,63}$/;
 const TOOLCHAIN = /^leanprover\/lean4:v[0-9]+\.[0-9]+\.[0-9]+$/;
+const MAX_REPLAY_ATTEMPTS = 4;
 const COUNTER_REASONS = new Set([
   "counter_not_reported",
   "counter_not_supported",
@@ -684,10 +685,11 @@ function validateLifecycleEvent(event: Record<string, unknown>, kind: LifecycleE
   }
   const payload = object(event.payload, "State event payload");
   exactFields(payload, LIFECYCLE_FIELDS[kind], "State event payload");
-  const positive = (field: string): void => {
+  const positive = (field: string): number => {
     if (typeof payload[field] !== "number" || !Number.isSafeInteger(payload[field]) || payload[field] < 1) {
       throw new TypeError(`${field} must be positive`);
     }
+    return payload[field];
   };
   const natural = (field: string): void => {
     if (typeof payload[field] !== "number" || !Number.isSafeInteger(payload[field]) || payload[field] < 0) {
@@ -700,7 +702,10 @@ function validateLifecycleEvent(event: Record<string, unknown>, kind: LifecycleE
   for (const field of ["archive_ciphertext_sha256", "evidence_sha256", "execution_profile_digest", "measurement_config_digest", "tree_digest"] as const) {
     if (field in payload && (typeof payload[field] !== "string" || !DIGEST.test(payload[field]))) throw new TypeError(`${field} is invalid`);
   }
-  if ("attempt" in payload) positive("attempt");
+  const attempt = "attempt" in payload ? positive("attempt") : null;
+  if (kind.startsWith("replay.") && attempt !== null && attempt > MAX_REPLAY_ATTEMPTS) {
+    throw new TypeError("replay attempt exceeds the limit");
+  }
   if ("reason_code" in payload && (typeof payload.reason_code !== "string" || !REASON.test(payload.reason_code))) throw new TypeError("reason_code is invalid");
   if ("retryable" in payload && typeof payload.retryable !== "boolean") throw new TypeError("retryable is invalid");
   if (kind === "archive.completed" && payload.encrypted !== true) throw new TypeError("archive must be encrypted");
@@ -726,7 +731,10 @@ function validateLifecycleEvent(event: Record<string, unknown>, kind: LifecycleE
   if ("release_at" in payload && (typeof payload.release_at !== "string" || !isCanonicalUtcTimestamp(payload.release_at))) throw new TypeError("release_at is invalid");
   if (kind === "replay.failed") {
     if (!REPLAY_FAILURES.has(String(payload.reason_code))) throw new TypeError("replay failure reason is not registered");
-    if (payload.retryable !== RETRYABLE_REPLAY_FAILURES.has(String(payload.reason_code))) {
+    if (attempt === null) throw new TypeError("replay failure attempt is missing");
+    const expectedRetryable = RETRYABLE_REPLAY_FAILURES.has(String(payload.reason_code))
+      && attempt < MAX_REPLAY_ATTEMPTS;
+    if (payload.retryable !== expectedRetryable) {
       throw new TypeError("replay retryability disagrees with its registered reason");
     }
   }

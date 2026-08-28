@@ -116,6 +116,7 @@ describe("historical public executor boundary", () => {
       (value: Record<string, unknown>) => { value.handoff_sha256 = "0".repeat(64); },
       (value: Record<string, unknown>) => { value.source_archive_sha256 = "0".repeat(64); },
       (value: Record<string, unknown>) => { value.attempt = 0; },
+      (value: Record<string, unknown>) => { value.attempt = 5; },
     ]) {
       const value = await fixture();
       mutate(value);

@@ -206,6 +206,61 @@ class ReplayControllerTests(unittest.TestCase):
             "busy",
         )
 
+    def test_stale_fourth_attempt_recovers_terminally_and_attempt_five_is_rejected(
+        self,
+    ) -> None:
+        queue, _, _, _ = inputs()
+        task = {
+            **queue["tasks"][0],
+            "status": "running",
+            "attempt": 4,
+            "event_id": "0198abcd-0000-7000-8000-000000000008",
+            "occurred_at": "2026-08-22T20:00:00.000Z",
+        }
+        recovered = recover_running(
+            {"replay_tasks": [task]}, "2026-08-23T07:00:00.000Z"
+        )
+        self.assertEqual(recovered["kind"], "failed")
+        self.assertFalse(recovered["event"]["payload"]["retryable"])
+
+        task["attempt"] = 5
+        with self.assertRaisesRegex(ReplayControllerError, "attempt is invalid"):
+            recover_running(
+                {"replay_tasks": [task]}, "2026-08-23T07:00:00.000Z"
+            )
+
+    def test_fourth_attempt_terminal_matches_shared_state_contract_fixture(
+        self,
+    ) -> None:
+        queue, profile, measurement, _ = inputs()
+        task = queue["tasks"][0]
+        task.update(
+            status="failed",
+            attempt=3,
+            reason_code="runner_lost",
+            retryable=True,
+            event_id="0198abcd-0000-7000-8000-000000000009",
+            occurred_at="2026-08-23T06:59:59.000Z",
+        )
+        plan = plan_next(queue, profile, measurement)
+        started = started_event(
+            plan,
+            queue,
+            "2026-08-23T07:00:00.000Z",
+            random_bytes=b"\x01" * 10,
+        )
+        terminal = terminal_event(
+            plan,
+            failure_verdict(plan, "runner_lost"),
+            started,
+            "2026-08-23T07:00:01.000Z",
+            random_bytes=b"\x02" * 10,
+        )
+        self.assertEqual(
+            terminal,
+            fixture("replay-failed-attempt-limit-v1.json"),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
