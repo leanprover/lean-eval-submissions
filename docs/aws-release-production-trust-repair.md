@@ -10,6 +10,12 @@ This is an administrator operation. Creating or executing a CloudFormation
 change set and dispatching the protected preflight require explicit approval.
 Keep `PUBLICATION_ENABLED` absent throughout.
 
+Run every shell block below, in order, in one dedicated Bash session. The
+first block installs an exit trap that removes operator material and deletes
+the named change set unless CloudFormation has accepted its execution. Do not
+close that shell between blocks. An exit after execution but before all
+readbacks and the protected preflight is deliberately reported as incomplete.
+
 ## Exact boundary
 
 The live trust currently names:
@@ -44,7 +50,7 @@ Use an authenticated short-lived administrator session in AWS account
 the trust and policy documents contain no credential, but they are operator
 material rather than repository artifacts.
 
-```sh
+```bash
 set -euo pipefail
 
 LEAN_EVAL_AWS_REGION=us-east-1
@@ -58,6 +64,74 @@ LEAN_EVAL_OLD_PREFIX=leanprover/lean-eval-releases
 LEAN_EVAL_NEW_PREFIX=leanprover@7233018/lean-eval-releases@1340741242
 LEAN_EVAL_OIDC_PROVIDER_ARN=arn:aws:iam::161072922960:oidc-provider/token.actions.githubusercontent.com
 LEAN_EVAL_SUBMISSION_PREFIX=leanprover/lean-eval-submissions
+LEAN_EVAL_RELEASES_COMMIT=ff37a9d56aeb6906527cf7b75917907423d6f139
+LEAN_EVAL_OPERATOR_TMP_ROOT="$(realpath -e -- "${TMPDIR:-/tmp}")"
+test -d "$LEAN_EVAL_OPERATOR_TMP_ROOT"
+LEAN_EVAL_AWS_OPS=
+LEAN_EVAL_CHANGE_SET=
+LEAN_EVAL_CHANGE_SET_ID=
+LEAN_EVAL_CHANGE_SET_OWNED=false
+LEAN_EVAL_CHANGE_SET_EXECUTION_ATTEMPTED=false
+LEAN_EVAL_TRUST_PREFLIGHT_COMPLETE=false
+
+lean_eval_remove_operator_material() {
+  [[ -n "$LEAN_EVAL_AWS_OPS" ]] || return 0
+  if [[ -L "$LEAN_EVAL_AWS_OPS" || ! -d "$LEAN_EVAL_AWS_OPS" ]]; then
+    echo "REFUSING to remove a non-directory or symlink operator path" >&2
+    return 1
+  fi
+
+  operator_parent="$(dirname -- "$LEAN_EVAL_AWS_OPS")"
+  operator_basename="$(basename -- "$LEAN_EVAL_AWS_OPS")"
+  canonical_parent="$(realpath -e -- "$operator_parent")" || return 1
+  if [[ "$canonical_parent" != "$LEAN_EVAL_OPERATOR_TMP_ROOT" ||
+        "$LEAN_EVAL_AWS_OPS" != "$LEAN_EVAL_OPERATOR_TMP_ROOT/$operator_basename" ||
+        ! "$operator_basename" =~ ^lean-eval-production-trust\.[A-Za-z0-9]{8}$ ]]; then
+    echo "REFUSING to remove an unexpected operator path" >&2
+    return 1
+  fi
+  canonical_operator_dir="$(realpath -e -- "$LEAN_EVAL_AWS_OPS")" || return 1
+  if [[ "$canonical_operator_dir" != "$LEAN_EVAL_OPERATOR_TMP_ROOT/$operator_basename" ]]; then
+    echo "REFUSING to remove a redirected operator path" >&2
+    return 1
+  fi
+
+  chmod -R u+rwX "$LEAN_EVAL_AWS_OPS" 2>/dev/null || true
+  rm -rf -- "$LEAN_EVAL_AWS_OPS"
+}
+
+lean_eval_cleanup() {
+  status=$?
+  set +e
+  trap - EXIT HUP INT TERM
+
+  if [[ "$LEAN_EVAL_CHANGE_SET_OWNED" == true &&
+        "$LEAN_EVAL_CHANGE_SET_EXECUTION_ATTEMPTED" != true ]]; then
+    if ! aws cloudformation delete-change-set \
+      --stack-name "$LEAN_EVAL_PRODUCTION_STACK" \
+      --change-set-name "$LEAN_EVAL_CHANGE_SET_ID" \
+      --region "$LEAN_EVAL_AWS_REGION"; then
+      echo "FAILED to delete the unexecuted production change set" >&2
+      status=1
+    fi
+  fi
+
+  if ! lean_eval_remove_operator_material; then
+    echo "FAILED to remove production trust operator material" >&2
+    status=1
+  fi
+
+  if [[ "$LEAN_EVAL_CHANGE_SET_EXECUTION_ATTEMPTED" == true &&
+        "$LEAN_EVAL_TRUST_PREFLIGHT_COMPLETE" != true ]]; then
+    echo "INCOMPLETE: production trust execution was attempted, but verification did not finish" >&2
+    status=1
+  fi
+  exit "$status"
+}
+trap lean_eval_cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 test "$(aws sts get-caller-identity --query Account --output text)" = \
   "$LEAN_EVAL_AWS_ACCOUNT"
@@ -69,9 +143,17 @@ test "$(gh api \
   --jq .sub_claim_prefix)" = "repo:$LEAN_EVAL_SUBMISSION_PREFIX"
 test "$(gh api repos/leanprover/lean-eval-releases/actions/variables \
   --jq '[.variables[] | select(.name=="PUBLICATION_ENABLED")] | length')" = 0
+test "$(gh api repos/leanprover/lean-eval-releases/branches/main \
+  --jq .commit.sha)" = "$LEAN_EVAL_RELEASES_COMMIT"
+test "$(gh api repos/leanprover/lean-eval-releases/branches/main \
+  --jq .protected)" = true
 
-LEAN_EVAL_AWS_OPS="$(mktemp -d)"
+LEAN_EVAL_AWS_OPS="$(mktemp -d \
+  "$LEAN_EVAL_OPERATOR_TMP_ROOT/lean-eval-production-trust.XXXXXXXX")"
 chmod 700 "$LEAN_EVAL_AWS_OPS"
+test ! -L "$LEAN_EVAL_AWS_OPS"
+test -d "$LEAN_EVAL_AWS_OPS"
+test "$(stat -c %a "$LEAN_EVAL_AWS_OPS")" = 700
 
 aws cloudformation get-template \
   --stack-name "$LEAN_EVAL_PRODUCTION_STACK" \
@@ -163,8 +245,8 @@ workload policy needs a new reviewed repair; do not broaden these checks.
 The following creates external AWS state and therefore belongs inside the
 explicitly approved operation.
 
-```sh
-LEAN_EVAL_CHANGE_SET="release-oidc-production-$(date -u +%Y%m%dT%H%M%SZ)"
+```bash
+LEAN_EVAL_CHANGE_SET="release-oidc-production-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 
 aws cloudformation create-change-set \
   --stack-name "$LEAN_EVAL_PRODUCTION_STACK" \
@@ -178,16 +260,41 @@ aws cloudformation create-change-set \
     ParameterKey=SubmissionGitHubSubjectPrefix,UsePreviousValue=true \
     ParameterKey=ReleaseGitHubSubjectPrefix,ParameterValue="$LEAN_EVAL_NEW_PREFIX" \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region "$LEAN_EVAL_AWS_REGION"
+  --region "$LEAN_EVAL_AWS_REGION" \
+  --output json > "$LEAN_EVAL_AWS_OPS/create-change-set.json"
+
+LEAN_EVAL_CHANGE_SET_ID="$(jq -er \
+  --arg stack "$LEAN_EVAL_PRODUCTION_STACK" \
+  --arg name "$LEAN_EVAL_CHANGE_SET" '
+  select(keys == ["Id", "StackId"]) |
+  .StackId as $stack_id |
+  .Id as $change_set_id |
+  select(
+    ($stack_id | type) == "string" and
+    ($stack_id | test(
+      "^arn:aws:cloudformation:us-east-1:161072922960:stack/" +
+      $stack + "/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-" +
+      "[0-9a-f]{4}-[0-9a-f]{12}$"
+    )) and
+    ($change_set_id | type) == "string" and
+    ($change_set_id | test(
+      "^arn:aws:cloudformation:us-east-1:161072922960:changeSet/" +
+      $name + "/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-" +
+      "[0-9a-f]{4}-[0-9a-f]{12}$"
+    ))
+  ) |
+  $change_set_id
+' "$LEAN_EVAL_AWS_OPS/create-change-set.json")"
+LEAN_EVAL_CHANGE_SET_OWNED=true
 
 aws cloudformation wait change-set-create-complete \
   --stack-name "$LEAN_EVAL_PRODUCTION_STACK" \
-  --change-set-name "$LEAN_EVAL_CHANGE_SET" \
+  --change-set-name "$LEAN_EVAL_CHANGE_SET_ID" \
   --region "$LEAN_EVAL_AWS_REGION"
 
 aws cloudformation describe-change-set \
   --stack-name "$LEAN_EVAL_PRODUCTION_STACK" \
-  --change-set-name "$LEAN_EVAL_CHANGE_SET" \
+  --change-set-name "$LEAN_EVAL_CHANGE_SET_ID" \
   --region "$LEAN_EVAL_AWS_REGION" \
   --output json > "$LEAN_EVAL_AWS_OPS/change-set.json"
 
@@ -201,17 +308,24 @@ jq -e '
 ' "$LEAN_EVAL_AWS_OPS/change-set.json"
 ```
 
-If the closed change-set check fails, delete the change set and stop. Do not
+Only the unique change-set ARN returned by a successful, exact creation
+response becomes cleanup-owned. A name collision, create failure, malformed
+response, or same-name replacement never authorizes deletion. If waiting,
+description, or the closed check then fails, the exit trap deletes that exact
+owned ARN. Confirm that cleanup succeeded before leaving the operation. Do not
 switch to the current repository template or admit a second resource.
 
 ## Execute and verify
 
 Execution requires the explicit approval for this exact production mutation.
+The attempt marker is set before the execute request, so a lost response can
+never authorize deletion of a change set that CloudFormation may be executing.
 
-```sh
+```bash
+LEAN_EVAL_CHANGE_SET_EXECUTION_ATTEMPTED=true
 aws cloudformation execute-change-set \
   --stack-name "$LEAN_EVAL_PRODUCTION_STACK" \
-  --change-set-name "$LEAN_EVAL_CHANGE_SET" \
+  --change-set-name "$LEAN_EVAL_CHANGE_SET_ID" \
   --region "$LEAN_EVAL_AWS_REGION"
 
 aws cloudformation wait stack-update-complete \
@@ -227,6 +341,17 @@ aws iam get-role-policy \
   --policy-name InvokeOnlyTheUnwrapAlias \
   --query PolicyDocument \
   --output json > "$LEAN_EVAL_AWS_OPS/post-policy.json"
+aws cloudformation get-template \
+  --stack-name "$LEAN_EVAL_PRODUCTION_STACK" \
+  --region "$LEAN_EVAL_AWS_REGION" \
+  --template-stage Original \
+  --query TemplateBody \
+  --output text > "$LEAN_EVAL_AWS_OPS/post-template.yaml"
+aws cloudformation describe-stacks \
+  --stack-name "$LEAN_EVAL_PRODUCTION_STACK" \
+  --region "$LEAN_EVAL_AWS_REGION" \
+  --query 'Stacks[0].Parameters' \
+  --output json > "$LEAN_EVAL_AWS_OPS/post-parameters.json"
 
 jq -e --arg provider "$LEAN_EVAL_OIDC_PROVIDER_ARN" '
   (keys == ["Statement", "Version"]) and
@@ -244,6 +369,25 @@ jq -e --arg provider "$LEAN_EVAL_OIDC_PROVIDER_ARN" '
 ' "$LEAN_EVAL_AWS_OPS/post-trust.json"
 cmp <(jq -S . "$LEAN_EVAL_AWS_OPS/pre-policy.json") \
   <(jq -S . "$LEAN_EVAL_AWS_OPS/post-policy.json")
+cmp "$LEAN_EVAL_AWS_OPS/pre-template.yaml" \
+  "$LEAN_EVAL_AWS_OPS/post-template.yaml"
+jq -e \
+  --arg provider "$LEAN_EVAL_OIDC_PROVIDER_ARN" \
+  --arg submissions "$LEAN_EVAL_SUBMISSION_PREFIX" \
+  --arg releases "$LEAN_EVAL_NEW_PREFIX" '
+  (map(.ParameterKey) | sort) == [
+    "EnvironmentName",
+    "GitHubOidcProviderArn",
+    "ReleaseGitHubSubjectPrefix",
+    "SubmissionGitHubSubjectPrefix"
+  ] and
+  (map({key: .ParameterKey, value: .ParameterValue}) | from_entries) == {
+    EnvironmentName: "production",
+    GitHubOidcProviderArn: $provider,
+    ReleaseGitHubSubjectPrefix: $releases,
+    SubmissionGitHubSubjectPrefix: $submissions
+  }
+' "$LEAN_EVAL_AWS_OPS/post-parameters.json"
 test "$(aws iam list-role-policies \
   --role-name "$LEAN_EVAL_RELEASE_ROLE" \
   --query PolicyNames \
@@ -271,27 +415,100 @@ test "$(gh api repos/leanprover/lean-eval-releases/actions/variables \
   --jq '[.variables[] | select(.name=="PUBLICATION_ENABLED")] | length')" = 0
 ```
 
-After the trust readback succeeds, dispatch
-`verify-production-release-oidc.yml` from exact protected release `main` with
-`confirm_publication_disabled=true`. That existing workflow assumes the role
-under an inline policy permitting only `sts:GetCallerIdentity`, then removes
-AWS and GitHub OIDC handles. It has no Lambda invocation, archive access,
-checkout, State, Git write, publication, or artifact path. Verify its exact
-head SHA, successful jobs, zero artifacts, and the still-absent publication
-variable. Do not dispatch the publication controller.
+Only after every trust, policy, template, parameter, output, staging, and
+publication-latch readback above succeeds, dispatch the source-free preflight
+from the already reviewed exact protected release commit. The workflow itself
+requires that same commit in `expected_release_commit` and rejects a moving or
+unprotected ref.
+
+```bash
+LEAN_EVAL_PREFLIGHT_URL="$(gh workflow run \
+  verify-production-release-oidc.yml \
+  --repo leanprover/lean-eval-releases \
+  --ref main \
+  -f expected_release_commit="$LEAN_EVAL_RELEASES_COMMIT" \
+  -f confirm_publication_disabled=true)"
+case "$LEAN_EVAL_PREFLIGHT_URL" in
+  https://github.com/leanprover/lean-eval-releases/actions/runs/*) ;;
+  *) echo "preflight dispatch returned no exact run URL" >&2; exit 1 ;;
+esac
+LEAN_EVAL_PREFLIGHT_RUN_ID="${LEAN_EVAL_PREFLIGHT_URL##*/}"
+[[ "$LEAN_EVAL_PREFLIGHT_RUN_ID" =~ ^[0-9]+$ ]]
+
+gh run watch "$LEAN_EVAL_PREFLIGHT_RUN_ID" \
+  --repo leanprover/lean-eval-releases \
+  --exit-status
+gh run view "$LEAN_EVAL_PREFLIGHT_RUN_ID" \
+  --repo leanprover/lean-eval-releases \
+  --json attempt,conclusion,databaseId,event,headBranch,headSha,status \
+  > "$LEAN_EVAL_AWS_OPS/preflight-run.json"
+jq -e \
+  --arg head "$LEAN_EVAL_RELEASES_COMMIT" \
+  --argjson run_id "$LEAN_EVAL_PREFLIGHT_RUN_ID" '
+  .databaseId == $run_id and
+  .attempt == 1 and
+  .status == "completed" and
+  .conclusion == "success" and
+  .event == "workflow_dispatch" and
+  .headBranch == "main" and
+  .headSha == $head
+' "$LEAN_EVAL_AWS_OPS/preflight-run.json"
+
+gh api \
+  "repos/leanprover/lean-eval-releases/actions/runs/$LEAN_EVAL_PREFLIGHT_RUN_ID/attempts/1/jobs?per_page=100" \
+  > "$LEAN_EVAL_AWS_OPS/preflight-jobs.json"
+jq -e \
+  --arg head "$LEAN_EVAL_RELEASES_COMMIT" \
+  --argjson run_id "$LEAN_EVAL_PREFLIGHT_RUN_ID" '
+  .total_count == 3 and
+  (.jobs | type) == "array" and
+  (.jobs | length) == 3 and
+  ([.jobs[].name] | sort) == ["authorize", "oidc-trust", "summarize"] and
+  ([.jobs[].id] | all(type == "number" and . > 0 and floor == .)) and
+  ([.jobs[].id] | unique | length) == 3 and
+  ([.jobs[]] | all(
+    .run_id == $run_id and
+    .run_attempt == 1 and
+    .head_sha == $head and
+    .status == "completed" and
+    .conclusion == "success"
+  ))
+' "$LEAN_EVAL_AWS_OPS/preflight-jobs.json"
+test "$(gh api \
+  "repos/leanprover/lean-eval-releases/actions/runs/$LEAN_EVAL_PREFLIGHT_RUN_ID/artifacts" \
+  --jq .total_count)" = 0
+test "$(gh api repos/leanprover/lean-eval-releases/actions/variables \
+  --jq '[.variables[] | select(.name=="PUBLICATION_ENABLED")] | length')" = 0
+
+LEAN_EVAL_TRUST_PREFLIGHT_COMPLETE=true
+echo PRODUCTION_RELEASE_TRUST_REPAIR_OK
+exit 0
+```
+
+The preflight assumes the role under an inline policy permitting only
+`sts:GetCallerIdentity`, then removes AWS and GitHub OIDC handles. It has no
+Lambda invocation, archive access, checkout, State, Git write, publication,
+or artifact path. Do not dispatch the publication controller. Completion is
+claimed only by the final marker after exact run and latch readback; the exit
+trap then removes the mode-700 operator directory.
 
 ## Rollback
 
 CloudFormation automatically rolls back a failed update. A successful update
-can be reversed by creating another change set with `--use-previous-template`
-and the same closed one-resource check, setting only:
+must not be reversed ad hoc. A rollback is a separate approval-gated operator
+change whose reviewed procedure must start from fresh readbacks, install the
+same unexecuted-change-set and mode-700 cleanup trap, use
+`--use-previous-template`, and require the same closed one-resource check. It
+may set only:
 
 ```text
 ParameterKey=ReleaseGitHubSubjectPrefix,ParameterValue=leanprover/lean-eval-releases
 ```
 
-Execute that rollback only after a separate operator decision, then require
-the trust document to equal `pre-trust.json` and the workload policy to remain
-byte-equivalent after canonical JSON sorting. Do not use a direct IAM trust
-edit: that would create CloudFormation drift. Delete the temporary directory
-after the approved operation's required review is complete.
+The rollback procedure must expect the exact ID-bearing trust before it creates
+anything. After execution it must re-read and require the exact obsolete trust,
+the unchanged workload policy and live template, the exact reverted parameter
+set, the unchanged staging timestamp, and the absent publication latch before
+claiming rollback completion. Any ambiguity is an incomplete rollback, not a
+success. Do not use a direct IAM trust edit: that would create CloudFormation
+drift.
