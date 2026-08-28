@@ -969,6 +969,21 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
             "statistics": None,
         }
         self.fixture.commit_state_event(started["event"])
+        proof = controller.current_running_proof(
+            plan, started, self.fixture.state
+        )
+        self.assertEqual(
+            proof,
+            {
+                "schema_version": 1,
+                "kind": "historical_private_current_running_proof",
+                "state_repository": "leanprover/lean-eval-state",
+                "state_head": self.fixture.state_head,
+                "replay_task_id": self.fixture.task["replay_task_id"],
+                "attempt": 1,
+                "started_event_id": started["event"]["event_id"],
+            },
+        )
         terminal = controller.terminal_candidate(
             plan,
             started,
@@ -1074,6 +1089,48 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
             )
         self.assertEqual(value, {"request": "exact"})
         self.assertEqual(executor.call_args.args[0], plan["execution_plan"])
+
+    def test_executor_config_is_task_scoped_digest_only_and_private(self) -> None:
+        plan = self.fixture.plan()
+        rendered = controller.render_executor_config(
+            plan,
+            self.fixture.repository,
+            "a46b90978a1c29cc4795f30677e7e4b8",
+            self.fixture.authority_commit,
+        )
+        task = self.fixture.task["replay_task_id"]
+        self.assertEqual(rendered["name"], f"hpr-{task[4:60]}-1")
+        container = rendered["containers"][0]
+        self.assertEqual(container["max_instances"], 1)
+        self.assertEqual(container["ssh"], {"enabled": False})
+        self.assertEqual(
+            container["image"],
+            "registry.cloudflare.com/a46b90978a1c29cc4795f30677e7e4b8/"
+            f"lean-eval-authoritative@{self.fixture.execution_profile['vm_image_digest']}",
+        )
+        variables = rendered["vars"]
+        self.assertEqual(variables["REPLAY_ENABLED"], "false")
+        self.assertEqual(variables["HISTORICAL_PRIVATE_REPLAY_ENABLED"], "true")
+        self.assertEqual(
+            variables["REVIEWED_EXECUTION_PROFILE_DIGEST"],
+            self.fixture.profile_digest,
+        )
+        self.assertEqual(
+            variables["GITHUB_OIDC_AUDIENCE"],
+            "lean-eval-historical-private-replay",
+        )
+
+        fifth = copy.deepcopy(plan)
+        fifth["task"]["attempt"] = 4
+        fifth["execution_plan"]["started_transition"]["payload"]["attempt"] = 5
+        fifth["execution_plan"]["request"]["attempt"] = 5
+        with self.assertRaises(controller.HistoricalPrivateReplayControllerError):
+            controller.render_executor_config(
+                fifth,
+                self.fixture.repository,
+                "a46b90978a1c29cc4795f30677e7e4b8",
+                self.fixture.authority_commit,
+            )
 
     def test_schema_v2_file_key_uses_strict_existing_handoff(self) -> None:
         plan = self.fixture.plan()

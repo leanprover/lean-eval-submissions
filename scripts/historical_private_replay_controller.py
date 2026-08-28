@@ -88,6 +88,7 @@ PROFILE_PATH = re.compile(r"evidence/private-replay/profiles/[0-9a-f]{64}\.json\
 RECONFIGURATION_PATH = re.compile(
     r"evidence/private-replay/reconfigurations/[0-9a-f]{64}\.json\Z"
 )
+ACCOUNT_ID = re.compile(r"[0-9a-f]{32}\Z")
 
 TASK_FIELDS = {
     "replay_task_id", "result_id", "historical_accepted_at", "owner_login",
@@ -1271,6 +1272,27 @@ def terminal_candidate(
     )
 
 
+def current_running_proof(
+    plan_value: Any,
+    started_candidate_value: Any,
+    state_root: pathlib.Path,
+) -> dict[str, Any]:
+    """Return a source-free proof of the one currently running exact task."""
+
+    plan, started, state_head = validate_started_history(
+        plan_value, started_candidate_value, state_root
+    )
+    return {
+        "schema_version": 1,
+        "kind": "historical_private_current_running_proof",
+        "state_repository": plan["state"]["repository"],
+        "state_head": state_head,
+        "replay_task_id": plan["task"]["replay_task_id"],
+        "attempt": plan["task"]["attempt"] + 1,
+        "started_event_id": started["event"]["event_id"],
+    }
+
+
 def _verify_state_event(state_root: pathlib.Path, event_value: Any) -> str:
     event = _object(event_value, "committed State event")
     event_id = _match(UUID7, event.get("event_id"), "committed State event_id")
@@ -1340,6 +1362,97 @@ def validate_executor_response(response_value: Any, plan_value: Any) -> dict[str
     return validate_private_executor_response(response_value, plan["execution_plan"])
 
 
+def render_executor_config(
+    plan_value: Any,
+    repository_root: pathlib.Path,
+    account_id: str,
+    source_commit: str,
+) -> dict[str, Any]:
+    """Render one task-scoped, digest-pinned private replay Worker."""
+
+    plan = validate_execution_plan(plan_value)
+    _, _, profile, _ = load_reviewed_inputs(repository_root, plan["task"])
+    _match(ACCOUNT_ID, account_id, "Cloudflare account id")
+    _match(COMMIT, source_commit, "historical private executor source commit")
+    _verify_ancestor_of_upstream(repository_root, source_commit, "executor source commit")
+    task = plan["task"]
+    manifest = profile["registry_manifest_digest"]
+    if (
+        profile["registry_repository"] != "lean-eval-authoritative"
+        or manifest != plan["execution_plan"]["request"]["execution_profile"][
+            "vm_image_digest"
+        ]
+    ):
+        raise HistoricalPrivateReplayControllerError(
+            "private executor image differs from the qualified plan"
+        )
+    attempt = task["attempt"] + 1
+    if attempt > MAX_REPLAY_ATTEMPTS:
+        raise HistoricalPrivateReplayControllerError(
+            "historical private replay exceeds the attempt limit"
+        )
+    worker_name = f"hpr-{task['replay_task_id'][4:60]}-{attempt}"
+    image = (
+        f"registry.cloudflare.com/{account_id}/"
+        f"{profile['registry_repository']}@{manifest}"
+    )
+    return {
+        "$schema": "node_modules/wrangler/config-schema.json",
+        "name": worker_name,
+        "main": "src/replay-entry.ts",
+        "account_id": account_id,
+        "compatibility_date": "2026-08-22",
+        "compatibility_flags": ["nodejs_compat"],
+        "workers_dev": True,
+        "preview_urls": False,
+        "observability": {"enabled": False},
+        "containers": [
+            {
+                "class_name": "ReplaySandbox",
+                "image": image,
+                "instance_type": "standard-4",
+                "max_instances": 1,
+                "ssh": {"enabled": False},
+            }
+        ],
+        "durable_objects": {
+            "bindings": [
+                {"name": "REPLAY_SANDBOX", "class_name": "ReplaySandbox"},
+                {
+                    "name": "REPLAY_TERMINAL_RECEIPT",
+                    "class_name": "ReplayTerminalReceipt",
+                },
+            ]
+        },
+        "migrations": [
+            {
+                "tag": "v1",
+                "new_sqlite_classes": ["ReplaySandbox", "ReplayTerminalReceipt"],
+            }
+        ],
+        "vars": {
+            "DEPLOYED_COMMIT": source_commit,
+            "DEPLOYMENT_ENVIRONMENT": "historical-private-replay",
+            "REPLAY_ENABLED": "false",
+            "HISTORICAL_PUBLIC_REPLAY_ENABLED": "false",
+            "HISTORICAL_PRIVATE_REPLAY_ENABLED": "true",
+            "STAGING_ACCEPTANCE_ENABLED": "false",
+            "GITHUB_OIDC_AUDIENCE": "lean-eval-historical-private-replay",
+            "GITHUB_OIDC_ENVIRONMENT": "replay-production",
+            "STAGING_MEMORY_LIMIT_BYTES": str(12 * 1024**3),
+            "PRODUCTION_MEMORY_GATE_BYTES": str(12 * 1024**3),
+            "REVIEWED_EXECUTION_PROFILE_DIGEST": task[
+                "execution_profile_digest"
+            ],
+            "REVIEWED_MEASUREMENT_CONFIG_DIGEST": task[
+                "measurement_config_digest"
+            ],
+            "REVIEWED_VM_IMAGE_DIGEST": manifest,
+            "SANDBOX_TRANSPORT": "rpc",
+        },
+    }
+
+
 def recover_running(
     state_root: pathlib.Path,
     trusted_now: str,
@@ -1380,6 +1493,11 @@ def parser() -> argparse.ArgumentParser:
     started.add_argument("--state-root", required=True, type=pathlib.Path)
     started.add_argument("--trusted-now", required=True)
     started.add_argument("--output", required=True, type=pathlib.Path)
+    proof = commands.add_parser("prove-running")
+    proof.add_argument("--plan", required=True, type=pathlib.Path)
+    proof.add_argument("--started-candidate", required=True, type=pathlib.Path)
+    proof.add_argument("--state-root", required=True, type=pathlib.Path)
+    proof.add_argument("--output", required=True, type=pathlib.Path)
     terminal = commands.add_parser("terminal-candidate")
     terminal.add_argument("--plan", required=True, type=pathlib.Path)
     terminal.add_argument("--started-candidate", required=True, type=pathlib.Path)
@@ -1405,6 +1523,12 @@ def parser() -> argparse.ArgumentParser:
     response.add_argument("--plan", required=True, type=pathlib.Path)
     response.add_argument("--response", required=True, type=pathlib.Path)
     response.add_argument("--verdict-output", required=True, type=pathlib.Path)
+    render = commands.add_parser("render-executor-config")
+    render.add_argument("--plan", required=True, type=pathlib.Path)
+    render.add_argument("--repository-root", required=True, type=pathlib.Path)
+    render.add_argument("--account-id", required=True)
+    render.add_argument("--source-commit", required=True)
+    render.add_argument("--output", required=True, type=pathlib.Path)
     recovery = commands.add_parser("recover")
     recovery.add_argument("--state-root", required=True, type=pathlib.Path)
     recovery.add_argument("--trusted-now", required=True)
@@ -1429,6 +1553,15 @@ def main() -> int:
                 args.output,
                 started_candidate(plan, args.state_root, args.trusted_now),
                 state_canonical_bytes,
+            )
+        elif args.command == "prove-running":
+            plan, _ = _load_canonical(args.plan, "historical private plan")
+            started, _ = _load_state_canonical(
+                args.started_candidate, "started append candidate"
+            )
+            _write(
+                args.output,
+                current_running_proof(plan, started, args.state_root),
             )
         elif args.command == "terminal-candidate":
             plan, _ = _load_canonical(args.plan, "historical private plan")
@@ -1483,6 +1616,17 @@ def main() -> int:
             plan, _ = _load_canonical(args.plan, "historical private plan")
             response, _ = _load_canonical(args.response, "private executor response")
             _write(args.verdict_output, validate_executor_response(response, plan))
+        elif args.command == "render-executor-config":
+            plan, _ = _load_canonical(args.plan, "historical private plan")
+            _write(
+                args.output,
+                render_executor_config(
+                    plan,
+                    args.repository_root,
+                    args.account_id,
+                    args.source_commit,
+                ),
+            )
         else:
             confirmation = (
                 None
