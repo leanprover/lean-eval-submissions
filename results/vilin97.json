@@ -6496,6 +6496,27 @@
         "ref": "716484769b8c37cf13722f679b93fd259403c5bd",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T20:17:41Z",
+      "benchmark_commit": "9627c03f57f7bf01b72f816470e4fc423c4a1f83",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1513,
+        "kind": "issue"
+      },
+      "problem_id": "annals_periodic_tiling_conjecture",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_1133f8c6481b1356a21f84866f9e475cf6640c0a2daa2db433f4ced12b8dc7be",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "7493a3f0c8a8fbb8ae993440e17ebd6846017267",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
