@@ -458,6 +458,29 @@
         "ref": "187a54ad473439fbfdb30663026144e000573136",
         "repo": "mlgraham/lean-eval-pell-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T05:46:47Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1490,
+        "kind": "issue"
+      },
+      "problem_id": "bauer_extreme_point_uniqueness",
+      "production_metadata": {
+        "production_description": "Original proof of bauer_extreme_point_uniqueness. Claude Opus 5 (Claude Code), under human\ndirection, from the Challenge statement, Mathlib source search, and compiler feedback only; no\npublished lean-eval solution consulted.\n\nMethod. The statement is the uniqueness half of Choquet theory: a probability measure carried by a\ncompact convex set K, whose barycenter is an extreme point x of K, must be the Dirac mass at x.\n\nThe proof splits on Mathlib's ae_eq_const_or_exists_average_ne_compl applied to the identity:\neither the identity is a.e. constant under mu, or there is a measurable set t with mu t and mu t^c\nboth nonzero whose two conditional averages differ.\n\n- Non-constant branch: average_mem_openSegment_compl_self places the global barycenter in the\n  open segment between the two conditional averages, and Convex.set_average_mem puts both of them\n  in K (K is closed since it is compact). Extremality of x then forces the two averages to be\n  equal to x, contradicting that they differ.\n- Constant branch: the identity is a.e. equal to x, so mu of the complement of {x} is zero and\n  mu {x} = 1; comparing with Measure.dirac_apply' on an arbitrary measurable set finishes.\n\nIntegrability of the identity is obtained by bounding it on K (compact, hence bounded) and getting\nstrong measurability from aestronglyMeasurable_iff_aemeasurable_separable, using that a compact set\nis separable — the ambient space is a general normed space, so this separability step is needed.\n\nAxioms: propext, Classical.choice, Quot.sound. No sorry. Built against the pinned Mathlib\nrev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1, Lean v4.33.0.",
+        "solution_publication_date": "2026-08-28",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_ca9810f94ecde38cddec4201dada21fd810a0bfc49d0ccffc74d3947978a15cc",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "f119ea6c8c5814360d25b2e3ee567e82a9bdfe1f",
+        "repo": "mlgraham/lean-eval-bauer-submission"
+      }
     }
   ],
   "schema_version": 2,
