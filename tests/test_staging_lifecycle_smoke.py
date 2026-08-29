@@ -108,8 +108,11 @@ class StagingLifecycleSmokeTests(unittest.TestCase):
         self.assertEqual(fixture["schema_version"], 1)
         self.assertEqual(fixture["environment"], "staging")
         source = fixture["source"]
-        self.assertEqual(source["repository"], "kim-em/lean-eval-intake-fixture")
-        self.assertRegex(source["commit"], r"^[0-9a-f]{40}$")
+        self.assertEqual(source["repository"], "leanprover/lean-eval-state-staging")
+        self.assertEqual(source["fixture_branch"], "staging-source-fixture-v1")
+        self.assertEqual(
+            source["commit"], "34357f2f94f39e293b1d2b127b7f298654d39cf7"
+        )
         self.assertEqual(source["owner_login"], "kim-em")
         for case in ("browser_submission", "headless_submission"):
             submission = fixture[case]

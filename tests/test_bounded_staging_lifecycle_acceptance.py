@@ -169,22 +169,22 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         mutation = self.mutation()
         output = io.StringIO()
         phrase = (
-            f"APPROVE GIST {mutation.gist_id}/{mutation.filename}@{mutation.prior_gist_head} AND TAG "
+            f"CONFIRM GIST {mutation.gist_id}/{mutation.filename}@{mutation.prior_gist_head} AND TAG "
             f"{mutation.repository}/refs/tags/{mutation.tag}@{mutation.commit} WITH EXACT CLEANUP"
         )
         with (
             mock.patch("builtins.input", return_value=phrase),
             contextlib.redirect_stdout(output),
         ):
-            self.driver.require_target_bound_approval(mutation)
+            self.driver.require_target_bound_confirmation(mutation)
         self.assertIn(mutation.describe_targets(), output.getvalue())
         self.assertNotIn("signed-secret", output.getvalue())
         with (
             mock.patch("builtins.input", return_value="NO"),
             contextlib.redirect_stdout(io.StringIO()),
-            self.assertRaisesRegex(self.driver.AcceptanceError, "approval"),
+            self.assertRaisesRegex(self.driver.AcceptanceError, "confirmation"),
         ):
-            self.driver.require_target_bound_approval(mutation)
+            self.driver.require_target_bound_confirmation(mutation)
 
     def test_external_404_must_be_exact_and_authenticated(self) -> None:
         def completed(returncode, stdout="", stderr=""):
@@ -450,7 +450,7 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
                         self.driver, "secret_git", side_effect=secret_git
                     ),
                     mock.patch.object(self.driver, "restore_gist", side_effect=restore),
-                    mock.patch.object(self.driver, "require_target_bound_approval"),
+                    mock.patch.object(self.driver, "require_target_bound_confirmation"),
                     contextlib.redirect_stderr(diagnostics),
                     self.assertRaisesRegex(
                         self.driver.AcceptanceError, "lost Gist push response"
@@ -677,7 +677,7 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             ),
             mock.patch.object(self.driver, "gist_cas_write", side_effect=gist_write),
             mock.patch.object(self.driver, "restore_gist", side_effect=gist_restore),
-            mock.patch.object(self.driver, "require_target_bound_approval"),
+            mock.patch.object(self.driver, "require_target_bound_confirmation"),
             contextlib.redirect_stderr(diagnostics),
             self.assertRaisesRegex(self.driver.AcceptanceError, "lost POST"),
         ):
@@ -824,6 +824,20 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
                     "git_pull_url": "https://gist.github.com/" + "a" * 20 + ".git",
                     "history": [{"version": "1" * 40}],
                     "files": {},
+                }
+            if endpoint == "repos/" + self.fixture["source"]["repository"]:
+                return {
+                    "full_name": self.fixture["source"]["repository"],
+                    "private": True,
+                    "default_branch": "main",
+                }
+            if endpoint.endswith(
+                "/branches/" + self.fixture["source"]["fixture_branch"]
+            ):
+                return {
+                    "name": self.fixture["source"]["fixture_branch"],
+                    "protected": False,
+                    "commit": {"sha": self.fixture["source"]["commit"]},
                 }
             if endpoint.endswith("/commits/" + self.fixture["source"]["commit"]):
                 return {"sha": self.fixture["source"]["commit"]}

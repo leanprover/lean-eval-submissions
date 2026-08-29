@@ -2,8 +2,9 @@
   "schema_version": 1,
   "environment": "staging",
   "source": {
-    "repository": "kim-em/lean-eval-intake-fixture",
-    "commit": "c1e504a3acce2da2ee77054ca45e6c251b143545",
+    "repository": "leanprover/lean-eval-state-staging",
+    "fixture_branch": "staging-source-fixture-v1",
+    "commit": "34357f2f94f39e293b1d2b127b7f298654d39cf7",
     "owner_login": "kim-em"
   },
   "browser_submission": {
@@ -40,8 +41,8 @@
     }
   },
   "headless_source_mismatch": {
-    "challenge_source_commit": "c1e504a3acce2da2ee77054ca45e6c251b143545",
-    "submitted_source_commit": "c1e504a3acce2da2ee77054ca45e6c251b143544",
+    "challenge_source_commit": "34357f2f94f39e293b1d2b127b7f298654d39cf7",
+    "submitted_source_commit": "34357f2f94f39e293b1d2b127b7f298654d39cf6",
     "expected_http_status": 401,
     "expected_error": "authentication_failed"
   },

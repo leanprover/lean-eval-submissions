@@ -5,8 +5,8 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "verify-evaluation-app.yml"
-FIXTURE = "kim-em/lean-eval-intake-fixture"
-COMMIT = "ae38f4d3e4ad2991212135435f54e6640bcc89e7"
+FIXTURE = "leanprover/lean-eval-state-staging"
+COMMIT = "34357f2f94f39e293b1d2b127b7f298654d39cf7"
 
 
 class EvaluationAppWorkflowTests(unittest.TestCase):
@@ -31,8 +31,8 @@ class EvaluationAppWorkflowTests(unittest.TestCase):
     def test_uses_the_same_evaluation_app_credentials(self) -> None:
         self.assertIn("secrets.LEAN_EVAL_BOT_CLIENT_ID", self.text)
         self.assertIn("secrets.LEAN_EVAL_BOT_PRIVATE_KEY", self.text)
-        self.assertIn("owner: kim-em", self.text)
-        self.assertIn("repositories: lean-eval-intake-fixture", self.text)
+        self.assertIn("owner: leanprover", self.text)
+        self.assertIn("repositories: lean-eval-state-staging", self.text)
 
     def test_checks_the_fixed_private_fixture_and_commit(self) -> None:
         self.assertGreaterEqual(self.text.count(FIXTURE), 3)

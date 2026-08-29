@@ -80,9 +80,10 @@ not this summary.
 - [x] Prove that each launch gate returns to disabled and public health reports
       the effective state.
 - [ ] Prepare one browser and one source-bound headless staging submission at
-      the exact proposed launch commits. The final headless success requires
-      separate approval to refresh the external fixture's one-time proof and
-      immutable tag.
+      the exact proposed launch commits. Its source commit and one-time tag are
+      confined to a temporary non-default branch in the allowlisted private
+      staging State repository; only the target-bound secret-Gist proof remains
+      outside the repository family.
 - [ ] Complete one exact-version staging lifecycle from archive through State,
       Result, scheduled release, publication-disabled reconstruction, and
       rollback.
