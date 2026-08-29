@@ -2191,6 +2191,384 @@
         "ref": "111a08f63ea9d70fe8b2ce20be673309d3eb128d",
         "repo": "Vilin97/lean-eval-furstenberg-measure"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "annals_algebraic_integers",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_637fff95fe4a502f2f98e0fbe5388010ff28b8434108a38c7af2fae7afe8a697",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "annals_flat_littlewood_poly",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_9d4d1d556e1b474c817d3d57df36e198cb4affda43a93fdc244ed508c4eb669c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "annals_lorentzian_polynomials",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_adb00f3bf9fa303e74ec5a4cbb2266c83cbfc8fb67f2dc57065fefd1a6e78301",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "bezout_projective_multiplicity",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_e95a247a62a1d19e71886290743aab699119d9fdac995bfe9ed60c221c04ab2c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "brun_constant_converges",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_cd5e8ba945dee2b2a591544c4cd89bed96957a662e7f77680604e087fe12b33d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "furstenberg_measure",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_3d4f25310dca1231ddd0f418e83aad963e4a482bdf4e2c109faa40cfb9089aed",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "hadwiger",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_9dc22013e0e1bf3fa579a869c028b2a5d9a5423935e7c4b1d29c27d097e016e4",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "hausdorff_absolute_continuity",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_c9a91659ddc23e84f71fcd864bc73df85b42c4cd779083334fedd7c8730adbc1",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "hausdorff_hildebrandt_schoenberg",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_290cab9afd947b5220f005e4063950bd61cd19f7da9380c28d2ca5d762b5ad71",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "moran_equality_affine",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_0df5ff4b82592323ec891c9cae20ae2ecf49300de12a0c8388a70a4479a05e41",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "morse_inequality",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_e5b0b49e6bd7e74552cf5da9538c709f159ab94856b31a35ebde9779fd380541",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "nonlinear_three_manifold_group",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_494e8fb07241d2d4973cf5007f89c3e44a2e1eb44f9ae93ca147591527449a04",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "pi_succ_sphere_n_mulEquiv_zmod_two",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_cee1d7f5892a9918b13a72361a1fdab7201266ad89c4614c2a35b501a7ffdc1c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "semilinear_poisson_radial_symmetry",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_c066f4ee6f4320be893b8a4c10bbf9f7c9023e8d918fc5e137dc19b8b8b627a6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "strong_mason_conjecture",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_d535a72fc64f6cca99b396a971a34aaf07bfa9b813e1ba24d86ea3db7dc547b5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "sturm_separation",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_9f0ca44dc7b02d22465ce1835f7a82cd3729def58b337b38ec365a4eca00e113",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "trace_cayley_hamilton_newton",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_eb392b758000dae7e6bb16cd66d753a03e6a0c2dd47113981c0274a4687ce3f7",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T05:13:18Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1478,
+        "kind": "issue"
+      },
+      "problem_id": "wiener_atom_detection",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_3720f9b258bcd8529234483432cd88e1f9db9b8fa9ff62f580396ffcd4b33be0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5e9c44d573477700ec20c7ee47c1d938139dde64",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
