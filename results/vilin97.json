@@ -6517,6 +6517,27 @@
         "ref": "7493a3f0c8a8fbb8ae993440e17ebd6846017267",
         "repo": "AxiomMath/lean-eval-submissions-final"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T20:28:41Z",
+      "benchmark_commit": "9627c03f57f7bf01b72f816470e4fc423c4a1f83",
+      "declared_model": "Axiom Prover (Axiom Math)",
+      "intake": {
+        "issue_number": 1512,
+        "kind": "issue"
+      },
+      "problem_id": "annals_van_der_waerden_conjecture",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_067950ce4822145c67f45fe5827422a2211a5e62d85fb21fab0f8f7ecb3fc76d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "1be9084af464d662595205a857f27eefb6e609f5",
+        "repo": "AxiomMath/lean-eval-submissions-final"
+      }
     }
   ],
   "schema_version": 2,
