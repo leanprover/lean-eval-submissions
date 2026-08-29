@@ -892,7 +892,7 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
             (
                 ROOT
                 / "evidence/public-replay/profiles/"
-                "0886d3624de67d0ba1cb00657f66c5f7304743773a024509fceda6ae8f4ff660.json"
+                "7d4027e5022973640bf768facd4ac56762cc327c542c560b5cc34aa59fcd771e.json"
             ).read_text()
         )
 

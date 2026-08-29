@@ -114,15 +114,6 @@ replay, append State, fetch submission source, assume AWS authority, or invoke
 the replay controller. Publishing a plan therefore does not satisfy the corpus
 execution gate.
 
-One qualified execution profile still references the earlier source-free plan
-at
-`evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json`;
-its toolchain-registry input is
-`evidence/public-replay/toolchains/5144fc19bbbbcf0ef16a1d7c88b163254f96a250cb4a5846fbbb0d465ce16790.json`
-and the referencing profile is
-`evidence/public-replay/profiles/0886d3624de67d0ba1cb00657f66c5f7304743773a024509fceda6ae8f4ff660.json`.
-Keep this set only until the final plan has an equivalent qualified profile.
-
 The final source-free plan covers all 128 replayable request groups and 194
 accepted results. It is stored at
 `evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json`;
