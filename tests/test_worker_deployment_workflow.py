@@ -227,6 +227,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "bounded-staging-lifecycle-watchdog.yml",
                 "historical-public-authority-preparation.yml",
                 "historical-public-image-qualification.yml",
+                "historical-private-image-qualification.yml",
                 "historical-public-replay-plan.yml",
                 "historical-public-runner-contract.yml",
                 "historical-replay-inventory.yml",

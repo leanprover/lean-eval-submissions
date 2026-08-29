@@ -63,18 +63,53 @@ jobs:
           test "$APPLY_CONFIRMATION" = publish-and-qualify-one-private-image
           [[ "$BENCHMARK_COMMIT" =~ ^[0-9a-f]{40}$ ]]
           test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
-          test "$GITHUB_REF" = refs/heads/main
-          test "$GITHUB_REF_PROTECTED" = true
+          test "$GITHUB_REF_TYPE" = tag
           [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
-          branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
-            --jq '[.commit.sha, .protected] | @tsv')
-          test "$branch" = "$GITHUB_SHA"$'\ttrue'
+          test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$GITHUB_SHA"
+          mapfile -t tag_lines < <(timeout 30s git ls-remote \
+            https://github.com/leanprover/lean-eval-submissions.git \
+            "$GITHUB_REF" "$GITHUB_REF^{}")
+          test "${#tag_lines[@]}" -ge 1
+          test "${#tag_lines[@]}" -le 2
+          tag_object=""
+          remote_commit=""
+          for line in "${tag_lines[@]}"; do
+            read -r object ref extra <<< "$line"
+            test -z "${extra:-}"
+            [[ "$object" =~ ^[0-9a-f]{40}$ ]]
+            if [ "$ref" = "$GITHUB_REF" ]; then
+              test -z "$tag_object"
+              tag_object="$object"
+            elif [ "$ref" = "$GITHUB_REF^{}" ]; then
+              test -z "$remote_commit"
+              remote_commit="$object"
+            else
+              exit 1
+            fi
+          done
+          test -n "$tag_object"
+          if [ -z "$remote_commit" ]; then remote_commit="$tag_object"; fi
+          test "$remote_commit" = "$GITHUB_SHA"
 
       # actions/checkout pinned to v7.0.1.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Prove the immutable source remains on protected main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.commit.sha, .protected] | @tsv')
+          read -r main_commit protected extra <<< "$branch"
+          test -z "${extra:-}"
+          [[ "$main_commit" =~ ^[0-9a-f]{40}$ ]]
+          test "$protected" = true
+          git fetch --no-tags origin "$main_commit"
+          git merge-base --is-ancestor "$GITHUB_SHA" "$main_commit"
 
       # actions/setup-node pinned to v6.5.0.
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
@@ -188,7 +223,12 @@ jobs:
               "$RUNNER_TEMP/registry-images.json")" = 0
             branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
               --jq '[.commit.sha, .protected] | @tsv')
-            test "$branch" = "$GITHUB_SHA"$'\ttrue'
+            read -r main_commit protected extra <<< "$branch"
+            test -z "${extra:-}"
+            [[ "$main_commit" =~ ^[0-9a-f]{40}$ ]]
+            test "$protected" = true
+            git fetch --no-tags origin "$main_commit"
+            git merge-base --is-ancestor "$GITHUB_SHA" "$main_commit"
             npx --prefix server wrangler containers push "$IMAGE"
             curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
               --max-time 30 --netrc-file "$RUNNER_TEMP/registry-netrc" \
