@@ -21,6 +21,20 @@ class ProductionCapabilitiesDisabledTests(unittest.TestCase):
         cls.replay = json.loads(
             (ROOT / verifier.REPLAY_PATH).read_text(encoding="utf-8")
         )
+        # This utility validates an immutable pre-launch rollback candidate;
+        # do not couple its fixtures to the current production launch state.
+        cls.intake["env"]["production"]["vars"].update(
+            verifier.INTAKE_CAPABILITIES
+        )
+        cls.intake["env"]["production"]["vars"].update(
+            {
+                "RESULT_AMENDMENT_MAINTAINERS": "[]",
+                "MODEL_IDENTITY_MAINTAINERS": "[]",
+            }
+        )
+        cls.replay["env"]["production"]["vars"].update(
+            verifier.REPLAY_CAPABILITIES
+        )
 
     def test_accepts_exact_disabled_production_without_restricting_staging(
         self,

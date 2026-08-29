@@ -242,6 +242,11 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "replay": "wrangler.replay.jsonc",
             }.items()
         }
+        # These fixtures model an emergency rollback target, independently of
+        # the capabilities enabled in the repository's current launch config.
+        self.configs["intake"]["env"]["production"]["vars"].update(
+            rollback.DISABLED_LAUNCH_GATE_BINDINGS
+        )
         self.paths: dict[str, pathlib.Path] = {}
         for name, config in self.configs.items():
             path = self.directory / f"{name}-config.json"

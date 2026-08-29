@@ -90,9 +90,11 @@ class WorkerLifecycleConfigurationTests(unittest.TestCase):
                 configuration("enabled"),
             )
             for candidate in cases:
-                with self.subTest(candidate=candidate):
-                    with self.assertRaises(LifecycleConfigurationError):
-                        read_lifecycle_state(self.write(root, candidate), "production")
+                with (
+                    self.subTest(candidate=candidate),
+                    self.assertRaises(LifecycleConfigurationError),
+                ):
+                    read_lifecycle_state(self.write(root, candidate), "production")
 
     def test_rejects_duplicate_keys_nonstandard_numbers_and_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
