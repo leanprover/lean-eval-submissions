@@ -17,12 +17,12 @@ Protected `main` commits at the packet baseline:
 
 | Repository | Commit |
 | --- | --- |
-| `leanprover/lean-eval` | `9625d5f290ca70c293ed73e8ea91fd40e61480e2` |
-| `leanprover/lean-eval-submissions` | `81e94fe2f4fc819300fd7d4e036f00124166784f` |
+| `leanprover/lean-eval` | `b2ab737034602afcb29958edc280e464487e27ea` |
+| `leanprover/lean-eval-submissions` | `73b12756c77d4cffe81ddabed6d82aff8bb271c6` |
 | `leanprover/lean-eval-leaderboard` | `bf534c149e204a286a5cd9bbaff449449567834b` |
 | `leanprover/lean-eval-state` | `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` |
-| `leanprover/lean-eval-state-staging` | `ee990a23e9ba29b7fbb7b03b0fe5b0f490c796aa` |
-| `leanprover/lean-eval-releases` | `071a52e2095d47ae4684ee983a7e08520f3c808a` |
+| `leanprover/lean-eval-state-staging` | `3d51ef89062ea2b1a27b57cf0557e18bcb00ab6b` |
+| `leanprover/lean-eval-releases` | `4f3d4cdd11d41e93294ba7821899923375ba360f` |
 | `leanprover/lean-eval-generator` | `010b01634cccda2db538cf9b09e6f26ddc453743` |
 | `leanprover/lean-eval-audit` | `eadf24b2b4a99c56ef59a43811eab9d54ae013ac` |
 
@@ -61,7 +61,7 @@ that order, verifying each readback before proceeding.
 | Disabled baseline | Production intake, general replay, historical-public replay, every public lifecycle family, model consolidation, and the promotion canary are effectively disabled. Production State validates at `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` with 469 immutable events and an empty release queue. The public leaderboard retains stable problem pages and visible statements. |
 | Archive boundary | Schema-version-3 archive-before-evaluation is deployed. Production archive authority is connected to the Encrypt-only Wrap role and has a qualified decrypt denial. The evaluation lane has no Wrap or unwrap authority. |
 | Staging release boundary | Qualified: exact one-submission scope, consume-before-unwrap, identical reuse refusal, authority removal before reconstruction, source allowlisting, no plaintext artifact, no State/Git mutation, and cleanup. Publication and production authority remained absent. |
-| Production release preflight | **PENDING:** repair the exact ID-bearing `release-production` OIDC trust, read it back, and pass the publication-disabled trust-only preflight. Do not decrypt or publish a production archive. |
+| Production release preflight | Controller State-write and audit-read credential preflights pass at release commit `4f3d4cdd11d41e93294ba7821899923375ba360f`, with publication absent and no due work. **PENDING:** repair the exact ID-bearing `release-production` OIDC trust, read it back, and pass the publication-disabled trust-only preflight. Do not decrypt or publish a production archive. |
 | Entry and submitter UI | `https://lean-lang.org/eval/submit/` and the production Worker application are live in disabled posture. The entry page states the policy and links to the Worker origin; the Worker supplies OAuth feedback, preserved form values, progress spinners, status, and visible opt-out UI when enabled. |
 | Exact-version staging | **PENDING:** record the successful browser and source-bound submissions, denial cases, archive/Result/State/scheduling checks, publication-disabled reconstruction, redaction checks, all-false rollback, and validated final staging State in section 9. |
 
