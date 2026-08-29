@@ -2,11 +2,15 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import io
 import json
 import pathlib
+import runpy
 import sys
 import tempfile
 import unittest
+import urllib.error
+from unittest import mock
 
 import jsonschema
 from referencing import Registry, Resource
@@ -21,6 +25,7 @@ from replay_orchestrator import config_digest
 MATRIX = ROOT / "configuration/historical-private-replay-image-matrix-v1.json"
 SCHEMA = ROOT / "schemas/historical-private-profile-qualification-v1.schema.json"
 WORKFLOW = ROOT / ".github/workflows/historical-private-image-qualification.yml"
+PROBE = runpy.run_path(ROOT / "scripts/run_historical_private_cloudflare_probe")
 
 
 class HistoricalPrivateImageQualificationTests(unittest.TestCase):
@@ -291,6 +296,71 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
                 request["request"]["network"]["untrusted_execution_phase"],
                 "disabled",
             )
+
+    def test_probe_health_retries_only_transient_readiness_failures(self) -> None:
+        commit = "1" * 40
+        unavailable = urllib.error.HTTPError(
+            "https://qualifier.example/healthz", 404, "not ready", {}, None
+        )
+        ready = io.BytesIO(
+            canonical(
+                {
+                    "status": "ok",
+                    "environment": "private-qualification",
+                    "deployed_commit": commit,
+                    "replay_enabled": True,
+                }
+            )
+        )
+        with (
+            mock.patch.object(
+                PROBE["urllib"].request,
+                "urlopen",
+                side_effect=[unavailable, ready],
+            ) as urlopen,
+            mock.patch.object(PROBE["time"], "sleep") as sleep,
+        ):
+            PROBE["_health"]("https://qualifier.example", commit)
+        self.assertEqual(urlopen.call_count, 2)
+        sleep.assert_called_once_with(PROBE["HEALTH_RETRY_SECONDS"])
+
+    def test_probe_health_fails_after_its_bounded_attempts(self) -> None:
+        errors = [
+            urllib.error.HTTPError(
+                "https://qualifier.example/healthz", 404, "not ready", {}, None
+            )
+            for _ in range(PROBE["HEALTH_ATTEMPTS"])
+        ]
+        with (
+            mock.patch.object(PROBE["urllib"].request, "urlopen", side_effect=errors),
+            mock.patch.object(PROBE["time"], "sleep") as sleep,
+            self.assertRaisesRegex(
+                qualification.QualificationError, "health check failed"
+            ),
+        ):
+            PROBE["_health"]("https://qualifier.example", "1" * 40)
+        self.assertEqual(sleep.call_count, PROBE["HEALTH_ATTEMPTS"] - 1)
+
+    def test_probe_health_does_not_retry_an_identity_mismatch(self) -> None:
+        wrong = io.BytesIO(
+            canonical(
+                {
+                    "status": "ok",
+                    "environment": "private-qualification",
+                    "deployed_commit": "2" * 40,
+                    "replay_enabled": True,
+                }
+            )
+        )
+        with (
+            mock.patch.object(PROBE["urllib"].request, "urlopen", return_value=wrong),
+            mock.patch.object(PROBE["time"], "sleep") as sleep,
+            self.assertRaisesRegex(
+                qualification.QualificationError, "health identity is invalid"
+            ),
+        ):
+            PROBE["_health"]("https://qualifier.example", "1" * 40)
+        sleep.assert_not_called()
 
     def test_workflow_is_manual_single_entry_and_disposable(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")
