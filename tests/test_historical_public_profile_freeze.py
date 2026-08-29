@@ -7,15 +7,13 @@ import unittest
 
 from scripts.historical_replay_controller import validate_qualification
 
-
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 MATRIX_PATH = ROOT / "configuration/historical-public-replay-profile-matrix-v1.json"
 PROFILE_DIRECTORY = ROOT / "evidence/public-replay/profiles"
-MISSING_BENCHMARK_COMMIT = "9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66"
 
 
 class HistoricalPublicProfileFreezeTests(unittest.TestCase):
-    def test_current_matrix_has_exactly_34_frozen_profiles(self) -> None:
+    def test_current_matrix_has_exactly_35_frozen_profiles(self) -> None:
         matrix_raw = MATRIX_PATH.read_bytes()
         matrix = json.loads(matrix_raw)
         matrix_sha256 = hashlib.sha256(matrix_raw).hexdigest()
@@ -46,8 +44,8 @@ class HistoricalPublicProfileFreezeTests(unittest.TestCase):
                     self.assertEqual(execution_profile[field], expected)
             profiles[commit] = path
 
-        self.assertEqual(len(profiles), 34)
-        self.assertEqual(set(entries) - set(profiles), {MISSING_BENCHMARK_COMMIT})
+        self.assertEqual(len(profiles), 35)
+        self.assertEqual(set(entries), set(profiles))
 
 
 if __name__ == "__main__":

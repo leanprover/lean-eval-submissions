@@ -32,10 +32,9 @@ The committed matrix has SHA-256
 It binds final plan `d6e81393…`, toolchain registry `4f2f3737…`, and component
 lock `68b5a58c…`; all 35 entries remain explicitly `unqualified`.
 
-Thirty-four current-matrix qualification objects are frozen under
-`evidence/public-replay/profiles/`. Benchmark
-`9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66` remains unqualified and requires
-separate exact Cloudflare approval for its source-free isolated staging probe.
+All thirty-five current-matrix qualification objects are frozen under
+`evidence/public-replay/profiles/`. Appending State qualification and enqueue
+events remains a separate authorization boundary.
 
 ## Qualification boundary
 
