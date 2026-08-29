@@ -412,6 +412,29 @@
         "ref": "b4ffbe305ecf9b023f629a5099019cd8be8a9d7c",
         "repo": "mlgraham/lean-eval-minkowski-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T05:23:37Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1488,
+        "kind": "issue"
+      },
+      "problem_id": "normal_spectral_theorem",
+      "production_metadata": {
+        "production_description": "Original proof of normal_spectral_theorem. Claude Opus 5 (Claude Code), under human direction,\nfrom the Challenge statement, Mathlib source search, and compiler feedback only; no published\nlean-eval solution consulted.\n\nMethod. Mathlib has the Hermitian spectral theorem (Matrix.IsHermitian.spectral_theorem) but no\nSchur triangulation, so the usual \"unitarily triangularise, then normal + upper triangular implies\ndiagonal\" route is unavailable. This submission avoids triangulation entirely:\n\n- write A = H + i*K with H = (A + Aᴴ)/2 and K = -(i/2)*(A - Aᴴ), both Hermitian;\n- IsStarNormal A is equivalent to Commute H K (the evenness of the cross terms is exactly\n  Aᴴ * A = A * Aᴴ);\n- transport to operators on EuclideanSpace and apply Mathlib's simultaneous diagonalisation of\n  commuting symmetric operators, LinearMap.IsSymmetric.directSum_isInternal_of_commute, together\n  with orthogonalFamily_eigenspace_inf_eigenspace;\n- DirectSum.IsInternal.subordinateOrthonormalBasis then yields an orthonormal basis of joint\n  eigenvectors of H and K, which are eigenvectors of A with eigenvalue mu + i*nu.\n\nOne wrinkle worth recording: subordinateOrthonormalBasis needs a Fintype index, and Mathlib's\njoint-eigenspace family is indexed by the whole of C x C. The index is cut down to\nModule.End.Eigenvalues H x Module.End.Eigenvalues K, which is finite for free, and the supremum\nover that finite index is still the whole space because a joint eigenspace for a non-eigenvalue is\ntrivial.\n\nThe unitary is then built as in Mathlib's Hermitian case (change-of-basis matrix against\nEuclideanSpace.basisFun, unitary by OrthonormalBasis.toMatrix_orthonormalBasis_mem_unitary), and\nA * U = U * diagonal d is checked entrywise. The converse direction is a short computation using\nthat diagonal matrices commute with their stars.\n\nAxioms: propext, Classical.choice, Quot.sound. No sorry. Built against the pinned Mathlib\nrev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1, Lean v4.33.0.",
+        "solution_publication_date": "2026-08-28",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_02f15bcf9c3b7db91522eca93d4d332e6935c1e0734ba6ceeef3db01492f04e5",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "e92fe28a523f53675c4b820492750b6203970921",
+        "repo": "mlgraham/lean-eval-normal-spectral-submission"
+      }
     }
   ],
   "schema_version": 2,
