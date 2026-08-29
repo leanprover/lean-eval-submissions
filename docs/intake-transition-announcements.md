@@ -43,7 +43,8 @@ Ready-to-edit announcement:
 
 Publish the dated repository notice under standing authorization. Obtain exact
 maintainer approval before posting the same notice in the LeanEval Zulip topic.
-Keep both links and the timestamp with the transition checklist.
+A Zulip copy is optional; it is not a launch, overlap, notice, or closure gate.
+Keep the repository link and timestamp with the transition checklist.
 
 ## Issue-intake closure gate
 
@@ -54,13 +55,13 @@ server enabled at: <UTC timestamp>
 planned overlap end: <UTC timestamp>
 selected closure date: <UTC timestamp>
 unresolved severity-high server incidents: <zero or blocking links>
-five most active submitters in preceding 60 days: <private operator record>
-their server submission or no-dependency confirmation: <5/5 evidence summary>
 server-path share in final 14 days: <count>/<total> = <percent>
-fewer than ten submissions, if applicable: <manual assessment link or N/A>
+adequate-adoption assessment: <reviewed link and concise rationale>
+stable archive/evaluation/State/release/leaderboard assessment: <reviewed link>
+final historical cutoff and append-only delta: <commit and digest>
 repository announcement published at: <UTC timestamp and link>
-Zulip announcement published at: <UTC timestamp and link>
-both announcements at least two weeks old: <yes/no>
+public closure notice published at: <UTC timestamp and link>
+closure notice at least two weeks old: <yes/no>
 standing authorization: <completion-plan section 11 link>
 issue-retirement readiness packet: <reviewed link>
 ```
@@ -69,13 +70,13 @@ Closure is allowed only when all of the following are true:
 
 1. at least four weeks have elapsed;
 2. no severity-high server incident remains unresolved;
-3. each of the five most active submitters from the preceding 60 days has made
-   a server-path submission or explicitly confirmed no migration dependency;
-4. at least 90% of submissions in the final 14 days used the server when that
-   window contains at least ten submissions; otherwise a maintainer has
-   recorded a manual adoption assessment; and
-5. the transition has been announced on Zulip and in repository documentation
-   for at least two weeks.
+3. server intake, archive, evaluation, release scheduling, and leaderboard
+   presentation are stable;
+4. a maintainer has reviewed current server/issue submission counts and
+   recorded that adoption is adequate to remove issue intake;
+5. the final historical cutoff and append-only delta are recorded; and
+6. a public repository closure notice has been available for at least two
+   weeks.
 
 Ready-to-edit closure announcement:
 
