@@ -194,16 +194,19 @@ jobs:
               "$RUNNER_TEMP/registry-images.json" \
               "$RUNNER_TEMP/registry-netrc"
           }
+          refresh_registry_credentials() {
+            timeout 60s npx --prefix server wrangler containers registries credentials \
+              registry.cloudflare.com --pull --expiration-minutes 5 --json \
+              > "$RUNNER_TEMP/registry-credentials.json"
+            registry_username=$(jq -er .username "$RUNNER_TEMP/registry-credentials.json")
+            registry_password=$(jq -er .password "$RUNNER_TEMP/registry-credentials.json")
+            echo "::add-mask::$registry_username"
+            echo "::add-mask::$registry_password"
+            printf 'machine registry.cloudflare.com login %s password %s\n' \
+              "$registry_username" "$registry_password" > "$RUNNER_TEMP/registry-netrc"
+          }
           trap cleanup EXIT
-          timeout 60s npx --prefix server wrangler containers registries credentials \
-            registry.cloudflare.com --pull --expiration-minutes 5 --json \
-            > "$RUNNER_TEMP/registry-credentials.json"
-          registry_username=$(jq -er .username "$RUNNER_TEMP/registry-credentials.json")
-          registry_password=$(jq -er .password "$RUNNER_TEMP/registry-credentials.json")
-          echo "::add-mask::$registry_username"
-          echo "::add-mask::$registry_password"
-          printf 'machine registry.cloudflare.com login %s password %s\n' \
-            "$registry_username" "$registry_password" > "$RUNNER_TEMP/registry-netrc"
+          refresh_registry_credentials
           npx --prefix server wrangler containers images list \
             --filter "^$IMAGE_REPOSITORY$" --json \
             > "$RUNNER_TEMP/registry-images.json"
@@ -230,12 +233,16 @@ jobs:
             git fetch --no-tags origin "$main_commit"
             git merge-base --is-ancestor "$GITHUB_SHA" "$main_commit"
             npx --prefix server wrangler containers push "$IMAGE"
-            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
-              --max-time 30 --netrc-file "$RUNNER_TEMP/registry-netrc" \
-              --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
-              "$manifest_url" --dump-header "$RUNNER_TEMP/registry-headers" \
-              --output "$RUNNER_TEMP/registry-manifest.json"
           fi
+          # A large first publication may outlive the five-minute pull
+          # credential used for the create-only preflight.  Refresh it before
+          # the definitive immutable-manifest and config reads.
+          refresh_registry_credentials
+          curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+            --max-time 30 --netrc-file "$RUNNER_TEMP/registry-netrc" \
+            --header 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+            "$manifest_url" --dump-header "$RUNNER_TEMP/registry-headers" \
+            --output "$RUNNER_TEMP/registry-manifest.json"
           image_digest=$(sed -n 's/^[Dd]ocker-[Cc]ontent-[Dd]igest:[[:space:]]*\(sha256:[0-9a-f]\{64\}\)[[:space:]\r]*$/\1/p' \
             "$RUNNER_TEMP/registry-headers")
           [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]

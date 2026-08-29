@@ -340,6 +340,18 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
         )
         self.assertIn("validate-registry-image", workflow)
         self.assertIn("Exact immutable tag exists; verifying it", workflow)
+        publication = workflow.split(
+            "- name: Publish once and resolve the immutable registry digest", 1
+        )[1].split("- name: Prepare one synthetic schema-v2 file-key probe", 1)[0]
+        self.assertEqual(publication.count("refresh_registry_credentials"), 3)
+        self.assertLess(
+            publication.index('npx --prefix server wrangler containers push "$IMAGE"'),
+            publication.rindex("refresh_registry_credentials"),
+        )
+        self.assertLess(
+            publication.rindex("refresh_registry_credentials"),
+            publication.rindex('"$manifest_url" --dump-header'),
+        )
         self.assertNotIn(
             "immutable registry tag already exists; refusing overwrite", workflow
         )
