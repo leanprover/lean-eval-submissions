@@ -481,6 +481,29 @@
         "ref": "f119ea6c8c5814360d25b2e3ee567e82a9bdfe1f",
         "repo": "mlgraham/lean-eval-bauer-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T06:25:12Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1492,
+        "kind": "issue"
+      },
+      "problem_id": "peano_existence",
+      "production_metadata": {
+        "production_description": "Original proof of peano_existence. Claude Opus 5 (Claude Code), under human direction, from the\nChallenge statement, Mathlib source search, and compiler feedback only; no published lean-eval\nsolution consulted.\n\nMethod. Mathlib has Picard-Lindelof (which needs a Lipschitz field), Arzela-Ascoli, and — the piece\nthat makes this tractable — smooth approximation of continuous maps\n(Continuous.exists_contDiff_dist_le_of_forall_mem_ball_dist_le in\nAnalysis/Calculus/BumpFunction/SmoothApprox.lean), which performs the mollification and installs the\nBorel/Haar structure internally, so no measure structure has to be assumed on E. The proof is the\nclassical approximation argument:\n\n1. Bound f by M on the closed unit ball around x0 and set L = M + 1, T = 1/(2L).\n2. For each n take a smooth g_n with sup-error at most 1/(n+1) on that ball, so ‖g_n‖ ≤ L there.\n3. Solve x' = g_n(x) exactly on the FIXED interval [-T, T]. This is the crux: the time interval in\n   IsPicardLindelof is constrained only by mul_max_le, i.e. by the sup bound L, never by the\n   Lipschitz constant — which is what keeps the interval from shrinking as the approximations get\n   rougher. A ContDiffBump cutoff is applied first so the bound is global, which turns the a priori\n   estimate ‖α(t) − x0‖ ≤ L|t| ≤ 1/2 into one application of the mean value inequality instead of a\n   bootstrap, and simultaneously gives the uniform Lipschitz bound needed for equicontinuity.\n4. Arzela-Ascoli (arzela_ascoli₂, over bounded continuous functions on the compact subtype [-T,T],\n   with the limit transported back to ℝ by Set.IccExtend) yields a uniformly convergent subsequence.\n5. Pass to the limit in the integral equation. The integrands converge uniformly because\n   ‖g_n(β_n s) − f(v s)‖ splits into the approximation error 1/(n+1) plus the modulus of continuity\n   of f on the compact ball.\n6. Differentiate back with intervalIntegral.integral_hasDerivAt_right. The differential-to-integral\n   step is done on the open interval, where HasDerivWithinAt on Icc upgrades to a genuine HasDerivAt\n   and uIcc 0 t stays inside.\n\nAxioms: propext, Classical.choice, Quot.sound. No sorry. Built against the pinned Mathlib\nrev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1, Lean v4.33.0.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_f505ebf9abdb433ee60783bbf6ec4abd062af7f1742cb39c69ba3e160a080b02",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "8256429c4f5f4cb673e00fcfa6528a102ad390a4",
+        "repo": "mlgraham/lean-eval-peano-submission"
+      }
     }
   ],
   "schema_version": 2,
