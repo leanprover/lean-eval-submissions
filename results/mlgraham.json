@@ -986,6 +986,29 @@
         "ref": "5b8eb6a5f09947e1c124bf83e4fd8360dd9a2723",
         "repo": "mlgraham/lean-eval-pi1-circle-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T10:20:56Z",
+      "benchmark_commit": "9627c03f57f7bf01b72f816470e4fc423c4a1f83",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1508,
+        "kind": "issue"
+      },
+      "problem_id": "lidskii_last",
+      "production_metadata": {
+        "production_description": "Original proof of lidskii_last. Claude Opus 5 (Claude Code), under human direction, from the\nChallenge statement, Mathlib source search, and compiler feedback only; no published lean-eval\nsolution consulted.\n\nMethod. Two observations set the shape of the proof.\n\n**The inequality is tight, so nothing crude survives.** `A = I`, `B = 0` gives equality, which\nrules out `∑ⱼ |λⱼ(A) − λⱼ(B)| ≤ n·‖A−B‖_op ≤ n·∑|Mᵢⱼ|` and every other estimate carrying a\ndimension factor. What is needed is exactly the trace-norm-level bound.\n\n**But the full Lidskii majorization is not needed.** Write `M = A − B = P − N` with `P` and `N` the\npositive and negative parts of its spectral decomposition. Then the path\n\n    B  →  B + P  →  B + P − N = A\n\nhas only **two** steps, and on each of them the perturbation is positive semidefinite, so Weyl\nmonotonicity makes *every* eigenvalue move in the same direction. A sum of absolute differences in\nwhich all the signs agree telescopes to a difference of traces:\n\n    ∑ⱼ |λⱼ(A) − λⱼ(B)| ≤ (tr C − tr A) + (tr C − tr B) = tr N + tr P = ∑ᵢ |μᵢ|.\n\nNo majorization theory, no Hardy–Littlewood–Pólya, no Ky Fan — just the triangle inequality applied\nonce. (This is why the sibling problem `lidskii_inequality`, with its exponent `p`, is genuinely\nharder: for `p ≠ 1` the telescoping does not happen and the majorization is unavoidable.)\n\nThat reduces everything to **Weyl monotonicity**, and Mathlib has no Courant–Fischer / min-max, so\nthe variational characterisation is proved here at the level of a symmetric operator (more general\nthan the matrix statement, and upstreamable):\n\n- `qf_eq_sum` : `⟪Tx, x⟫ = ∑ᵢ λᵢ ‖repr x i‖²`, from `repr (T x) i = λᵢ · repr x i`, itself a\n  three-line consequence of symmetry.\n- `le_eigenvalue_of_forall_mem` : the *min* half of Courant–Fischer. A subspace `V` of dimension\n  `j+1` on which the form is `≥ t` forces `t ≤ λⱼ`, because `V` and the span of the eigenvectors\n  indexed `j …  n−1` have dimensions summing to `n+1`, so they meet in a nonzero vector, and on\n  that span the form is `≤ λⱼ‖x‖²`.\n- `eigenvalues_mono` : hence a form-monotone pair of symmetric operators has monotone sorted\n  eigenvalues; `eigenvalues₀_mono` transfers this to Hermitian matrices through\n  `Matrix.toEuclideanLin`.\n\nThe entrywise step is elementary and needs no operator norms:\n`|μᵢ| = |(U* M U)ᵢᵢ|` expands to `|∑ⱼ∑ₖ conj(Uⱼᵢ) Mⱼₖ Uₖᵢ|`, and summing over `i` factors out\n`∑ᵢ |Uⱼᵢ||Uₖᵢ| ≤ 1`, which is Cauchy–Schwarz against rows of a unitary matrix having unit `ℓ²`\nnorm.\n\nTwo Mathlib facts worth flagging for anyone rebuilding this: `Matrix.PosSemidef` is stated over\n`n →₀ R` (finitely supported), so `posSemidef_iff_dotProduct_mulVec` is the usable form for a\n`Fintype`; and `RCLike.ofReal` and `Complex.ofReal` are definitionally equal but not syntactically\nequal, so `rw` fails against `spectral_theorem`'s `diagonal (RCLike.ofReal ∘ eigenvalues)` where a\n`show` succeeds.\n\n381 lines of helpers, one line of assembly. Zero `sorry`; `#print axioms` gives exactly propext,\nClassical.choice, Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_9ba0fb6042da07ac2127bb51025b10f5abdef2e29110867915d93a48ca017f36",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "467865288b9728af287a31de53733f8819e33e76",
+        "repo": "mlgraham/lean-eval-lidskii-submission"
+      }
     }
   ],
   "schema_version": 2,
