@@ -1055,6 +1055,29 @@
         "ref": "fe0cd09d9c343e847249ca3cf7bd156eee7a850e",
         "repo": "mlgraham/lean-eval-nyquist-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T10:34:12Z",
+      "benchmark_commit": "9627c03f57f7bf01b72f816470e4fc423c4a1f83",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1509,
+        "kind": "issue"
+      },
+      "problem_id": "irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius",
+      "production_metadata": {
+        "production_description": "Original proof of irreducible_nonnegative_matrix_has_positive_eigenvector_at_spectralRadius.\nClaude Opus 5 (Claude Code), under human direction, from the Challenge statement, Mathlib source\nsearch, and compiler feedback only; no published lean-eval solution consulted.\n\nMethod. Mathlib already supplies the combinatorial half — `Matrix.IsIrreducible` and\n`isIrreducible_iff_exists_pow_pos` — so all the work is analytic, and the shape of the proof is\nchosen to keep it elementary.\n\n**Collatz–Wielandt without any continuity of a minimum.** The textbook route maximises\n`x ↦ minᵢ (Ax)ᵢ/xᵢ`, which is not continuous where a coordinate vanishes and forces a detour\nthrough upper semicontinuity or through a restricted positive cone. Instead, take\n\n    r := sSup {s | ∃ x ∈ Δ, ∀ i, s·xᵢ ≤ (Ax)ᵢ}\n\nrealised as `Prod.fst '' K`, where `K ⊆ [0, M] × Δ` is the set of admissible *pairs*. `K` is\ncompact — the constraint `s·xᵢ ≤ (Ax)ᵢ` is closed, and `M := ∑ᵢⱼ |Aᵢⱼ|` bounds `s` because\nsumming the constraints over `i` against `∑ xᵢ = 1` gives `s ≤ M`. So `IsCompact.sSup_mem`\ndelivers attainment directly, with no semicontinuity argument and no maximising sequence.\n\n**The strictly positive smoothing matrix.** Irreducibility gives, for each `(i,j)`, some `k` with\n`(Aᵏ)ᵢⱼ > 0`; taking `N` to be the maximum over the finitely many pairs and using the entrywise\nbound `Aᵏ ≤ (1+A)ᴺ` for `k ≤ N` (a short induction — no binomial theorem needed) yields\n`B := (1+A)ᴺ` with **every** entry positive.\n\n**The improvement step.** `B` is a polynomial in `A`, so `B(Ay) = A(By)`, and `B` is nonnegative,\nso `Ay ≥ ry` transports to `A(By) ≥ r(By)`. Normalise `z := By/‖By‖₁ ∈ Δ`, which is strictly\npositive. If `Az - rz` were nonzero it would be nonnegative and nonzero, so `B(Az - rz)` is\nstrictly positive in *every* coordinate; that is `A(Bz) - r(Bz) > 0` entrywise, and taking\n`ε := minᵢ ((Av')ᵢ - r·v'ᵢ)/v'ᵢ > 0` for the normalised `v'` exhibits `r + ε` as admissible,\ncontradicting `r = sSup`. Hence `Az = rz` with `z > 0`.\n\n**Identifying `r` with the spectral radius.** Two inclusions. `r` is an eigenvalue, so\n`r ∈ spectrum ℝ A` (`Matrix.spectrum_toLin'` plus `hasEigenvalue_iff_mem_spectrum`). Conversely a\nreal eigenvalue `λ` with eigenvector `u` satisfies, entrywise,\n`(A|u|)ᵢ = ∑ⱼ Aᵢⱼ|uⱼ| ≥ |∑ⱼ Aᵢⱼuⱼ| = |λ||uᵢ|`, so `|u|` normalised is admissible and `|λ| ≤ r`.\nTogether these give `spectralRadius ℝ A = ↑(Real.toNNReal r)`, hence `.toReal = r`.\n\n401 lines of helpers, one line of assembly. Zero `sorry`; `#print axioms` gives exactly propext,\nClassical.choice, Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_32ca55e3901bdf92667d648bd4d9fa3d85bfc832c0722b64c895f8397b2d2228",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "246646cab0b4dd69b63163966e12b7fe8696c8c9",
+        "repo": "mlgraham/lean-eval-perron-submission"
+      }
     }
   ],
   "schema_version": 2,
