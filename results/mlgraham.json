@@ -572,6 +572,29 @@
         "ref": "a8f0a4dea5b32665c6c119c267e3be292cc70d2d",
         "repo": "mlgraham/lean-eval-rising-sun-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T07:21:22Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1497,
+        "kind": "issue"
+      },
+      "problem_id": "wiener_atom_detection",
+      "production_metadata": {
+        "production_description": "Original proof of wiener_atom_detection. Claude Opus 5 (Claude Code), under human direction, from\nthe Challenge statement, Mathlib source search, and compiler feedback only; no published lean-eval\nsolution consulted.\n\nMethod. Writing mu-hat_k times its conjugate as an iterated integral turns the Cesaro average into\nthe double integral of the kernel K_N(t) = (1/N) sum_{k=1}^N fourier k t, and the theorem follows\nfrom the behaviour of that kernel.\n\n1. Kernel. K_N is bounded by 1 for every N (including N = 0, where it is 0), equals 1 at the\n   identity, and tends to 0 elsewhere. The last point is a geometric sum: characters are powers of\n   the single unit-modulus number toCircle t, and t nonzero gives toCircle t <> 1 by\n   AddCircle.injective_toCircle, so the partial sums stay bounded by 2 / |z - 1| while the 1/N\n   factor kills them.\n2. Cesaro bridge. fourier k (x - y) = fourier k x * conj (fourier k y) gives\n   mu-hat_k * conj(mu-hat_k) = int int fourier k (x - y), and pleasingly this needs no integrability\n   hypotheses at all — integral_const_mul and integral_conj hold unconditionally for Bochner\n   integrals. Summing and dividing gives that the double integral of K_N is exactly the real number\n   (1/N) sum |mu-hat_k|^2.\n3. Two dominated convergences, not a product measure. For fixed y the inner integral tends to\n   mu({y}), the pointwise limit of K_N(x - y) being the indicator of the diagonal; then the outer\n   integral tends to int mu({y}) dmu(y). Measurability for the outer step comes free by putting the\n   inner integral in closed form, (N)^{-1} sum mu-hat_k conj(fourier k y), which is visibly\n   continuous in y.\n4. Diagonal mass. The atoms form a countable set (countable_meas_pos_of_disjoint_iUnion applied to\n   singletons). The subtle point is that y -> mu({y}) is not obviously measurable; it is, because it\n   vanishes off that countable set, so every preimage is either contained in it or differs from its\n   complement by a subset of it. With measurability in hand, setIntegral_countable and\n   tsum_subtype_eq_of_support_subset turn the integral into the sum of squared atom masses.\n\nAxioms: propext, Classical.choice, Quot.sound. No sorry. Built against the pinned Mathlib\nrev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1, Lean v4.33.0.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_0a6ee6cfdcaca17e8c162cd97cadd6673b66698960f806bfc50618d83294cbd6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "917ef4ccd335005b91c2817095385051952d6b24",
+        "repo": "mlgraham/lean-eval-wiener-submission"
+      }
     }
   ],
   "schema_version": 2,
