@@ -504,6 +504,29 @@
         "ref": "8256429c4f5f4cb673e00fcfa6528a102ad390a4",
         "repo": "mlgraham/lean-eval-peano-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T06:38:44Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1493,
+        "kind": "issue"
+      },
+      "problem_id": "dimitrov",
+      "production_metadata": {
+        "production_description": "Resubmission of the identical, already-accepted `dimitrov` source tree (issue #1474, accepted\n2026-08-28) under this account's consolidated Model label. Same repository, same commit\n`661e66a9fb0830eea5084f2b6ca88a10813749df`, no change to the proof.\n\nThe only change is the Model field. The earlier submission went out as\n`github.com/mlgraham (Claude Fable 5)`; that string is not accurate as a bucket label for this\naccount's submissions, for two reasons that apply here as much as anywhere:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming a single model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Provenance for this particular solve: the proof was produced by Claude Opus 5 (Claude\nCode) under human direction, from the Challenge statement, Mathlib source search, and compiler\nfeedback only, with no published lean-eval solution consulted — that specific claim belongs in this\nfree-text field rather than in the bucket label.\n\nPlease treat this as a relabel rather than a new solve if the pipeline supports that; if it does\nnot, the duplicate result on the same problem id is expected and harmless.",
+        "solution_publication_date": "2026-08-27",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_5b131e44009ade7c2a408273047b8d450d6e3a29d34fc7d8f2ac155ae9bc24fe",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "661e66a9fb0830eea5084f2b6ca88a10813749df",
+        "repo": "mlgraham/lean-eval-dimitrov-submission"
+      }
     }
   ],
   "schema_version": 2,
