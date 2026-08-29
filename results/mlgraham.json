@@ -940,6 +940,29 @@
         "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
         "repo": "mlgraham/lean-eval-consolidated"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T08:00:01Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1498,
+        "kind": "issue"
+      },
+      "problem_id": "cyclotomic_integer_house_le_two",
+      "production_metadata": {
+        "production_description": "Original proof of cyclotomic_integer_house_le_two. Claude Opus 5 (Claude Code), under human\ndirection, from the Challenge statement, Mathlib source search, and compiler feedback only; no\npublished lean-eval solution consulted.\n\nMethod, in four stages.\n\n1. Kronecker on the Chebyshev orbit. Mathlib's Kronecker theorem needs all conjugates inside the\n   closed unit disk; here they only satisfy |.| <= 2. The fix is to run the same finiteness argument\n   on the orbit u_0 = 2, u_1 = beta, u_{j+1} = beta*u_j - u_{j-1}. Since beta is totally real with\n   house at most 2, each conjugate is 2*cos(theta) and the orbit's conjugates are 2*cos(j*theta),\n   so the whole orbit lands in {x : IsIntegral Z x and all conjugates of norm <= 2}, finite by\n   Embeddings.finite_of_norm_le. Hence the orbit repeats.\n\n2. The repetition factors algebraically. Writing the seed as z + z^{-1}, the recursion is exactly\n   z^j + z^{-j}, and a repetition gives (z^a - z^b)(z^{a+b} - 1) = 0, so z is a root of unity. This\n   avoids arccos and trigonometric identities entirely — one linear_combination.\n\n3. The Galois orbit, cheaply. The only input needed is that a primitive d-th root of unity and its\n   coprime powers share a minimal polynomial (both are cyclotomic d over Q). Composing f with\n   X + X^{d-1} transfers any rational relation satisfied by z + z^{-1} to z^k + z^{-k}; combined\n   with Embeddings.range_eval_eq_rootSet_minpoly, every orbit value is some psi(beta) and so is\n   bounded by the house.\n\n4. The maximisation. On the unit circle ||w + w^{-1}|| = 2|Re w|, so the question becomes\n   max over j coprime to d of |cos(2 pi j / d)|. Comparing doubled angles removes all sign\n   bookkeeping: |cos t| <= cos a iff cos 2t <= cos 2a, and cos(2*(2 pi j/d)) = cos(2 pi s/d) with\n   s = 2j mod d by periodicity alone. Then s is nonzero because d dividing 2j with gcd(j,d)=1 forces\n   d dividing 2, and for even d the reduced representative is itself even, hence at least 2. The\n   bound is attained at j = 1 for even d and at j = (d+1)/2 for odd d, where 2j = d+1 gives both\n   coprimality and cos(pi + pi/d) = -cos(pi/d). This yields m = d for odd d and m = d/2 for even d,\n   with the degenerate orders d <= 2 giving house exactly 2.\n\nAxioms: propext, Classical.choice, Quot.sound. No sorry. Built against the pinned Mathlib\nrev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1, Lean v4.33.0.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_e027d65627f2b2b31f3e8bceddea3570cebe7c52323b6f439e81a5b1297e229b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "960b5405692701b573b1f7e09a071d285f0e62a5",
+        "repo": "mlgraham/lean-eval-cyclotomic-house-submission"
+      }
     }
   ],
   "schema_version": 2,
