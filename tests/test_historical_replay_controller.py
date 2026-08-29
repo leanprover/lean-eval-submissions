@@ -43,11 +43,11 @@ from scripts.replay_orchestrator import config_digest
 from scripts.results_schema import result_id as stable_result_id
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-PLAN_PATH = ROOT / "evidence/public-replay/plans/2b00c9651f5c3f43d44e0306a8368947a4a950ab3dd1e8c9b1f283fc82101942.json"
-PROFILE_PATH = ROOT / "evidence/public-replay/profiles/0886d3624de67d0ba1cb00657f66c5f7304743773a024509fceda6ae8f4ff660.json"
+PLAN_PATH = ROOT / "evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json"
+PROFILE_PATH = ROOT / "evidence/public-replay/profiles/7d4027e5022973640bf768facd4ac56762cc327c542c560b5cc34aa59fcd771e.json"
 MATRIX_PATH = ROOT / "configuration/historical-public-replay-profile-matrix-v1.json"
 CONTRACT_PATH = ROOT / "configuration/historical-public-runner-v1.json"
-PROFILE_COMMIT = "7ed4a2e33cec8800f65eb6d53619c1b7fb703876"
+PROFILE_COMMIT = "1dc321fe15e79457e0b8dcb62069ae9c8212b444"
 
 
 def loaded_git(commit: str, path: pathlib.Path) -> tuple[dict, bytes]:
