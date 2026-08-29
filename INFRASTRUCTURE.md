@@ -92,6 +92,11 @@ unconditional destruction.
 
 GitHub environments `cloudflare-staging` (`20259250422`) and
 `cloudflare-production` (`20259250928`) are restricted to protected branches.
+`cloudflare-production` additionally requires reviewer `kim-em`, with
+self-review permitted, so an exact candidate can finish staging verification
+before its production deployment is released. To remove only this hold, clear
+the reviewer list while preserving the protected-branch policy and first
+verify that no production deployment is waiting.
 Each contains distinct values for:
 
 - `CLOUDFLARE_ACCOUNT_ID`;
