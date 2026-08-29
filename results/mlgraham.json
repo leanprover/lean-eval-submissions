@@ -527,6 +527,28 @@
         "ref": "661e66a9fb0830eea5084f2b6ca88a10813749df",
         "repo": "mlgraham/lean-eval-dimitrov-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T06:40:56Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1495,
+        "kind": "issue"
+      },
+      "problem_id": "coc_strong_normalization",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** Identical source tree to the already-accepted submission (issue #1444):\nsame private repository, same commit `c82122b6741bf68a344a4f480bb0bf9031f84083`, proof unchanged.\nThe only change is the Model field, so that this solve joins the rest of this account's results\nunder one honest bucket label. The duplicate result on this problem id is expected.\n\nThis is the one accepted solve whose source is private, which is why it is relabelled here rather\nthan in the consolidated public repository (issue #1494 covers the other 21).\n\nWhy the label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\nProvenance for this particular solve, unchanged from #1444: original proof of all six\n`coc_strong_normalization` holes, produced under human direction from the Challenge, the published\nmathematics, and compiler feedback only, via a Melliès–Werner Λ-set model built inside Mathlib's\n`ZFSet`, so no axioms beyond Lean's own. That specific claim belongs in this free-text field rather\nthan in the bucket label.\n\nThe `lean-eval-bot` GitHub App is installed on the repository, as it was for the accepted\nsubmission.",
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_24c04fcf08aa050896c7368bf6a64277b5a8783e73f752df6ff1938affd0458b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "c82122b6741bf68a344a4f480bb0bf9031f84083",
+        "repo": "mlgraham/lean-eval-coc"
+      }
     }
   ],
   "schema_version": 2,
