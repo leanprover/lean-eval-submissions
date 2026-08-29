@@ -36,6 +36,9 @@ from historical_private_image_qualification import (  # noqa: E402
 
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 OCI_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+HEALTH_ATTEMPTS = 12
+HEALTH_RETRY_SECONDS = 5
+HEALTH_TIMEOUT_SECONDS = 10
 CONTEXT_FIELDS = {
     "schema_version",
     "worker_name",
@@ -157,14 +160,24 @@ def _post(url: str, value: dict[str, Any]) -> tuple[int, dict[str, Any]]:
 
 
 def _health(worker_url: str, expected_commit: str) -> None:
-    try:
-        incoming = urllib.request.Request(
-            f"{worker_url}/healthz", headers={"accept": "application/json"}
-        )
-        with urllib.request.urlopen(incoming, timeout=30) as response:
-            body = _object(json.load(response), "executor health")
-    except (OSError, urllib.error.HTTPError, json.JSONDecodeError) as error:
-        raise QualificationError("qualification executor health check failed") from error
+    body: dict[str, Any] | None = None
+    for attempt in range(1, HEALTH_ATTEMPTS + 1):
+        try:
+            incoming = urllib.request.Request(
+                f"{worker_url}/healthz", headers={"accept": "application/json"}
+            )
+            with urllib.request.urlopen(
+                incoming, timeout=HEALTH_TIMEOUT_SECONDS
+            ) as response:
+                body = _object(json.load(response), "executor health")
+            break
+        except (OSError, urllib.error.HTTPError, json.JSONDecodeError) as error:
+            if attempt == HEALTH_ATTEMPTS:
+                raise QualificationError(
+                    "qualification executor health check failed"
+                ) from error
+            time.sleep(HEALTH_RETRY_SECONDS)
+    assert body is not None
     if (
         body.get("status") != "ok"
         or body.get("environment") != "private-qualification"
