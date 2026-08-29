@@ -113,7 +113,7 @@ reason to install the identity before the pre-mutation packet is complete.
       every queued baseline Result appears exactly once while the 29 reviewed
       private orphans retain their existing unavailable dispositions.
 
-## Create-only preparation order
+## Packet-bound execution order
 
 1. Finish and commit the 63 private profile objects, then run
    `prepare_historical_private_replay.py plan` with all 63 paths and their one
@@ -143,5 +143,6 @@ prepare a new exact packet covering only those added Results. Never extend this
 retained-baseline packet by implication.
 
 At every step, an input mismatch leaves the corresponding capability disabled.
-No step in packet preparation writes State, migrates an archive, or enables
-replay.
+Creating and filling this packet does not itself write State, migrate an
+archive, or enable replay; only the separately invoked packet-bound execution
+steps do so.
