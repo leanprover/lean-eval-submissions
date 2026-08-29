@@ -1009,6 +1009,29 @@
         "ref": "467865288b9728af287a31de53733f8819e33e76",
         "repo": "mlgraham/lean-eval-lidskii-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T10:25:04Z",
+      "benchmark_commit": "9627c03f57f7bf01b72f816470e4fc423c4a1f83",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1505,
+        "kind": "issue"
+      },
+      "problem_id": "heat_kernel_solves_heat_equation",
+      "production_metadata": {
+        "production_description": "Original proof of heat_kernel_solves_heat_equation. Claude Opus 5 (Claude Code), under human\ndirection, from the Challenge statement, Mathlib source search, and compiler feedback only; no\npublished lean-eval solution consulted.\n\nMethod.\n\nThe one structural observation that shapes the whole file: writing the kernel as\n\n    G t x y = cst t * exp (-(x - y)^2 / (4 t)),    cst t = (4 pi t)^(-1/2),\n\nits second x-derivative and its t-derivative are *literally the same expression*,\n\n    G2 t x y = G t x y * ((x - y)^2 / (4 t^2) - 1 / (2 t)),\n\nbecause cst' t = -(1/(2t)) * cst t. So the PDE is not proved by comparing two computed\nquantities; the same `G2` is produced by all three differentiations, and the heat equation\nfalls out of `hasDerivAt_G_t` and `hasDerivAt_G1_x` having the same value.\n\nThat leaves the analysis, which is three applications of\n`hasDerivAt_integral_of_dominated_loc_of_deriv_le` and one dominated-convergence argument.\n\n1. One domination lemma for everything. Every bound in the file reduces to\n\n       polyGauss_le : (|z| + 1)^2 * exp (-(a z^2)) <= 2 * max 1 a⁻¹      (a > 0)\n\n   proved from exp u >= 1 + u, with no calculus. Splitting the Gaussian as\n   exp(-z^2/(8t)) = exp(-z^2/(16t)) * exp(-z^2/(16t)) lets the polynomial factor be absorbed by\n   one half while the other half stays integrable. `G`, `G1` and `G2` then all share a single\n   `G t x y * c` bound lemma, differing only in the choice of `c`.\n\n2. Uniformity in x. For |x - x0| <= 1 the estimate (w - z)^2 >= z^2/2 - w^2 >= z^2/2 - 1 gives\n   exp(-(x-y)^2/(4t)) <= exp(1/(4t)) * exp(-(y-x0)^2/(8t)), a bound independent of x. This is\n   what makes the dominating function admissible on a whole neighbourhood.\n\n3. Uniformity in t. For the time derivative the window is |s - t| <= t/2, so\n   t/2 <= s <= 3t/2; monotonicity of `cst` and of exp(-(x-y)^2/(4s)) in s gives the same shape\n   of bound with 1/(12t) in the exponent.\n\n4. The initial condition. `tendsto_integral_peak_smul_of_integrable_of_tendsto` does not apply:\n   it wants `Integrable f`, and here f is only continuous and bounded. Substituting\n   y = x + 2 sqrt(t) s instead turns the solution into\n\n       u(t,x) = pi^(-1/2) * INT exp(-s^2) * f (x + 2 sqrt(t) s) ds,\n\n   with the normalisation collapsing exactly (cst t * 2 sqrt t = pi^(-1/2)). The limit is then\n   ordinary dominated convergence against M * exp(-s^2), using only continuity of f at x, and\n   `integral_gaussian 1` supplies INT exp(-s^2) = sqrt pi.\n\nSubstrate used: `hasDerivAt_integral_of_dominated_loc_of_deriv_le`,\n`tendsto_integral_filter_of_dominated_convergence`, `integrable_exp_neg_mul_sq`,\n`integral_gaussian`, `Measure.integral_comp_mul_left`, `integral_add_left_eq_self`.\n\nZero `sorry`; `#print axioms` gives exactly propext, Classical.choice, Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_c2fdc0eccf8685592641887d6adef8e5f8f0febc9d0f443c1f1fdbec279e3a9b",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "e2f1262e2e031a9b126c48340f001cd6764edb24",
+        "repo": "mlgraham/lean-eval-heat-kernel-submission"
+      }
     }
   ],
   "schema_version": 2,
