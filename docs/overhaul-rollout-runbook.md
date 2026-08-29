@@ -360,6 +360,11 @@ candidate commits:
 
 Do not rerun broad historical matrices to refresh timestamps.
 
+The compact production go/no-go record is
+[`production-launch-readiness.md`](production-launch-readiness.md). Keep its
+binding, gate result, and finalization fields current; do not duplicate them as
+a run history here.
+
 ## 8. Historical completion
 
 The final cutoff and replay process use the canonical files listed in
