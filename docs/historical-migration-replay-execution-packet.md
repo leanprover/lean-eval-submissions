@@ -19,8 +19,9 @@ a second transaction or replay system.
 | Public replay plan | `evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json` | 128 requests, 194 Results |
 | Public profile matrix | `configuration/historical-public-replay-profile-matrix-v1.json`, SHA-256 `a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c` | 35 profiles |
 | Public qualification set | submissions commit `81e94fe2f4fc819300fd7d4e036f00124166784f`, profile-set SHA-256 `d44e73c7ae58adf806a3b5147e9aa1dbfe700a53fa9482f16c2aea3127e04e2e` | 35 profiles |
-| Public materialized task content | SHA-256 `be2e97a2e75e0c73e087f080910bed9dd8bc5d4f365f6b2d4c8ba9acd4b82bc0` | 194 tasks |
+| Public materialized task content | SHA-256 `be2e97a2e75e0c73e087f080910bed9dd8bc5d4f365f6b2d4c8ba9acd4b82bc0` | 194 tasks, 582 events when scheduled |
 | Private archive crosswalk | `evidence/historical-replay/private-crosswalks/dfdcbc0da3a3526f8a26e6a69cefa41cbcd92de7608752193b742fcd92b00a67.json` | 639 bound, 29 not found |
+| Private matrix source plan | `evidence/historical-replay/private-plans/d9561ad62098e0542656678f207b3360b0b295be975c292cbf729dc48d03bd5e.json` | 668 entries, 21 reused public profiles |
 | Private image matrix | `configuration/historical-private-replay-image-matrix-v1.json`, SHA-256 `54ad4c237d08e5d0e298dfc8f752b25c89ce30e79b396a2256b4216a1c0f772c` | 63 images, 639 Results |
 | Private audit source | audit commit `ad356e7bc5a2d650d9902ac3f6d352a0164360bc`, inventory digest `6b8867f41a13c3ba323746988058886e5dc73da7b509deaf01ccf9c36fe8d5d4` | 1,045 archives |
 | Selected schema-1 migration set | inventory digest `a8913f1c8b5073e5b7ab309ba10481b615ca4fc00e629e41a9e57962f3afebd4` | 439 unique archives |
@@ -36,6 +37,10 @@ are selected.
 This packet authorizes only the retained baseline hashes above. The final
 issue-intake cutoff and append-only delta require a later, separate exact
 packet; they do not prevent processing the retained baseline during overlap.
+The new retained-baseline append is expected to contain 2,499 events and
+materialize 833 replay tasks: 582 events/194 tasks for public replay and 1,917
+events/639 tasks for migrated private replay. The existing 439 public and 29
+private unavailable dispositions are not appended again.
 
 ## Pre-mutation authorization bindings
 
