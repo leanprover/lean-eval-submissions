@@ -595,6 +595,351 @@
         "ref": "917ef4ccd335005b91c2817095385051952d6b24",
         "repo": "mlgraham/lean-eval-wiener-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "banach_alaoglu_bourbaki",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_054cf71cee11596495044a03abbbec461fc680367dd069b56ddf26e54645459e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "brauer_character_in_cyclotomic",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_963773cd888f4566ef48f1d984d2187786699ddc630684e484a7c9e9d3c6b317",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "bvp_comparison",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_24ae77a45faf0e2acbcd0e9c05bbbef0a0e4ea85b620bb8d11330a5fbe1f9a8d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "cubic_decay_asymptotic",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_da957637ec452de4600e47d3da6067becd1681af4231d8151a29661006975e40",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "dirichlet_eigenvalues_eq_nat_sq",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_9113485c690219bca134409c739e6c94ffa1caf40fcc9ff3c687355a1a810759",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "finite_graph_ramsey_theorem",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_290d06762063917f83d71559e268ce4ec52da1ffa847fe274892ecb30aa2c7d0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "koszul_formula",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_7f567dae7931e80af81d3f33eeae8e18cc005b7f460f5580b6de163879adb4a9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "lp_maximum_principle",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_184cecf77065c7ad4d527c1b819b310c82b1db80687b716d1e50619848dcb401",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "mulCayley_connected_iff_closure_eq_top",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_94fd739285e28b4a0b4cf32bfba07d69ae32fc0682bf2e3a0d1ae4f4543ec3ae",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "oppenheim_inequality",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_c03cf5e7898c1b5a168facd1460d2f5931b155b3e1913d23305faf8c2c38ce52",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "posSemidef_map_exp",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_33ec56b76e29cd1079244e62807077535fda3a233ea1e6c6357afc826732292d",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "sturm_separation",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_b868de6f4eb7909b67cca278674a379a388b0fdfebf376d9227ad65eba694af0",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_0d045f39bfed02b6341ade92d0001de1068bed10f0e75c10bd6ebce8872d327e",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "symplectic_matrix_det",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_c9df6bd0082f6c63920f4e6062af54e06a68756acecfbdee845a9084893dd82c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
+    },
+    {
+      "accepted_at": "2026-08-29T07:27:57Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1494,
+        "kind": "issue"
+      },
+      "problem_id": "trace_cayley_hamilton_newton",
+      "production_metadata": {
+        "production_description": "**Relabel, not new work.** This repository gathers every already-accepted solve from this account\nthat has a public source tree, so they can all carry one honest Model string. The proofs are\nunchanged from the submissions that were already accepted; nothing here is a new claim, and\nduplicate results on those problem ids are expected.\n\nProblem ids present (21): banach_alaoglu_bourbaki, bauer_extreme_point_uniqueness,\nbrauer_character_in_cyclotomic, bvp_comparison, cubic_decay_asymptotic, dimitrov,\ndirichlet_eigenvalues_eq_nat_sq, finite_graph_ramsey_theorem, koszul_formula, lp_maximum_principle,\nmem_convexHull_finset_extremePoints_of_mem_compact_convex, mulCayley_connected_iff_closure_eq_top,\nnormal_spectral_theorem, oppenheim_inequality, peano_existence, pell_solution_convergent,\nposSemidef_map_exp, sturm_separation, substInv_X_sub_X_sq_eq_catalan, symplectic_matrix_det,\ntrace_cayley_hamilton_newton.\n\nWhy one label. Two facts make any single model string inaccurate for this account:\n\n1. Private harnesses and components, drawn from private repositories under this account, take part\n   in producing these submissions. What is evaluated is a model together with tooling that is\n   neither public nor fixed, so naming one model implies the model alone produced the result.\n2. Providers switch models mid-run. Some route or downgrade automatically during use, so a string\n   naming one model can become false through no choice of ours and without our knowledge.\n\n`(various models)` is chosen to stay true under both, and is now the standing label for this\naccount. Per-solve provenance, where it is worth stating, belongs in this free-text field rather\nthan in the bucket label; the individual submissions already carry it.\n\nEarlier submissions of these same proofs went out under `github.com/mlgraham (Claude Fable 5)` and\n`github.com/mlgraham — public accepted source, packaged (Claude Fable 5)`. Please treat this as a\nrelabel of those results if the pipeline supports it. One further accepted solve,\n`coc_strong_normalization`, has a private source tree and is relabelled in a separate issue rather\nthan being published here.\n\nEvery workspace is self-contained, pins Mathlib rev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1 on\nLean v4.33.0, contains no `sorry`, and depends only on propext, Classical.choice and Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_50ddf80702211e749da9d7ba01ceb400738c6941d48e2c6708d7639fd06fc002",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "17dbbe392e840d8dbdc487cfc6ce24fb8a8c1972",
+        "repo": "mlgraham/lean-eval-consolidated"
+      }
     }
   ],
   "schema_version": 2,
