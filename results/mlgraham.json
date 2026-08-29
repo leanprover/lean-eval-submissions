@@ -549,6 +549,29 @@
         "ref": "c82122b6741bf68a344a4f480bb0bf9031f84083",
         "repo": "mlgraham/lean-eval-coc"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T06:42:06Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1496,
+        "kind": "issue"
+      },
+      "problem_id": "rising_sun_lemma",
+      "production_metadata": {
+        "production_description": "Original proof of rising_sun_lemma. Claude Opus 5 (Claude Code), under human direction, from the\nChallenge statement, Mathlib source search, and compiler feedback only; no published lean-eval\nsolution consulted.\n\nThe statement bundles three claims about the shadow set S = {x in (a,b) : f x < f t for some\nt in [x,b] with t > x}.\n\n1. S is open. From continuity at an interior point, together with the witness t staying valid on a\n   small enough neighbourhood.\n\n2. S is empty iff f is antitone on [a,b]. The forward direction is immediate at interior points —\n   x not in S says exactly that f dominates everything to its right — but the left endpoint a is\n   not interior, so f y <= f a is obtained by passing to the limit along the filter within (a,b),\n   using left_nhdsWithin_Ioo_neBot for the NeBot instance.\n\n3. When nonempty, S decomposes into countably many disjoint open intervals with f(c) <= f(d).\n   Mathlib has no structure theorem for open subsets of the reals, so this is built here:\n   a nonempty bounded open preconnected set equals Ioo (sInf) (sSup) (using\n   IsPreconnected.ordConnected for the reverse inclusion), and the connected component of a point\n   in a bounded open set is such an interval whose endpoints lie outside the set — if an endpoint\n   were in S, a slightly longer interval would still be preconnected and inside S, so by\n   maximality of the component it would be contained in the component, which it is not.\n\n   For the required indexing by the naturals, components are enumerated by \"first rational\":\n   fixing a bijection from the naturals to the rationals, index n is good when its rational lies in\n   S and no earlier rational lies in the same component. Every component has exactly one good\n   index, distinct good indices give disjoint components, and bad indices are padded with the\n   degenerate interval Ioo a a, which is empty and trivially satisfies f a <= f a.\n\nThe mathematical heart is the endpoint inequality. On a maximal interval (c,d), the right endpoint\nd is not in S, so f dominates everything on [d,b]. If some interior x had f x > f d, the maximum of\nf over [x,d] would be attained at some xi < d, and xi lies in S, so f xi < f t for some t > xi with\nt <= b: if t <= d this contradicts maximality on [x,d], and if t > d then f t <= f d < f x <= f xi.\nHence f x <= f d throughout (c,d), and continuity at c gives f c <= f d.\n\nAxioms: propext, Classical.choice, Quot.sound. No sorry. Built against the pinned Mathlib\nrev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1, Lean v4.33.0.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_b7c96d844b5dc737e3cc3670e09991e9175e8666d2657e8c5e7960f955f0ac6f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "a8f0a4dea5b32665c6c119c267e3be292cc70d2d",
+        "repo": "mlgraham/lean-eval-rising-sun-submission"
+      }
     }
   ],
   "schema_version": 2,
