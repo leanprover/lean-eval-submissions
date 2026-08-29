@@ -435,6 +435,29 @@
         "ref": "e92fe28a523f53675c4b820492750b6203970921",
         "repo": "mlgraham/lean-eval-normal-spectral-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T05:34:50Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1489,
+        "kind": "issue"
+      },
+      "problem_id": "pell_solution_convergent",
+      "production_metadata": {
+        "production_description": "Original proof of pell_solution_convergent. Claude Opus 5 (Claude Code), under human direction,\nfrom the Challenge statement, Mathlib source search, and compiler feedback only; no published\nlean-eval solution consulted.\n\nMethod. Mathlib already has Legendre's theorem in the form needed\n(Real.exists_convs_eq_rat: if |xi - q| < 1/(2 * q.den^2) then q is a convergent of the continued\nfraction of xi), so the work is entirely in producing the approximation bound with the correct\ndenominator.\n\n- Coprimality: gcd x y divides x^2 and d*y^2, hence divides x^2 - d*y^2 = 1, so gcd x y = 1.\n  Rat.den_div_eq_of_coprime then gives that the denominator of x/y is exactly y, which is what\n  makes the 1/(2 * den^2) threshold usable.\n- The estimate: from x^2 - d*y^2 = 1 one gets (x - y*sqrt d)(x + y*sqrt d) = 1, so\n  |sqrt d - x/y| = 1/(y * (x + y*sqrt d)). Since d >= 1 forces x > y and sqrt d >= 1, we get\n  x + y*sqrt d > 2y, hence the quantity is < 1/(2y^2).\n\nThe final inequality is discharged by nlinarith from the factored identity together with\nx - y*sqrt d > 0 and x + y*sqrt d - 2y > 0, which is exactly the product-positivity that makes\nthe bound work.\n\nAxioms: propext, Classical.choice, Quot.sound. No sorry. Built against the pinned Mathlib\nrev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1, Lean v4.33.0.",
+        "solution_publication_date": "2026-08-28",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_876f3f891337b1e5edc0b8c3b0c3f7a6d5950438b1fa8af4a5f3c116b8a9aa03",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "187a54ad473439fbfdb30663026144e000573136",
+        "repo": "mlgraham/lean-eval-pell-submission"
+      }
     }
   ],
   "schema_version": 2,
