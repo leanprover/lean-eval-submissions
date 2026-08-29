@@ -324,10 +324,18 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
         self.assertNotIn("steps.sandbox_cleanup", deletion)
         self.assertIn("container-applications-final.json", deletion)
         self.assertNotIn("lean-eval-replay-executor.lean-eval.workers.dev", workflow)
-        self.assertIn('test "$GITHUB_REF_PROTECTED" = true', workflow)
+        self.assertIn('test "$GITHUB_REF_TYPE" = tag', workflow)
+        self.assertIn(
+            'test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$GITHUB_SHA"',
+            workflow,
+        )
+        self.assertIn('test "$remote_commit" = "$GITHUB_SHA"', workflow)
         self.assertIn("[.commit.sha, .protected] | @tsv", workflow)
+        self.assertIn(
+            'git merge-base --is-ancestor "$GITHUB_SHA" "$main_commit"', workflow
+        )
         self.assertLess(
-            workflow.index('test "$GITHUB_REF_PROTECTED" = true'),
+            workflow.index('test "$GITHUB_REF_TYPE" = tag'),
             workflow.index("CLOUDFLARE_API_TOKEN: ${{ secrets."),
         )
         self.assertIn("validate-registry-image", workflow)
