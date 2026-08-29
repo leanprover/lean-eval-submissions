@@ -963,6 +963,29 @@
         "ref": "960b5405692701b573b1f7e09a071d285f0e62a5",
         "repo": "mlgraham/lean-eval-cyclotomic-house-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T08:13:51Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1499,
+        "kind": "issue"
+      },
+      "problem_id": "pi1_circle_mulEquiv_int",
+      "production_metadata": {
+        "production_description": "Original proof of pi1_circle_mulEquiv_int. Claude Opus 5 (Claude Code), under human direction, from\nthe Challenge statement, Mathlib source search, and compiler feedback only; no published lean-eval\nsolution consulted.\n\nMethod. Almost all of the mathematics is already in Mathlib; the work is in connecting four pieces.\n\n- Topology.Homotopy.Lifting has the covering-space computation of the fundamental group:\n  IsAddQuotientCoveringMap.fundamentalGroupEquiv gives FundamentalGroup X x equivalent to\n  (Multiplicative G) with the opposite multiplication, for a simply-connected covering space with\n  deck group G.\n- Topology.Covering.AddCircle supplies the covering map R -> AddCircle (2 pi) with deck group\n  zmultiples (2 pi), and R is simply connected because it is contractible\n  (RealTopologicalVectorSpace.contractibleSpace, which lives in Analysis.Convex.Contractible and\n  simply needs importing).\n- The deck group is infinite cyclic: zmultiplesHom R (2 pi) is injective because 2 pi is nonzero,\n  and its range is zmultiples (2 pi).\n- Transporting from AddCircle (2 pi) to Circle along homeomorphCircle' needed a small piece that\n  Mathlib does not package: a homeomorphism induces an equivalence of fundamental groupoids\n  (built with Equivalence.mk from FundamentalGroupoid.map_comp and map_id), and then\n  Functor.FullyFaithful.mulEquivEnd transports the vertex group. Note FundamentalGroup is defined\n  as End, not Aut, so mulEquivEnd rather than autMulEquivOfFullyFaithful is the right tool.\n\nOne wrinkle worth recording for anyone doing something similar: the group instance on\nHomotopyGroup depends on a DecidableEq argument, and\nhomotopyGroupOfUniqueMulEquivFundamentalGroup derives that from Unique N\n(decidableEq_of_subsingleton) whereas the benchmark statement elaborates with instDecidableEqFin.\nThe two are propositionally equal by Subsingleton.elim, so reverting and rewriting along that\nequality reconciles them.\n\nAxioms: propext, Classical.choice, Quot.sound. No sorry. Built against the pinned Mathlib\nrev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1, Lean v4.33.0.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_ba027e5ab7db0d8f6082f9bdfc88afe20323de9cb8c234444ff0e7d53fb476eb",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "5b8eb6a5f09947e1c124bf83e4fd8360dd9a2723",
+        "repo": "mlgraham/lean-eval-pi1-circle-submission"
+      }
     }
   ],
   "schema_version": 2,
