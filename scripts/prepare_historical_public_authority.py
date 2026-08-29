@@ -1711,6 +1711,24 @@ def build_batch_events(
     return events, expected_tasks
 
 
+def batch_task_content(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove only State-assigned event identities from materialized tasks."""
+    state_fields = {
+        "authority_event_id",
+        "authorized_at",
+        "qualification_event_id",
+        "qualified_at",
+        "event_id",
+        "occurred_at",
+    }
+    if any(not state_fields.issubset(task) for task in tasks):
+        raise PreparationError("materialized task lacks State-assigned identity")
+    return [
+        {key: value for key, value in task.items() if key not in state_fields}
+        for task in tasks
+    ]
+
+
 def finalize_batch(args: argparse.Namespace) -> None:
     qualification_commit = match(
         COMMIT, args.qualification_commit, "qualification commit"
@@ -1803,6 +1821,9 @@ def finalize_batch(args: argparse.Namespace) -> None:
         "pinned_state_latest_occurred_at": latest_state_time,
         "profile_set_sha256": sha256_bytes(canonical(profile_files)),
         "event_set_sha256": sha256_bytes(canonical(event_files)),
+        "materialized_task_content_set_sha256": sha256_bytes(
+            canonical(batch_task_content(expected_tasks))
+        ),
         "materialized_task_set_sha256": sha256_bytes(canonical(expected_tasks)),
     }
     write_relative(
