@@ -149,10 +149,13 @@ For the authenticated non-maintainer cases, first enable with the fixture's
 closed denial profiles and make only the two expected `404` decision requests.
 Then re-dispatch the same exact commit with the success profiles before the
 owner and maintainer success cases. The headless success additionally requires
-the operator to create the returned secret-gist proof and exact
-`lean-eval/<submission-id>` source tag; those are separate external-repository
-actions and remain approval-gated. The source-mismatch denial is checked before
-either external lookup and needs neither mutation.
+the operator to create the returned secret-Gist proof and exact
+`lean-eval/<submission-id>` source tag. The source commit lives on temporary
+non-default branch `staging-source-fixture-v1` in the allowlisted private
+`leanprover/lean-eval-state-staging` repository, so the tag write is in-family.
+The secret-Gist compare-and-swap write remains external and is limited to the
+exact target-bound proof and cleanup described below. The source-mismatch denial
+is checked before either external lookup and needs neither mutation.
 
 Restore the same exact commit by dispatching the workflow with `state=disabled`,
 both maintainer arrays equal to `[]`, and the explicit confirmation selected.
@@ -192,10 +195,12 @@ there is no movable or temporary release tag authority.
 5. run the driver with only the visible browser submission ID, secret gist ID,
    and exact staging commit. It derives the browser Result through the
    same-owner agent session and accepts no Result ID from the operator;
-6. when the driver pauses after receiving the headless challenge, obtain
-   separate user approval for the displayed nonsecret gist/file and
-   repository/tag/commit targets, then type the target-bound confirmation it
-   displays. Let the driver make only those writes and complete the headless,
+6. when the driver pauses after receiving the headless challenge, verify the
+   displayed nonsecret Gist/file and allowlisted repository/tag/commit targets,
+   then type the target-bound confirmation it displays. The maintainer's
+   standing authorization covers only this non-PR temporary Gist proof, the
+   in-family tag, and their exact cleanup; a different external target remains
+   a hard stop. Let the driver make only those writes and complete the headless,
    denial, lifecycle, State, Results, redacted-projection, scheduling, uniquely
    named publication-disabled reconstruction from the fixture's guarded exact
    release commit, and disabled-route checks. The release run is accepted only
@@ -208,8 +213,8 @@ there is no movable or temporary release tag authority.
    eventual all-false health result. If either is interrupted, immediately use
    the existing exact-tag disabled dispatch and verify public health.
 
-Before the approved proof write, the driver keeps the signed challenge only in
-ordinary process memory. During the exact approved mutation, its only other
+Before the confirmed proof write, the driver keeps the signed challenge only in
+ordinary process memory. During the exact reviewed mutation, its only other
 representations are the named secret Gist proof and a mode-`0700` Git checkout
 on verified tmpfs; the driver removes the checkout synchronously, clears request
 copies after submission, and retains one comparison value in memory only until
@@ -276,6 +281,12 @@ required source change, not optional cleanup. Delete this exact inventory:
 - `scripts/run_bounded_staging_lifecycle.py`;
 - `tests/test_bounded_staging_lifecycle_acceptance.py`; and
 - `tests/test_staging_lifecycle_smoke.py`.
+
+After every dependent archive and evaluation is terminal, also delete temporary
+branch `staging-source-fixture-v1` from
+`leanprover/lean-eval-state-staging` and remove that repository from the
+selected installations of both read-only source Apps. Never remove the branch
+while a generated source tag or dependent run remains.
 
 Remove this bounded-acceptance subsection and any tests or workflow inventories
 that reference those paths in the same retirement change. Retain no replacement

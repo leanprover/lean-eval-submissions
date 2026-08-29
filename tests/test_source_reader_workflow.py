@@ -19,7 +19,8 @@ class SourceReaderWorkflowTests(unittest.TestCase):
             re.compile(r"^    environment: cloudflare-staging$", re.MULTILINE),
         )
         self.assertNotIn("cloudflare-production", self.text)
-        self.assertEqual(self.text.count("kim-em/lean-eval-intake-fixture"), 2)
+        self.assertNotIn("kim-em/lean-eval-intake-fixture", self.text)
+        self.assertIn("leanprover/lean-eval-state-staging", self.text)
         self.assertIn("secrets.READINESS_TOKEN", self.text)
 
     def test_requires_private_exact_response(self) -> None:

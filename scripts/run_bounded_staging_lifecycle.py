@@ -30,7 +30,7 @@ from typing import Any
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURE = ROOT / "configuration" / "staging-lifecycle-smoke-v1.json"
 EXPECTED_FIXTURE_SHA256 = (
-    "8e9e573840fdd3b6e90eecc8a6e0e14d6d4eead48fdaae24eba444d72d1cbb90"
+    "72db1e75856d2a50b98b8a906cc1a454ed1f37ac540629f782cee8e4ed123565"
 )
 UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
@@ -231,8 +231,9 @@ def fixture_preflight(
     bounded = fixture["bounded_acceptance"]
     verify_candidate_checkout(expected_commit, fixture)
     if source != {
-        "repository": "kim-em/lean-eval-intake-fixture",
-        "commit": "c1e504a3acce2da2ee77054ca45e6c251b143545",
+        "repository": "leanprover/lean-eval-state-staging",
+        "fixture_branch": "staging-source-fixture-v1",
+        "commit": "34357f2f94f39e293b1d2b127b7f298654d39cf7",
         "owner_login": "kim-em",
     }:
         raise AcceptanceError("fixture source authority drifted")
@@ -281,6 +282,25 @@ def fixture_preflight(
     user = gh_json(["user"])
     if user.get("login", "").lower() != source["owner_login"]:
         raise AcceptanceError("gh must be authenticated as the exact fixture owner")
+    repository = gh_json([f"repos/{source['repository']}"])
+    if (
+        repository.get("full_name", "").lower() != source["repository"].lower()
+        or repository.get("private") is not True
+        or repository.get("default_branch") != "main"
+    ):
+        raise AcceptanceError("fixture repository identity or visibility drifted")
+    fixture_branch = gh_json(
+        [f"repos/{source['repository']}/branches/{source['fixture_branch']}"]
+    )
+    if (
+        fixture_branch.get("name") != source["fixture_branch"]
+        or fixture_branch.get("protected") is not False
+        or not isinstance(fixture_branch.get("commit"), dict)
+        or fixture_branch["commit"].get("sha") != source["commit"]
+    ):
+        raise AcceptanceError(
+            "temporary fixture branch does not bind the exact source commit"
+        )
     commit = gh_json([f"repos/{source['repository']}/commits/{source['commit']}"])
     if commit.get("sha") != source["commit"]:
         raise AcceptanceError("fixture commit is unavailable")
@@ -603,19 +623,19 @@ class FixtureMutation:
         )
 
 
-def require_target_bound_approval(mutation: FixtureMutation) -> None:
+def require_target_bound_confirmation(mutation: FixtureMutation) -> None:
     confirmation = (
-        f"APPROVE GIST {mutation.gist_id}/{mutation.filename}@{mutation.prior_gist_head} AND TAG "
+        f"CONFIRM GIST {mutation.gist_id}/{mutation.filename}@{mutation.prior_gist_head} AND TAG "
         f"{mutation.repository}/refs/tags/{mutation.tag}@{mutation.commit} WITH EXACT CLEANUP"
     )
-    print("\nExternal fixture approval is now required.")
+    print("\nTarget-bound fixture confirmation is now required.")
     print(f"Exact temporary targets: {mutation.describe_targets()}")
     print("The proof value is intentionally not displayed.")
-    print("After obtaining explicit user approval, type this exact nonsecret line:")
+    print("Type this exact nonsecret line to confirm the reviewed temporary writes:")
     print(confirmation)
     supplied = input("> ")
     if supplied != confirmation:
-        raise AcceptanceError("target-bound external approval was not supplied")
+        raise AcceptanceError("target-bound fixture confirmation was not supplied")
 
 
 def gist_cas_write(mutation: FixtureMutation) -> None:
@@ -843,7 +863,7 @@ def apply_exact_proof_and_tag(
         raise AcceptanceError(
             "generated source tag already exists; refusing to move or reuse it"
         )
-    require_target_bound_approval(mutation)
+    require_target_bound_confirmation(mutation)
     print(f"Interruption rollback targets: {mutation.describe_targets()}")
     try:
         gist_cas_write(mutation)
