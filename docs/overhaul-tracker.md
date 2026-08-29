@@ -89,18 +89,17 @@ not this summary.
 
 These are bounded smoke cases, not a combinatorial staging matrix.
 
-### Approval-gated credential work
+### Credential-boundary work
 
-- [x] Present and obtain approval for the exact staging release OIDC trust
-      mutation, target role and
+- [x] Review the exact staging release OIDC trust mutation, target role and
       subject, absent publication/production authority, test archive, and
       rollback.
-- [x] Apply only the approved staging trust mutation.
+- [x] Apply only the reviewed staging trust mutation.
 - [x] Complete one staging unwrap/reconstruction and verify
       consume-before-unwrap, reuse refusal, authority removal, source
       allowlisting, no plaintext artifact, and cleanup.
-- [ ] Present the production archive Wrap-only connection separately for
-      approval; prove it cannot unwrap before intake is enabled.
+- [x] Connect the production archive Wrap-only role and prove it cannot unwrap
+      before intake is enabled.
 - [ ] Repair and reverify the production release role trust and scope using
       [`aws-release-production-trust-repair.md`](aws-release-production-trust-repair.md),
       without decrypting or publishing a production archive.
