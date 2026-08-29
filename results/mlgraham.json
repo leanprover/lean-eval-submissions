@@ -389,6 +389,29 @@
         "ref": "661e66a9fb0830eea5084f2b6ca88a10813749df",
         "repo": "mlgraham/lean-eval-dimitrov-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T04:54:12Z",
+      "benchmark_commit": "c57fa9187b5cc158e53209bf023c70cd37a52374",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1487,
+        "kind": "issue"
+      },
+      "problem_id": "mem_convexHull_finset_extremePoints_of_mem_compact_convex",
+      "production_metadata": {
+        "production_description": "Original proof of mem_convexHull_finset_extremePoints_of_mem_compact_convex. Claude Opus 5\n(Claude Code), under human direction, from the Challenge statement, Mathlib source search, and\ncompiler feedback only; no published lean-eval solution consulted.\n\nNote on method: the problem's informal solution suggests combining Krein-Milman with\nCaratheodory, but that is not sufficient on its own. Mathlib's closure_convexHull_extremePoints\ngives only closure (convexHull (extremePoints s)) = s, and the extreme points of a compact\nconvex set need not be closed (already false in dimension 3), so the closure cannot simply be\ndropped -- Caratheodory applied to the closure yields points of closure (extremePoints s),\nnot of extremePoints s as the statement requires. The submission therefore proves Minkowski's\ntheorem proper, by strong induction on Module.finrank:\n\n- a transport lemma moving extreme points along the injective affine embedding of the direction\n  space (vectorSpan) of the set, used to descend whenever the set spans a proper subspace;\n- for a set with nonempty interior, a chord through the target point meets the set in a compact\n  segment whose endpoints are not interior; geometric_hahn_banach_open_point applied to the\n  interior supplies a supporting functional at each endpoint (no limiting argument needed), whose\n  argmax face is exposed, hence extreme, and lies in a hyperplane so its vectorSpan is proper;\n- the induction hypothesis applies to each face, and the target point is a convex combination of\n  the two endpoints.\n\nCaratheodory's convexHull_eq_union then trims to an affinely independent finset, and\nAffineIndependent.card_le_finrank_succ with Submodule.finrank_le gives the finrank + 1 bound.\n\nAxioms: propext, Classical.choice, Quot.sound. No sorry. Built against the pinned Mathlib\nrev 6f1ef4e5dd604a435bddba4747b13970cd65d2a1, Lean v4.33.0.",
+        "solution_publication_date": "2026-08-28",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_59abad969f5a3a6b391798fea078c515ca71aab85429e80c09454edfa41b8d1f",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "b4ffbe305ecf9b023f629a5099019cd8be8a9d7c",
+        "repo": "mlgraham/lean-eval-minkowski-submission"
+      }
     }
   ],
   "schema_version": 2,
