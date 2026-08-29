@@ -216,6 +216,16 @@ remove it when those credentials retire. The internet-facing Worker must not
 write workflows, repository settings, the submissions repository, or the other
 environment's State.
 
+Each fine-grained PAT consumes the issuing user's shared GitHub REST core
+allowance; its one-repository permission scope does not create an independent
+rate bucket. GitHub quota exhaustion therefore makes the matching Worker's
+readiness and State-dependent routes fail closed with `503` until capacity
+returns. While either Worker is in operational use, reserve the issuing
+principal's allowance by avoiding unrelated high-volume authenticated API work
+from that principal and treat a sustained readiness failure as a reason to
+pause intake. This is a current availability limitation, not permission to
+bypass State or weaken its fail-closed behavior.
+
 Rotate each token separately before its deadline: create a replacement with
 the same one-repository scope under the packet-bound principal, replace only the
 matching Worker's `GITHUB_STATE_TOKEN`, run the protected write preflight with

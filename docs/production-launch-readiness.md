@@ -149,7 +149,10 @@ The authoritative text is on the [submission entry page][entry] and in the
 - The production State writer is a user-scoped GitHub token whose API allowance
   shares its issuer's rate bucket. Exhaustion makes readiness and intake fail
   closed until capacity returns; avoid unrelated high-volume authenticated API
-  work from that principal during staging and launch.
+  work from that principal whenever the server is in operational use. A later
+  dedicated GitHub App installation-token path would remove this coupling, but
+  is an availability improvement rather than a launch gate under the accepted
+  completion plan.
 
 ## 8. Repository announcement
 
