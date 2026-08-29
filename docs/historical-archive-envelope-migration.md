@@ -50,6 +50,9 @@ Applying this template is distinct from connecting the production live-intake
 Wrap role and from approving release
 controller trust. The repository workflow does not apply the stack or enable
 production capability.
+The production operation is packaged in
+[`aws-production-archive-migration-infrastructure.md`](aws-production-archive-migration-infrastructure.md);
+it neither installs the legacy identity nor dispatches this workflow.
 
 Before apply, prepare the paired retirement changes. After the reviewed audit
 branch is promoted, remove the one-shot workflow, migration-only environment

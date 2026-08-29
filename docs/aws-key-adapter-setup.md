@@ -143,6 +143,9 @@ The production stack has an eighth output, `MigrationWrapRoleArn`. It is an
 Encrypt-only role bound exactly to the `archive-migration-production` OIDC
 subject. Store that ARN as `AWS_WRAP_ROLE_ARN` only in the migration
 environment; do not reuse the ordinary `WrapRoleArn` there.
+Use the pinned
+[`aws-production-archive-migration-infrastructure.md`](aws-production-archive-migration-infrastructure.md)
+operator path for the one-time production update and selector connection.
 
 After the outputs exist, store each reviewed role ARN as a non-secret variable
 in its existing environment. Recheck rather than change the recorded ref
