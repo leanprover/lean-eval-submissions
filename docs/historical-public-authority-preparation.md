@@ -2,7 +2,8 @@
 
 The first historical image qualification and the first production State append
 are separate review boundaries. A successful staging probe is evidence for an
-execution profile; it is not permission to append State or enqueue replay.
+execution profile; it does not establish readiness to append State or enqueue
+replay.
 
 `historical-public-authority-preparation.yml` implements the source-free bridge
 between those boundaries. It consumes one exact successful version-2
@@ -65,7 +66,8 @@ It remains explicitly blocked on all five steps recorded in the artifact:
 2. Supply the exact commit containing that blob.
 3. Supply fresh, strictly increasing State event IDs and occurrence times.
 4. Validate the three-event append against current production State.
-5. Separately authorize the State append and replay enqueue.
+5. Bind the State append and replay enqueue to the exact immutable historical
+   execution packet.
 
 The offline `finalize` command enforces those conditions mechanically. It
 requires clean exact checkouts of the qualification commit and production
@@ -108,6 +110,6 @@ and HTTPS remotes without the `.git` suffix are rejected.
 
 The first workflow defaults select benchmark `11081d34…`, request
 `prr_9927609e…`, and result `r2_70b509d7…`. Those defaults are a deterministic
-first candidate, not an authorization. Until an exact successful qualification
-artifact exists and the later review/append steps complete, production State
-and the historical queue remain unchanged.
+first candidate, not execution readiness. Until an exact successful
+qualification artifact exists and the later review/append steps complete,
+production State and the historical queue remain unchanged.

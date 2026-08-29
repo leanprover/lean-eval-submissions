@@ -78,7 +78,7 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         initial = self.watchdog.index("Verify exact tag and initial all-false")
         install = self.watchdog.index("npm ci")
         armed = self.watchdog.index("Arm all-false recovery")
-        enabled = self.watchdog.index("Wait for the separately approved enabled state")
+        enabled = self.watchdog.index("Wait for the packet-bound enabled state")
         hold = self.watchdog.index("Hold the bounded acceptance window")
         self.assertLess(initial, install)
         self.assertLess(install, armed)

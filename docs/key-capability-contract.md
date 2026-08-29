@@ -1,9 +1,10 @@
 # Archive-key envelope and capability contract
 
 This contract freezes the provider-neutral archive-key boundary. The dedicated
-AWS account and environment-specific stacks now implement the initial adapter;
-production workload authority remains disconnected until its protected GitHub
-environment variable is explicitly approved. The schemas and validator are:
+AWS account and environment-specific stacks now implement the initial adapter.
+Production archive Wrap authority is connected and qualified; production replay
+authority remains disconnected until its readiness packet is complete. The
+schemas and validator are:
 
 - [`archive-key-envelope-v1.schema.json`](../schemas/archive-key-envelope-v1.schema.json)
 - [`archive-key-envelope-v2.schema.json`](../schemas/archive-key-envelope-v2.schema.json)
@@ -65,9 +66,10 @@ to use the unchanged version-1 native-identity envelope.
 
 The infrastructure template expresses v2 as separate, exact-context policy
 statements: Encrypt only on the production migration role and Decrypt only on
-the unwrap function role. Deploying those reviewed statements to each required
-stack is an explicit infrastructure approval. It is not the separate approval
-to connect production live-intake Wrap authority or release-controller trust.
+the unwrap function role. Standing authorization covers deployment of those
+reviewed statements through the exact historical execution packet. That packet
+is separate from the already qualified production live-intake Wrap boundary
+and the release-controller trust-repair procedure.
 
 ## Trusted archive writer
 
@@ -128,9 +130,9 @@ python3 scripts/archive_envelope.py \
 The reusable server archive workflow now invokes this tool before evaluation
 and persists the ciphertext with a schema-version-3 sidecar. Staging has its
 environment-specific Wrap role connected. The production
-`archive-production` environment deliberately has no `AWS_WRAP_ROLE_ARN`, so
-the server lane cannot acquire production Wrap authority until that single
-variable is explicitly approved and installed.
+`archive-production` environment has its exact `AWS_WRAP_ROLE_ARN` installed
+after the protected Wrap-only qualification. No production replay role is
+connected, and the archive job cannot acquire Decrypt authority.
 
 ## Initial AWS adapter
 

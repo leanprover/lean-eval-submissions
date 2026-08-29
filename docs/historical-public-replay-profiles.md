@@ -34,7 +34,7 @@ lock `68b5a58c…`; all 35 entries remain explicitly `unqualified`.
 
 All thirty-five current-matrix qualification objects are frozen under
 `evidence/public-replay/profiles/`. Appending State qualification and enqueue
-events remains a separate authorization boundary.
+events remains gated on the exact immutable historical execution packet.
 
 ## Qualification boundary
 

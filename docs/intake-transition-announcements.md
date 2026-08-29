@@ -1,9 +1,10 @@
 # Intake transition announcement templates
 
-These templates prepare the approved D10 transition from GitHub-issue intake
-to the lifecycle-aware server. They are not authorization to enable or close
-either path. Replace every placeholder and link the supporting evidence before
-publishing an announcement.
+These templates prepare the D10 transition from GitHub-issue intake to the
+lifecycle-aware server. Standing authorization is recorded in the completion
+plan; these templates do not establish launch or closure readiness. Replace
+every placeholder and link the supporting evidence before publishing an
+announcement.
 
 ## Production server launch
 
@@ -40,8 +41,9 @@ Ready-to-edit announcement:
 > incident, submitter-migration, adoption, and announcement gates below must
 > also pass. Any revised closure date will be announced explicitly.
 
-Publish the same dated notice in repository documentation and the LeanEval
-Zulip topic. Keep both links and the timestamp with the transition checklist.
+Publish the dated repository notice under standing authorization. Obtain exact
+maintainer approval before posting the same notice in the LeanEval Zulip topic.
+Keep both links and the timestamp with the transition checklist.
 
 ## Issue-intake closure gate
 
@@ -59,7 +61,8 @@ fewer than ten submissions, if applicable: <manual assessment link or N/A>
 repository announcement published at: <UTC timestamp and link>
 Zulip announcement published at: <UTC timestamp and link>
 both announcements at least two weeks old: <yes/no>
-maintainer approval to close: <link>
+standing authorization: <completion-plan section 11 link>
+issue-retirement readiness packet: <reviewed link>
 ```
 
 Closure is allowed only when all of the following are true:

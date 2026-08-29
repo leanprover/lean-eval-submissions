@@ -8,6 +8,14 @@ must never be recorded here.
 Update current values in place after an infrastructure change. Git history and
 Actions retain run history; do not add rollout narratives or evidence tables.
 
+Standing maintainer authorization covers every remaining in-scope
+infrastructure, credential, protected-environment, production, canonical-data,
+and external non-PR operation. Exact readiness packets, preconditions,
+rollback, and post-change readbacks remain mandatory. An authenticated action
+performed by the maintainer because the agent lacks access is an operator
+handoff, not a new permission gate. The remaining approval exceptions are
+listed in [`docs/overhaul-tracker.md`](docs/overhaul-tracker.md).
+
 Last reconciled: **2026-08-27**
 
 ## Current baseline
@@ -67,7 +75,7 @@ send users to the production Worker origin for authentication and submission.
 The broker Workers have no public route. Intake and replay health endpoints use
 their matching `workers.dev` names. Obtain the active Worker version IDs and
 deployed commit from the latest successful protected deployment and structured
-health when preparing a rollback or go/no-go packet; copying those ephemeral
+health when preparing a rollback or launch readiness packet; copying those ephemeral
 values into this file would make this inventory stale during its own
 documentation-only deployment.
 
@@ -114,8 +122,8 @@ not the identity, installation time, or expiry of the matching Worker secret.
 
 | Credential | Current scope | Current age / expiry | Rotation, revocation, and recovery |
 | --- | --- | --- | --- |
-| `READINESS_TOKEN` | One intake Worker's protected readiness endpoints and the matching `cloudflare-*` environment | GitHub copies created 2026-08-20; Worker installation date unknown; no application-enforced expiry | Replace the Worker secret and matching GitHub environment secret as one approved maintenance change, verify readiness, and retain no old value. Overwriting both copies revokes the old token. If custody is lost, keep intake disabled and install a new random value in both locations. |
-| `LIFECYCLE_CALLBACK_TOKEN` | One intake Worker's lifecycle callbacks and the matching source-free callback jobs | Both pairs installed 2026-08-21; no application-enforced expiry | Replace both matching copies as one approved maintenance change, verify a source-free callback denial/success pair, and retain no old value. Overwriting both copies revokes the old token. If custody is lost, keep intake disabled and install a new random value in both locations. |
+| `READINESS_TOKEN` | One intake Worker's protected readiness endpoints and the matching `cloudflare-*` environment | GitHub copies created 2026-08-20; Worker installation date unknown; no application-enforced expiry | Replace the Worker secret and matching GitHub environment secret as one reviewed maintenance unit, verify readiness, and retain no old value. Overwriting both copies revokes the old token. If custody is lost, keep intake disabled and install a new random value in both locations. |
+| `LIFECYCLE_CALLBACK_TOKEN` | One intake Worker's lifecycle callbacks and the matching source-free callback jobs | Both pairs installed 2026-08-21; no application-enforced expiry | Replace both matching copies as one reviewed maintenance unit, verify a source-free callback denial/success pair, and retain no old value. Overwriting both copies revokes the old token. If custody is lost, keep intake disabled and install a new random value in both locations. |
 | `AUTH_TOKEN_SECRET` | Session signing for one intake Worker only | Installation date unknown; no application-enforced expiry | Replace only the matching Worker secret. This intentionally invalidates all sessions in that environment; verify new OAuth and agent sessions before reopening intake. Overwriting it revokes every token signed only by the old value. If custody is lost, keep intake disabled and install a new random value. |
 | `GITHUB_OAUTH_CLIENT_SECRET` | One environment's personal GitHub OAuth App and matching intake Worker | Creation and expiry are not recorded and are not exposed by the available GitHub APIs | Generate a replacement in that App, replace only the matching Worker secret, verify OAuth, then revoke the old App secret. Recovery requires access to the owning `kim-em` account; otherwise pause browser intake. |
 
@@ -143,7 +151,7 @@ custodian. The current GitHub secret was created on 2026-08-20; it has no
 application-enforced expiry. Rotation replaces only that environment secret
 with a fresh value and verifies the next protected promotion. Deleting it
 revokes the guard and makes promotion fail closed; recovery is installation of
-a fresh value through an explicitly approved credential change.
+a fresh value through a reviewed, packet-bound credential change.
 
 ## GitHub applications and State access
 
@@ -172,10 +180,10 @@ Temporary owner: personal account `kim-em`, which is acceptable for initial
 launch. Recovery and rotation remain with Kim Morrison until transfer. The
 current recovery path is recovery of the `kim-em` GitHub account; there is no
 independent alternate OAuth-App custodian. If that account is unavailable,
-pause browser intake rather than changing callbacks or credentials without a
-new approval. The intended later transfer is both Apps to `leanprover`, keeping
-the same exact callbacks and `read:user` scope, followed by environment-by-
-environment client-secret rotation.
+pause browser intake until a reviewed recovery packet is ready rather than
+changing callbacks or credentials ad hoc. The intended later transfer is both
+Apps to `leanprover`, keeping the same exact callbacks and `read:user` scope,
+followed by environment-by-environment client-secret rotation.
 
 | App | Application ID / client ID | Exact callback |
 | --- | --- | --- |
@@ -209,11 +217,11 @@ write workflows, repository settings, the submissions repository, or the other
 environment's State.
 
 Rotate each token separately before its deadline: create a replacement with
-the same one-repository scope under an approved principal, replace only the
+the same one-repository scope under the packet-bound principal, replace only the
 matching Worker's `GITHUB_STATE_TOKEN`, run the protected write preflight with
 intake disabled, and then revoke the old token in its issuing account. If the
 principal changes, update the matching State ruleset bypass only as a separate
-approved ruleset change. Immediate revocation removes the token in its issuing
+reviewed ruleset change. Immediate revocation removes the token in its issuing
 account and keeps that environment's intake disabled until a replacement has
 passed the same preflight.
 
@@ -413,6 +421,7 @@ At least quarterly and after every infrastructure change:
 3. verify staging cannot reach production State and vice versa;
 4. compare AWS account, OIDC subjects, stack outputs, KMS aliases and rotation,
    one-use tables, Lambda aliases, and IAM trust/policy boundaries;
-5. verify production archive Wrap, replay, publication, and public lifecycle
-   gates remain absent or disabled until separately approved; and
+5. verify production replay, publication, and public lifecycle gates remain
+   absent or disabled until their readiness packets are complete, and verify
+   the connected production archive Wrap boundary remains Encrypt-only; and
 6. update `Last reconciled` and current values here without adding run history.

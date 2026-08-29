@@ -25,7 +25,8 @@ history, or replace the cross-repository execution runbook.
 - Model consolidation is not a launch feature.
 - Automatic release publication is disabled in
   `leanprover/lean-eval-releases`.
-- Production archive Wrap and replay role variables are not connected.
+- Production archive Wrap is connected and qualified; the production replay
+  role variable is not connected.
 - The staging release role trusts the exact current ID-bearing GitHub OIDC
   subject, and its credentialed, publication-disabled reconstruction boundary
   is qualified.
@@ -83,7 +84,7 @@ not this summary.
       the exact proposed launch commits. Its source commit and one-time tag are
       confined to a temporary non-default branch in the allowlisted private
       staging State repository; only the target-bound secret-Gist proof remains
-      outside the repository family.
+      outside the repository family and is covered by standing authorization.
 - [ ] Complete one exact-version staging lifecycle from archive through State,
       Result, scheduled release, publication-disabled reconstruction, and
       rollback.
@@ -112,12 +113,13 @@ These are bounded smoke cases, not a combinatorial staging matrix.
 - [ ] Reconcile every accepted Result as public-source replayable,
       private-archive replayable, or reviewed unavailable.
 - [x] Freeze all thirty-five exact historical-public execution profiles.
-      State qualification and enqueue remain separately authorization-gated.
+      State qualification and enqueue remain gated on the exact immutable
+      execution packet.
 - [x] Provide one offline, create-only batch finalizer for the existing
       authorize, qualify, and enqueue State events across the exact final
-      public corpus. Appending its output remains separately approval-gated.
-- [ ] Migrate recoverable legacy private envelopes only after the separate
-      migration-semantics decision and infrastructure/credential approval.
+      public corpus. Appending its output remains gated on that packet.
+- [ ] Migrate recoverable legacy private envelopes only after the migration
+      execution packet is complete and the custodian operator handoff is ready.
 - [ ] Run bounded official-Lean-plus-nanoda replay and record a terminal replay
       or unavailable disposition for every final-cutoff Result.
 
@@ -134,19 +136,25 @@ Canonical inputs retained for this work:
 Build or qualify only exact images used by replayable Results. Execute the
 official Lean kernel path and nanoda only.
 
-## Production approval boundary
+## Standing authorization boundary
 
 Repository implementation, tests, PRs, merges, ordinary CI, and automatic
 disabled-state deployments are autonomous inside the allowlisted LeanEval
-repository family. Stop for explicit maintainer approval before:
+repository family. Standing maintainer authorization also covers every
+remaining in-scope infrastructure, credential, production, canonical-data,
+issue-retirement, announcement, and external non-PR operation. Readiness
+packets, preconditions, review, rollback, and post-change verification remain
+mandatory; authenticated maintainer steps are operator handoffs, not new
+permission gates.
 
-- changing AWS, Cloudflare, DNS, OAuth Apps, GitHub Apps, credentials, deploy
-  keys, rulesets, or protected environments;
-- enabling production intake, replay, publication, or public lifecycle APIs;
-- acting in a repository outside the allowlist; or
+Stop for exact maintainer approval only before:
+
+- opening, updating, or merging a pull request outside the allowlist;
+- posting a Zulip message or comment;
+- posting a comment or review on another person's pull request; or
 - expanding the completion-plan scope.
 
-The launch go/no-go packet and capability-enable sequence are maintained in
+The launch readiness packet and capability-enable sequence are maintained in
 the [cross-repository execution runbook][execution-runbook].
 
 ## Definition of done for this repository

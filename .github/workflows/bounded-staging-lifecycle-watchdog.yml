@@ -13,7 +13,7 @@ on:
         type: number
         default: 60
       activation_timeout_minutes:
-        description: 'Maximum wait for the separately approved enable dispatch (5-15 minutes)'
+        description: 'Maximum wait for the packet-bound enable dispatch (5-15 minutes)'
         required: true
         type: number
         default: 10
@@ -140,7 +140,7 @@ jobs:
           PY
           echo 'ready=true' >> "$GITHUB_OUTPUT"
 
-      - name: Wait for the separately approved enabled state
+      - name: Wait for the packet-bound enabled state
         env:
           ACTIVATION_TIMEOUT_MINUTES: ${{ inputs.activation_timeout_minutes }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
@@ -177,7 +177,7 @@ jobs:
             fi
             sleep 5
           done
-          echo "approved enabled staging state did not converge before the watchdog deadline" >&2
+          echo "packet-bound enabled staging state did not converge before the watchdog deadline" >&2
           exit 1
 
       - name: Hold the bounded acceptance window
