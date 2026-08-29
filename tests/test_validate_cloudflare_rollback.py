@@ -245,7 +245,11 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         # These fixtures model an emergency rollback target, independently of
         # the capabilities enabled in the repository's current launch config.
         self.configs["intake"]["env"]["production"]["vars"].update(
-            rollback.DISABLED_LAUNCH_GATE_BINDINGS
+            {
+                "INTAKE_ENABLED": "false",
+                "INTAKE_ENABLEMENT_MODE": "disabled",
+                **rollback.DISABLED_LAUNCH_GATE_BINDINGS,
+            }
         )
         self.paths: dict[str, pathlib.Path] = {}
         for name, config in self.configs.items():
