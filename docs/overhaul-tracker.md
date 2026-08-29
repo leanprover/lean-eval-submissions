@@ -125,6 +125,7 @@ These are bounded smoke cases, not a combinatorial staging matrix.
 
 Canonical inputs retained for this work:
 
+- [`historical-migration-replay-execution-packet.md`](historical-migration-replay-execution-packet.md)
 - [`historical-replay-inventory.md`](historical-replay-inventory.md)
 - [`historical-public-replay-plan.md`](historical-public-replay-plan.md)
 - [`historical-public-replay-profiles.md`](historical-public-replay-profiles.md)

@@ -885,6 +885,14 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
 
 
 class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
+    PACKET_QUALIFICATION_COMMIT = "81e94fe2f4fc819300fd7d4e036f00124166784f"
+    PACKET_PROFILE_SET_SHA256 = (
+        "d44e73c7ae58adf806a3b5147e9aa1dbfe700a53fa9482f16c2aea3127e04e2e"
+    )
+    PACKET_TASK_CONTENT_SET_SHA256 = (
+        "be2e97a2e75e0c73e087f080910bed9dd8bc5d4f365f6b2d4c8ba9acd4b82bc0"
+    )
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.matrix = json.loads(MATRIX.read_text())
@@ -1080,6 +1088,24 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
                 [authority.canonical_state_event(event) for event in events],
                 [authority.canonical_state_event(event) for event in repeated],
             )
+            _, rescheduled_tasks = authority.build_batch_events(
+                matrix, selections, profiles, "f" * 40,
+                "2026-08-26T07:00:00.000Z", "6" * 64,
+            )
+            self.assertNotEqual(tasks, rescheduled_tasks)
+            task_content = authority.batch_task_content(tasks)
+            self.assertEqual(
+                task_content,
+                authority.batch_task_content(rescheduled_tasks),
+            )
+            self.assertEqual(
+                manifest["materialized_task_content_set_sha256"],
+                authority.sha256_bytes(authority.canonical(task_content)),
+            )
+            with self.assertRaisesRegex(
+                authority.PreparationError, "State-assigned identity"
+            ):
+                authority.batch_task_content([{"event_id": "incomplete"}])
             with (
                 mock.patch.object(
                     authority,
@@ -1094,6 +1120,45 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
                 self.assertRaisesRegex(authority.PreparationError, "overwrite"),
             ):
                 authority.finalize_batch(args)
+
+    def test_retained_packet_content_hashes_are_reproducible(self) -> None:
+        with mock.patch.object(authority, "verify_checkout"):
+            matrix, profiles, selections = authority.load_batch_inputs(
+                ROOT, self.PACKET_QUALIFICATION_COMMIT
+            )
+        _, tasks = authority.build_batch_events(
+            matrix,
+            selections,
+            profiles,
+            self.PACKET_QUALIFICATION_COMMIT,
+            "2026-08-29T22:30:00.000Z",
+            "0" * 64,
+        )
+        profile_files = [
+            {"path": relative, "sha256": authority.sha256_bytes(raw)}
+            for _, raw, relative in sorted(
+                profiles.values(), key=lambda item: item[2]
+            )
+        ]
+        self.assertEqual(
+            authority.sha256_bytes(authority.canonical(profile_files)),
+            self.PACKET_PROFILE_SET_SHA256,
+        )
+        self.assertEqual(
+            authority.sha256_bytes(
+                authority.canonical(authority.batch_task_content(tasks))
+            ),
+            self.PACKET_TASK_CONTENT_SET_SHA256,
+        )
+        packet = (
+            ROOT / "docs/historical-migration-replay-execution-packet.md"
+        ).read_text(encoding="utf-8")
+        for binding in (
+            self.PACKET_QUALIFICATION_COMMIT,
+            self.PACKET_PROFILE_SET_SHA256,
+            self.PACKET_TASK_CONTENT_SET_SHA256,
+        ):
+            self.assertIn(binding, packet)
 
     def test_batch_requires_every_exact_fully_valid_profile(self) -> None:
         blobs, paths = self.exact_git_inputs()
