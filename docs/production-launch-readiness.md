@@ -205,7 +205,13 @@ production launch:
   lifecycle deployment commit/run: <40-character SHA and Actions URL>
   intake deployment commit/run: <40-character SHA and Actions URL>
   production Worker version IDs: <intake, broker, replay>
-  production canary source/problem: <exact nonsecret binding>
+  production canary source:
+    repository: leanprover/lean-eval-state-staging
+    ref: production-canary-source-fixture-v1
+    commit: a2422110ed395ca737c6889a0601938f77d2925f
+  production canary problem: formalization-evaluation/two_plus_two@1
+  production canary model: LeanEval production launch canary a2422110ed395ca737c6889a0601938f77d2925f
+  production canary publication sequence: scheduled, then visible pre-release opt-out
   production canary submission/result: <UUIDv7 and terminal result URL>
   production State commit after validation: <40-character SHA>
   production health/readiness: <URL>
