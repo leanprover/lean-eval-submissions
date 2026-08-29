@@ -31,11 +31,12 @@ Public structured health currently reports one coherent deployed commit with:
 - empty maintainer lists.
 
 Automatic release publication is disabled because `PUBLICATION_ENABLED` is
-absent. Production archive Wrap and replay role variables are absent. The
-staging release role trusts the current ID-bearing GitHub OIDC subject, and its
-credentialed, publication-disabled reconstruction boundary is qualified. The
-production release trust repair and all production capability connections
-remain approval-gated.
+absent. Production archive Wrap is connected and its Encrypt-only/decrypt-
+denial preflight is qualified; the production replay role variable is absent.
+The staging release role trusts the current ID-bearing GitHub OIDC subject, and
+its credentialed, publication-disabled reconstruction boundary is qualified.
+The production release trust repair remains an authenticated operator handoff;
+standing maintainer authorization covers that exact reviewed change.
 
 ## Cloudflare resources
 
@@ -257,7 +258,7 @@ trying to recover the old private material.
 | Repository / environment | Node | Ref policy | Current external authority |
 | --- | --- | --- | --- |
 | submissions / `archive-staging` | `EN_kwDOSh7OzM8AAAAEu8r2_A` | `lean-eval-dispatch/*` | `AWS_WRAP_ROLE_ARN` set to staging Wrap role |
-| submissions / `archive-production` | `EN_kwDOSh7OzM8AAAAEu8r25w` | `lean-eval-dispatch/*` | Production Wrap variable absent |
+| submissions / `archive-production` | `EN_kwDOSh7OzM8AAAAEu8r25w` | `lean-eval-dispatch/*` | Production Encrypt-only `AWS_WRAP_ROLE_ARN` set and qualified |
 | submissions / `replay-staging` | `EN_kwDOSh7OzM8AAAAEu8r21Q` | `main` and `lean-eval-dispatch/*` | Staging replay invoker role set |
 | submissions / `replay-production` | `EN_kwDOSh7OzM8AAAAEu8r3MQ` | protected branches | Production replay variable absent |
 | submissions / `archive-migration-production` | `EN_kwDOSh7OzM8AAAAEwLDSMQ` | protected branches | Ordinary production Wrap role recorded but incompatible with this environment's OIDC subject; unusable |
@@ -276,9 +277,9 @@ Environment protection/policy IDs, in the same order, are:
 - `release-production`: protection `63321651`.
 
 Never configure archive environments as protected-branches-only: dispatch runs
-from immutable tags. Never allow unrestricted refs. Changes to environments,
-variables, credentials, deploy keys, or rulesets require explicit maintainer
-approval.
+from immutable tags. Never allow unrestricted refs. Review environment,
+variable, credential, deploy-key, and ruleset mutations against the standing
+authorization and their exact rollback before applying them.
 
 ## AWS archive-key boundary
 
@@ -319,10 +320,10 @@ Current GitHub OIDC subject prefixes are
 role trusts exact subject
 `repo:leanprover@7233018/lean-eval-releases@1340741242:environment:release-staging`.
 The production release role still trusts the obsolete name-only subject; its
-separately approval-gated repair is documented in
+authenticated repair is documented in
 [`docs/aws-release-production-trust-repair.md`](docs/aws-release-production-trust-repair.md).
 That procedure reuses the live production template so it cannot also provision
-the deferred migration role. This inventory does not authorize that repair.
+the deferred migration role.
 
 The historical migration role
 `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`

@@ -219,15 +219,10 @@ credential, State event, result, or release is uploaded.
 
 ### Production Wrap-only launch preflight
 
-The production stack exists, but `archive-production` deliberately has no
-`AWS_WRAP_ROLE_ARN`. `AWS production Wrap-only preflight` is inert in that
-state: it enters the protected environment, reports that the role is not
-connected, and stops before requesting a GitHub OIDC token or calling AWS.
-
-Connecting the role is a credential-boundary mutation and requires the
-maintainer's explicit approval. Immediately before requesting that approval,
-run the repository's fail-closed, read-only boundary check with a short-lived
-AWS administrator session:
+The production `archive-production` environment has the exact Encrypt-only
+`AWS_WRAP_ROLE_ARN`, and the synthetic Wrap/decrypt-denial preflight is
+qualified. Before changing or rechecking that boundary, run the repository's
+fail-closed, read-only check with a short-lived AWS administrator session:
 
 ```sh
 python3 scripts/preflight_production_wrap_role.py
@@ -345,7 +340,7 @@ remain enabled. Stop if any command fails.
 The exact environment readback also discloses and requires the existing
 `can_admins_bypass: true`: repository administrators can bypass its tag
 protection. This procedure does not change or hide that standing boundary.
-The only variable to add after exact approval is:
+The exact connected variable is:
 
 ```text
 Repository:  leanprover/lean-eval-submissions
@@ -369,11 +364,10 @@ policy, including historical immutable tags; it is not authority limited to
 the one synthetic preflight run. Each archive workflow independently requires
 its tag name, workflow commit input and `github.sha` to agree. Narrowing or
 otherwise changing the wildcard policy is a separate protected-environment
-design and approval, not part of this connection. Explain this durable effect
-in the approval request.
+design, not part of this connection.
 
-After approval, add and read back only the exact variable, then rerun the AWS
-boundary check:
+To repair a missing connection, add and read back only the exact variable, then
+rerun the AWS boundary check:
 
 ```sh
 gh variable set AWS_WRAP_ROLE_ARN \
@@ -550,7 +544,7 @@ and the live staging release role trusts that exact subject. The production
 release role still trusts the obsolete name-only subject. Do not disable
 immutable subjects or edit either IAM role directly.
 
-For the separately approval-gated production trust-only repair, follow
+For the authenticated production trust-only repair, follow
 [`aws-release-production-trust-repair.md`](aws-release-production-trust-repair.md).
 The production procedure deliberately reuses the live stack template: applying
 the current full template would also provision the deferred migration role.
