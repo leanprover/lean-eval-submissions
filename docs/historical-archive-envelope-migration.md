@@ -39,8 +39,10 @@ review branch is absent, fetches current audit `main`, and refuses any drift in
 the 439 selected source/sidecar or target/sidecar paths. A failed run is
 retryable only while the review branch is still absent; an existing branch or
 an inconclusive remote lookup is a hard stop.
-The reviewed template must first be applied, at a separate infrastructure
-approval gate, to every stack that must wrap or replay these archives. It adds
+The reviewed template must first be applied, through the immutable historical
+migration/replay readiness packet, to every stack that must wrap or replay
+these archives. Standing authorization covers the infrastructure mutation but
+does not waive the packet, preflight, or rollback checks. The template adds
 only exact-context v2 Encrypt authority to the production migration role,
 which has no v1 Encrypt path, and exact-context v2 Decrypt authority to the
 relevant unwrap function role. It does not change either live v1 statement.

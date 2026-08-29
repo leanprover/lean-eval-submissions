@@ -283,7 +283,7 @@ Replace all three copies before revoking the old token in its issuing GitHub
 account, then verify one dispatch from each caller. The repository APIs expose
 the secret names but not the PAT issuer or expiry; those two current facts are
 not recoverable from this repository and must not be guessed. Record them in
-the credential inventories at the next approved PAT rotation.
+the credential inventories during the next reviewed, packet-bound PAT rotation.
 
 ## Branch protection on `main` (Repository Ruleset)
 

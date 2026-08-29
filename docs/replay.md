@@ -155,7 +155,7 @@ No source artifact crosses jobs. Fetch, decrypt, evaluate, and plaintext cleanup
 therefore remain in the same disposable replay job, matching the existing
 submission workflow's no-public-artifact invariant.
 
-## Approval and launch gates
+## Readiness and launch gates
 
 Replay remains unavailable until all gates have evidence linked from
 `INFRASTRUCTURE.md`:

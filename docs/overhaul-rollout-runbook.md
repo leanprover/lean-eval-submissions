@@ -65,10 +65,11 @@ dispatch tag. Workflow-only changes use
 [`promote-workflow-dispatch-ref.yml`](../.github/workflows/promote-workflow-dispatch-ref.yml)
 when its path classification permits; it cannot deploy Workers.
 
-An ordinary merge may trigger a disabled-state deployment. Approval of its
-existing promotion environment is allowed only when the reviewed change cannot
-enable a production capability. Environment or ruleset configuration changes
-remain explicit approval gates.
+An ordinary merge may trigger a disabled-state deployment. Enter its existing
+promotion environment only after the reviewed change is proved unable to
+enable a production capability. Environment or ruleset changes are covered by
+standing authorization when in scope, but still require an exact change packet,
+rollback, and readback.
 
 ## 3. Staging intake
 
@@ -95,9 +96,10 @@ dependencies, then creates a one-use State-bound lease. The Worker enforces the
 lease expiry independently of Actions. Durable enablement is the last step and
 occurs only after the lease, health, and protected-State checks pass.
 
-Enabling production intake requires the explicit launch go/no-go described in
-the cross-repository runbook. Do not combine enablement with refactoring,
-documentation cleanup, replay expansion, or other feature changes.
+Enabling production intake requires the completed launch readiness packet
+described in the cross-repository runbook. Standing authorization covers the
+bounded enablement; do not combine it with refactoring, documentation cleanup,
+replay expansion, or other feature changes.
 
 Emergency pause uses
 [`intake-disable-recovery.yml`](../.github/workflows/intake-disable-recovery.yml).
@@ -109,8 +111,8 @@ later production change.
 
 ## 5. Lifecycle API gates
 
-The launch-approved families are configured in `server/wrangler.jsonc`. Before
-production approval, verify that the candidate commit provides an independent
+The launch families are configured in `server/wrangler.jsonc`. Before
+production enablement, verify that the candidate commit provides an independent
 gate for each:
 
 - metadata backfill;
@@ -119,9 +121,10 @@ gate for each:
 - model aliases and renaming; and
 - release opt-out.
 
-Before requesting production approval, run one owner/maintainer success and one
-authorization or validation denial for each family, then return every gate to
-disabled and verify effective public health. Keep model consolidation disabled.
+Before completing the production launch packet, run one owner/maintainer
+success and one authorization or validation denial for each family, then return
+every gate to disabled and verify effective public health. Keep model
+consolidation disabled.
 
 The bounded staging exercise uses
 [`set-staging-lifecycle-smoke.yml`](../.github/workflows/set-staging-lifecycle-smoke.yml)
@@ -153,9 +156,10 @@ the operator to create the returned secret-Gist proof and exact
 `lean-eval/<submission-id>` source tag. The source commit lives on temporary
 non-default branch `staging-source-fixture-v1` in the allowlisted private
 `leanprover/lean-eval-state-staging` repository, so the tag write is in-family.
-The secret-Gist compare-and-swap write remains external and is limited to the
-exact target-bound proof and cleanup described below. The source-mismatch denial
-is checked before either external lookup and needs neither mutation.
+Standing authorization covers the external secret-Gist compare-and-swap write,
+limited to the exact target-bound proof and cleanup described below; the
+authenticated browser action remains an operator handoff. The source-mismatch
+denial is checked before either external lookup and needs neither mutation.
 
 Restore the same exact commit by dispatching the workflow with `state=disabled`,
 both maintainer arrays equal to `[]`, and the explicit confirmation selected.
@@ -166,7 +170,7 @@ automatically for an ordinary step failure. Cancellation after deployment may
 prevent that recovery step: immediately re-dispatch the same exact tag with
 `state=disabled` and both maintainer arrays equal to `[]`, then verify every
 launch field is false in public health. Do not use the enabled state outside
-the approved bounded smoke.
+the packet-bound smoke.
 
 The final exercise uses the temporary
 [`bounded-staging-lifecycle-watchdog.yml`](../.github/workflows/bounded-staging-lifecycle-watchdog.yml)
@@ -213,8 +217,8 @@ there is no movable or temporary release tag authority.
    eventual all-false health result. If either is interrupted, immediately use
    the existing exact-tag disabled dispatch and verify public health.
 
-Before the confirmed proof write, the driver keeps the signed challenge only in
-ordinary process memory. During the exact reviewed mutation, its only other
+Before the packet-bound proof write, the driver keeps the signed challenge only
+in ordinary process memory. During the exact mutation, its only other
 representations are the named secret Gist proof and a mode-`0700` Git checkout
 on verified tmpfs; the driver removes the checkout synchronously, clears request
 copies after submission, and retains one comparison value in memory only until
@@ -255,8 +259,8 @@ returns the ref to the captured prior head. It never uses an undocumented
 conditional HTTP PATCH and never overwrites an intervening edit or deletion.
 If a source-tag create response is lost and a tag appears, its
 ownership is ambiguous: the driver restores the proved Gist change, refuses to
-delete the tag, and reports only the exact nonsecret rollback target for a new
-explicit decision.
+delete the tag, and reports only the exact nonsecret rollback target for a
+fresh reviewed recovery decision.
 
 The final disabled-route assertions are transient response checks. Intake must
 return `503 intake_disabled`; every launch lifecycle gate—including legacy
@@ -300,7 +304,7 @@ maintainer identity per maintainer family when enabled and none when disabled,
 and always rejects model-consolidation enablement. The normal protected
 deployment controller reads that state, binds it to the immutable dispatch tag,
 enters `cloudflare-production`, and verifies every effective public health
-field. After the production go/no-go, enable these APIs only with a
+field. After the production launch packet is complete, enable these APIs with a
 single-purpose configuration change; do not combine it with intake enablement,
 release publication, refactoring, or unrelated documentation.
 
@@ -323,14 +327,12 @@ submission/digest binding, and provider-neutral adapter fields.
 
 Current authority boundaries and environment variables are recorded in
 [`../INFRASTRUCTURE.md`](../INFRASTRUCTURE.md). The staging release trust and
-credentialed reconstruction boundary are qualified. The remaining external
-steps are separate approvals:
-
-1. connect the production archive Wrap-only role and prove it cannot unwrap;
-2. reverify production release trust and scope without decrypting or
-   publishing production source, following the separate
-   [`aws-release-production-trust-repair.md`](aws-release-production-trust-repair.md)
-   procedure only after its explicit approval.
+credentialed reconstruction boundary are qualified, as is the connected
+production archive Wrap-only boundary. The remaining production release-trust
+repair is covered by standing authorization but must follow the exact
+operator-handoff procedure in
+[`aws-release-production-trust-repair.md`](aws-release-production-trust-repair.md)
+without decrypting or publishing production source.
 
 The qualified staging release boundary is limited to:
 
@@ -368,9 +370,10 @@ silently substitute a newer source or toolchain.
 Classify each accepted Result as public-source replayable,
 private-archive replayable, or reviewed unavailable. Use bounded retries and
 record an explicit terminal outcome. Private legacy-envelope migration requires
-its own infrastructure and credential approval; rewrap the per-submission key
-without changing archive ciphertext or stable IDs, then remove temporary
-authority and plaintext.
+its exact immutable execution packet and credential-custodian operator handoff.
+Standing authorization covers the bounded infrastructure, credential, and
+canonical writes; rewrap the per-submission key without changing archive
+ciphertext or stable IDs, then remove temporary authority and plaintext.
 
 ## 9. Rollback
 
@@ -407,9 +410,16 @@ At least quarterly and after each infrastructure change:
    and one-use tables; and
 5. update current values in `INFRASTRUCTURE.md` in place.
 
-## 11. Approval boundary
+## 11. Standing authorization boundary
 
-Stop for explicit approval before any AWS or Cloudflare mutation, DNS/OAuth/App
-or credential change, ruleset/protected-environment change, production feature
-enablement, external-repository action, or material scope expansion. Present
-one exact mutation with target, reason, read-only preconditions, and rollback.
+Standing maintainer authorization covers every remaining in-scope operation,
+including AWS, Cloudflare, DNS/OAuth/App, credentials, rulesets and protected
+environments, production enablement, canonical data, issue retirement,
+announcements, and external non-PR mutations. Complete the applicable exact
+packet with targets, immutable inputs, impact, read-only preconditions,
+rollback, and post-change verification; do not request repeated permission.
+Authenticated maintainer execution remains an operator handoff.
+
+Stop for exact approval only before opening, updating, or merging an external
+repository pull request, posting on Zulip, commenting or reviewing another
+person's pull request, or expanding the completion-plan scope.

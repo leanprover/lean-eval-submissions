@@ -5,6 +5,12 @@ same template creates isolated staging and production resources in one
 dedicated Lean Eval AWS account; exact live identifiers, credential boundaries,
 and rotation ownership belong in `INFRASTRUCTURE.md`.
 
+Standing maintainer authorization covers the remaining in-scope infrastructure
+and credential operations in this procedure. Each closed check, change packet,
+rollback, and post-change readback remains mandatory. A short-lived
+authenticated administrator session supplied by the maintainer is an operator
+handoff, not a new permission gate.
+
 ## 1. Create the account
 
 Create a new AWS account used only for Lean Eval archive identities. Record its
@@ -93,7 +99,7 @@ atomic DynamoDB condition and does not depend on Lambda reserved concurrency;
 this also permits deployment in a new account with AWS's minimum regional
 concurrency quota.
 
-## 4. Record outputs; do not connect production yet
+## 4. Record outputs and connect only reviewed consumers
 
 The six GitHub environment shells already exist:
 
@@ -114,12 +120,12 @@ protected branches. It must use the production-only
 only `archive-production` and deliberately cannot be assumed by a migration
 job.
 
-Before provisioning they are intentionally empty. The archive and replay
-staging role variables and both release role variables are now installed. The
-release variables are non-secret role selectors and do not enable publication;
-the separate `PUBLICATION_ENABLED` repository variable remains absent.
-Production archive and replay role variables remain deliberately unconnected.
-Do not recreate or broaden the environments, and do not connect production
+The archive and replay staging role variables, the production archive Wrap
+variable, and both release role variables are installed. The release variables
+are non-secret role selectors and do not enable publication; the separate
+`PUBLICATION_ENABLED` repository variable remains absent. The production
+replay role variable remains deliberately unconnected. Do not recreate or
+broaden the environments, and do not connect another production consumer
 merely because its dormant stack exists.
 
 For each stack, copy the seven common non-secret outputs into
@@ -145,8 +151,8 @@ policies. Use variable `AWS_WRAP_ROLE_ARN` in `archive-staging`,
 `AWS_RELEASE_UNWRAP_ROLE_ARN` in each matching release environment. The
 release role variables are installed because their workflows have been
 reviewed; production publication remains independently disabled. Reserve the
-production archive and replay variables until their workflows and launch gates
-are qualified.
+production replay variable until its workflow and launch readiness packet are
+qualified.
 
 List both stacks' recorded outputs without exposing a credential:
 
@@ -239,8 +245,8 @@ key. Any difference stops the operation; do not replace the check with a
 visual policy review.
 
 In a separately authenticated GitHub shell, require the current boundary to be
-disconnected and the environment's existing wildcard immutable-tag policy to
-be unchanged:
+connected to the exact reviewed role and the environment's existing wildcard
+immutable-tag policy to be unchanged:
 
 ```sh
 set -euo pipefail
@@ -279,7 +285,8 @@ gh api \
     '
 test "$(gh api \
   repos/$LEAN_EVAL_SUBMISSIONS/environments/$LEAN_EVAL_ARCHIVE_ENVIRONMENT/variables \
-  --jq .total_count)" = 0
+  --jq '.variables | if length == 1 then .[0].name + "=" + .[0].value else "" end')" = \
+  "AWS_WRAP_ROLE_ARN=$LEAN_EVAL_WRAP_ROLE_ARN"
 test "$(gh api \
   repos/$LEAN_EVAL_SUBMISSIONS/environments/replay-production/variables \
   --jq .total_count)" = 0
@@ -552,8 +559,7 @@ Any future staging drift repair must use CloudFormation, reconcile the live
 template and complete parameter set, and stop unless the change set contains
 exactly one resource change: a non-replacing `Modify` of
 `ReleaseInvokerRole` (`AWS::IAM::Role`). The production repair must meet the
-same resource-change whitelist and leave
-the other stack unchanged.
+same resource-change whitelist and leave the other stack unchanged.
 
 ## Why this is one-use
 

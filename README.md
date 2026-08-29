@@ -182,8 +182,9 @@ etc.).
 - Trusted provider-neutral archive writer and server-archive workflow:
   [`scripts/archive_envelope.py`](scripts/archive_envelope.py) and
   [`.github/workflows/server-archive.yml`](.github/workflows/server-archive.yml).
-- AWS KMS/DynamoDB adapter and linted SAM infrastructure; live role connections
-  remain separately approval-gated: [`scripts/aws_key_adapter.py`](scripts/aws_key_adapter.py) and
+- AWS KMS/DynamoDB adapter and linted SAM infrastructure; production archive
+  Wrap is connected, while production replay remains packet-gated under the
+  standing authorization: [`scripts/aws_key_adapter.py`](scripts/aws_key_adapter.py) and
   [`infrastructure/aws-key-adapter/template.yaml`](infrastructure/aws-key-adapter/template.yaml).
 - Concise operator walkthrough for the dedicated account:
   [`docs/aws-key-adapter-setup.md`](docs/aws-key-adapter-setup.md).
