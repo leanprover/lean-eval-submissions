@@ -1078,6 +1078,29 @@
         "ref": "246646cab0b4dd69b63163966e12b7fe8696c8c9",
         "repo": "mlgraham/lean-eval-perron-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T10:53:51Z",
+      "benchmark_commit": "9627c03f57f7bf01b72f816470e4fc423c4a1f83",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1510,
+        "kind": "issue"
+      },
+      "problem_id": "euler_lagrange_equation",
+      "production_metadata": {
+        "production_description": "Original proof of euler_lagrange_equation. Claude Opus 5 (Claude Code), under human direction,\nfrom the Challenge statement, Mathlib source search, and compiler feedback only; no published\nlean-eval solution consulted.\n\nMethod. Mathlib supplies the hardest analytic input —\n`IsOpen.ae_eq_zero_of_integral_contDiff_smul_eq_zero`, the fundamental lemma of the calculus of\nvariations — so the proof is the classical three steps, and the effort goes into the plumbing\naround them.\n\n**1. Currying.** The statement's partials are `deriv (fun y => L t y v) (x t)` and\n`deriv (fun z => L t (x t) z) (x' t)`, while the regularity hypothesis is `ContDiff ℝ 2` on the\n*uncurried* `L`. Each curried partial is the directional derivative of the uncurried Lagrangian\nalong a basis vector: composing `fderiv` with the affine embedding `z ↦ (t, z, v)` (whose\nderivative is `(0,1,0)`) identifies them. That single observation is what lets everything\ndownstream work with `fderiv ℝ (Lag L)` and never with the curried form again.\n\n**2. Differentiating the action.** `hasDerivAt_integral_of_dominated_loc_of_deriv_le` over\n`volume.restrict (Ioo a b)`. The dominating function is a **constant**: the perturbed path point\n`(t, x t + εh t, x' t + εh' t)` ranges over a compact box for `(ε,t) ∈ [-1,1] × [a,b]`, and\n`fderiv` of a `C²` function is continuous, so `IsCompact.exists_bound_of_continuousOn` gives the\nbound with no growth estimate at all. At `ε = 0` the derivative splits as\n`(0, h t, h' t) = h t • (0,1,0) + h' t • (0,0,1)`, giving exactly `P·h + Q·h'`.\n\n**3. Integration by parts.** `intervalIntegral.integral_mul_deriv_eq_deriv_mul` on `[a,b]`. The\nboundary terms vanish because `tsupport h ⊆ Ioo a b` puts `a` and `b` outside the support, so\n`h a = h b = 0` by `image_eq_zero_of_notMem_tsupport`. `Q = ∂L/∂x'` along the path is `C¹` —\n`ContDiff.contDiff_fderiv_apply` on the `C²` Lagrangian, composed with the `C¹` path point\n`t ↦ (t, x t, x' t)` (which needs `ContDiff.deriv'` to see that `x'` is `C¹`).\n\n**4. From a.e. to everywhere.** The fundamental lemma returns `∀ᵐ t, t ∈ Ioo a b → f t = 0`. Since\n`f = P - Q'` is continuous, `{f ≠ 0} ∩ Ioo a b` is *open*; a nonempty open subset of `ℝ` has\npositive measure (`IsOpen.measure_pos`), so it must be empty.\n\n307 lines of helpers, one line of assembly. Zero `sorry`; `#print axioms` gives exactly propext,\nClassical.choice, Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_c7e69ab387dcbaddd0644f91e2302b374d80f0ab0b040d6a47e625ef4139ef2c",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "3d5905db147c558bceb25b1ae395670187e147c5",
+        "repo": "mlgraham/lean-eval-euler-lagrange-submission"
+      }
     }
   ],
   "schema_version": 2,
