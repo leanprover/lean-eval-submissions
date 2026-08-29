@@ -1032,6 +1032,29 @@
         "ref": "e2f1262e2e031a9b126c48340f001cd6764edb24",
         "repo": "mlgraham/lean-eval-heat-kernel-submission"
       }
+    },
+    {
+      "accepted_at": "2026-08-29T10:25:29Z",
+      "benchmark_commit": "9627c03f57f7bf01b72f816470e4fc423c4a1f83",
+      "declared_model": "github.com/mlgraham (various models)",
+      "intake": {
+        "issue_number": 1507,
+        "kind": "issue"
+      },
+      "problem_id": "nyquist_shannon_sampling",
+      "production_metadata": {
+        "production_description": "Original proof of nyquist_shannon_sampling. Claude Opus 5 (Claude Code), under human direction,\nfrom the Challenge statement, Mathlib source search, and compiler feedback only; no published\nlean-eval solution consulted.\n\nMethod. The obvious route expands `𝓕f` in a Fourier series on `[-1/2, 1/2]`: build the periodic\nextension as an `AddCircle 1` function via `AddCircle.liftIco`, compute its `fourierCoeff`, and\napply `hasSum_fourier_series_of_summable`. That works but needs the endpoint values `𝓕f(±1/2) = 0`\n(a one-sided-limit argument), the `fourierCoeff_eq_intervalIntegral` shift to a non-standard base\npoint, and completeness of the trigonometric system.\n\n**Poisson summation supplies the whole step for free** — provided it is applied to the *transform*\nrather than to the function. `SchwartzMap.tsum_eq_tsum_fourier` on `fourierTransformCLM ℂ f` reads\n\n    ∑ₙ 𝓕f(ξ + n) = ∑ₖ 𝓕(𝓕f)(k) · e^{2πikξ}.\n\nOn the *open* Nyquist band the left side collapses to the single term `n = 0`, because for `n ≠ 0`\nand `|ξ| < 1/2` the translate `ξ + n` leaves `[-1/2, 1/2]` (`tsum_eq_single`). The right side is\n`∑ₖ f(-k) e^{2πikξ}` because `𝓕(𝓕f)(v) = f(-v)`, which is Fourier inversion\n(`Continuous.fourierInv_fourier_eq`) composed with `Real.fourierInv_eq_fourier_neg`. So\n\n    𝓕f(ξ) = ∑ₖ f(-k) e^{2πikξ}   on   (-1/2, 1/2),\n\nwith no `AddCircle` lift, no `fourierCoeff` computation, and no endpoint analysis — working on the\nopen interval instead of the closed one is what removes the last of those, since `Ioo` and `Icc`\ndiffer by a null set and the integral cannot tell them apart.\n\nThe rest is bookkeeping:\n\n- **Term-by-term integration.** `hasSum_integral_of_summable_integral_norm` over `Ioo (-1/2) (1/2)`;\n  each `∫ ‖·‖` is exactly `‖f(-k)‖` since the exponential has modulus one and the interval has\n  measure one. Summability of the samples comes from the Schwartz bound `‖x‖²‖f x‖ ≤ C` with\n  `Real.summable_one_div_int_pow`, applied cofinitely so the `n = 0` term is not an obstruction.\n- **The total.** `∫_{Ioo} 𝓕f(ξ)e^{2πitξ} dξ = ∫_ℝ … = 𝓕⁻(𝓕f)(t) = f(t)`, the first step by\n  `setIntegral_eq_integral_of_ae_compl_eq_zero` (the integrand vanishes off `Icc`, and\n  `Icc ∖ Ioo = {±1/2}` is null).\n- **Each term.** `∫_{-1/2}^{1/2} e^{2πiuξ} dξ = sinc(πu)` from `integral_exp_mul_complex`, with\n  `u = 0` handled separately since `sinc` is defined by cases.\n- **Reindex** `k ↦ -k` and use that `sinc` is even.\n\nOne practical note for anyone rebuilding this: `𝓕 ⇑f` as written in the deps and `𝓕 f` as it\nappears after rewriting with `SchwartzMap.fourierTransformCLM_apply` are definitionally equal but\nnot syntactically equal, so `rw` fails where `Eq.trans` and `calc` succeed. Several steps here are\n`calc` chains for exactly that reason.\n\n219 lines of helpers, three lines of assembly. Zero `sorry`; `#print axioms` gives exactly\npropext, Classical.choice, Quot.sound.",
+        "solution_publication_date": "2026-08-29",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_f15b33be16c4ce53053f7cd596cb0c2e8cc666e7c93db5c220bacfe6fc8a2eea",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "fe0cd09d9c343e847249ca3cf7bd156eee7a850e",
+        "repo": "mlgraham/lean-eval-nyquist-submission"
+      }
     }
   ],
   "schema_version": 2,
