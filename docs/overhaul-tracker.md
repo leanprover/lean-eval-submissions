@@ -111,11 +111,8 @@ These are bounded smoke cases, not a combinatorial staging matrix.
       inventory delta.
 - [ ] Reconcile every accepted Result as public-source replayable,
       private-archive replayable, or reviewed unavailable.
-- [ ] Freeze the exact historical-public execution profiles. Thirty-four of
-      thirty-five matrix profiles are frozen; benchmark
-      `9921ef5c57b8d9eaa31b64a7e2d68cf53a388c66` remains unqualified and requires
-      separate exact Cloudflare approval for its source-free isolated staging
-      probe.
+- [x] Freeze all thirty-five exact historical-public execution profiles.
+      State qualification and enqueue remain separately authorization-gated.
 - [x] Provide one offline, create-only batch finalizer for the existing
       authorize, qualify, and enqueue State events across the exact final
       public corpus. Appending its output remains separately approval-gated.
