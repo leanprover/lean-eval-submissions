@@ -38,7 +38,7 @@ The launch candidate tracks:
 
 It has not been deployed and the launch-readiness packet remains `NO-GO`. The
 live staging and production Workers are still deployed at
-`f2d7f7cbecec89da19c685452ee521b8e708f51e`: production intake and every public
+`30bc92b3d46bd2a3ba1788433264fdd70ae3c74e`: production intake and every public
 production lifecycle API are effectively disabled, both live production
 maintainer lists are empty, and live staging intake and lifecycle APIs remain
 all-false. The bounded staging acceptance and promotion-canary exceptions keep

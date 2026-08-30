@@ -17,7 +17,7 @@ history, or replace the cross-repository execution runbook.
 
 - Protected `main` requires the `verify` aggregate check.
 - Staging and production Workers report one coherent live deployment at
-  `f2d7f7cbecec89da19c685452ee521b8e708f51e`.
+  `30bc92b3d46bd2a3ba1788433264fdd70ae3c74e`.
 - The live deployment keeps production intake and every public production
   lifecycle API configured and effectively disabled, with empty maintainer
   allowlists.
