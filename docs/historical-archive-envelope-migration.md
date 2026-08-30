@@ -39,6 +39,13 @@ review branch is absent, fetches current audit `main`, and refuses any drift in
 the 439 selected source/sidecar or target/sidecar paths. A failed run is
 retryable only while the review branch is still absent; an existing branch or
 an inconclusive remote lookup is a hard stop.
+Promotion binds the staged commit, tree, and exact binary patch relative to the
+pinned source. Immediately before promotion, it binds the then-current audit
+`main`, requires the pinned source to remain its ancestor, and repeats the
+zero-overlap check across every migration-touched path. It applies exactly the
+staged patch to that current head, binds the resulting commit and tree, and
+requires merged audit `main` to have exactly that tree. The same
+exact-patch/current-head rule applies to the final issue-intake delta.
 The reviewed template must first be applied, through the immutable historical
 migration/replay readiness packet, to every stack that must wrap or replay
 these archives. Standing authorization covers the infrastructure mutation but

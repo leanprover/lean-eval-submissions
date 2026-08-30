@@ -26,6 +26,25 @@ a second transaction or replay system.
 | Private audit source | audit commit `ad356e7bc5a2d650d9902ac3f6d352a0164360bc`, inventory digest `6b8867f41a13c3ba323746988058886e5dc73da7b509deaf01ccf9c36fe8d5d4` | 1,045 archives |
 | Selected schema-1 migration set | inventory digest `a8913f1c8b5073e5b7ab309ba10481b615ca4fc00e629e41a9e57962f3afebd4` | 439 unique archives |
 
+The fixed reviewed implementation bindings are:
+
+| Component | Exact binding |
+| --- | --- |
+| Migration workflow | `.github/workflows/migrate-archive-envelopes.yml`, SHA-256 `242da58b04478f7bf614f55b6ab78d01cd494b5b6df867681e2e5616ef848f64` |
+| Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `b0b2e1310ce3e71ee2738439a9d3c371259d976dc3a0556963072563f66eb76c` |
+| Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `4f8572f27d9e1c9d8013059135c7446b905cbda16226f5c7cd38ec2f65296a6e` |
+| Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
+| Private plan builder | `scripts/prepare_historical_private_replay.py`, SHA-256 `2f1ae6a6e8710a0d0983aa7c2b3f64e77ebf2322da8154c04e39be084f4355e4` |
+| Public finalizer | `scripts/prepare_historical_public_authority.py`, SHA-256 `0293a9bd94fa381283448b82d1ba09f892e4cc4c41266cadf9def2b18ae2f0f5` |
+| Migration infrastructure | `infrastructure/aws-key-adapter/template.yaml`, SHA-256 `f075b0439dfadd83930cb18051e595fa6d378b3a5e30c55cb2f1966e6820a45a`; operator script SHA-256 `bee43ece436377c5eb5ec717b3985ab669ef2662dd92dedcacc7039edd0c5d7a` |
+| Migration boundary | role `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`; environment `archive-migration-production`; review branch `archive-file-key-rewrap-v1`; confirmation `stage-envelope-migration` |
+| Deterministic migration report | SHA-256 `faa26e1aa47eb629966db03695eda4f949b6c9804166f0047f53e09d9cc83339` |
+
+Both replay controllers are restricted to protected `main`, use separate
+non-cancelling concurrency groups, allow at most four execution attempts, and
+bound each job to 360 minutes. Cleanup has a seven-hour deadline, receipts are
+retained for 24 hours, and each OIDC token lifetime is at most ten minutes.
+
 The public task-content digest excludes only the six State-assigned event
 identity fields: `authority_event_id`, `authorized_at`,
 `qualification_event_id`, `qualified_at`, `event_id`, and `occurred_at`. It
@@ -110,12 +129,17 @@ These fields are unknowable until the packet-bound migration has produced and
 validated the randomized v2 envelope bytes. They are a readback gate, not a
 reason to install the identity before the pre-mutation packet is complete.
 
-- [ ] The migration output report digest plus the staged audit commit and tree.
+- [ ] The deterministic migration report digest plus the staged audit commit,
+      tree, and exact binary patch digest relative to the pinned audit source.
       Require 439 schema-version-3 sidecars, zero changed ciphertexts and stable
       IDs, and no retained plaintext, legacy identity, AWS session, or scratch
       output.
-- [ ] Review and promote exactly that audit tree; bind the resulting immutable
-      audit `main` commit before generating private State candidates.
+- [ ] Immediately before promotion, bind the then-current audit `main`. Require
+      the pinned source to be its ancestor and require zero overlap between all
+      intervening changes and the migration-touched source and target paths.
+      Apply exactly the staged patch to that current head, bind the resulting
+      commit and tree, and promote only that rebased tree. After merge, require
+      audit `main` to have exactly the bound tree.
 - [ ] The exact production State head used for combined validation.
 - [ ] One `first_occurred_at` after that State head and deterministic event
       identities derived by the canonical public and private finalizers from
@@ -136,12 +160,15 @@ reason to install the identity before the pre-mutation packet is complete.
    bounded migration infrastructure, and only then have the custodian install
    the legacy identity for the exact protected workflow run.
 3. Run the archive migration workflow against the exact audit commit and
-   selected inventory digest. Complete the post-migration readback, then review
-   and promote only its isolated audit branch.
-4. Run `prepare_historical_public_authority.py finalize-batch` and
+   selected inventory digest. Complete the post-migration readback, then apply
+   the exact staged patch to the separately bound current audit head and
+   promote only the resulting reviewed tree.
+4. Run `prepare_historical_public_authority.py finalize-batch` against its
+   pinned State contract checkout `15a96673efd44d3b198890c1e94581b33c2a1a87` while choosing timestamps after
+   the separately bound current production State head. Run
    `prepare_historical_private_replay.py state-events --selection full
-   --append-ready` with non-overlapping times after one exact current State
-   head. Validate their combined event graph and materialized queues before
+   --append-ready` against that exact current head with non-overlapping times.
+   Validate both candidate sets together against the current head before
    committing either candidate.
 5. Append the reviewed candidates, enable only the required historical
    controllers, drain both queues with bounded retries, and record a terminal
@@ -156,8 +183,9 @@ reason to install the identity before the pre-mutation packet is complete.
 7. After the announced issue-intake cutoff, generate the append-only delta and
    prepare a new exact packet covering only those added Results. Never extend
    this retained-baseline packet by implication. Use that packet to migrate any
-   selected delta archives, promote the exact isolated audit tree, and complete
-   its post-migration readback.
+   selected delta archives, apply its exact staged patch to the separately
+   bound current audit head, promote the resulting tree, and complete its
+   post-migration readback.
 8. Only after final-delta promotion and readback, remove the installed identity
    and session material, one-shot migration workflow, protected migration
    environment, dedicated migration Encrypt role and stack output, and
