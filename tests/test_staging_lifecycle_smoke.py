@@ -143,6 +143,10 @@ class StagingLifecycleSmokeTests(unittest.TestCase):
             fixture["lifecycle_cases"]["problem_repair"]["denial_http_status"],
             400,
         )
+        self.assertEqual(
+            fixture["lifecycle_cases"]["model_alias_and_rename"]["alias"],
+            "lean-eval-launch-final-staging-alias-v2",
+        )
         backfill = fixture["lifecycle_cases"]["metadata_backfill"]
         self.assertEqual(backfill["target"], "claimed_legacy_result")
         self.assertRegex(backfill["claim"]["result_id"], r"^r2_[0-9a-f]{64}$")
