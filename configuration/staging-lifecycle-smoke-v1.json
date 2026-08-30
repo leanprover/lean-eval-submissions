@@ -154,7 +154,7 @@
     "release_repository": "leanprover/lean-eval-releases",
     "release_workflow": "credentialed-release-staging-smoke.yml",
     "release_ref": "main",
-    "release_commit": "1c09d096687b7dd410b775c7022c9b3496245319",
+    "release_commit": "20c077f4916c757acfeb961c706c98833cd9ea2f",
     "release_run_name_prefix": "Reconstruct staging submission ",
     "fixture_gist_file": "lean-eval-proof.txt",
     "retire_after": "one accepted bounded staging lifecycle run"
