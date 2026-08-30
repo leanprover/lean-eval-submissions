@@ -834,9 +834,68 @@ class RunEvalInvocationTests(unittest.TestCase):
 
         self.assertEqual(result["problems"][0]["id"], "two_plus_two")
         self.assertIn("live comparator output", stderr.getvalue())
+        argv = popen.call_args.args[0]
+        self.assertEqual(argv[:3], ["lake", "exe", "lean-eval"])
         _, kwargs = popen.call_args
         self.assertIs(kwargs["stderr"], None)
         self.assertEqual(kwargs["stdout"], ev.subprocess.PIPE)
+
+    def test_preprimed_run_eval_uses_validated_baked_executable(self) -> None:
+        class FakeProcess:
+            def __init__(self) -> None:
+                self.returncode = 0
+
+            def communicate(self) -> tuple[str, None]:
+                return ('{"problems": []}', None)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = pathlib.Path(tmp)
+            executable = repo_root / ".lake/build/bin/lean-eval"
+            executable.parent.mkdir(parents=True)
+            executable.write_text("fixture", encoding="utf-8")
+            executable.chmod(0o755)
+            with mock.patch.object(
+                ev.subprocess, "Popen", return_value=FakeProcess()
+            ) as popen:
+                ev._run_run_eval(
+                    problem_ids=["two_plus_two"],
+                    workspaces_root=repo_root / "workspaces",
+                    repo_root=repo_root,
+                    use_prebuilt_runner=True,
+                )
+
+        argv = popen.call_args.args[0]
+        self.assertEqual(argv[0], str(executable.resolve()))
+        self.assertEqual(argv[1:3], ["run-eval", "--json"])
+        self.assertNotIn("lake", argv)
+        self.assertEqual(popen.call_args.kwargs["cwd"], repo_root)
+
+    def test_preprimed_run_eval_rejects_unsafe_baked_executable(self) -> None:
+        for obstruction in ("missing", "symlink", "non-executable"):
+            with (
+                self.subTest(obstruction=obstruction),
+                tempfile.TemporaryDirectory() as tmp,
+            ):
+                repo_root = pathlib.Path(tmp)
+                executable = repo_root / ".lake/build/bin/lean-eval"
+                executable.parent.mkdir(parents=True)
+                if obstruction == "symlink":
+                    target = repo_root / "target"
+                    target.write_text("fixture", encoding="utf-8")
+                    target.chmod(0o755)
+                    executable.symlink_to(target)
+                elif obstruction == "non-executable":
+                    executable.write_text("fixture", encoding="utf-8")
+                    executable.chmod(0o644)
+                with self.assertRaisesRegex(
+                    ev.EvaluateError, "non-symlink executable inside repo_root"
+                ):
+                    ev._run_run_eval(
+                        problem_ids=["two_plus_two"],
+                        workspaces_root=repo_root / "workspaces",
+                        repo_root=repo_root,
+                        use_prebuilt_runner=True,
+                    )
 
     def test_run_eval_passes_problem_ids_as_single_comma_separated_flag(self) -> None:
         # lean4-cli's `Array String` flag instance does NOT support

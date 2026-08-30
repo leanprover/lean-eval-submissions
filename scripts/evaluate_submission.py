@@ -562,11 +562,25 @@ def _run_run_eval(
     problem_ids: list[str],
     workspaces_root: pathlib.Path,
     repo_root: pathlib.Path,
+    use_prebuilt_runner: bool = False,
 ) -> dict:
-    args = [
-        "lake",
-        "exe",
-        "lean-eval",
+    if use_prebuilt_runner:
+        executable = repo_root / ".lake" / "build" / "bin" / "lean-eval"
+        if (
+            executable.is_symlink()
+            or not executable.is_file()
+            or not os.access(executable, os.X_OK)
+            or not _is_inside(executable, repo_root)
+        ):
+            raise EvaluateError(
+                "preprimed run-eval executable must be a non-symlink executable "
+                "inside repo_root"
+            )
+        prefix = [str(executable.resolve())]
+    else:
+        prefix = ["lake", "exe", "lean-eval"]
+    runner_name = " ".join(prefix)
+    args = prefix + [
         "run-eval",
         "--json",
         "--workspaces-root",
@@ -592,7 +606,8 @@ def _run_run_eval(
             part for part in [f"stdout:\n{stdout}" if stdout else ""] if part
         )
         raise EvaluateError(
-            f"lake exe lean-eval run-eval failed with exit code {process.returncode}:\n{details}"
+            f"{runner_name} run-eval failed with exit code {process.returncode}:\n"
+            f"{details}"
         )
     try:
         return json.loads(stdout)
@@ -669,7 +684,9 @@ def evaluate_submission(
     """Run the full evaluation pipeline and write results.json + summary.json.
 
     `run_eval_runner` is an optional injection point for tests. If None, the
-    real `lake exe lean-eval run-eval` is used.
+    real `lake exe lean-eval run-eval` is used, except that replay-only
+    preprimed mode invokes the validated baked executable directly so Lake
+    does not create package-configuration locks on the read-only benchmark.
 
     `shared_packages` optionally points at a directory containing an
     already-populated `.lake/packages/...` layout (e.g. the benchmark
@@ -772,6 +789,7 @@ def evaluate_submission(
                 problem_ids=overlaid_ids,
                 workspaces_root=workspaces_root,
                 repo_root=repo_root,
+                use_prebuilt_runner=preprimed_workspaces,
             )
         else:
             run_eval_output = run_eval_runner(
