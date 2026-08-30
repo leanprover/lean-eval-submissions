@@ -840,62 +840,56 @@ class RunEvalInvocationTests(unittest.TestCase):
         self.assertIs(kwargs["stderr"], None)
         self.assertEqual(kwargs["stdout"], ev.subprocess.PIPE)
 
-    def test_preprimed_run_eval_uses_validated_baked_executable(self) -> None:
-        class FakeProcess:
-            def __init__(self) -> None:
-                self.returncode = 0
-
-            def communicate(self) -> tuple[str, None]:
-                return ('{"problems": []}', None)
-
+    def test_preprimed_eval_runs_only_baked_workspace_tests(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = pathlib.Path(tmp)
-            executable = repo_root / ".lake/build/bin/lean-eval"
-            executable.parent.mkdir(parents=True)
-            executable.write_text("fixture", encoding="utf-8")
-            executable.chmod(0o755)
+            workspaces = repo_root / "workspaces"
+            for problem_id in ("accepted", "rejected"):
+                (workspaces / problem_id).mkdir(parents=True)
             with mock.patch.object(
-                ev.subprocess, "Popen", return_value=FakeProcess()
-            ) as popen:
-                ev._run_run_eval(
-                    problem_ids=["two_plus_two"],
-                    workspaces_root=repo_root / "workspaces",
+                ev.subprocess,
+                "run",
+                side_effect=[
+                    mock.Mock(returncode=0),
+                    mock.Mock(returncode=1),
+                ],
+            ) as run:
+                result = ev._run_preprimed_eval(
+                    problem_ids=["accepted", "rejected"],
+                    workspaces_root=workspaces,
                     repo_root=repo_root,
-                    use_prebuilt_runner=True,
                 )
 
-        argv = popen.call_args.args[0]
-        self.assertEqual(argv[0], str(executable.resolve()))
-        self.assertEqual(argv[1:3], ["run-eval", "--json"])
-        self.assertNotIn("lake", argv)
-        self.assertEqual(popen.call_args.kwargs["cwd"], repo_root)
+        self.assertEqual(result["attempted_problems"], 2)
+        self.assertEqual(result["succeeded_problems"], 1)
+        self.assertEqual(
+            [(entry["id"], entry["succeeded"]) for entry in result["problems"]],
+            [("accepted", True), ("rejected", False)],
+        )
+        self.assertEqual(run.call_count, 2)
+        for call, problem_id in zip(run.call_args_list, ("accepted", "rejected")):
+            self.assertEqual(call.args[0], ["lake", "test"])
+            self.assertEqual(call.kwargs["cwd"], workspaces / problem_id)
+            self.assertIs(call.kwargs["stdin"], ev.subprocess.DEVNULL)
+            self.assertIs(call.kwargs["stdout"], ev.subprocess.DEVNULL)
+            self.assertIs(call.kwargs["stderr"], ev.subprocess.DEVNULL)
 
-    def test_preprimed_run_eval_rejects_unsafe_baked_executable(self) -> None:
-        for obstruction in ("missing", "symlink", "non-executable"):
-            with (
-                self.subTest(obstruction=obstruction),
-                tempfile.TemporaryDirectory() as tmp,
+    def test_preprimed_eval_rejects_symlink_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = pathlib.Path(tmp)
+            workspaces = repo_root / "workspaces"
+            target = repo_root / "target"
+            workspaces.mkdir()
+            target.mkdir()
+            (workspaces / "problem").symlink_to(target, target_is_directory=True)
+            with self.assertRaisesRegex(
+                ev.EvaluateError, "preprimed workspace is unavailable"
             ):
-                repo_root = pathlib.Path(tmp)
-                executable = repo_root / ".lake/build/bin/lean-eval"
-                executable.parent.mkdir(parents=True)
-                if obstruction == "symlink":
-                    target = repo_root / "target"
-                    target.write_text("fixture", encoding="utf-8")
-                    target.chmod(0o755)
-                    executable.symlink_to(target)
-                elif obstruction == "non-executable":
-                    executable.write_text("fixture", encoding="utf-8")
-                    executable.chmod(0o644)
-                with self.assertRaisesRegex(
-                    ev.EvaluateError, "non-symlink executable inside repo_root"
-                ):
-                    ev._run_run_eval(
-                        problem_ids=["two_plus_two"],
-                        workspaces_root=repo_root / "workspaces",
-                        repo_root=repo_root,
-                        use_prebuilt_runner=True,
-                    )
+                ev._run_preprimed_eval(
+                    problem_ids=["problem"],
+                    workspaces_root=workspaces,
+                    repo_root=repo_root,
+                )
 
     def test_run_eval_passes_problem_ids_as_single_comma_separated_flag(self) -> None:
         # lean4-cli's `Array String` flag instance does NOT support

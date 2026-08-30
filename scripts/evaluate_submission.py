@@ -562,23 +562,8 @@ def _run_run_eval(
     problem_ids: list[str],
     workspaces_root: pathlib.Path,
     repo_root: pathlib.Path,
-    use_prebuilt_runner: bool = False,
 ) -> dict:
-    if use_prebuilt_runner:
-        executable = repo_root / ".lake" / "build" / "bin" / "lean-eval"
-        if (
-            executable.is_symlink()
-            or not executable.is_file()
-            or not os.access(executable, os.X_OK)
-            or not _is_inside(executable, repo_root)
-        ):
-            raise EvaluateError(
-                "preprimed run-eval executable must be a non-symlink executable "
-                "inside repo_root"
-            )
-        prefix = [str(executable.resolve())]
-    else:
-        prefix = ["lake", "exe", "lean-eval"]
+    prefix = ["lake", "exe", "lean-eval"]
     runner_name = " ".join(prefix)
     args = prefix + [
         "run-eval",
@@ -615,6 +600,66 @@ def _run_run_eval(
         raise EvaluateError(
             f"run-eval exited 0 but produced invalid JSON ({exc}):\nstdout:\n{stdout or '(empty)'}"
         ) from exc
+
+
+def _run_preprimed_eval(
+    *,
+    problem_ids: list[str],
+    workspaces_root: pathlib.Path,
+    repo_root: pathlib.Path,
+) -> dict:
+    """Score only already-overlaid workspaces without rebuilding trusted tools.
+
+    Historical images bake the exact generated workspaces, packages, theorem
+    extractor, and evaluator.  Older benchmark `run-eval` implementations
+    nevertheless rebuild the theorem extractor before invoking `lake test`.
+    That is both unnecessary and impossible with the benchmark mounted read
+    only.  The submission adapter already established which locked workspaces
+    were changed, so replay can invoke their existing `lake test` target
+    directly.  That target remains the benchmark-defined comparator/landrun
+    boundary and receives the configured measurement and nanoda settings.
+    """
+    scores: list[dict] = []
+    for problem_id in problem_ids:
+        workspace = workspaces_root / problem_id
+        if (
+            workspace.is_symlink()
+            or not workspace.is_dir()
+            or not _is_inside(workspace, workspaces_root)
+            or not _is_inside(workspace, repo_root)
+        ):
+            raise EvaluateError("preprimed workspace is unavailable")
+        process = subprocess.run(
+            ["lake", "test"],
+            cwd=workspace,
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        scores.append(
+            {
+                "id": problem_id,
+                "title": problem_id,
+                "test": False,
+                "attempted": True,
+                "succeeded": process.returncode == 0,
+                "exit_code": process.returncode,
+                "mismatches": ["submitted source overlay"],
+                "workspace_path": str(workspace.relative_to(repo_root)),
+            }
+        )
+    succeeded = sum(score["succeeded"] for score in scores)
+    return {
+        "total_problems": len(scores),
+        "attempted_problems": len(scores),
+        "succeeded_problems": succeeded,
+        "attempted_test_problems": 0,
+        "succeeded_test_problems": 0,
+        "attempted_main_problems": len(scores),
+        "succeeded_main_problems": succeeded,
+        "problems": scores,
+    }
 
 
 def _extract_passed(run_eval_output: dict) -> list[str]:
@@ -684,9 +729,9 @@ def evaluate_submission(
     """Run the full evaluation pipeline and write results.json + summary.json.
 
     `run_eval_runner` is an optional injection point for tests. If None, the
-    real `lake exe lean-eval run-eval` is used, except that replay-only
-    preprimed mode invokes the validated baked executable directly so Lake
-    does not create package-configuration locks on the read-only benchmark.
+    real `lake exe lean-eval run-eval` is used. Replay-only preprimed mode
+    invokes the baked workspace `lake test` targets directly so historical
+    benchmark runners cannot rebuild trusted tools on the read-only image.
 
     `shared_packages` optionally points at a directory containing an
     already-populated `.lake/packages/...` layout (e.g. the benchmark
@@ -785,12 +830,18 @@ def evaluate_submission(
             )
 
         if run_eval_runner is None:
-            run_eval_output = _run_run_eval(
-                problem_ids=overlaid_ids,
-                workspaces_root=workspaces_root,
-                repo_root=repo_root,
-                use_prebuilt_runner=preprimed_workspaces,
-            )
+            if preprimed_workspaces:
+                run_eval_output = _run_preprimed_eval(
+                    problem_ids=overlaid_ids,
+                    workspaces_root=workspaces_root,
+                    repo_root=repo_root,
+                )
+            else:
+                run_eval_output = _run_run_eval(
+                    problem_ids=overlaid_ids,
+                    workspaces_root=workspaces_root,
+                    repo_root=repo_root,
+                )
         else:
             run_eval_output = run_eval_runner(
                 problem_ids=overlaid_ids,
