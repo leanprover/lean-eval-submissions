@@ -42,9 +42,9 @@ reads `GO`.
 | Capability | Current production state | Launch state |
 | --- | --- | --- |
 | Automatic release controller | `PUBLICATION_ENABLED` absent | `true`, initially with an empty release queue |
-| Result-owner APIs | disabled | metadata backfill and repair/retraction enabled |
+| Result-owner APIs | disabled | legacy-result claim prerequisite, metadata backfill, and repair/retraction enabled |
 | Maintainer APIs | disabled, empty lists | decisions enabled for exactly `kim-em` / GitHub user `477956` |
-| Model identity APIs | alias/rename disabled; consolidation disabled | alias/rename enabled; consolidation remains disabled |
+| Model identity APIs | identity-creation prerequisite and alias/rename disabled; consolidation disabled | identity creation and alias/rename enabled; consolidation remains disabled |
 | Release opt-out | disabled | enabled |
 | Server intake | disabled, durable lease absent | enabled through the finite-lease controller, then durable |
 | Production canary | none | one packet-bound, withheld-source canary after intake; verify archive, evaluation, State, Result, leaderboard, and scheduling |
@@ -53,6 +53,13 @@ reads `GO`.
 The decisions are not bundled: enable the release controller, lifecycle APIs,
 intake, run the production canary, and publish the repository announcement in
 that order, verifying each readback before proceeding.
+
+The enabled surface includes two prerequisite routes rather than hiding them
+behind feature labels: `POST /api/v1/results/claims` establishes immutable
+owner authority before historical metadata backfill, and `POST
+/api/v1/model-identities` creates the owner-bound identity required before an
+alias or rename. They share the reviewed owner gates and do not enable intake,
+model consolidation, replay, or publication.
 
 ## 3. Gates from completion-plan sections 7.2–7.4
 
