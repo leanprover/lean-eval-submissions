@@ -37,14 +37,14 @@ PLAN_SHA256 = "d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e"
 MATRIX_SHA256 = "a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c"
 RUNNER_CONTRACT_SHA256 = "6d341a642dfd6aa9092228269da6761000bf0818128ce3f35cb259bd8fb2303f"
 QUALIFICATION_CONTRACT_SHA256 = "937a1ce9800350de47fb2ce0c3d276b6cddc38cd39820727c8b8687bea89dad0"
-STATE_COMMIT = "15a96673efd44d3b198890c1e94581b33c2a1a87"
-STATE_TREE = "14cbbd50bb3b23561ed465dbf074543e03cee2a1"
-STATE_EVENT_SCHEMA_SHA256 = "acbdd88fa233fe2bc64eb928a421c06521e58b113bbd3f1b90c8a8744c84395a"
+STATE_COMMIT = "0c943edde8a247b8670e10339b80fc65be6c0f33"
+STATE_TREE = "0ba2090d9c43e0d51fb08272efbd12a3efb490e9"
+STATE_EVENT_SCHEMA_SHA256 = "2d19515da1b0798f00dd3e9809c3a2770fee8b27ce6323ac9b9e827db4c7ea27"
 STATE_HISTORICAL_QUEUE_SCHEMA_SHA256 = (
     "a3b23b21f85370161892d4adc3c4170e35f864556da4339c53b404e5477077ab"
 )
-STATE_VALIDATOR_SHA256 = "3f2abdfa48a00c8040519dd74307986dfede20a27d81019572df7968493c7750"
-STATE_MATERIALIZER_SHA256 = "2594de45c6e5fdc1e00759bdf032f46a0dd3b2e5e92be7e989f9dd5255d4a0b1"
+STATE_VALIDATOR_SHA256 = "d36222c071054c2bf925d081141c1f1dc4fca0c65ec686e5438b2eb02a131ed2"
+STATE_MATERIALIZER_SHA256 = "5c437c12f1b3c24f9cd9d5a9da3f876fddc4f55e126cee74bf213723984719e7"
 WORKFLOW_PATH = ".github/workflows/historical-public-image-qualification.yml"
 SUBMISSIONS_REPOSITORY = "leanprover/lean-eval-submissions"
 BENCHMARK_REPOSITORY = "leanprover/lean-eval"
@@ -58,10 +58,30 @@ MAX_ARTIFACT_ZIP_BYTES = 4 * 1024 * 1024
 MAX_ARTIFACT_MEMBER_BYTES = 1024 * 1024
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 BATCH_PROFILE_COUNT = 35
-BATCH_REQUEST_COUNT = 128
-BATCH_RESULT_COUNT = 194
+SOURCE_PLAN_REQUEST_COUNT = 128
+SOURCE_PLAN_RESULT_COUNT = 194
+BATCH_REQUEST_COUNT = 120
+BATCH_RESULT_COUNT = 174
+BATCH_TERMINAL_EXCLUSION_COUNT = 20
+BATCH_SELECTED_PROFILE_COUNT = 34
 BATCH_EVENT_COUNT = BATCH_RESULT_COUNT * 3
-PINNED_STATE_EVENT_COUNT = 440
+PINNED_STATE_EVENT_COUNT = 489
+PINNED_PUBLIC_UNAVAILABLE_COUNT = 459
+BATCH_PROFILE_SET_SHA256 = (
+    "d44e73c7ae58adf806a3b5147e9aa1dbfe700a53fa9482f16c2aea3127e04e2e"
+)
+BATCH_SELECTED_PROFILE_SET_SHA256 = (
+    "03c1ad7bf4f5ac2c353db91df4647116f334bc812ce04238e9f84eabcabde8cd"
+)
+BATCH_TERMINAL_EXCLUSION_SET_SHA256 = (
+    "4030cda13036869e451c57a6af921f811ec9495d551f5dd8ef5fcfa809a0c882"
+)
+BATCH_SELECTION_SET_SHA256 = (
+    "a8451701c516c6d521d3c002aef48988a205e3e774700ec58a728332cbfe6b2a"
+)
+BATCH_TASK_CONTENT_SET_SHA256 = (
+    "e8bffbc3afd93be21d51f58754e3435788fc0aae2d8109346950256d0f9cba81"
+)
 BATCH_UUID_DOMAIN = b"lean-eval-historical-public-authority-batch-v1\0"
 
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
@@ -371,7 +391,7 @@ def load_artifact_zip(
 
 def load_and_validate_pinned_state(
     root: pathlib.Path, candidates: list[dict[str, Any]]
-) -> tuple[str, dict[str, Any]]:
+) -> tuple[str, dict[str, Any], tuple[str, ...]]:
     try:
         import jsonschema
     except ImportError as error:
@@ -451,6 +471,23 @@ def load_and_validate_pinned_state(
             for index, event in enumerate(existing):
                 state_validator.validate_event_data(event, f"pinned[{index}]")
             state_validator.validate_semantics(existing, "production")
+            terminal_public_results = tuple(
+                sorted(
+                    event["subject_id"]
+                    for event in existing
+                    if event["event_type"]
+                    == "historical_result.replay_unavailable"
+                )
+            )
+            if (
+                len(existing) != PINNED_STATE_EVENT_COUNT
+                or len(terminal_public_results) != PINNED_PUBLIC_UNAVAILABLE_COUNT
+                or len(set(terminal_public_results))
+                != PINNED_PUBLIC_UNAVAILABLE_COUNT
+            ):
+                raise PreparationError(
+                    "pinned State terminal public disposition set changed"
+                )
             for index, event in enumerate(candidates):
                 state_validator.validate_event_data(event, f"candidate[{index}]")
             combined = [*existing, *candidates]
@@ -478,7 +515,11 @@ def load_and_validate_pinned_state(
             for module in module_names:
                 sys.modules.pop(module, None)
     latest = max(event["occurred_at"] for event in existing)
-    return latest, views["historical-public-replay-queue.json"]
+    return (
+        latest,
+        views["historical-public-replay-queue.json"],
+        terminal_public_results,
+    )
 
 
 def uuid7_timestamp_ms(event_id: str) -> int:
@@ -1409,7 +1450,7 @@ def finalize(args: argparse.Namespace) -> None:
         "actor": {"kind": "system"},
         "payload": preparation["ordinary_replay_enqueue"]["payload"],
     }
-    latest_state_time, queue = load_and_validate_pinned_state(
+    latest_state_time, queue, _ = load_and_validate_pinned_state(
         pathlib.Path(args.state_root), [authority, qualification, enqueue]
     )
     if times[0] <= latest_state_time:
@@ -1449,11 +1490,14 @@ def finalize(args: argparse.Namespace) -> None:
 
 
 def load_batch_inputs(
-    repository_root: pathlib.Path, qualification_commit: str
+    repository_root: pathlib.Path,
+    qualification_commit: str,
+    terminal_public_results: tuple[str, ...],
 ) -> tuple[
     dict[str, Any],
     dict[str, tuple[dict[str, Any], bytes, str]],
     list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
+    tuple[str, ...],
 ]:
     verify_checkout(
         repository_root,
@@ -1482,13 +1526,13 @@ def load_batch_inputs(
     requests = plan.get("requests")
     images = matrix.get("images")
     if (
-        plan.get("resolved_request_count") != BATCH_REQUEST_COUNT
-        or plan.get("resolved_result_count") != BATCH_RESULT_COUNT
+        plan.get("resolved_request_count") != SOURCE_PLAN_REQUEST_COUNT
+        or plan.get("resolved_result_count") != SOURCE_PLAN_RESULT_COUNT
         or not isinstance(requests, list)
-        or len(requests) != BATCH_REQUEST_COUNT
+        or len(requests) != SOURCE_PLAN_REQUEST_COUNT
         or matrix.get("image_count") != BATCH_PROFILE_COUNT
-        or matrix.get("request_count") != BATCH_REQUEST_COUNT
-        or matrix.get("result_count") != BATCH_RESULT_COUNT
+        or matrix.get("request_count") != SOURCE_PLAN_REQUEST_COUNT
+        or matrix.get("result_count") != SOURCE_PLAN_RESULT_COUNT
         or not isinstance(images, list)
         or len(images) != BATCH_PROFILE_COUNT
     ):
@@ -1510,10 +1554,41 @@ def load_batch_inputs(
             selections.append(selection)
             result_ids.append(result["result_id"])
     if (
-        len(selections) != BATCH_RESULT_COUNT
-        or len(set(result_ids)) != BATCH_RESULT_COUNT
+        len(selections) != SOURCE_PLAN_RESULT_COUNT
+        or len(set(result_ids)) != SOURCE_PLAN_RESULT_COUNT
     ):
         raise PreparationError("final plan does not contain exactly 194 unique Results")
+    terminal_set = set(terminal_public_results)
+    excluded_result_ids = tuple(sorted(terminal_set.intersection(result_ids)))
+    if len(excluded_result_ids) != BATCH_TERMINAL_EXCLUSION_COUNT:
+        raise PreparationError(
+            "pinned State does not exclude exactly 20 terminal public Results"
+        )
+    excluded_set = set(excluded_result_ids)
+    retained_selections = [
+        selection
+        for selection in selections
+        if selection[1]["result_id"] not in excluded_set
+    ]
+    retained_requests = {
+        request["request_id"] for request, _, _ in retained_selections
+    }
+    partially_excluded_requests = {
+        request["request_id"]
+        for request, result, _ in selections
+        if result["result_id"] in excluded_set
+        and request["request_id"] in retained_requests
+    }
+    if (
+        len(retained_selections) != BATCH_RESULT_COUNT
+        or len({selection[1]["result_id"] for selection in retained_selections})
+        != BATCH_RESULT_COUNT
+        or len(retained_requests) != BATCH_REQUEST_COUNT
+        or partially_excluded_requests
+    ):
+        raise PreparationError(
+            "terminal public dispositions do not produce the exact retained batch"
+        )
     entries = {entry["benchmark_commit"]: entry for entry in matrix["images"]}
     profile_paths = _git(
         repository_root,
@@ -1562,7 +1637,12 @@ def load_batch_inputs(
         profiles[benchmark_commit] = (profile, raw, relative)
     if len(profiles) != BATCH_PROFILE_COUNT or set(profiles) != set(entries):
         raise PreparationError("qualification commit does not contain exactly 35 current profiles")
-    return matrix, profiles, selections
+    selected_benchmarks = {
+        entry["benchmark_commit"] for _, _, entry in retained_selections
+    }
+    if len(selected_benchmarks) != BATCH_SELECTED_PROFILE_COUNT:
+        raise PreparationError("retained batch does not use exactly 34 profiles")
+    return matrix, profiles, retained_selections, excluded_result_ids
 
 
 def deterministic_batch_uuid7(
@@ -1729,13 +1809,41 @@ def batch_task_content(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def batch_selection_content(
+    selections: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]],
+    profiles: dict[str, tuple[dict[str, Any], bytes, str]],
+) -> list[dict[str, str]]:
+    """Bind the State-selected retained Results to their exact frozen profiles."""
+    content = []
+    for request, result, entry in selections:
+        profile = profiles[entry["benchmark_commit"]][0]
+        content.append(
+            {
+                "request_id": request["request_id"],
+                "result_id": result["result_id"],
+                "benchmark_commit": entry["benchmark_commit"],
+                "execution_profile_digest": profile["execution_profile_digest"],
+                "measurement_config_digest": profile["measurement_config_digest"],
+            }
+        )
+    return sorted(content, key=lambda item: item["result_id"])
+
+
 def finalize_batch(args: argparse.Namespace) -> None:
     qualification_commit = match(
         COMMIT, args.qualification_commit, "qualification commit"
     )
     repository_root = pathlib.Path(args.qualification_repository_root)
-    matrix, profiles, selections = load_batch_inputs(
-        repository_root, qualification_commit
+    state_root = pathlib.Path(args.state_root)
+    latest_state_time, initial_queue, terminal_public_results = (
+        load_and_validate_pinned_state(state_root, [])
+    )
+    if initial_queue.get("tasks"):
+        raise PreparationError(
+            "pinned State already contains queued historical public replay"
+        )
+    matrix, profiles, selections, excluded_result_ids = load_batch_inputs(
+        repository_root, qualification_commit, terminal_public_results
     )
     events, expected_tasks = build_batch_events(
         matrix,
@@ -1745,9 +1853,14 @@ def finalize_batch(args: argparse.Namespace) -> None:
         args.first_occurred_at,
         args.event_id_seed,
     )
-    latest_state_time, queue = load_and_validate_pinned_state(
-        pathlib.Path(args.state_root), events
+    validated_latest_state_time, queue, validated_terminal_public_results = (
+        load_and_validate_pinned_state(state_root, events)
     )
+    if (
+        validated_latest_state_time != latest_state_time
+        or validated_terminal_public_results != terminal_public_results
+    ):
+        raise PreparationError("pinned State changed during batch validation")
     if events[0]["occurred_at"] <= latest_state_time:
         raise PreparationError("candidate events do not follow the pinned State time window")
     if (
@@ -1758,7 +1871,7 @@ def finalize_batch(args: argparse.Namespace) -> None:
         or queue.get("tasks") != expected_tasks
     ):
         raise PreparationError(
-            "pinned State did not materialize exactly 194 queued historical tasks"
+            "pinned State did not materialize exactly 174 queued historical tasks"
         )
     event_files = []
     for event in events:
@@ -1774,6 +1887,38 @@ def finalize_batch(args: argparse.Namespace) -> None:
         {"path": relative, "sha256": sha256_bytes(raw)}
         for _, raw, relative in sorted(profiles.values(), key=lambda item: item[2])
     ]
+    selected_benchmarks = {
+        entry["benchmark_commit"] for _, _, entry in selections
+    }
+    selected_profile_files = [
+        {"path": relative, "sha256": sha256_bytes(raw)}
+        for benchmark_commit, (_, raw, relative) in sorted(profiles.items())
+        if benchmark_commit in selected_benchmarks
+    ]
+    content_digests = {
+        "profile_set_sha256": sha256_bytes(canonical(profile_files)),
+        "selected_profile_set_sha256": sha256_bytes(
+            canonical(selected_profile_files)
+        ),
+        "terminal_exclusion_set_sha256": sha256_bytes(
+            canonical(list(excluded_result_ids))
+        ),
+        "batch_selection_set_sha256": sha256_bytes(
+            canonical(batch_selection_content(selections, profiles))
+        ),
+        "materialized_task_content_set_sha256": sha256_bytes(
+            canonical(batch_task_content(expected_tasks))
+        ),
+    }
+    expected_content_digests = {
+        "profile_set_sha256": BATCH_PROFILE_SET_SHA256,
+        "selected_profile_set_sha256": BATCH_SELECTED_PROFILE_SET_SHA256,
+        "terminal_exclusion_set_sha256": BATCH_TERMINAL_EXCLUSION_SET_SHA256,
+        "batch_selection_set_sha256": BATCH_SELECTION_SET_SHA256,
+        "materialized_task_content_set_sha256": BATCH_TASK_CONTENT_SET_SHA256,
+    }
+    if content_digests != expected_content_digests:
+        raise PreparationError("retained public batch canonical content changed")
     output_root = pathlib.Path(args.output_directory)
     create_output_root(output_root)
     for event, descriptor in zip(events, event_files, strict=True):
@@ -1806,8 +1951,19 @@ def finalize_batch(args: argparse.Namespace) -> None:
         "profile_matrix_path": MATRIX_PATH,
         "profile_matrix_sha256": MATRIX_SHA256,
         "profile_count": BATCH_PROFILE_COUNT,
+        "selected_profile_count": BATCH_SELECTED_PROFILE_COUNT,
+        "source_plan_request_count": SOURCE_PLAN_REQUEST_COUNT,
+        "source_plan_result_count": SOURCE_PLAN_RESULT_COUNT,
         "request_count": BATCH_REQUEST_COUNT,
         "result_count": BATCH_RESULT_COUNT,
+        "terminal_exclusion_count": BATCH_TERMINAL_EXCLUSION_COUNT,
+        "terminal_exclusion_result_ids": list(excluded_result_ids),
+        "terminal_exclusion_set_sha256": content_digests[
+            "terminal_exclusion_set_sha256"
+        ],
+        "batch_selection_set_sha256": content_digests[
+            "batch_selection_set_sha256"
+        ],
         "event_count": BATCH_EVENT_COUNT,
         "authority_event_count": BATCH_RESULT_COUNT,
         "qualification_event_count": BATCH_RESULT_COUNT,
@@ -1819,11 +1975,14 @@ def finalize_batch(args: argparse.Namespace) -> None:
         "first_occurred_at": events[0]["occurred_at"],
         "last_occurred_at": events[-1]["occurred_at"],
         "pinned_state_latest_occurred_at": latest_state_time,
-        "profile_set_sha256": sha256_bytes(canonical(profile_files)),
+        "profile_set_sha256": content_digests["profile_set_sha256"],
+        "selected_profile_set_sha256": content_digests[
+            "selected_profile_set_sha256"
+        ],
         "event_set_sha256": sha256_bytes(canonical(event_files)),
-        "materialized_task_content_set_sha256": sha256_bytes(
-            canonical(batch_task_content(expected_tasks))
-        ),
+        "materialized_task_content_set_sha256": content_digests[
+            "materialized_task_content_set_sha256"
+        ],
         "materialized_task_set_sha256": sha256_bytes(canonical(expected_tasks)),
     }
     write_relative(

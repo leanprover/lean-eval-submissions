@@ -121,3 +121,9 @@ its 35-commit, five-toolchain registry is retained at
 `evidence/public-replay/toolchains/4f2f3737d79e6abd6c169ebdde3f2218157d8f6c482a85ad2026821a4b8e81a0.json`.
 These files are replay inputs; they do not qualify execution profiles, enqueue
 State work, or decide that unavailable sources are permanently unrecoverable.
+The later reviewed State ledger has since recorded terminal public-source
+unavailability for 20 of these Results across eight complete requests. The
+source plan remains byte-for-byte evidence of its earlier classification, but
+the retained batch finalizer now derives the authoritative 174-task subset from
+the validated current State contract. It cannot enqueue any subject with an
+existing terminal disposition.

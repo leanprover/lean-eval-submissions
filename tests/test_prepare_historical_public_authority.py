@@ -402,16 +402,20 @@ class HistoricalPublicAuthorityPreparationTests(unittest.TestCase):
 
             def validate_state(_root: pathlib.Path, candidates: list[dict[str, object]]):
                 enqueue = candidates[-1]
-                return "2026-08-24T19:59:59.000Z", {
-                    "tasks": [{
-                        "replay_task_id": enqueue["subject_id"],
-                        "result_id": enqueue["payload"]["result_id"],
-                        "qualification_event_id": candidates[1]["event_id"],
-                        "event_id": enqueue["event_id"],
-                        "status": "queued",
-                        "attempt": 0,
-                    }]
-                }
+                return (
+                    "2026-08-24T19:59:59.000Z",
+                    {
+                        "tasks": [{
+                            "replay_task_id": enqueue["subject_id"],
+                            "result_id": enqueue["payload"]["result_id"],
+                            "qualification_event_id": candidates[1]["event_id"],
+                            "event_id": enqueue["event_id"],
+                            "status": "queued",
+                            "attempt": 0,
+                        }]
+                    },
+                    (),
+                )
 
             with (
                 mock.patch.object(authority, "verify_qualification_blob"),
@@ -890,12 +894,42 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
         "d44e73c7ae58adf806a3b5147e9aa1dbfe700a53fa9482f16c2aea3127e04e2e"
     )
     PACKET_TASK_CONTENT_SET_SHA256 = (
-        "be2e97a2e75e0c73e087f080910bed9dd8bc5d4f365f6b2d4c8ba9acd4b82bc0"
+        "e8bffbc3afd93be21d51f58754e3435788fc0aae2d8109346950256d0f9cba81"
+    )
+    PACKET_SELECTED_PROFILE_SET_SHA256 = (
+        "03c1ad7bf4f5ac2c353db91df4647116f334bc812ce04238e9f84eabcabde8cd"
+    )
+    PACKET_TERMINAL_EXCLUSION_SET_SHA256 = (
+        "4030cda13036869e451c57a6af921f811ec9495d551f5dd8ef5fcfa809a0c882"
+    )
+    PACKET_BATCH_SELECTION_SET_SHA256 = (
+        "a8451701c516c6d521d3c002aef48988a205e3e774700ec58a728332cbfe6b2a"
     )
 
     @classmethod
     def setUpClass(cls) -> None:
         cls.matrix = json.loads(MATRIX.read_text())
+        current_dispositions = json.loads(
+            (
+                ROOT
+                / "evidence/public-replay/unavailability-dispositions-v1/"
+                "e577802df7df3a657a1dbfea20d60985264cf82bc955e39951160acf39adc66b.json"
+            ).read_text()
+        )["dispositions"]
+        disposition_values = (
+            current_dispositions.values()
+            if isinstance(current_dispositions, dict)
+            else current_dispositions
+        )
+        cls.terminal_public_results = tuple(
+            sorted(
+                result_id
+                for disposition in disposition_values
+                for result_id in disposition["result_ids"]
+            )
+        )
+        if len(cls.terminal_public_results) != authority.PINNED_PUBLIC_UNAVAILABLE_COUNT:
+            raise AssertionError("current public disposition fixture changed")
         cls.template = json.loads(
             (
                 ROOT
@@ -968,8 +1002,16 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
         return blobs, paths
 
     def load_inputs(
-        self, blobs: dict[str, bytes], paths: list[str]
-    ) -> tuple[dict[str, object], dict[str, tuple[dict[str, object], bytes, str]], list[object]]:
+        self,
+        blobs: dict[str, bytes],
+        paths: list[str],
+        terminal_public_results: tuple[str, ...] | None = None,
+    ) -> tuple[
+        dict[str, object],
+        dict[str, tuple[dict[str, object], bytes, str]],
+        list[object],
+        tuple[str, ...],
+    ]:
         def git(_root: pathlib.Path, *arguments: str, **_kwargs: object) -> bytes:
             if arguments[:4] == ("ls-tree", "-r", "--name-only", "f" * 40):
                 return ("\n".join(paths) + "\n").encode()
@@ -983,11 +1025,31 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
             mock.patch.object(authority, "_git", side_effect=git),
             mock.patch.object(authority, "_git_optional_blob", side_effect=blob),
         ):
-            return authority.load_batch_inputs(pathlib.Path("fixture"), "f" * 40)
+            return authority.load_batch_inputs(
+                pathlib.Path("fixture"),
+                "f" * 40,
+                (
+                    self.terminal_public_results
+                    if terminal_public_results is None
+                    else terminal_public_results
+                ),
+            )
 
     def materialized_queue(
         self, _root: pathlib.Path, events: list[dict[str, object]]
-    ) -> tuple[str, dict[str, object]]:
+    ) -> tuple[str, dict[str, object], tuple[str, ...]]:
+        if not events:
+            return (
+                "2026-08-26T05:59:59.999Z",
+                {
+                    "schema_version": 2,
+                    "environment": "production",
+                    "source_event_count": authority.PINNED_STATE_EVENT_COUNT,
+                    "source_digest": "0" * 64,
+                    "tasks": [],
+                },
+                self.terminal_public_results,
+            )
         self.assertEqual(len(events), authority.BATCH_EVENT_COUNT)
         tasks = []
         for index in range(0, len(events), 3):
@@ -1019,21 +1081,25 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
                 }
             )
         tasks.sort(key=lambda task: task["replay_task_id"])
-        return "2026-08-26T05:59:59.999Z", {
-            "schema_version": 2,
-            "environment": "production",
-            "source_event_count": (
-                authority.PINNED_STATE_EVENT_COUNT + authority.BATCH_EVENT_COUNT
-            ),
-            "source_digest": "0" * 64,
-            "tasks": tasks,
-        }
+        return (
+            "2026-08-26T05:59:59.999Z",
+            {
+                "schema_version": 2,
+                "environment": "production",
+                "source_event_count": (
+                    authority.PINNED_STATE_EVENT_COUNT + authority.BATCH_EVENT_COUNT
+                ),
+                "source_digest": "0" * 64,
+                "tasks": tasks,
+            },
+            self.terminal_public_results,
+        )
 
     def test_batch_finalization_is_complete_deterministic_and_create_only(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             blobs, paths = self.exact_git_inputs()
-            matrix, profiles, selections = self.load_inputs(blobs, paths)
+            matrix, profiles, selections, excluded = self.load_inputs(blobs, paths)
             events, tasks = authority.build_batch_events(
                 matrix,
                 selections,
@@ -1042,7 +1108,51 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
                 "2026-08-26T06:00:00.000Z",
                 "5" * 64,
             )
-            self.assertEqual((len(profiles), len(selections), len(events), len(tasks)), (35, 194, 582, 194))
+            self.assertEqual(
+                (
+                    len(profiles),
+                    len(selections),
+                    len(excluded),
+                    len(events),
+                    len(tasks),
+                ),
+                (35, 174, 20, 522, 174),
+            )
+            profile_files = [
+                {"path": relative, "sha256": authority.sha256_bytes(raw)}
+                for _, raw, relative in sorted(
+                    profiles.values(), key=lambda item: item[2]
+                )
+            ]
+            selected_benchmarks = {
+                entry["benchmark_commit"] for _, _, entry in selections
+            }
+            selected_profile_files = [
+                {"path": relative, "sha256": authority.sha256_bytes(raw)}
+                for benchmark_commit, (_, raw, relative) in sorted(
+                    profiles.items()
+                )
+                if benchmark_commit in selected_benchmarks
+            ]
+            synthetic_bindings = {
+                "BATCH_PROFILE_SET_SHA256": authority.sha256_bytes(
+                    authority.canonical(profile_files)
+                ),
+                "BATCH_SELECTED_PROFILE_SET_SHA256": authority.sha256_bytes(
+                    authority.canonical(selected_profile_files)
+                ),
+                "BATCH_TERMINAL_EXCLUSION_SET_SHA256": authority.sha256_bytes(
+                    authority.canonical(list(excluded))
+                ),
+                "BATCH_SELECTION_SET_SHA256": authority.sha256_bytes(
+                    authority.canonical(
+                        authority.batch_selection_content(selections, profiles)
+                    )
+                ),
+                "BATCH_TASK_CONTENT_SET_SHA256": authority.sha256_bytes(
+                    authority.canonical(authority.batch_task_content(tasks))
+                ),
+            }
             args = argparse.Namespace(
                 qualification_commit="f" * 40,
                 qualification_repository_root="fixture",
@@ -1055,13 +1165,14 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
                 mock.patch.object(
                     authority,
                     "load_batch_inputs",
-                    return_value=(matrix, profiles, selections),
+                    return_value=(matrix, profiles, selections, excluded),
                 ),
                 mock.patch.object(
                     authority,
                     "load_and_validate_pinned_state",
                     side_effect=self.materialized_queue,
                 ),
+                mock.patch.multiple(authority, **synthetic_bindings),
             ):
                 authority.finalize_batch(args)
             output = pathlib.Path(args.output_directory)
@@ -1078,7 +1189,14 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
                     manifest["event_count"],
                     manifest["replay_task_count"],
                 ),
-                (35, 128, 194, 582, 194),
+                (35, 120, 174, 522, 174),
+            )
+            self.assertEqual(manifest["source_plan_request_count"], 128)
+            self.assertEqual(manifest["source_plan_result_count"], 194)
+            self.assertEqual(manifest["selected_profile_count"], 34)
+            self.assertEqual(manifest["terminal_exclusion_count"], 20)
+            self.assertEqual(
+                manifest["terminal_exclusion_result_ids"], list(excluded)
             )
             repeated, _ = authority.build_batch_events(
                 matrix, selections, profiles, "f" * 40,
@@ -1110,21 +1228,24 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
                 mock.patch.object(
                     authority,
                     "load_batch_inputs",
-                    return_value=(matrix, profiles, selections),
+                    return_value=(matrix, profiles, selections, excluded),
                 ),
                 mock.patch.object(
                     authority,
                     "load_and_validate_pinned_state",
                     side_effect=self.materialized_queue,
                 ),
+                mock.patch.multiple(authority, **synthetic_bindings),
                 self.assertRaisesRegex(authority.PreparationError, "overwrite"),
             ):
                 authority.finalize_batch(args)
 
     def test_retained_packet_content_hashes_are_reproducible(self) -> None:
         with mock.patch.object(authority, "verify_checkout"):
-            matrix, profiles, selections = authority.load_batch_inputs(
-                ROOT, self.PACKET_QUALIFICATION_COMMIT
+            matrix, profiles, selections, excluded = authority.load_batch_inputs(
+                ROOT,
+                self.PACKET_QUALIFICATION_COMMIT,
+                self.terminal_public_results,
             )
         _, tasks = authority.build_batch_events(
             matrix,
@@ -1140,9 +1261,33 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
                 profiles.values(), key=lambda item: item[2]
             )
         ]
+        selected_benchmarks = {
+            entry["benchmark_commit"] for _, _, entry in selections
+        }
+        selected_profile_files = [
+            {"path": relative, "sha256": authority.sha256_bytes(raw)}
+            for benchmark_commit, (_, raw, relative) in sorted(profiles.items())
+            if benchmark_commit in selected_benchmarks
+        ]
         self.assertEqual(
             authority.sha256_bytes(authority.canonical(profile_files)),
             self.PACKET_PROFILE_SET_SHA256,
+        )
+        self.assertEqual(
+            authority.sha256_bytes(authority.canonical(selected_profile_files)),
+            self.PACKET_SELECTED_PROFILE_SET_SHA256,
+        )
+        self.assertEqual(
+            authority.sha256_bytes(authority.canonical(list(excluded))),
+            self.PACKET_TERMINAL_EXCLUSION_SET_SHA256,
+        )
+        self.assertEqual(
+            authority.sha256_bytes(
+                authority.canonical(
+                    authority.batch_selection_content(selections, profiles)
+                )
+            ),
+            self.PACKET_BATCH_SELECTION_SET_SHA256,
         )
         self.assertEqual(
             authority.sha256_bytes(
@@ -1156,6 +1301,9 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
         for binding in (
             self.PACKET_QUALIFICATION_COMMIT,
             self.PACKET_PROFILE_SET_SHA256,
+            self.PACKET_SELECTED_PROFILE_SET_SHA256,
+            self.PACKET_TERMINAL_EXCLUSION_SET_SHA256,
+            self.PACKET_BATCH_SELECTION_SET_SHA256,
             self.PACKET_TASK_CONTENT_SET_SHA256,
         ):
             self.assertIn(binding, packet)
@@ -1170,9 +1318,23 @@ class HistoricalPublicAuthorityBatchFinalizationTests(unittest.TestCase):
         with self.assertRaisesRegex(authority.PreparationError, "profile is invalid"):
             self.load_inputs(blobs, paths)
 
+    def test_batch_rejects_terminal_state_overlap_drift(self) -> None:
+        blobs, paths = self.exact_git_inputs()
+        _, _, _, excluded = self.load_inputs(blobs, paths)
+        changed_terminal_results = tuple(
+            result_id
+            for result_id in self.terminal_public_results
+            if result_id != excluded[0]
+        )
+        with self.assertRaisesRegex(
+            authority.PreparationError,
+            "exactly 20 terminal public Results",
+        ):
+            self.load_inputs(blobs, paths, changed_terminal_results)
+
     def test_batch_translates_matrix_profile_binding_failure(self) -> None:
         blobs, paths = self.exact_git_inputs()
-        matrix, profiles, selections = self.load_inputs(blobs, paths)
+        matrix, profiles, selections, _ = self.load_inputs(blobs, paths)
         benchmark_commit = selections[0][2]["benchmark_commit"]
         profile, raw, relative = profiles[benchmark_commit]
         changed = copy.deepcopy(profile)
