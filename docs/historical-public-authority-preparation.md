@@ -71,8 +71,9 @@ It remains explicitly blocked on all five steps recorded in the artifact:
 
 The offline `finalize` command enforces those conditions mechanically. It
 requires clean exact checkouts of the qualification commit and production
-State commit `15a96673efd44d3b198890c1e94581b33c2a1a87`, including the retained
-baseline's reviewed source-unavailability dispositions. The command proves the
+State commit `0c943edde8a247b8670e10339b80fc65be6c0f33`, including all 459
+reviewed public-source and 29 reviewed private-archive unavailability
+dispositions. The command proves the
 qualification blob with `git show`, reconstructs the State event and script
 inputs from exact commit objects, validates the authority → qualification →
 enqueue chain with the pinned State validator, and requires the materializer to
@@ -83,6 +84,16 @@ while Unicode-preserving canonicalization remains unchanged for evidence and
 digest-bearing profile objects. Even then the output remains a local append
 candidate: the command does not commit, push, append, enqueue, deploy, or enable
 anything.
+
+`finalize-batch` retains the immutable 128-request / 194-Result source plan and
+all 35 qualified profiles, but it does not assume that the old replayable
+classification is current authority. It first validates the complete pinned
+State ledger, intersects the plan with its terminal public-unavailability
+subjects, and requires the exact reviewed partition: 20 terminal exclusions
+covering eight complete requests, leaving 120 requests / 174 Results and 34
+used profiles. It then validates all 522 candidate events with the same pinned
+validator and materializer. Any different overlap, partial request, profile
+set, task-content digest, or State graph fails before creating output.
 
 The finalized command is intentionally not called by the preparation workflow.
 It becomes usable only after the profile-review PR lands:

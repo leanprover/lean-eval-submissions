@@ -128,8 +128,9 @@ These are bounded smoke cases, not a combinatorial staging matrix.
       State qualification and enqueue remain gated on the exact immutable
       execution packet.
 - [x] Provide one offline, create-only batch finalizer for the existing
-      authorize, qualify, and enqueue State events across the exact final
-      public corpus. Appending its output remains gated on that packet.
+      authorize, qualify, and enqueue State events across the exact retained
+      public task subset. It derives terminal exclusions from the validated
+      pinned State ledger; appending its output remains gated on that packet.
 - [ ] Migrate recoverable legacy private envelopes only after the migration
       execution packet is complete and the custodian operator handoff is ready.
 - [ ] Run bounded official-Lean-plus-nanoda replay and record a terminal replay

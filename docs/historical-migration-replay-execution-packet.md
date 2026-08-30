@@ -16,10 +16,13 @@ a second transaction or replay system.
 | Input | Exact binding | Count |
 | --- | --- | ---: |
 | Retained baseline inventory | `evidence/historical-replay/inventories/bb405fbabe084e106ad5500b455a05ba1e1d54175d1964db3aebcc3b6ea3fce3.json` | 1,301 Results: 633 public, 668 private |
-| Public replay plan | `evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json` | 128 requests, 194 Results |
+| Public replay plan | `evidence/public-replay/plans/d6e81393c37138f7928435e1e68235165dba6d9aab01698edae66acd6f08120e.json` | Frozen source evidence for 128 requests / 194 Results |
+| Terminal public exclusions | validated State `0c943edde8a247b8670e10339b80fc65be6c0f33`; set SHA-256 `4030cda13036869e451c57a6af921f811ec9495d551f5dd8ef5fcfa809a0c882` | 8 requests / 20 Results now reviewed unavailable |
+| Retained public batch selection | SHA-256 `a8451701c516c6d521d3c002aef48988a205e3e774700ec58a728332cbfe6b2a` | 120 requests / 174 Results |
 | Public profile matrix | `configuration/historical-public-replay-profile-matrix-v1.json`, SHA-256 `a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c` | 35 profiles |
 | Public qualification set | submissions commit `81e94fe2f4fc819300fd7d4e036f00124166784f`, profile-set SHA-256 `d44e73c7ae58adf806a3b5147e9aa1dbfe700a53fa9482f16c2aea3127e04e2e` | 35 profiles |
-| Public materialized task content | SHA-256 `be2e97a2e75e0c73e087f080910bed9dd8bc5d4f365f6b2d4c8ba9acd4b82bc0` | 194 tasks, 582 events when scheduled |
+| Selected public profile descriptors | SHA-256 `03c1ad7bf4f5ac2c353db91df4647116f334bc812ce04238e9f84eabcabde8cd` | 34 used profiles; the complete 35-profile set remains frozen |
+| Public materialized task content | SHA-256 `e8bffbc3afd93be21d51f58754e3435788fc0aae2d8109346950256d0f9cba81` | 174 tasks, 522 events when scheduled |
 | Private archive crosswalk | `evidence/historical-replay/private-crosswalks/dfdcbc0da3a3526f8a26e6a69cefa41cbcd92de7608752193b742fcd92b00a67.json` | 639 bound, 29 not found |
 | Private matrix source plan | `evidence/historical-replay/private-plans/d9561ad62098e0542656678f207b3360b0b295be975c292cbf729dc48d03bd5e.json` | 668 entries, 21 reused public profiles |
 | Private image matrix | `configuration/historical-private-replay-image-matrix-v1.json`, SHA-256 `54ad4c237d08e5d0e298dfc8f752b25c89ce30e79b396a2256b4216a1c0f772c` | 63 images, 639 Results |
@@ -35,7 +38,7 @@ The fixed reviewed implementation bindings are:
 | Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `4f8572f27d9e1c9d8013059135c7446b905cbda16226f5c7cd38ec2f65296a6e` |
 | Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
 | Private plan builder | `scripts/prepare_historical_private_replay.py`, SHA-256 `2f1ae6a6e8710a0d0983aa7c2b3f64e77ebf2322da8154c04e39be084f4355e4` |
-| Public finalizer | `scripts/prepare_historical_public_authority.py`, SHA-256 `0293a9bd94fa381283448b82d1ba09f892e4cc4c41266cadf9def2b18ae2f0f5` |
+| Public finalizer | `scripts/prepare_historical_public_authority.py`, SHA-256 `2b5c4e6d2a88c3f4d703de17889476f18d9b2922c2287da7918ae08c7600fdda` |
 | Migration infrastructure | `infrastructure/aws-key-adapter/template.yaml`, SHA-256 `f075b0439dfadd83930cb18051e595fa6d378b3a5e30c55cb2f1966e6820a45a`; operator script SHA-256 `bee43ece436377c5eb5ec717b3985ab669ef2662dd92dedcacc7039edd0c5d7a` |
 | Migration boundary | role `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`; environment `archive-migration-production`; review branch `archive-file-key-rewrap-v1`; confirmation `stage-envelope-migration` |
 | Deterministic migration report | SHA-256 `faa26e1aa47eb629966db03695eda4f949b6c9804166f0047f53e09d9cc83339` |
@@ -44,6 +47,13 @@ Both replay controllers are restricted to protected `main`, use separate
 non-cancelling concurrency groups, allow at most four execution attempts, and
 bound each job to 360 minutes. Cleanup has a seven-hour deadline, receipts are
 retained for 24 hours, and each OIDC token lifetime is at most ten minutes.
+
+The old plan remains immutable source evidence; it is not current enqueue
+authority. The pinned State validator proves that exactly 20 of its Results now
+have terminal `historical_result.replay_unavailable` roots and excludes those
+subjects before event construction. The finalizer fails unless this produces
+the exact 174-Result retained selection and the digests above. It never masks a
+State validation conflict or chooses between competing lanes.
 
 The public task-content digest excludes only the six State-assigned event
 identity fields: `authority_event_id`, `authorized_at`,
@@ -56,9 +66,9 @@ are selected.
 This packet authorizes only the retained baseline hashes above. The final
 issue-intake cutoff and append-only delta require a later, separate exact
 packet; they do not prevent processing the retained baseline during overlap.
-The new retained-baseline append is expected to contain 2,499 events and
-materialize 833 replay tasks: 582 events/194 tasks for public replay and 1,917
-events/639 tasks for migrated private replay. The existing 439 public and 29
+The new retained-baseline append is expected to contain 2,439 events and
+materialize 813 replay tasks: 522 events/174 tasks for public replay and 1,917
+events/639 tasks for migrated private replay. The existing 459 public and 29
 private unavailable dispositions are not appended again.
 
 ## Pre-mutation authorization bindings
@@ -148,8 +158,9 @@ reason to install the identity before the pre-mutation packet is complete.
       digests, materialized queue digests, event counts, and task counts after
       validating the combined graph against that exact State head.
 - [ ] A read-only redacted projection of the combined candidate and proof that
-      every queued baseline Result appears exactly once while the 29 reviewed
-      private orphans retain their existing unavailable dispositions.
+      every queued baseline Result appears exactly once while all 459 public
+      and 29 private reviewed-unavailable Results retain their terminal
+      dispositions.
 
 ## Packet-bound execution order
 
@@ -164,8 +175,11 @@ reason to install the identity before the pre-mutation packet is complete.
    the exact staged patch to the separately bound current audit head and
    promote only the resulting reviewed tree.
 4. Run `prepare_historical_public_authority.py finalize-batch` against its
-   pinned State contract checkout `15a96673efd44d3b198890c1e94581b33c2a1a87` while choosing timestamps after
-   the separately bound current production State head. Run
+   pinned, complete State contract checkout
+   `0c943edde8a247b8670e10339b80fc65be6c0f33`; the finalizer derives the exact
+   20 terminal exclusions from that validated ledger. The caller supplies the
+   timestamp and event-ID seed, and the finalizer requires every derived event
+   to follow the ledger's latest event. Run
    `prepare_historical_private_replay.py state-events --selection full
    --append-ready` against that exact current head with non-overlapping times.
    Validate both candidate sets together against the current head before

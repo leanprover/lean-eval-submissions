@@ -821,10 +821,10 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
 
     def test_runtime_and_historical_finalizer_bind_distinct_state_views(self) -> None:
         state_commit = "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a"
-        historical_state_commit = "15a96673efd44d3b198890c1e94581b33c2a1a87"
+        historical_state_commit = "0c943edde8a247b8670e10339b80fc65be6c0f33"
         runtime_schema = QUALIFICATION["state_event_schema_sha256"]
         complete_ledger_schema = (
-            "acbdd88fa233fe2bc64eb928a421c06521e58b113bbd3f1b90c8a8744c84395a"
+            "2d19515da1b0798f00dd3e9809c3a2770fee8b27ce6323ac9b9e827db4c7ea27"
         )
 
         # The deployed owner APIs remain rollback-qualified against their
@@ -834,10 +834,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertEqual(DEPLOY.count(f'"{runtime_schema}"'), 2)
 
         # The offline finalizer remains bound to the reviewed historical
-        # snapshot. It validates the complete ledger at that snapshot,
-        # including system-only historical unavailability events outside the
-        # runtime projection.
-        self.assertNotEqual(runtime_schema, complete_ledger_schema)
+        # snapshot. Its commit is distinct from the rollback-qualified runtime
+        # projection even when both commits retain the same event schema.
         self.assertNotEqual(state_commit, historical_state_commit)
         self.assertIn(
             f'STATE_COMMIT = "{historical_state_commit}"',
