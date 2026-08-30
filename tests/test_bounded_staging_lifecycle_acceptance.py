@@ -128,7 +128,7 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             },
         )
         self.assertEqual(
-            bounded["release_commit"], "4f3d4cdd11d41e93294ba7821899923375ba360f"
+            bounded["release_commit"], "1c09d096687b7dd410b775c7022c9b3496245319"
         )
         self.assertEqual(bounded["release_ref"], "main")
         self.assertEqual(
