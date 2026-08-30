@@ -260,8 +260,19 @@ def main() -> int:
         raise CanaryFailure("READINESS_TOKEN length is outside the closed bound")
 
     client = opener()
-    readiness_status, readiness = request_json(client, "/readyz", token, None)
-    validate_readiness(readiness_status, readiness)
+    deadline = time.monotonic() + args.timeout_seconds
+    while True:
+        try:
+            readiness_status, readiness = request_json(client, "/readyz", token, None)
+        except CanaryConnectivityFailure:
+            if time.monotonic() + args.poll_seconds > deadline:
+                raise CanaryFailure(
+                    "staging readiness did not recover before the promotion deadline"
+                ) from None
+            time.sleep(args.poll_seconds)
+            continue
+        validate_readiness(readiness_status, readiness)
+        break
     request = {
         "schema_version": 2,
         "deployed_commit": args.commit,
@@ -269,7 +280,6 @@ def main() -> int:
         "controller_run_id": args.run_id,
         "controller_run_attempt": args.run_attempt,
     }
-    deadline = time.monotonic() + args.timeout_seconds
     submission_id: str | None = None
     while True:
         try:
