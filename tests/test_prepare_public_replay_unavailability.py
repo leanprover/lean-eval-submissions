@@ -524,9 +524,19 @@ class PublicReplayUnavailabilityTests(unittest.TestCase):
                 for entry in workflow["contracts"]
                 if entry["evaluator_commit"]
                 not in {
+                    "01d448c46dec91d111fb0649b6cb9fa542d89128",
+                    "0bf88bf0e29c6f2abe8fe07aed1ab803ce98f2ec",
+                    "47afc601e4d891303049d951dd64db69477e333f",
+                    "5c6df34621d9c442a59c428bfea676808c2d934f",
+                    "832e02149f245c512546f89409580c31195c9966",
+                    "ac1fe58ff4b2b7ab3e92b63fb252f86eb0e7e02a",
                     "ae1a9714c5433b4c195b8fdfb5643893ecac8019",
+                    "bb4632fcc6ec30c46cbdac0c0a0ac047e6055ff4",
+                    "d223d5919ad76fc082e32345fb1333513b8db9f0",
                     "e545a29504a9e207951ee74e446fe97c8755c648",
+                    "e664f5349d6a6e942b752a24c2b8c00a4daec83f",
                     "efca5d7ba6b88635ae9655726912a171df564e5a",
+                    "fdaecd3669ea3e3542de01840e0d2530fb37d846",
                 }
             ]
             workflow_raw = canonical_document_bytes(workflow)

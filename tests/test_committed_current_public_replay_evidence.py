@@ -35,6 +35,18 @@ LORENZO_RESULT_COUNTS = {
     "prr_ee2ae925f65eeccb22b2fff2d85d8513d0d5b879c758d09dcbeea2e0b27b26f9": 6,
     "prr_fe48499d222f9fc329f7e75265fbd6d28cbafad49a3cfa99ee712f41d672bb9a": 1,
 }
+LATER_WORKFLOW_CONTRACT_COMMITS = {
+    "01d448c46dec91d111fb0649b6cb9fa542d89128",
+    "0bf88bf0e29c6f2abe8fe07aed1ab803ce98f2ec",
+    "47afc601e4d891303049d951dd64db69477e333f",
+    "5c6df34621d9c442a59c428bfea676808c2d934f",
+    "832e02149f245c512546f89409580c31195c9966",
+    "ac1fe58ff4b2b7ab3e92b63fb252f86eb0e7e02a",
+    "bb4632fcc6ec30c46cbdac0c0a0ac047e6055ff4",
+    "d223d5919ad76fc082e32345fb1333513b8db9f0",
+    "e664f5349d6a6e942b752a24c2b8c00a4daec83f",
+    "fdaecd3669ea3e3542de01840e0d2530fb37d846",
+}
 
 
 class CommittedCurrentPublicReplayEvidenceTests(unittest.TestCase):
@@ -42,10 +54,21 @@ class CommittedCurrentPublicReplayEvidenceTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.raw = EVIDENCE.read_bytes()
         cls.value = json.loads(cls.raw)
-        cls.workflow_raw = (
+        workflow_path = (
             ROOT / "configuration" / "public-replay-workflow-definitions-v1.json"
-        ).read_bytes()
-        cls.workflow = json.loads(cls.workflow_raw)
+        )
+        cls.workflow = json.loads(workflow_path.read_bytes())
+        # This immutable evidence asset predates the later reviewed contracts.
+        # Reconstruct the exact registry snapshot it names instead of rebinding
+        # old evidence whenever the live append-only registry grows.
+        cls.workflow["contracts"] = [
+            entry
+            for entry in cls.workflow["contracts"]
+            if entry["evaluator_commit"] not in LATER_WORKFLOW_CONTRACT_COMMITS
+        ]
+        cls.workflow_raw = (
+            json.dumps(cls.workflow, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
         cls.adjudication_raw = (
             ROOT / "configuration" / "public-replay-legacy-adjudications-v1.json"
         ).read_bytes()

@@ -12,6 +12,11 @@
     },
     {
       "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "c311d49b030dcfc4cdcda7e41ece7749a05158d46a01abaf5b607abbabda8735",
+      "evaluator_commit": "01d448c46dec91d111fb0649b6cb9fa542d89128"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
       "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
       "evaluator_commit": "01f64b97180801f6da7da10e61ee54c68e3c6bb7"
     },
@@ -29,6 +34,11 @@
       "contract": "split_repository_recorded_benchmark_v1",
       "definition_sha256": "1d0650f3821f066e93f0b8432b2cecad43ffd8c0a9a66c3eb977422aeb356587",
       "evaluator_commit": "0995de7b0c1dee33be1f7cbceebe0d400363d842"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "c311d49b030dcfc4cdcda7e41ece7749a05158d46a01abaf5b607abbabda8735",
+      "evaluator_commit": "0bf88bf0e29c6f2abe8fe07aed1ab803ce98f2ec"
     },
     {
       "contract": "split_repository_recorded_benchmark_v1",
@@ -182,6 +192,11 @@
     },
     {
       "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "c311d49b030dcfc4cdcda7e41ece7749a05158d46a01abaf5b607abbabda8735",
+      "evaluator_commit": "47afc601e4d891303049d951dd64db69477e333f"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
       "definition_sha256": "e14dd7a28ca829e17132da4267e8b16b1db564bfa853296a1142022989a91a23",
       "evaluator_commit": "4bcfce4099b7359d83704cd8d042b74d2fa9e223"
     },
@@ -244,6 +259,11 @@
       "contract": "split_repository_recorded_benchmark_v1",
       "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
       "evaluator_commit": "596dc6415a498e2992f654c447c6e1e7434e0a5a"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "c311d49b030dcfc4cdcda7e41ece7749a05158d46a01abaf5b607abbabda8735",
+      "evaluator_commit": "5c6df34621d9c442a59c428bfea676808c2d934f"
     },
     {
       "contract": "split_repository_recorded_benchmark_v1",
@@ -342,6 +362,11 @@
     },
     {
       "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "c311d49b030dcfc4cdcda7e41ece7749a05158d46a01abaf5b607abbabda8735",
+      "evaluator_commit": "832e02149f245c512546f89409580c31195c9966"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
       "definition_sha256": "7b15e22709ba65f73fcc953a778fd1de7d95552e25c52be9fa99693089b573f5",
       "evaluator_commit": "8447423578fe70ebcfbdda6418c1421ef211f6ed"
     },
@@ -422,6 +447,11 @@
     },
     {
       "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "c311d49b030dcfc4cdcda7e41ece7749a05158d46a01abaf5b607abbabda8735",
+      "evaluator_commit": "ac1fe58ff4b2b7ab3e92b63fb252f86eb0e7e02a"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
       "definition_sha256": "febee81f643c7c3c97186a6e1c41178a6b12fc2a194da41aa976c5de9fccf57c",
       "evaluator_commit": "ae1a9714c5433b4c195b8fdfb5643893ecac8019"
     },
@@ -444,6 +474,11 @@
       "contract": "split_repository_recorded_benchmark_v1",
       "definition_sha256": "fa0889fb632a5856ec8c86a87c2c3e4f305409d927eb31b492198ea3990fbd1a",
       "evaluator_commit": "baaa89e3d8c8f99084806b717b3172c977210353"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "c311d49b030dcfc4cdcda7e41ece7749a05158d46a01abaf5b607abbabda8735",
+      "evaluator_commit": "bb4632fcc6ec30c46cbdac0c0a0ac047e6055ff4"
     },
     {
       "contract": "split_repository_recorded_benchmark_v1",
@@ -489,6 +524,11 @@
       "contract": "split_repository_recorded_benchmark_v1",
       "definition_sha256": "ba851933ac8a333fc9cc26eea813a82ffb585069b682ac28d123cd0214cc679b",
       "evaluator_commit": "d08a59a5268b2b516da285138120b6120ba41c0c"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "c311d49b030dcfc4cdcda7e41ece7749a05158d46a01abaf5b607abbabda8735",
+      "evaluator_commit": "d223d5919ad76fc082e32345fb1333513b8db9f0"
     },
     {
       "contract": "split_repository_recorded_benchmark_v1",
@@ -572,6 +612,11 @@
     },
     {
       "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "c311d49b030dcfc4cdcda7e41ece7749a05158d46a01abaf5b607abbabda8735",
+      "evaluator_commit": "e664f5349d6a6e942b752a24c2b8c00a4daec83f"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
       "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
       "evaluator_commit": "e7594cda8ed2c54c230dc9c7a402c30bccb9d7b3"
     },
@@ -614,6 +659,11 @@
       "contract": "split_repository_recorded_benchmark_v1",
       "definition_sha256": "7a40ba508f8da9ace2ac2bcb487274f7ada0f461744a700c9cda1a86077b379e",
       "evaluator_commit": "fcb795a10ac43639d29a5c8021d8f7a387958951"
+    },
+    {
+      "contract": "split_repository_recorded_benchmark_v1",
+      "definition_sha256": "c311d49b030dcfc4cdcda7e41ece7749a05158d46a01abaf5b607abbabda8735",
+      "evaluator_commit": "fdaecd3669ea3e3542de01840e0d2530fb37d846"
     }
   ],
   "kind": "historical_public_replay_workflow_definition_registry",
