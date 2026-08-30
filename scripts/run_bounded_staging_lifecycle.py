@@ -30,7 +30,7 @@ from typing import Any
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURE = ROOT / "configuration" / "staging-lifecycle-smoke-v1.json"
 EXPECTED_FIXTURE_SHA256 = (
-    "72db1e75856d2a50b98b8a906cc1a454ed1f37ac540629f782cee8e4ed123565"
+    "98052996bb4b0d55db16b891f6e414c995a1f40db76cc9fea2f277a79f243afb"
 )
 UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
@@ -249,7 +249,7 @@ def fixture_preflight(
         "release_repository": "leanprover/lean-eval-releases",
         "release_workflow": "credentialed-release-staging-smoke.yml",
         "release_ref": "main",
-        "release_commit": "071a52e2095d47ae4684ee983a7e08520f3c808a",
+        "release_commit": "4f3d4cdd11d41e93294ba7821899923375ba360f",
         "release_run_name_prefix": "Reconstruct staging submission ",
         "fixture_gist_file": "lean-eval-proof.txt",
         "retire_after": "one accepted bounded staging lifecycle run",
