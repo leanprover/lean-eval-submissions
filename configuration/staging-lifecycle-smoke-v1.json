@@ -11,7 +11,7 @@
     "problem_id": "two_plus_two",
     "problem_group": "formalization-evaluation",
     "statement_revision": 1,
-    "declared_model": "LeanEval launch browser staging smoke 92e64e0ba1a05130138a3f6b8f2c6c731a938969",
+    "declared_model": "LeanEval launch browser staging smoke e3f6db4d347e63ae21f5361437c8cfad5ee70f99",
     "source_visibility": "private",
     "publication_choice": "scheduled",
     "production_metadata": {
@@ -31,7 +31,7 @@
     "problem_id": "two_plus_two",
     "problem_group": "formalization-evaluation",
     "statement_revision": 1,
-    "declared_model": "LeanEval launch headless staging smoke 92e64e0ba1a05130138a3f6b8f2c6c731a938969",
+    "declared_model": "LeanEval launch headless staging smoke e3f6db4d347e63ae21f5361437c8cfad5ee70f99",
     "source_visibility": "private",
     "publication_choice": "scheduled",
     "production_metadata": {
@@ -154,7 +154,7 @@
     "release_repository": "leanprover/lean-eval-releases",
     "release_workflow": "credentialed-release-staging-smoke.yml",
     "release_ref": "main",
-    "release_commit": "4f3d4cdd11d41e93294ba7821899923375ba360f",
+    "release_commit": "1c09d096687b7dd410b775c7022c9b3496245319",
     "release_run_name_prefix": "Reconstruct staging submission ",
     "fixture_gist_file": "lean-eval-proof.txt",
     "retire_after": "one accepted bounded staging lifecycle run"
