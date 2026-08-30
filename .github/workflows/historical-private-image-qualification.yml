@@ -163,8 +163,8 @@ jobs:
               test -x /opt/lean-eval/bin/nanoda_bin
               test "$(find /opt/lean-eval -type d -name .git -print -quit)" = ""
               cd /opt/lean-eval/benchmark
-              python3 scripts/validate_manifest.py >/dev/null
-              python3 -c '"'"'import pathlib, sys; sys.path.insert(0, "scripts"); import generate_projects as gp; problems = gp.load_manifest(pathlib.Path("manifests/problems.toml")); gp.build_extractor(problems)'"'"'
+              lake exe lean-eval validate-manifest >/dev/null
+              lake --no-build build extract_theorem >/dev/null
             '
 
       - name: Publish once and resolve the immutable registry digest

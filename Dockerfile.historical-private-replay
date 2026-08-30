@@ -142,8 +142,8 @@ RUN . /tmp/image.env \
     && git diff --exit-code -- lake-manifest.json \
     && lake exe cache get \
     && lake build lean-eval \
-    && python3 scripts/validate_manifest.py \
-    && python3 -c 'import pathlib, sys; sys.path.insert(0, "scripts"); import generate_projects as gp; problems = gp.load_manifest(pathlib.Path("manifests/problems.toml")); gp.build_extractor(problems)' \
+    && lake exe lean-eval validate-manifest \
+    && lake build extract_theorem \
     && printf '%s\n' "$BENCHMARK_COMMIT" > .lean-eval-commit \
     && printf '%s\n' "$BENCHMARK_TREE" > .lean-eval-tree \
     && for workspace in generated/*; do \

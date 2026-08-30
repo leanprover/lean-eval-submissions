@@ -256,8 +256,8 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
         )[1].split(
             "      - name: Publish once and resolve the immutable registry digest", 1
         )[0]
-        self.assertIn("python3 scripts/validate_manifest.py", inspection)
-        self.assertIn("gp.build_extractor(problems)", inspection)
+        self.assertIn("lake exe lean-eval validate-manifest", inspection)
+        self.assertIn("lake --no-build build extract_theorem", inspection)
         self.assertIn("historical-private-image-build-${{ inputs.benchmark_commit }}", raw)
         self.assertIn(
             "historical-private-profile-review-${{ github.sha }}-${{ github.run_id }}", raw
