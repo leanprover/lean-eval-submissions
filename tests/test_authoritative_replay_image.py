@@ -85,6 +85,16 @@ class AuthoritativeReplayImageTests(unittest.TestCase):
         self.assertIn("sys.executable", runner)
         self.assertNotIn('"/usr/bin/python3"', runner)
         self.assertRegex(runner, r'"--authoritative-checker",\s*"nanoda"')
+        self.assertIn('"--workspace-parent"', runner)
+        self.assertIn('BENCHMARK / ".replay-workspaces"', runner)
+
+    def test_image_provides_the_scoped_replay_workspace_mountpoint(self) -> None:
+        dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+        self.assertIn(
+            "mkdir -p -m 0700 /run/lean-eval /workspace \\\n"
+            "      /opt/lean-eval/benchmark/.replay-workspaces",
+            dockerfile,
+        )
 
     def test_runner_unconditionally_removes_both_key_material_variants(self) -> None:
         runner = RUNNER.read_text(encoding="utf-8")

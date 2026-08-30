@@ -187,6 +187,15 @@ class HistoricalPrivateReplayImageTests(unittest.TestCase):
             "COPY scripts/replay_orchestrator.py /opt/lean-eval/replay_orchestrator.py",
             dockerfile,
         )
+        self.assertIn(
+            "mkdir -p -m 0700 /run/lean-eval /workspace \\\n"
+            "      /opt/lean-eval/benchmark/.replay-workspaces",
+            dockerfile,
+        )
+        self.assertIn("git init /opt/lean-eval/benchmark", dockerfile)
+        self.assertNotIn("git init /build/benchmark", dockerfile)
+        self.assertIn("python3 scripts/validate_manifest.py", dockerfile)
+        self.assertIn("gp.build_extractor(problems)", dockerfile)
         self.assertNotIn("replay-archive-acceptance", dockerfile)
         self.assertNotIn("qualification", dockerfile.lower().replace("qualification record", ""))
         self.assertNotIn("experimental", dockerfile.lower())

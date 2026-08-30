@@ -162,6 +162,9 @@ jobs:
               test -x /opt/lean-eval/bin/age-file-key
               test -x /opt/lean-eval/bin/nanoda_bin
               test "$(find /opt/lean-eval -type d -name .git -print -quit)" = ""
+              cd /opt/lean-eval/benchmark
+              python3 scripts/validate_manifest.py >/dev/null
+              python3 -c '"'"'import pathlib, sys; sys.path.insert(0, "scripts"); import generate_projects as gp; problems = gp.load_manifest(pathlib.Path("manifests/problems.toml")); gp.build_extractor(problems)'"'"'
             '
 
       - name: Publish once and resolve the immutable registry digest
@@ -319,8 +322,11 @@ jobs:
             --cpu-model "$cpu_model" \
             --output-directory "$RUNNER_TEMP/offline-probe" \
             > "$RUNNER_TEMP/offline-probe-summary.json"
+          # The comparator executes its freshly built workspace test binary, so
+          # this one scoped writable mount must permit execution.
           docker run --rm --network none --read-only --cpus 4 --memory 12g --user 0:0 \
             --mount "type=bind,src=$RUNNER_TEMP/offline-probe,dst=/workspace" \
+            --tmpfs /opt/lean-eval/benchmark/.replay-workspaces:rw,exec,nosuid,nodev,size=4g,mode=0700 \
             --tmpfs /run/lean-eval:rw,noexec,nosuid,size=16m \
             --tmpfs /tmp:rw,noexec,nosuid,size=64m \
             --entrypoint /opt/lean-eval/replay-authoritative "$INSPECTION_IMAGE" \

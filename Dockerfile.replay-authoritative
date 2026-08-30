@@ -160,6 +160,7 @@ RUN chmod 0555 /usr/local/bin/landrun /opt/lean-eval/bin/* \
       /opt/lean-eval/replay-archive-acceptance \
       /opt/lean-eval/replay-measure \
     && mkdir -p -m 0700 /run/lean-eval /workspace \
+      /opt/lean-eval/benchmark/.replay-workspaces \
     && test "$(cat /opt/lean-eval/benchmark/.lean-eval-commit)" = \
       b91d4757aa0d7776c02540c9089df54fa0d0658a \
     && test "$(cat /opt/lean-eval/benchmark/lean-toolchain)" = \
