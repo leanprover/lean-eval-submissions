@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -161,6 +162,10 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
         )
         workflow.parent.mkdir(parents=True, exist_ok=True)
         workflow.write_text("name: private qualification fixture\n", encoding="utf-8")
+        shutil.copytree(
+            ROOT / "evidence/public-replay/profiles",
+            root / "evidence/public-replay/profiles",
+        )
 
         _entry, selected = self.qualified_fixture()
         core = copy.deepcopy(selected)
@@ -226,13 +231,10 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
         )
         public: pathlib.Path | None = None
         if mark_digest_public or delete_public_before_qualification:
-            public = root / "evidence/public-replay/profiles" / f"{'a' * 64}.json"
-            public.parent.mkdir(parents=True, exist_ok=True)
-            public.write_bytes(
-                private_replay.canonical(
-                    {"registry_manifest_digest": core["execution_profile"]["vm_image_digest"]}
-                )
-            )
+            public = min((root / "evidence/public-replay/profiles").glob("*.json"))
+            public_value = json.loads(public.read_bytes())
+            public_value["registry_manifest_digest"] = core["execution_profile"]["vm_image_digest"]
+            public.write_bytes(private_replay.canonical(public_value))
         source_commit = self.commit_fixture(root, "private image source fixture")
         if delete_public_before_qualification:
             assert public is not None
@@ -265,13 +267,17 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
                 "workflow_sha256": hashlib.sha256(workflow.read_bytes()).hexdigest(),
                 "workflow_run_id": 123,
                 "workflow_run_attempt": 1,
-                "private_archive_probe": {
+                "offline_image_inspection": {
                     "archive_expectation_schema_version": 2,
                     "key_material_type": "age-file-key-v1",
                     "runner_entrypoint": "/opt/lean-eval/replay-authoritative",
-                    "status": "passed",
+                    "official_entrypoint": "passed",
+                    "network": "blocked",
+                    "root_filesystem": "read_only",
+                    "registry_manifest": "validated",
+                    "source_closure": "validated",
                 },
-                "network_probe": "blocked",
+                "cloudflare_runtime_validation": "deferred_to_first_historical_replay",
             },
         }
         path = root / private_replay.PRIVATE_PROFILE_PREFIX / f"{digest}.json"
@@ -1006,23 +1012,13 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
             path, commit, artifact = self.private_qualification_fixture(
                 root, delete_public_before_qualification=True
             )
-            self.assertEqual(
-                subprocess.check_output(
-                    [
-                        "git", "-C", str(root), "ls-tree", "-r", "--name-only",
-                        commit, "evidence/public-replay/profiles",
-                    ],
-                    text=True,
-                ),
-                "",
-            )
             with mock.patch.object(
                 private_replay,
                 "PRIVATE_IMAGE_MATRIX_SHA256",
                 artifact["source_blobs"]["profile_matrix"]["sha256"],
             ), self.assertRaisesRegex(
                 private_replay.PrivateReplayPlanError,
-                "qualification image is invalid",
+                "public runtime profile set is incomplete",
             ):
                 private_replay.load_private_profiles([path], commit)
 
@@ -1042,7 +1038,7 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
             ),
             (
                 lambda artifact: artifact["qualification"][
-                    "private_archive_probe"
+                    "offline_image_inspection"
                 ].__setitem__(
                     "runner_entrypoint",
                     "/opt/lean-eval/replay-archive-acceptance",

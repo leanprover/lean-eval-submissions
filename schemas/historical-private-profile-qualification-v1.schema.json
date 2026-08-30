@@ -49,7 +49,7 @@
       "required": [
         "workflow_repository", "workflow_commit", "workflow_path",
         "workflow_sha256", "workflow_run_id", "workflow_run_attempt",
-        "private_archive_probe", "network_probe"
+        "offline_image_inspection", "cloudflare_runtime_validation"
       ],
       "properties": {
         "workflow_repository": {"const": "leanprover/lean-eval-submissions"},
@@ -62,20 +62,27 @@
         "workflow_run_attempt": {
           "type": "integer", "minimum": 1, "maximum": 9007199254740991
         },
-        "private_archive_probe": {
+        "offline_image_inspection": {
           "type": "object", "additionalProperties": false,
           "required": [
             "archive_expectation_schema_version", "key_material_type",
-            "runner_entrypoint", "status"
+            "runner_entrypoint", "official_entrypoint", "network",
+            "root_filesystem", "registry_manifest", "source_closure"
           ],
           "properties": {
             "archive_expectation_schema_version": {"const": 2},
             "key_material_type": {"const": "age-file-key-v1"},
             "runner_entrypoint": {"const": "/opt/lean-eval/replay-authoritative"},
-            "status": {"const": "passed"}
+            "official_entrypoint": {"const": "passed"},
+            "network": {"const": "blocked"},
+            "root_filesystem": {"const": "read_only"},
+            "registry_manifest": {"const": "validated"},
+            "source_closure": {"const": "validated"}
           }
         },
-        "network_probe": {"const": "blocked"}
+        "cloudflare_runtime_validation": {
+          "const": "deferred_to_first_historical_replay"
+        }
       }
     },
     "benchmark_commit": {"$ref": "#/$defs/commit"},

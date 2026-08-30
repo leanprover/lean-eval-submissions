@@ -46,10 +46,8 @@ export type ReplayRuntimeEnv = ReplayAuthEnvironment & {
   REVIEWED_EXECUTION_PROFILE_DIGEST: string;
   REVIEWED_MEASUREMENT_CONFIG_DIGEST: string;
   REVIEWED_VM_IMAGE_DIGEST: string;
-  EXPECTED_RUNNER_NONCE?: string;
   EXPECTED_REPLAY_TASK_ID?: string;
   EXPECTED_REPLAY_ATTEMPT?: string;
-  EXPECTED_QUALIFICATION_REQUEST_SHA256?: string;
   EXECUTOR_OWNERSHIP_TAG?: string;
 };
 
@@ -63,10 +61,7 @@ type TerminalReceiptStore = Pick<
   | "readReceipt"
   | "prepareReceipt"
   | "confirmReceipt"
-> & Partial<Pick<
-  ReplayTerminalReceipt,
-  "claimQualificationBinding" | "confirmQualificationRunning"
->>;
+>;
 
 type HistoricalCleanupStore = Pick<
   ReplayTerminalReceipt,
@@ -132,26 +127,6 @@ function terminalReceiptStore(
 
 function json(value: unknown, status = 200): Response {
   return Response.json(value, { status, headers: { "cache-control": "no-store" } });
-}
-
-function requireQualificationBinding(
-  env: ReplayRuntimeEnv,
-  value: { runner_nonce: string; replay_task_id: string; attempt: number },
-): void {
-  if (env.DEPLOYMENT_ENVIRONMENT !== "private-qualification") return;
-  if (
-    env.EXPECTED_RUNNER_NONCE === undefined
-    || !SHA256_DIGEST.test(env.EXPECTED_RUNNER_NONCE)
-    || value.runner_nonce !== env.EXPECTED_RUNNER_NONCE
-    || env.EXPECTED_REPLAY_TASK_ID === undefined
-    || !REPLAY_TASK_ID.test(env.EXPECTED_REPLAY_TASK_ID)
-    || value.replay_task_id !== env.EXPECTED_REPLAY_TASK_ID
-    || env.EXPECTED_REPLAY_ATTEMPT !== String(value.attempt)
-    || env.EXPECTED_QUALIFICATION_REQUEST_SHA256 === undefined
-    || !SHA256_DIGEST.test(env.EXPECTED_QUALIFICATION_REQUEST_SHA256)
-  ) {
-    throw new AuthoritativeReplayContractError("execution is not the reviewed one-use qualification binding");
-  }
 }
 
 function requireHistoricalPrivateBinding(
@@ -544,48 +519,16 @@ function rejectBindingMismatch(value: unknown): never {
 async function claimActiveBinding(
   store: TerminalReceiptStore,
   request: AuthoritativeReplayStatusRequest,
-  qualificationRequestSha256?: string,
 ): Promise<AuthoritativeActiveBinding> {
   let value: unknown;
   const binding = activeBinding(request);
   try {
-    if (
-      qualificationRequestSha256 !== undefined
-      && store.claimQualificationBinding === undefined
-    ) {
-      throw new Error("qualification claim store is unavailable");
-    }
-    value = qualificationRequestSha256 === undefined
-      ? await store.claimBinding(binding)
-      : await store.claimQualificationBinding?.({
-          schema_version: 1,
-          request_sha256: qualificationRequestSha256,
-          binding,
-        });
+    value = await store.claimBinding(binding);
   } catch {
     throw new ReplayExecutorError("command_rpc_failed");
   }
   if (!sameActiveBinding(value, request)) rejectBindingMismatch(value);
   return value;
-}
-
-async function confirmQualificationRunning(
-  store: TerminalReceiptStore,
-  binding: AuthoritativeActiveBinding,
-  requestSha256: string,
-): Promise<void> {
-  if (store.confirmQualificationRunning === undefined) {
-    throw new ReplayExecutorError("command_rpc_failed");
-  }
-  try {
-    await store.confirmQualificationRunning({
-      schema_version: 1,
-      request_sha256: requestSha256,
-      binding,
-    });
-  } catch {
-    throw new ReplayExecutorError("command_rpc_failed");
-  }
 }
 
 async function requireActiveBinding(
@@ -1714,7 +1657,6 @@ export async function handleReplayRequest(
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
-      requireQualificationBinding(env, input);
       requireHistoricalPrivateBinding(env, input);
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
       await requireActiveBinding(store, input);
@@ -1738,24 +1680,13 @@ export async function handleReplayRequest(
         env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
-      requireQualificationBinding(env, {
-        runner_nonce: input.runner_nonce,
-        replay_task_id: String(input.request.replay_task_id),
-        attempt: Number(input.request.attempt),
-      });
       requireHistoricalPrivateBinding(env, {
         replay_task_id: String(input.request.replay_task_id),
         attempt: Number(input.request.attempt),
       });
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
       const binding = statusBinding(input);
-      const claimedBinding = await claimActiveBinding(
-        store,
-        binding,
-        env.DEPLOYMENT_ENVIRONMENT === "private-qualification"
-          ? env.EXPECTED_QUALIFICATION_REQUEST_SHA256
-          : undefined,
-      );
+      await claimActiveBinding(store, binding);
       const existingReceipt = await readTerminalReceipt(store, binding);
       if (existingReceipt !== null) {
         return json({
@@ -1781,17 +1712,6 @@ export async function handleReplayRequest(
             await writeSandboxFile(sandbox, "/workspace/key-material.b64", input.plaintext_key_material_base64);
           }
         });
-        if (env.DEPLOYMENT_ENVIRONMENT === "private-qualification") {
-          const qualificationRequestSha256 = env.EXPECTED_QUALIFICATION_REQUEST_SHA256;
-          if (qualificationRequestSha256 === undefined) {
-            throw new ReplayExecutorError("command_rpc_failed");
-          }
-          await confirmQualificationRunning(
-            store,
-            claimedBinding,
-            qualificationRequestSha256,
-          );
-        }
       } catch (error) {
         if (!(error instanceof ProcessStartConflictError)) {
           await sandbox.destroy();

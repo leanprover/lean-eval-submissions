@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -68,31 +69,13 @@ class Fixture:
                 "perf_event": "instructions:u",
             },
         }
-        self.execution_profile = {
-            "schema_version": 1,
-            "runner_profile": "historical-private-v1",
-            "vm_image_digest": "sha256:" + "a" * 64,
-            "toolchain": "leanprover/lean4:v4.19.0-rc1",
-            "architecture": "x86_64",
-            "cpu_model": "fixture-cpu",
-            "kernel_release": "6.8.0-fixture",
-            "cache_state": "cold",
-            "measurement_command": ["/opt/lean-eval/run"],
-            "go_toolchain": "go1.24.2",
-            "rust_toolchain": "rustc-1.85.0",
-            "components": {
-                name: {
-                    "repository": repository,
-                    "commit": character * 40,
-                }
-                for name, repository, character in (
-                    ("comparator", "leanprover/comparator", "1"),
-                    ("landrun", "leanprover/landrun", "2"),
-                    ("lean4export", "leanprover/lean4export", "3"),
-                    ("nanoda", "leanprover/nanoda", "4"),
-                )
-            },
-        }
+        public_source = ROOT / "evidence/public-replay/profiles"
+        shutil.copytree(
+            public_source, self.repository / "evidence/public-replay/profiles"
+        )
+        public_profile = json.loads(min(public_source.glob("*.json")).read_bytes())
+        self.execution_profile = copy.deepcopy(public_profile["execution_profile"])
+        self.execution_profile["vm_image_digest"] = "sha256:" + "a" * 64
         self.measurement_digest = config_digest(
             "lean-eval-replay-measurement-config-v1", self.measurement
         )
@@ -142,13 +125,17 @@ class Fixture:
                 "workflow_sha256": controller.sha256_bytes(workflow_raw),
                 "workflow_run_id": 123,
                 "workflow_run_attempt": 1,
-                "private_archive_probe": {
+                "offline_image_inspection": {
                     "archive_expectation_schema_version": 2,
                     "key_material_type": "age-file-key-v1",
                     "runner_entrypoint": "/opt/lean-eval/replay-authoritative",
-                    "status": "passed",
+                    "official_entrypoint": "passed",
+                    "network": "blocked",
+                    "root_filesystem": "read_only",
+                    "registry_manifest": "validated",
+                    "source_closure": "validated",
                 },
-                "network_probe": "blocked",
+                "cloudflare_runtime_validation": "deferred_to_first_historical_replay",
             },
             **self.profile_core,
         }
@@ -1531,7 +1518,10 @@ class HistoricalPrivateRecoveryTests(unittest.TestCase):
                 task,
                 "2026-10-21T06:00:03.000Z",
                 ids[2],
-                {"attempt": 1, "runner_profile": "historical-private-v1"},
+                {
+                    "attempt": 1,
+                    "runner_profile": "cloudflare-sandbox-standard-4-v1",
+                },
             )
             state_binding = ({"environment": "production"}, b"", "a" * 40)
             with mock.patch.object(controller, "load_state_queue", return_value=state_binding):

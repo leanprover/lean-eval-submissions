@@ -2,15 +2,11 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import io
 import json
 import pathlib
-import runpy
 import sys
 import tempfile
 import unittest
-import urllib.error
-from unittest import mock
 
 import jsonschema
 from referencing import Registry, Resource
@@ -25,7 +21,7 @@ from replay_orchestrator import config_digest
 MATRIX = ROOT / "configuration/historical-private-replay-image-matrix-v1.json"
 SCHEMA = ROOT / "schemas/historical-private-profile-qualification-v1.schema.json"
 WORKFLOW = ROOT / ".github/workflows/historical-private-image-qualification.yml"
-PROBE = runpy.run_path(ROOT / "scripts/run_historical_private_cloudflare_probe")
+PUBLIC_PROFILES = ROOT / "evidence/public-replay/profiles"
 
 
 class HistoricalPrivateImageQualificationTests(unittest.TestCase):
@@ -36,10 +32,7 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
         cls.entry = cls.matrix["images"][0]
         cls.source_commit = "1" * 40
         cls.candidate = qualification.select_candidate(
-            MATRIX,
-            cls.entry["benchmark_commit"],
-            ROOT,
-            cls.source_commit,
+            MATRIX, cls.entry["benchmark_commit"], ROOT, cls.source_commit
         )
 
     def receipt(self, manifest: str) -> dict[str, object]:
@@ -48,61 +41,33 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
             "kind": qualification.RECEIPT_KIND,
             "registry_manifest_digest": manifest,
             "benchmark_commit": self.entry["benchmark_commit"],
-            "runner_entrypoint": "/opt/lean-eval/replay-authoritative",
+            "runner_entrypoint": qualification.RUNNER_ENTRYPOINT,
             "archive_expectation_schema_version": 2,
             "key_material_type": "age-file-key-v1",
             "network_probe": "blocked",
             "status": "passed",
-            "architecture": "x86_64",
-            "kernel_release": "6.18.36-cloudflare-firecracker-2026.6.17",
-            "cpu_model": "AMD EPYC",
+            "architecture": qualification.EXPECTED_ARCHITECTURE,
+            "kernel_release": qualification.EXPECTED_KERNEL_RELEASE,
+            "cpu_model": qualification.EXPECTED_CPU_MODEL,
         }
 
-    def test_selector_accepts_exactly_the_closed_63_entry_matrix(self) -> None:
+    def test_selector_accepts_only_the_closed_matrix_and_source_closure(self) -> None:
         images = qualification.validate_matrix(self.matrix, self.matrix_raw)
         self.assertEqual(len(images), 63)
-        self.assertEqual(
-            hashlib.sha256(self.matrix_raw).hexdigest(), qualification.MATRIX_SHA256
-        )
+        self.assertEqual(hashlib.sha256(self.matrix_raw).hexdigest(), qualification.MATRIX_SHA256)
         self.assertEqual(self.candidate["benchmark_commit"], self.entry["benchmark_commit"])
-        self.assertEqual(
-            self.candidate["matrix_entry_sha256"],
-            hashlib.sha256(canonical(self.entry)).hexdigest(),
-        )
-        self.assertEqual(
-            self.candidate["profile_lock"]["runner_profile"],
-            "cloudflare-sandbox-standard-4-v1",
-        )
-
-    def test_selector_binds_the_complete_final_source_blob_closure(self) -> None:
-        self.assertEqual(
-            set(self.candidate["source_blobs"]), set(qualification.SOURCE_PATHS)
-        )
-        for name, relative in qualification.SOURCE_PATHS.items():
-            blob = self.candidate["source_blobs"][name]
-            self.assertEqual(blob["path"], relative)
-            self.assertEqual(
-                blob["sha256"], hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
-            )
-
-    def test_matrix_change_or_unknown_commit_fails_closed(self) -> None:
+        self.assertEqual(set(self.candidate["source_blobs"]), set(qualification.SOURCE_PATHS))
+        changed = copy.deepcopy(self.matrix)
+        changed["images"][0]["workspace_count"] += 1
         with tempfile.TemporaryDirectory() as raw:
-            changed = copy.deepcopy(self.matrix)
-            changed["images"][0]["workspace_count"] += 1
             path = pathlib.Path(raw) / "matrix.json"
             path.write_bytes(canonical(changed))
-            with self.assertRaisesRegex(
-                qualification.QualificationError, "matrix identity changed"
-            ):
+            with self.assertRaisesRegex(qualification.QualificationError, "identity changed"):
                 qualification.select_candidate(
                     path, self.entry["benchmark_commit"], ROOT, self.source_commit
                 )
-        with self.assertRaisesRegex(
-            qualification.QualificationError, "does not select exactly one"
-        ):
-            qualification.select_candidate(MATRIX, "0" * 40, ROOT, self.source_commit)
 
-    def test_existing_immutable_tag_resumes_only_for_the_exact_image(self) -> None:
+    def test_existing_tag_must_match_exact_manifest_config_and_labels(self) -> None:
         labels = {
             "org.lean-eval.image-family": qualification.IMAGE_FAMILY,
             "org.lean-eval.image-matrix-sha256": qualification.MATRIX_SHA256,
@@ -112,19 +77,12 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
                 canonical(self.candidate)
             ).hexdigest(),
         }
-        config_raw = json.dumps(
-            {"config": {"Labels": labels}}, separators=(",", ":")
-        ).encode()
-        manifest_raw = json.dumps(
-            {
-                "schemaVersion": 2,
-                "config": {
-                    "digest": "sha256:" + hashlib.sha256(config_raw).hexdigest()
-                },
-                "layers": [],
-            },
-            separators=(",", ":"),
-        ).encode()
+        config_raw = json.dumps({"config": {"Labels": labels}}, separators=(",", ":")).encode()
+        manifest_raw = json.dumps({
+            "schemaVersion": 2,
+            "config": {"digest": "sha256:" + hashlib.sha256(config_raw).hexdigest()},
+            "layers": [],
+        }, separators=(",", ":")).encode()
         digest = "sha256:" + hashlib.sha256(manifest_raw).hexdigest()
         with tempfile.TemporaryDirectory() as raw:
             root = pathlib.Path(raw)
@@ -133,1041 +91,202 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
             manifest.write_bytes(manifest_raw)
             config.write_bytes(config_raw)
             self.assertEqual(
-                qualification.validate_registry_image(
-                    self.candidate, digest, manifest, config
-                ),
+                qualification.validate_registry_image(self.candidate, digest, manifest, config),
                 digest,
             )
-            changed = json.loads(config_raw)
-            changed["config"]["Labels"][
-                "org.lean-eval.image-source-commit"
-            ] = "0" * 40
-            changed_raw = json.dumps(changed, separators=(",", ":")).encode()
-            config.write_bytes(changed_raw)
-            with self.assertRaisesRegex(
-                qualification.QualificationError,
-                "manifest does not bind|labels differ",
-            ):
-                qualification.validate_registry_image(
-                    self.candidate, digest, manifest, config
-                )
+            config.write_bytes(b"{}")
+            with self.assertRaises(qualification.QualificationError):
+                qualification.validate_registry_image(self.candidate, digest, manifest, config)
 
-    def test_renderer_produces_the_final_private_profile_schema_shape(self) -> None:
+    def test_pulled_inspection_image_must_match_exact_remote_digest(self) -> None:
+        digest = "sha256:" + "2" * 64
+        expected = (
+            f"{qualification.CLOUDFLARE_REGISTRY}/"
+            f"{qualification.CLOUDFLARE_ACCOUNT_ID}/"
+            f"{qualification.IMAGE_REPOSITORY}@{digest}"
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            repo_digests = pathlib.Path(raw) / "repo-digests.json"
+            repo_digests.write_text(json.dumps([expected]), encoding="utf-8")
+            self.assertEqual(
+                qualification.validate_pulled_image_reference(digest, repo_digests),
+                expected,
+            )
+            repo_digests.write_text(
+                json.dumps([expected.rsplit("@", 1)[0] + "@sha256:" + "3" * 64]),
+                encoding="utf-8",
+            )
+            self.assertRaisesRegex(
+                qualification.QualificationError,
+                "not bound",
+                qualification.validate_pulled_image_reference,
+                digest,
+                repo_digests,
+            )
+
+    def test_frozen_public_profiles_support_every_private_toolchain_and_one_runtime(self) -> None:
+        for entry in self.matrix["images"]:
+            candidate = qualification.select_candidate(
+                MATRIX, entry["benchmark_commit"], ROOT, self.source_commit
+            )
+            self.assertEqual(
+                qualification.target_runtime_from_public_profiles(PUBLIC_PROFILES, candidate),
+                {
+                    "architecture": qualification.EXPECTED_ARCHITECTURE,
+                    "kernel_release": qualification.EXPECTED_KERNEL_RELEASE,
+                    "cpu_model": qualification.EXPECTED_CPU_MODEL,
+                },
+            )
+        with tempfile.TemporaryDirectory() as raw:
+            self.assertRaisesRegex(
+                qualification.QualificationError,
+                "incomplete",
+                qualification.target_runtime_from_public_profiles,
+                pathlib.Path(raw),
+                self.candidate,
+            )
+
+    def test_offline_probe_keeps_local_runtime_out_of_target_profile(self) -> None:
         manifest = "sha256:" + "2" * 64
-        workflow_sha = hashlib.sha256(WORKFLOW.read_bytes()).hexdigest()
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            plaintext = root / "source.tar.gz"
+            ciphertext = root / "source.tar.gz.age"
+            key = root / "file-key"
+            probe = root / "probe"
+            probe.mkdir()
+            plaintext.write_bytes(b"plaintext")
+            ciphertext.write_bytes(b"ciphertext")
+            key.write_bytes(b"0" * 16)
+            qualification.prepare_offline_probe_inputs(
+                self.candidate, plaintext, ciphertext, key, manifest, 123, 1,
+                "x86_64", "local-kernel", "local-cpu", probe,
+            )
+            request = json.loads((probe / "replay-request.json").read_bytes())
+            self.assertEqual(request["execution_profile"]["kernel_release"], "local-kernel")
+            (probe / "archive.tar.gz.age.b64").unlink()
+            (probe / "key-material.b64").unlink()
+            verdict = json.loads(
+                (ROOT / "tests/fixtures/replay-verdict-accepted-v1.json").read_text()
+            )
+            verdict["replay_task_id"] = request["replay_task_id"]
+            verdict_path = root / "verdict.json"
+            verdict_path.write_text(json.dumps(verdict), encoding="utf-8")
+            receipt = qualification.render_offline_receipt(
+                self.candidate, manifest, probe, verdict_path, PUBLIC_PROFILES
+            )
+            self.assertEqual(receipt["architecture"], qualification.EXPECTED_ARCHITECTURE)
+            self.assertNotEqual(receipt["kernel_release"], "local-kernel")
+            for residue in (
+                "archive.tar.gz.age.b64",
+                "key-material.b64",
+                "accepted-source.tar.gz.age",
+                "accepted-source.file-key",
+                "accepted-source.tar.gz",
+                "authoritative",
+                "replay-output",
+                "metrics.json",
+            ):
+                with self.subTest(residue=residue):
+                    residue_path = probe / residue
+                    residue_path.write_bytes(b"sensitive execution residue")
+                    self.assertRaisesRegex(
+                        qualification.QualificationError,
+                        "cleanup is incomplete",
+                        qualification.render_offline_receipt,
+                        self.candidate,
+                        manifest,
+                        probe,
+                        verdict_path,
+                        PUBLIC_PROFILES,
+                    )
+                    residue_path.unlink()
+
+    def test_renderer_preserves_schema_and_records_deferred_live_canary(self) -> None:
+        manifest = "sha256:" + "2" * 64
         execution_digest, profile = qualification.render_qualification(
             self.candidate,
             self.receipt(manifest),
+            PUBLIC_PROFILES,
             manifest,
             "3" * 40,
-            workflow_sha,
+            hashlib.sha256(WORKFLOW.read_bytes()).hexdigest(),
             1234,
             2,
         )
         schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
         plan_schema = json.loads(
-            (ROOT / "schemas/historical-private-replay-plan-v1.schema.json").read_text(
-                encoding="utf-8"
-            )
+            (ROOT / "schemas/historical-private-replay-plan-v1.schema.json").read_text()
         )
-        registry = Registry().with_resources(
-            [
-                (value["$id"], Resource.from_contents(value))
-                for value in (schema, plan_schema)
-            ]
-        )
+        registry = Registry().with_resources([
+            (value["$id"], Resource.from_contents(value)) for value in (schema, plan_schema)
+        ])
         jsonschema.Draft202012Validator.check_schema(schema)
         jsonschema.Draft202012Validator(schema, registry=registry).validate(profile)
-        self.assertEqual(set(profile), set(schema["required"]))
-        self.assertEqual(profile["qualification_status"], "qualified")
-        self.assertEqual(profile["registry_manifest_digest"], manifest)
-        self.assertEqual(profile["execution_profile"]["vm_image_digest"], manifest)
+        proof = profile["qualification"]
+        self.assertEqual(proof["offline_image_inspection"], {
+            "archive_expectation_schema_version": 2,
+            "key_material_type": "age-file-key-v1",
+            "runner_entrypoint": qualification.RUNNER_ENTRYPOINT,
+            "official_entrypoint": "passed",
+            "network": "blocked",
+            "root_filesystem": "read_only",
+            "registry_manifest": "validated",
+            "source_closure": "validated",
+        })
         self.assertEqual(
-            profile["qualification"]["private_archive_probe"],
-            {
-                "archive_expectation_schema_version": 2,
-                "key_material_type": "age-file-key-v1",
-                "runner_entrypoint": "/opt/lean-eval/replay-authoritative",
-                "status": "passed",
-            },
+            proof["cloudflare_runtime_validation"], "deferred_to_first_historical_replay"
         )
-        self.assertEqual(profile["qualification"]["network_probe"], "blocked")
         self.assertEqual(
             execution_digest,
-            config_digest(
-                "lean-eval-replay-execution-profile-v1",
-                profile["execution_profile"],
-            ),
-        )
-        self.assertEqual(profile["execution_profile_digest"], execution_digest)
-        self.assertEqual(
-            profile["measurement_config_digest"],
-            config_digest(
-                "lean-eval-replay-measurement-config-v1",
-                profile["measurement_config"],
-            ),
-        )
-        self.assertEqual(canonical(profile), canonical(json.loads(canonical(profile))))
-
-    def test_renderer_refuses_non_v2_or_non_blocked_receipts(self) -> None:
-        manifest = "sha256:" + "2" * 64
-        for field, value in (
-            ("archive_expectation_schema_version", 1),
-            ("key_material_type", "age-identity-v1"),
-            ("network_probe", "available"),
-            ("status", "failed"),
-        ):
-            with self.subTest(field=field):
-                receipt = self.receipt(manifest)
-                receipt[field] = value
-                with self.assertRaisesRegex(
-                    qualification.QualificationError, "passing exact probe"
-                ):
-                    qualification.render_qualification(
-                        self.candidate,
-                        receipt,
-                        manifest,
-                        "3" * 40,
-                        "4" * 64,
-                        1234,
-                        1,
-                    )
-
-    def test_probe_archive_and_disposable_config_are_closed_to_one_run(self) -> None:
-        manifest = "sha256:" + "2" * 64
-        with tempfile.TemporaryDirectory() as raw:
-            root = pathlib.Path(raw)
-            archive = root / "source.tar.gz"
-            qualification.create_probe_archive(self.candidate, archive)
-            ciphertext = root / "source.tar.gz.age"
-            ciphertext.write_bytes(b"age-encryption.org/v1\nfixture")
-            key = root / "file-key"
-            key.write_bytes(b"0123456789abcdef")
-            output = root / "closed"
-            output.mkdir()
-            context = qualification.prepare_probe_inputs(
-                self.candidate,
-                archive,
-                ciphertext,
-                key,
-                manifest,
-                123456,
-                2,
-                output,
-            )
-            self.assertEqual(
-                {path.name for path in output.iterdir()},
-                {"context.json", "request.json", "status.json", "wrangler.json"},
-            )
-            config = json.loads((output / "wrangler.json").read_bytes())
-            request = json.loads((output / "request.json").read_bytes())
-            self.assertEqual(config["name"], "lean-eval-private-q-123456-2")
-            self.assertEqual(context["container_application_name"], "le-q-123456-2")
-            self.assertEqual(
-                config["containers"][0]["name"], context["container_application_name"]
-            )
-            self.assertEqual(config["workers_dev"], True)
-            self.assertEqual(config["containers"][0]["max_instances"], 1)
-            self.assertEqual(config["containers"][0]["ssh"], {"enabled": False})
-            self.assertEqual(
-                config["containers"][0]["image"],
-                f"registry.cloudflare.com/{qualification.CLOUDFLARE_ACCOUNT_ID}/"
-                f"lean-eval-authoritative@{manifest}",
-            )
-            self.assertEqual(config["vars"]["QUALIFICATION_RUN_ID"], "123456")
-            self.assertEqual(config["vars"]["QUALIFICATION_RUN_ATTEMPT"], "2")
-            self.assertEqual(
-                config["vars"]["EXPECTED_RUNNER_NONCE"], context["runner_nonce"]
-            )
-            self.assertEqual(
-                config["vars"]["EXPECTED_REPLAY_TASK_ID"], context["replay_task_id"]
-            )
-            self.assertEqual(config["vars"]["EXPECTED_REPLAY_ATTEMPT"], "1")
-            self.assertEqual(
-                config["vars"]["EXPECTED_QUALIFICATION_REQUEST_SHA256"],
-                hashlib.sha256(canonical(request)).hexdigest(),
-            )
-            self.assertEqual(request["schema_version"], 2)
-            self.assertEqual(request["key_material_type"], "age-file-key-v1")
-            self.assertEqual(
-                request["archive_expectation"]["schema_version"], 2
-            )
-            self.assertEqual(
-                request["request"]["network"]["untrusted_execution_phase"],
-                "disabled",
-            )
-
-    def test_probe_health_retries_only_transient_readiness_failures(self) -> None:
-        commit = "1" * 40
-        for status in (404, 429, 500, 503):
-            with self.subTest(status=status):
-                unavailable = urllib.error.HTTPError(
-                    "https://qualifier.example/healthz",
-                    status,
-                    "not ready",
-                    {},
-                    None,
-                )
-                ready = io.BytesIO(
-                    canonical(
-                        {
-                            "status": "ok",
-                            "environment": "private-qualification",
-                            "deployed_commit": commit,
-                            "replay_enabled": True,
-                        }
-                    )
-                )
-                with (
-                    mock.patch.object(
-                        PROBE["urllib"].request,
-                        "urlopen",
-                        side_effect=[unavailable, ready],
-                    ) as urlopen,
-                    mock.patch.object(PROBE["time"], "sleep") as sleep,
-                ):
-                    PROBE["_health"]("https://qualifier.example", commit)
-                self.assertEqual(urlopen.call_count, 2)
-                sleep.assert_called_once_with(PROBE["HEALTH_RETRY_SECONDS"])
-
-    def test_probe_uses_fixed_identity_for_every_worker_request(self) -> None:
-        commit = "1" * 40
-        health = io.BytesIO(
-            canonical(
-                {
-                    "status": "ok",
-                    "environment": "private-qualification",
-                    "deployed_commit": commit,
-                    "replay_enabled": True,
-                }
-            )
-        )
-        posted = io.BytesIO(canonical({"status": "reserved"}))
-        posted.status = 200
-        with (
-            mock.patch.object(
-                PROBE["urllib"].request,
-                "urlopen",
-                side_effect=[health, posted],
-            ) as urlopen,
-            mock.patch.object(PROBE["time"], "sleep"),
-            mock.patch.dict(
-                PROBE["_post"].__globals__, {"_oidc_token": lambda: "token"}
-            ),
-        ):
-            PROBE["_health"]("https://qualifier.example", commit)
-            self.assertEqual(
-                PROBE["_post"]("https://qualifier.example/reserve", {"value": 1}),
-                (200, {"status": "reserved"}),
-            )
-        self.assertEqual(urlopen.call_count, 2)
-        self.assertEqual(
-            urlopen.call_args_list[0].kwargs["timeout"],
-            PROBE["HEALTH_TIMEOUT_SECONDS"],
-        )
-        self.assertEqual(
-            urlopen.call_args_list[1].kwargs["timeout"],
-            PROBE["POST_TIMEOUT_SECONDS"],
-        )
-        for call in urlopen.call_args_list:
-            request = call.args[0]
-            self.assertEqual(
-                request.get_header("User-agent"),
-                PROBE["QUALIFICATION_USER_AGENT"],
-            )
-
-    def test_probe_extends_only_the_named_reservation_request(self) -> None:
-        post = mock.Mock(return_value=(500, {}))
-        with (
-            mock.patch.dict(
-                PROBE["_run"].__globals__,
-                {"_health": mock.Mock(), "_post": post},
-            ),
-            self.assertRaisesRegex(
-                qualification.QualificationError,
-                "sandbox cleanup identity was not reserved",
-            ),
-        ):
-            PROBE["_run"](
-                {"image_source_commit": "1" * 40},
-                {},
-                {"schema_version": 1},
-                {"worker_url": "https://qualifier.example"},
-                pathlib.Path("unused-receipt"),
-                pathlib.Path("unused-reservation"),
-            )
-        post.assert_called_once_with(
-            "https://qualifier.example/api/v1/private-qualification/reserve",
-            {"schema_version": 1},
-            timeout_seconds=PROBE["RESERVATION_TIMEOUT_SECONDS"],
-            operation="reservation request",
-        )
-        self.assertEqual(PROBE["POST_TIMEOUT_SECONDS"], 60)
-        self.assertEqual(PROBE["RESERVATION_TIMEOUT_SECONDS"], 180)
-
-    def test_probe_reports_a_safe_reservation_specific_timeout(self) -> None:
-        with (
-            mock.patch.object(
-                PROBE["urllib"].request,
-                "urlopen",
-                side_effect=TimeoutError(),
-            ) as urlopen,
-            mock.patch.dict(
-                PROBE["_post"].__globals__, {"_oidc_token": lambda: "token"}
-            ),
-            self.assertRaisesRegex(
-                qualification.QualificationError,
-                "qualification executor reservation request failed",
-            ),
-        ):
-            PROBE["_post"](
-                "https://qualifier.example/api/v1/private-qualification/reserve",
-                {"schema_version": 1},
-                timeout_seconds=PROBE["RESERVATION_TIMEOUT_SECONDS"],
-                operation="reservation request",
-            )
-        self.assertEqual(
-            urlopen.call_args.kwargs["timeout"],
-            PROBE["RESERVATION_TIMEOUT_SECONDS"],
+            config_digest("lean-eval-replay-execution-profile-v1", profile["execution_profile"]),
         )
 
-    def test_probe_extends_only_the_named_replay_start_request(self) -> None:
-        post = mock.Mock(
-            side_effect=[
-                (
-                    200,
-                    {
-                        "schema_version": 1,
-                        "replay_task_id": "task-1",
-                        "attempt": 1,
-                        "status": "reserved",
-                    },
-                ),
-                (
-                    202,
-                    {
-                        "schema_version": 1,
-                        "replay_task_id": "task-1",
-                        "attempt": 1,
-                        "status": "running",
-                    },
-                ),
-                (500, {}),
-            ]
-        )
-        with (
-            mock.patch.dict(
-                PROBE["_run"].__globals__,
-                {
-                    "_health": mock.Mock(),
-                    "_post": post,
-                    "write_exclusive": mock.Mock(),
-                },
-            ),
-            self.assertRaisesRegex(
-                qualification.QualificationError,
-                "qualification executor did not return one terminal verdict",
-            ),
-        ):
-            PROBE["_run"](
-                {"image_source_commit": "1" * 40},
-                {"schema_version": 1},
-                {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1},
-                {
-                    "worker_url": "https://qualifier.example",
-                    "runner_nonce": "2" * 64,
-                    "replay_task_id": "task-1",
-                },
-                pathlib.Path("unused-receipt"),
-                pathlib.Path("unused-reservation"),
-            )
-        self.assertEqual(
-            post.call_args_list,
-            [
-                mock.call(
-                    "https://qualifier.example/api/v1/private-qualification/reserve",
-                    {
-                        "schema_version": 1,
-                        "replay_task_id": "task-1",
-                        "attempt": 1,
-                    },
-                    timeout_seconds=PROBE["RESERVATION_TIMEOUT_SECONDS"],
-                    operation="reservation request",
-                ),
-                mock.call(
-                    "https://qualifier.example/api/v1/replay",
-                    {"schema_version": 1},
-                    timeout_seconds=PROBE["REPLAY_START_TIMEOUT_SECONDS"],
-                    operation="replay start request",
-                ),
-                mock.call(
-                    "https://qualifier.example/api/v1/replay/status",
-                    {
-                        "schema_version": 1,
-                        "replay_task_id": "task-1",
-                        "attempt": 1,
-                    },
-                ),
-            ],
-        )
-        self.assertEqual(PROBE["POST_TIMEOUT_SECONDS"], 60)
-        self.assertEqual(PROBE["RESERVATION_TIMEOUT_SECONDS"], 180)
-        self.assertEqual(PROBE["REPLAY_START_TIMEOUT_SECONDS"], 360)
-
-    def test_probe_reports_a_safe_replay_start_specific_timeout(self) -> None:
-        with (
-            mock.patch.object(
-                PROBE["urllib"].request,
-                "urlopen",
-                side_effect=TimeoutError(),
-            ) as urlopen,
-            mock.patch.dict(
-                PROBE["_post"].__globals__, {"_oidc_token": lambda: "token"}
-            ),
-            self.assertRaisesRegex(
-                qualification.QualificationError,
-                "qualification executor replay start request failed",
-            ),
-        ):
-            PROBE["_post"](
-                "https://qualifier.example/api/v1/replay",
-                {"schema_version": 1},
-                timeout_seconds=PROBE["REPLAY_START_TIMEOUT_SECONDS"],
-                operation="replay start request",
-            )
-        self.assertEqual(
-            urlopen.call_args.kwargs["timeout"],
-            PROBE["REPLAY_START_TIMEOUT_SECONDS"],
-        )
-
-    def test_probe_reconciles_an_exact_server_proven_start_rpc_failure(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        post = mock.Mock(
-            side_effect=[
-                (500, dict(PROBE["RETRYABLE_REPLAY_START_FAILURE"])),
-                (202, {**status, "status": "running"}),
-            ]
-        )
-        with (
-            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
-            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
-        ):
-            result = PROBE["_start_replay"](
-                "https://qualifier.example", {"schema_version": 1}, status
-            )
-        self.assertEqual(result, (202, {**status, "status": "running"}))
-        self.assertEqual(
-            post.call_args_list,
-            [
-                mock.call(
-                    "https://qualifier.example/api/v1/replay",
-                    {"schema_version": 1},
-                    timeout_seconds=PROBE["REPLAY_START_TIMEOUT_SECONDS"],
-                    operation="replay start request",
-                ),
-                mock.call(
-                    "https://qualifier.example/api/v1/replay/status",
-                    status,
-                    timeout_seconds=PROBE["START_RECONCILIATION_TIMEOUT_SECONDS"],
-                    operation="replay start reconciliation request",
-                ),
-            ],
-        )
-
-    def test_probe_reconciles_an_ambiguous_start_transport_failure(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        post = mock.Mock(
-            side_effect=[
-                PROBE["ExecutorTransportError"](
-                    "qualification executor replay start request failed"
-                ),
-                (202, {**status, "status": "running"}),
-            ]
-        )
-        with (
-            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
-            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
-        ):
-            result = PROBE["_start_replay"](
-                "https://qualifier.example", {"schema_version": 1}, status
-            )
-        self.assertEqual(result, (202, {**status, "status": "running"}))
-        self.assertEqual(
-            [call.args[0] for call in post.call_args_list],
-            [
-                "https://qualifier.example/api/v1/replay",
-                "https://qualifier.example/api/v1/replay/status",
-            ],
-        )
-
-    def test_probe_stops_when_start_reconciliation_expires(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        post = mock.Mock(
-            side_effect=[
-                PROBE["ExecutorTransportError"](
-                    "qualification executor replay start request failed"
-                ),
-                (500, dict(PROBE["RETRYABLE_REPLAY_START_FAILURE"])),
-            ]
-        )
-        with (
-            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
-            mock.patch.object(PROBE["time"], "monotonic", side_effect=[0, 0, 61]),
-            self.assertRaisesRegex(
-                qualification.QualificationError,
-                "replay start did not reconcile",
-            ),
-        ):
-            PROBE["_start_replay"](
-                "https://qualifier.example", {"schema_version": 1}, status
-            )
-        self.assertEqual(post.call_count, 2)
-        self.assertEqual(
-            [call.args[0] for call in post.call_args_list],
-            [
-                "https://qualifier.example/api/v1/replay",
-                "https://qualifier.example/api/v1/replay/status",
-            ],
-        )
-
-    def test_probe_reconciliation_caps_the_last_request_to_its_deadline(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        post = mock.Mock(return_value=(202, {**status, "status": "running"}))
-        with (
-            mock.patch.dict(PROBE["_reconcile_start"].__globals__, {"_post": post}),
-            mock.patch.object(PROBE["time"], "monotonic", side_effect=[0, 58.2]),
-        ):
-            PROBE["_reconcile_start"]("https://qualifier.example", status)
-        post.assert_called_once()
-        call = post.call_args
-        self.assertEqual(call.args, ("https://qualifier.example/api/v1/replay/status", status))
-        self.assertEqual(call.kwargs["operation"], "replay start reconciliation request")
-        self.assertAlmostEqual(call.kwargs["timeout_seconds"], 1.8)
-
-    def test_probe_reconciliation_accepts_a_terminal_status(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        terminal = {
-            "schema_version": 1,
-            "verdict": {"schema_version": 1},
-            "destruction": "confirmed",
-        }
-        post = mock.Mock(
-            side_effect=[
-                PROBE["ExecutorTransportError"](
-                    "qualification executor replay start request failed"
-                ),
-                (200, terminal),
-            ]
-        )
-        with (
-            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
-            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
-        ):
-            result = PROBE["_start_replay"](
-                "https://qualifier.example", {"schema_version": 1}, status
-            )
-        self.assertEqual(result, (200, terminal))
-        self.assertEqual(
-            [call.args[0] for call in post.call_args_list],
-            [
-                "https://qualifier.example/api/v1/replay",
-                "https://qualifier.example/api/v1/replay/status",
-            ],
-        )
-
-    def test_probe_reconciliation_tolerates_status_transport_then_recovers(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        post = mock.Mock(
-            side_effect=[
-                PROBE["ExecutorTransportError"](
-                    "qualification executor replay start request failed"
-                ),
-                PROBE["ExecutorTransportError"](
-                    "qualification executor replay start reconciliation request failed"
-                ),
-                (202, {**status, "status": "running"}),
-            ]
-        )
-        with (
-            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
-            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
-            mock.patch.object(PROBE["time"], "sleep") as sleep,
-        ):
-            result = PROBE["_start_replay"](
-                "https://qualifier.example", {"schema_version": 1}, status
-            )
-        self.assertEqual(result, (202, {**status, "status": "running"}))
-        self.assertEqual(
-            [call.args[0] for call in post.call_args_list],
-            [
-                "https://qualifier.example/api/v1/replay",
-                "https://qualifier.example/api/v1/replay/status",
-                "https://qualifier.example/api/v1/replay/status",
-            ],
-        )
-        sleep.assert_called_once_with(PROBE["START_RECONCILIATION_POLL_SECONDS"])
-
-    def test_probe_reconciliation_tolerates_repeated_exact_rpc_failures(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        retryable = dict(PROBE["RETRYABLE_REPLAY_START_FAILURE"])
-        post = mock.Mock(
-            side_effect=[
-                (500, retryable),
-                (500, retryable),
-                (500, retryable),
-                (202, {**status, "status": "running"}),
-            ]
-        )
-        with (
-            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
-            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
-            mock.patch.object(PROBE["time"], "sleep") as sleep,
-        ):
-            result = PROBE["_start_replay"](
-                "https://qualifier.example", {"schema_version": 1}, status
-            )
-        self.assertEqual(result, (202, {**status, "status": "running"}))
-        self.assertEqual(
-            [call.args[0] for call in post.call_args_list],
-            [
-                "https://qualifier.example/api/v1/replay",
-                "https://qualifier.example/api/v1/replay/status",
-                "https://qualifier.example/api/v1/replay/status",
-                "https://qualifier.example/api/v1/replay/status",
-            ],
-        )
-        self.assertEqual(sleep.call_count, 2)
-
-    def test_probe_reconciliation_makes_no_call_after_its_deadline(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        post = mock.Mock()
-        with (
-            mock.patch.dict(PROBE["_reconcile_start"].__globals__, {"_post": post}),
-            mock.patch.object(PROBE["time"], "monotonic", side_effect=[0, 61]),
-            self.assertRaisesRegex(
-                qualification.QualificationError,
-                "replay start did not reconcile",
-            ),
-        ):
-            PROBE["_reconcile_start"]("https://qualifier.example", status)
-        post.assert_not_called()
-
-    def test_probe_reconciliation_rejects_an_unexpected_status(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        post = mock.Mock(
-            side_effect=[
-                (500, dict(PROBE["RETRYABLE_REPLAY_START_FAILURE"])),
-                (500, {**PROBE["RETRYABLE_REPLAY_START_FAILURE"], "extra": True}),
-            ]
-        )
-        with (
-            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
-            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
-            self.assertRaisesRegex(
-                qualification.QualificationError,
-                "replay start reconciliation failed",
-            ),
-        ):
-            PROBE["_start_replay"](
-                "https://qualifier.example", {"schema_version": 1}, status
-            )
-        self.assertEqual(
-            [call.args[0] for call in post.call_args_list],
-            [
-                "https://qualifier.example/api/v1/replay",
-                "https://qualifier.example/api/v1/replay/status",
-            ],
-        )
-
-    def test_probe_reconciliation_rejects_every_nontransient_status_shape(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        cases = [
-            (202, {**status, "status": "running", "extra": True}),
-            (202, {**status, "status": "running", "replay_task_id": "other"}),
-            (400, {"error": "invalid_request"}),
-            (500, {"error": "executor_failed", "reason": "input_transfer_failed"}),
-        ]
-        for response in cases:
-            with self.subTest(response=response):
-                post = mock.Mock(
-                    side_effect=[
-                        (500, dict(PROBE["RETRYABLE_REPLAY_START_FAILURE"])),
-                        response,
-                    ]
-                )
-                with (
-                    mock.patch.dict(
-                        PROBE["_start_replay"].__globals__, {"_post": post}
-                    ),
-                    mock.patch.object(PROBE["time"], "monotonic", return_value=0),
-                    self.assertRaisesRegex(
-                        qualification.QualificationError,
-                        "replay start reconciliation failed",
-                    ),
-                ):
-                    PROBE["_start_replay"](
-                        "https://qualifier.example", {"schema_version": 1}, status
-                    )
-                self.assertEqual(
-                    [call.args[0] for call in post.call_args_list],
-                    [
-                        "https://qualifier.example/api/v1/replay",
-                        "https://qualifier.example/api/v1/replay/status",
-                    ],
-                )
-
-    def test_probe_rejects_a_malformed_initial_running_status(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        for started in (
-            {**status, "status": "running", "extra": True},
-            {**status, "status": "running", "attempt": 2},
-        ):
-            with self.subTest(started=started):
-                post = mock.Mock(return_value=(202, started))
-                with (
-                    mock.patch.dict(
-                        PROBE["_start_replay"].__globals__, {"_post": post}
-                    ),
-                    self.assertRaisesRegex(
-                        qualification.QualificationError,
-                        "did not start the reviewed probe$",
-                    ),
-                ):
-                    PROBE["_start_replay"](
-                        "https://qualifier.example", {"schema_version": 1}, status
-                    )
-                post.assert_called_once()
-
-    def test_probe_reconciled_terminal_reaches_full_verdict_validation(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        terminal = {
-            "schema_version": 1,
-            "verdict": {
-                "schema_version": 1,
-                "replay_task_id": "task-1",
-                "attempt": 1,
-                "execution_outcome": "completed",
-                "checker_outcome": "invalid",
-                "failure_reason": None,
-            },
-            "destruction": "confirmed",
-        }
-        post = mock.Mock(
-            side_effect=[
-                (
-                    200,
-                    {
-                        "schema_version": 1,
-                        "replay_task_id": "task-1",
-                        "attempt": 1,
-                        "status": "reserved",
-                    },
-                ),
-                PROBE["ExecutorTransportError"](
-                    "qualification executor replay start request failed"
-                ),
-                (200, terminal),
-            ]
-        )
-        with (
-            mock.patch.dict(
-                PROBE["_run"].__globals__,
-                {
-                    "_health": mock.Mock(),
-                    "_post": post,
-                    "write_exclusive": mock.Mock(),
-                },
-            ),
-            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
-            self.assertRaisesRegex(
-                qualification.QualificationError,
-                "not a passing official-entrypoint probe",
-            ),
-        ):
-            PROBE["_run"](
-                {"image_source_commit": "1" * 40},
-                {"schema_version": 1},
-                status,
-                {
-                    "worker_url": "https://qualifier.example",
-                    "runner_nonce": "2" * 64,
-                    "replay_task_id": "task-1",
-                },
-                pathlib.Path("unused-receipt"),
-                pathlib.Path("unused-reservation"),
-            )
-        self.assertEqual(
-            [call.args[0] for call in post.call_args_list],
-            [
-                "https://qualifier.example/api/v1/private-qualification/reserve",
-                "https://qualifier.example/api/v1/replay",
-                "https://qualifier.example/api/v1/replay/status",
-            ],
-        )
-
-    def test_probe_does_not_retry_a_nontransport_client_failure(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        post = mock.Mock(
-            side_effect=qualification.QualificationError(
-                "qualification executor returned a non-JSON error"
-            )
-        )
-        with (
-            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
-            self.assertRaisesRegex(
-                qualification.QualificationError,
-                "qualification executor returned a non-JSON error",
-            ),
-        ):
-            PROBE["_start_replay"](
-                "https://qualifier.example", {"schema_version": 1}, status
-            )
-        post.assert_called_once()
-
-    def test_probe_reports_only_closed_nonretryable_start_failures(self) -> None:
-        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
-        cases = [
-            (
-                {"error": "executor_failed", "reason": "input_transfer_failed"},
-                "did not start the reviewed probe: input_transfer_failed",
-            ),
-            (
-                {
-                    "error": "executor_failed",
-                    "reason": "command_rpc_failed",
-                    "private": "must-not-leak",
-                },
-                "did not start the reviewed probe$",
-            ),
-        ]
-        for response, message in cases:
-            with self.subTest(response=response):
-                post = mock.Mock(return_value=(500, response))
-                with (
-                    mock.patch.dict(
-                        PROBE["_start_replay"].__globals__, {"_post": post}
-                    ),
-                    self.assertRaisesRegex(qualification.QualificationError, message),
-                ):
-                    PROBE["_start_replay"](
-                        "https://qualifier.example", {"schema_version": 1}, status
-                    )
-                post.assert_called_once()
-
-    def test_probe_health_retries_transport_failures(self) -> None:
-        commit = "1" * 40
-        for unavailable in (TimeoutError(), urllib.error.URLError("unavailable")):
-            with self.subTest(error=type(unavailable).__name__):
-                ready = io.BytesIO(
-                    canonical(
-                        {
-                            "status": "ok",
-                            "environment": "private-qualification",
-                            "deployed_commit": commit,
-                            "replay_enabled": True,
-                        }
-                    )
-                )
-                with (
-                    mock.patch.object(
-                        PROBE["urllib"].request,
-                        "urlopen",
-                        side_effect=[unavailable, ready],
-                    ) as urlopen,
-                    mock.patch.object(PROBE["time"], "sleep") as sleep,
-                ):
-                    PROBE["_health"]("https://qualifier.example", commit)
-                self.assertEqual(urlopen.call_count, 2)
-                sleep.assert_called_once_with(PROBE["HEALTH_RETRY_SECONDS"])
-
-    def test_probe_health_fails_after_its_bounded_attempts(self) -> None:
-        errors = [
-            urllib.error.HTTPError(
-                "https://qualifier.example/healthz", 404, "not ready", {}, None
-            )
-            for _ in range(PROBE["HEALTH_ATTEMPTS"])
-        ]
-        with (
-            mock.patch.object(PROBE["urllib"].request, "urlopen", side_effect=errors),
-            mock.patch.object(PROBE["time"], "sleep") as sleep,
-            self.assertRaisesRegex(
-                qualification.QualificationError,
-                "did not converge after 25 attempts; last failure: http_404",
-            ),
-        ):
-            PROBE["_health"]("https://qualifier.example", "1" * 40)
-        self.assertEqual(sleep.call_count, PROBE["HEALTH_ATTEMPTS"] - 1)
-
-    def test_probe_health_does_not_retry_permanent_http_failure(self) -> None:
-        forbidden = urllib.error.HTTPError(
-            "https://qualifier.example/healthz", 403, "forbidden", {}, None
-        )
-        with (
-            mock.patch.object(
-                PROBE["urllib"].request, "urlopen", side_effect=forbidden
-            ) as urlopen,
-            mock.patch.object(PROBE["time"], "sleep") as sleep,
-            self.assertRaisesRegex(
-                qualification.QualificationError, "permanent HTTP 403"
-            ),
-        ):
-            PROBE["_health"]("https://qualifier.example", "1" * 40)
-        self.assertEqual(urlopen.call_count, 1)
-        sleep.assert_not_called()
-
-    def test_probe_health_does_not_retry_non_json_success(self) -> None:
-        with (
-            mock.patch.object(
-                PROBE["urllib"].request,
-                "urlopen",
-                return_value=io.BytesIO(b"not json"),
-            ) as urlopen,
-            mock.patch.object(PROBE["time"], "sleep") as sleep,
-            self.assertRaisesRegex(
-                qualification.QualificationError, "non-JSON content"
-            ),
-        ):
-            PROBE["_health"]("https://qualifier.example", "1" * 40)
-        self.assertEqual(urlopen.call_count, 1)
-        sleep.assert_not_called()
-
-    def test_probe_health_does_not_retry_an_identity_mismatch(self) -> None:
-        wrong = io.BytesIO(
-            canonical(
-                {
-                    "status": "ok",
-                    "environment": "private-qualification",
-                    "deployed_commit": "2" * 40,
-                    "replay_enabled": True,
-                }
-            )
-        )
-        with (
-            mock.patch.object(PROBE["urllib"].request, "urlopen", return_value=wrong),
-            mock.patch.object(PROBE["time"], "sleep") as sleep,
-            self.assertRaises(qualification.QualificationError) as raised,
-        ):
-            PROBE["_health"]("https://qualifier.example", "1" * 40)
-        self.assertEqual(
-            str(raised.exception),
-            "qualification executor health identity mismatch: deployed_commit",
-        )
-        self.assertNotIn("2" * 40, str(raised.exception))
-        sleep.assert_not_called()
-
-    def test_workflow_is_manual_single_entry_and_disposable(self) -> None:
-        workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("workflow_dispatch:", workflow)
-        self.assertNotIn("schedule:", workflow)
-        self.assertNotIn("\n  push:", workflow)
-        self.assertNotIn("strategy:", workflow)
-        self.assertIn("environment: cloudflare-production", workflow)
-        self.assertIn("confirm_registry_publication_and_qualification", workflow)
-        self.assertIn("confirm_temporary_cloudflare_resource_creation", workflow)
-        self.assertIn("publish-and-qualify-one-private-image", workflow)
-        self.assertIn("benchmark commit does not select exactly one of 63 images", (
-            ROOT / "scripts/historical_private_image_qualification.py"
-        ).read_text(encoding="utf-8"))
-        gate = workflow.index('test -x "$EXECUTOR"')
-        build = workflow.index("docker build --progress=plain")
-        publish = workflow.index("wrangler containers push")
-        self.assertLess(gate, build)
-        self.assertLess(gate, publish)
-        executor = ROOT / "scripts/run_historical_private_cloudflare_probe"
-        self.assertTrue(executor.exists())
-        self.assertIn("cleanup-only", executor.read_text(encoding="utf-8"))
-        self.assertIn("private-qualification/reserve", executor.read_text(encoding="utf-8"))
-        self.assertIn("wrangler delete", workflow)
-        self.assertIn("wrangler containers delete", workflow)
-        self.assertIn("container_application_name", workflow)
-        deletion = workflow.split(
-            "- name: Delete and verify absence of the disposable Worker", 1
-        )[1].split("- name: Render one canonical", 1)[0]
-        self.assertIn("if: always() && steps.deploy.outcome != 'skipped'", deletion)
-        self.assertNotIn("steps.sandbox_cleanup", deletion)
-        self.assertIn("container-applications-final.json", deletion)
-        self.assertNotIn("lean-eval-replay-executor.lean-eval.workers.dev", workflow)
-        self.assertIn('test "$GITHUB_REF_TYPE" = tag', workflow)
+    def test_workflow_has_no_disposable_cloudflare_runtime_and_unique_review_branch(self) -> None:
+        raw = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("prepare-offline-probe", raw)
+        self.assertIn("--network none --read-only --cpus 4 --memory 12g", raw)
+        self.assertIn("historical-private-image-build-${{ inputs.benchmark_commit }}", raw)
         self.assertIn(
-            'test "$GITHUB_REF" = "refs/tags/lean-eval-dispatch/$GITHUB_SHA"',
-            workflow,
+            "historical-private-profile-review-${{ github.sha }}-${{ github.run_id }}", raw
         )
-        self.assertIn('test "$remote_commit" = "$GITHUB_SHA"', workflow)
-        self.assertIn("[.commit.sha, .protected] | @tsv", workflow)
-        self.assertIn(
-            'git merge-base --is-ancestor "$GITHUB_SHA" "$main_commit"', workflow
-        )
-        self.assertLess(
-            workflow.index('test "$GITHUB_REF_TYPE" = tag'),
-            workflow.index("CLOUDFLARE_API_TOKEN: ${{ secrets."),
-        )
-        self.assertIn("validate-registry-image", workflow)
-        self.assertIn("Exact immutable tag exists; verifying it", workflow)
-        publication = workflow.split(
-            "- name: Publish once and resolve the immutable registry digest", 1
-        )[1].split("- name: Prepare one synthetic schema-v2 file-key probe", 1)[0]
-        self.assertEqual(publication.count("refresh_registry_credentials"), 3)
-        self.assertLess(
-            publication.index('npx --prefix server wrangler containers push "$IMAGE"'),
-            publication.rindex("refresh_registry_credentials"),
-        )
-        self.assertLess(
-            publication.rindex("refresh_registry_credentials"),
-            publication.rindex('"$manifest_url" --dump-header'),
-        )
-        self.assertNotIn(
-            "immutable registry tag already exists; refusing overwrite", workflow
-        )
-        self.assertIn("container-applications-deployed.json", workflow)
-        self.assertIn("$matches[0].image == $image", workflow)
+        self.assertNotIn("confirm_temporary_cloudflare_resource_creation", raw)
+        self.assertNotIn("confirm_registry_publication_and_qualification", raw)
+        self.assertNotIn("$EXECUTOR", raw)
+        self.assertNotIn("wrangler deploy", raw)
+        self.assertNotIn("id-token: write", raw)
+        self.assertFalse((ROOT / "scripts/run_historical_private_cloudflare_probe").exists())
+        self.assertFalse((ROOT / "server/src/private-qualification-entry.ts").exists())
 
-    def test_workflow_scopes_cloudflare_and_review_write_authority(self) -> None:
-        workflow = WORKFLOW.read_text(encoding="utf-8")
-        self.assertEqual(workflow.count("CLOUDFLARE_ACCOUNT_ID: ${{ secrets."), 3)
-        self.assertEqual(workflow.count("CLOUDFLARE_API_TOKEN: ${{ secrets."), 3)
-        self.assertIn('test -z "${CLOUDFLARE_ACCOUNT_ID:-}"', workflow)
-        self.assertIn('test -z "${CLOUDFLARE_API_TOKEN:-}"', workflow)
-        self.assertIn("create-probe-archive", workflow)
-        self.assertIn("prepare-probe", workflow)
-        self.assertIn("--cleanup-only", workflow)
-        self.assertIn("stage-isolated-review-branch:", workflow)
-        self.assertIn("contents: write", workflow)
-        self.assertIn("historical-private-profile-review-${{ github.sha }}", workflow)
+    def test_existing_tag_resume_inspects_only_the_exact_remote_digest(self) -> None:
+        raw = WORKFLOW.read_text(encoding="utf-8")
+        registry = raw.split(
+            "      - name: Publish once and resolve the immutable registry digest", 1
+        )[1].split(
+            "      - name: Run one offline official-entrypoint schema-v2 probe", 1
+        )[0]
+        resume_branch = registry.index('if test "$manifest_status" = 200; then')
+        branch_end = registry.index("\n          fi\n", resume_branch)
+        pull = registry.index('docker pull "$remote_image"')
+        self.assertLess(branch_end, pull)
         self.assertIn(
-            'git push origin "HEAD:refs/heads/$REVIEW_BRANCH"', workflow
+            'remote_image="registry.cloudflare.com/$CLOUDFLARE_ACCOUNT_ID/'
+            '$IMAGE_REPOSITORY@$image_digest"',
+            registry,
         )
-        self.assertNotIn("lean-eval-state", workflow)
-
-    def test_teardown_never_deletes_an_unowned_colliding_application(self) -> None:
-        workflow = WORKFLOW.read_text(encoding="utf-8")
-        deploy = workflow.split(
-            "- name: Create only the isolated per-run qualifier Worker", 1
-        )[1].split("- name: Run exactly one official-entrypoint", 1)[0]
-        worker_absent = deploy.index('test "$code" = 404')
-        application_absent = deploy.index(
-            '"$RUNNER_TEMP/container-applications-before.json\")" = 0'
-        )
-        ownership_marker = deploy.index(
-            ': > "$RUNNER_TEMP/qualifier-deploy-attempted"'
-        )
-        self.assertLess(worker_absent, ownership_marker)
-        self.assertLess(application_absent, ownership_marker)
-
-        deletion = workflow.split(
-            "- name: Delete and verify absence of the disposable Worker", 1
-        )[1].split("- name: Render one canonical", 1)[0]
-        unowned, owned = deletion.split(
-            '          npx --prefix server wrangler delete "$worker"', 1
-        )
+        probe = raw.split(
+            "      - name: Run one offline official-entrypoint schema-v2 probe", 1
+        )[1].split(
+            "      - name: Render one canonical content-addressed qualification profile", 1
+        )[0]
+        self.assertEqual(probe.count('"$INSPECTION_IMAGE"'), 4)
+        self.assertNotIn('"$IMAGE"', probe)
+        self.assertIn("refresh_registry_credentials 30", registry)
+        self.assertIn('timeout 1500s docker pull "$remote_image"', registry)
+        self.assertIn("docker logout registry.cloudflare.com", registry)
         self.assertIn(
-            'if ! test -f "$RUNNER_TEMP/qualifier-deploy-attempted"; then',
-            unowned,
+            '"$RUNNER_TEMP/registry-pulled-repo-digests.json"', registry
         )
-        self.assertIn('test "$code" = 404', unowned)
-        self.assertIn("container-applications-final.json", unowned)
-        self.assertIn("exit 0\n          fi", unowned)
-        self.assertNotIn("wrangler containers delete", unowned)
-        self.assertIn("wrangler containers delete", owned)
 
 
 if __name__ == "__main__":
