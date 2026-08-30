@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Select and render one historical-private image qualification artifact.
+"""Build and render one historical-private replay image profile.
 
-This source-only helper never provisions or invokes Cloudflare itself.  It
-closes the input, disposable Worker configuration, and source-free receipt for
-the separately reviewed manual workflow.
+The helper prepares an offline, network-disabled official-entrypoint probe.
+Target Cloudflare runtime fields come only from the already frozen public
+profile set; they are never inferred from the local Docker host.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from replay_orchestrator import (
     config_digest,
     replay_task_id,
     validate_execution_request,
+    validate_verdict,
 )
 
 MATRIX_SHA256 = "54ad4c237d08e5d0e298dfc8f752b25c89ce30e79b396a2256b4216a1c0f772c"
@@ -38,13 +39,13 @@ IMAGE_REPOSITORY = "lean-eval-authoritative"
 SOURCE_REPOSITORY = "leanprover/lean-eval-submissions"
 WORKFLOW_PATH = ".github/workflows/historical-private-image-qualification.yml"
 RUNNER_ENTRYPOINT = "/opt/lean-eval/replay-authoritative"
+CLOUDFLARE_REGISTRY = "registry.cloudflare.com"
 CLOUDFLARE_ACCOUNT_ID = "a46b90978a1c29cc4795f30677e7e4b8"
-CLOUDFLARE_WORKERS_SUBDOMAIN = "lean-eval.workers.dev"
-OIDC_AUDIENCE = "lean-eval-historical-private-qualification"
-OIDC_ENVIRONMENT = "cloudflare-production"
 EXPECTED_ARCHITECTURE = "x86_64"
 EXPECTED_CPU_MODEL = "AMD EPYC"
 EXPECTED_KERNEL_RELEASE = "6.18.36-cloudflare-firecracker-2026.6.17"
+EXPECTED_RUNNER_PROFILE = "cloudflare-sandbox-standard-4-v1"
+PUBLIC_PROFILE_COUNT = 35
 PROBLEM_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,127}\Z")
 
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
@@ -119,6 +120,21 @@ RECEIPT_FIELDS = {
     "kernel_release",
     "cpu_model",
 }
+OFFLINE_SUMMARY_FIELDS = {
+    "schema_version",
+    "kind",
+    "registry_manifest_digest",
+    "benchmark_commit",
+    "request_sha256",
+    "execution_profile_digest",
+    "local_runtime",
+}
+LOCAL_RUNTIME_FIELDS = {"architecture", "kernel_release", "cpu_model"}
+POST_PROBE_WORKSPACE_FILES = {
+    "archive-expectation.json",
+    "offline-probe-summary.json",
+    "replay-request.json",
+}
 
 MEASUREMENT_CONFIG = {
     "schema_version": 1,
@@ -189,6 +205,32 @@ def validate_registry_image(
             "registry image labels differ from the exact qualification candidate"
         )
     return manifest_digest
+
+
+def validate_pulled_image_reference(
+    manifest_digest: str, repo_digests_path: pathlib.Path
+) -> str:
+    """Bind the inspection image reference to the validated remote manifest."""
+    if not matches(OCI_DIGEST, manifest_digest):
+        raise QualificationError("pulled registry manifest digest is invalid")
+    expected = (
+        f"{CLOUDFLARE_REGISTRY}/{CLOUDFLARE_ACCOUNT_ID}/"
+        f"{IMAGE_REPOSITORY}@{manifest_digest}"
+    )
+    try:
+        repo_digests = json.loads(repo_digests_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise QualificationError("pulled image repository digests are invalid") from error
+    if (
+        not isinstance(repo_digests, list)
+        or not repo_digests
+        or any(not isinstance(value, str) for value in repo_digests)
+        or expected not in repo_digests
+    ):
+        raise QualificationError(
+            "pulled image is not bound to the validated registry manifest"
+        )
+    return expected
 
 
 def load_canonical(path: pathlib.Path, label: str) -> tuple[dict[str, Any], bytes]:
@@ -375,9 +417,67 @@ def validate_receipt(
     return value
 
 
+def target_runtime_from_public_profiles(
+    directory: pathlib.Path, candidate: dict[str, Any]
+) -> dict[str, str]:
+    """Require the frozen public set to support this exact private lock."""
+    candidate = validate_candidate(candidate)
+    if not directory.is_dir() or directory.is_symlink():
+        raise QualificationError("frozen public profile directory is unavailable")
+    paths = sorted(directory.glob("*.json"))
+    if len(paths) != PUBLIC_PROFILE_COUNT or any(
+        not path.is_file() or path.is_symlink() for path in paths
+    ):
+        raise QualificationError("frozen public profile set is incomplete")
+    supported = False
+    runtime_values: set[tuple[str, str, str, str]] = set()
+    for path in paths:
+        value, _ = load_canonical(path, "frozen public profile")
+        profile = value.get("execution_profile")
+        if (
+            value.get("qualification_status") != "qualified"
+            or not isinstance(profile, dict)
+            or value.get("execution_profile_digest") != path.stem
+        ):
+            raise QualificationError("frozen public profile is invalid")
+        architecture = profile.get("architecture")
+        kernel_release = profile.get("kernel_release")
+        cpu_model = profile.get("cpu_model")
+        runner_profile = profile.get("runner_profile")
+        if not all(
+            isinstance(item, str)
+            for item in (architecture, kernel_release, cpu_model, runner_profile)
+        ):
+            raise QualificationError("frozen public runtime is invalid")
+        runtime_values.add((architecture, kernel_release, cpu_model, runner_profile))
+        if (
+            profile.get("toolchain") == candidate["profile_lock"]["toolchain"]
+            and profile.get("components") == candidate["profile_lock"]["components"]
+        ):
+            supported = True
+    expected = {
+        (
+            EXPECTED_ARCHITECTURE,
+            EXPECTED_KERNEL_RELEASE,
+            EXPECTED_CPU_MODEL,
+            EXPECTED_RUNNER_PROFILE,
+        )
+    }
+    if runtime_values != expected or not supported:
+        raise QualificationError(
+            "frozen public profiles do not support the private execution lock"
+        )
+    return {
+        "architecture": EXPECTED_ARCHITECTURE,
+        "kernel_release": EXPECTED_KERNEL_RELEASE,
+        "cpu_model": EXPECTED_CPU_MODEL,
+    }
+
+
 def render_qualification(
     candidate: dict[str, Any],
     receipt: dict[str, Any],
+    public_profiles_directory: pathlib.Path,
     manifest_digest: str,
     workflow_commit: str,
     workflow_sha256: str,
@@ -396,6 +496,11 @@ def render_qualification(
     ):
         raise QualificationError("workflow or registry identity is invalid")
     receipt = validate_receipt(receipt, candidate, manifest_digest)
+    target_runtime = target_runtime_from_public_profiles(
+        public_profiles_directory, candidate
+    )
+    if any(receipt[field] != value for field, value in target_runtime.items()):
+        raise QualificationError("probe receipt differs from frozen target runtime")
     lock = candidate["profile_lock"]
     execution_profile = {
         "schema_version": 1,
@@ -434,13 +539,17 @@ def render_qualification(
             "workflow_sha256": workflow_sha256,
             "workflow_run_id": workflow_run_id,
             "workflow_run_attempt": workflow_run_attempt,
-            "private_archive_probe": {
+            "offline_image_inspection": {
                 "archive_expectation_schema_version": 2,
                 "key_material_type": "age-file-key-v1",
                 "runner_entrypoint": RUNNER_ENTRYPOINT,
-                "status": "passed",
+                "official_entrypoint": "passed",
+                "network": "blocked",
+                "root_filesystem": "read_only",
+                "registry_manifest": "validated",
+                "source_closure": "validated",
             },
-            "network_probe": "blocked",
+            "cloudflare_runtime_validation": "deferred_to_first_historical_replay",
         },
         "benchmark_commit": candidate["benchmark_commit"],
         "benchmark_tree": candidate["benchmark_tree"],
@@ -501,7 +610,7 @@ def _positive_safe_integer(value: int, label: str) -> int:
     return value
 
 
-def prepare_probe_inputs(
+def prepare_offline_probe_inputs(
     candidate: dict[str, Any],
     plaintext_path: pathlib.Path,
     ciphertext_path: pathlib.Path,
@@ -509,9 +618,12 @@ def prepare_probe_inputs(
     manifest_digest: str,
     workflow_run_id: int,
     workflow_run_attempt: int,
+    architecture: str,
+    kernel_release: str,
+    cpu_model: str,
     output_directory: pathlib.Path,
 ) -> dict[str, Any]:
-    """Close one disposable Worker deployment and schema-v2 probe request."""
+    """Close one local official-entrypoint schema-v2 probe."""
     candidate = validate_candidate(candidate)
     run_id = _positive_safe_integer(workflow_run_id, "workflow run ID")
     run_attempt = _positive_safe_integer(workflow_run_attempt, "workflow run attempt")
@@ -532,15 +644,18 @@ def prepare_probe_inputs(
     if not ciphertext or len(ciphertext) > 11 * 1024 * 1024 or len(key) != 16:
         raise QualificationError("probe ciphertext or file key is invalid")
 
+    local_runtime = {
+        "architecture": safe_text(architecture, "local architecture", 128),
+        "kernel_release": safe_text(kernel_release, "local kernel release", 256),
+        "cpu_model": safe_text(cpu_model, "local CPU model", 256),
+    }
     lock = candidate["profile_lock"]
     execution_profile = {
         "schema_version": 1,
         "runner_profile": lock["runner_profile"],
         "vm_image_digest": manifest_digest,
         "toolchain": lock["toolchain"],
-        "architecture": EXPECTED_ARCHITECTURE,
-        "cpu_model": EXPECTED_CPU_MODEL,
-        "kernel_release": EXPECTED_KERNEL_RELEASE,
+        **local_runtime,
         "cache_state": lock["cache_state"],
         "measurement_command": lock["measurement_command"],
         "go_toolchain": lock["go_toolchain"],
@@ -556,7 +671,7 @@ def prepare_probe_inputs(
     run_text = str(run_id)
     attempt_text = str(run_attempt)
     binding = _identity(
-        "lean-eval-private-qualification-binding-v1",
+        "lean-eval-private-offline-probe-binding-v1",
         candidate["image_source_commit"],
         candidate["benchmark_commit"],
         manifest_digest,
@@ -565,7 +680,7 @@ def prepare_probe_inputs(
     )
     submission_id = f"01800000-0000-7000-8000-{binding[:12]}"
     result_id = "r2_" + _identity(
-        "lean-eval-private-qualification-result-v1", binding
+        "lean-eval-private-offline-probe-result-v1", binding
     )
     task_id = replay_task_id(result_id, measurement_digest)
     ciphertext_digest = sha256(ciphertext)
@@ -597,7 +712,7 @@ def prepare_probe_inputs(
             "statement_revision": 1,
             "commit": candidate["image_source_commit"],
             "tree_digest": _identity(
-                "lean-eval-private-qualification-tree-v1", binding
+                "lean-eval-private-offline-probe-tree-v1", binding
             ),
         },
         "checker": "nanoda",
@@ -620,107 +735,102 @@ def prepare_probe_inputs(
         "plaintext_tar_size": len(plaintext),
         "key_material_type": "age-file-key-v1",
     }
-    outer = {
-        "schema_version": 2,
-        "runner_nonce": binding,
-        "request": request,
-        "archive_expectation": expectation,
-        "ciphertext_base64": base64.b64encode(ciphertext).decode("ascii"),
-        "key_material_type": "age-file-key-v1",
-        "plaintext_key_material_base64": base64.b64encode(key).decode("ascii"),
-    }
-    status = {
+    summary = {
         "schema_version": 1,
-        "runner_nonce": binding,
-        "replay_task_id": task_id,
-        "attempt": 1,
-        "execution_profile_digest": execution_digest,
-        "measurement_config_digest": measurement_digest,
-        "vm_image_digest": manifest_digest,
-    }
-    request_sha256 = sha256(canonical(outer))
-    worker_name = f"lean-eval-private-q-{run_id}-{run_attempt}"
-    container_application_name = f"le-q-{run_id}-{run_attempt}"
-    if len(worker_name) > 63:
-        raise QualificationError("disposable Worker name is too long")
-    if len(container_application_name) > 32:
-        raise QualificationError("disposable Container application name is too long")
-    config = {
-        "$schema": "node_modules/wrangler/config-schema.json",
-        "name": worker_name,
-        "main": (pathlib.Path.cwd() / "server/src/private-qualification-entry.ts")
-        .resolve()
-        .as_posix(),
-        "account_id": CLOUDFLARE_ACCOUNT_ID,
-        "compatibility_date": "2026-08-22",
-        "compatibility_flags": ["nodejs_compat"],
-        "workers_dev": True,
-        "preview_urls": False,
-        "observability": {"enabled": False},
-        "containers": [{
-            "name": container_application_name,
-            "class_name": "PrivateQualificationSandbox",
-            "image": (
-                f"registry.cloudflare.com/{CLOUDFLARE_ACCOUNT_ID}/"
-                f"{IMAGE_REPOSITORY}@{manifest_digest}"
-            ),
-            "instance_type": "standard-4",
-            "max_instances": 1,
-            "ssh": {"enabled": False},
-        }],
-        "durable_objects": {"bindings": [
-            {"name": "REPLAY_SANDBOX", "class_name": "PrivateQualificationSandbox"},
-            {"name": "REPLAY_TERMINAL_RECEIPT", "class_name": "ReplayTerminalReceipt"},
-        ]},
-        "migrations": [{
-            "tag": "v1",
-            "new_sqlite_classes": [
-                "PrivateQualificationSandbox", "ReplayTerminalReceipt"
-            ],
-        }],
-        "vars": {
-            "DEPLOYED_COMMIT": candidate["image_source_commit"],
-            "DEPLOYMENT_ENVIRONMENT": "private-qualification",
-            "REPLAY_ENABLED": "true",
-            "HISTORICAL_PUBLIC_REPLAY_ENABLED": "false",
-            "STAGING_ACCEPTANCE_ENABLED": "false",
-            "GITHUB_OIDC_AUDIENCE": OIDC_AUDIENCE,
-            "GITHUB_OIDC_ENVIRONMENT": OIDC_ENVIRONMENT,
-            "QUALIFICATION_RUN_ID": run_text,
-            "QUALIFICATION_RUN_ATTEMPT": attempt_text,
-            "EXPECTED_RUNNER_NONCE": binding,
-            "EXPECTED_REPLAY_TASK_ID": task_id,
-            "EXPECTED_REPLAY_ATTEMPT": "1",
-            "EXPECTED_QUALIFICATION_REQUEST_SHA256": request_sha256,
-            "STAGING_MEMORY_LIMIT_BYTES": str(MEASUREMENT_CONFIG["memory_limit_bytes"]),
-            "PRODUCTION_MEMORY_GATE_BYTES": str(MEASUREMENT_CONFIG["memory_limit_bytes"]),
-            "REVIEWED_EXECUTION_PROFILE_DIGEST": execution_digest,
-            "REVIEWED_MEASUREMENT_CONFIG_DIGEST": measurement_digest,
-            "REVIEWED_VM_IMAGE_DIGEST": manifest_digest,
-            "SANDBOX_TRANSPORT": "rpc",
-        },
-    }
-    context = {
-        "schema_version": 1,
-        "worker_name": worker_name,
-        "worker_url": f"https://{worker_name}.{CLOUDFLARE_WORKERS_SUBDOMAIN}",
-        "container_application_name": container_application_name,
+        "kind": "historical_private_offline_probe_inputs",
         "registry_manifest_digest": manifest_digest,
         "benchmark_commit": candidate["benchmark_commit"],
-        "runner_nonce": binding,
-        "replay_task_id": task_id,
-        "request_sha256": request_sha256,
-        "workflow_run_id": run_id,
-        "workflow_run_attempt": run_attempt,
-        "architecture": EXPECTED_ARCHITECTURE,
-        "kernel_release": EXPECTED_KERNEL_RELEASE,
-        "cpu_model": EXPECTED_CPU_MODEL,
+        "request_sha256": sha256(canonical(request)),
+        "execution_profile_digest": execution_digest,
+        "local_runtime": local_runtime,
     }
-    write_exclusive(output_directory / "wrangler.json", config)
-    write_exclusive(output_directory / "request.json", outer)
-    write_exclusive(output_directory / "status.json", status)
-    write_exclusive(output_directory / "context.json", context)
-    return context
+    write_exclusive(output_directory / "replay-request.json", request)
+    write_exclusive(output_directory / "archive-expectation.json", expectation)
+    write_bytes_exclusive(
+        output_directory / "archive.tar.gz.age.b64", base64.b64encode(ciphertext)
+    )
+    write_bytes_exclusive(
+        output_directory / "key-material.b64", base64.b64encode(key)
+    )
+    write_exclusive(output_directory / "offline-probe-summary.json", summary)
+    return summary
+
+
+def render_offline_receipt(
+    candidate: dict[str, Any],
+    manifest_digest: str,
+    probe_directory: pathlib.Path,
+    verdict_path: pathlib.Path,
+    public_profiles_directory: pathlib.Path,
+) -> dict[str, Any]:
+    """Validate a local probe and bind it to the frozen target runtime."""
+    candidate = validate_candidate(candidate)
+    try:
+        workspace_entries = list(probe_directory.iterdir())
+    except OSError as error:
+        raise QualificationError("offline probe workspace is unavailable") from error
+    if (
+        {entry.name for entry in workspace_entries} != POST_PROBE_WORKSPACE_FILES
+        or any(not entry.is_file() or entry.is_symlink() for entry in workspace_entries)
+    ):
+        raise QualificationError("offline probe workspace cleanup is incomplete")
+    summary, _ = load_canonical(
+        probe_directory / "offline-probe-summary.json", "offline probe summary"
+    )
+    request, request_raw = load_canonical(
+        probe_directory / "replay-request.json", "offline probe request"
+    )
+    require_fields(summary, OFFLINE_SUMMARY_FIELDS, "offline probe summary")
+    local_runtime = require_fields(
+        summary.get("local_runtime"), LOCAL_RUNTIME_FIELDS, "offline local runtime"
+    )
+    try:
+        verdict = json.loads(verdict_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise QualificationError("offline probe verdict is invalid") from error
+    request = validate_execution_request(request)
+    validate_verdict(verdict, request)
+    profile = request["execution_profile"]
+    if (
+        summary.get("schema_version") != 1
+        or summary.get("kind") != "historical_private_offline_probe_inputs"
+        or summary.get("registry_manifest_digest") != manifest_digest
+        or summary.get("benchmark_commit") != candidate["benchmark_commit"]
+        or summary.get("request_sha256") != sha256(request_raw)
+        or summary.get("execution_profile_digest")
+        != request["execution_profile_digest"]
+        or any(profile.get(field) != value for field, value in local_runtime.items())
+        or profile.get("vm_image_digest") != manifest_digest
+        or profile.get("toolchain") != candidate["toolchain"]
+        or profile.get("components") != candidate["profile_lock"]["components"]
+        or verdict.get("execution_outcome") != "completed"
+        or verdict.get("checker_outcome") not in {"accepted", "rejected", "declined"}
+        or verdict.get("failure_reason") is not None
+    ):
+        raise QualificationError("offline official-entrypoint probe did not pass")
+    target = target_runtime_from_public_profiles(
+        public_profiles_directory, candidate
+    )
+    return {
+        "schema_version": 1,
+        "kind": RECEIPT_KIND,
+        "registry_manifest_digest": manifest_digest,
+        "benchmark_commit": candidate["benchmark_commit"],
+        "runner_entrypoint": RUNNER_ENTRYPOINT,
+        "archive_expectation_schema_version": 2,
+        "key_material_type": "age-file-key-v1",
+        "network_probe": "blocked",
+        "status": "passed",
+        **target,
+    }
+
+
+def write_bytes_exclusive(path: pathlib.Path, raw: bytes) -> None:
+    if path.exists() or path.is_symlink():
+        raise QualificationError("output already exists")
+    if not path.parent.is_dir() or path.parent.is_symlink():
+        raise QualificationError("output parent is not one existing real directory")
+    path.write_bytes(raw)
 
 
 def write_exclusive(path: pathlib.Path, value: dict[str, Any]) -> None:
@@ -745,6 +855,9 @@ def main() -> int:
     render = subparsers.add_parser("render-qualification")
     render.add_argument("--candidate", required=True, type=pathlib.Path)
     render.add_argument("--receipt", required=True, type=pathlib.Path)
+    render.add_argument(
+        "--public-profiles-directory", required=True, type=pathlib.Path
+    )
     render.add_argument("--registry-manifest-digest", required=True)
     render.add_argument("--workflow-commit", required=True)
     render.add_argument("--workflow-sha256", required=True)
@@ -756,7 +869,7 @@ def main() -> int:
     archive.add_argument("--candidate", required=True, type=pathlib.Path)
     archive.add_argument("--output", required=True, type=pathlib.Path)
 
-    prepare = subparsers.add_parser("prepare-probe")
+    prepare = subparsers.add_parser("prepare-offline-probe")
     prepare.add_argument("--candidate", required=True, type=pathlib.Path)
     prepare.add_argument("--plaintext", required=True, type=pathlib.Path)
     prepare.add_argument("--ciphertext", required=True, type=pathlib.Path)
@@ -764,13 +877,30 @@ def main() -> int:
     prepare.add_argument("--registry-manifest-digest", required=True)
     prepare.add_argument("--workflow-run-id", required=True, type=int)
     prepare.add_argument("--workflow-run-attempt", required=True, type=int)
+    prepare.add_argument("--architecture", required=True)
+    prepare.add_argument("--kernel-release", required=True)
+    prepare.add_argument("--cpu-model", required=True)
     prepare.add_argument("--output-directory", required=True, type=pathlib.Path)
+
+    receipt = subparsers.add_parser("render-offline-receipt")
+    receipt.add_argument("--candidate", required=True, type=pathlib.Path)
+    receipt.add_argument("--registry-manifest-digest", required=True)
+    receipt.add_argument("--probe-directory", required=True, type=pathlib.Path)
+    receipt.add_argument("--verdict", required=True, type=pathlib.Path)
+    receipt.add_argument(
+        "--public-profiles-directory", required=True, type=pathlib.Path
+    )
+    receipt.add_argument("--output", required=True, type=pathlib.Path)
 
     registry = subparsers.add_parser("validate-registry-image")
     registry.add_argument("--candidate", required=True, type=pathlib.Path)
     registry.add_argument("--manifest-digest", required=True)
     registry.add_argument("--manifest", required=True, type=pathlib.Path)
     registry.add_argument("--image-config", required=True, type=pathlib.Path)
+
+    pulled = subparsers.add_parser("validate-pulled-image")
+    pulled.add_argument("--manifest-digest", required=True)
+    pulled.add_argument("--repo-digests", required=True, type=pathlib.Path)
 
     args = parser.parse_args()
     try:
@@ -788,6 +918,7 @@ def main() -> int:
             digest, value = render_qualification(
                 candidate,
                 receipt,
+                args.public_profiles_directory.resolve(),
                 args.registry_manifest_digest,
                 args.workflow_commit,
                 args.workflow_sha256,
@@ -800,6 +931,16 @@ def main() -> int:
         elif args.command == "create-probe-archive":
             candidate, _ = load_canonical(args.candidate, "qualification candidate")
             create_probe_archive(candidate, args.output)
+        elif args.command == "render-offline-receipt":
+            candidate, _ = load_canonical(args.candidate, "qualification candidate")
+            value = render_offline_receipt(
+                candidate,
+                args.registry_manifest_digest,
+                args.probe_directory.resolve(),
+                args.verdict.resolve(),
+                args.public_profiles_directory.resolve(),
+            )
+            write_exclusive(args.output, value)
         elif args.command == "validate-registry-image":
             candidate, _ = load_canonical(args.candidate, "qualification candidate")
             print(
@@ -810,9 +951,15 @@ def main() -> int:
                     args.image_config,
                 )
             )
+        elif args.command == "validate-pulled-image":
+            print(
+                validate_pulled_image_reference(
+                    args.manifest_digest, args.repo_digests
+                )
+            )
         else:
             candidate, _ = load_canonical(args.candidate, "qualification candidate")
-            context = prepare_probe_inputs(
+            context = prepare_offline_probe_inputs(
                 candidate,
                 args.plaintext,
                 args.ciphertext,
@@ -820,6 +967,9 @@ def main() -> int:
                 args.registry_manifest_digest,
                 args.workflow_run_id,
                 args.workflow_run_attempt,
+                args.architecture,
+                args.kernel_release,
+                args.cpu_model,
                 args.output_directory,
             )
             print(json.dumps(context, separators=(",", ":"), sort_keys=True))

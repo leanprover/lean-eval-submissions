@@ -15,16 +15,6 @@ const HISTORICAL_ROUTES = new Set([
   "/api/v1/historical-public-replay/cleanup-reservation",
 ]);
 const HISTORICAL_CLEANUP_ROUTE = "/api/v1/historical-public-replay/cleanup";
-const PRIVATE_QUALIFICATION_AUDIENCE = "lean-eval-historical-private-qualification";
-const PRIVATE_QUALIFICATION_ENVIRONMENT = "cloudflare-production";
-const PRIVATE_QUALIFICATION_WORKFLOW = `${GITHUB_REPOSITORY}/.github/workflows/`
-  + "historical-private-image-qualification.yml";
-const PRIVATE_QUALIFICATION_ROUTES = new Set([
-  "/api/v1/replay",
-  "/api/v1/replay/status",
-  "/api/v1/private-qualification/cleanup",
-  "/api/v1/private-qualification/reserve",
-]);
 const HISTORICAL_PRIVATE_AUDIENCE = "lean-eval-historical-private-replay";
 const HISTORICAL_PRIVATE_ENVIRONMENT = "replay-production";
 const HISTORICAL_PRIVATE_WORKFLOW_REF = `${GITHUB_REPOSITORY}/.github/workflows/`
@@ -39,15 +29,11 @@ const HISTORICAL_PRIVATE_CLEANUP_ROUTE = "/api/v1/historical-private-replay/clea
 
 type JwtHeader = { alg: string; kid: string; typ: string };
 type JwtClaims = Record<string, unknown>;
-type ReplayAuthMode = "ordinary" | "private-qualification";
-
 export type ReplayAuthEnvironment = {
   DEPLOYED_COMMIT: string;
   DEPLOYMENT_ENVIRONMENT: string;
   GITHUB_OIDC_AUDIENCE: string;
   GITHUB_OIDC_ENVIRONMENT: string;
-  QUALIFICATION_RUN_ID?: string;
-  QUALIFICATION_RUN_ATTEMPT?: string;
 };
 
 export class ReplayAuthError extends Error {}
@@ -128,19 +114,6 @@ function isHistoricalProductionSurface(
     && env.GITHUB_OIDC_ENVIRONMENT === HISTORICAL_PRODUCTION_ENVIRONMENT;
 }
 
-function isPrivateQualificationSurface(
-  request: Request,
-  env: ReplayAuthEnvironment,
-): boolean {
-  return request.method === "POST"
-    && PRIVATE_QUALIFICATION_ROUTES.has(new URL(request.url).pathname)
-    && env.DEPLOYMENT_ENVIRONMENT === "private-qualification"
-    && env.GITHUB_OIDC_AUDIENCE === PRIVATE_QUALIFICATION_AUDIENCE
-    && env.GITHUB_OIDC_ENVIRONMENT === PRIVATE_QUALIFICATION_ENVIRONMENT
-    && /^[1-9][0-9]{0,15}$/.test(env.QUALIFICATION_RUN_ID ?? "")
-    && /^[1-9][0-9]{0,6}$/.test(env.QUALIFICATION_RUN_ATTEMPT ?? "");
-}
-
 function isHistoricalPrivateSurface(
   request: Request,
   env: ReplayAuthEnvironment,
@@ -173,25 +146,6 @@ function allowsHistoricalProtectedMain(
   return COMMIT.test(env.DEPLOYED_COMMIT) && sha === env.DEPLOYED_COMMIT;
 }
 
-function allowsPrivateQualificationImmutableDispatch(
-  request: Request,
-  claims: JwtClaims,
-  env: ReplayAuthEnvironment,
-  ref: string,
-  sha: string,
-): boolean {
-  const match = DISPATCH_REF.exec(ref);
-  return isPrivateQualificationSurface(request, env)
-    && match?.[1] === sha
-    && COMMIT.test(sha)
-    && sha === env.DEPLOYED_COMMIT
-    && claims.workflow_ref === `${PRIVATE_QUALIFICATION_WORKFLOW}@${ref}`
-    && claims.workflow_sha === sha
-    && claims.event_name === "workflow_dispatch"
-    && claims.run_id === env.QUALIFICATION_RUN_ID
-    && claims.run_attempt === env.QUALIFICATION_RUN_ATTEMPT;
-}
-
 function allowsHistoricalPrivateProtectedMain(
   request: Request,
   claims: JwtClaims,
@@ -217,7 +171,6 @@ function validateClaims(
   claims: JwtClaims,
   env: ReplayAuthEnvironment,
   nowSeconds: number,
-  mode: ReplayAuthMode,
 ): void {
   const expectedSubject = `repo:${GITHUB_REPOSITORY}:environment:${env.GITHUB_OIDC_ENVIRONMENT}`;
   if (claims.iss !== GITHUB_ISSUER || claims.aud !== env.GITHUB_OIDC_AUDIENCE) {
@@ -238,15 +191,11 @@ function validateClaims(
   const sha = requiredString(claims.sha, "token sha", 40);
   const match = DISPATCH_REF.exec(ref);
   const immutableDispatch = match?.[1] === sha && COMMIT.test(sha);
-  const refAllowed = mode === "private-qualification"
-    ? allowsPrivateQualificationImmutableDispatch(request, claims, env, ref, sha)
-    : env.DEPLOYMENT_ENVIRONMENT === "private-qualification"
-      ? false
-      : isHistoricalProductionSurface(request, env)
-        ? allowsHistoricalProtectedMain(request, claims, env, ref, sha)
-        : isHistoricalPrivateSurface(request, env)
-          ? allowsHistoricalPrivateProtectedMain(request, claims, env, ref, sha)
-          : immutableDispatch;
+  const refAllowed = isHistoricalProductionSurface(request, env)
+    ? allowsHistoricalProtectedMain(request, claims, env, ref, sha)
+    : isHistoricalPrivateSurface(request, env)
+      ? allowsHistoricalPrivateProtectedMain(request, claims, env, ref, sha)
+      : immutableDispatch;
   if (!refAllowed) {
     throw new ReplayAuthError("token ref is not an allowed immutable execution ref");
   }
@@ -269,7 +218,6 @@ async function verifyGithubOidcWithMode(
   env: ReplayAuthEnvironment,
   fetcher: typeof fetch = fetch,
   nowSeconds = Math.floor(Date.now() / 1000),
-  mode: ReplayAuthMode = "ordinary",
 ): Promise<void> {
   const authorization = request.headers.get("authorization");
   if (authorization === null || authorization.length > 8192 || !authorization.startsWith("Bearer ")) {
@@ -284,7 +232,7 @@ async function verifyGithubOidcWithMode(
   }
   const header = parseHeader(jsonPart(encodedHeader, "token header"));
   const claims = jsonPart(encodedClaims, "token claims");
-  validateClaims(request, claims, env, nowSeconds, mode);
+  validateClaims(request, claims, env, nowSeconds);
   const key = await crypto.subtle.importKey(
     "jwk",
     await githubKey(header.kid, fetcher),
@@ -308,19 +256,4 @@ export function verifyGithubOidc(
   nowSeconds = Math.floor(Date.now() / 1000),
 ): Promise<void> {
   return verifyGithubOidcWithMode(request, env, fetcher, nowSeconds);
-}
-
-export function verifyPrivateQualificationGithubOidc(
-  request: Request,
-  env: ReplayAuthEnvironment,
-  fetcher: typeof fetch = fetch,
-  nowSeconds = Math.floor(Date.now() / 1000),
-): Promise<void> {
-  return verifyGithubOidcWithMode(
-    request,
-    env,
-    fetcher,
-    nowSeconds,
-    "private-qualification",
-  );
 }

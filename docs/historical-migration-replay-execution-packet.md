@@ -47,8 +47,9 @@ private unavailable dispositions are not appended again.
 Fill these values only from committed canonical outputs. Do not substitute a
 workflow artifact, worktree file, mutable tag, or branch head.
 
-- [ ] One submissions qualification commit containing all 63 canonical private
-      profile files. Bind the canonical descriptor set of exactly
+- [ ] One submissions commit containing all 63 canonical private execution
+      profile files produced by immutable image build, publication readback,
+      and offline inspection. Bind the canonical descriptor set of exactly
       `{path, sha256}` and its SHA-256, using the same serialization as the
       public batch finalizer. Validate benchmark-commit and execution-profile
       identities separately; they are not descriptor-set hash fields.
@@ -84,12 +85,16 @@ workflow artifact, worktree file, mutable tag, or branch head.
 For each private profile the plan builder derives and validates the fields that
 must enter State: `benchmark_commit`, `toolchain`,
 `lean_toolchain_blob_sha256`, `measurement_config_digest`,
-`execution_profile_digest`, checker `nanoda`, and the qualification locator
+`execution_profile_digest`, checker `nanoda`, and the existing profile locator
 `{commit, path, sha256}`. The profile blob itself binds the immutable registry
 manifest, image-source commit and source-blob closure, workflow commit and
-digest, workflow run and attempt, passing schema-2 file-key probe, and blocked
-network probe. The packet binds the profile descriptor set instead of copying
-those fields into a second format.
+digest, workflow run and attempt, and a passing local official-entrypoint
+schema-2 file-key probe under Docker `--network none`. Its target Cloudflare
+runtime tuple is accepted only when the packet-bound frozen public profile set
+has one common tuple and an exact matching toolchain/component lock. The first
+real migrated replay remains the serialized Cloudflare execution canary. The
+packet binds the profile descriptor set instead of copying those fields into a
+second format.
 
 Completion of this section is the gate for the custodian to install
 `LEGACY_ARCHIVE_IDENTITY` directly into the protected environment and for the
@@ -121,7 +126,7 @@ reason to install the identity before the pre-mutation packet is complete.
 
 ## Packet-bound execution order
 
-1. Finish and commit the 63 private profile objects, then run
+1. Build, publish, inspect, and commit the 63 private profile objects, then run
    `prepare_historical_private_replay.py plan` with all 63 paths and their one
    exact containing commit. Commit the digest-derived plan.
 2. Complete the pre-mutation authorization bindings, apply and verify the
@@ -140,9 +145,9 @@ reason to install the identity before the pre-mutation packet is complete.
    replay or reviewed-unavailable disposition for every retained-baseline
    Result.
 6. Remove the migration identity, migration-only role and environment binding,
-   one-shot migration workflow, temporary private qualification workflow and
-   executor, and controller enable variables. Retain v2 replay Decrypt support
-   and the versioned replay/checker records.
+   one-shot migration workflow, temporary private image-build workflow and
+   controller enable variables. Retain v2 replay Decrypt support and the
+   versioned replay/checker records.
 
 After the announced issue-intake cutoff, generate the append-only delta and
 prepare a new exact packet covering only those added Results. Never extend this

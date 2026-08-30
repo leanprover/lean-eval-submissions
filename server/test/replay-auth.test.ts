@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  type ReplayAuthEnvironment,
   verifyGithubOidc,
-  verifyPrivateQualificationGithubOidc,
 } from "../src/replay-auth";
 
 function base64Url(value: Uint8Array): string {
@@ -101,30 +99,6 @@ const HISTORICAL_MAIN_CLAIMS = {
   event_name: "workflow_dispatch",
 };
 
-const PRIVATE_QUALIFICATION_ENV = {
-  DEPLOYED_COMMIT: "a".repeat(40),
-  DEPLOYMENT_ENVIRONMENT: "private-qualification",
-  GITHUB_OIDC_AUDIENCE: "lean-eval-historical-private-qualification",
-  GITHUB_OIDC_ENVIRONMENT: "cloudflare-production",
-  QUALIFICATION_RUN_ID: "123456789",
-  QUALIFICATION_RUN_ATTEMPT: "2",
-};
-
-const PRIVATE_QUALIFICATION_CLAIMS = {
-  aud: PRIVATE_QUALIFICATION_ENV.GITHUB_OIDC_AUDIENCE,
-  sub: "repo:leanprover/lean-eval-submissions:environment:cloudflare-production",
-  environment: "cloudflare-production",
-  ref: `refs/tags/lean-eval-dispatch/${PRIVATE_QUALIFICATION_ENV.DEPLOYED_COMMIT}`,
-  sha: PRIVATE_QUALIFICATION_ENV.DEPLOYED_COMMIT,
-  workflow_ref: "leanprover/lean-eval-submissions/.github/workflows/"
-    + "historical-private-image-qualification.yml@refs/tags/lean-eval-dispatch/"
-    + PRIVATE_QUALIFICATION_ENV.DEPLOYED_COMMIT,
-  workflow_sha: PRIVATE_QUALIFICATION_ENV.DEPLOYED_COMMIT,
-  event_name: "workflow_dispatch",
-  run_id: PRIVATE_QUALIFICATION_ENV.QUALIFICATION_RUN_ID,
-  run_attempt: PRIVATE_QUALIFICATION_ENV.QUALIFICATION_RUN_ATTEMPT,
-};
-
 const HISTORICAL_PRIVATE_ENV = {
   DEPLOYED_COMMIT: "a".repeat(40),
   DEPLOYMENT_ENVIRONMENT: "historical-private-replay",
@@ -189,86 +163,6 @@ describe("GitHub OIDC replay authentication", () => {
         1_787_395_200,
       )).rejects.toThrow("immutable execution ref");
     }
-  });
-
-  it("binds private qualification to the exact protected workflow run", async () => {
-    for (const path of [
-      "/api/v1/replay",
-      "/api/v1/replay/status",
-      "/api/v1/private-qualification/reserve",
-      "/api/v1/private-qualification/cleanup",
-    ]) {
-      const { request, fetcher } = await signedRequest(PRIVATE_QUALIFICATION_CLAIMS, path);
-      await expect(verifyPrivateQualificationGithubOidc(
-        request,
-        PRIVATE_QUALIFICATION_ENV,
-        fetcher,
-        1_787_395_200,
-      )).resolves.toBeUndefined();
-    }
-    for (const overrides of [
-      { run_id: "123456788" },
-      { run_attempt: "3" },
-      { workflow_sha: "b".repeat(40) },
-      { workflow_ref: "other/workflow@refs/heads/main" },
-      {
-        ref: "refs/heads/main",
-        workflow_ref: "leanprover/lean-eval-submissions/.github/workflows/"
-          + "historical-private-image-qualification.yml@refs/heads/main",
-      },
-      {
-        ref: `refs/tags/lean-eval-dispatch/${"b".repeat(40)}`,
-        workflow_ref: "leanprover/lean-eval-submissions/.github/workflows/"
-          + `historical-private-image-qualification.yml@refs/tags/lean-eval-dispatch/${"b".repeat(40)}`,
-      },
-    ]) {
-      const { request, fetcher } = await signedRequest({
-        ...PRIVATE_QUALIFICATION_CLAIMS,
-        ...overrides,
-      }, "/api/v1/replay");
-      await expect(verifyPrivateQualificationGithubOidc(
-        request,
-        PRIVATE_QUALIFICATION_ENV,
-        fetcher,
-        1_787_395_200,
-      )).rejects.toThrow("immutable execution ref");
-    }
-    const missingRunId = {
-      DEPLOYED_COMMIT: PRIVATE_QUALIFICATION_ENV.DEPLOYED_COMMIT,
-      DEPLOYMENT_ENVIRONMENT: PRIVATE_QUALIFICATION_ENV.DEPLOYMENT_ENVIRONMENT,
-      GITHUB_OIDC_AUDIENCE: PRIVATE_QUALIFICATION_ENV.GITHUB_OIDC_AUDIENCE,
-      GITHUB_OIDC_ENVIRONMENT: PRIVATE_QUALIFICATION_ENV.GITHUB_OIDC_ENVIRONMENT,
-      QUALIFICATION_RUN_ATTEMPT: PRIVATE_QUALIFICATION_ENV.QUALIFICATION_RUN_ATTEMPT,
-    } satisfies ReplayAuthEnvironment;
-    for (const env of [
-      missingRunId,
-      { ...PRIVATE_QUALIFICATION_ENV, QUALIFICATION_RUN_ATTEMPT: "invalid" },
-      { ...PRIVATE_QUALIFICATION_ENV, GITHUB_OIDC_AUDIENCE: "wrong-audience" },
-      { ...PRIVATE_QUALIFICATION_ENV, GITHUB_OIDC_ENVIRONMENT: "wrong-environment" },
-      { ...PRIVATE_QUALIFICATION_ENV, DEPLOYMENT_ENVIRONMENT: "production" },
-    ]) {
-      const { request, fetcher } = await signedRequest(
-        PRIVATE_QUALIFICATION_CLAIMS,
-        "/api/v1/replay",
-      );
-      await expect(verifyPrivateQualificationGithubOidc(
-        request,
-        env,
-        fetcher,
-        1_787_395_200,
-      )).rejects.toThrow();
-    }
-
-    const { request, fetcher } = await signedRequest(
-      PRIVATE_QUALIFICATION_CLAIMS,
-      "/api/v1/replay",
-    );
-    await expect(verifyGithubOidc(
-      request,
-      PRIVATE_QUALIFICATION_ENV,
-      fetcher,
-      1_787_395_200,
-    )).rejects.toThrow("immutable execution ref");
   });
 
   it("accepts only the protected environment and immutable dispatch tag", async () => {

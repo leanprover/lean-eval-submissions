@@ -164,7 +164,8 @@ SOURCE_BLOB_PATHS = {
 }
 QUALIFICATION_FIELDS = {
     "workflow_repository", "workflow_commit", "workflow_path", "workflow_sha256",
-    "workflow_run_id", "workflow_run_attempt", "private_archive_probe", "network_probe",
+    "workflow_run_id", "workflow_run_attempt", "offline_image_inspection",
+    "cloudflare_runtime_validation",
 }
 QUALIFICATION_WORKFLOW_PATH = ".github/workflows/historical-private-image-qualification.yml"
 STATE_QUEUE_PATH = "state-views/historical-private-replay-queue.json"
@@ -737,14 +738,19 @@ def _validate_profile(value: Any, task: dict[str, Any]) -> dict[str, Any]:
     if (
         qualification["workflow_repository"] != "leanprover/lean-eval-submissions"
         or qualification["workflow_path"] != QUALIFICATION_WORKFLOW_PATH
-        or qualification["private_archive_probe"]
+        or qualification["offline_image_inspection"]
         != {
             "archive_expectation_schema_version": 2,
             "key_material_type": "age-file-key-v1",
             "runner_entrypoint": "/opt/lean-eval/replay-authoritative",
-            "status": "passed",
+            "official_entrypoint": "passed",
+            "network": "blocked",
+            "root_filesystem": "read_only",
+            "registry_manifest": "validated",
+            "source_closure": "validated",
         }
-        or qualification["network_probe"] != "blocked"
+        or qualification["cloudflare_runtime_validation"]
+        != "deferred_to_first_historical_replay"
     ):
         raise HistoricalPrivateReplayControllerError(
             "private replay qualification outcome is invalid"
@@ -805,7 +811,18 @@ def _verify_profile_provenance(
         raise HistoricalPrivateReplayControllerError(
             "committed public replay profile inventory is unavailable"
         ) from error
+    public_paths = [
+        path for path in public_paths
+        if re.fullmatch(r"evidence/public-replay/profiles/[0-9a-f]{64}\.json", path)
+    ]
+    if len(public_paths) != 35:
+        raise HistoricalPrivateReplayControllerError(
+            "committed public runtime profile set is incomplete"
+        )
     manifest = profile["registry_manifest_digest"]
+    runtime_values: set[tuple[str, str, str, str]] = set()
+    target_supported = False
+    private_execution = _object(profile["execution_profile"], "private execution profile")
     for path in public_paths:
         public = _parse_canonical(
             _git_blob(repository_root, task["authority_commit"], path),
@@ -815,6 +832,33 @@ def _verify_profile_provenance(
             raise HistoricalPrivateReplayControllerError(
                 "private replay image is also a committed public replay image"
             )
+        public_execution = _object(
+            public.get("execution_profile"), "committed public execution profile"
+        )
+        architecture = public_execution.get("architecture")
+        kernel_release = public_execution.get("kernel_release")
+        cpu_model = public_execution.get("cpu_model")
+        runner_profile = public_execution.get("runner_profile")
+        if not all(
+            isinstance(item, str)
+            for item in (architecture, kernel_release, cpu_model, runner_profile)
+        ):
+            raise HistoricalPrivateReplayControllerError(
+                "committed public runtime profile is invalid"
+            )
+        runtime_values.add((architecture, kernel_release, cpu_model, runner_profile))
+        if (
+            public_execution.get("toolchain") == private_execution.get("toolchain")
+            and public_execution.get("components") == private_execution.get("components")
+        ):
+            target_supported = True
+    if runtime_values != {(
+        "x86_64", "6.18.36-cloudflare-firecracker-2026.6.17",
+        "AMD EPYC", "cloudflare-sandbox-standard-4-v1",
+    )} or not target_supported:
+        raise HistoricalPrivateReplayControllerError(
+            "committed public profiles do not support target runtime"
+        )
 
 
 def _validate_authority(value: Any, task: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:

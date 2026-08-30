@@ -588,6 +588,59 @@ def _public_image_digests(root: pathlib.Path, commit: str) -> set[str]:
     return digests
 
 
+def _require_public_runtime_support(
+    root: pathlib.Path, commit: str, core: dict[str, Any]
+) -> None:
+    try:
+        paths = _git(
+            root, "ls-tree", "-r", "--name-only", commit,
+            "evidence/public-replay/profiles", maximum=256 * 1024,
+        ).decode().splitlines()
+    except UnicodeError as error:
+        raise PrivateReplayPlanError("public runtime profile inventory is invalid") from error
+    paths = [
+        path for path in paths
+        if re.fullmatch(r"evidence/public-replay/profiles/[0-9a-f]{64}\.json", path)
+    ]
+    if len(paths) != 35:
+        raise PrivateReplayPlanError("public runtime profile set is incomplete")
+    runtimes: set[tuple[str, str, str, str]] = set()
+    supported = False
+    for path in paths:
+        raw = _blob_at_commit(root, commit, path, "public runtime profile")
+        try:
+            value = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise PrivateReplayPlanError("public runtime profile is invalid") from error
+        profile = value.get("execution_profile") if isinstance(value, dict) else None
+        if (
+            not isinstance(profile, dict)
+            or value.get("qualification_status") != "qualified"
+            or value.get("execution_profile_digest") != pathlib.PurePosixPath(path).stem
+        ):
+            raise PrivateReplayPlanError("public runtime profile is invalid")
+        architecture = profile.get("architecture")
+        kernel_release = profile.get("kernel_release")
+        cpu_model = profile.get("cpu_model")
+        runner_profile = profile.get("runner_profile")
+        if not all(
+            isinstance(item, str)
+            for item in (architecture, kernel_release, cpu_model, runner_profile)
+        ):
+            raise PrivateReplayPlanError("public runtime profile is invalid")
+        runtimes.add((architecture, kernel_release, cpu_model, runner_profile))
+        if (
+            profile.get("toolchain") == core["execution_profile"]["toolchain"]
+            and profile.get("components") == core["execution_profile"]["components"]
+        ):
+            supported = True
+    if runtimes != {(
+        "x86_64", "6.18.36-cloudflare-firecracker-2026.6.17",
+        "AMD EPYC", "cloudflare-sandbox-standard-4-v1",
+    )} or not supported:
+        raise PrivateReplayPlanError("public profiles do not support target runtime")
+
+
 def _private_source_blob(
     value: Any, name: str, root: pathlib.Path, source_commit: str
 ) -> bytes:
@@ -747,14 +800,15 @@ def validate_private_qualification(
             source_blobs[name], name, repository_root, value["image_source_commit"]
         )
     _validate_private_image_matrix(source_raw["profile_matrix"], core)
+    _require_public_runtime_support(repository_root, qualification_commit, core)
     qualification = value["qualification"]
     qualification_fields = {
         "workflow_repository", "workflow_commit", "workflow_path",
         "workflow_sha256", "workflow_run_id", "workflow_run_attempt",
-        "private_archive_probe", "network_probe",
+        "offline_image_inspection", "cloudflare_runtime_validation",
     }
-    archive_probe = (
-        qualification.get("private_archive_probe")
+    offline_inspection = (
+        qualification.get("offline_image_inspection")
         if isinstance(qualification, dict)
         else None
     )
@@ -772,13 +826,18 @@ def validate_private_qualification(
         or not 1 <= qualification["workflow_run_id"] <= 9_007_199_254_740_991
         or type(qualification.get("workflow_run_attempt")) is not int
         or not 1 <= qualification["workflow_run_attempt"] <= 9_007_199_254_740_991
-        or archive_probe != {
+        or offline_inspection != {
             "archive_expectation_schema_version": 2,
             "key_material_type": "age-file-key-v1",
             "runner_entrypoint": "/opt/lean-eval/replay-authoritative",
-            "status": "passed",
+            "official_entrypoint": "passed",
+            "network": "blocked",
+            "root_filesystem": "read_only",
+            "registry_manifest": "validated",
+            "source_closure": "validated",
         }
-        or qualification.get("network_probe") != "blocked"
+        or qualification.get("cloudflare_runtime_validation")
+        != "deferred_to_first_historical_replay"
     ):
         raise PrivateReplayPlanError("private replay qualification proof is invalid")
     workflow_raw = _blob_at_commit(
