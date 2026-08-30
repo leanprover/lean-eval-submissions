@@ -496,7 +496,7 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
         )
         self.assertEqual(PROBE["POST_TIMEOUT_SECONDS"], 60)
         self.assertEqual(PROBE["RESERVATION_TIMEOUT_SECONDS"], 180)
-        self.assertEqual(PROBE["REPLAY_START_TIMEOUT_SECONDS"], 180)
+        self.assertEqual(PROBE["REPLAY_START_TIMEOUT_SECONDS"], 360)
 
     def test_probe_reports_a_safe_replay_start_specific_timeout(self) -> None:
         with (
