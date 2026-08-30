@@ -1,0 +1,74 @@
+name: Report a LeanEval submission server problem
+description: Report a problem with the lifecycle-aware submission server, entry page, or submitted result.
+title: "[server problem] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form for problems with the LeanEval submission server, the
+        stable submission entry page, or the lifecycle of a server submission.
+
+        This issue will be public. **Do not include credentials, OAuth tokens,
+        cookies, private source, unpublished proofs, archive contents, or raw
+        authenticated response bodies.** If the problem might expose private
+        material, describe the concern without copying that material here.
+
+        For submission instructions and current intake status, see
+        https://lean-lang.org/eval/submit/.
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      options:
+        - Stable submission entry page
+        - Production submission application
+        - GitHub sign-in or source access
+        - Submission status or lifecycle action
+        - Result or leaderboard presentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened
+      description: Describe the problem and the safe, non-sensitive steps that led to it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: Describe the behavior you expected instead.
+    validations:
+      required: true
+
+  - type: input
+    id: occurred_at
+    attributes:
+      label: Approximate time (UTC, optional)
+      description: This helps maintainers match the report to service health without exposing private data.
+      placeholder: YYYY-MM-DD HH:MM UTC
+    validations:
+      required: false
+
+  - type: input
+    id: public_identifier
+    attributes:
+      label: Public submission or result identifier (optional)
+      description: Include an identifier only if it is already public or you are comfortable making it public. Do not include a private source URL.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Public-report safety
+      options:
+        - label: I have not included secrets, credentials, private source, unpublished proofs, or authenticated response bodies.
+          required: true
