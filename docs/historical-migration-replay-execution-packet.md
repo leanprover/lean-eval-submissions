@@ -37,6 +37,7 @@ The fixed reviewed implementation bindings are:
 | Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `b0b2e1310ce3e71ee2738439a9d3c371259d976dc3a0556963072563f66eb76c` |
 | Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `4f8572f27d9e1c9d8013059135c7446b905cbda16226f5c7cd38ec2f65296a6e` |
 | Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
+| Migration promotion helper | `scripts/promote_archive_envelope_migration.py`, SHA-256 `4f1e86d98648393c043100249d9f7f3a73c3606dd1cd178d62f322af03312249` |
 | Private plan builder | `scripts/prepare_historical_private_replay.py`, SHA-256 `2f1ae6a6e8710a0d0983aa7c2b3f64e77ebf2322da8154c04e39be084f4355e4` |
 | Public finalizer | `scripts/prepare_historical_public_authority.py`, SHA-256 `2b5c4e6d2a88c3f4d703de17889476f18d9b2922c2287da7918ae08c7600fdda` |
 | Migration infrastructure | `infrastructure/aws-key-adapter/template.yaml`, SHA-256 `f075b0439dfadd83930cb18051e595fa6d378b3a5e30c55cb2f1966e6820a45a`; operator script SHA-256 `bee43ece436377c5eb5ec717b3985ab669ef2662dd92dedcacc7039edd0c5d7a` |
@@ -97,6 +98,11 @@ workflow artifact, worktree file, mutable tag, or branch head.
       `a8913f1c8b5073e5b7ab309ba10481b615ca4fc00e629e41a9e57962f3afebd4`,
       count 439, dedicated role ARN, protected environment, isolated review
       branch name, and apply confirmation.
+- [ ] Legacy identity custody: custodian Kim Morrison (`@kim-em`), GitHub SSH
+      key id `125797072`; derive and require the SSH RSA 2048 public-key
+      fingerprint `SHA256:4unwBywJxfq9LsOjygB+/NRHaXdBhvxKP+a3EEpqjoE`
+      before direct protected-environment installation. Record neither private
+      material nor its path.
 - [ ] The exact controller commits, immutable image manifest digests, OIDC
       subjects and route scopes, serialization/lease limits, four-attempt cap,
       and terminal-disposition rules for the later bounded replay.
@@ -144,12 +150,19 @@ reason to install the identity before the pre-mutation packet is complete.
       Require 439 schema-version-3 sidecars, zero changed ciphertexts and stable
       IDs, and no retained plaintext, legacy identity, AWS session, or scratch
       output.
+- [ ] The canonical promotion-binding digest and fields emitted by
+      `promote_archive_envelope_migration.py plan`: staged commit/tree, patch
+      digest and size, current audit `main`, intervening-change count, zero
+      overlap, complete touched-path count, and rebased result tree.
 - [ ] Immediately before promotion, bind the then-current audit `main`. Require
       the pinned source to be its ancestor and require zero overlap between all
       intervening changes and the migration-touched source and target paths.
       Apply exactly the staged patch to that current head, bind the resulting
       commit and tree, and promote only that rebased tree. After merge, require
       audit `main` to have exactly the bound tree.
+- [ ] The promotion-candidate digest, commit, sole bound parent, and result tree;
+      after merge, the readback digest and exact audit `main` commit/tree. The
+      candidate commit must be an ancestor of that exact `main`.
 - [ ] The exact production State head used for combined validation.
 - [ ] One `first_occurred_at` after that State head and deterministic event
       identities derived by the canonical public and private finalizers from
@@ -172,8 +185,10 @@ reason to install the identity before the pre-mutation packet is complete.
    the legacy identity for the exact protected workflow run.
 3. Run the archive migration workflow against the exact audit commit and
    selected inventory digest. Complete the post-migration readback, then apply
-   the exact staged patch to the separately bound current audit head and
-   promote only the resulting reviewed tree.
+   `promote_archive_envelope_migration.py plan` and `prepare` to the separately
+   bound current audit head. Review and promote only the generated candidate;
+   run its `readback` command against the exact merged audit `main` before
+   continuing.
 4. Run `prepare_historical_public_authority.py finalize-batch` against its
    pinned, complete State contract checkout
    `0c943edde8a247b8670e10339b80fc65be6c0f33`; the finalizer derives the exact
@@ -203,12 +218,15 @@ reason to install the identity before the pre-mutation packet is complete.
 8. Only after final-delta promotion and readback, remove the installed identity
    and session material, one-shot migration workflow, protected migration
    environment, dedicated migration Encrypt role and stack output, and
-   temporary private image-build workflow. The custodian must then destroy the
-   offline master and verify that no installed or working copy remains. Retain
-   v2 replay Decrypt support, the schema-3 file-key replay implementation, and
-   the versioned replay/checker records. Enable the historical controllers only
-   for the separately reviewed final-delta queues and disable them again after
-   every Result has a terminal disposition.
+   temporary private image-build workflow. Delete the one-shot promotion helper
+   and focused test, remove the obsolete bounded-promotion instructions, and
+   remove this packet's helper hash and promotion-only checklist fields. The
+   custodian must then destroy the offline master and verify that no installed
+   or working copy remains. Retain v2 replay Decrypt support, the schema-3
+   file-key replay implementation, and the versioned replay/checker records.
+   Enable the historical controllers only for the separately reviewed
+   final-delta queues and disable them again after every Result has a terminal
+   disposition.
 
 At every step, an input mismatch leaves the corresponding capability disabled.
 Creating and filling this packet does not itself write State, migrate an
