@@ -40,6 +40,7 @@ HEALTH_ATTEMPTS = 25
 HEALTH_RETRY_SECONDS = 5
 HEALTH_TIMEOUT_SECONDS = 10
 TRANSIENT_HEALTH_HTTP_CODES = {404, 429}
+QUALIFICATION_USER_AGENT = "lean-eval-historical-private-qualification/1"
 CONTEXT_FIELDS = {
     "schema_version",
     "worker_name",
@@ -145,6 +146,7 @@ def _post(url: str, value: dict[str, Any]) -> tuple[int, dict[str, Any]]:
             "authorization": f"Bearer {_oidc_token()}",
             "content-type": "application/json",
             "accept": "application/json",
+            "user-agent": QUALIFICATION_USER_AGENT,
         },
     )
     try:
@@ -166,7 +168,11 @@ def _health(worker_url: str, expected_commit: str) -> None:
     for attempt in range(1, HEALTH_ATTEMPTS + 1):
         try:
             incoming = urllib.request.Request(
-                f"{worker_url}/healthz", headers={"accept": "application/json"}
+                f"{worker_url}/healthz",
+                headers={
+                    "accept": "application/json",
+                    "user-agent": QUALIFICATION_USER_AGENT,
+                },
             )
             with urllib.request.urlopen(
                 incoming, timeout=HEALTH_TIMEOUT_SECONDS

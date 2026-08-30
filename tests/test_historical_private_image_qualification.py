@@ -330,6 +330,44 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
                 self.assertEqual(urlopen.call_count, 2)
                 sleep.assert_called_once_with(PROBE["HEALTH_RETRY_SECONDS"])
 
+    def test_probe_uses_fixed_identity_for_every_worker_request(self) -> None:
+        commit = "1" * 40
+        health = io.BytesIO(
+            canonical(
+                {
+                    "status": "ok",
+                    "environment": "private-qualification",
+                    "deployed_commit": commit,
+                    "replay_enabled": True,
+                }
+            )
+        )
+        posted = io.BytesIO(canonical({"status": "reserved"}))
+        posted.status = 200
+        with (
+            mock.patch.object(
+                PROBE["urllib"].request,
+                "urlopen",
+                side_effect=[health, posted],
+            ) as urlopen,
+            mock.patch.object(PROBE["time"], "sleep"),
+            mock.patch.dict(
+                PROBE["_post"].__globals__, {"_oidc_token": lambda: "token"}
+            ),
+        ):
+            PROBE["_health"]("https://qualifier.example", commit)
+            self.assertEqual(
+                PROBE["_post"]("https://qualifier.example/reserve", {"value": 1}),
+                (200, {"status": "reserved"}),
+            )
+        self.assertEqual(urlopen.call_count, 2)
+        for call in urlopen.call_args_list:
+            request = call.args[0]
+            self.assertEqual(
+                request.get_header("User-agent"),
+                PROBE["QUALIFICATION_USER_AGENT"],
+            )
+
     def test_probe_health_retries_transport_failures(self) -> None:
         commit = "1" * 40
         for unavailable in (TimeoutError(), urllib.error.URLError("unavailable")):
