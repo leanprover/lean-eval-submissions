@@ -119,20 +119,23 @@ class StagingPromotionCanaryTests(unittest.TestCase):
                 self.assertNotIn(detail, str(failure))
 
     def test_only_bounded_gateway_unavailability_is_transport_retryable(self) -> None:
-        for status in (502, 503, 504):
-            with self.subTest(status=status):
-                failure = CANARY.http_failure(
-                    "/internal/v1/promotion-canary",
-                    status,
-                    b'{"detail":"must not surface"}',
-                )
-                self.assertIsInstance(failure, CANARY.CanaryConnectivityFailure)
-                self.assertEqual(
-                    str(failure),
-                    "/internal/v1/promotion-canary returned "
-                    f"HTTP {status} (http_{status})",
-                )
-                self.assertNotIn("must not surface", str(failure))
+        for path in ("/readyz", "/internal/v1/promotion-canary"):
+            for status in (502, 503, 504):
+                with self.subTest(path=path, status=status):
+                    failure = CANARY.http_failure(
+                        path,
+                        status,
+                        b'{"detail":"must not surface"}',
+                    )
+                    self.assertIsInstance(
+                        failure,
+                        CANARY.CanaryConnectivityFailure,
+                    )
+                    self.assertEqual(
+                        str(failure),
+                        f"{path} returned HTTP {status} (http_{status})",
+                    )
+                    self.assertNotIn("must not surface", str(failure))
 
         for status in (500, 501, 505):
             with self.subTest(status=status):
@@ -191,6 +194,84 @@ class StagingPromotionCanaryTests(unittest.TestCase):
             {"timeout_seconds": 30},
         )
         sleep.assert_called_once_with(5)
+
+    def test_main_retries_bounded_staging_readiness_unavailability(self) -> None:
+        commit = "c" * 40
+        args = types.SimpleNamespace(
+            commit=commit,
+            dispatch_ref=f"lean-eval-dispatch/{commit}",
+            run_id="32712345678",
+            run_attempt="1",
+            timeout_seconds=480,
+            poll_seconds=5,
+        )
+        readiness = {
+            "environment": "staging",
+            "intake_configured_enabled": False,
+            "intake_effective_enabled": False,
+            "intake_enabled": False,
+            "intake_enablement_mode": "disabled",
+            "intake_lease_expires_at": None,
+            "state_commit": "a" * 40,
+            "status": "state_writer_ready",
+        }
+        request_json = mock.Mock(
+            side_effect=[
+                CANARY.CanaryConnectivityFailure("temporarily unavailable"),
+                (200, readiness),
+                (200, {}),
+            ]
+        )
+        with (
+            mock.patch.object(CANARY, "parse_args", return_value=args),
+            mock.patch.object(CANARY, "opener", return_value=mock.sentinel.client),
+            mock.patch.object(CANARY, "request_json", request_json),
+            mock.patch.object(
+                CANARY,
+                "validate_canary",
+                return_value=("0198abcd-1111-7000-8000-0000000000ca", True),
+            ),
+            mock.patch.object(CANARY.time, "monotonic", side_effect=[100, 101]),
+            mock.patch.object(CANARY.time, "sleep") as sleep,
+            mock.patch("builtins.print"),
+            mock.patch.dict(CANARY.os.environ, {"READINESS_TOKEN": "x" * 32}),
+        ):
+            self.assertEqual(CANARY.main(), 0)
+        self.assertEqual(request_json.call_count, 3)
+        self.assertEqual(
+            [call.args[1] for call in request_json.call_args_list],
+            ["/readyz", "/readyz", "/internal/v1/promotion-canary"],
+        )
+        sleep.assert_called_once_with(5)
+
+    def test_staging_readiness_retry_stops_at_existing_deadline(self) -> None:
+        commit = "c" * 40
+        args = types.SimpleNamespace(
+            commit=commit,
+            dispatch_ref=f"lean-eval-dispatch/{commit}",
+            run_id="32712345678",
+            run_attempt="1",
+            timeout_seconds=480,
+            poll_seconds=5,
+        )
+        request_json = mock.Mock(
+            side_effect=[CANARY.CanaryConnectivityFailure("temporarily unavailable")]
+        )
+        with (
+            mock.patch.object(CANARY, "parse_args", return_value=args),
+            mock.patch.object(CANARY, "opener", return_value=mock.sentinel.client),
+            mock.patch.object(CANARY, "request_json", request_json),
+            mock.patch.object(CANARY.time, "monotonic", side_effect=[100, 576]),
+            mock.patch.object(CANARY.time, "sleep") as sleep,
+            mock.patch.dict(CANARY.os.environ, {"READINESS_TOKEN": "x" * 32}),
+        ):
+            with self.assertRaisesRegex(
+                CANARY.CanaryFailure,
+                "staging readiness did not recover",
+            ):
+                CANARY.main()
+        self.assertEqual(request_json.call_count, 1)
+        sleep.assert_not_called()
 
     def test_main_retries_only_a_bounded_deployment_binding_mismatch(self) -> None:
         commit = "c" * 40
