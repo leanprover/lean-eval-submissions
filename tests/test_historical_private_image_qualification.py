@@ -21,6 +21,7 @@ from replay_orchestrator import config_digest
 MATRIX = ROOT / "configuration/historical-private-replay-image-matrix-v1.json"
 SCHEMA = ROOT / "schemas/historical-private-profile-qualification-v1.schema.json"
 WORKFLOW = ROOT / ".github/workflows/historical-private-image-qualification.yml"
+DOCKERFILE = ROOT / "Dockerfile.historical-private-replay"
 PUBLIC_PROFILES = ROOT / "evidence/public-replay/profiles"
 
 
@@ -263,7 +264,7 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
         self.assertFalse((ROOT / "scripts/run_historical_private_cloudflare_probe").exists())
         self.assertFalse((ROOT / "server/src/private-qualification-entry.ts").exists())
 
-    def test_read_only_inspection_does_not_invoke_lake_config_loader(self) -> None:
+    def test_read_only_inspection_is_strictly_static(self) -> None:
         raw = WORKFLOW.read_text(encoding="utf-8")
         inspection = raw.split(
             "      - name: Build and inspect only the selected dedicated image", 1
@@ -271,13 +272,25 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
             "      - name: Publish once and resolve the immutable registry digest", 1
         )[0]
         self.assertIn("docker run --rm --network none --read-only", inspection)
-        self.assertIn(
-            ".lake/build/bin/lean-eval validate-manifest >/dev/null", inspection
-        )
+        self.assertIn("test -f lake-manifest.json", inspection)
+        self.assertIn("test -f .lake/package-overrides.json", inspection)
+        self.assertIn("test -d .lake/packages", inspection)
+        self.assertIn("test -x .lake/build/bin/lean-eval", inspection)
         self.assertIn("test -x .lake/build/bin/extract_theorem", inspection)
+        self.assertNotIn("validate-manifest", inspection)
         self.assertNotIn("lake exe", inspection)
         self.assertNotIn("lake --no-build", inspection)
         self.assertNotIn("--tmpfs", inspection)
+
+    def test_docker_builder_owns_manifest_validation_and_extractor_build(self) -> None:
+        dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+        validation = dockerfile.index("&& lake exe lean-eval validate-manifest \\")
+        extractor = dockerfile.index("&& lake build extract_theorem \\")
+        final_image = dockerfile.rindex(
+            "FROM docker.io/cloudflare/sandbox:0.12.7-python@"
+        )
+        self.assertLess(validation, extractor)
+        self.assertLess(extractor, final_image)
 
     def test_existing_tag_resume_inspects_only_the_exact_remote_digest(self) -> None:
         raw = WORKFLOW.read_text(encoding="utf-8")
