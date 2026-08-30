@@ -23,7 +23,7 @@ from typing import Any
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from historical_private_image_qualification import (  # noqa: E402
+from historical_private_image_qualification import (
     OIDC_AUDIENCE,
     RECEIPT_KIND,
     RUNNER_ENTRYPOINT,
@@ -39,6 +39,8 @@ OCI_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 HEALTH_ATTEMPTS = 25
 HEALTH_RETRY_SECONDS = 5
 HEALTH_TIMEOUT_SECONDS = 10
+POST_TIMEOUT_SECONDS = 60
+RESERVATION_TIMEOUT_SECONDS = 180
 TRANSIENT_HEALTH_HTTP_CODES = {404, 429}
 QUALIFICATION_USER_AGENT = "lean-eval-historical-private-qualification/1"
 CONTEXT_FIELDS = {
@@ -137,7 +139,13 @@ def _oidc_token() -> str:
     return token
 
 
-def _post(url: str, value: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+def _post(
+    url: str,
+    value: dict[str, Any],
+    *,
+    timeout_seconds: int = POST_TIMEOUT_SECONDS,
+    operation: str = "request",
+) -> tuple[int, dict[str, Any]]:
     incoming = urllib.request.Request(
         url,
         method="POST",
@@ -150,7 +158,7 @@ def _post(url: str, value: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         },
     )
     try:
-        with urllib.request.urlopen(incoming, timeout=60) as response:
+        with urllib.request.urlopen(incoming, timeout=timeout_seconds) as response:
             return response.status, _object(json.load(response), "executor response")
     except urllib.error.HTTPError as error:
         try:
@@ -159,7 +167,9 @@ def _post(url: str, value: dict[str, Any]) -> tuple[int, dict[str, Any]]:
             raise QualificationError("qualification executor returned a non-JSON error") from parse_error
         return error.code, body
     except (OSError, json.JSONDecodeError) as error:
-        raise QualificationError("qualification executor request failed") from error
+        raise QualificationError(
+            f"qualification executor {operation} failed"
+        ) from error
 
 
 def _health(worker_url: str, expected_commit: str) -> None:
@@ -248,7 +258,10 @@ def _run(
     worker_url = context["worker_url"]
     _health(worker_url, candidate["image_source_commit"])
     reserve_code, reservation = _post(
-        f"{worker_url}/api/v1/private-qualification/reserve", status_request
+        f"{worker_url}/api/v1/private-qualification/reserve",
+        status_request,
+        timeout_seconds=RESERVATION_TIMEOUT_SECONDS,
+        operation="reservation request",
     )
     if (
         reserve_code != 200

@@ -361,12 +361,75 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
                 (200, {"status": "reserved"}),
             )
         self.assertEqual(urlopen.call_count, 2)
+        self.assertEqual(
+            urlopen.call_args_list[0].kwargs["timeout"],
+            PROBE["HEALTH_TIMEOUT_SECONDS"],
+        )
+        self.assertEqual(
+            urlopen.call_args_list[1].kwargs["timeout"],
+            PROBE["POST_TIMEOUT_SECONDS"],
+        )
         for call in urlopen.call_args_list:
             request = call.args[0]
             self.assertEqual(
                 request.get_header("User-agent"),
                 PROBE["QUALIFICATION_USER_AGENT"],
             )
+
+    def test_probe_extends_only_the_named_reservation_request(self) -> None:
+        post = mock.Mock(return_value=(500, {}))
+        with (
+            mock.patch.dict(
+                PROBE["_run"].__globals__,
+                {"_health": mock.Mock(), "_post": post},
+            ),
+            self.assertRaisesRegex(
+                qualification.QualificationError,
+                "sandbox cleanup identity was not reserved",
+            ),
+        ):
+            PROBE["_run"](
+                {"image_source_commit": "1" * 40},
+                {},
+                {"schema_version": 1},
+                {"worker_url": "https://qualifier.example"},
+                pathlib.Path("unused-receipt"),
+                pathlib.Path("unused-reservation"),
+            )
+        post.assert_called_once_with(
+            "https://qualifier.example/api/v1/private-qualification/reserve",
+            {"schema_version": 1},
+            timeout_seconds=PROBE["RESERVATION_TIMEOUT_SECONDS"],
+            operation="reservation request",
+        )
+        self.assertEqual(PROBE["POST_TIMEOUT_SECONDS"], 60)
+        self.assertEqual(PROBE["RESERVATION_TIMEOUT_SECONDS"], 180)
+
+    def test_probe_reports_a_safe_reservation_specific_timeout(self) -> None:
+        with (
+            mock.patch.object(
+                PROBE["urllib"].request,
+                "urlopen",
+                side_effect=TimeoutError(),
+            ) as urlopen,
+            mock.patch.dict(
+                PROBE["_post"].__globals__, {"_oidc_token": lambda: "token"}
+            ),
+            self.assertRaisesRegex(
+                qualification.QualificationError,
+                "qualification executor reservation request failed",
+            ),
+        ):
+            PROBE["_post"](
+                "https://qualifier.example/api/v1/private-qualification/reserve",
+                {"schema_version": 1},
+                timeout_seconds=PROBE["RESERVATION_TIMEOUT_SECONDS"],
+                operation="reservation request",
+            )
+        self.assertEqual(
+            urlopen.call_args.kwargs["timeout"],
+            PROBE["RESERVATION_TIMEOUT_SECONDS"],
+        )
 
     def test_probe_health_retries_transport_failures(self) -> None:
         commit = "1" * 40
