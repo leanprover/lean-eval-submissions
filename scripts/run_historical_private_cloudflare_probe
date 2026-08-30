@@ -43,6 +43,9 @@ HEALTH_TIMEOUT_SECONDS = 10
 POST_TIMEOUT_SECONDS = 60
 RESERVATION_TIMEOUT_SECONDS = 180
 REPLAY_START_TIMEOUT_SECONDS = 360
+START_RECONCILIATION_SECONDS = 60
+START_RECONCILIATION_POLL_SECONDS = 5
+START_RECONCILIATION_TIMEOUT_SECONDS = 10
 RETRYABLE_REPLAY_START_FAILURE = {
     "error": "executor_failed",
     "reason": "command_rpc_failed",
@@ -65,6 +68,10 @@ CONTEXT_FIELDS = {
     "kernel_release",
     "cpu_model",
 }
+
+
+class ExecutorTransportError(QualificationError):
+    """The executor response boundary was ambiguous."""
 
 
 def _object(value: Any, label: str) -> dict[str, Any]:
@@ -149,7 +156,7 @@ def _post(
     url: str,
     value: dict[str, Any],
     *,
-    timeout_seconds: int = POST_TIMEOUT_SECONDS,
+    timeout_seconds: float = POST_TIMEOUT_SECONDS,
     operation: str = "request",
 ) -> tuple[int, dict[str, Any]]:
     incoming = urllib.request.Request(
@@ -172,7 +179,11 @@ def _post(
         except (QualificationError, json.JSONDecodeError) as parse_error:
             raise QualificationError("qualification executor returned a non-JSON error") from parse_error
         return error.code, body
-    except (OSError, json.JSONDecodeError) as error:
+    except OSError as error:
+        raise ExecutorTransportError(
+            f"qualification executor {operation} failed"
+        ) from error
+    except json.JSONDecodeError as error:
         raise QualificationError(
             f"qualification executor {operation} failed"
         ) from error
@@ -253,23 +264,83 @@ def _cleanup(worker_url: str, status_request: dict[str, Any]) -> None:
         raise QualificationError("sandbox cleanup was not confirmed")
 
 
-def _start_replay(worker_url: str, request: dict[str, Any]) -> None:
-    url = f"{worker_url}/api/v1/replay"
-    code, started = _post(
-        url,
-        request,
-        timeout_seconds=REPLAY_START_TIMEOUT_SECONDS,
-        operation="replay start request",
+def _running_status(
+    code: int,
+    body: dict[str, Any],
+    status_request: dict[str, Any],
+) -> bool:
+    return (
+        code == 202
+        and set(body) == {"schema_version", "replay_task_id", "attempt", "status"}
+        and body.get("schema_version") == 1
+        and body.get("replay_task_id") == status_request.get("replay_task_id")
+        and body.get("attempt") == status_request.get("attempt")
+        and body.get("status") == "running"
     )
-    if code == 500 and started == RETRYABLE_REPLAY_START_FAILURE:
+
+
+def _terminal_status(code: int, body: dict[str, Any]) -> bool:
+    return code == 200 and set(body) == {"schema_version", "verdict", "destruction"}
+
+
+def _reconcile_start(
+    worker_url: str,
+    status_request: dict[str, Any],
+) -> tuple[int, dict[str, Any]]:
+    deadline = time.monotonic() + START_RECONCILIATION_SECONDS
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise QualificationError(
+                "qualification executor replay start did not reconcile"
+            )
+        try:
+            code, body = _post(
+                f"{worker_url}/api/v1/replay/status",
+                status_request,
+                timeout_seconds=min(
+                    float(START_RECONCILIATION_TIMEOUT_SECONDS), remaining
+                ),
+                operation="replay start reconciliation request",
+            )
+        except ExecutorTransportError:
+            pass
+        else:
+            if _running_status(code, body, status_request) or _terminal_status(
+                code, body
+            ):
+                return code, body
+            if code != 500 or body != RETRYABLE_REPLAY_START_FAILURE:
+                raise QualificationError(
+                    "qualification executor replay start reconciliation failed"
+                )
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise QualificationError(
+                "qualification executor replay start did not reconcile"
+            )
+        time.sleep(min(START_RECONCILIATION_POLL_SECONDS, remaining))
+
+
+def _start_replay(
+    worker_url: str,
+    request: dict[str, Any],
+    status_request: dict[str, Any],
+) -> tuple[int, dict[str, Any]]:
+    url = f"{worker_url}/api/v1/replay"
+    try:
         code, started = _post(
             url,
             request,
             timeout_seconds=REPLAY_START_TIMEOUT_SECONDS,
             operation="replay start request",
         )
-    if code == 202 and started.get("status") == "running":
-        return
+    except ExecutorTransportError:
+        return _reconcile_start(worker_url, status_request)
+    if code == 500 and started == RETRYABLE_REPLAY_START_FAILURE:
+        return _reconcile_start(worker_url, status_request)
+    if _running_status(code, started, status_request):
+        return code, started
     failure = sanitized_failure(started)
     if failure is None:
         raise QualificationError("qualification executor did not start the reviewed probe")
@@ -313,16 +384,18 @@ def _run(
         "replay_task_id": context["replay_task_id"],
         "status": "reserved",
     })
-    _start_replay(worker_url, request)
+    code, body = _start_replay(worker_url, request, status_request)
     deadline = time.monotonic() + 20_400
-    while True:
+    while code == 202:
         code, body = _post(f"{worker_url}/api/v1/replay/status", status_request)
-        if code == 202 and body.get("status") == "running":
+        if code == 202:
+            if not _running_status(code, body, status_request):
+                raise QualificationError(
+                    "qualification executor returned an invalid running status"
+                )
             if time.monotonic() >= deadline:
                 raise QualificationError("qualification executor exceeded its deadline")
             time.sleep(20)
-            continue
-        break
     if code != 200 or set(body) != {"schema_version", "verdict", "destruction"}:
         raise QualificationError("qualification executor did not return one terminal verdict")
     verdict = _object(body.get("verdict"), "qualification verdict")
