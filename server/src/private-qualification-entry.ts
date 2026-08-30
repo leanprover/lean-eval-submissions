@@ -67,8 +67,8 @@ export default {
       || key === "POST /api/v1/private-qualification/reserve"
     ) {
       try {
-        const { verifyGithubOidc } = await import("./replay-auth");
-        await verifyGithubOidc(request, env);
+        const { verifyPrivateQualificationGithubOidc } = await import("./replay-auth");
+        await verifyPrivateQualificationGithubOidc(request, env);
         const input = await readAuthoritativeReplayStatusRequest(
           request,
           env.REVIEWED_EXECUTION_PROFILE_DIGEST,
@@ -126,8 +126,8 @@ export default {
     }
     return handleReplayRequest(request, env, {
       authenticate: async (incoming, runtime) => {
-        const { verifyGithubOidc } = await import("./replay-auth");
-        await verifyGithubOidc(incoming, runtime);
+        const { verifyPrivateQualificationGithubOidc } = await import("./replay-auth");
+        await verifyPrivateQualificationGithubOidc(incoming, runtime);
       },
       sandbox(runtime, runnerNonce) {
         return replaySandbox(runtime, runnerNonce);
