@@ -608,6 +608,11 @@ class HistoricalPublicImageQualificationTests(unittest.TestCase):
             dockerfile,
         )
         self.assertIn("git diff --exit-code -- lake-manifest.json", dockerfile)
+        self.assertIn(
+            "mkdir -p -m 0700 /run/lean-eval /workspace \\\n"
+            "      /opt/lean-eval/benchmark/.replay-workspaces",
+            dockerfile,
+        )
         self.assertNotIn(
             "COPY --from=lean-builder /runtime/benchmark /opt/lean-eval/benchmark",
             dockerfile,

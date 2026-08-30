@@ -246,6 +246,18 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
         raw = WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("prepare-offline-probe", raw)
         self.assertIn("--network none --read-only --cpus 4 --memory 12g", raw)
+        self.assertIn(
+            "--tmpfs /opt/lean-eval/benchmark/.replay-workspaces:"
+            "rw,exec,nosuid,nodev,size=4g,mode=0700",
+            raw,
+        )
+        inspection = raw.split(
+            "      - name: Build and inspect only the selected dedicated image", 1
+        )[1].split(
+            "      - name: Publish once and resolve the immutable registry digest", 1
+        )[0]
+        self.assertIn("lake exe lean-eval validate-manifest", inspection)
+        self.assertIn("lake --no-build build extract_theorem", inspection)
         self.assertIn("historical-private-image-build-${{ inputs.benchmark_commit }}", raw)
         self.assertIn(
             "historical-private-profile-review-${{ github.sha }}-${{ github.run_id }}", raw

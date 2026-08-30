@@ -657,6 +657,7 @@ def evaluate_submission(
     manifest_dir: pathlib.Path,
     output_dir: pathlib.Path,
     repo_root: pathlib.Path,
+    workspace_parent: pathlib.Path | None = None,
     shared_packages: pathlib.Path | None = None,
     problem_id: str | None = None,
     statement_revision: int | None = None,
@@ -674,7 +675,27 @@ def evaluate_submission(
     already-populated `.lake/packages/...` layout (e.g. the benchmark
     repo's `.lake/packages`) that per-workspace builds can reuse instead of
     re-unpacking Mathlib for each.
+
+    `workspace_parent` optionally selects an existing directory inside
+    `repo_root` for the temporary per-submission workspace. This supports a
+    narrowly mounted writable directory when the rest of the benchmark is
+    read-only.
     """
+    repo_root.mkdir(parents=True, exist_ok=True)
+    if workspace_parent is None:
+        workspace_parent = repo_root
+    elif (
+        workspace_parent.is_symlink()
+        or not workspace_parent.is_dir()
+        or not _is_inside(workspace_parent, repo_root)
+    ):
+        raise EvaluateError(
+            "workspace parent must be an existing non-symlink directory "
+            "inside repo_root"
+        )
+    else:
+        workspace_parent = workspace_parent.resolve()
+
     manifest_revisions = _load_manifest_revisions(manifest_dir)
     if (problem_id is None) != (statement_revision is None):
         raise EvaluateError(
@@ -697,13 +718,15 @@ def evaluate_submission(
     )
 
     overlay_records: list[dict] = []
-    # Create the tempdir as an immediate child of repo_root so that:
+    # Create the tempdir inside repo_root (directly by default, or under the
+    # validated workspace parent) so that:
     #   (1) comparator's landrun sandbox, which whitelists paths rooted
     #       at the repo, can reach the per-workspace .lake/build
     #   (2) run_eval.score_problems can compute
     #       workspace_path.relative_to(REPO_ROOT) without ValueError
-    repo_root.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(dir=repo_root, prefix=".submission-") as tmp:
+    with tempfile.TemporaryDirectory(
+        dir=workspace_parent, prefix=".submission-"
+    ) as tmp:
         workspaces_root = pathlib.Path(tmp) / "workspaces"
         workspaces_root.mkdir(parents=True, exist_ok=True)
         overlaid_ids: list[str] = []
@@ -800,6 +823,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Repo root where `lake exe lean-eval` should run. Defaults to detection.",
     )
     parser.add_argument(
+        "--workspace-parent",
+        type=pathlib.Path,
+        default=None,
+        help=(
+            "Existing non-symlink directory inside --repo-root for temporary "
+            "per-submission workspaces. Defaults to --repo-root."
+        ),
+    )
+    parser.add_argument(
         "--shared-packages",
         type=pathlib.Path,
         default=None,
@@ -870,6 +902,11 @@ def main(argv: list[str] | None = None) -> int:
             manifest_dir=args.manifest_dir.resolve(),
             output_dir=args.output_dir.resolve(),
             repo_root=args.repo_root.resolve(),
+            workspace_parent=(
+                args.workspace_parent.absolute()
+                if args.workspace_parent is not None
+                else None
+            ),
             shared_packages=(
                 args.shared_packages.resolve()
                 if args.shared_packages is not None

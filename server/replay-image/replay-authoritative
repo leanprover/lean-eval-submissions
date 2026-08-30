@@ -18,6 +18,7 @@ from typing import Any
 WORKSPACE = pathlib.Path("/workspace")
 INSTALL = pathlib.Path("/opt/lean-eval")
 BENCHMARK = INSTALL / "benchmark"
+EVALUATOR_WORKSPACE_PARENT = BENCHMARK / ".replay-workspaces"
 METRICS = pathlib.Path("/run/lean-eval/metrics.json")
 MAX_JSON = 256 * 1024
 MAX_CIPHERTEXT = 11 * 1024 * 1024
@@ -662,6 +663,8 @@ def main() -> None:
                 str(output),
                 "--repo-root",
                 str(BENCHMARK),
+                "--workspace-parent",
+                str(EVALUATOR_WORKSPACE_PARENT),
                 "--shared-packages",
                 str(BENCHMARK / ".lake" / "packages"),
                 "--problem-id",

@@ -210,6 +210,7 @@ RUN chmod 0555 /usr/local/bin/landrun /opt/lean-eval/bin/* \
       /opt/lean-eval/replay-staging-acceptance \
       /opt/lean-eval/replay-measure \
     && mkdir -p -m 0700 /run/lean-eval /workspace \
+      /opt/lean-eval/benchmark/.replay-workspaces \
     && chmod 0555 /opt/lean-eval/replay-authoritative \
     && test "$(find /opt/lean-eval -type d -name .git -print -quit)" = '' \
     && test -d /opt/lean-eval/benchmark/.lake/packages \

@@ -128,41 +128,44 @@ RUN . /tmp/image.env \
     && strip /build/lean4export/.lake/build/bin/lean4export
 
 RUN . /tmp/image.env \
-    && git init /build/benchmark \
-    && git -C /build/benchmark remote add origin https://github.com/leanprover/lean-eval.git \
-    && git -C /build/benchmark fetch --depth 1 origin "$BENCHMARK_COMMIT" \
-    && git -C /build/benchmark checkout --detach FETCH_HEAD \
-    && test "$(git -C /build/benchmark rev-parse HEAD)" = "$BENCHMARK_COMMIT" \
-    && test "$(git -C /build/benchmark rev-parse 'HEAD^{tree}')" = "$BENCHMARK_TREE" \
-    && test "$(sha256sum /build/benchmark/lean-toolchain | cut -d' ' -f1)" = "$TOOLCHAIN_BLOB_SHA256" \
-    && test "$(cat /build/benchmark/lean-toolchain)" = "$TOOLCHAIN" \
-    && cd /build/benchmark \
+    && mkdir -p /opt/lean-eval \
+    && git init /opt/lean-eval/benchmark \
+    && git -C /opt/lean-eval/benchmark remote add origin https://github.com/leanprover/lean-eval.git \
+    && git -C /opt/lean-eval/benchmark fetch --depth 1 origin "$BENCHMARK_COMMIT" \
+    && git -C /opt/lean-eval/benchmark checkout --detach FETCH_HEAD \
+    && test "$(git -C /opt/lean-eval/benchmark rev-parse HEAD)" = "$BENCHMARK_COMMIT" \
+    && test "$(git -C /opt/lean-eval/benchmark rev-parse 'HEAD^{tree}')" = "$BENCHMARK_TREE" \
+    && test "$(sha256sum /opt/lean-eval/benchmark/lean-toolchain | cut -d' ' -f1)" = "$TOOLCHAIN_BLOB_SHA256" \
+    && test "$(cat /opt/lean-eval/benchmark/lean-toolchain)" = "$TOOLCHAIN" \
+    && cd /opt/lean-eval/benchmark \
     && lake update \
     && git diff --exit-code -- lake-manifest.json \
     && lake exe cache get \
     && lake build lean-eval \
+    && lake exe lean-eval validate-manifest \
+    && lake build extract_theorem \
     && printf '%s\n' "$BENCHMARK_COMMIT" > .lean-eval-commit \
     && printf '%s\n' "$BENCHMARK_TREE" > .lean-eval-tree \
     && for workspace in generated/*; do \
          if [ -f "$workspace/lakefile.toml" ]; then \
            mkdir -p "$workspace/.lake"; \
-           ln -s /build/benchmark/.lake/packages "$workspace/.lake/packages"; \
+           ln -s /opt/lean-eval/benchmark/.lake/packages "$workspace/.lake/packages"; \
            (cd "$workspace" && lake update); \
            rm "$workspace/.lake/packages"; \
          fi; \
        done \
     && test "$(find generated -mindepth 2 -maxdepth 2 -name lake-manifest.json | wc -l)" = "$WORKSPACE_COUNT" \
-    && python3 -c 'import json, pathlib; root = pathlib.Path("/build/benchmark"); manifest = json.loads((root / "lake-manifest.json").read_text()); packages = [{"type": "path", "dir": "/opt/lean-eval/benchmark/.lake/packages/" + package["name"].removeprefix("«").removesuffix("»"), "name": package["name"], "manifestFile": package["manifestFile"], "inherited": package["inherited"], "configFile": package["configFile"]} for package in manifest["packages"]]; (root / ".lake/package-overrides.json").write_text(json.dumps({"version": manifest["version"], "packages": packages}, indent=2, ensure_ascii=False, sort_keys=True) + "\n")' \
+    && python3 -c 'import json, pathlib; root = pathlib.Path("/opt/lean-eval/benchmark"); manifest = json.loads((root / "lake-manifest.json").read_text()); packages = [{"type": "path", "dir": "/opt/lean-eval/benchmark/.lake/packages/" + package["name"].removeprefix("«").removesuffix("»"), "name": package["name"], "manifestFile": package["manifestFile"], "inherited": package["inherited"], "configFile": package["configFile"]} for package in manifest["packages"]]; (root / ".lake/package-overrides.json").write_text(json.dumps({"version": manifest["version"], "packages": packages}, indent=2, ensure_ascii=False, sort_keys=True) + "\n")' \
     && for workspace in generated/*; do \
          if [ -f "$workspace/lake-manifest.json" ]; then \
            cp .lake/package-overrides.json "$workspace/.lake/package-overrides.json"; \
          fi; \
        done \
     && test "$(find generated -mindepth 3 -maxdepth 3 -path '*/.lake/package-overrides.json' | wc -l)" = "$WORKSPACE_COUNT" \
-    && find /build/benchmark -type d -name .git -prune -exec rm -rf '{}' + \
-    && strip /build/benchmark/.lake/build/bin/lean-eval \
+    && find /opt/lean-eval/benchmark -type d -name .git -prune -exec rm -rf '{}' + \
+    && strip /opt/lean-eval/benchmark/.lake/build/bin/lean-eval \
     && mkdir -p /runtime/benchmark /runtime/bin /runtime/home/.elan/toolchains /runtime/profile \
-    && cp -a /build/benchmark/. /runtime/benchmark/ \
+    && cp -a /opt/lean-eval/benchmark/. /runtime/benchmark/ \
     && cp /build/comparator/.lake/build/bin/comparator /runtime/bin/comparator \
     && cp /build/lean4export/.lake/build/bin/lean4export /runtime/bin/lean4export \
     && cp -a "$ELAN_HOME/bin" /runtime/home/.elan/bin \
@@ -219,6 +222,7 @@ RUN chmod 0555 /usr/local/bin/landrun /opt/lean-eval/bin/* \
       /opt/lean-eval/replay-authoritative \
       /opt/lean-eval/replay-measure \
     && mkdir -p -m 0700 /run/lean-eval /workspace \
+      /opt/lean-eval/benchmark/.replay-workspaces \
     && test -x /opt/lean-eval/bin/age-file-key \
     && test -x /opt/lean-eval/bin/nanoda_bin \
     && test "$(find /opt/lean-eval -type d -name .git -print -quit)" = '' \

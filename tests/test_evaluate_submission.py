@@ -498,6 +498,75 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
                 },
             )
 
+    def test_explicit_workspace_parent_is_used_and_cleaned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            generated, manifest_dir = self._setup_repo_like(tmp_path)
+            _write_pristine(generated, "two_plus_two")
+            _write_manifest(manifest_dir, ["two_plus_two"])
+            src = tmp_path / "src"
+            _write_submitter_workspace(src, ".", "two_plus_two")
+            workspace_parent = tmp_path / ".replay-workspaces"
+            workspace_parent.mkdir()
+            observed: list[pathlib.Path] = []
+
+            def runner(*, problem_ids: list[str], workspaces_root: pathlib.Path) -> dict:
+                self.assertEqual(problem_ids, ["two_plus_two"])
+                observed.append(workspaces_root.parent)
+                self.assertEqual(
+                    workspaces_root.parent.parent,
+                    workspace_parent.resolve(),
+                )
+                return _fake_runner_factory(["two_plus_two"])(
+                    problem_ids=problem_ids,
+                    workspaces_root=workspaces_root,
+                )
+
+            ev.evaluate_submission(
+                source_dir=src,
+                generated_root=generated,
+                manifest_dir=manifest_dir,
+                output_dir=tmp_path / "out",
+                repo_root=tmp_path,
+                workspace_parent=workspace_parent,
+                run_eval_runner=runner,
+            )
+
+            self.assertEqual(len(observed), 1)
+            self.assertFalse(observed[0].exists())
+            self.assertEqual(list(workspace_parent.iterdir()), [])
+
+    def test_explicit_workspace_parent_rejects_symlink_and_outside_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            repo_root = tmp_path / "repo"
+            repo_root.mkdir()
+            outside = tmp_path / "outside"
+            outside.mkdir()
+            missing = repo_root / "missing-workspaces"
+            file_path = repo_root / "workspace-file"
+            file_path.write_text("not a directory", encoding="utf-8")
+            symlink = repo_root / "linked-workspaces"
+            symlink.symlink_to(outside, target_is_directory=True)
+            common = {
+                "source_dir": repo_root / "unused-source",
+                "generated_root": repo_root / "unused-generated",
+                "manifest_dir": repo_root / "unused-manifests",
+                "output_dir": repo_root / "unused-output",
+                "repo_root": repo_root,
+                "run_eval_runner": _fake_runner_factory([]),
+            }
+            for workspace_parent in (symlink, outside, missing, file_path):
+                with self.subTest(workspace_parent=workspace_parent):
+                    with self.assertRaisesRegex(
+                        ev.EvaluateError,
+                        "workspace parent must be an existing non-symlink directory",
+                    ):
+                        ev.evaluate_submission(
+                            workspace_parent=workspace_parent,
+                            **common,
+                        )
+
     def test_statement_revision_is_frozen_into_results_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = pathlib.Path(tmp)
@@ -706,6 +775,33 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
 
 
 class RunEvalInvocationTests(unittest.TestCase):
+    def test_workspace_parent_cli_is_wired_without_hiding_a_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            target = root / "target"
+            target.mkdir()
+            workspace_parent = root / "workspace-parent"
+            workspace_parent.symlink_to(target, target_is_directory=True)
+            with mock.patch.object(ev, "evaluate_submission") as evaluate:
+                self.assertEqual(
+                    ev.main([
+                        "--source-dir", str(root / "source"),
+                        "--generated-root", str(root / "generated"),
+                        "--manifest-dir", str(root / "manifests"),
+                        "--output-dir", str(root / "output"),
+                        "--repo-root", str(root),
+                        "--workspace-parent", str(workspace_parent),
+                    ]),
+                    0,
+                )
+            self.assertEqual(
+                evaluate.call_args.kwargs["workspace_parent"],
+                workspace_parent.absolute(),
+            )
+            self.assertTrue(
+                evaluate.call_args.kwargs["workspace_parent"].is_symlink()
+            )
+
     def test_measurement_command_cli_requires_json_array(self) -> None:
         self.assertEqual(
             ev._measurement_command('["trusted", "--flag"]'),
