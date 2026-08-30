@@ -431,6 +431,99 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
             PROBE["RESERVATION_TIMEOUT_SECONDS"],
         )
 
+    def test_probe_extends_only_the_named_replay_start_request(self) -> None:
+        post = mock.Mock(
+            side_effect=[
+                (
+                    200,
+                    {
+                        "schema_version": 1,
+                        "replay_task_id": "task-1",
+                        "attempt": 1,
+                        "status": "reserved",
+                    },
+                ),
+                (202, {"status": "running"}),
+                (500, {}),
+            ]
+        )
+        with (
+            mock.patch.dict(
+                PROBE["_run"].__globals__,
+                {
+                    "_health": mock.Mock(),
+                    "_post": post,
+                    "write_exclusive": mock.Mock(),
+                },
+            ),
+            self.assertRaisesRegex(
+                qualification.QualificationError,
+                "qualification executor did not return one terminal verdict",
+            ),
+        ):
+            PROBE["_run"](
+                {"image_source_commit": "1" * 40},
+                {"schema_version": 1},
+                {"schema_version": 1},
+                {
+                    "worker_url": "https://qualifier.example",
+                    "runner_nonce": "2" * 64,
+                    "replay_task_id": "task-1",
+                },
+                pathlib.Path("unused-receipt"),
+                pathlib.Path("unused-reservation"),
+            )
+        self.assertEqual(
+            post.call_args_list,
+            [
+                mock.call(
+                    "https://qualifier.example/api/v1/private-qualification/reserve",
+                    {"schema_version": 1},
+                    timeout_seconds=PROBE["RESERVATION_TIMEOUT_SECONDS"],
+                    operation="reservation request",
+                ),
+                mock.call(
+                    "https://qualifier.example/api/v1/replay",
+                    {"schema_version": 1},
+                    timeout_seconds=PROBE["REPLAY_START_TIMEOUT_SECONDS"],
+                    operation="replay start request",
+                ),
+                mock.call(
+                    "https://qualifier.example/api/v1/replay/status",
+                    {"schema_version": 1},
+                ),
+            ],
+        )
+        self.assertEqual(PROBE["POST_TIMEOUT_SECONDS"], 60)
+        self.assertEqual(PROBE["RESERVATION_TIMEOUT_SECONDS"], 180)
+        self.assertEqual(PROBE["REPLAY_START_TIMEOUT_SECONDS"], 180)
+
+    def test_probe_reports_a_safe_replay_start_specific_timeout(self) -> None:
+        with (
+            mock.patch.object(
+                PROBE["urllib"].request,
+                "urlopen",
+                side_effect=TimeoutError(),
+            ) as urlopen,
+            mock.patch.dict(
+                PROBE["_post"].__globals__, {"_oidc_token": lambda: "token"}
+            ),
+            self.assertRaisesRegex(
+                qualification.QualificationError,
+                "qualification executor replay start request failed",
+            ),
+        ):
+            PROBE["_post"](
+                "https://qualifier.example/api/v1/replay",
+                {"schema_version": 1},
+                timeout_seconds=PROBE["REPLAY_START_TIMEOUT_SECONDS"],
+                operation="replay start request",
+            )
+        self.assertEqual(
+            urlopen.call_args.kwargs["timeout"],
+            PROBE["REPLAY_START_TIMEOUT_SECONDS"],
+        )
+
     def test_probe_health_retries_transport_failures(self) -> None:
         commit = "1" * 40
         for unavailable in (TimeoutError(), urllib.error.URLError("unavailable")):
