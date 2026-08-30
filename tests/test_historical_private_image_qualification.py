@@ -524,6 +524,70 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
             PROBE["REPLAY_START_TIMEOUT_SECONDS"],
         )
 
+    def test_probe_retries_only_an_exact_server_proven_start_rpc_failure(self) -> None:
+        post = mock.Mock(
+            side_effect=[
+                (500, dict(PROBE["RETRYABLE_REPLAY_START_FAILURE"])),
+                (202, {"status": "running"}),
+            ]
+        )
+        with mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}):
+            PROBE["_start_replay"](
+                "https://qualifier.example", {"schema_version": 1}
+            )
+        expected = mock.call(
+            "https://qualifier.example/api/v1/replay",
+            {"schema_version": 1},
+            timeout_seconds=PROBE["REPLAY_START_TIMEOUT_SECONDS"],
+            operation="replay start request",
+        )
+        self.assertEqual(post.call_args_list, [expected, expected])
+
+    def test_probe_stops_after_one_server_proven_start_retry(self) -> None:
+        post = mock.Mock(
+            return_value=(500, dict(PROBE["RETRYABLE_REPLAY_START_FAILURE"]))
+        )
+        with (
+            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
+            self.assertRaisesRegex(
+                qualification.QualificationError,
+                "did not start the reviewed probe: command_rpc_failed",
+            ),
+        ):
+            PROBE["_start_replay"](
+                "https://qualifier.example", {"schema_version": 1}
+            )
+        self.assertEqual(post.call_count, 2)
+
+    def test_probe_reports_only_closed_nonretryable_start_failures(self) -> None:
+        cases = [
+            (
+                {"error": "executor_failed", "reason": "input_transfer_failed"},
+                "did not start the reviewed probe: input_transfer_failed",
+            ),
+            (
+                {
+                    "error": "executor_failed",
+                    "reason": "command_rpc_failed",
+                    "private": "must-not-leak",
+                },
+                "did not start the reviewed probe$",
+            ),
+        ]
+        for response, message in cases:
+            with self.subTest(response=response):
+                post = mock.Mock(return_value=(500, response))
+                with (
+                    mock.patch.dict(
+                        PROBE["_start_replay"].__globals__, {"_post": post}
+                    ),
+                    self.assertRaisesRegex(qualification.QualificationError, message),
+                ):
+                    PROBE["_start_replay"](
+                        "https://qualifier.example", {"schema_version": 1}
+                    )
+                post.assert_called_once()
+
     def test_probe_health_retries_transport_failures(self) -> None:
         commit = "1" * 40
         for unavailable in (TimeoutError(), urllib.error.URLError("unavailable")):

@@ -33,6 +33,7 @@ from historical_private_image_qualification import (
     validate_candidate,
     write_exclusive,
 )
+from sanitize_executor_failure import sanitized_failure
 
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 OCI_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -42,6 +43,10 @@ HEALTH_TIMEOUT_SECONDS = 10
 POST_TIMEOUT_SECONDS = 60
 RESERVATION_TIMEOUT_SECONDS = 180
 REPLAY_START_TIMEOUT_SECONDS = 360
+RETRYABLE_REPLAY_START_FAILURE = {
+    "error": "executor_failed",
+    "reason": "command_rpc_failed",
+}
 TRANSIENT_HEALTH_HTTP_CODES = {404, 429}
 QUALIFICATION_USER_AGENT = "lean-eval-historical-private-qualification/1"
 CONTEXT_FIELDS = {
@@ -248,6 +253,34 @@ def _cleanup(worker_url: str, status_request: dict[str, Any]) -> None:
         raise QualificationError("sandbox cleanup was not confirmed")
 
 
+def _start_replay(worker_url: str, request: dict[str, Any]) -> None:
+    url = f"{worker_url}/api/v1/replay"
+    code, started = _post(
+        url,
+        request,
+        timeout_seconds=REPLAY_START_TIMEOUT_SECONDS,
+        operation="replay start request",
+    )
+    if code == 500 and started == RETRYABLE_REPLAY_START_FAILURE:
+        code, started = _post(
+            url,
+            request,
+            timeout_seconds=REPLAY_START_TIMEOUT_SECONDS,
+            operation="replay start request",
+        )
+    if code == 202 and started.get("status") == "running":
+        return
+    failure = sanitized_failure(started)
+    if failure is None:
+        raise QualificationError("qualification executor did not start the reviewed probe")
+    reason = failure["reason"]
+    if "detail" in failure:
+        reason += f"/{failure['detail']}"
+    raise QualificationError(
+        f"qualification executor did not start the reviewed probe: {reason}"
+    )
+
+
 def _run(
     candidate: dict[str, Any],
     request: dict[str, Any],
@@ -280,14 +313,7 @@ def _run(
         "replay_task_id": context["replay_task_id"],
         "status": "reserved",
     })
-    code, started = _post(
-        f"{worker_url}/api/v1/replay",
-        request,
-        timeout_seconds=REPLAY_START_TIMEOUT_SECONDS,
-        operation="replay start request",
-    )
-    if code != 202 or started.get("status") != "running":
-        raise QualificationError("qualification executor did not start the reviewed probe")
+    _start_replay(worker_url, request)
     deadline = time.monotonic() + 20_400
     while True:
         code, body = _post(f"{worker_url}/api/v1/replay/status", status_request)
