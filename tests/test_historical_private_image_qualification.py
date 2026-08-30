@@ -251,13 +251,6 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
             "rw,exec,nosuid,nodev,size=4g,mode=0700",
             raw,
         )
-        inspection = raw.split(
-            "      - name: Build and inspect only the selected dedicated image", 1
-        )[1].split(
-            "      - name: Publish once and resolve the immutable registry digest", 1
-        )[0]
-        self.assertIn("lake exe lean-eval validate-manifest", inspection)
-        self.assertIn("lake --no-build build extract_theorem", inspection)
         self.assertIn("historical-private-image-build-${{ inputs.benchmark_commit }}", raw)
         self.assertIn(
             "historical-private-profile-review-${{ github.sha }}-${{ github.run_id }}", raw
@@ -269,6 +262,22 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
         self.assertNotIn("id-token: write", raw)
         self.assertFalse((ROOT / "scripts/run_historical_private_cloudflare_probe").exists())
         self.assertFalse((ROOT / "server/src/private-qualification-entry.ts").exists())
+
+    def test_read_only_inspection_does_not_invoke_lake_config_loader(self) -> None:
+        raw = WORKFLOW.read_text(encoding="utf-8")
+        inspection = raw.split(
+            "      - name: Build and inspect only the selected dedicated image", 1
+        )[1].split(
+            "      - name: Publish once and resolve the immutable registry digest", 1
+        )[0]
+        self.assertIn("docker run --rm --network none --read-only", inspection)
+        self.assertIn(
+            ".lake/build/bin/lean-eval validate-manifest >/dev/null", inspection
+        )
+        self.assertIn("test -x .lake/build/bin/extract_theorem", inspection)
+        self.assertNotIn("lake exe", inspection)
+        self.assertNotIn("lake --no-build", inspection)
+        self.assertNotIn("--tmpfs", inspection)
 
     def test_existing_tag_resume_inspects_only_the_exact_remote_digest(self) -> None:
         raw = WORKFLOW.read_text(encoding="utf-8")
