@@ -680,7 +680,7 @@ def _validate_private_image_matrix(raw: bytes, core: dict[str, Any]) -> None:
         or matrix.get("kind") != "historical_private_replay_image_matrix"
         or matrix.get("benchmark_repository") != BENCHMARK_REPOSITORY
         or matrix.get("private_plan_sha256")
-        != "85c21beb341fbfe5ffd877b935149ffe577dc7312c9bb65506e270674c6453c4"
+        != LEGACY_UNAVAILABILITY_PLAN_SHA256
         or matrix.get("checker") != "nanoda"
         or matrix.get("image_count") != 63
         or matrix.get("toolchain_count") != 5
