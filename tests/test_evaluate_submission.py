@@ -513,7 +513,10 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
             def runner(*, problem_ids: list[str], workspaces_root: pathlib.Path) -> dict:
                 self.assertEqual(problem_ids, ["two_plus_two"])
                 observed.append(workspaces_root.parent)
-                self.assertEqual(workspaces_root.parent.parent, workspace_parent)
+                self.assertEqual(
+                    workspaces_root.parent.parent,
+                    workspace_parent.resolve(),
+                )
                 return _fake_runner_factory(["two_plus_two"])(
                     problem_ids=problem_ids,
                     workspaces_root=workspaces_root,
@@ -772,6 +775,33 @@ class EvaluateSubmissionEndToEndTests(unittest.TestCase):
 
 
 class RunEvalInvocationTests(unittest.TestCase):
+    def test_workspace_parent_cli_is_wired_without_hiding_a_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            target = root / "target"
+            target.mkdir()
+            workspace_parent = root / "workspace-parent"
+            workspace_parent.symlink_to(target, target_is_directory=True)
+            with mock.patch.object(ev, "evaluate_submission") as evaluate:
+                self.assertEqual(
+                    ev.main([
+                        "--source-dir", str(root / "source"),
+                        "--generated-root", str(root / "generated"),
+                        "--manifest-dir", str(root / "manifests"),
+                        "--output-dir", str(root / "output"),
+                        "--repo-root", str(root),
+                        "--workspace-parent", str(workspace_parent),
+                    ]),
+                    0,
+                )
+            self.assertEqual(
+                evaluate.call_args.kwargs["workspace_parent"],
+                workspace_parent.absolute(),
+            )
+            self.assertTrue(
+                evaluate.call_args.kwargs["workspace_parent"].is_symlink()
+            )
+
     def test_measurement_command_cli_requires_json_array(self) -> None:
         self.assertEqual(
             ev._measurement_command('["trusted", "--flag"]'),
