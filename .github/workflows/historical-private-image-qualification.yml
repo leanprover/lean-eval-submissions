@@ -163,8 +163,10 @@ jobs:
               test -x /opt/lean-eval/bin/nanoda_bin
               test "$(find /opt/lean-eval -type d -name .git -print -quit)" = ""
               cd /opt/lean-eval/benchmark
-              lake exe lean-eval validate-manifest >/dev/null
-              lake --no-build build extract_theorem >/dev/null
+              # Invoke the prebuilt tools directly: Lake creates package-config
+              # lock files even for --no-build commands on a read-only image.
+              .lake/build/bin/lean-eval validate-manifest >/dev/null
+              test -x .lake/build/bin/extract_theorem
             '
 
       - name: Publish once and resolve the immutable registry digest
