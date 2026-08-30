@@ -48,9 +48,10 @@ Fill these values only from committed canonical outputs. Do not substitute a
 workflow artifact, worktree file, mutable tag, or branch head.
 
 - [ ] One submissions qualification commit containing all 63 canonical private
-      profile files. Bind the canonical descriptor set of
-      `{benchmark_commit, execution_profile_digest, path, sha256}` and its
-      SHA-256.
+      profile files. Bind the canonical descriptor set of exactly
+      `{path, sha256}` and its SHA-256, using the same serialization as the
+      public batch finalizer. Validate benchmark-commit and execution-profile
+      identities separately; they are not descriptor-set hash fields.
 - [ ] One regenerated private replay plan at its digest-derived path and one
       commit containing it. It must contain 63 profiles, 639
       `profile_qualified` bound entries, and the same 29
