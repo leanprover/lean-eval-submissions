@@ -443,7 +443,15 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
                         "status": "reserved",
                     },
                 ),
-                (202, {"status": "running"}),
+                (
+                    202,
+                    {
+                        "schema_version": 1,
+                        "replay_task_id": "task-1",
+                        "attempt": 1,
+                        "status": "running",
+                    },
+                ),
                 (500, {}),
             ]
         )
@@ -464,7 +472,7 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
             PROBE["_run"](
                 {"image_source_commit": "1" * 40},
                 {"schema_version": 1},
-                {"schema_version": 1},
+                {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1},
                 {
                     "worker_url": "https://qualifier.example",
                     "runner_nonce": "2" * 64,
@@ -478,7 +486,11 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
             [
                 mock.call(
                     "https://qualifier.example/api/v1/private-qualification/reserve",
-                    {"schema_version": 1},
+                    {
+                        "schema_version": 1,
+                        "replay_task_id": "task-1",
+                        "attempt": 1,
+                    },
                     timeout_seconds=PROBE["RESERVATION_TIMEOUT_SECONDS"],
                     operation="reservation request",
                 ),
@@ -490,7 +502,11 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
                 ),
                 mock.call(
                     "https://qualifier.example/api/v1/replay/status",
-                    {"schema_version": 1},
+                    {
+                        "schema_version": 1,
+                        "replay_task_id": "task-1",
+                        "attempt": 1,
+                    },
                 ),
             ],
         )
@@ -524,42 +540,392 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
             PROBE["REPLAY_START_TIMEOUT_SECONDS"],
         )
 
-    def test_probe_retries_only_an_exact_server_proven_start_rpc_failure(self) -> None:
+    def test_probe_reconciles_an_exact_server_proven_start_rpc_failure(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
         post = mock.Mock(
             side_effect=[
                 (500, dict(PROBE["RETRYABLE_REPLAY_START_FAILURE"])),
-                (202, {"status": "running"}),
+                (202, {**status, "status": "running"}),
             ]
         )
-        with mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}):
-            PROBE["_start_replay"](
-                "https://qualifier.example", {"schema_version": 1}
+        with (
+            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
+            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
+        ):
+            result = PROBE["_start_replay"](
+                "https://qualifier.example", {"schema_version": 1}, status
             )
-        expected = mock.call(
-            "https://qualifier.example/api/v1/replay",
-            {"schema_version": 1},
-            timeout_seconds=PROBE["REPLAY_START_TIMEOUT_SECONDS"],
-            operation="replay start request",
+        self.assertEqual(result, (202, {**status, "status": "running"}))
+        self.assertEqual(
+            post.call_args_list,
+            [
+                mock.call(
+                    "https://qualifier.example/api/v1/replay",
+                    {"schema_version": 1},
+                    timeout_seconds=PROBE["REPLAY_START_TIMEOUT_SECONDS"],
+                    operation="replay start request",
+                ),
+                mock.call(
+                    "https://qualifier.example/api/v1/replay/status",
+                    status,
+                    timeout_seconds=PROBE["START_RECONCILIATION_TIMEOUT_SECONDS"],
+                    operation="replay start reconciliation request",
+                ),
+            ],
         )
-        self.assertEqual(post.call_args_list, [expected, expected])
 
-    def test_probe_stops_after_one_server_proven_start_retry(self) -> None:
+    def test_probe_reconciles_an_ambiguous_start_transport_failure(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
         post = mock.Mock(
-            return_value=(500, dict(PROBE["RETRYABLE_REPLAY_START_FAILURE"]))
+            side_effect=[
+                PROBE["ExecutorTransportError"](
+                    "qualification executor replay start request failed"
+                ),
+                (202, {**status, "status": "running"}),
+            ]
+        )
+        with (
+            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
+            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
+        ):
+            result = PROBE["_start_replay"](
+                "https://qualifier.example", {"schema_version": 1}, status
+            )
+        self.assertEqual(result, (202, {**status, "status": "running"}))
+        self.assertEqual(
+            [call.args[0] for call in post.call_args_list],
+            [
+                "https://qualifier.example/api/v1/replay",
+                "https://qualifier.example/api/v1/replay/status",
+            ],
+        )
+
+    def test_probe_stops_when_start_reconciliation_expires(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
+        post = mock.Mock(
+            side_effect=[
+                PROBE["ExecutorTransportError"](
+                    "qualification executor replay start request failed"
+                ),
+                (500, dict(PROBE["RETRYABLE_REPLAY_START_FAILURE"])),
+            ]
+        )
+        with (
+            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
+            mock.patch.object(PROBE["time"], "monotonic", side_effect=[0, 0, 61]),
+            self.assertRaisesRegex(
+                qualification.QualificationError,
+                "replay start did not reconcile",
+            ),
+        ):
+            PROBE["_start_replay"](
+                "https://qualifier.example", {"schema_version": 1}, status
+            )
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(
+            [call.args[0] for call in post.call_args_list],
+            [
+                "https://qualifier.example/api/v1/replay",
+                "https://qualifier.example/api/v1/replay/status",
+            ],
+        )
+
+    def test_probe_reconciliation_caps_the_last_request_to_its_deadline(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
+        post = mock.Mock(return_value=(202, {**status, "status": "running"}))
+        with (
+            mock.patch.dict(PROBE["_reconcile_start"].__globals__, {"_post": post}),
+            mock.patch.object(PROBE["time"], "monotonic", side_effect=[0, 58.2]),
+        ):
+            PROBE["_reconcile_start"]("https://qualifier.example", status)
+        post.assert_called_once()
+        call = post.call_args
+        self.assertEqual(call.args, ("https://qualifier.example/api/v1/replay/status", status))
+        self.assertEqual(call.kwargs["operation"], "replay start reconciliation request")
+        self.assertAlmostEqual(call.kwargs["timeout_seconds"], 1.8)
+
+    def test_probe_reconciliation_accepts_a_terminal_status(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
+        terminal = {
+            "schema_version": 1,
+            "verdict": {"schema_version": 1},
+            "destruction": "confirmed",
+        }
+        post = mock.Mock(
+            side_effect=[
+                PROBE["ExecutorTransportError"](
+                    "qualification executor replay start request failed"
+                ),
+                (200, terminal),
+            ]
+        )
+        with (
+            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
+            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
+        ):
+            result = PROBE["_start_replay"](
+                "https://qualifier.example", {"schema_version": 1}, status
+            )
+        self.assertEqual(result, (200, terminal))
+        self.assertEqual(
+            [call.args[0] for call in post.call_args_list],
+            [
+                "https://qualifier.example/api/v1/replay",
+                "https://qualifier.example/api/v1/replay/status",
+            ],
+        )
+
+    def test_probe_reconciliation_tolerates_status_transport_then_recovers(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
+        post = mock.Mock(
+            side_effect=[
+                PROBE["ExecutorTransportError"](
+                    "qualification executor replay start request failed"
+                ),
+                PROBE["ExecutorTransportError"](
+                    "qualification executor replay start reconciliation request failed"
+                ),
+                (202, {**status, "status": "running"}),
+            ]
+        )
+        with (
+            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
+            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
+            mock.patch.object(PROBE["time"], "sleep") as sleep,
+        ):
+            result = PROBE["_start_replay"](
+                "https://qualifier.example", {"schema_version": 1}, status
+            )
+        self.assertEqual(result, (202, {**status, "status": "running"}))
+        self.assertEqual(
+            [call.args[0] for call in post.call_args_list],
+            [
+                "https://qualifier.example/api/v1/replay",
+                "https://qualifier.example/api/v1/replay/status",
+                "https://qualifier.example/api/v1/replay/status",
+            ],
+        )
+        sleep.assert_called_once_with(PROBE["START_RECONCILIATION_POLL_SECONDS"])
+
+    def test_probe_reconciliation_tolerates_repeated_exact_rpc_failures(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
+        retryable = dict(PROBE["RETRYABLE_REPLAY_START_FAILURE"])
+        post = mock.Mock(
+            side_effect=[
+                (500, retryable),
+                (500, retryable),
+                (500, retryable),
+                (202, {**status, "status": "running"}),
+            ]
+        )
+        with (
+            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
+            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
+            mock.patch.object(PROBE["time"], "sleep") as sleep,
+        ):
+            result = PROBE["_start_replay"](
+                "https://qualifier.example", {"schema_version": 1}, status
+            )
+        self.assertEqual(result, (202, {**status, "status": "running"}))
+        self.assertEqual(
+            [call.args[0] for call in post.call_args_list],
+            [
+                "https://qualifier.example/api/v1/replay",
+                "https://qualifier.example/api/v1/replay/status",
+                "https://qualifier.example/api/v1/replay/status",
+                "https://qualifier.example/api/v1/replay/status",
+            ],
+        )
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_probe_reconciliation_makes_no_call_after_its_deadline(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
+        post = mock.Mock()
+        with (
+            mock.patch.dict(PROBE["_reconcile_start"].__globals__, {"_post": post}),
+            mock.patch.object(PROBE["time"], "monotonic", side_effect=[0, 61]),
+            self.assertRaisesRegex(
+                qualification.QualificationError,
+                "replay start did not reconcile",
+            ),
+        ):
+            PROBE["_reconcile_start"]("https://qualifier.example", status)
+        post.assert_not_called()
+
+    def test_probe_reconciliation_rejects_an_unexpected_status(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
+        post = mock.Mock(
+            side_effect=[
+                (500, dict(PROBE["RETRYABLE_REPLAY_START_FAILURE"])),
+                (500, {**PROBE["RETRYABLE_REPLAY_START_FAILURE"], "extra": True}),
+            ]
+        )
+        with (
+            mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
+            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
+            self.assertRaisesRegex(
+                qualification.QualificationError,
+                "replay start reconciliation failed",
+            ),
+        ):
+            PROBE["_start_replay"](
+                "https://qualifier.example", {"schema_version": 1}, status
+            )
+        self.assertEqual(
+            [call.args[0] for call in post.call_args_list],
+            [
+                "https://qualifier.example/api/v1/replay",
+                "https://qualifier.example/api/v1/replay/status",
+            ],
+        )
+
+    def test_probe_reconciliation_rejects_every_nontransient_status_shape(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
+        cases = [
+            (202, {**status, "status": "running", "extra": True}),
+            (202, {**status, "status": "running", "replay_task_id": "other"}),
+            (400, {"error": "invalid_request"}),
+            (500, {"error": "executor_failed", "reason": "input_transfer_failed"}),
+        ]
+        for response in cases:
+            with self.subTest(response=response):
+                post = mock.Mock(
+                    side_effect=[
+                        (500, dict(PROBE["RETRYABLE_REPLAY_START_FAILURE"])),
+                        response,
+                    ]
+                )
+                with (
+                    mock.patch.dict(
+                        PROBE["_start_replay"].__globals__, {"_post": post}
+                    ),
+                    mock.patch.object(PROBE["time"], "monotonic", return_value=0),
+                    self.assertRaisesRegex(
+                        qualification.QualificationError,
+                        "replay start reconciliation failed",
+                    ),
+                ):
+                    PROBE["_start_replay"](
+                        "https://qualifier.example", {"schema_version": 1}, status
+                    )
+                self.assertEqual(
+                    [call.args[0] for call in post.call_args_list],
+                    [
+                        "https://qualifier.example/api/v1/replay",
+                        "https://qualifier.example/api/v1/replay/status",
+                    ],
+                )
+
+    def test_probe_rejects_a_malformed_initial_running_status(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
+        for started in (
+            {**status, "status": "running", "extra": True},
+            {**status, "status": "running", "attempt": 2},
+        ):
+            with self.subTest(started=started):
+                post = mock.Mock(return_value=(202, started))
+                with (
+                    mock.patch.dict(
+                        PROBE["_start_replay"].__globals__, {"_post": post}
+                    ),
+                    self.assertRaisesRegex(
+                        qualification.QualificationError,
+                        "did not start the reviewed probe$",
+                    ),
+                ):
+                    PROBE["_start_replay"](
+                        "https://qualifier.example", {"schema_version": 1}, status
+                    )
+                post.assert_called_once()
+
+    def test_probe_reconciled_terminal_reaches_full_verdict_validation(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
+        terminal = {
+            "schema_version": 1,
+            "verdict": {
+                "schema_version": 1,
+                "replay_task_id": "task-1",
+                "attempt": 1,
+                "execution_outcome": "completed",
+                "checker_outcome": "invalid",
+                "failure_reason": None,
+            },
+            "destruction": "confirmed",
+        }
+        post = mock.Mock(
+            side_effect=[
+                (
+                    200,
+                    {
+                        "schema_version": 1,
+                        "replay_task_id": "task-1",
+                        "attempt": 1,
+                        "status": "reserved",
+                    },
+                ),
+                PROBE["ExecutorTransportError"](
+                    "qualification executor replay start request failed"
+                ),
+                (200, terminal),
+            ]
+        )
+        with (
+            mock.patch.dict(
+                PROBE["_run"].__globals__,
+                {
+                    "_health": mock.Mock(),
+                    "_post": post,
+                    "write_exclusive": mock.Mock(),
+                },
+            ),
+            mock.patch.object(PROBE["time"], "monotonic", return_value=0),
+            self.assertRaisesRegex(
+                qualification.QualificationError,
+                "not a passing official-entrypoint probe",
+            ),
+        ):
+            PROBE["_run"](
+                {"image_source_commit": "1" * 40},
+                {"schema_version": 1},
+                status,
+                {
+                    "worker_url": "https://qualifier.example",
+                    "runner_nonce": "2" * 64,
+                    "replay_task_id": "task-1",
+                },
+                pathlib.Path("unused-receipt"),
+                pathlib.Path("unused-reservation"),
+            )
+        self.assertEqual(
+            [call.args[0] for call in post.call_args_list],
+            [
+                "https://qualifier.example/api/v1/private-qualification/reserve",
+                "https://qualifier.example/api/v1/replay",
+                "https://qualifier.example/api/v1/replay/status",
+            ],
+        )
+
+    def test_probe_does_not_retry_a_nontransport_client_failure(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
+        post = mock.Mock(
+            side_effect=qualification.QualificationError(
+                "qualification executor returned a non-JSON error"
+            )
         )
         with (
             mock.patch.dict(PROBE["_start_replay"].__globals__, {"_post": post}),
             self.assertRaisesRegex(
                 qualification.QualificationError,
-                "did not start the reviewed probe: command_rpc_failed",
+                "qualification executor returned a non-JSON error",
             ),
         ):
             PROBE["_start_replay"](
-                "https://qualifier.example", {"schema_version": 1}
+                "https://qualifier.example", {"schema_version": 1}, status
             )
-        self.assertEqual(post.call_count, 2)
+        post.assert_called_once()
 
     def test_probe_reports_only_closed_nonretryable_start_failures(self) -> None:
+        status = {"schema_version": 1, "replay_task_id": "task-1", "attempt": 1}
         cases = [
             (
                 {"error": "executor_failed", "reason": "input_transfer_failed"},
@@ -584,7 +950,7 @@ class HistoricalPrivateImageQualificationTests(unittest.TestCase):
                     self.assertRaisesRegex(qualification.QualificationError, message),
                 ):
                     PROBE["_start_replay"](
-                        "https://qualifier.example", {"schema_version": 1}
+                        "https://qualifier.example", {"schema_version": 1}, status
                     )
                 post.assert_called_once()
 
