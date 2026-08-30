@@ -6,7 +6,6 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "verify-evaluation-app.yml"
 FIXTURE = "leanprover/lean-eval-state-staging"
-COMMIT = "34357f2f94f39e293b1d2b127b7f298654d39cf7"
 
 
 class EvaluationAppWorkflowTests(unittest.TestCase):
@@ -34,9 +33,14 @@ class EvaluationAppWorkflowTests(unittest.TestCase):
         self.assertIn("owner: leanprover", self.text)
         self.assertIn("repositories: lean-eval-state-staging", self.text)
 
-    def test_checks_the_fixed_private_fixture_and_commit(self) -> None:
+    def test_checks_the_fixed_private_fixture_and_exact_inputs(self) -> None:
         self.assertGreaterEqual(self.text.count(FIXTURE), 3)
-        self.assertEqual(self.text.count(COMMIT), 2)
+        self.assertIn("expected_branch:", self.text)
+        self.assertIn("expected_commit:", self.text)
+        self.assertIn("^[0-9a-f]{40}$", self.text)
+        self.assertIn('branch["ref"] == f"refs/heads/', self.text)
+        self.assertIn('branch["object"] == {', self.text)
+        self.assertIn('commit["sha"] == os.environ["EXPECTED_COMMIT"]', self.text)
         self.assertIn('metadata["private"] is True', self.text)
         self.assertIn("curl --fail-with-body", self.text)
 
