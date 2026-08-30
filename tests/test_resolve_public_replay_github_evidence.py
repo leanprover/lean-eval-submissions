@@ -1508,14 +1508,14 @@ GPT-5.5 Codex
         registry_raw = registry_path.read_bytes()
         registry = json.loads(registry_raw)
         reviewed = validate_workflow_registry(registry)
-        self.assertEqual(len(reviewed), 123)
+        self.assertEqual(len(reviewed), 133)
         self.assertEqual(
             len({entry["definition_sha256"] for entry in reviewed.values()}),
-            13,
+            14,
         )
         self.assertEqual(
             hashlib.sha256(registry_raw).hexdigest(),
-            "f9e3f39683cce17cbb8389e6ab78a5fa7443ed36ee11f1ab0cb96ba7be9da747",
+            "24a4ed157b5b62fc52a58c530cc7a72073108135d2554684a32664174524637a",
         )
         schema = json.loads(
             (
