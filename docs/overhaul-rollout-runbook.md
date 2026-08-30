@@ -396,7 +396,13 @@ record an explicit terminal outcome. Private legacy-envelope migration requires
 its exact immutable execution packet and credential-custodian operator handoff.
 Standing authorization covers the bounded infrastructure, credential, and
 canonical writes; rewrap the per-submission key without changing archive
-ciphertext or stable IDs, then remove temporary authority and plaintext.
+ciphertext or stable IDs. After the retained baseline, remove the installed
+legacy identity, session credentials, and scratch, and disable the replay
+controllers; retain the migration role, protected environment, one-shot
+workflow, and offline master for the separately bound final-cutoff delta. Only
+after that delta's audit tree is promoted and read back may the migration lane
+be removed and the offline master destroyed. Retain v2 replay Decrypt support
+and the versioned replay records.
 
 ## 9. Rollback
 
