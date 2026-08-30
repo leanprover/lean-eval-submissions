@@ -133,6 +133,11 @@ The authoritative text is on the [submission entry page][entry] and in the
 4. A rollback never rewrites State, Results, releases, audit objects, AWS
    resources, credentials, or Git history. Forward-deploy or rerun recovery to
    restore one coherent component set.
+5. After recovery or rollback, read back `/healthz` and `/readyz`: intake,
+   broker, and general replay must be false, the recovered Worker version must
+   match the recorded deployment, and State validation must still pass. If
+   publication was paused, also verify that the controller cannot enter its
+   production environment before investigation continues.
 
 ## 7. Deferred functions and launch limitations
 
@@ -156,27 +161,27 @@ The authoritative text is on the [submission entry page][entry] and in the
 
 ## 8. Repository announcement
 
-Publish this only after the first four production actions have succeeded. The overlap
-starts at the recorded enablement timestamp and its target end is 28 days
-later. Repository publication is covered by standing authorization; a Zulip
-post still requires separate exact approval.
+Publish only after the first four production actions have succeeded. The
+overlap starts at the recorded enablement timestamp. Before publishing,
+calculate and record the explicit UTC calendar closure date 28 days later; do
+not publish a relative-date placeholder. Repository publication is covered by
+standing authorization; a Zulip post still requires separate exact approval.
 
-> Lean Eval's lifecycle-aware submission server is now available at
-> **https://lean-lang.org/eval/submit/**. GitHub-issue intake remains available
-> during an initially planned four-week transition, with a target closure date
-> of **<28 days after the section 9 launch timestamp>**.
->
-> Server-path submissions use authenticated, exact-ref intake. Evaluation-group
-> source starts private. When the publication choice is `scheduled`, accepted
-> source is released under the Apache License 2.0 exactly two UTC calendar
-> months after acceptance; choosing `withheld` opts out. Lifecycle amendments,
-> model aliases, publication choice, and status are available through the new
-> path. Issue submissions keep their existing policy during the transition.
->
-> Please report server problems at
-> **https://github.com/leanprover/lean-eval-submissions/issues/1310**. Issue
-> intake will close only after the incident, adoption, four-week overlap, and
-> two-week notice gates pass; any revised date will be announced explicitly.
+The announcement must include all of the following reviewed facts:
+
+- the lifecycle-aware submission-server URL,
+  **https://lean-lang.org/eval/submit/**;
+- the explicit target issue-intake closure date and the condition that issue
+  intake closes only after the incident, adoption, overlap, and two-week notice
+  gates pass;
+- authenticated exact-ref intake, initially private evaluation-group source,
+  public evaluation metadata and results, and best-effort confidentiality;
+- the `scheduled` Apache-2.0 release policy, exactly two UTC calendar months
+  after acceptance, and the `withheld` opt-out;
+- lifecycle amendments, model aliases, publication choice, and status; and
+- a request to report server problems by
+  [opening a submissions issue](https://github.com/leanprover/lean-eval-submissions/issues/new),
+  with any revised overlap date announced explicitly.
 
 ## 9. Finalization record
 
