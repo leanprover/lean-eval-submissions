@@ -41,6 +41,7 @@ HEALTH_RETRY_SECONDS = 5
 HEALTH_TIMEOUT_SECONDS = 10
 POST_TIMEOUT_SECONDS = 60
 RESERVATION_TIMEOUT_SECONDS = 180
+REPLAY_START_TIMEOUT_SECONDS = 180
 TRANSIENT_HEALTH_HTTP_CODES = {404, 429}
 QUALIFICATION_USER_AGENT = "lean-eval-historical-private-qualification/1"
 CONTEXT_FIELDS = {
@@ -279,7 +280,12 @@ def _run(
         "replay_task_id": context["replay_task_id"],
         "status": "reserved",
     })
-    code, started = _post(f"{worker_url}/api/v1/replay", request)
+    code, started = _post(
+        f"{worker_url}/api/v1/replay",
+        request,
+        timeout_seconds=REPLAY_START_TIMEOUT_SECONDS,
+        operation="replay start request",
+    )
     if code != 202 or started.get("status") != "running":
         raise QualificationError("qualification executor did not start the reviewed probe")
     deadline = time.monotonic() + 20_400
