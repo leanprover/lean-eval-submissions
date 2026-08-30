@@ -17,11 +17,11 @@ Protected `main` commits at the packet baseline:
 
 | Repository | Commit |
 | --- | --- |
-| `leanprover/lean-eval` | `b2ab737034602afcb29958edc280e464487e27ea` |
-| `leanprover/lean-eval-submissions` | `73b12756c77d4cffe81ddabed6d82aff8bb271c6` |
+| `leanprover/lean-eval` | `c64d992696ceb3bc04a4677de72ddaa4308d33eb` |
+| `leanprover/lean-eval-submissions` | `0cdcf3f9f66db6d1555c90e976c886c936b8784c` |
 | `leanprover/lean-eval-leaderboard` | `bf534c149e204a286a5cd9bbaff449449567834b` |
 | `leanprover/lean-eval-state` | `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` |
-| `leanprover/lean-eval-state-staging` | `3d51ef89062ea2b1a27b57cf0557e18bcb00ab6b` |
+| `leanprover/lean-eval-state-staging` | `747d3c9523ea8b7459ac18e3e17c09219c5f44a4` |
 | `leanprover/lean-eval-releases` | `4f3d4cdd11d41e93294ba7821899923375ba360f` |
 | `leanprover/lean-eval-generator` | `010b01634cccda2db538cf9b09e6f26ddc453743` |
 | `leanprover/lean-eval-audit` | `eadf24b2b4a99c56ef59a43811eab9d54ae013ac` |
@@ -30,7 +30,7 @@ The protected launch workflow must replace the submissions binding above with
 the exact merged capability configuration it deploys, and final staging must
 have exercised that same commit and its immutable
 `lean-eval-dispatch/<commit>` tag. The current production Worker baseline is
-`c1013bee0b5b2f57956501e0258d27dc30413d2b`, with every launch capability
+`0cdcf3f9f66db6d1555c90e976c886c936b8784c`, with every launch capability
 disabled. Record the exact final staging and launch versions in section 9.
 
 ## 2. Capability decision
