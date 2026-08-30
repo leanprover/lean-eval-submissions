@@ -16,13 +16,23 @@ history, or replace the cross-repository execution runbook.
 ## Current safe baseline
 
 - Protected `main` requires the `verify` aggregate check.
-- Staging and production Workers report one coherent deployed commit.
-- Production intake is configured and effectively disabled.
+- Staging and production Workers report one coherent live deployment at
+  `30bc92b3d46bd2a3ba1788433264fdd70ae3c74e`.
+- The live deployment keeps production intake and every public production
+  lifecycle API configured and effectively disabled, with empty maintainer
+  allowlists.
+- This launch candidate keeps production intake disabled while tracking the
+  reviewed result-owner, amendment-owner, amendment-maintainer,
+  model-identity-owner, model-identity-maintainer, and release-opt-out gates as
+  enabled for exactly `kim-em` / GitHub user `477956` where maintainer
+  authority is required. It has not been deployed and readiness remains
+  `NO-GO`.
+- Tracked staging intake and every staging lifecycle API remain all-false with
+  empty maintainer allowlists.
 - General staging replay, historical-public replay, and production replay are
   disabled. The bounded staging acceptance endpoint remains enabled.
-- Public result-owner, maintainer, model-alias, and model-rename APIs are
-  disabled. Maintainer allowlists are empty.
-- Model consolidation is not a launch feature.
+- Model consolidation remains disabled in both tracked environments and is not
+  a launch feature.
 - Automatic release publication is disabled in
   `leanprover/lean-eval-releases`.
 - Production archive Wrap is connected and qualified; the production replay
@@ -49,7 +59,9 @@ not this summary.
 - [x] Accepted, rejected, archive-failed, and evaluation-failed lifecycle
       transitions.
 - [x] Metadata backfill, repair/retraction request, maintainer-decision, and
-      model-alias/rename implementation behind disabled gates.
+      model-alias/rename implementation behind independent gates. This launch
+      candidate enables the reviewed production lifecycle surface only;
+      staging and the live production lifecycle surface remain all-false.
 - [x] Official Lean build and nanoda replay formats with versioned checker and
       measurement fields.
 - [x] Protected finite-lease intake enablement and disable-only recovery.

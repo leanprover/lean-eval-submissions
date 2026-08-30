@@ -142,7 +142,8 @@ secrets are unavailable to pull-request jobs.
 
 [`deploy-worker.yml`](.github/workflows/deploy-worker.yml) is the normal
 deployment path. It validates code, deploys staging, runs the promotion canary,
-then deploys production with tracked capabilities disabled. The protected
+then deploys production with tracked intake and replay disabled and lifecycle
+gates in their reviewed tracked state. The protected
 `submission-dispatch-promotion` environment (`20259251430`) requires reviewer
 `kim-em` and contains only `DISPATCH_PROMOTION_APPROVAL_GUARD`. Tag ruleset
 `21094118` rejects update or deletion of

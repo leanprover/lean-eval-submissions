@@ -19,16 +19,30 @@ client secrets in documentation, issues, pull requests, logs, or artifacts.
 
 ## 1. Current posture
 
-The tracked safe default is:
+Keep the not-yet-deployed candidate distinct from live service state.
+
+The launch candidate tracks:
 
 - production intake disabled;
 - staging and production general replay disabled;
 - historical-public replay disabled;
 - production acceptance endpoints disabled;
-- public result-owner and maintainer APIs disabled;
-- public model-alias and model-rename APIs disabled;
-- maintainer lists empty; and
+- production result-owner, amendment-owner, amendment-maintainer,
+  model-identity-owner, model-identity-maintainer, and release-opt-out APIs
+  enabled;
+- exactly `kim-em` / GitHub user `477956` in both production maintainer lists;
+- staging intake and every staging lifecycle API all-false with empty
+  maintainer lists;
+- model consolidation disabled in both environments; and
 - release publication disabled in `leanprover/lean-eval-releases`.
+
+It has not been deployed and the launch-readiness packet remains `NO-GO`. The
+live staging and production Workers are still deployed at
+`30bc92b3d46bd2a3ba1788433264fdd70ae3c74e`: production intake and every public
+production lifecycle API are effectively disabled, both live production
+maintainer lists are empty, and live staging intake and lifecycle APIs remain
+all-false. The bounded staging acceptance and promotion-canary exceptions keep
+their separately documented staging-only posture.
 
 Verify live state before relying on it:
 
@@ -41,11 +55,14 @@ python3 scripts/monitor_cloudflare_health.py \
 python3 -m json.tool "$tmp_dir/health.json"
 ```
 
-Remove the temporary directory after inspection. A ready report must bind all
-four public Worker health endpoints to one full deployed commit and the tracked
-disabled-state configuration. Also inspect the latest protected deployment and
-the canonical readiness issue; endpoint health alone does not prove that a
-rollout is not stuck.
+Remove the temporary directory after inspection. The monitor compares live
+health with the checked-out tracked configuration. It is therefore expected to
+report a mismatch on this not-yet-deployed launch candidate; use the exact
+deployed commit when verifying the current all-false live baseline. After
+deployment, a ready report must bind all four public Worker health endpoints to
+one full deployed commit and the tracked candidate configuration. Also inspect
+the latest protected deployment and the canonical readiness issue; endpoint
+health alone does not prove that a rollout is not stuck.
 
 ## 2. Ordinary protected deployment
 
@@ -304,9 +321,10 @@ maintainer identity per maintainer family when enabled and none when disabled,
 and always rejects model-consolidation enablement. The normal protected
 deployment controller reads that state, binds it to the immutable dispatch tag,
 enters `cloudflare-production`, and verifies every effective public health
-field. After the production launch packet is complete, enable these APIs with a
-single-purpose configuration change; do not combine it with intake enablement,
-release publication, refactoring, or unrelated documentation.
+field. This branch is the single-purpose lifecycle configuration candidate.
+Do not deploy it until the production launch packet is complete and still
+reads `GO`; do not combine its deployment with intake enablement, release
+publication, refactoring, or unrelated implementation changes.
 
 The same disable-only recovery used for intake also returns every lifecycle
 gate to false. It validates the exact recovered Worker version against explicit

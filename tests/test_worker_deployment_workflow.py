@@ -989,17 +989,18 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         }
         for environment, (configuration, base_url) in expected.items():
             with self.subTest(environment=environment):
+                expected_lifecycle = "true" if environment == "production" else "false"
                 self.assertIs(configuration["workers_dev"], True)
                 self.assertIs(configuration["preview_urls"], False)
                 self.assertNotIn("routes", configuration)
                 self.assertEqual(configuration["vars"]["INTAKE_ENABLED"], "false")
                 self.assertEqual(
                     configuration["vars"]["LEGACY_RESULT_OWNER_API_ENABLED"],
-                    "false",
+                    expected_lifecycle,
                 )
                 self.assertEqual(
                     configuration["vars"]["RESULT_AMENDMENT_OWNER_API_ENABLED"],
-                    "false",
+                    expected_lifecycle,
                 )
                 self.assertEqual(
                     configuration["vars"]["MODEL_IDENTITY_CONSOLIDATION_API_ENABLED"],
@@ -1007,7 +1008,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     configuration["vars"]["RELEASE_OPT_OUT_API_ENABLED"],
-                    "false",
+                    expected_lifecycle,
                 )
                 expected_contract = (
                     "8ae11456f0a439f91ec5822ec36adb93b76b0d96"

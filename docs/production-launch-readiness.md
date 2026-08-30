@@ -17,11 +17,11 @@ Protected `main` commits at the packet baseline:
 
 | Repository | Commit |
 | --- | --- |
-| `leanprover/lean-eval` | `b2ab737034602afcb29958edc280e464487e27ea` |
-| `leanprover/lean-eval-submissions` | `73b12756c77d4cffe81ddabed6d82aff8bb271c6` |
+| `leanprover/lean-eval` | `d448950a4d1fd33255e1c1be922a48b6a1b736c8` |
+| `leanprover/lean-eval-submissions` | `30bc92b3d46bd2a3ba1788433264fdd70ae3c74e` |
 | `leanprover/lean-eval-leaderboard` | `bf534c149e204a286a5cd9bbaff449449567834b` |
-| `leanprover/lean-eval-state` | `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` |
-| `leanprover/lean-eval-state-staging` | `3d51ef89062ea2b1a27b57cf0557e18bcb00ab6b` |
+| `leanprover/lean-eval-state` | `07e68200ee20efdd363cea16c1d08a13971acc2e` |
+| `leanprover/lean-eval-state-staging` | `869e098021073462fc36d7de3f7aa3b58df0b9d4` |
 | `leanprover/lean-eval-releases` | `4f3d4cdd11d41e93294ba7821899923375ba360f` |
 | `leanprover/lean-eval-generator` | `010b01634cccda2db538cf9b09e6f26ddc453743` |
 | `leanprover/lean-eval-audit` | `eadf24b2b4a99c56ef59a43811eab9d54ae013ac` |
@@ -30,7 +30,7 @@ The protected launch workflow must replace the submissions binding above with
 the exact merged capability configuration it deploys, and final staging must
 have exercised that same commit and its immutable
 `lean-eval-dispatch/<commit>` tag. The current production Worker baseline is
-`c1013bee0b5b2f57956501e0258d27dc30413d2b`, with every launch capability
+`30bc92b3d46bd2a3ba1788433264fdd70ae3c74e`, with every launch capability
 disabled. Record the exact final staging and launch versions in section 9.
 
 ## 2. Capability decision
@@ -42,9 +42,9 @@ reads `GO`.
 | Capability | Current production state | Launch state |
 | --- | --- | --- |
 | Automatic release controller | `PUBLICATION_ENABLED` absent | `true`, initially with an empty release queue |
-| Result-owner APIs | disabled | metadata backfill and repair/retraction enabled |
+| Result-owner APIs | disabled | legacy-result claim prerequisite, metadata backfill, and repair/retraction enabled |
 | Maintainer APIs | disabled, empty lists | decisions enabled for exactly `kim-em` / GitHub user `477956` |
-| Model identity APIs | alias/rename disabled; consolidation disabled | alias/rename enabled; consolidation remains disabled |
+| Model identity APIs | identity-creation prerequisite and alias/rename disabled; consolidation disabled | identity creation and alias/rename enabled; consolidation remains disabled |
 | Release opt-out | disabled | enabled |
 | Server intake | disabled, durable lease absent | enabled through the finite-lease controller, then durable |
 | Production canary | none | one packet-bound, withheld-source canary after intake; verify archive, evaluation, State, Result, leaderboard, and scheduling |
@@ -54,15 +54,22 @@ The decisions are not bundled: enable the release controller, lifecycle APIs,
 intake, run the production canary, and publish the repository announcement in
 that order, verifying each readback before proceeding.
 
+The enabled surface includes two prerequisite routes rather than hiding them
+behind feature labels: `POST /api/v1/results/claims` establishes immutable
+owner authority before historical metadata backfill, and `POST
+/api/v1/model-identities` creates the owner-bound identity required before an
+alias or rename. They share the reviewed owner gates and do not enable intake,
+model consolidation, replay, or publication.
+
 ## 3. Gates from completion-plan sections 7.2–7.4
 
 | Gate | Current result |
 | --- | --- |
-| Disabled baseline | Production intake, general replay, historical-public replay, every public lifecycle family, model consolidation, and the promotion canary are effectively disabled. Production State validates at `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` with 469 immutable events and an empty release queue. The public leaderboard retains stable problem pages and visible statements. |
+| Disabled baseline | Production intake, general replay, historical-public replay, every public lifecycle family, model consolidation, and the promotion canary are effectively disabled. Protected production State validates at `07e68200ee20efdd363cea16c1d08a13971acc2e`; the deployed lifecycle contract pin remains its validated ancestor `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a`. The release queue is empty. The public leaderboard retains stable problem pages and visible statements. |
 | Archive boundary | Schema-version-3 archive-before-evaluation is deployed. Production archive authority is connected to the Encrypt-only Wrap role and has a qualified decrypt denial. The evaluation lane has no Wrap or unwrap authority. |
 | Staging release boundary | Qualified: exact one-submission scope, consume-before-unwrap, identical reuse refusal, authority removal before reconstruction, source allowlisting, no plaintext artifact, no State/Git mutation, and cleanup. Publication and production authority remained absent. |
 | Production release preflight | Controller State-write and audit-read credential preflights pass at release commit `4f3d4cdd11d41e93294ba7821899923375ba360f`, with publication absent and no due work. **PENDING:** repair the exact ID-bearing `release-production` OIDC trust, read it back, and pass the publication-disabled trust-only preflight. Do not decrypt or publish a production archive. |
-| Entry and submitter UI | `https://lean-lang.org/eval/submit/` and the production Worker application are live in disabled posture. The entry page states the policy and links to the Worker origin; the Worker supplies OAuth feedback, preserved form values, progress spinners, status, and visible opt-out UI when enabled. |
+| Entry and submitter UI | The static `https://lean-lang.org/eval/submit/` entry page and the stable production application at `https://lean-eval-submission-server.lean-eval.workers.dev/` are live in disabled posture. The entry page states the policy and links to the Worker origin; the Worker supplies OAuth feedback, preserved form values, progress spinners, status, and visible opt-out UI when enabled. No LeanEval hostname or DNS change is required. |
 | Exact-version staging | **PENDING:** record the successful browser and source-bound submissions, denial cases, archive/Result/State/scheduling checks, publication-disabled reconstruction, redaction checks, all-false rollback, and validated final staging State in section 9. |
 
 Any non-coherent Worker deployment, nonempty due-release queue, failed final
@@ -99,8 +106,9 @@ launch gate.
 
 ## 5. Submitter-facing contract
 
-The authoritative text is on the [submission entry page][entry] and in the
-[Worker form implementation][worker-form]. It tells submitters that:
+The authoritative text is on the [submission entry page][entry], the stable
+[production application][application], and in the [Worker form
+implementation][worker-form]. It tells submitters that:
 
 - they must have authority to provide the exact source and must not submit
   secrets or material they cannot disclose;
@@ -114,6 +122,7 @@ The authoritative text is on the [submission entry page][entry] and in the
   source publication while leaving the public result.
 
 [entry]: https://lean-lang.org/eval/submit/
+[application]: https://lean-eval-submission-server.lean-eval.workers.dev/
 [worker-form]: https://github.com/leanprover/lean-eval-submissions/blob/main/server/src/browser-ui.ts
 
 ## 6. Rollback and emergency pause
@@ -133,6 +142,12 @@ The authoritative text is on the [submission entry page][entry] and in the
 4. A rollback never rewrites State, Results, releases, audit objects, AWS
    resources, credentials, or Git history. Forward-deploy or rerun recovery to
    restore one coherent component set.
+5. After recovery or rollback, read back `/healthz` and make the authenticated
+   `POST /readyz` State-writer proof: intake, broker, and general replay must be
+   false, the recovered Worker version must match the recorded deployment, and
+   State validation must still pass. If publication was paused, also read back
+   its independent gate and verify that production publication cannot proceed
+   before investigation continues.
 
 ## 7. Deferred functions and launch limitations
 
@@ -156,27 +171,29 @@ The authoritative text is on the [submission entry page][entry] and in the
 
 ## 8. Repository announcement
 
-Publish this only after the first four production actions have succeeded. The overlap
-starts at the recorded enablement timestamp and its target end is 28 days
-later. Repository publication is covered by standing authorization; a Zulip
-post still requires separate exact approval.
+Publish only after the first four production actions have succeeded. The
+overlap starts at the recorded enablement timestamp. Before publishing,
+calculate and record the explicit UTC calendar closure date 28 days later; do
+not publish a relative-date placeholder. Repository publication is covered by
+standing authorization; a Zulip post still requires separate exact approval.
 
-> Lean Eval's lifecycle-aware submission server is now available at
-> **https://lean-lang.org/eval/submit/**. GitHub-issue intake remains available
-> during an initially planned four-week transition, with a target closure date
-> of **<28 days after the section 9 launch timestamp>**.
->
-> Server-path submissions use authenticated, exact-ref intake. Evaluation-group
-> source starts private. When the publication choice is `scheduled`, accepted
-> source is released under the Apache License 2.0 exactly two UTC calendar
-> months after acceptance; choosing `withheld` opts out. Lifecycle amendments,
-> model aliases, publication choice, and status are available through the new
-> path. Issue submissions keep their existing policy during the transition.
->
-> Please report server problems at
-> **https://github.com/leanprover/lean-eval-submissions/issues/1310**. Issue
-> intake will close only after the incident, adoption, four-week overlap, and
-> two-week notice gates pass; any revised date will be announced explicitly.
+The announcement must include all of the following reviewed facts:
+
+- the static leaderboard entry URL,
+  **https://lean-lang.org/eval/submit/**, and the stable lifecycle-aware
+  submission application URL,
+  **https://lean-eval-submission-server.lean-eval.workers.dev/**;
+- the explicit target issue-intake closure date and the condition that issue
+  intake closes only after the incident, adoption, overlap, and two-week notice
+  gates pass;
+- authenticated exact-ref intake, initially private evaluation-group source,
+  public evaluation metadata and results, and best-effort confidentiality;
+- the `scheduled` Apache-2.0 release policy, exactly two UTC calendar months
+  after acceptance, and the `withheld` opt-out;
+- lifecycle amendments, model aliases, publication choice, and status; and
+- a request to report server problems by
+  [opening a submissions issue](https://github.com/leanprover/lean-eval-submissions/issues/new),
+  with any revised overlap date announced explicitly.
 
 ## 9. Finalization record
 
@@ -205,7 +222,13 @@ production launch:
   lifecycle deployment commit/run: <40-character SHA and Actions URL>
   intake deployment commit/run: <40-character SHA and Actions URL>
   production Worker version IDs: <intake, broker, replay>
-  production canary source/problem: <exact nonsecret binding>
+  production canary source:
+    repository: leanprover/lean-eval-state-staging
+    ref: production-canary-source-fixture-v1
+    commit: a2422110ed395ca737c6889a0601938f77d2925f
+  production canary problem: formalization-evaluation/two_plus_two@1
+  production canary model: LeanEval production launch canary a2422110ed395ca737c6889a0601938f77d2925f
+  production canary publication sequence: scheduled, then visible pre-release opt-out
   production canary submission/result: <UUIDv7 and terminal result URL>
   production State commit after validation: <40-character SHA>
   production health/readiness: <URL>

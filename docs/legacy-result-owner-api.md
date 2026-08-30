@@ -21,19 +21,19 @@ before a write.
 
 ## Safe configuration
 
-Both environments track these non-secret variables:
+The launch candidate tracks these non-secret variables:
 
-```text
-LEGACY_RESULT_OWNER_API_ENABLED=false
-RESULT_OWNER_STATE_CONTRACT_COMMIT=<f00055ed… in staging; 15a96673… in production>
-```
+| Environment | Owner API | State contract |
+| --- | --- | --- |
+| Staging | `LEGACY_RESULT_OWNER_API_ENABLED=false` | `8ae11456f0a439f91ec5822ec36adb93b76b0d96` |
+| Production | `LEGACY_RESULT_OWNER_API_ENABLED=true` | `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` |
 
 The route exists only when the enable flag is exactly `true` and the contract
-commit is exact. The reviewed merge keeps both staging and production flags
-false. Enabling this owner-only API does not enable submission intake:
-production `INTAKE_ENABLED` remains independently false. OAuth start/callback
-may operate while intake is disabled only when the owner API gate is enabled;
-submission routes remain disabled.
+commit is exact. The launch candidate enables the production owner API while
+keeping staging dark. This does not enable submission intake: production
+`INTAKE_ENABLED` remains independently false. OAuth start/callback may operate
+while intake is disabled only when the owner API gate is enabled; submission
+routes remain disabled.
 
 The protected bindings above contain the reviewed owner/amendment contract,
 monotone release-status version 2, and permanent effective-result identity
@@ -193,8 +193,9 @@ inconsistency. The live result-completion callback always enters this
 repository replay check even when its submission view already names a result;
 it never returns `already_recorded` solely from the view.
 
-Immediately before changing either tracked enable flag to `true`, repeat these
-read-only gates against the exact intended deployment inputs:
+Immediately before deploying the tracked production enablement, or before any
+future staging enablement, repeat these read-only gates against the exact
+intended deployment inputs:
 
 1. Validate production State and prove its protected `main` still descends from
    the pinned contract. Before the first compatible deployment, require zero
@@ -217,5 +218,6 @@ After the first result-owner event or guard exists, never roll back the Worker
 to a commit that lacks these event decoders and identity-path reservations.
 Disable the route with a forward deployment of this compatible implementation,
 then repair or forward-deploy. State events and guards are append-only and are
-not deleted during rollback. The tracked disabled configuration in this change
-does not itself authorize either staging or production enablement.
+not deleted during rollback. The tracked launch configuration does not claim
+that production is already deployed or that its readiness packet is `GO`;
+staging remains disabled.
