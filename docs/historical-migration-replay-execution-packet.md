@@ -76,8 +76,11 @@ workflow artifact, worktree file, mutable tag, or branch head.
       artifacts, logs, or publication.
 - [ ] Fail-closed recovery and rollback: leave audit `main` unchanged if
       migration validation fails; keep replay variables absent; remove the
-      legacy identity, AWS session, migration role binding, scratch output and
-      review branch when the bounded operation fails or is abandoned.
+      installed legacy identity, AWS session, scratch output, and review branch
+      when the bounded operation fails. Retain the reviewed migration role,
+      protected environment, and workflow for the separately bound final-cutoff
+      delta unless the entire migration lane is explicitly abandoned and
+      retired.
 - [ ] Explicit exclusions: no legacy-key destruction, final-cutoff delta,
       intake or publication change, experimental checker, FC/disproof work,
       external PR/comment, or item outside the hashes in this packet.
@@ -144,14 +147,26 @@ reason to install the identity before the pre-mutation packet is complete.
    controllers, drain both queues with bounded retries, and record a terminal
    replay or reviewed-unavailable disposition for every retained-baseline
    Result.
-6. Remove the migration identity, migration-only role and environment binding,
-   one-shot migration workflow, temporary private image-build workflow and
-   controller enable variables. Retain v2 replay Decrypt support and the
-   versioned replay/checker records.
-
-After the announced issue-intake cutoff, generate the append-only delta and
-prepare a new exact packet covering only those added Results. Never extend this
-retained-baseline packet by implication.
+6. After the retained-baseline queues reach their reviewed terminal states,
+   remove only the installed legacy identity, AWS session, and migration
+   scratch, and disable the historical replay controllers. Retain the dedicated
+   migration Encrypt role and stack output, protected migration environment,
+   one-shot migration workflow, and custodian-held offline master for the
+   separately bound final-cutoff delta.
+7. After the announced issue-intake cutoff, generate the append-only delta and
+   prepare a new exact packet covering only those added Results. Never extend
+   this retained-baseline packet by implication. Use that packet to migrate any
+   selected delta archives, promote the exact isolated audit tree, and complete
+   its post-migration readback.
+8. Only after final-delta promotion and readback, remove the installed identity
+   and session material, one-shot migration workflow, protected migration
+   environment, dedicated migration Encrypt role and stack output, and
+   temporary private image-build workflow. The custodian must then destroy the
+   offline master and verify that no installed or working copy remains. Retain
+   v2 replay Decrypt support, the schema-3 file-key replay implementation, and
+   the versioned replay/checker records. Enable the historical controllers only
+   for the separately reviewed final-delta queues and disable them again after
+   every Result has a terminal disposition.
 
 At every step, an input mismatch leaves the corresponding capability disabled.
 Creating and filling this packet does not itself write State, migrate an

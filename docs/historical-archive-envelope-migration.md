@@ -55,18 +55,19 @@ The production operation is packaged in
 it neither installs the legacy identity nor dispatches this workflow.
 
 Before baseline apply, prepare the paired retirement changes, but retain the
-one-shot workflow and migration Encrypt role until the separately bound final
-cutoff delta is promoted and read back. After each bounded migration run,
-remove the installed `LEGACY_ARCHIVE_IDENTITY` environment secret and all
-session credentials. The custodian retains the only offline master strictly
-for the final cutoff delta and reinstalls it only for that bounded run.
+one-shot workflow, protected `archive-migration-production` environment, and
+migration Encrypt role until the separately bound final-cutoff delta is
+promoted and read back. After each bounded migration run, remove the installed
+`LEGACY_ARCHIVE_IDENTITY` environment secret and all session credentials. The
+custodian retains the only offline master strictly for the final-cutoff delta
+and reinstalls it only for that bounded run.
 
 After the final delta is promoted and read back, remove the installed identity,
-one-shot workflow, migration-only environment variable and credentials, and
-the production migration Encrypt role and stack output. Retain v2 Decrypt in
-the replay unwrap role and retain the schema-3 file-key replay implementation.
-The live archiver App credentials are shared with ordinary archive workflows
-and are not migration-only retirement targets.
+one-shot workflow, protected migration environment and its migration-only
+variable and credentials, and the production migration Encrypt role and stack
+output. Retain v2 Decrypt in the replay unwrap role and retain the schema-3
+file-key replay implementation. The live archiver App credentials are shared
+with ordinary archive workflows and are not migration-only retirement targets.
 
 The legacy RSA stanza remains in each unchanged age header. Only after the
 final cutoff delta is complete must the custodian destroy the offline master

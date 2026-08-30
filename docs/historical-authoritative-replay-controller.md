@@ -26,13 +26,13 @@ handoff:
   exact reviewed owner, Gist ID, commit, tree, and remote before emitting the
   same deterministic archive and `historical_public_runner_v1` handoff.
 
-The recovery fixtures include the required `system.initialized` root and full
+Recovery fixtures must include the `system.initialized` root and complete
 authority, qualification, enqueue, retry/reconfiguration, unavailable, and
-ordinary modern-replay histories. They were validated against the production
-State contract at `b0a30e3a64aa5c05660040405b32135dea4b7f1d`; positive reducer
-histories pass both State schema and semantic validation. The workflow still
-validates live protected State before invoking the narrower projection, so the
-fixtures are evidence rather than a substitute for that runtime precondition.
+ordinary modern-replay histories. Every positive reducer history must pass both
+schema and semantic validation under the same State contract used by the
+protected workflow. The workflow must also validate live protected State before
+invoking the narrower projection; fixtures never substitute for that runtime
+precondition.
 
 The executor request closes over the runner nonce, replay task, attempt,
 handoff and archive digests, reviewed execution and measurement digests, and
