@@ -36,9 +36,10 @@ from historical_private_image_qualification import (  # noqa: E402
 
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 OCI_DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
-HEALTH_ATTEMPTS = 12
+HEALTH_ATTEMPTS = 25
 HEALTH_RETRY_SECONDS = 5
 HEALTH_TIMEOUT_SECONDS = 10
+TRANSIENT_HEALTH_HTTP_CODES = {404, 429}
 CONTEXT_FIELDS = {
     "schema_version",
     "worker_name",
@@ -161,6 +162,7 @@ def _post(url: str, value: dict[str, Any]) -> tuple[int, dict[str, Any]]:
 
 def _health(worker_url: str, expected_commit: str) -> None:
     body: dict[str, Any] | None = None
+    last_failure = "none"
     for attempt in range(1, HEALTH_ATTEMPTS + 1):
         try:
             incoming = urllib.request.Request(
@@ -171,20 +173,47 @@ def _health(worker_url: str, expected_commit: str) -> None:
             ) as response:
                 body = _object(json.load(response), "executor health")
             break
-        except (OSError, urllib.error.HTTPError, json.JSONDecodeError) as error:
-            if attempt == HEALTH_ATTEMPTS:
+        except urllib.error.HTTPError as error:
+            if (
+                error.code not in TRANSIENT_HEALTH_HTTP_CODES
+                and not 500 <= error.code <= 599
+            ):
                 raise QualificationError(
-                    "qualification executor health check failed"
+                    f"qualification executor health returned permanent HTTP {error.code}"
                 ) from error
-            time.sleep(HEALTH_RETRY_SECONDS)
+            last_failure = f"http_{error.code}"
+        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+            raise QualificationError(
+                "qualification executor health returned non-JSON content"
+            ) from error
+        except OSError as error:
+            last_failure = (
+                "transport_timeout" if isinstance(error, TimeoutError)
+                or isinstance(getattr(error, "reason", None), TimeoutError)
+                else "transport_error"
+            )
+        if attempt == HEALTH_ATTEMPTS:
+            raise QualificationError(
+                "qualification executor health did not converge "
+                f"after {HEALTH_ATTEMPTS} attempts; last failure: {last_failure}"
+            )
+        time.sleep(HEALTH_RETRY_SECONDS)
     assert body is not None
-    if (
-        body.get("status") != "ok"
-        or body.get("environment") != "private-qualification"
-        or body.get("deployed_commit") != expected_commit
-        or body.get("replay_enabled") is not True
-    ):
-        raise QualificationError("qualification executor health identity is invalid")
+    mismatches = [
+        field
+        for field, expected in (
+            ("status", "ok"),
+            ("environment", "private-qualification"),
+            ("deployed_commit", expected_commit),
+            ("replay_enabled", True),
+        )
+        if body.get(field) != expected
+    ]
+    if mismatches:
+        raise QualificationError(
+            "qualification executor health identity mismatch: "
+            + ", ".join(mismatches)
+        )
 
 
 def _cleanup(worker_url: str, status_request: dict[str, Any]) -> None:
