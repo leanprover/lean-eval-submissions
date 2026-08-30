@@ -118,6 +118,31 @@ class StagingPromotionCanaryTests(unittest.TestCase):
                 )
                 self.assertNotIn(detail, str(failure))
 
+    def test_only_bounded_gateway_unavailability_is_transport_retryable(self) -> None:
+        for status in (502, 503, 504):
+            with self.subTest(status=status):
+                failure = CANARY.http_failure(
+                    "/internal/v1/promotion-canary",
+                    status,
+                    b'{"detail":"must not surface"}',
+                )
+                self.assertIsInstance(failure, CANARY.CanaryConnectivityFailure)
+                self.assertEqual(
+                    str(failure),
+                    "/internal/v1/promotion-canary returned "
+                    f"HTTP {status} (http_{status})",
+                )
+                self.assertNotIn("must not surface", str(failure))
+
+        for status in (500, 501, 505):
+            with self.subTest(status=status):
+                failure = CANARY.http_failure(
+                    "/internal/v1/promotion-canary",
+                    status,
+                    b'{"detail":"must not surface"}',
+                )
+                self.assertIs(type(failure), CANARY.CanaryFailure)
+
     def test_main_retries_a_bounded_canary_transport_timeout(self) -> None:
         commit = "c" * 40
         args = types.SimpleNamespace(

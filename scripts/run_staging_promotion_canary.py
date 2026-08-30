@@ -86,11 +86,16 @@ def http_failure_reason(status: int, encoded: bytes) -> str:
 
 def http_failure(path: str, status: int, encoded: bytes) -> CanaryFailure:
     reason = http_failure_reason(status, encoded)
-    failure = (
-        CanaryDeploymentBindingMismatch
-        if reason == "deployment_binding_mismatch"
-        else CanaryFailure
-    )
+    if reason == "deployment_binding_mismatch":
+        failure = CanaryDeploymentBindingMismatch
+    elif status in {502, 503, 504}:
+        # A newly deployed Worker or Container can briefly cross the exact
+        # readiness boundary after the deployment job has returned.  Reuse the
+        # existing bounded transport deadline rather than requiring another
+        # deployment for a source-free, idempotent canary request.
+        failure = CanaryConnectivityFailure
+    else:
+        failure = CanaryFailure
     return failure(f"{path} returned HTTP {status} ({reason})")
 
 
