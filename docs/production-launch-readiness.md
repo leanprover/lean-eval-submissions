@@ -17,11 +17,11 @@ Protected `main` commits at the packet baseline:
 
 | Repository | Commit |
 | --- | --- |
-| `leanprover/lean-eval` | `08f95d04ae7cb463f7ad5fb103a5d6937b0ed285` |
-| `leanprover/lean-eval-submissions` | `5612d62f2d97c9b5521d5f761be7c4bb5c78d5d3` |
+| `leanprover/lean-eval` | `d448950a4d1fd33255e1c1be922a48b6a1b736c8` |
+| `leanprover/lean-eval-submissions` | `f2d7f7cbecec89da19c685452ee521b8e708f51e` |
 | `leanprover/lean-eval-leaderboard` | `bf534c149e204a286a5cd9bbaff449449567834b` |
-| `leanprover/lean-eval-state` | `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` |
-| `leanprover/lean-eval-state-staging` | `a60fb091cee21565a6ee084273b3ee4ae410f510` |
+| `leanprover/lean-eval-state` | `07e68200ee20efdd363cea16c1d08a13971acc2e` |
+| `leanprover/lean-eval-state-staging` | `869e098021073462fc36d7de3f7aa3b58df0b9d4` |
 | `leanprover/lean-eval-releases` | `4f3d4cdd11d41e93294ba7821899923375ba360f` |
 | `leanprover/lean-eval-generator` | `010b01634cccda2db538cf9b09e6f26ddc453743` |
 | `leanprover/lean-eval-audit` | `eadf24b2b4a99c56ef59a43811eab9d54ae013ac` |
@@ -30,7 +30,7 @@ The protected launch workflow must replace the submissions binding above with
 the exact merged capability configuration it deploys, and final staging must
 have exercised that same commit and its immutable
 `lean-eval-dispatch/<commit>` tag. The current production Worker baseline is
-`5612d62f2d97c9b5521d5f761be7c4bb5c78d5d3`, with every launch capability
+`f2d7f7cbecec89da19c685452ee521b8e708f51e`, with every launch capability
 disabled. Record the exact final staging and launch versions in section 9.
 
 ## 2. Capability decision
@@ -58,11 +58,11 @@ that order, verifying each readback before proceeding.
 
 | Gate | Current result |
 | --- | --- |
-| Disabled baseline | Production intake, general replay, historical-public replay, every public lifecycle family, model consolidation, and the promotion canary are effectively disabled. Production State validates at `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` with 469 immutable events and an empty release queue. The public leaderboard retains stable problem pages and visible statements. |
+| Disabled baseline | Production intake, general replay, historical-public replay, every public lifecycle family, model consolidation, and the promotion canary are effectively disabled. Protected production State validates at `07e68200ee20efdd363cea16c1d08a13971acc2e`; the deployed lifecycle contract pin remains its validated ancestor `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a`. The release queue is empty. The public leaderboard retains stable problem pages and visible statements. |
 | Archive boundary | Schema-version-3 archive-before-evaluation is deployed. Production archive authority is connected to the Encrypt-only Wrap role and has a qualified decrypt denial. The evaluation lane has no Wrap or unwrap authority. |
 | Staging release boundary | Qualified: exact one-submission scope, consume-before-unwrap, identical reuse refusal, authority removal before reconstruction, source allowlisting, no plaintext artifact, no State/Git mutation, and cleanup. Publication and production authority remained absent. |
 | Production release preflight | Controller State-write and audit-read credential preflights pass at release commit `4f3d4cdd11d41e93294ba7821899923375ba360f`, with publication absent and no due work. **PENDING:** repair the exact ID-bearing `release-production` OIDC trust, read it back, and pass the publication-disabled trust-only preflight. Do not decrypt or publish a production archive. |
-| Entry and submitter UI | `https://lean-lang.org/eval/submit/` and the production Worker application are live in disabled posture. The entry page states the policy and links to the Worker origin; the Worker supplies OAuth feedback, preserved form values, progress spinners, status, and visible opt-out UI when enabled. |
+| Entry and submitter UI | The static `https://lean-lang.org/eval/submit/` entry page and the stable production application at `https://lean-eval-submission-server.lean-eval.workers.dev/` are live in disabled posture. The entry page states the policy and links to the Worker origin; the Worker supplies OAuth feedback, preserved form values, progress spinners, status, and visible opt-out UI when enabled. No LeanEval hostname or DNS change is required. |
 | Exact-version staging | **PENDING:** record the successful browser and source-bound submissions, denial cases, archive/Result/State/scheduling checks, publication-disabled reconstruction, redaction checks, all-false rollback, and validated final staging State in section 9. |
 
 Any non-coherent Worker deployment, nonempty due-release queue, failed final
@@ -99,8 +99,9 @@ launch gate.
 
 ## 5. Submitter-facing contract
 
-The authoritative text is on the [submission entry page][entry] and in the
-[Worker form implementation][worker-form]. It tells submitters that:
+The authoritative text is on the [submission entry page][entry], the stable
+[production application][application], and in the [Worker form
+implementation][worker-form]. It tells submitters that:
 
 - they must have authority to provide the exact source and must not submit
   secrets or material they cannot disclose;
@@ -114,6 +115,7 @@ The authoritative text is on the [submission entry page][entry] and in the
   source publication while leaving the public result.
 
 [entry]: https://lean-lang.org/eval/submit/
+[application]: https://lean-eval-submission-server.lean-eval.workers.dev/
 [worker-form]: https://github.com/leanprover/lean-eval-submissions/blob/main/server/src/browser-ui.ts
 
 ## 6. Rollback and emergency pause
@@ -133,11 +135,12 @@ The authoritative text is on the [submission entry page][entry] and in the
 4. A rollback never rewrites State, Results, releases, audit objects, AWS
    resources, credentials, or Git history. Forward-deploy or rerun recovery to
    restore one coherent component set.
-5. After recovery or rollback, read back `/healthz` and `/readyz`: intake,
-   broker, and general replay must be false, the recovered Worker version must
-   match the recorded deployment, and State validation must still pass. If
-   publication was paused, also verify that the controller cannot enter its
-   production environment before investigation continues.
+5. After recovery or rollback, read back `/healthz` and make the authenticated
+   `POST /readyz` State-writer proof: intake, broker, and general replay must be
+   false, the recovered Worker version must match the recorded deployment, and
+   State validation must still pass. If publication was paused, also read back
+   its independent gate and verify that production publication cannot proceed
+   before investigation continues.
 
 ## 7. Deferred functions and launch limitations
 
@@ -169,8 +172,10 @@ standing authorization; a Zulip post still requires separate exact approval.
 
 The announcement must include all of the following reviewed facts:
 
-- the lifecycle-aware submission-server URL,
-  **https://lean-lang.org/eval/submit/**;
+- the static leaderboard entry URL,
+  **https://lean-lang.org/eval/submit/**, and the stable lifecycle-aware
+  submission application URL,
+  **https://lean-eval-submission-server.lean-eval.workers.dev/**;
 - the explicit target issue-intake closure date and the condition that issue
   intake closes only after the incident, adoption, overlap, and two-week notice
   gates pass;
