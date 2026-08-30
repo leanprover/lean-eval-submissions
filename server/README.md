@@ -1,9 +1,11 @@
 # lean-eval submission Worker
 
 This directory contains the Cloudflare Worker that will replace GitHub Issues
-as the submission intake boundary. It is intentionally deployed with
-`INTAKE_ENABLED=false` until the state repositories, GitHub credentials, abuse
-controls, and replay key design have passed their rollout gates.
+as the submission intake boundary. The tracked production configuration enables
+the reviewed lifecycle APIs while keeping new intake disabled; staging keeps
+both surfaces disabled. The emergency rollback posture sets
+`INTAKE_ENABLED=false`, uses `INTAKE_ENABLEMENT_MODE=disabled`, disables every
+public lifecycle gate, and clears both maintainer arrays.
 
 The first implemented primitive is append-only Git state. Each durable event is
 stored in its own `events/<id-prefix>/<event-id>.json` file. The ID-derived
@@ -41,8 +43,8 @@ smoke test, then deploy production and run the same smoke test. GitHub
 Environments named `cloudflare-staging` and `cloudflare-production` hold their
 own deployment credentials. See [`../INFRASTRUCTURE.md`](../INFRASTRUCTURE.md)
 for the complete inventory, ownership, setup, and recovery record.
-The temporary intake-disabled rollout uses the isolated `lean-eval.workers.dev`
-account subdomain. Preview URLs remain disabled. The provider-neutral API,
+The temporary rollout uses the isolated `lean-eval.workers.dev` account
+subdomain. Preview URLs remain disabled. The provider-neutral API,
 State, archive, and broker contracts allow a later move to an organization
 account or another provider without changing stable identities.
 The authentication and source-boundary design is recorded in
@@ -106,7 +108,7 @@ ephemerally by the controller and is never committed.
 
 ## Local API version 1 (`/api/v1`) contract
 
-The intake-disabled build implements these routes for local workerd and
+The Worker implements these routes for deployed use, local workerd, and
 contract testing:
 
 - `GET /api/v1/oauth/start` and `GET /api/v1/oauth/callback` perform a
@@ -143,9 +145,11 @@ contract testing:
   Consolidation additionally requires the exact-`true`
   `MODEL_IDENTITY_CONSOLIDATION_API_ENABLED` gate, so the smaller owner surface
   can be enabled without it.
-  Both route families remain dark in staging and production.
-  They remain disabled in both tracked environments and do not depend on or
-  enable submission intake.
+  The tracked production configuration enables the launch-approved owner and
+  maintainer route families for exactly the configured maintainer identity;
+  staging keeps them disabled. Model consolidation remains disabled in both
+  environments, and the lifecycle routes do not depend on or enable submission
+  intake.
 
 All JSON objects use exact-field decoders, request bodies are limited to 16
 KiB, and submitter-controlled text has explicit Unicode/control-character and
@@ -172,10 +176,10 @@ the raw nonce and signed token never enter State. Production and staging State
 deploy the matching `authentication.nonce_consumed`,
 `submission.metadata_amended`, and `submission.publication_changed` schemas
 and materializer. The lifecycle-aware submission view (wire schema version 2)
-additionally
-authenticates its referenced archive, evaluation, and result events without
-scanning the full ledger. Staging uses this contract for the end-to-end
-fixture; production intake remains disabled.
+additionally authenticates its referenced archive, evaluation, and result
+events without scanning the full ledger. Staging uses this contract for the
+end-to-end fixture; the tracked production configuration also binds the
+contract while keeping intake disabled.
 
 ## GitHub App broker boundary
 
@@ -194,8 +198,8 @@ operations without changing submission IDs, State, or API routes.
 Static `GITHUB_VERIFICATION_TOKEN` and `GITHUB_DISPATCH_TOKEN` hooks remain only
 for local contract tests; they are not an approved production credential
 design. The Apps must remain organization-owned and least-scoped as documented
-in `INFRASTRUCTURE.md`. The safe production default remains
-`INTAKE_ENABLED=false`. Do not request
+in `INFRASTRUCTURE.md`. The safe rollback default remains the all-false launch
+posture, including `INTAKE_ENABLED=false`. Do not request
 broad OAuth `repo` scope as a shortcut; browser OAuth intentionally requests
 only `read:user`.
 
@@ -244,7 +248,7 @@ outbox is removed without another provider call so it cannot permanently occupy
 a rotating window.
 
 Automatic protected-main deployment has one staging-only promotion exception
-while ordinary intake remains disabled. Authenticated `POST
+while ordinary staging intake remains disabled. Authenticated `POST
 /internal/v1/promotion-canary` accepts a deterministic, withheld synthetic
 fixture for the exact `DEPLOYED_COMMIT` and its matching immutable dispatch
 tag plus the deployment `GITHUB_RUN_ID`/`GITHUB_RUN_ATTEMPT`. Polls for that
@@ -271,7 +275,8 @@ asynchronous no-op job completed. Responses contain no fixture contents,
 credentials, or upstream response bodies.
 
 State independently reconstructs archive/evaluation/result summaries from the
-immutable event graph and rejects a stale or fabricated view. The safe current
-behavior remains `INTAKE_ENABLED=false` until the staged live path and all
-other rollout gates pass; do not treat a queued State record alone as a
-completed pipeline.
+immutable event graph and rejects a stale or fabricated view. Production intake
+remains disabled in this tracked lifecycle-only state. Later intake enablement
+must use the finite-lease controller before durable mode; lease expiry or
+recovery returns intake to the fail-closed disabled posture. Do not treat a
+queued State record alone as a completed pipeline.

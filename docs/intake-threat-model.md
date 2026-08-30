@@ -1,6 +1,7 @@
 # Submission intake threat model
 
-Status: design gate; intake remains disabled. Last reviewed: 2026-08-20.
+Status: reviewed launch contract; tracked production intake remains disabled.
+Last reviewed: 2026-08-30.
 
 ## Assets and trust boundaries
 
