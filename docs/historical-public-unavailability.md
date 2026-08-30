@@ -142,7 +142,7 @@ frozen inputs, reviewed candidate bytes, and exact review registry by replacing
 `--dispositions`, and otherwise supplying the same arguments. Verification
 requires byte-for-byte equality with a fresh deterministic finalization.
 
-## Reviewed frozen baseline
+## Reviewed retained baseline and current packet
 
 The complete source-free review registry for the exact `ba5f5784427621f8b9be7396dd45a0938792707d`
 Results baseline is
@@ -153,19 +153,47 @@ It covers all 187 retained requests exactly once and adopts the documented
 439 bound Results. The corresponding deterministic source-free disposition is
 `evidence/public-replay/unavailability-dispositions-v1/afe3c3d1f8657ee3f7c6bad05fc72f5a5d6f8f0a609f25fdce35c8d0edcc3321.json`.
 
-These artifacts finalize only the retained 1,301-Result baseline. They are not
-the final issue-intake cutoff: the separately documented three-Result delta at
-`7eb77aa8c2ef7f4d598c77240ea9effbb248dce2` and every later acceptance remain
-outside this review and require their own inventory, classification, and
-terminal disposition. A complete baseline review also does not authorize a
-State append, create replay work, claim replay execution, or establish corpus
-completion. Those claims remain false in the disposition artifact.
+The current protected evidence extends that reviewed set without replacing it.
+For Results commit `844ade95c0a432e63a84798f84969b8d9f2f53a3`, the exact
+current inputs have inventory digest
+`b17c24071e3945ceb1b0e8fe492b90e868a89a064d8ae2cd033b7f787ec27780`,
+resolution-request digest
+`b12d436e03ed6fe2af29f9ac04b05498570ce117610302dd10aa890183c56840`,
+workflow-registry digest
+`f9e3f39683cce17cbb8389e6ab78a5fa7443ed36ee11f1ab0cb96ba7be9da747`,
+and aggregate digest
+`7c10dfc3e3d66f6f9ae0107ef2ed94b8f731d7f8410741ed3f5978dc55e149e5`.
+The current content-addressed packet is:
 
-## Remaining State boundary
+- candidate manifest
+  `evidence/public-replay/unavailability-candidate-bundle-v1/010be7d30736574043c5db3cfdbbb671f466f880633e4f2fb9a188c8bbed585d.json`,
+  binding seven adjacent shards;
+- review registry
+  `evidence/public-replay/unavailability-review-registry-v1/bb6ecc3bd701266069bd89b9748e96ea66121c4ff1c3d1d5d8a423ea66005b5b.json`;
+  and
+- final disposition
+  `evidence/public-replay/unavailability-dispositions-v1/e577802df7df3a657a1dbfea20d60985264cf82bc955e39951160acf39adc66b.json`.
 
-The current historical State queue contains only authorized, qualified replay
-work. It must not invent an execution profile or enqueue an unavailable source
-merely to make `replay.unavailable` reachable. A separately reviewed State
-contract must consume a finalized disposition without creating a fictional
-submission, archive, execution profile, or attempted replay. That contract and
-append authorization remain later gates.
+It reviews 195 requests / 459 Results. The exact prior 187 requests / 439
+Results remain identical at the request/result-identity layer and already have
+terminal State events. The current-only delta is eight requests / 20 Results.
+A State append consuming this packet must append only that disjoint 20-Result
+delta; it must not replace or duplicate the prior 439 events.
+
+Neither packet represents the final issue-intake cutoff. Every later acceptance
+still requires its own inventory, classification, and terminal disposition. A
+complete current review also does not itself authorize a State append, create
+replay work, claim replay execution, or establish corpus completion. Those
+claims remain false in the disposition artifact.
+
+## State append boundary
+
+The existing root `historical_result.replay_unavailable` contract is the
+smallest State mechanism for this packet. It consumes the finalized disposition
+without creating a fictional submission, archive, execution profile, attempted
+replay, release, or queue item. Before appending the 20 current-only events, the
+producer must reverify the exact protected submissions commit and packet bytes,
+prove that current protected State contains exactly the prior 439 event subjects
+and none of the 20 new subjects, validate the complete materialized State graph,
+and advance protected State by compare-and-swap. The historical replay queues
+remain restricted to authorized, profile-qualified replay work.
