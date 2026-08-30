@@ -44,6 +44,9 @@ UNAVAILABILITY_PLAN = (
     / f"{UNAVAILABILITY_PLAN_SHA256}.json"
 )
 PRIVATE_PLAN = ROOT / private_replay.PRIVATE_PLAN_PREFIX / f"{PRIVATE_PLAN_SHA256}.json"
+PRIVATE_IMAGE_MATRIX = (
+    ROOT / "configuration/historical-private-replay-image-matrix-v1.json"
+)
 
 
 def recursive_keys(value: object) -> set[str]:
@@ -87,6 +90,38 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
         cls.plan = json.loads(cls.raw)
         cls.unavailability_raw = UNAVAILABILITY_PLAN.read_bytes()
         cls.unavailability_plan = json.loads(cls.unavailability_raw)
+
+    def test_committed_private_image_matrix_uses_unavailability_source_plan(
+        self,
+    ) -> None:
+        raw = PRIVATE_IMAGE_MATRIX.read_bytes()
+        matrix = json.loads(raw)
+        image = matrix["images"][0]
+        lock = image["profile_lock"]
+        core = {
+            "benchmark_commit": image["benchmark_commit"],
+            "benchmark_tree": image["benchmark_tree"],
+            "toolchain": image["toolchain"],
+            "lean_toolchain_blob_sha256": image["lean_toolchain_blob_sha256"],
+            "execution_profile": {
+                field: copy.deepcopy(lock[field])
+                for field in (
+                    "runner_profile",
+                    "go_toolchain",
+                    "rust_toolchain",
+                    "cache_state",
+                    "measurement_command",
+                    "components",
+                )
+            },
+        }
+
+        self.assertEqual(
+            matrix["private_plan_sha256"],
+            private_replay.LEGACY_UNAVAILABILITY_PLAN_SHA256,
+        )
+        self.assertNotEqual(matrix["private_plan_sha256"], PRIVATE_PLAN_SHA256)
+        private_replay._validate_private_image_matrix(raw, core)
 
     def qualified_fixture(self) -> tuple[dict[str, object], dict[str, object]]:
         entry = copy.deepcopy(
@@ -215,7 +250,7 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
             "schema_version": 1,
             "kind": "historical_private_replay_image_matrix",
             "benchmark_repository": private_replay.BENCHMARK_REPOSITORY,
-            "private_plan_sha256": PRIVATE_PLAN_SHA256,
+            "private_plan_sha256": UNAVAILABILITY_PLAN_SHA256,
             "historical_public_profile_matrix_sha256": "4" * 64,
             "historical_public_component_lock_sha256": "5" * 64,
             "checker": "nanoda",
