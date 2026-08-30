@@ -168,6 +168,13 @@ class HistoricalPrivateReplayImageTests(unittest.TestCase):
         self.assertTrue(
             all(re.search(r"@sha256:[0-9a-f]{64}(?: AS [a-z-]+)?$", line) for line in from_lines)
         )
+        python_base = (
+            "FROM docker.io/cloudflare/sandbox:0.12.7-python@sha256:"
+            "6dfa7301e69d3e5cd8e0404b92fd240026fe834ed7101ee29cb66337b0af0981"
+        )
+        self.assertIn(f"{python_base} AS lean-builder", from_lines)
+        self.assertIn(python_base, from_lines)
+        self.assertIn("python3 -c 'import tomllib'", dockerfile)
         self.assertIn("ARG BENCHMARK_COMMIT", dockerfile)
         self.assertIn("len(matrix[\"images\"]) == 63", dockerfile)
         self.assertIn(hashlib.sha256(self.matrix_raw).hexdigest(), dockerfile)

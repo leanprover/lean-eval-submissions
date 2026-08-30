@@ -28,7 +28,7 @@ RUN apt-get update \
     && strip /build/nanoda/target/release/nanoda_bin
 
 
-FROM docker.io/cloudflare/sandbox:0.12.7@sha256:6d741713aef266e8ae0831a5709c6f2d7b77b4952ac79b549f4f4e380af86fbe AS lean-builder
+FROM docker.io/cloudflare/sandbox:0.12.7-python@sha256:6dfa7301e69d3e5cd8e0404b92fd240026fe834ed7101ee29cb66337b0af0981 AS lean-builder
 
 ARG BENCHMARK_COMMIT
 USER root
@@ -40,9 +40,8 @@ COPY configuration/historical-private-replay-image-matrix-v1.json /tmp/private-i
 COPY server/replay-image/comparator-71b52-phase-metrics.patch /tmp/comparator-phase-metrics.patch
 COPY scripts/prepare_historical_image_layers.py /tmp/prepare-historical-image-layers.py
 
-RUN apt-get update \
-    && apt-get install --yes --no-install-recommends python3 \
-    && rm -rf /var/lib/apt/lists/*
+RUN test "$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')" = 3.11 \
+    && python3 -c 'import tomllib'
 
 # The build argument may select only one of the 63 closed source entries. No
 # qualification record or previously published image digest is an image input.
