@@ -61,7 +61,9 @@ class IntakeDisableRecoveryWorkflowTests(unittest.TestCase):
         for field in ("run_attempt", "head_sha", "conclusion", "id"):
             with self.subTest(field=field):
                 self.assertIn(f"github.event.workflow_run.{field}", recovery)
-        self.assertIn('actions/runs/$EVENT_RUN_ID', recovery)
+        self.assertIn(
+            'actions/runs/$EVENT_RUN_ID/attempts/$EVENT_ATTEMPT', recovery
+        )
         self.assertIn("automatic recovery trigger read-back differs", recovery)
 
     def test_recovery_is_bound_to_protected_main_exact_controller_and_tag(self) -> None:
@@ -76,6 +78,7 @@ class IntakeDisableRecoveryWorkflowTests(unittest.TestCase):
         self.assertIn(
             'git/ref/tags/lean-eval-dispatch/$commit', recovery
         )
+        self.assertIn('actions/runs/$run_id/attempts/$run_attempt', recovery)
         self.assertIn("controller dispatch tag does not resolve exactly", recovery)
         self.assertIn('[ "$commit" != "$LIVE_COMMIT" ]', recovery)
 

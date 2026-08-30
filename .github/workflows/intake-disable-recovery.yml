@@ -177,7 +177,7 @@ jobs:
               exit 1
             fi
             trigger=$(timeout 30s gh api \
-              "repos/$REPOSITORY/actions/runs/$EVENT_RUN_ID" \
+              "repos/$REPOSITORY/actions/runs/$EVENT_RUN_ID/attempts/$EVENT_ATTEMPT" \
               --jq '[.id, .run_attempt, .head_sha, .path, .event, .status, (.conclusion // "")] | @tsv')
             if [ "$trigger" != "$EVENT_RUN_ID"$'\t'"$EVENT_ATTEMPT"$'\t'"$EVENT_COMMIT"$'\t.github/workflows/deploy-worker.yml\tpush\tcompleted\t'"$EVENT_CONCLUSION" ] &&
                [ "$trigger" != "$EVENT_RUN_ID"$'\t'"$EVENT_ATTEMPT"$'\t'"$EVENT_COMMIT"$'\t.github/workflows/deploy-worker.yml\tworkflow_dispatch\tcompleted\t'"$EVENT_CONCLUSION" ]; then
@@ -201,7 +201,8 @@ jobs:
             echo "recovery controller identity is not an exact eligible deploy" >&2
             exit 1
           fi
-          run=$(timeout 30s gh api "repos/$REPOSITORY/actions/runs/$run_id" \
+          run=$(timeout 30s gh api \
+            "repos/$REPOSITORY/actions/runs/$run_id/attempts/$run_attempt" \
             --jq '[.id, .run_attempt, .head_sha, .path, .event, .status, (.conclusion // "")] | @tsv')
           if [ "$run" != "$run_id"$'\t'"$run_attempt"$'\t'"$commit"$'\t.github/workflows/deploy-worker.yml\tpush\tcompleted\t'"$conclusion" ] &&
              [ "$run" != "$run_id"$'\t'"$run_attempt"$'\t'"$commit"$'\t.github/workflows/deploy-worker.yml\tworkflow_dispatch\tcompleted\t'"$conclusion" ]; then
