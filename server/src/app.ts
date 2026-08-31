@@ -43,7 +43,7 @@ import {
   type OAuthState,
   type SubmissionGrant,
 } from "./auth";
-import { browserPage, browserScript } from "./browser-ui";
+import { browserPage, browserScript, releasePage, releaseScript } from "./browser-ui";
 import {
   type LegacyResultBackfillRequest,
   type LegacyResultClaimRequest,
@@ -344,6 +344,7 @@ const JSON_HEADERS = {
 } as const;
 const SESSION_COOKIE = "lean_eval_session";
 const OAUTH_COOKIE = "lean_eval_oauth_state";
+const OAUTH_RETURN_COOKIE = "lean_eval_oauth_return";
 const PROMOTION_CANARY_REPOSITORY = "kim-em/lean-eval-intake-fixture";
 const PROMOTION_CANARY_SOURCE_COMMIT = "ae38f4d3e4ad2991212135435f54e6640bcc89e7";
 const PROMOTION_CANARY_LOGIN = "kim-em";
@@ -1855,10 +1856,13 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const signed = await signToken(configuredSecret(env), makeOAuthState(now));
     const authorize = new URL("https://github.com/login/oauth/authorize");
     authorize.search = new URLSearchParams({ client_id: env.GITHUB_OAUTH_CLIENT_ID, redirect_uri: callback.toString(), scope: "read:user", state: signed }).toString();
-    return new Response(null, {
-      status: 302,
-      headers: { "cache-control": "no-store", location: authorize.toString(), "set-cookie": setCookie(OAUTH_COOKIE, signed, 600, "Lax") },
-    });
+    const returnPath = url.searchParams.get("return_to") === "/release/"
+      ? "/release/?oauth=success"
+      : env.BROWSER_SUCCESS_URL ?? "/";
+    const headers = new Headers({ "cache-control": "no-store", location: authorize.toString() });
+    headers.append("set-cookie", setCookie(OAUTH_COOKIE, signed, 600, "Lax"));
+    headers.append("set-cookie", setCookie(OAUTH_RETURN_COOKIE, returnPath, 600, "Lax"));
+    return new Response(null, { status: 302, headers });
   }
   if (request.method === "GET" && url.pathname === "/api/v1/oauth/callback") {
     if (!env.GITHUB_OAUTH_CLIENT_ID || !env.GITHUB_OAUTH_CLIENT_SECRET || !env.OAUTH_CALLBACK_URL) throw new AuthError("OAuth is not configured");
@@ -1880,7 +1884,11 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     if (!consumed.created) throw new AuthError("OAuth state was already consumed");
     const browserSession: BrowserSession = { kind: "browser_session", login: identity.login, github_id: identity.id, issued_at: now, expires_at: now + 3600 };
     const token = await signToken(configuredSecret(env), browserSession);
-    const destination = new URL(env.BROWSER_SUCCESS_URL ?? "/", url.origin);
+    const returnPath = cookie(request, OAUTH_RETURN_COOKIE);
+    const destination = new URL(
+      returnPath === "/release/?oauth=success" ? returnPath : env.BROWSER_SUCCESS_URL ?? "/",
+      url.origin,
+    );
     if (destination.origin !== url.origin) throw new AuthError("browser success URL must be same-origin");
     const headers = new Headers({
       "cache-control": "no-store",
@@ -1888,6 +1896,7 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     });
     headers.append("set-cookie", setCookie(SESSION_COOKIE, token, 3600, "Strict"));
     headers.append("set-cookie", setCookie(OAUTH_COOKIE, "deleted", 0, "Lax"));
+    headers.append("set-cookie", setCookie(OAUTH_RETURN_COOKIE, "deleted", 0, "Lax"));
     return new Response(null, {
       status: 303,
       headers,
@@ -2390,8 +2399,14 @@ export async function handleRequest(
       releaseOptInApiEnabled(env),
     );
   }
+  if (request.method === "GET" && url.pathname === "/release/") {
+    return releasePage(env.DEPLOYMENT_ENVIRONMENT, releaseOptInApiEnabled(env));
+  }
   if (request.method === "GET" && url.pathname === "/intake.js") {
     return browserScript();
+  }
+  if (request.method === "GET" && url.pathname === "/release.js") {
+    return releaseScript();
   }
   if (request.method === "GET" && url.pathname === "/healthz") {
     return json({

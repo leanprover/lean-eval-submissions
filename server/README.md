@@ -131,9 +131,9 @@ contract testing:
 - `POST /api/v1/browser/submissions/<uuid>/publication-opt-in` lets the owning
   identity irreversibly change `withheld` to `scheduled`. If a result already
   exists, the State update atomically creates its previously absent release
-  schedule. The browser form accepts the receipt ID of an earlier private
-  submission, so this choice remains available after the submission page is
-  reloaded. The route has its own exact-`true`
+  schedule. The dedicated browser page at `/release/` accepts the receipt ID
+  of an earlier private submission; the new-submission form does not mix this
+  later lifecycle action into intake. The route has its own exact-`true`
   `RELEASE_OPT_IN_API_ENABLED` gate.
 - `GET /api/v1/submissions/<uuid>`,
   `PATCH /api/v1/submissions/<uuid>/metadata`, and

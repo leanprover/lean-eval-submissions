@@ -112,6 +112,35 @@ describe("Worker routing", () => {
     });
   });
 
+  it("routes later publication scheduling to its dedicated gated page", async () => {
+    const enabledEnv: RuntimeEnv = { ...ENV, RELEASE_OPT_IN_API_ENABLED: "true" };
+    const intake = await handleRequest(
+      new Request("https://example.test/"),
+      enabledEnv,
+      LIFECYCLE,
+    );
+    const intakeBody = await intake.text();
+    expect(intakeBody).toContain('href="/release/"');
+    expect(intakeBody).not.toContain('id="release-opt-in-form"');
+
+    const release = await handleRequest(
+      new Request("https://example.test/release/"),
+      enabledEnv,
+      LIFECYCLE,
+    );
+    expect(release.status).toBe(200);
+    expect(await release.text()).toContain('id="release-opt-in-form"');
+
+    const disabled = await handleRequest(
+      new Request("https://example.test/release/"),
+      ENV,
+      LIFECYCLE,
+    );
+    const disabledBody = await disabled.text();
+    expect(disabledBody).toContain("Source release scheduling is currently unavailable");
+    expect(disabledBody).not.toContain('id="release-opt-in-form"');
+  });
+
   it("fails the maintainer gate closed and never exposes configured identities", async () => {
     const configured = JSON.stringify([{ github_id: 477956, login: "kim-em" }]);
     const enabled = await handleRequest(

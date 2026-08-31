@@ -2121,7 +2121,7 @@ describe("browser OAuth and owner routes in workerd", () => {
       OAUTH_CALLBACK_URL: "https://submit.test/api/v1/oauth/callback",
     };
     const start = await handleRequest(
-      new Request("https://submit.test/api/v1/oauth/start"),
+      new Request("https://submit.test/api/v1/oauth/start?return_to=%2Frelease%2F"),
       oauthEnv,
       LIFECYCLE,
       { now: () => NOW_MS, provider: new GitHubProvider(upstream), state },
@@ -2130,23 +2130,39 @@ describe("browser OAuth and owner routes in workerd", () => {
     const location = new URL(start.headers.get("location") ?? "");
     const signedState = location.searchParams.get("state") ?? "";
     expect(signedState).not.toBe("");
-    const boundCookie = /lean_eval_oauth_state=([^;]+)/u.exec(start.headers.get("set-cookie") ?? "")?.[1] ?? "";
+    const startCookies = start.headers.getSetCookie();
+    expect(startCookies).toHaveLength(2);
+    const boundCookie = /lean_eval_oauth_state=([^;]+)/u.exec(startCookies[0] ?? "")?.[1] ?? "";
     expect(boundCookie).toBe(signedState);
+    expect(startCookies[1]).toBe("lean_eval_oauth_return=/release/?oauth=success; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax");
+
+    const untrustedReturn = await handleRequest(
+      new Request("https://submit.test/api/v1/oauth/start?return_to=https%3A%2F%2Fattacker.test%2F"),
+      oauthEnv,
+      LIFECYCLE,
+      { now: () => NOW_MS, provider: new GitHubProvider(upstream), state },
+    );
+    expect(untrustedReturn.headers.getSetCookie()[1]).toBe(
+      "lean_eval_oauth_return=/preview/; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=Lax",
+    );
 
     const callbackUrl = new URL(oauthEnv.OAUTH_CALLBACK_URL ?? "");
     callbackUrl.search = new URLSearchParams({ code: "abcdefgh", state: signedState }).toString();
     const callback = await handleRequest(
-      new Request(callbackUrl, { headers: { cookie: `lean_eval_oauth_state=${boundCookie}` } }),
+      new Request(callbackUrl, {
+        headers: { cookie: `lean_eval_oauth_state=${boundCookie}; lean_eval_oauth_return=/release/?oauth=success` },
+      }),
       oauthEnv,
       LIFECYCLE,
       { now: () => NOW_MS, provider: new GitHubProvider(upstream), state },
     );
     expect(callback.status).toBe(303);
-    expect(callback.headers.get("location")).toBe("https://submit.test/preview/");
+    expect(callback.headers.get("location")).toBe("https://submit.test/release/?oauth=success");
     const callbackCookies = callback.headers.getSetCookie();
-    expect(callbackCookies).toHaveLength(2);
+    expect(callbackCookies).toHaveLength(3);
     expect(callbackCookies[0]).toMatch(/^lean_eval_session=/u);
     expect(callbackCookies[1]).toBe("lean_eval_oauth_state=deleted; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax");
+    expect(callbackCookies[2]).toBe("lean_eval_oauth_return=deleted; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax");
     expect(JSON.stringify(state.events)).not.toContain(oauthToken);
     expect(state.events).toHaveLength(1);
     expect(state.events[0]?.event_type).toBe("authentication.nonce_consumed");
