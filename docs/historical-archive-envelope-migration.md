@@ -61,6 +61,37 @@ The production operation is packaged in
 [`aws-production-archive-migration-infrastructure.md`](aws-production-archive-migration-infrastructure.md);
 it neither installs the legacy identity nor dispatches this workflow.
 
+## Custodian identity handoff
+
+Only after the execution packet's pre-mutation checklist is complete, run the
+repository helper from a terminal where GitHub CLI has write access to
+`leanprover/lean-eval-submissions`:
+
+```bash
+scripts/custodian_legacy_archive_identity.sh install
+```
+
+At its single prompt, the custodian types the local identity-file path and
+presses Enter. Input is hidden. The helper accepts no path argument, creates no
+temporary identity file, verifies that the unencrypted SSH RSA 2048 key has
+fingerprint `SHA256:4unwBywJxfq9LsOjygB+/NRHaXdBhvxKP+a3EEpqjoE`, and streams
+the already-open file descriptor directly into the
+`archive-migration-production` environment secret. After the hidden prompt,
+its only success output is the terminal marker
+`LEGACY_ARCHIVE_IDENTITY_INSTALLED`.
+
+After each bounded migration run, the operator removes and verifies removal of
+the installed secret without another custodian interaction:
+
+```bash
+scripts/custodian_legacy_archive_identity.sh remove
+```
+
+The custodian retains the offline master until the separately packeted final
+delta has been promoted and read back. After that final run, remove the secret,
+destroy the offline master, attest that no installed or working copy remains,
+and delete this one-shot helper with the other migration-only machinery.
+
 Before baseline apply, prepare the paired retirement changes, but retain the
 one-shot workflow, protected `archive-migration-production` environment, and
 migration Encrypt role until the separately bound final-cutoff delta is
