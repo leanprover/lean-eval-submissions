@@ -246,6 +246,14 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
 
     def test_exact_tag_response_and_idempotent_owned_cleanup(self) -> None:
         mutation = self.mutation()
+        self.assertEqual(
+            mutation.tag_endpoint,
+            f"repos/{mutation.repository}/git/ref/tags/{mutation.tag}",
+        )
+        self.assertEqual(
+            mutation.tag_delete_endpoint,
+            f"repos/{mutation.repository}/git/refs/tags/{mutation.tag}",
+        )
         response = {
             "ref": f"refs/tags/{mutation.tag}",
             "node_id": "node",
@@ -277,6 +285,35 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             self.driver.restore_gist(mutation)
             self.driver.remove_created_tag(mutation)
         github.assert_not_called()
+
+    def test_owned_tag_cleanup_uses_the_delete_reference_endpoint(self) -> None:
+        mutation = self.mutation()
+        mutation.tag_created = True
+        response = {
+            "ref": f"refs/tags/{mutation.tag}",
+            "node_id": "node",
+            "url": "https://api.github.test/ref",
+            "object": {
+                "sha": mutation.commit,
+                "type": "commit",
+                "url": "https://api.github.test/commit",
+            },
+        }
+        with (
+            mock.patch.object(
+                self.driver,
+                "gh_json_or_authenticated_404",
+                side_effect=[response, None],
+            ) as read,
+            mock.patch.object(self.driver, "gh_json", return_value=None) as write,
+        ):
+            self.driver.remove_created_tag(mutation)
+        self.assertEqual(
+            read.call_args_list,
+            [mock.call([mutation.tag_endpoint]), mock.call([mutation.tag_endpoint])],
+        )
+        write.assert_called_once_with([mutation.tag_delete_endpoint], method="DELETE")
+        self.assertFalse(mutation.tag_created)
 
     def test_gist_transport_is_tmpfs_atomic_and_has_no_patch_or_debug_env(self) -> None:
         self.assertIn('["ls-remote", "--symref", "origin", "HEAD"]', self.driver_text)

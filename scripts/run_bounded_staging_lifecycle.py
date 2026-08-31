@@ -617,6 +617,10 @@ class FixtureMutation:
     def tag_endpoint(self) -> str:
         return f"repos/{self.repository}/git/ref/tags/{self.tag}"
 
+    @property
+    def tag_delete_endpoint(self) -> str:
+        return f"repos/{self.repository}/git/refs/tags/{self.tag}"
+
     def describe_targets(self) -> str:
         return (
             f"gist={self.gist_id} file={self.filename} "
@@ -809,7 +813,7 @@ def remove_created_tag(mutation: FixtureMutation) -> None:
     verify_exact_tag_response(
         current, mutation.repository, mutation.tag, mutation.commit
     )
-    response = gh_json([mutation.tag_endpoint], method="DELETE")
+    response = gh_json([mutation.tag_delete_endpoint], method="DELETE")
     if response is not None:
         raise AcceptanceError(
             "generated fixture tag deletion returned an inexact response"
