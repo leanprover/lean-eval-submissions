@@ -52,11 +52,16 @@ class CustodianLegacyArchiveIdentityTests(unittest.TestCase):
               exit 0
             fi
             if [[ "$1" == api && "$2" == */environments/archive-migration-production ]]; then
+              if [[ -s "$FAKE_GH_ENVIRONMENT_FAILURE" ]]; then exit 1; fi
               printf 'true\\n'
               exit 0
             fi
             if [[ "$1" == api && "$2" == */variables/AWS_WRAP_ROLE_ARN ]]; then
-              printf 'AWS_WRAP_ROLE_ARN=arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production\\n'
+              if [[ -s "$FAKE_GH_ROLE_MISMATCH" ]]; then
+                printf 'AWS_WRAP_ROLE_ARN=arn:aws:iam::161072922960:role/wrong\\n'
+              else
+                printf 'AWS_WRAP_ROLE_ARN=arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production\\n'
+              fi
               exit 0
             fi
             if [[ " $* " == *' api --paginate --slurp '* &&
@@ -66,9 +71,17 @@ class CustodianLegacyArchiveIdentityTests(unittest.TestCase):
                 exit 1
               fi
               if [[ -s "$FAKE_GH_STATE" ]]; then
-                printf '[{"secrets":[{"name":"AUDIT_MIGRATION_READ_KEY"},{"name":"LEGACY_ARCHIVE_IDENTITY"}]}]\\n'
+                if [[ -s "$FAKE_GH_EXTRA_SECRET" ]]; then
+                  printf '[{"secrets":[{"name":"AUDIT_MIGRATION_READ_KEY"},{"name":"EXTRA"},{"name":"LEGACY_ARCHIVE_IDENTITY"}]}]\\n'
+                else
+                  printf '[{"secrets":[{"name":"AUDIT_MIGRATION_READ_KEY"},{"name":"LEGACY_ARCHIVE_IDENTITY"}]}]\\n'
+                fi
               else
-                printf '[{"secrets":[{"name":"AUDIT_MIGRATION_READ_KEY"}]}]\\n'
+                if [[ -s "$FAKE_GH_EXTRA_SECRET" ]]; then
+                  printf '[{"secrets":[{"name":"AUDIT_MIGRATION_READ_KEY"},{"name":"EXTRA"}]}]\\n'
+                else
+                  printf '[{"secrets":[{"name":"AUDIT_MIGRATION_READ_KEY"}]}]\\n'
+                fi
               fi
               exit 0
             fi
@@ -99,7 +112,10 @@ class CustodianLegacyArchiveIdentityTests(unittest.TestCase):
         mode: str,
         identity: pathlib.Path | None = None,
         *,
+        environment_failure: bool = False,
+        extra_secret: bool = False,
         readback_failure: bool = False,
+        role_mismatch: bool = False,
         set_failure: bool = False,
     ) -> subprocess.CompletedProcess[str]:
         environment = dict(os.environ)
@@ -108,12 +124,21 @@ class CustodianLegacyArchiveIdentityTests(unittest.TestCase):
                 "PATH": f"{self.bin}:{environment['PATH']}",
                 "FAKE_GH_STATE": str(self.state),
                 "FAKE_GH_CAPTURE": str(self.capture),
+                "FAKE_GH_ENVIRONMENT_FAILURE": str(self.root / "environment-failure"),
+                "FAKE_GH_EXTRA_SECRET": str(self.root / "extra-secret"),
                 "FAKE_GH_READBACK_FAILURE": str(self.root / "readback-failure"),
+                "FAKE_GH_ROLE_MISMATCH": str(self.root / "role-mismatch"),
                 "FAKE_GH_SET_FAILURE": str(self.root / "set-failure"),
             }
         )
+        if environment_failure:
+            (self.root / "environment-failure").write_text("1", encoding="utf-8")
+        if extra_secret:
+            (self.root / "extra-secret").write_text("1", encoding="utf-8")
         if readback_failure:
             (self.root / "readback-failure").write_text("1", encoding="utf-8")
+        if role_mismatch:
+            (self.root / "role-mismatch").write_text("1", encoding="utf-8")
         if set_failure:
             (self.root / "set-failure").write_text("1", encoding="utf-8")
         supplied = f"{identity}\n" if identity is not None else ""
@@ -182,12 +207,30 @@ class CustodianLegacyArchiveIdentityTests(unittest.TestCase):
         self.assertNotIn(str(self.identity), combined)
         self.assertNotIn(self.identity_value.strip(), combined)
 
+    def test_wrong_migration_role_refuses_install_before_identity_input(self) -> None:
+        result = self._run("install", role_mismatch=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not the dedicated migration role", result.stderr)
+        self.assertFalse(self.capture.exists())
+
+    def test_unexpected_secret_inventory_refuses_install(self) -> None:
+        result = self._run("install", extra_secret=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("secret inventory is not ready", result.stderr)
+        self.assertFalse(self.capture.exists())
+
     def test_remove_deletes_and_verifies_without_identity_input(self) -> None:
         self.state.write_text("installed\n", encoding="utf-8")
         result = self._run("remove")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "LEGACY_ARCHIVE_IDENTITY_REMOVED\n")
         self.assertEqual(self.state.read_text(encoding="utf-8"), "")
+
+    def test_remove_remains_available_after_environment_policy_drift(self) -> None:
+        self.state.write_text("installed\n", encoding="utf-8")
+        result = self._run("remove", environment_failure=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "LEGACY_ARCHIVE_IDENTITY_REMOVED\n")
 
     def test_ambiguous_readback_requires_removal_before_proceeding(self) -> None:
         result = self._run("install", self.identity, readback_failure=True)
