@@ -210,12 +210,14 @@ there is no movable or temporary release tag authority.
 3. after the watchdog reports that recovery is armed, dispatch the exact
    immutable tag through `set-staging-lifecycle-smoke.yml` with the fixture's
    two denial maintainer arrays and `state=enabled`;
-4. make one ordinary browser submission with accepted source initially private,
-   wait for its Result, and click the visible irreversible publication opt-in
-   control; no browser cookie, token, or DevTools value is copied;
+4. make one ordinary browser submission with accepted source initially private;
+   the new-submission form contains no later publication operation, and no
+   browser cookie, token, or DevTools value is copied;
 5. run the driver with only the visible browser submission ID, secret gist ID,
    and exact staging commit. It derives the browser Result through the
-   same-owner agent session and accepts no Result ID from the operator;
+   same-owner agent session, accepts no Result ID from the operator, and
+   exercises the post-result private-to-scheduled transition through the same
+   API used by the dedicated release page;
 6. when the driver pauses after receiving the headless challenge, verify the
    displayed nonsecret Gist/file and allowlisted repository/tag/commit targets,
    then type the target-bound confirmation it displays. The maintainer's
@@ -291,8 +293,10 @@ these denials.
 
 This lifecycle driver does not verify the public entry page. Separately perform
 the browser UI regression check at `lean-lang.org/eval/submit`: problem text,
-pre-filled form values, sign-in feedback, preparing spinner, submission status,
-and the visible irreversible opt-in control must all work without DevTools.
+pre-filled form values, sign-in feedback, preparing spinner, and submission
+status must work without DevTools. Verify the visible irreversible opt-in on
+the separate Worker `/release/` page; it must not appear on the new-submission
+form.
 
 After the single accepted run and verified all-false recovery, retirement is a
 required source change, not optional cleanup. Delete this exact inventory:
@@ -306,9 +310,11 @@ required source change, not optional cleanup. Delete this exact inventory:
 
 After every dependent archive and evaluation is terminal, also delete temporary
 branch `staging-source-fixture-v1` from
-`leanprover/lean-eval-state-staging` and remove that repository from the
-selected installations of both read-only source Apps. Never remove the branch
-while a generated source tag or dependent run remains.
+`leanprover/lean-eval-state-staging`. Never remove the branch while a generated
+source tag or dependent run remains. Retain that repository in the selected
+installations of both read-only source Apps only through the named production
+canary on its separate fixture branch, then remove both selections immediately
+after the production canary reaches its verified terminal Result.
 
 Remove this bounded-acceptance subsection and any tests or workflow inventories
 that reference those paths in the same retirement change. Retain no replacement
