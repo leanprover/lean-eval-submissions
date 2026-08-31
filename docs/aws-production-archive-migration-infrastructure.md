@@ -12,10 +12,14 @@ publication. Its final GitHub mutation only replaces the unusable ordinary
 Wrap-role ARN in `archive-migration-production` with the new dedicated role
 ARN.
 
-Run `scripts/operator_production_archive_migration_infra.sh` from an
-authenticated AWS CloudShell root session for account `161072922960`. Execute
-only an immutable raw GitHub URL whose commit and SHA-256 have been supplied by
-the maintainer preparing the operation.
+Run `scripts/operator_production_archive_migration_infra.sh` from the reviewed
+repository commit in an AWS CLI session authenticated as account
+`161072922960` root. On the maintained operator machine, authenticate the
+existing local profile with `aws login --remote --profile lean-eval-bootstrap`,
+then run and verify the script with `AWS_PROFILE=lean-eval-bootstrap`. The
+account holder performs only the browser authorization step; the operator
+session runs the commands. Do not move the procedure through CloudShell or
+expose AWS credentials to the repository.
 
 The script fails closed unless all of these facts hold:
 
