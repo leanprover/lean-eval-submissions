@@ -31,7 +31,9 @@ Ready-to-edit announcement:
 > publication choice is `scheduled`, accepted source is scheduled for release
 > under the Apache License 2.0 exactly two UTC calendar months after acceptance.
 > Choosing `scheduled` confirms that the submitter is authorized to grant that
-> license; choosing `withheld` opts out. Amendments, model-alias changes,
+> license. Choosing `withheld` keeps accepted source private; the submitter may
+> later irreversibly change that choice to `scheduled`. Amendments, model-alias
+> changes,
 > publication choices, and lifecycle status are available through the server
 > path. Issue-path
 > submissions retain their existing policy during the transition.
