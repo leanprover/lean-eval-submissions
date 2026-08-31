@@ -33,6 +33,7 @@ describe("Worker routing", () => {
       model_identity_consolidation_api_enabled: false,
       model_identity_write_max_subrequests: 400,
       model_identity_consolidation_api: "atomic_reverse_impact_v1",
+      release_opt_in_api_enabled: false,
       release_opt_out_api_enabled: false,
       promotion_canary_configured_enabled: true,
       promotion_canary_enabled: true,
@@ -64,6 +65,7 @@ describe("Worker routing", () => {
       model_identity_consolidation_api_enabled: false,
       model_identity_write_max_subrequests: 400,
       model_identity_consolidation_api: "atomic_reverse_impact_v1",
+      release_opt_in_api_enabled: false,
       release_opt_out_api_enabled: false,
       promotion_canary_configured_enabled: false,
       promotion_canary_enabled: false,
@@ -73,7 +75,7 @@ describe("Worker routing", () => {
     expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
-  it("reports independently effective consolidation and release opt-out gates", async () => {
+  it("reports opt-in independently and keeps the reverse transition disabled", async () => {
     const contract = "8ae11456f0a439f91ec5822ec36adb93b76b0d96";
     const enabled = await handleRequest(
       new Request("https://example.test/healthz"),
@@ -82,6 +84,7 @@ describe("Worker routing", () => {
         MODEL_IDENTITY_OWNER_API_ENABLED: "true",
         MODEL_IDENTITY_CONSOLIDATION_API_ENABLED: "true",
         MODEL_IDENTITY_STATE_CONTRACT_COMMIT: contract,
+        RELEASE_OPT_IN_API_ENABLED: "true",
         RELEASE_OPT_OUT_API_ENABLED: "true",
       },
       LIFECYCLE,
@@ -90,7 +93,8 @@ describe("Worker routing", () => {
       intake_effective_enabled: false,
       model_identity_owner_api_enabled: true,
       model_identity_consolidation_api_enabled: true,
-      release_opt_out_api_enabled: true,
+      release_opt_in_api_enabled: true,
+      release_opt_out_api_enabled: false,
     });
 
     const missingOwner = await handleRequest(

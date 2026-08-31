@@ -37,15 +37,17 @@ const BROWSER_FIELD_NAMES = [
 export function browserPage(
   environment: "staging" | "production",
   intakeEnabled: boolean,
-  releaseOptOutEnabled: boolean,
+  releaseOptInEnabled: boolean,
 ): Response {
   const title = environment === "staging" ? "LeanEval staging intake" : "LeanEval submissions";
   const status = intakeEnabled
     ? `<p class="notice">${escapeHtml(environment)} intake is enabled. Sign in with GitHub, review every field, and submit.</p>`
     : `<p class="notice disabled">${escapeHtml(environment)} intake is currently disabled.</p>`;
-  const form = intakeEnabled ? `
+  const authentication = intakeEnabled || releaseOptInEnabled ? `
     <p><a id="oauth-sign-in" class="button" href="/api/v1/oauth/start">Sign in with GitHub</a></p>
-    <p id="auth-status" class="auth-status" role="status" aria-live="polite">GitHub sign-in is required before submission.</p>
+    <p id="auth-status" class="auth-status" role="status" aria-live="polite">GitHub sign-in is required.</p>
+  ` : "";
+  const submissionForm = intakeEnabled ? `
     <form id="submission-form">
       <label>Problem ID <input id="problem_id" name="problem_id" required pattern="[a-z][a-z0-9_]*"></label>
       <label>Problem group
@@ -61,9 +63,9 @@ export function browserPage(
       <label>Publication choice
         <select id="publication_choice" name="publication_choice">
           <option value="scheduled">scheduled release (default)</option>
-          <option value="withheld">withheld (opt out)</option>
+          <option value="withheld">keep accepted source private</option>
         </select>
-        <small>Choosing scheduled release confirms that you are authorized to license the submitted source under the Apache License 2.0. Accepted source is released under that license exactly two UTC calendar months after acceptance. Choose withheld to opt out.</small>
+        <small>Choosing scheduled release confirms that you are authorized to license the submitted source under the Apache License 2.0. Accepted source is released under that license exactly two UTC calendar months after acceptance. Choose private to keep accepted source withheld; you may schedule it later.</small>
       </label>
       <label>Production metadata JSON <textarea id="production_metadata" name="production_metadata" rows="5">{}</textarea></label>
       <button id="submit-button" type="submit" aria-busy="false">
@@ -72,16 +74,22 @@ export function browserPage(
       </button>
     </form>
     <pre id="result" role="status" aria-live="polite"></pre>
-    ${releaseOptOutEnabled ? `<section id="release-opt-out" hidden>
-      <h2>Release choice</h2>
-      <p id="release-opt-out-help">This submission is scheduled for LeanEval automatic source release if accepted. Opting out changes its publication choice to withheld.</p>
-      <button id="release-opt-out-button" type="button" aria-busy="false" aria-describedby="release-opt-out-help">
-        <span id="release-opt-out-label">Opt out of LeanEval source release</span>
-        <span class="spinner" aria-hidden="true"></span>
-      </button>
-      <p id="release-opt-out-status" role="status" aria-live="polite"></p>
-    </section>` : ""}
   ` : "";
+  const releaseOptInForm = releaseOptInEnabled ? `
+    <section id="release-opt-in">
+      <h2>Schedule a private submission</h2>
+      <p id="release-opt-in-help">If you previously chose to keep accepted source private, you can irreversibly schedule it for Apache-2.0 release two UTC calendar months after acceptance.</p>
+      <form id="release-opt-in-form">
+        <label>Private submission ID <input id="release-opt-in-submission-id" name="submission_id" required pattern="[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}" placeholder="UUID from the submission receipt"></label>
+        <button id="release-opt-in-button" type="submit" aria-busy="false" aria-describedby="release-opt-in-help">
+          <span id="release-opt-in-label">Schedule source release</span>
+          <span class="spinner" aria-hidden="true"></span>
+        </button>
+      </form>
+      <p id="release-opt-in-status" role="status" aria-live="polite"></p>
+    </section>
+  ` : "";
+  const controls = authentication + submissionForm + releaseOptInForm;
   const body = `<!doctype html>
 <html lang="en">
 <head>
@@ -112,8 +120,8 @@ export function browserPage(
 <body>
   <h1>${escapeHtml(title)}</h1>
   ${status}
-  ${form}
-  ${intakeEnabled ? '<script src="/intake.js?v=release-opt-out-v1" defer></script>' : ""}
+  ${controls}
+  ${intakeEnabled || releaseOptInEnabled ? '<script src="/intake.js?v=release-opt-in-v1" defer></script>' : ""}
 </body>
 </html>`;
   return new Response(body, { headers: PAGE_HEADERS });
@@ -127,13 +135,15 @@ const authStatus = document.querySelector("#auth-status");
 const oauthSignIn = document.querySelector("#oauth-sign-in");
 const submitButton = document.querySelector("#submit-button");
 const submitLabel = document.querySelector("#submit-label");
-const releaseOptOut = document.querySelector("#release-opt-out");
-const releaseOptOutButton = document.querySelector("#release-opt-out-button");
-const releaseOptOutLabel = document.querySelector("#release-opt-out-label");
-const releaseOptOutStatus = document.querySelector("#release-opt-out-status");
+const releaseOptIn = document.querySelector("#release-opt-in");
+const releaseOptInForm = document.querySelector("#release-opt-in-form");
+const releaseOptInSubmission = document.querySelector("#release-opt-in-submission-id");
+const releaseOptInButton = document.querySelector("#release-opt-in-button");
+const releaseOptInLabel = document.querySelector("#release-opt-in-label");
+const releaseOptInStatus = document.querySelector("#release-opt-in-status");
 const fieldNames = ${JSON.stringify(BROWSER_FIELD_NAMES)};
 const authExpiryKey = "lean-eval-github-session-expires-at";
-let releaseOptOutSubmissionId = null;
+const pendingReleaseOptInKey = "lean-eval-pending-publication-opt-in";
 const saved = sessionStorage.getItem("lean-eval-pending-submission");
 if (saved) {
   try {
@@ -144,11 +154,20 @@ if (saved) {
     }
   } catch { sessionStorage.removeItem("lean-eval-pending-submission"); }
 }
+const savedReleaseOptIn = sessionStorage.getItem(pendingReleaseOptInKey);
+if (releaseOptInSubmission !== null && savedReleaseOptIn !== null) {
+  releaseOptInSubmission.value = savedReleaseOptIn;
+}
 const query = new URLSearchParams(location.search);
 for (const name of fieldNames) {
   const element = document.querySelector("#" + name);
   const value = query.get(name);
   if (element && value !== null) element.value = value;
+}
+const querySubmissionId = query.get("submission_id");
+if (releaseOptInSubmission !== null && querySubmissionId !== null) {
+  releaseOptInSubmission.value = querySubmissionId;
+  sessionStorage.setItem(pendingReleaseOptInKey, querySubmissionId);
 }
 if (query.get("oauth") === "success") {
   sessionStorage.setItem(authExpiryKey, String(Date.now() + 55 * 60 * 1000));
@@ -170,13 +189,17 @@ const setSubmitting = (submitting, label) => {
   submitButton.setAttribute("aria-busy", String(submitting));
   submitLabel.textContent = label;
 };
-const setReleaseOptOutPending = (pending, label) => {
-  releaseOptOutButton.disabled = pending;
-  releaseOptOutButton.setAttribute("aria-busy", String(pending));
-  releaseOptOutLabel.textContent = label;
+const setReleaseOptInPending = (pending, label) => {
+  releaseOptInButton.disabled = pending;
+  releaseOptInButton.setAttribute("aria-busy", String(pending));
+  releaseOptInLabel.textContent = label;
 };
 oauthSignIn?.addEventListener("click", () => {
   saveCurrentValues();
+  const releaseOptInSubmissionId = releaseOptInSubmission?.value.trim() ?? "";
+  if (releaseOptInSubmissionId) {
+    sessionStorage.setItem(pendingReleaseOptInKey, releaseOptInSubmissionId);
+  }
   authStatus.textContent = "Opening GitHub sign-in…";
 });
 form?.addEventListener("submit", async (event) => {
@@ -221,39 +244,43 @@ form?.addEventListener("submit", async (event) => {
     setSubmitting(false, "Submission queued");
     submitButton.disabled = true;
     if (
-      values.publication_choice === "scheduled" &&
+      values.publication_choice === "withheld" &&
       typeof body.submission_id === "string" &&
-      releaseOptOut !== null &&
-      releaseOptOutStatus !== null
+      releaseOptIn !== null &&
+      releaseOptInStatus !== null
     ) {
-      releaseOptOutSubmissionId = body.submission_id;
-      releaseOptOut.hidden = false;
-      releaseOptOutStatus.textContent = "LeanEval automatic source release remains scheduled.";
+      releaseOptInSubmission.value = body.submission_id;
+      sessionStorage.setItem(pendingReleaseOptInKey, body.submission_id);
+      releaseOptInStatus.textContent = "Accepted source remains private unless you schedule release.";
     }
   } catch (error) {
     result.textContent += String.fromCharCode(10) + (error instanceof Error ? error.message : "Submission failed");
     setSubmitting(false, "Submit exact commit");
   }
 });
-releaseOptOutButton?.addEventListener("click", async () => {
-  if (releaseOptOutSubmissionId === null) return;
-  setReleaseOptOutPending(true, "Opting out of source release…");
-  releaseOptOutStatus.textContent = "Saving release opt-out…";
+releaseOptInForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const releaseOptInSubmissionId = releaseOptInSubmission?.value.trim() ?? "";
+  if (!releaseOptInSubmissionId || !releaseOptInForm.reportValidity()) return;
+  sessionStorage.setItem(pendingReleaseOptInKey, releaseOptInSubmissionId);
+  setReleaseOptInPending(true, "Scheduling source release…");
+  releaseOptInStatus.textContent = "Saving release choice…";
   try {
-    const response = await fetch("/api/v1/browser/submissions/" + encodeURIComponent(releaseOptOutSubmissionId) + "/publication-opt-out", {
+    const response = await fetch("/api/v1/browser/submissions/" + encodeURIComponent(releaseOptInSubmissionId) + "/publication-opt-in", {
       method: "POST",
       credentials: "same-origin",
     });
     const body = await response.json();
-    if (!response.ok || body.publication_choice !== "withheld") {
-      throw new Error("Release opt-out was rejected with HTTP " + response.status);
+    if (!response.ok || body.publication_choice !== "scheduled") {
+      throw new Error("Release scheduling was rejected with HTTP " + response.status);
     }
-    setReleaseOptOutPending(false, "Automatic source release opted out");
-    releaseOptOutButton.disabled = true;
-    releaseOptOutStatus.textContent = "LeanEval automatic source release is opted out while the publication choice remains withheld.";
+    sessionStorage.removeItem(pendingReleaseOptInKey);
+    setReleaseOptInPending(false, "Source release scheduled");
+    releaseOptInButton.disabled = true;
+    releaseOptInStatus.textContent = "LeanEval source release is now scheduled and cannot be changed back to private.";
   } catch (error) {
-    setReleaseOptOutPending(false, "Opt out of LeanEval source release");
-    releaseOptOutStatus.textContent = error instanceof Error ? error.message : "Release opt-out failed";
+    setReleaseOptInPending(false, "Schedule source release");
+    releaseOptInStatus.textContent = error instanceof Error ? error.message : "Release scheduling failed";
   }
 });`;
   return new Response(script, { headers: SCRIPT_HEADERS });

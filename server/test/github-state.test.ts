@@ -31,6 +31,7 @@ import {
   effectiveResultIdentityReservation,
   initialResultReleaseStatusView,
   recordedGuard,
+  type ResultReleaseStatusView,
   type VerifiedLegacyResult,
 } from "../src/result-owner";
 import {
@@ -2589,6 +2590,139 @@ describe("atomic Git State append", () => {
           `/compare/${RESULT_OWNER_CONTRACT_COMMIT}...${HEAD}`,
         );
     expect(fetcher.mock.calls.every(([, init]) => init?.redirect === "manual")).toBe(true);
+  });
+
+  it("atomically opts an accepted private result into publication and schedules release", async () => {
+    const withheldReceived: StateEvent = {
+      ...RECEIVED,
+      payload: { ...RECEIVED.payload, publication_choice: "withheld" },
+    };
+    const withheldView: SubmissionView = {
+      ...RESULT_VIEW,
+      submission: { ...RESULT_VIEW.submission, publication_choice: "withheld" },
+      publication_choice: "withheld",
+    };
+    const publication: WritableStateEvent = {
+      schema_version: 1,
+      event_id: "0198abcd-2222-7000-8000-000000000010",
+      event_type: "submission.publication_changed",
+      occurred_at: "2026-08-20T06:07:12.000Z",
+      subject_id: SUBMISSION_ID,
+      causation_event_id: METADATA_ID,
+      actor: { kind: "github", login: "alice" },
+      payload: { publication_choice: "scheduled" },
+    };
+    const releaseIdentity = {
+      eventId: "0198abcd-2222-7000-8000-000000000011",
+      occurredAt: "2026-08-20T06:07:12.001Z",
+    };
+    const notScheduled = initialResultReleaseStatusView(
+      RESULT_ID,
+      RESULT_EVENT.event_id,
+    );
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(withheldView),
+      contents(withheldReceived),
+      contents(METADATA),
+      contents(ARCHIVE_EVENT),
+      contents(EVALUATION_ACCEPTED),
+      contents(RESULT_EVENT),
+      contents(EVALUATION_STARTED),
+      contents(notScheduled),
+      new Response(null, { status: 404 }),
+      new Response(null, { status: 404 }),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+
+    const outcome = await repository(fetcher).appendPublicationOptIn(
+      publication,
+      releaseIdentity,
+      "alice",
+    );
+    expect(outcome).toMatchObject({
+      commit: NEW_COMMIT,
+      created: true,
+      releaseScheduled: true,
+      view: {
+        publication_choice: "scheduled",
+        publication_event_id: publication.event_id,
+        mutation_event_id: publication.event_id,
+      },
+    });
+    const treeRequest = fetcher.mock.calls.find(([input, init]) =>
+      fetchUrl(input).endsWith("/git/trees") && init?.method === "POST")?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
+    expect(tree.tree.map((entry) => entry.path)).toEqual([
+      `events/01/${publication.event_id}.json`,
+      `events/01/${releaseIdentity.eventId}.json`,
+      `views/submissions/01/${SUBMISSION_ID}.json`,
+      `views/result-release-status/aa/${RESULT_ID}.json`,
+    ]);
+    expect(JSON.parse(tree.tree[1]?.content ?? "null")).toMatchObject({
+      event_type: "release.scheduled",
+      causation_event_id: RESULT_EVENT.event_id,
+      payload: {
+        result_id: RESULT_ID,
+        release_at: "2026-10-20T06:07:10.001Z",
+      },
+    });
+    expect(JSON.parse(tree.tree[3]?.content ?? "null")).toEqual(
+      initialResultReleaseStatusView(
+        RESULT_ID,
+        RESULT_EVENT.event_id,
+        releaseIdentity.eventId,
+      ),
+    );
+  });
+
+  it("verifies an accepted result has a release schedule before reporting an idempotent opt-in", async () => {
+    const publication: WritableStateEvent = {
+      schema_version: 1,
+      event_id: "0198abcd-2222-7000-8000-000000000012",
+      event_type: "submission.publication_changed",
+      occurred_at: "2026-08-20T06:07:13.000Z",
+      subject_id: SUBMISSION_ID,
+      causation_event_id: METADATA_ID,
+      actor: { kind: "github", login: "alice" },
+      payload: { publication_choice: "scheduled" },
+    };
+    const releaseIdentity = {
+      eventId: "0198abcd-2222-7000-8000-000000000013",
+      occurredAt: "2026-08-20T06:07:13.001Z",
+    };
+    const responses = (status: ResultReleaseStatusView) => [
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(RESULT_VIEW),
+      contents(RECEIVED),
+      contents(METADATA),
+      contents(ARCHIVE_EVENT),
+      contents(EVALUATION_ACCEPTED),
+      contents(RESULT_EVENT),
+      contents(EVALUATION_STARTED),
+      contents(status),
+    ];
+
+    await expect(repository(sequence(responses(RESULT_RELEASE_STATUS_VIEW)))
+      .appendPublicationOptIn(publication, releaseIdentity, "alice"))
+      .resolves.toMatchObject({
+        commit: HEAD,
+        created: false,
+        releaseScheduled: true,
+      });
+    clearResultOwnerContractProofCacheForTest();
+    await expect(repository(sequence(responses(initialResultReleaseStatusView(
+      RESULT_ID,
+      RESULT_EVENT.event_id,
+    )))).appendPublicationOptIn(publication, releaseIdentity, "alice"))
+      .rejects.toBeInstanceOf(StateEventConflictError);
   });
 
   it("records an open-conjecture result with an exact not-scheduled release status", async () => {

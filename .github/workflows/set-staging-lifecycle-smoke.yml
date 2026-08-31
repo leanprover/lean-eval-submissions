@@ -189,7 +189,8 @@ jobs:
             --var "MODEL_IDENTITY_MAINTAINER_API_ENABLED:$enabled" \
             --var "MODEL_IDENTITY_MAINTAINERS:$MODEL_IDENTITY_MAINTAINERS" \
             --var "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED:false" \
-            --var "RELEASE_OPT_OUT_API_ENABLED:$enabled"
+            --var "RELEASE_OPT_IN_API_ENABLED:$enabled" \
+            --var "RELEASE_OPT_OUT_API_ENABLED:false"
 
       - name: Verify bounded staging lifecycle state
         env:
@@ -219,10 +220,11 @@ jobs:
               "result_amendment_maintainer_api_enabled",
               "model_identity_owner_api_enabled",
               "model_identity_maintainer_api_enabled",
-              "release_opt_out_api_enabled",
+              "release_opt_in_api_enabled",
           ):
               assert body[field] is enabled, field
           assert body["model_identity_consolidation_api_enabled"] is False
+          assert body["release_opt_out_api_enabled"] is False
           assert body["intake_enablement_mode"] == ("durable" if enabled else "disabled")
           assert body["intake_lease_expires_at"] is None
           PY
@@ -283,6 +285,7 @@ jobs:
             --var "MODEL_IDENTITY_MAINTAINER_API_ENABLED:false" \
             --var 'MODEL_IDENTITY_MAINTAINERS:[]' \
             --var "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED:false" \
+            --var "RELEASE_OPT_IN_API_ENABLED:false" \
             --var "RELEASE_OPT_OUT_API_ENABLED:false"
           for attempt in $(seq 1 13); do
             body=$(curl --fail --silent --show-error --max-time 10 \
@@ -306,6 +309,7 @@ jobs:
               "model_identity_owner_api_enabled",
               "model_identity_maintainer_api_enabled",
               "model_identity_consolidation_api_enabled",
+              "release_opt_in_api_enabled",
               "release_opt_out_api_enabled",
           ):
               assert body[field] is False, field

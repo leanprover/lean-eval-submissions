@@ -28,7 +28,7 @@ The launch candidate tracks:
 - historical-public replay disabled;
 - production acceptance endpoints disabled;
 - production result-owner, amendment-owner, amendment-maintainer,
-  model-identity-owner, model-identity-maintainer, and release-opt-out APIs
+  model-identity-owner, model-identity-maintainer, and publication-opt-in APIs
   enabled;
 - exactly `kim-em` / GitHub user `477956` in both production maintainer lists;
 - staging intake and every staging lifecycle API all-false with empty
@@ -136,7 +136,7 @@ gate for each:
 - repair/retraction requests;
 - maintainer decisions;
 - model aliases and renaming; and
-- release opt-out.
+- one-way publication opt-in. The reverse transition remains disabled.
 
 Before completing the production launch packet, run one owner/maintainer
 success and one authorization or validation denial for each family, then return
@@ -210,9 +210,9 @@ there is no movable or temporary release tag authority.
 3. after the watchdog reports that recovery is armed, dispatch the exact
    immutable tag through `set-staging-lifecycle-smoke.yml` with the fixture's
    two denial maintainer arrays and `state=enabled`;
-4. make one ordinary browser submission, wait for its Result, and click the
-   visible release opt-out control; no browser cookie, token, or DevTools value
-   is copied;
+4. make one ordinary browser submission with accepted source initially private,
+   wait for its Result, and click the visible irreversible publication opt-in
+   control; no browser cookie, token, or DevTools value is copied;
 5. run the driver with only the visible browser submission ID, secret gist ID,
    and exact staging commit. It derives the browser Result through the
    same-owner agent session and accepts no Result ID from the operator;
@@ -282,8 +282,9 @@ fresh reviewed recovery decision.
 The final disabled-route assertions are transient response checks. Intake must
 return `503 intake_disabled`; every launch lifecycle gate—including legacy
 result-owner, result-amendment owner and maintainer, model-identity owner and
-maintainer, and release opt-out—must return the public owner-hiding `404
-not_found`. Model consolidation stays excluded. For lifecycle probes the driver
+maintainer, and publication opt-in—must return the public owner-hiding `404
+not_found`. The reverse publication transition and model consolidation stay
+disabled. For lifecycle probes the driver
 also proves its generated idempotency event is absent from State. Do not create
 a State event, durable evidence record, artifact, or run-history document for
 these denials.
@@ -291,7 +292,7 @@ these denials.
 This lifecycle driver does not verify the public entry page. Separately perform
 the browser UI regression check at `lean-lang.org/eval/submit`: problem text,
 pre-filled form values, sign-in feedback, preparing spinner, submission status,
-and the visible opt-out control must all work without DevTools.
+and the visible irreversible opt-in control must all work without DevTools.
 
 After the single accepted run and verified all-false recovery, retirement is a
 required source change, not optional cleanup. Delete this exact inventory:

@@ -371,9 +371,10 @@ read path without affecting State writers or intake.
 
 `leanprover/lean-eval-releases` owns public two-calendar-month-delayed source
 bundles and provenance. Eligibility is recomputed from immutable State. The
-controller's publication variable remains absent. Release opt-out and
-submitter-facing license/release text must pass the launch smoke and maintainer
-review before enablement.
+controller's publication variable remains absent. The initial private/scheduled
+choice, one-way later publication opt-in, and submitter-facing license/release
+text must pass the launch smoke and maintainer review before enablement. The
+reverse scheduled-to-private transition remains disabled.
 
 ## Monitoring and emergency response
 

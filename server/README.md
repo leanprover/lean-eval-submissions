@@ -126,15 +126,22 @@ contract testing:
 - For both browser and headless intake, choosing `publication_choice=scheduled`
   confirms that the submitter is authorized to license the submitted source
   under the Apache License 2.0. Accepted source is released under that license
-  exactly two UTC calendar months after acceptance. Choosing `withheld` opts
-  out of release.
+  exactly two UTC calendar months after acceptance. Choosing `withheld` keeps
+  accepted source private.
+- `POST /api/v1/browser/submissions/<uuid>/publication-opt-in` lets the owning
+  identity irreversibly change `withheld` to `scheduled`. If a result already
+  exists, the State update atomically creates its previously absent release
+  schedule. The browser form accepts the receipt ID of an earlier private
+  submission, so this choice remains available after the submission page is
+  reloaded. The route has its own exact-`true`
+  `RELEASE_OPT_IN_API_ENABLED` gate.
 - `GET /api/v1/submissions/<uuid>`,
   `PATCH /api/v1/submissions/<uuid>/metadata`, and
   `PUT /api/v1/submissions/<uuid>/publication` require the base record's
   owning identity. Mutations also require a canonical UUIDv7
   `Idempotency-Key`; cookie-authenticated mutations are same-origin. The
-  publication route has its own exact-`true` `RELEASE_OPT_OUT_API_ENABLED`
-  gate, so an owner can withhold a submission while intake remains disabled.
+  publication mutation accepts only the same one-way `withheld` to `scheduled`
+  authorization and shares the opt-in gate.
 - `POST /api/v1/results/claims` and
   `PATCH /api/v1/results/<result-id>/metadata` implement the separately gated
   legacy-result owner flow documented in

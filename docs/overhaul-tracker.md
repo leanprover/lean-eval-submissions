@@ -23,7 +23,7 @@ history, or replace the cross-repository execution runbook.
   allowlists.
 - This launch candidate keeps production intake disabled while tracking the
   reviewed result-owner, amendment-owner, amendment-maintainer,
-  model-identity-owner, model-identity-maintainer, and release-opt-out gates as
+  model-identity-owner, model-identity-maintainer, and publication-opt-in gates as
   enabled for exactly `kim-em` / GitHub user `477956` where maintainer
   authority is required. It has not been deployed and readiness remains
   `NO-GO`.
@@ -89,7 +89,8 @@ not this summary.
       maintainer decisions.
 - [x] Prepare one success and one authorization/validation denial fixture for
       model alias/rename.
-- [x] Prepare one pre-release opt-out case and verify its scheduling effect.
+- [ ] Prepare one private-to-scheduled publication opt-in case and verify its
+      atomic scheduling effect after a Result exists.
 - [x] Prove that each launch gate returns to disabled and public health reports
       the effective state.
 - [ ] Prepare one browser and one source-bound headless staging submission at
@@ -177,8 +178,8 @@ the [cross-repository execution runbook][execution-runbook].
 - [ ] Accepted and rejected lifecycle transitions are coherent and recoverable.
 - [ ] Launch-approved owner and maintainer APIs are operating with disable
       paths.
-- [ ] Automatic releases operate under the two-calendar-month policy with
-      opt-out support.
+- [ ] Automatic releases operate under the two-calendar-month policy with the
+      initial private/scheduled choice and one-way later opt-in.
 - [ ] Every final-cutoff accepted Result has an official-Lean-plus-nanoda
       terminal replay or reviewed unavailable disposition.
 - [ ] Current rollback and emergency-pause procedures are verified.

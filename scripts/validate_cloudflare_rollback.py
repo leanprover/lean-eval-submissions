@@ -58,6 +58,7 @@ CALLBACK_CONTRACT_FILES = [
     "server/src/github-state.ts",
     "server/src/maintainer.ts",
     "server/src/model-identity.ts",
+    "server/src/release-policy.ts",
     "server/src/result-amendment.ts",
     "server/src/result-owner.ts",
     "server/src/scheduled-subrequest-budget.ts",
@@ -93,6 +94,7 @@ DISABLED_LAUNCH_GATE_BINDINGS = {
     "MODEL_IDENTITY_MAINTAINER_API_ENABLED": "false",
     "MODEL_IDENTITY_MAINTAINERS": "[]",
     "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED": "false",
+    "RELEASE_OPT_IN_API_ENABLED": "false",
     "RELEASE_OPT_OUT_API_ENABLED": "false",
     "PROMOTION_CANARY_ENABLED": "false",
 }
@@ -912,6 +914,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     model_consolidation_supported = (
         present_model_consolidation_fields == model_consolidation_gate_fields
     )
+    release_opt_in_supported = "RELEASE_OPT_IN_API_ENABLED" in intake_expected
     release_opt_out_supported = "RELEASE_OPT_OUT_API_ENABLED" in intake_expected
     intake_limits = intake_selected.get("limits")
     if (
@@ -968,6 +971,12 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         if model_consolidation_supported
         else False
     )
+    plan["release_opt_in_api_contract_supported"] = release_opt_in_supported
+    plan["release_opt_in_api_enabled"] = (
+        enabled(intake_expected, "RELEASE_OPT_IN_API_ENABLED")
+        if release_opt_in_supported
+        else False
+    )
     plan["release_opt_out_api_contract_supported"] = release_opt_out_supported
     plan["release_opt_out_api_enabled"] = (
         enabled(intake_expected, "RELEASE_OPT_OUT_API_ENABLED")
@@ -1019,6 +1028,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
             "model_identity_owner_api_enabled",
             "model_identity_maintainer_api_enabled",
             "model_identity_consolidation_api_enabled",
+            "release_opt_in_api_enabled",
             "release_opt_out_api_enabled",
             "promotion_canary_enabled",
             "replay_enabled",
@@ -1027,7 +1037,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     ):
         raise RollbackValidationError(
             "an emergency production rollback target must disable result owner APIs, "
-            "promotion canary, replay, model identity APIs, and release opt-out"
+            "promotion canary, replay, model identity APIs, and release choice APIs"
         )
     if getattr(args, "require_intake_disabled", False) and plan["intake_enabled"]:
         raise RollbackValidationError(
@@ -1284,6 +1294,10 @@ def validate_health(
             expected["model_identity_consolidation_api_enabled"] = plan[
                 "model_identity_consolidation_api_enabled"
             ]
+        if plan["release_opt_in_api_contract_supported"]:
+            expected["release_opt_in_api_enabled"] = plan[
+                "release_opt_in_api_enabled"
+            ]
         if plan["release_opt_out_api_contract_supported"]:
             expected["release_opt_out_api_enabled"] = plan[
                 "release_opt_out_api_enabled"
@@ -1362,6 +1376,8 @@ def build_prestate(args: argparse.Namespace) -> dict[str, Any]:
         "model_identity_maintainer_api_enabled",
         "model_identity_consolidation_api_contract_supported",
         "model_identity_consolidation_api_enabled",
+        "release_opt_in_api_contract_supported",
+        "release_opt_in_api_enabled",
         "release_opt_out_api_contract_supported",
         "release_opt_out_api_enabled",
         "model_identity_state_contract_commit",
@@ -1478,6 +1494,10 @@ def build_prestate(args: argparse.Namespace) -> dict[str, Any]:
             "model_identity_consolidation_api_enabled": plan[
                 "model_identity_consolidation_api_enabled"
             ],
+            "release_opt_in_api_contract_supported": plan[
+                "release_opt_in_api_contract_supported"
+            ],
+            "release_opt_in_api_enabled": plan["release_opt_in_api_enabled"],
             "release_opt_out_api_contract_supported": plan[
                 "release_opt_out_api_contract_supported"
             ],

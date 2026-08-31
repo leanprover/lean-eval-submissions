@@ -76,7 +76,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             4,
         )
         self.assertEqual(
-            DEPLOY.count('"release_opt_out_api_enabled",'),
+            DEPLOY.count('"release_opt_in_api_enabled",'),
             3,
         )
         self.assertIn('body["release_opt_out_api_enabled"] is False', DEPLOY)
@@ -726,7 +726,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "result_amendment_maintainer_api_enabled",
             "model_identity_owner_api_enabled",
             "model_identity_maintainer_api_enabled",
-            "release_opt_out_api_enabled",
+            "release_opt_in_api_enabled",
         ):
             with self.subTest(field=field):
                 self.assertEqual(production.count(f'"{field}",'), 3)
@@ -889,6 +889,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("--require-intake-disabled", RECOVERY)
         self.assertIn("--require-launch-gates-disabled", RECOVERY)
         self.assertIn("worker_lifecycle_configuration.py", RECOVERY)
+        self.assertIn('--var "RELEASE_OPT_IN_API_ENABLED:false"', RECOVERY)
         self.assertIn('--var "RELEASE_OPT_OUT_API_ENABLED:false"', RECOVERY)
         self.assertIn('--var "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED:false"', RECOVERY)
         self.assertNotIn("INTAKE_ENABLED:true", RECOVERY)
@@ -1005,8 +1006,12 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                     "false",
                 )
                 self.assertEqual(
-                    configuration["vars"]["RELEASE_OPT_OUT_API_ENABLED"],
+                    configuration["vars"]["RELEASE_OPT_IN_API_ENABLED"],
                     expected_lifecycle,
+                )
+                self.assertEqual(
+                    configuration["vars"]["RELEASE_OPT_OUT_API_ENABLED"],
+                    "false",
                 )
                 expected_contract = (
                     "8ae11456f0a439f91ec5822ec36adb93b76b0d96"

@@ -87,6 +87,7 @@ import {
 } from "./github-provider";
 import { githubBrokerFetch } from "./github-broker-client";
 import { intakeEnablement, type IntakeEnablement } from "./intake-enablement";
+import { addCalendarMonths } from "./release-policy";
 import {
   type ArchiveCompletedEvent,
   type ArchiveFailedEvent,
@@ -163,6 +164,7 @@ export type RuntimeEnv = Omit<
   | "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED"
   | "MODEL_IDENTITY_MAINTAINERS"
   | "MODEL_IDENTITY_STATE_CONTRACT_COMMIT"
+  | "RELEASE_OPT_IN_API_ENABLED"
   | "RELEASE_OPT_OUT_API_ENABLED"
   | "STATE_REPOSITORY"
 > &
@@ -206,6 +208,7 @@ export type RuntimeEnv = Omit<
     MODEL_IDENTITY_CONSOLIDATION_API_ENABLED?: string;
     MODEL_IDENTITY_MAINTAINERS?: string;
     MODEL_IDENTITY_STATE_CONTRACT_COMMIT?: string;
+    RELEASE_OPT_IN_API_ENABLED?: string;
     RELEASE_OPT_OUT_API_ENABLED?: string;
     STATE_REPOSITORY: string;
   }>;
@@ -240,6 +243,15 @@ export type StateAccess = Readonly<{
     expectedMutationEventId: string,
     nextView: SubmissionView,
   ): Promise<{ created: boolean; view: SubmissionView }>;
+  appendPublicationOptIn(
+    event: WritableStateEvent,
+    releaseIdentity: Readonly<{ eventId: string; occurredAt: string }>,
+    ownerLogin: string,
+  ): Promise<{
+    created: boolean;
+    releaseScheduled: boolean;
+    view: SubmissionView;
+  }>;
   updateDispatch(
     nextView: SubmissionView,
     expectedAttempts: number,
@@ -413,12 +425,22 @@ function requireModelIdentityConsolidationApi(env: RuntimeEnv): void {
   }
 }
 
-function releaseOptOutApiEnabled(env: RuntimeEnv): boolean {
-  return env.RELEASE_OPT_OUT_API_ENABLED === "true";
+function releaseOptOutApiEnabled(): boolean {
+  return false;
 }
 
-function requireReleaseOptOutApi(env: RuntimeEnv): void {
-  if (!releaseOptOutApiEnabled(env)) {
+function releaseOptInApiEnabled(env: RuntimeEnv): boolean {
+  return env.RELEASE_OPT_IN_API_ENABLED === "true";
+}
+
+function requireReleaseOptInApi(env: RuntimeEnv): void {
+  if (!releaseOptInApiEnabled(env)) {
+    throw new GitHubProviderError(503, "release opt-in API is not configured");
+  }
+}
+
+function requireReleaseOptOutApi(): void {
+  if (!releaseOptOutApiEnabled()) {
     throw new GitHubProviderError(503, "release opt-out API is not configured");
   }
 }
@@ -1633,20 +1655,6 @@ async function evaluationCompleted(
   }, outcome.created ? 201 : 200);
 }
 
-function addCalendarMonths(timestamp: string, months: number): string {
-  const date = new Date(timestamp);
-  const day = date.getUTCDate();
-  date.setUTCDate(1);
-  date.setUTCMonth(date.getUTCMonth() + months);
-  const endOfMonth = new Date(Date.UTC(
-    date.getUTCFullYear(),
-    date.getUTCMonth() + 1,
-    0,
-  )).getUTCDate();
-  date.setUTCDate(Math.min(day, endOfMonth));
-  return date.toISOString();
-}
-
 async function resultCompleted(
   request: Request,
   env: RuntimeEnv,
@@ -1896,10 +1904,47 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const grant = await verifyToken<SubmissionGrant>(configuredSecret(env), body.grant, "submission_grant", now);
     return acceptSubmission(env, dependencies, { id: authenticated.github_id, login: authenticated.login }, grant, body.submission, "submission");
   }
+  const browserPublicationOptInMatch =
+    /^\/api\/v1\/browser\/submissions\/([0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/publication-opt-in$/.exec(url.pathname);
+  if (request.method === "POST" && browserPublicationOptInMatch?.[1]) {
+    requireReleaseOptInApi(env);
+    const authenticated = await session(request, env, dependencies);
+    const ledger = state(env, dependencies);
+    const submissionId = browserPublicationOptInMatch[1];
+    const current = await ledger.readSubmission(submissionId);
+    if (current?.owner_login !== authenticated.login) return json({ error: "not_found" }, 404);
+    const identity = nextSubmissionMutationIdentity(current.mutation_event_id, nowMilliseconds);
+    const releaseMilliseconds = Date.parse(identity.occurredAt) + 1;
+    const releaseIdentity = {
+      eventId: newEventId(releaseMilliseconds),
+      occurredAt: canonicalMilliseconds(releaseMilliseconds),
+    };
+    const event: WritableStateEvent = {
+      schema_version: 1,
+      event_id: identity.eventId,
+      event_type: "submission.publication_changed",
+      occurred_at: identity.occurredAt,
+      subject_id: submissionId,
+      causation_event_id: current.mutation_event_id,
+      actor: { kind: "github", login: authenticated.login },
+      payload: { publication_choice: "scheduled" },
+    };
+    const outcome = await ledger.appendPublicationOptIn(
+      event,
+      releaseIdentity,
+      authenticated.login,
+    );
+    return json({
+      submission_id: submissionId,
+      publication_choice: "scheduled",
+      release_schedule: outcome.releaseScheduled ? "scheduled" : "pending_result",
+      status: outcome.created ? "opted_in" : "already_scheduled",
+    });
+  }
   const browserPublicationOptOutMatch =
     /^\/api\/v1\/browser\/submissions\/([0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/publication-opt-out$/.exec(url.pathname);
   if (request.method === "POST" && browserPublicationOptOutMatch?.[1]) {
-    requireReleaseOptOutApi(env);
+    requireReleaseOptOutApi();
     const authenticated = await session(request, env, dependencies);
     const ledger = state(env, dependencies);
     const submissionId = browserPublicationOptOutMatch[1];
@@ -2267,22 +2312,33 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
       return json({ submission_id: match[1], status: "amended" });
     }
     if (request.method === "PUT" && match[2] === "publication") {
-      requireReleaseOptOutApi(env);
+      requireReleaseOptInApi(env);
       const choice: PublicationChoice = decodePublicationChoice(await readJson(request));
+      if (choice !== "scheduled") {
+        throw new ApiDecodeError("publication choice may only change from withheld to scheduled");
+      }
       const event: WritableStateEvent = {
         schema_version: 1, event_id: eventId, event_type: "submission.publication_changed",
-        occurred_at: canonicalMilliseconds(nowMilliseconds), subject_id: match[1], causation_event_id: current.mutation_event_id,
-        actor: { kind: "github", login: authenticated.login }, payload: { publication_choice: choice },
+        occurred_at: canonicalMilliseconds(nowMilliseconds), subject_id: match[1],
+        causation_event_id: current.mutation_event_id,
+        actor: { kind: "github", login: authenticated.login },
+        payload: { publication_choice: "scheduled" },
       };
-      const nextView: SubmissionView = {
-        ...current,
-        mutation_event_id: eventId,
-        publication_event_id: eventId,
-        submission: { ...current.submission, publication_choice: choice },
-        publication_choice: choice,
-      };
-      await ledger.appendSubmissionMutation(event, current.mutation_event_id, nextView);
-      return json({ submission_id: match[1], publication_choice: choice });
+      const releaseMilliseconds = nowMilliseconds + 1;
+      const outcome = await ledger.appendPublicationOptIn(
+        event,
+        {
+          eventId: newEventId(releaseMilliseconds),
+          occurredAt: canonicalMilliseconds(releaseMilliseconds),
+        },
+        authenticated.login,
+      );
+      return json({
+        submission_id: match[1],
+        publication_choice: "scheduled",
+        release_schedule: outcome.releaseScheduled ? "scheduled" : "pending_result",
+        status: outcome.created ? "opted_in" : "already_scheduled",
+      });
     }
   }
   return json({ error: "not_found" }, 404);
@@ -2331,7 +2387,7 @@ export async function handleRequest(
     return browserPage(
       env.DEPLOYMENT_ENVIRONMENT,
       intake.effective,
-      releaseOptOutApiEnabled(env),
+      releaseOptInApiEnabled(env),
     );
   }
   if (request.method === "GET" && url.pathname === "/intake.js") {
@@ -2356,7 +2412,8 @@ export async function handleRequest(
       model_identity_consolidation_api_enabled: modelIdentityConsolidationApiEnabled(env),
       model_identity_write_max_subrequests: MODEL_IDENTITY_WRITE_MAX_SUBREQUESTS,
       model_identity_consolidation_api: MODEL_IDENTITY_CONSOLIDATION_CAPABILITY,
-      release_opt_out_api_enabled: releaseOptOutApiEnabled(env),
+      release_opt_in_api_enabled: releaseOptInApiEnabled(env),
+      release_opt_out_api_enabled: releaseOptOutApiEnabled(),
       promotion_canary_configured_enabled: env.PROMOTION_CANARY_ENABLED === "true",
       promotion_canary_enabled: promotionCanaryEnabled(env),
     });
@@ -2425,15 +2482,18 @@ export async function handleRequest(
   const modelIdentityMaintainerRoute =
     /^\/api\/v1\/model-identities\/mi1_[0-9a-f]{64}\/decisions$/.test(url.pathname);
   const releaseOptOutRoute =
-    /^\/api\/v1\/submissions\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/publication$/.test(url.pathname) ||
     /^\/api\/v1\/browser\/submissions\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/publication-opt-out$/.test(url.pathname);
+  const releaseOptInRoute =
+    /^\/api\/v1\/browser\/submissions\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/publication-opt-in$/.test(url.pathname) ||
+    /^\/api\/v1\/submissions\/[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/publication$/.test(url.pathname);
   if (legacyResultOwnerRoute && !resultOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (amendmentOwnerRoute && !resultAmendmentOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (amendmentMaintainerRoute && !resultAmendmentMaintainerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (modelIdentityRoute && !modelIdentityOwnerApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (modelIdentityConsolidationRoute && !modelIdentityConsolidationApiEnabled(env)) return json({ error: "not_found" }, 404);
   if (modelIdentityMaintainerRoute && !modelIdentityMaintainerApiEnabled(env)) return json({ error: "not_found" }, 404);
-  if (releaseOptOutRoute && !releaseOptOutApiEnabled(env)) return json({ error: "not_found" }, 404);
+  if (releaseOptOutRoute && !releaseOptOutApiEnabled()) return json({ error: "not_found" }, 404);
+  if (releaseOptInRoute && !releaseOptInApiEnabled(env)) return json({ error: "not_found" }, 404);
   const oauthRoute = url.pathname === "/api/v1/oauth/start" || url.pathname === "/api/v1/oauth/callback";
   const anyOwnerApiEnabled = resultOwnerApiEnabled(env) || resultAmendmentOwnerApiEnabled(env) ||
     resultAmendmentMaintainerApiEnabled(env);
@@ -2445,7 +2505,8 @@ export async function handleRequest(
     !(
       ((legacyResultOwnerRoute || amendmentOwnerRoute || amendmentMaintainerRoute || oauthRoute) && anyOwnerApiEnabled) ||
       ((modelIdentityRoute || modelIdentityMaintainerRoute || modelIdentityConsolidationRoute || oauthRoute) && anyModelIdentityApiEnabled) ||
-      ((releaseOptOutRoute || oauthRoute) && releaseOptOutApiEnabled(env))
+      ((releaseOptInRoute || oauthRoute) && releaseOptInApiEnabled(env)) ||
+      ((releaseOptOutRoute || oauthRoute) && releaseOptOutApiEnabled())
     )
   ) {
     return json({ error: "intake_disabled" }, 503);

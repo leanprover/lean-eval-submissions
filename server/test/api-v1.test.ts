@@ -63,7 +63,6 @@ import {
   type ResultAmendmentView,
 } from "../src/result-amendment";
 import {
-  newEventId,
   validateStateEvent,
   type WritableResultLifecycleEvent,
   type WritableStateEvent,
@@ -135,6 +134,7 @@ class MemoryState implements StateAccess {
   readonly events: WritableStateEvent[] = [];
   readonly views = new Map<string, SubmissionView>();
   readonly outbox = new Map<string, DispatchOutbox>();
+  readonly scheduledReleases = new Set<string>();
   created = true;
   head = "d".repeat(40);
   readonly legacyClaims: LegacyResultClaimRequest[] = [];
@@ -253,6 +253,70 @@ class MemoryState implements StateAccess {
     this.events.push(event);
     this.views.set(nextView.submission_id, nextView);
     return Promise.resolve({ created: true, view: nextView });
+  }
+
+  appendPublicationOptIn(
+    event: WritableStateEvent,
+    releaseIdentity: Readonly<{ eventId: string; occurredAt: string }>,
+    ownerLogin: string,
+  ): Promise<{
+    created: boolean;
+    releaseScheduled: boolean;
+    view: SubmissionView;
+  }> {
+    validateStateEvent(event);
+    const current = this.views.get(event.subject_id);
+    if (current?.owner_login !== ownerLogin) throw new Error("publication opt-in conflict");
+    if (current.publication_choice === "scheduled") {
+      if (
+        current.result_id !== null &&
+        current.submission.problem_group !== "open-conjectures" &&
+        !this.scheduledReleases.has(current.result_id)
+      ) {
+        throw new StateEventConflictError(current.result_id);
+      }
+      return Promise.resolve({
+        created: false,
+        releaseScheduled: current.result_id !== null &&
+          current.submission.problem_group !== "open-conjectures",
+        view: current,
+      });
+    }
+    const nextView = decodeSubmissionView({
+      ...current,
+      mutation_event_id: event.event_id,
+      publication_event_id: event.event_id,
+      submission: { ...current.submission, publication_choice: "scheduled" },
+      publication_choice: "scheduled",
+    });
+    this.events.push(event);
+    let releaseScheduled = false;
+    if (
+      current.schema_version === 2 &&
+      current.result_id !== null &&
+      current.evaluation.status === "accepted" &&
+      current.submission.problem_group !== "open-conjectures"
+    ) {
+      const release: WritableStateEvent = {
+        schema_version: 1,
+        event_id: releaseIdentity.eventId,
+        event_type: "release.scheduled",
+        occurred_at: releaseIdentity.occurredAt,
+        subject_id: current.result_id,
+        causation_event_id: event.event_id,
+        actor: { kind: "system" },
+        payload: {
+          result_id: current.result_id,
+          release_at: "2026-03-31T12:34:56.789Z",
+        },
+      };
+      validateStateEvent(release);
+      this.events.push(release);
+      this.scheduledReleases.add(current.result_id);
+      releaseScheduled = true;
+    }
+    this.views.set(event.subject_id, nextView);
+    return Promise.resolve({ created: true, releaseScheduled, view: nextView });
   }
 
   updateDispatch(
@@ -2098,16 +2162,9 @@ describe("browser OAuth and owner routes in workerd", () => {
     expect(upstream).toHaveBeenCalledTimes(4);
   });
 
-  it("provides a gated, owner-only, retry-safe browser publication opt-out", async () => {
+  it("keeps the legacy reverse publication transition hard-disabled", async () => {
     const state = new MemoryState();
     const submissionId = "019debcf-cb48-7000-8000-000000000001";
-    const maximumTail = new Uint8Array(16).fill(0xff);
-    const mutationHead = newEventId(NOW_MS, maximumTail);
-    state.views.set(submissionId, {
-      ...pendingView(submissionId, new Date(NOW_MS).toISOString()),
-      mutation_event_id: mutationHead,
-      metadata_event_id: mutationHead,
-    });
     const alice: BrowserSession = {
       kind: "browser_session",
       login: "alice",
@@ -2116,15 +2173,14 @@ describe("browser OAuth and owner routes in workerd", () => {
       expires_at: Math.floor(NOW_MS / 1000) + 3600,
     };
     const aliceToken = await signToken(SECRET, alice);
-    const bobToken = await signToken(SECRET, { ...alice, login: "bob" });
     const path = `/api/v1/browser/submissions/${submissionId}/publication-opt-out`;
-    const request = (token?: string, origin = "https://submit.test") => new Request(
+    const request = () => new Request(
       `https://submit.test${path}`,
       {
         method: "POST",
         headers: {
-          ...(token === undefined ? {} : { cookie: `lean_eval_session=${token}` }),
-          origin,
+          cookie: `lean_eval_session=${aliceToken}`,
+          origin: "https://submit.test",
         },
       },
     );
@@ -2142,7 +2198,61 @@ describe("browser OAuth and owner routes in workerd", () => {
       LIFECYCLE,
       { now: () => NOW_MS, state },
     );
-    expect(await enabledPage.text()).toContain('id="release-opt-out" hidden');
+    expect(await enabledPage.text()).not.toContain('id="release-opt-out"');
+
+    for (const env of [ENV, { ...ENV, RELEASE_OPT_OUT_API_ENABLED: "true" }]) {
+      const response = await handleRequest(
+        request(),
+        env,
+        LIFECYCLE,
+        { now: () => NOW_MS, state },
+      );
+      expect(response.status).toBe(404);
+    }
+    expect(state.events).toHaveLength(0);
+  });
+
+  it("allows only owner opt-in and schedules a previously accepted result", async () => {
+    const state = new MemoryState();
+    const submissionId = "019debcf-cb48-7000-8000-000000000011";
+    const resultId = `r2_${"1".repeat(64)}`;
+    const pending = pendingView(submissionId, "2026-01-30T00:00:00.000Z");
+    state.views.set(submissionId, {
+      ...pending,
+      schema_version: 2,
+      submission: { ...pending.submission, publication_choice: "withheld" },
+      publication_choice: "withheld",
+      archive: { status: "pending" },
+      evaluation: {
+        status: "accepted",
+        event_id: "019debcf-cb48-7000-8000-000000000020",
+        occurred_at: "2026-01-31T12:34:56.789Z",
+        attempt: 1,
+        benchmark_repository: "leanprover/lean-eval",
+        benchmark_commit: "b".repeat(40),
+        toolchain: "leanprover/lean4:v4.32.0",
+        evaluator_version: "test",
+      },
+      result_id: resultId,
+      result_event_id: "019debcf-cb48-7000-8000-000000000021",
+    });
+    const alice: BrowserSession = {
+      kind: "browser_session",
+      login: "alice",
+      github_id: 42,
+      issued_at: Math.floor(NOW_MS / 1000),
+      expires_at: Math.floor(NOW_MS / 1000) + 3600,
+    };
+    const aliceToken = await signToken(SECRET, alice);
+    const bobToken = await signToken(SECRET, { ...alice, login: "bob" });
+    const path = `/api/v1/browser/submissions/${submissionId}/publication-opt-in`;
+    const request = (token: string) => new Request(`https://submit.test${path}`, {
+      method: "POST",
+      headers: {
+        cookie: `lean_eval_session=${token}`,
+        origin: "https://submit.test",
+      },
+    });
 
     const disabled = await handleRequest(
       request(aliceToken),
@@ -2151,75 +2261,151 @@ describe("browser OAuth and owner routes in workerd", () => {
       { now: () => NOW_MS, state },
     );
     expect(disabled.status).toBe(404);
-    expect(state.events).toHaveLength(0);
-
-    const releaseEnv: RuntimeEnv = {
+    const enabledEnv: RuntimeEnv = {
       ...ENV,
       INTAKE_ENABLED: "false",
-      RELEASE_OPT_OUT_API_ENABLED: "true",
+      RELEASE_OPT_IN_API_ENABLED: "true",
     };
-    const unauthenticated = await handleRequest(
-      request(),
-      releaseEnv,
-      LIFECYCLE,
-      { now: () => NOW_MS, state },
-    );
-    expect(unauthenticated.status).toBe(401);
-    const crossOrigin = await handleRequest(
-      request(aliceToken, "https://attacker.test"),
-      releaseEnv,
-      LIFECYCLE,
-      { now: () => NOW_MS, state },
-    );
-    expect(crossOrigin.status).toBe(401);
     const wrongOwner = await handleRequest(
       request(bobToken),
-      releaseEnv,
+      enabledEnv,
       LIFECYCLE,
       { now: () => NOW_MS, state },
     );
     expect(wrongOwner.status).toBe(404);
-    expect(state.events).toHaveLength(0);
 
-    const optedOut = await handleRequest(
+    const optedIn = await handleRequest(
       request(aliceToken),
-      releaseEnv,
+      enabledEnv,
       LIFECYCLE,
       { now: () => NOW_MS, state },
     );
-    expect(optedOut.status).toBe(200);
-    await expect(optedOut.json()).resolves.toEqual({
+    expect(optedIn.status).toBe(200);
+    await expect(optedIn.json()).resolves.toMatchObject({
       submission_id: submissionId,
-      publication_choice: "withheld",
-      status: "opted_out",
+      publication_choice: "scheduled",
+      release_schedule: "scheduled",
+      status: "opted_in",
     });
-    expect(state.events).toHaveLength(1);
-    expect(state.events[0]).toMatchObject({
-      event_type: "submission.publication_changed",
-      occurred_at: new Date(NOW_MS + 1).toISOString(),
-      subject_id: submissionId,
-      causation_event_id: mutationHead,
-      actor: { kind: "github", login: "alice" },
-      payload: { publication_choice: "withheld" },
+    expect(state.events.slice(-2).map((event) => event.event_type)).toEqual([
+      "submission.publication_changed",
+      "release.scheduled",
+    ]);
+    expect(state.events.at(-1)).toMatchObject({
+      subject_id: resultId,
+      payload: {
+        result_id: resultId,
+        release_at: "2026-03-31T12:34:56.789Z",
+      },
     });
-    expect(state.events[0]?.event_id.localeCompare(mutationHead)).toBe(1);
 
-    const retryAfterLostResponse = await handleRequest(
+    const retry = await handleRequest(
       request(aliceToken),
-      releaseEnv,
+      enabledEnv,
       LIFECYCLE,
       { now: () => NOW_MS, state },
     );
-    expect(retryAfterLostResponse.status).toBe(200);
-    await expect(retryAfterLostResponse.json()).resolves.toEqual({
+    await expect(retry.json()).resolves.toEqual({
       submission_id: submissionId,
-      publication_choice: "withheld",
-      status: "already_withheld",
+      publication_choice: "scheduled",
+      release_schedule: "scheduled",
+      status: "already_scheduled",
     });
-    expect(state.events).toHaveLength(1);
+    expect(state.events.slice(-2).map((event) => event.event_type)).toEqual([
+      "submission.publication_changed",
+      "release.scheduled",
+    ]);
   });
 
-  it("returns owner status and appends linear idempotent metadata/publication events", async () => {
+  it("records pre-result publication opt-in for normal result-time scheduling", async () => {
+    const state = new MemoryState();
+    const submissionId = "019debcf-cb48-7000-8000-000000000012";
+    const pending = pendingView(submissionId, "2026-01-30T00:00:00.000Z");
+    state.views.set(submissionId, {
+      ...pending,
+      submission: { ...pending.submission, publication_choice: "withheld" },
+      publication_choice: "withheld",
+    });
+    const alice: BrowserSession = {
+      kind: "browser_session",
+      login: "alice",
+      github_id: 42,
+      issued_at: Math.floor(NOW_MS / 1000),
+      expires_at: Math.floor(NOW_MS / 1000) + 3600,
+    };
+    const token = await signToken(SECRET, alice);
+    const response = await handleRequest(
+      new Request(
+        `https://submit.test/api/v1/browser/submissions/${submissionId}/publication-opt-in`,
+        {
+          method: "POST",
+          headers: {
+            cookie: `lean_eval_session=${token}`,
+            origin: "https://submit.test",
+          },
+        },
+      ),
+      { ...ENV, RELEASE_OPT_IN_API_ENABLED: "true" },
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    await expect(response.json()).resolves.toMatchObject({
+      publication_choice: "scheduled",
+      release_schedule: "pending_result",
+      status: "opted_in",
+    });
+    expect(state.events.at(-1)?.event_type).toBe("submission.publication_changed");
+    expect(state.views.get(submissionId)?.publication_choice).toBe("scheduled");
+  });
+
+  it("fails closed when an accepted scheduled submission has no release schedule", async () => {
+    const state = new MemoryState();
+    const submissionId = "019debcf-cb48-7000-8000-000000000013";
+    const resultId = `r2_${"2".repeat(64)}`;
+    const pending = pendingView(submissionId, "2026-01-30T00:00:00.000Z");
+    state.views.set(submissionId, {
+      ...pending,
+      schema_version: 2,
+      evaluation: {
+        status: "accepted",
+        event_id: "019debcf-cb48-7000-8000-000000000020",
+        occurred_at: "2026-01-31T12:34:56.789Z",
+        attempt: 1,
+        benchmark_repository: "leanprover/lean-eval",
+        benchmark_commit: "b".repeat(40),
+        toolchain: "leanprover/lean4:v4.32.0",
+        evaluator_version: "test",
+      },
+      result_id: resultId,
+      result_event_id: "019debcf-cb48-7000-8000-000000000021",
+    });
+    const token = await signToken(SECRET, {
+      kind: "browser_session",
+      login: "alice",
+      github_id: 42,
+      issued_at: Math.floor(NOW_MS / 1000),
+      expires_at: Math.floor(NOW_MS / 1000) + 3600,
+    });
+    const response = await handleRequest(
+      new Request(
+        `https://submit.test/api/v1/browser/submissions/${submissionId}/publication-opt-in`,
+        {
+          method: "POST",
+          headers: {
+            cookie: `lean_eval_session=${token}`,
+            origin: "https://submit.test",
+          },
+        },
+      ),
+      { ...ENV, RELEASE_OPT_IN_API_ENABLED: "true" },
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(response.status).toBe(409);
+    expect(state.events).toHaveLength(0);
+  });
+
+  it("returns owner status, appends metadata, and rejects the dormant reverse route", async () => {
     const state = new MemoryState();
     const submissionId = "019debcf-cb48-7000-8000-000000000001";
     state.events.push(
@@ -2327,7 +2513,7 @@ describe("browser OAuth and owner routes in workerd", () => {
     const releaseEnv: RuntimeEnv = {
       ...ENV,
       INTAKE_ENABLED: "false",
-      RELEASE_OPT_OUT_API_ENABLED: "true",
+      RELEASE_OPT_IN_API_ENABLED: "true",
     };
     const bob = await signToken(SECRET, { ...alice, login: "bob" });
     const hiddenPublication = await handleRequest(
@@ -2345,11 +2531,8 @@ describe("browser OAuth and owner routes in workerd", () => {
       LIFECYCLE,
       { now: () => NOW_MS, state },
     );
-    expect(publication.status).toBe(200);
-    expect(state.events.at(-1)).toMatchObject({
-      event_type: "submission.publication_changed",
-      causation_event_id: "019debcf-cb48-7000-8000-000000000003",
-    });
+    expect(publication.status).toBe(400);
+    expect(state.events).toHaveLength(eventCount);
 
     const status = await handleRequest(
       new Request(`https://submit.test/api/v1/submissions/${submissionId}`, { headers: { authorization } }),
@@ -2361,7 +2544,7 @@ describe("browser OAuth and owner routes in workerd", () => {
     await expect(status.json()).resolves.toMatchObject({
       submission_id: submissionId,
       production_metadata: { notes: "amended" },
-      publication_choice: "withheld",
+      publication_choice: "scheduled",
     });
 
     const hidden = await handleRequest(
@@ -2373,6 +2556,76 @@ describe("browser OAuth and owner routes in workerd", () => {
       { now: () => NOW_MS, state },
     );
     expect(hidden.status).toBe(404);
+  });
+
+  it("lets an authenticated owner irreversibly schedule a private submission through the generic API", async () => {
+    const state = new MemoryState();
+    const submissionId = "019debcf-cb48-7000-8000-000000000005";
+    const pending = pendingView(submissionId, "2026-01-30T00:00:00.000Z");
+    state.views.set(submissionId, {
+      ...pending,
+      submission: { ...pending.submission, publication_choice: "withheld" },
+      publication_choice: "withheld",
+    });
+    const authorization = `Bearer ${await signToken(SECRET, {
+      kind: "browser_session",
+      login: "alice",
+      github_id: 42,
+      issued_at: Math.floor(NOW_MS / 1000),
+      expires_at: Math.floor(NOW_MS / 1000) + 3600,
+    })}`;
+    const request = (choice: "scheduled" | "withheld", eventId: string) =>
+      new Request(`https://submit.test/api/v1/submissions/${submissionId}/publication`, {
+        method: "PUT",
+        headers: {
+          authorization,
+          "content-type": "application/json",
+          "idempotency-key": eventId,
+        },
+        body: JSON.stringify({ publication_choice: choice }),
+      });
+    const enabledEnv: RuntimeEnv = {
+      ...ENV,
+      INTAKE_ENABLED: "false",
+      RELEASE_OPT_IN_API_ENABLED: "true",
+    };
+
+    const optedIn = await handleRequest(
+      request("scheduled", "019debcf-cb48-7000-8000-000000000006"),
+      enabledEnv,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(optedIn.status).toBe(200);
+    await expect(optedIn.json()).resolves.toMatchObject({
+      submission_id: submissionId,
+      publication_choice: "scheduled",
+      release_schedule: "pending_result",
+      status: "opted_in",
+    });
+    expect(state.views.get(submissionId)?.publication_choice).toBe("scheduled");
+
+    const retry = await handleRequest(
+      request("scheduled", "019debcf-cb48-7000-8000-000000000007"),
+      enabledEnv,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(retry.status).toBe(200);
+    await expect(retry.json()).resolves.toMatchObject({
+      publication_choice: "scheduled",
+      release_schedule: "pending_result",
+      status: "already_scheduled",
+    });
+
+    const reverse = await handleRequest(
+      request("withheld", "019debcf-cb48-7000-8000-000000000008"),
+      enabledEnv,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(reverse.status).toBe(400);
+    expect(state.views.get(submissionId)?.publication_choice).toBe("scheduled");
   });
 });
 
