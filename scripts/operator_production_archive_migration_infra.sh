@@ -155,7 +155,7 @@ test -n "$staging_updated_before"
 aws cloudformation describe-stack-resources --stack-name "$STACK" \
   --region "$AWS_REGION" --output json > "$ops/resources-before.json"
 jq -e '
-  [.StackResources[] | select(.ResourceStatus | endswith("_COMPLETE") | not)] | length == 0 and
+  ([.StackResources[] | select(.ResourceStatus | endswith("_COMPLETE") | not)] | length) == 0 and
   ([.StackResources[].LogicalResourceId] | index("MigrationWrapRole")) == null
 ' "$ops/resources-before.json" >/dev/null
 

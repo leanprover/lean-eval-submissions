@@ -67,6 +67,16 @@ class ProductionArchiveMigrationInfrastructureTests(unittest.TestCase):
         self.assertIn('ReleaseGitHubSubjectPrefix: $releases', post)
         self.assertIn('SubmissionGitHubSubjectPrefix: $submissions', post)
 
+    def test_live_resource_status_filter_keeps_the_root_object_in_scope(self) -> None:
+        self.assertIn(
+            '([.StackResources[] | select(.ResourceStatus | endswith("_COMPLETE") | not)] | length) == 0 and',
+            SCRIPT,
+        )
+        self.assertNotIn(
+            '[.StackResources[] | select(.ResourceStatus | endswith("_COMPLETE") | not)] | length == 0 and',
+            SCRIPT,
+        )
+
     def test_never_installs_secret_or_runs_workloads(self) -> None:
         self.assertNotIn("gh secret set", SCRIPT)
         self.assertNotIn("gh workflow run", SCRIPT)
