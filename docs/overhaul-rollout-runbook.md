@@ -313,8 +313,13 @@ branch `staging-source-fixture-v1` from
 `leanprover/lean-eval-state-staging`. Never remove the branch while a generated
 source tag or dependent run remains. Retain that repository in the selected
 installations of both read-only source Apps only through the named production
-canary on its separate fixture branch, then remove both selections immediately
-after the production canary reaches its verified terminal Result.
+canary on its separate fixture branch. After the canary's archive, evaluation,
+State, Result, leaderboard presentation, and private-to-scheduled event are
+verified and no dependent run remains, delete temporary branch
+`production-canary-source-fixture-v4`. Then remove
+`leanprover/lean-eval-state-staging` from both App selections as the final canary
+cleanup step. The scheduled source need not have reached its two-month
+publication date before this cleanup.
 
 Remove this bounded-acceptance subsection and any tests or workflow inventories
 that reference those paths in the same retirement change. Retain no replacement
