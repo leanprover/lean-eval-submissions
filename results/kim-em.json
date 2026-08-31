@@ -496,6 +496,29 @@
         "ref": "c1e504a3acce2da2ee77054ca45e6c251b143545",
         "repo": "kim-em/lean-eval-intake-fixture"
       }
+    },
+    {
+      "accepted_at": "2026-08-31T00:39:27Z",
+      "benchmark_commit": "7e977ab32fa56be5b7f29933b3b8b02f9823d4b1",
+      "declared_model": "LeanEval launch browser staging smoke e3f6db4d347e63ae21f5361437c8cfad5ee70f99",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a05516-1a39-71f6-a7c2-61c3f832b339"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "harness": "bounded staging lifecycle smoke",
+        "human_involvement": "Selected and submitted by the staging operator",
+        "web_access": false
+      },
+      "result_id": "r2_d98b77374dd844db315af932bb0ee07e80926ef7c2ce28ac0116232641ad1f28",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "34357f2f94f39e293b1d2b127b7f298654d39cf7",
+        "repo": "leanprover/lean-eval-state-staging"
+      }
     }
   ],
   "schema_version": 2,
