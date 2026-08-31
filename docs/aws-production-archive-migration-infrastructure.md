@@ -21,6 +21,10 @@ The script fails closed unless all of these facts hold:
 
 - production is still the exact pre-migration stack and staging is unchanged;
 - the repaired ID-bearing `release-production` trust is present;
+- the live stack still has the legacy `SubmissionGitHubRepository` and
+  `ReleaseGitHubRepository` parameter names with their exact current subject
+  values; the update replaces those names with the reviewed subject-prefix
+  parameters without changing the effective subjects;
 - the migration environment is protected and has no legacy identity;
 - the source template and two Lambda source files match commit
   `c1013bee0b5b2f57956501e0258d27dc30413d2b` byte for byte;
