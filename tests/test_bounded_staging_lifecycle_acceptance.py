@@ -94,6 +94,17 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         self.assertIn(
             "window_minutes must be an integer from 15 through 90", self.watchdog
         )
+        enabled_health = self.watchdog[enabled:hold]
+        enabled_fields_start = enabled_health.index("for field in (")
+        enabled_fields_end = enabled_health.index("):", enabled_fields_start)
+        enabled_true_fields = enabled_health[
+            enabled_fields_start:enabled_fields_end
+        ]
+        self.assertIn('"release_opt_in_api_enabled"', enabled_true_fields)
+        self.assertNotIn('"release_opt_out_api_enabled"', enabled_true_fields)
+        self.assertIn(
+            'body["release_opt_out_api_enabled"] is False', enabled_health
+        )
         for variable in (
             "INTAKE_ENABLED",
             "LEGACY_RESULT_OWNER_API_ENABLED",
