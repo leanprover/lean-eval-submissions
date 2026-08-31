@@ -7,7 +7,7 @@ result ID, or reinterprets its grandfathered solution-publication policy.
 
 The implementation is bound to production State contract commit
 `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` and staging contract commit
-`8ae11456f0a439f91ec5822ec36adb93b76b0d96`. Before an owner operation, the
+`41f55135a8d5f36941e615e9ec9e4f5e32a786a5`. Before an owner operation, the
 Worker resolves protected State `main`, proves that it equals or descends from
 the repository-specific commit, and checks the exact current root entries for
 `README.md`, `docs`, `schema`, and `scripts`. The three tree entries bind their
@@ -25,7 +25,7 @@ The launch candidate tracks these non-secret variables:
 
 | Environment | Owner API | State contract |
 | --- | --- | --- |
-| Staging | `LEGACY_RESULT_OWNER_API_ENABLED=false` | `8ae11456f0a439f91ec5822ec36adb93b76b0d96` |
+| Staging | `LEGACY_RESULT_OWNER_API_ENABLED=false` | `41f55135a8d5f36941e615e9ec9e4f5e32a786a5` |
 | Production | `LEGACY_RESULT_OWNER_API_ENABLED=true` | `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` |
 
 The route exists only when the enable flag is exactly `true` and the contract
