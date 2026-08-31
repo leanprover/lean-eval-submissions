@@ -157,6 +157,7 @@ def expected_health(
             "RESULT_AMENDMENT_MAINTAINER_API_ENABLED",
             "MODEL_IDENTITY_OWNER_API_ENABLED",
             "MODEL_IDENTITY_MAINTAINER_API_ENABLED",
+            "RELEASE_OPT_IN_API_ENABLED",
             "RELEASE_OPT_OUT_API_ENABLED",
         )
     }
@@ -219,6 +220,9 @@ def expected_health(
         "model_identity_consolidation_api_enabled": False,
         "model_identity_write_max_subrequests": 400,
         "model_identity_consolidation_api": "atomic_reverse_impact_v1",
+        "release_opt_in_api_enabled": lifecycle_enabled[
+            "RELEASE_OPT_IN_API_ENABLED"
+        ],
         "release_opt_out_api_enabled": lifecycle_enabled[
             "RELEASE_OPT_OUT_API_ENABLED"
         ],
@@ -332,6 +336,9 @@ def verify_snapshot(
                     "model_identity_owner_api_enabled"
                 ],
                 "promotion_canary_enabled": expected_intake["promotion_canary_enabled"],
+                "release_opt_in_api_enabled": expected_intake[
+                    "release_opt_in_api_enabled"
+                ],
                 "release_opt_out_api_enabled": expected_intake[
                     "release_opt_out_api_enabled"
                 ],

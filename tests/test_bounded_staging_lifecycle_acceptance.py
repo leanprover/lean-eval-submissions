@@ -102,6 +102,7 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             "MODEL_IDENTITY_OWNER_API_ENABLED",
             "MODEL_IDENTITY_MAINTAINER_API_ENABLED",
             "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED",
+            "RELEASE_OPT_IN_API_ENABLED",
             "RELEASE_OPT_OUT_API_ENABLED",
         ):
             self.assertIn(f'--var "{variable}:false"', self.watchdog)
@@ -164,6 +165,11 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         self.assertNotIn("args.browser_result_id", self.driver_text)
         self.assertNotIn("confirm-external-mutations", self.driver_text)
         self.assertIn("browser, browser_result = wait_submission", self.driver_text)
+        self.assertIn(
+            'f"/api/v1/browser/submissions/{args.browser_submission_id}/publication-opt-in"',
+            self.driver_text,
+        )
+        self.assertNotIn("browser opt-out", self.driver_text.lower())
 
     def test_target_bound_pause_never_prints_challenge(self) -> None:
         mutation = self.mutation()

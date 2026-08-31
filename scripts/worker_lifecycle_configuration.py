@@ -24,7 +24,7 @@ LAUNCH_FLAGS = (
     "RESULT_AMENDMENT_MAINTAINER_API_ENABLED",
     "MODEL_IDENTITY_OWNER_API_ENABLED",
     "MODEL_IDENTITY_MAINTAINER_API_ENABLED",
-    "RELEASE_OPT_OUT_API_ENABLED",
+    "RELEASE_OPT_IN_API_ENABLED",
 )
 MAINTAINER_VARIABLES = (
     "RESULT_AMENDMENT_MAINTAINERS",
@@ -143,6 +143,10 @@ def read_lifecycle_state(path: pathlib.Path, environment: str) -> str:
     if variables.get("MODEL_IDENTITY_CONSOLIDATION_API_ENABLED") != "false":
         raise LifecycleConfigurationError(
             "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED must remain false"
+        )
+    if variables.get("RELEASE_OPT_OUT_API_ENABLED") != "false":
+        raise LifecycleConfigurationError(
+            "RELEASE_OPT_OUT_API_ENABLED must remain false"
         )
     expected_maintainers = 1 if state == "true" else 0
     for name in MAINTAINER_VARIABLES:

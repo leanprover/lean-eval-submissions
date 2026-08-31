@@ -97,6 +97,7 @@ class IntakeDisableRecoveryWorkflowTests(unittest.TestCase):
             "MODEL_IDENTITY_OWNER_API_ENABLED",
             "MODEL_IDENTITY_MAINTAINER_API_ENABLED",
             "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED",
+            "RELEASE_OPT_IN_API_ENABLED",
             "RELEASE_OPT_OUT_API_ENABLED",
             "PROMOTION_CANARY_ENABLED",
         ):

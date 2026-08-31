@@ -45,7 +45,7 @@ reads `GO`.
 | Result-owner APIs | disabled | legacy-result claim prerequisite, metadata backfill, and repair/retraction enabled |
 | Maintainer APIs | disabled, empty lists | decisions enabled for exactly `kim-em` / GitHub user `477956` |
 | Model identity APIs | identity-creation prerequisite and alias/rename disabled; consolidation disabled | identity creation and alias/rename enabled; consolidation remains disabled |
-| Release opt-out | disabled | enabled |
+| Publication opt-in | disabled | one-way private-to-scheduled transition enabled; reverse transition disabled |
 | Server intake | disabled, durable lease absent | enabled through the finite-lease controller, then durable |
 | Production canary | none | one packet-bound, withheld-source canary after intake; verify archive, evaluation, State, Result, leaderboard, and scheduling |
 | General and historical replay | disabled | remain disabled; bounded historical workflows are separate |
@@ -69,7 +69,7 @@ model consolidation, replay, or publication.
 | Archive boundary | Schema-version-3 archive-before-evaluation is deployed. Production archive authority is connected to the Encrypt-only Wrap role and has a qualified decrypt denial. The evaluation lane has no Wrap or unwrap authority. |
 | Staging release boundary | Qualified: exact one-submission scope, consume-before-unwrap, identical reuse refusal, authority removal before reconstruction, source allowlisting, no plaintext artifact, no State/Git mutation, and cleanup. Publication and production authority remained absent. |
 | Production release preflight | Controller State-write and audit-read credential preflights pass at release commit `4f3d4cdd11d41e93294ba7821899923375ba360f`, with publication absent and no due work. **PENDING:** repair the exact ID-bearing `release-production` OIDC trust, read it back, and pass the publication-disabled trust-only preflight. Do not decrypt or publish a production archive. |
-| Entry and submitter UI | The static `https://lean-lang.org/eval/submit/` entry page and the stable production application at `https://lean-eval-submission-server.lean-eval.workers.dev/` are live in disabled posture. The entry page states the policy and links to the Worker origin; the Worker supplies OAuth feedback, preserved form values, progress spinners, status, and visible opt-out UI when enabled. No LeanEval hostname or DNS change is required. |
+| Entry and submitter UI | The static `https://lean-lang.org/eval/submit/` entry page and the stable production application at `https://lean-eval-submission-server.lean-eval.workers.dev/` are live in disabled posture. The entry page states the policy and links to the Worker origin; the Worker supplies OAuth feedback, preserved form values, progress spinners, status, and visible one-way publication opt-in when enabled. No LeanEval hostname or DNS change is required. |
 | Exact-version staging | **PENDING:** record the successful browser and source-bound submissions, denial cases, archive/Result/State/scheduling checks, publication-disabled reconstruction, redaction checks, all-false rollback, and validated final staging State in section 9. |
 
 Any non-coherent Worker deployment, nonempty due-release queue, failed final
@@ -118,8 +118,9 @@ implementation][worker-form]. It tells submitters that:
 - `scheduled` is the default publication choice and confirms authority to
   license accepted source under Apache License 2.0 exactly two UTC calendar
   months after acceptance; and
-- `withheld`, including the visible pre-release opt-out, prevents automatic
-  source publication while leaving the public result.
+- `withheld` keeps accepted source private while leaving the public result;
+  the submitter may later schedule release, and a scheduled choice cannot be
+  changed back to private.
 
 [entry]: https://lean-lang.org/eval/submit/
 [application]: https://lean-eval-submission-server.lean-eval.workers.dev/
@@ -189,7 +190,8 @@ The announcement must include all of the following reviewed facts:
 - authenticated exact-ref intake, initially private evaluation-group source,
   public evaluation metadata and results, and best-effort confidentiality;
 - the `scheduled` Apache-2.0 release policy, exactly two UTC calendar months
-  after acceptance, and the `withheld` opt-out;
+  after acceptance, the `withheld` private-source choice, and the irreversible
+  later transition from private to scheduled;
 - lifecycle amendments, model aliases, publication choice, and status; and
 - a request to report server problems by
   [opening a submissions issue](https://github.com/leanprover/lean-eval-submissions/issues/new),
@@ -228,7 +230,7 @@ production launch:
     commit: a2422110ed395ca737c6889a0601938f77d2925f
   production canary problem: formalization-evaluation/two_plus_two@1
   production canary model: LeanEval production launch canary a2422110ed395ca737c6889a0601938f77d2925f
-  production canary publication sequence: scheduled, then visible pre-release opt-out
+  production canary publication sequence: private, then visible irreversible publication opt-in
   production canary submission/result: <UUIDv7 and terminal result URL>
   production State commit after validation: <40-character SHA>
   production health/readiness: <URL>

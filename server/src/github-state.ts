@@ -89,6 +89,7 @@ import {
   type ModelIdentityReverseImpactView,
   type ModelIdentityView,
 } from "./model-identity";
+import { addCalendarMonths } from "./release-policy";
 
 const API = "https://api.github.com";
 const STATE_BRANCH = "main";
@@ -2719,6 +2720,187 @@ export class GitHubStateRepository {
       await pause(attempt);
     }
     throw new Error("unreachable owner mutation attempt");
+  }
+
+  async appendPublicationOptIn(
+    event: WritableStateEvent,
+    releaseIdentity: Readonly<{ eventId: string; occurredAt: string }>,
+    ownerLogin: string,
+  ): Promise<{
+    commit: string;
+    created: boolean;
+    releaseScheduled: boolean;
+    view: SubmissionView;
+  }> {
+    if (event.event_type !== "submission.publication_changed") {
+      throw new TypeError("publication opt-in event is invalid");
+    }
+    validateStateEvent(event);
+    if (
+      event.payload.publication_choice !== "scheduled" ||
+      event.actor.login !== ownerLogin ||
+      !UUID_V7.test(releaseIdentity.eventId) ||
+      new Date(releaseIdentity.occurredAt).toISOString() !== releaseIdentity.occurredAt ||
+      `${releaseIdentity.occurredAt}\0${releaseIdentity.eventId}` <=
+        `${event.occurred_at}\0${event.event_id}`
+    ) {
+      throw new TypeError("publication opt-in identity is invalid");
+    }
+    const publicationPath = stateEventPath(event);
+    const viewPath = submissionViewPath(event.subject_id);
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await this.#resultOwnerSnapshot();
+      const current = await readSubmissionAt(
+        this.#config,
+        this.#fetcher,
+        event.subject_id,
+        snapshot.headSha,
+      );
+      if (current?.owner_login !== ownerLogin) {
+        throw new GitHubStateError(404, "submission view does not exist");
+      }
+      if (current.publication_choice === "scheduled") {
+        const releaseRequired = current.result_id !== null &&
+          current.submission.problem_group !== "open-conjectures";
+        if (releaseRequired) {
+          if (current.result_event_id === null) {
+            throw new StateEventConflictError(viewPath);
+          }
+          const releaseStatusPath = resultReleaseStatusPath(current.result_id);
+          const releaseStatusEntry = await readPathAt(
+            this.#config,
+            this.#fetcher,
+            releaseStatusPath,
+            snapshot.headSha,
+          );
+          let releaseStatus;
+          try {
+            releaseStatus = decodeResultReleaseStatusView(
+              releaseStatusEntry.found ? releaseStatusEntry.value : null,
+            );
+          } catch {
+            throw new StateEventConflictError(releaseStatusPath);
+          }
+          if (
+            releaseStatus.result_id !== current.result_id ||
+            releaseStatus.authority_event_id !== current.result_event_id ||
+            releaseStatus.status === "not_scheduled"
+          ) {
+            throw new StateEventConflictError(releaseStatusPath);
+          }
+        }
+        return {
+          commit: snapshot.headSha,
+          created: false,
+          releaseScheduled: releaseRequired,
+          view: current,
+        };
+      }
+      if (
+        current.mutation_event_id !== event.causation_event_id ||
+        event.event_id <= current.mutation_event_id
+      ) {
+        throw new StateEventConflictError(publicationPath);
+      }
+      const nextView = decodeSubmissionView({
+        ...current,
+        mutation_event_id: event.event_id,
+        publication_event_id: event.event_id,
+        submission: { ...current.submission, publication_choice: "scheduled" },
+        publication_choice: "scheduled",
+      });
+      const releaseRequired = current.result_id !== null &&
+        current.submission.problem_group !== "open-conjectures";
+      let release: WritableResultLifecycleEvent | null = null;
+      let releaseStatusPath: string | null = null;
+      let releaseStatus: ResultReleaseStatusView | null = null;
+      if (releaseRequired) {
+        if (
+          current.result_event_id === null ||
+          current.evaluation.status !== "accepted"
+        ) {
+          throw new StateEventConflictError(viewPath);
+        }
+        release = {
+          schema_version: 1,
+          event_id: releaseIdentity.eventId,
+          event_type: "release.scheduled",
+          occurred_at: releaseIdentity.occurredAt,
+          subject_id: current.result_id,
+          causation_event_id: current.result_event_id,
+          actor: { kind: "system" },
+          payload: {
+            result_id: current.result_id,
+            release_at: addCalendarMonths(current.evaluation.occurred_at, 2),
+          },
+        };
+        validateStateEvent(release);
+        releaseStatusPath = resultReleaseStatusPath(current.result_id);
+        const currentReleaseStatusEntry = await readPathAt(
+          this.#config,
+          this.#fetcher,
+          releaseStatusPath,
+          snapshot.headSha,
+        );
+        let currentReleaseStatus;
+        try {
+          currentReleaseStatus = decodeResultReleaseStatusView(
+            currentReleaseStatusEntry.found ? currentReleaseStatusEntry.value : null,
+          );
+        } catch {
+          throw new StateEventConflictError(releaseStatusPath);
+        }
+        if (
+          currentReleaseStatus.result_id !== current.result_id ||
+          currentReleaseStatus.authority_event_id !== current.result_event_id ||
+          currentReleaseStatus.status !== "not_scheduled"
+        ) {
+          throw new StateEventConflictError(releaseStatusPath);
+        }
+        releaseStatus = initialResultReleaseStatusView(
+          current.result_id,
+          current.result_event_id,
+          release.event_id,
+        );
+      }
+      const eventPaths = release === null
+        ? [publicationPath]
+        : [publicationPath, stateEventPath(release)];
+      const existingEvents = await Promise.all(eventPaths.map((path) =>
+        readPathAt(this.#config, this.#fetcher, path, snapshot.headSha)));
+      if (existingEvents.some((entry) => entry.found)) {
+        throw new StateEventConflictError(
+          eventPaths[existingEvents.findIndex((entry) => entry.found)] ?? publicationPath,
+        );
+      }
+      const updates: { path: string; value: unknown }[] = [
+        { path: viewPath, value: nextView },
+      ];
+      if (releaseStatusPath !== null && releaseStatus !== null) {
+        updates.push({ path: releaseStatusPath, value: releaseStatus });
+      }
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        release === null ? [event] : [event, release],
+        updates,
+        `Record publication opt-in for ${event.subject_id}`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return {
+          commit,
+          created: true,
+          releaseScheduled: release !== null,
+          view: nextView,
+        };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) {
+        throw new GitHubStateError(409, "State branch kept changing during publication opt-in");
+      }
+      await pause(attempt);
+    }
+    throw new Error("unreachable publication opt-in attempt");
   }
 
   async updateDispatch(

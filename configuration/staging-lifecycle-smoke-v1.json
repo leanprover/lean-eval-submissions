@@ -13,7 +13,7 @@
     "statement_revision": 1,
     "declared_model": "LeanEval launch browser staging smoke e3f6db4d347e63ae21f5361437c8cfad5ee70f99",
     "source_visibility": "private",
-    "publication_choice": "scheduled",
+    "publication_choice": "withheld",
     "production_metadata": {
       "web_access": false,
       "harness": "bounded staging lifecycle smoke",
@@ -95,12 +95,13 @@
       },
       "denial_http_status": 400
     },
-    "release_opt_out": {
+    "publication_opt_in": {
       "target": "browser_submission",
-      "request": {
-        "publication_choice": "withheld"
+      "transition": {
+        "from": "withheld",
+        "to": "scheduled"
       },
-      "expected_release_status": "not_scheduled"
+      "expected_release_status": "scheduled"
     },
     "model_alias_and_rename": {
       "primary_display_name": "LeanEval launch staging model primary",

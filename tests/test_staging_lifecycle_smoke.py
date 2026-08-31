@@ -42,7 +42,7 @@ class StagingLifecycleSmokeTests(unittest.TestCase):
             "RESULT_AMENDMENT_MAINTAINER_API_ENABLED",
             "MODEL_IDENTITY_OWNER_API_ENABLED",
             "MODEL_IDENTITY_MAINTAINER_API_ENABLED",
-            "RELEASE_OPT_OUT_API_ENABLED",
+            "RELEASE_OPT_IN_API_ENABLED",
         }
         for variable in enabled_vars:
             with self.subTest(variable=variable):
@@ -70,11 +70,12 @@ class StagingLifecycleSmokeTests(unittest.TestCase):
             "result_amendment_maintainer_api_enabled",
             "model_identity_owner_api_enabled",
             "model_identity_maintainer_api_enabled",
-            "release_opt_out_api_enabled",
+            "release_opt_in_api_enabled",
         ):
             with self.subTest(field=field):
                 self.assertIn(f'"{field}"', self.text)
         self.assertIn('body["model_identity_consolidation_api_enabled"] is False', self.text)
+        self.assertIn('body["release_opt_out_api_enabled"] is False', self.text)
 
     def test_controller_runs_the_exact_unauthenticated_browser_case(self) -> None:
         case = self.fixture["browser_unauthenticated_request"]
@@ -120,7 +121,12 @@ class StagingLifecycleSmokeTests(unittest.TestCase):
             self.assertEqual(submission["problem_id"], "two_plus_two")
             self.assertEqual(submission["statement_revision"], 1)
             self.assertEqual(submission["source_visibility"], "private")
-            self.assertEqual(submission["publication_choice"], "scheduled")
+        self.assertEqual(
+            fixture["browser_submission"]["publication_choice"], "withheld"
+        )
+        self.assertEqual(
+            fixture["headless_submission"]["publication_choice"], "scheduled"
+        )
         mismatch = fixture["headless_source_mismatch"]
         self.assertEqual(mismatch["challenge_source_commit"], source["commit"])
         self.assertNotEqual(mismatch["submitted_source_commit"], source["commit"])
@@ -130,10 +136,17 @@ class StagingLifecycleSmokeTests(unittest.TestCase):
             {
                 "metadata_backfill",
                 "problem_repair",
-                "release_opt_out",
+                "publication_opt_in",
                 "model_alias_and_rename",
             },
         )
+        publication = fixture["lifecycle_cases"]["publication_opt_in"]
+        self.assertEqual(publication["target"], "browser_submission")
+        self.assertEqual(
+            publication["transition"],
+            {"from": "withheld", "to": "scheduled"},
+        )
+        self.assertEqual(publication["expected_release_status"], "scheduled")
         repair_denial = fixture["lifecycle_cases"]["problem_repair"]["denial_request"]
         self.assertNotRegex(
             repair_denial["corrected_problem_id"],

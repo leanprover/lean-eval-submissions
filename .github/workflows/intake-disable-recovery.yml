@@ -291,6 +291,7 @@ jobs:
             --var "MODEL_IDENTITY_MAINTAINER_API_ENABLED:false" \
             --var 'MODEL_IDENTITY_MAINTAINERS:[]' \
             --var "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED:false" \
+            --var "RELEASE_OPT_IN_API_ENABLED:false" \
             --var "RELEASE_OPT_OUT_API_ENABLED:false" \
             --var "PROMOTION_CANARY_ENABLED:false"
 

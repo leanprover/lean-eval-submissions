@@ -30,7 +30,7 @@ from typing import Any
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURE = ROOT / "configuration" / "staging-lifecycle-smoke-v1.json"
 EXPECTED_FIXTURE_SHA256 = (
-    "b9efe57d77ded55f2db5fa330e44e7134d6b76772c151e09597c3082b40eeb52"
+    "1f277aa06969399b6da7831e06fd7e170ff6b55f9ce1c351b09aa8d05f848296"
 )
 UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
@@ -180,7 +180,7 @@ def health(api: Api, commit: str, enabled: bool | None) -> bool:
         "result_amendment_maintainer_api_enabled",
         "model_identity_owner_api_enabled",
         "model_identity_maintainer_api_enabled",
-        "release_opt_out_api_enabled",
+        "release_opt_in_api_enabled",
     )
     values = [body.get(field) for field in fields]
     if enabled is None:
@@ -194,6 +194,8 @@ def health(api: Api, commit: str, enabled: bool | None) -> bool:
         raise AcceptanceError("staging launch gates do not match the expected phase")
     if body.get("model_identity_consolidation_api_enabled") is not False:
         raise AcceptanceError("model consolidation must remain disabled")
+    if body.get("release_opt_out_api_enabled") is not False:
+        raise AcceptanceError("reverse publication transition must remain disabled")
     return enabled
 
 
@@ -1339,13 +1341,21 @@ def clone_and_assert_state(
         )
         domain = closed_json(output / "domain.json")
         submissions = {item["submission_id"]: item for item in domain["submissions"]}
-        if submissions[browser_id]["publication_choice"] != "withheld":
-            raise AcceptanceError("browser opt-out is absent from materialized State")
+        if submissions[browser_id]["publication_choice"] != "scheduled":
+            raise AcceptanceError(
+                "browser publication opt-in is absent from materialized State"
+            )
         if submissions[headless_id].get("result_id") != headless_result:
             raise AcceptanceError("headless Result is absent from materialized State")
         queue = closed_json(output / "release-queue.json")["tasks"]
-        if any(task["submission_id"] == browser_id for task in queue):
-            raise AcceptanceError("withheld browser submission was scheduled")
+        if not any(
+            task["submission_id"] == browser_id
+            and task["result_id"] == browser_result
+            for task in queue
+        ):
+            raise AcceptanceError(
+                "opted-in browser Result is absent from the release queue"
+            )
         if not any(
             task["submission_id"] == headless_id
             and task["result_id"] == headless_result
@@ -1391,9 +1401,9 @@ def clone_and_assert_state(
             raise AcceptanceError(
                 "accepted Results are absent from the redacted leaderboard projection"
             )
-        if projected[browser_result]["release"] is not None:
+        if (projected[browser_result]["release"] or {}).get("status") != "scheduled":
             raise AcceptanceError(
-                "withheld browser Result has a leaderboard release entry"
+                "opted-in browser Result is not scheduled in the leaderboard projection"
             )
         if (projected[headless_result]["release"] or {}).get("status") != "scheduled":
             raise AcceptanceError(
@@ -1538,7 +1548,7 @@ def assert_disabled_routes(
         (
             "PUT",
             f"/api/v1/submissions/{browser_submission_id}/publication",
-            {"publication_choice": "withheld"},
+            {"publication_choice": "scheduled"},
         ),
     )
     for method, path, body in cases:
@@ -1679,7 +1689,6 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
             **fixture["browser_submission"],
             "source_repository": source["repository"],
             "source_commit": source["commit"],
-            "publication_choice": "withheld",
         }
         try:
             headless, headless_result = wait_submission(
@@ -1727,6 +1736,43 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
 
     assert_archive_sidecar(browser)
     assert_archive_sidecar(headless)
+
+    publication = fixture["lifecycle_cases"]["publication_opt_in"]
+    if (
+        browser.get("publication_choice") != publication["transition"]["from"]
+        or browser.get("result_id") != browser_result
+    ):
+        raise AcceptanceError(
+            "browser Result was not private before publication opt-in"
+        )
+    opted_in = api.request(
+        "POST",
+        f"/api/v1/browser/submissions/{args.browser_submission_id}/publication-opt-in",
+        bearer=token,
+    )
+    if opted_in != {
+        "submission_id": args.browser_submission_id,
+        "publication_choice": publication["transition"]["to"],
+        "release_schedule": publication["expected_release_status"],
+        "status": "opted_in",
+    }:
+        raise AcceptanceError("browser publication opt-in response is not exact")
+    browser_scheduled = api.request(
+        "GET",
+        f"/api/v1/submissions/{args.browser_submission_id}",
+        bearer=token,
+    )
+    browser_scheduled_expected = {
+        **browser_expected,
+        "publication_choice": publication["transition"]["to"],
+    }
+    if validate_new_submission(
+        browser_scheduled,
+        args.browser_submission_id,
+        browser_scheduled_expected,
+        args.expected_commit,
+    ) != browser_result:
+        raise AcceptanceError("browser Result identity changed during publication opt-in")
 
     invalid = fixture["lifecycle_cases"]["problem_repair"]
     mutation(
@@ -1869,8 +1915,6 @@ def execute(args: argparse.Namespace, fixture: dict[str, Any]) -> None:
     if denied != {"error": nonowner["expected_error"]}:
         raise AcceptanceError("metadata non-owner denial was not owner-hiding")
 
-    if browser.get("publication_choice") != "withheld":
-        raise AcceptanceError("browser submission was not visibly opted out")
     assert_results(fixture, {browser_result, headless_result})
     clone_and_assert_state(
         fixture,

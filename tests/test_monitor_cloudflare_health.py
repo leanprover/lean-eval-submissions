@@ -57,7 +57,8 @@ class CloudflareHealthMonitorTests(unittest.TestCase):
                 "model_identity_maintainer_api_enabled": True,
                 "model_identity_owner_api_enabled": True,
                 "promotion_canary_enabled": False,
-                "release_opt_out_api_enabled": True,
+                "release_opt_in_api_enabled": True,
+                "release_opt_out_api_enabled": False,
                 "replay_enabled": False,
                 "result_amendment_maintainer_api_enabled": True,
                 "result_amendment_owner_api_enabled": True,
@@ -91,7 +92,7 @@ class CloudflareHealthMonitorTests(unittest.TestCase):
         responses = self.responses()
         endpoints = monitor.tracked_endpoints(self.intake, self.replay)
         responses[endpoints["production"]["intake"]][
-            "release_opt_out_api_enabled"
+            "release_opt_in_api_enabled"
         ] = False
         with self.assertRaisesRegex(monitor.MonitorError, "health differs"):
             monitor.verify_snapshot(self.intake, self.replay, lambda url: responses[url])

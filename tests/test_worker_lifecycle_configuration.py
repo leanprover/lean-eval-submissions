@@ -18,6 +18,7 @@ def configuration(
     variables: dict[str, object] = {
         "DEPLOYMENT_ENVIRONMENT": environment,
         "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED": "false",
+        "RELEASE_OPT_OUT_API_ENABLED": "false",
         "RESULT_AMENDMENT_MAINTAINERS": (
             '[{"github_id":477956,"login":"kim-em"}]' if state == "true" else "[]"
         ),
@@ -62,6 +63,13 @@ class WorkerLifecycleConfigurationTests(unittest.TestCase):
             ] = "true"
             with self.assertRaisesRegex(LifecycleConfigurationError, "must remain false"):
                 read_lifecycle_state(self.write(root, consolidation), "production")
+
+            opt_out = configuration("true")
+            opt_out["env"]["production"]["vars"][
+                "RELEASE_OPT_OUT_API_ENABLED"
+            ] = "true"
+            with self.assertRaisesRegex(LifecycleConfigurationError, "must remain false"):
+                read_lifecycle_state(self.write(root, opt_out), "production")
 
     def test_rejects_wrong_maintainer_cardinality_or_shape(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
