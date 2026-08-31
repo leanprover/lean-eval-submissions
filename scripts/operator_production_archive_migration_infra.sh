@@ -302,8 +302,18 @@ change_set_id="$(jq -er --arg stack "$STACK" --arg name "$change_set" '
   .Id
 ' "$ops/create-change-set.json")"
 change_set_owned=true
-aws cloudformation wait change-set-create-complete --stack-name "$STACK" \
-  --change-set-name "$change_set_id" --region "$AWS_REGION"
+if ! aws cloudformation wait change-set-create-complete --stack-name "$STACK" \
+  --change-set-name "$change_set_id" --region "$AWS_REGION"; then
+  if aws cloudformation describe-change-set --stack-name "$STACK" \
+    --change-set-name "$change_set_id" --include-property-values \
+    --region "$AWS_REGION" --output json > "$ops/change-set-failure.json"; then
+    jq '{Status, ExecutionStatus, StatusReason}' \
+      "$ops/change-set-failure.json" >&2
+  else
+    echo 'change set creation failed and its terminal status could not be read' >&2
+  fi
+  exit 1
+fi
 aws cloudformation describe-change-set --stack-name "$STACK" \
   --change-set-name "$change_set_id" --include-property-values \
   --region "$AWS_REGION" --output json > "$ops/change-set.json"

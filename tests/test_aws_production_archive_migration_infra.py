@@ -35,6 +35,12 @@ class ProductionArchiveMigrationInfrastructureTests(unittest.TestCase):
         self.assertIn("else false end", SCRIPT)
         self.assertIn("change_set_owned=true", SCRIPT)
         self.assertIn("execution_attempted=true", SCRIPT)
+        self.assertIn("change-set-failure.json", SCRIPT)
+        self.assertIn("jq '{Status, ExecutionStatus, StatusReason}'", SCRIPT)
+        self.assertLess(
+            SCRIPT.index("change-set-failure.json"),
+            SCRIPT.index("echo step=execute-production-change-set"),
+        )
 
     def test_preserves_existing_authority_and_v1_contract(self) -> None:
         self.assertEqual(SCRIPT.count("compare_role \"$WRAP_ROLE\""), 1)
