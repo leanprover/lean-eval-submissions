@@ -87,6 +87,28 @@
         "ref": "6cb9c709c83461323318156a74e6ee82b9bc257e",
         "repo": "juihuichung/lean-eval-submissions-private"
       }
+    },
+    {
+      "accepted_at": "2026-08-31T05:24:30Z",
+      "benchmark_commit": "a0a06faa95f2ee15578675c6dacc596a83b17db3",
+      "declared_model": "Humanifa + GPT 5.6 sol",
+      "intake": {
+        "issue_number": 1568,
+        "kind": "issue"
+      },
+      "problem_id": "erdos_unit_distance_conjecture_false",
+      "production_metadata": {
+        "solution_publication_date": "2026-09-30",
+        "solution_publication_status": "planned"
+      },
+      "result_id": "r2_63fc1e3820e03fa9825664154aca2aa1716d9f858e2eb7c0388a1617265923b8",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "557981f8d86db0643b1e53c5e340dcff57612bfa",
+        "repo": "juihuichung/lean-eval-submissions-private"
+      }
     }
   ],
   "schema_version": 2,
