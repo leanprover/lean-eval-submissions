@@ -318,6 +318,12 @@ aws cloudformation describe-change-set --stack-name "$STACK" \
   --change-set-name "$change_set_id" --include-property-values \
   --region "$AWS_REGION" --output json > "$ops/change-set.json"
 
+jq '[.Changes[].ResourceChange | {
+  action: .Action,
+  logical_resource: .LogicalResourceId,
+  type: .ResourceType,
+  replacement: .Replacement
+}]' "$ops/change-set.json"
 jq -e '
   .Status == "CREATE_COMPLETE" and
   (.Changes | length) >= 5 and (.Changes | length) <= 6 and
@@ -356,12 +362,6 @@ jq -e '
     .Action == "Remove"
   )] | length) <= 1
 ' "$ops/change-set.json" >/dev/null
-jq '[.Changes[].ResourceChange | {
-  action: .Action,
-  logical_resource: .LogicalResourceId,
-  type: .ResourceType,
-  replacement: .Replacement
-}]' "$ops/change-set.json"
 
 echo step=execute-production-change-set
 execution_attempted=true

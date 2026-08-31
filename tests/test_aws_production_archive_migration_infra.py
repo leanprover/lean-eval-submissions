@@ -38,6 +38,10 @@ class ProductionArchiveMigrationInfrastructureTests(unittest.TestCase):
         self.assertIn("change-set-failure.json", SCRIPT)
         self.assertIn("jq '{Status, ExecutionStatus, StatusReason}'", SCRIPT)
         self.assertLess(
+            SCRIPT.index("logical_resource: .LogicalResourceId"),
+            SCRIPT.index('  .Status == "CREATE_COMPLETE"'),
+        )
+        self.assertLess(
             SCRIPT.index("change-set-failure.json"),
             SCRIPT.index("echo step=execute-production-change-set"),
         )
