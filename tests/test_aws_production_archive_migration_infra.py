@@ -45,6 +45,28 @@ class ProductionArchiveMigrationInfrastructureTests(unittest.TestCase):
         self.assertIn("$staging_updated_before", SCRIPT)
         self.assertIn("MigrationWrapRoleArn", SCRIPT)
 
+    def test_migrates_the_exact_live_legacy_parameter_names(self) -> None:
+        preflight, update = SCRIPT.split("echo step=create-and-inspect-change-set", 1)
+        create, post = update.split("echo step=post-update-verification", 1)
+        self.assertIn('ReleaseGitHubRepository: $releases', preflight)
+        self.assertIn('SubmissionGitHubRepository: $submissions', preflight)
+        self.assertIn(
+            'ParameterKey=SubmissionGitHubSubjectPrefix,ParameterValue="$SUBMISSION_PREFIX"',
+            create,
+        )
+        self.assertIn(
+            'ParameterKey=ReleaseGitHubSubjectPrefix,ParameterValue="$RELEASE_PREFIX"',
+            create,
+        )
+        self.assertNotIn(
+            "ParameterKey=SubmissionGitHubSubjectPrefix,UsePreviousValue=true", create
+        )
+        self.assertNotIn(
+            "ParameterKey=ReleaseGitHubSubjectPrefix,UsePreviousValue=true", create
+        )
+        self.assertIn('ReleaseGitHubSubjectPrefix: $releases', post)
+        self.assertIn('SubmissionGitHubSubjectPrefix: $submissions', post)
+
     def test_never_installs_secret_or_runs_workloads(self) -> None:
         self.assertNotIn("gh secret set", SCRIPT)
         self.assertNotIn("gh workflow run", SCRIPT)

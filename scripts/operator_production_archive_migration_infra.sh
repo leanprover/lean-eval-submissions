@@ -133,8 +133,8 @@ jq -e \
   (.Stacks[0].Parameters | map({key: .ParameterKey, value: .ParameterValue}) | from_entries) == {
     EnvironmentName: "production",
     GitHubOidcProviderArn: $provider,
-    ReleaseGitHubSubjectPrefix: $releases,
-    SubmissionGitHubSubjectPrefix: $submissions
+    ReleaseGitHubRepository: $releases,
+    SubmissionGitHubRepository: $submissions
   } and
   (.Stacks[0].Outputs | map(.OutputKey) | sort) == [
     "AdapterName",
@@ -284,8 +284,8 @@ aws cloudformation create-change-set \
   --parameters \
     ParameterKey=EnvironmentName,UsePreviousValue=true \
     ParameterKey=GitHubOidcProviderArn,UsePreviousValue=true \
-    ParameterKey=SubmissionGitHubSubjectPrefix,UsePreviousValue=true \
-    ParameterKey=ReleaseGitHubSubjectPrefix,UsePreviousValue=true \
+    ParameterKey=SubmissionGitHubSubjectPrefix,ParameterValue="$SUBMISSION_PREFIX" \
+    ParameterKey=ReleaseGitHubSubjectPrefix,ParameterValue="$RELEASE_PREFIX" \
   --capabilities CAPABILITY_NAMED_IAM \
   --region "$AWS_REGION" --output json > "$ops/create-change-set.json"
 
@@ -363,11 +363,21 @@ aws cloudformation wait stack-update-complete --stack-name "$STACK" \
 echo step=post-update-verification
 aws cloudformation describe-stacks --stack-name "$STACK" --region "$AWS_REGION" \
   --output json > "$ops/stack-after.json"
-jq -e --arg role "$MIGRATION_ROLE_ARN" \
+jq -e \
+  --arg provider "$OIDC_PROVIDER_ARN" \
+  --arg submissions "$SUBMISSION_PREFIX" \
+  --arg releases "$RELEASE_PREFIX" \
+  --arg role "$MIGRATION_ROLE_ARN" \
   --slurpfile before "$ops/stack-before.json" '
   (.Stacks | length) == 1 and .Stacks[0].StackStatus == "UPDATE_COMPLETE" and
   .Stacks[0].EnableTerminationProtection ==
     $before[0].Stacks[0].EnableTerminationProtection and
+  (.Stacks[0].Parameters | map({key: .ParameterKey, value: .ParameterValue}) | from_entries) == {
+    EnvironmentName: "production",
+    GitHubOidcProviderArn: $provider,
+    ReleaseGitHubSubjectPrefix: $releases,
+    SubmissionGitHubSubjectPrefix: $submissions
+  } and
   (.Stacks[0].Outputs | map(.OutputKey) | sort) == [
     "AdapterName",
     "CapabilityTableName",
