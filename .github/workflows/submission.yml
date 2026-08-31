@@ -953,6 +953,12 @@ jobs:
           PY
           response_file=$(mktemp)
           curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --retry 3 \
+            --retry-delay 2 \
+            --retry-max-time 120 \
+            --retry-connrefused \
             --request POST \
             --header "Authorization: Bearer ${LIFECYCLE_CALLBACK_TOKEN}" \
             --header "Content-Type: application/json" \
@@ -1010,6 +1016,12 @@ jobs:
           esac
           response_file=$(mktemp)
           curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --retry 3 \
+            --retry-delay 2 \
+            --retry-max-time 120 \
+            --retry-connrefused \
             --request POST \
             --header "Authorization: Bearer ${LIFECYCLE_CALLBACK_TOKEN}" \
             --header "Content-Type: application/json" \
@@ -1101,6 +1113,12 @@ jobs:
           esac
           response_file=$(mktemp)
           curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --retry 3 \
+            --retry-delay 2 \
+            --retry-max-time 120 \
+            --retry-connrefused \
             --request POST \
             --header "Authorization: Bearer ${LIFECYCLE_CALLBACK_TOKEN}" \
             --header "Content-Type: application/json" \
@@ -1494,6 +1512,12 @@ jobs:
           esac
           response_file=$(mktemp)
           curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --retry 3 \
+            --retry-delay 2 \
+            --retry-max-time 120 \
+            --retry-connrefused \
             --request POST \
             --header "Authorization: Bearer ${LIFECYCLE_CALLBACK_TOKEN}" \
             --header "Content-Type: application/json" \
