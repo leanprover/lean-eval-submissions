@@ -519,6 +519,29 @@
         "ref": "34357f2f94f39e293b1d2b127b7f298654d39cf7",
         "repo": "leanprover/lean-eval-state-staging"
       }
+    },
+    {
+      "accepted_at": "2026-08-31T01:08:51Z",
+      "benchmark_commit": "7e977ab32fa56be5b7f29933b3b8b02f9823d4b1",
+      "declared_model": "LeanEval launch headless staging smoke e3f6db4d347e63ae21f5361437c8cfad5ee70f99",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a05537-61c1-76dc-8096-ca50cd61d75c"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "harness": "bounded staging lifecycle smoke",
+        "human_involvement": "Selected and submitted by the staging operator",
+        "web_access": false
+      },
+      "result_id": "r2_6701c0b5562acf420ebf5e4a94161fc5f6a6bdd2540d8f6e1713c56fbf8abb39",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "34357f2f94f39e293b1d2b127b7f298654d39cf7",
+        "repo": "leanprover/lean-eval-state-staging"
+      }
     }
   ],
   "schema_version": 2,
