@@ -36,6 +36,14 @@ class AwsKeyInfrastructureTests(unittest.TestCase):
         self.assertNotIn("AWS::ApiGateway", self.template)
         self.assertNotIn("FunctionUrlConfig", self.template)
 
+    def test_resources_preserve_sam_deployment_identity_metadata(self) -> None:
+        resources = _section(self.template, "Resources:\n", "Outputs:\n")
+        names = re.findall(r"^  ([A-Za-z0-9]+):\n    Type:", resources, re.MULTILINE)
+        for index, name in enumerate(names):
+            end = f"  {names[index + 1]}:\n" if index + 1 < len(names) else None
+            section = _section(resources, f"  {name}:\n", end) if end else resources.split(f"  {name}:\n", 1)[1]
+            self.assertIn(f"SamResourceId: {name}", section)
+
     def test_lambda_package_build_copies_only_the_two_reviewed_modules(self) -> None:
         makefile = MAKEFILE_PATH.read_text(encoding="utf-8")
         copy_lines = [line for line in makefile.splitlines() if line.startswith("\tcp ")]

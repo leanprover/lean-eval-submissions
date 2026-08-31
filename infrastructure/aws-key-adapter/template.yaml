@@ -26,6 +26,8 @@ Conditions:
 Resources:
   ArchiveIdentityKey:
     Type: AWS::KMS::Key
+    Metadata:
+      SamResourceId: ArchiveIdentityKey
     Properties:
       Description: !Sub Lean Eval ${EnvironmentName} per-submission age identities
       EnableKeyRotation: true
@@ -41,12 +43,16 @@ Resources:
 
   ArchiveIdentityKeyAlias:
     Type: AWS::KMS::Alias
+    Metadata:
+      SamResourceId: ArchiveIdentityKeyAlias
     Properties:
       AliasName: !Sub alias/lean-eval-archive-identities-${EnvironmentName}
       TargetKeyId: !Ref ArchiveIdentityKey
 
   CapabilityConsumption:
     Type: AWS::DynamoDB::Table
+    Metadata:
+      SamResourceId: CapabilityConsumption
     Properties:
       TableName: !Sub lean-eval-capability-consumption-${EnvironmentName}
       BillingMode: PAY_PER_REQUEST
@@ -64,6 +70,8 @@ Resources:
 
   WrapRole:
     Type: AWS::IAM::Role
+    Metadata:
+      SamResourceId: WrapRole
     Properties:
       RoleName: !Sub lean-eval-archive-wrap-${EnvironmentName}
       MaxSessionDuration: 3600
@@ -106,6 +114,8 @@ Resources:
   MigrationWrapRole:
     Type: AWS::IAM::Role
     Condition: IsProduction
+    Metadata:
+      SamResourceId: MigrationWrapRole
     Properties:
       RoleName: lean-eval-archive-migration-wrap-production
       MaxSessionDuration: 3600
@@ -148,6 +158,8 @@ Resources:
 
   UnwrapFunctionRole:
     Type: AWS::IAM::Role
+    Metadata:
+      SamResourceId: UnwrapFunctionRole
     Properties:
       RoleName: !Sub lean-eval-archive-unwrap-function-${EnvironmentName}
       AssumeRolePolicyDocument:
@@ -219,6 +231,7 @@ Resources:
     Type: AWS::Serverless::Function
     Metadata:
       BuildMethod: makefile
+      SamResourceId: UnwrapFunction
     Properties:
       FunctionName: !Sub lean-eval-archive-unwrap-${EnvironmentName}
       Description: Validates and consumes one capability before one KMS decrypt
@@ -244,6 +257,8 @@ Resources:
 
   ReplayInvokerRole:
     Type: AWS::IAM::Role
+    Metadata:
+      SamResourceId: ReplayInvokerRole
     Properties:
       RoleName: !Sub lean-eval-replay-unwrap-invoker-${EnvironmentName}
       MaxSessionDuration: 3600
@@ -269,6 +284,8 @@ Resources:
 
   ReleaseInvokerRole:
     Type: AWS::IAM::Role
+    Metadata:
+      SamResourceId: ReleaseInvokerRole
     Properties:
       RoleName: !Sub lean-eval-release-unwrap-invoker-${EnvironmentName}
       MaxSessionDuration: 3600
