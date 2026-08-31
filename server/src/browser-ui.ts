@@ -135,7 +135,7 @@ export function releasePage(
   const controls = releaseOptInEnabled ? `
     <p><a id="oauth-sign-in" class="button" href="/api/v1/oauth/start?return_to=%2Frelease%2F">Sign in with GitHub</a></p>
     <p id="auth-status" class="auth-status" role="status" aria-live="polite">GitHub sign-in is required.</p>
-    <p id="release-opt-in-help">If you previously chose to keep accepted source private, you can irreversibly schedule it for Apache-2.0 release two UTC calendar months after acceptance.</p>
+    <p id="release-opt-in-help">If you previously chose to keep accepted source private, scheduling confirms that you are authorized to license the accepted source under the Apache License 2.0 and irreversibly schedules it for release exactly two UTC calendar months after acceptance.</p>
     <form id="release-opt-in-form">
       <label>Private submission ID <input id="release-opt-in-submission-id" name="submission_id" required pattern="[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}" placeholder="UUID from the submission receipt"></label>
       <button id="release-opt-in-button" type="submit" aria-busy="false" aria-describedby="release-opt-in-help">
