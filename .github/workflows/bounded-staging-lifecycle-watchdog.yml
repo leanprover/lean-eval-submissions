@@ -167,10 +167,11 @@ jobs:
               "result_amendment_maintainer_api_enabled",
               "model_identity_owner_api_enabled",
               "model_identity_maintainer_api_enabled",
-              "release_opt_out_api_enabled",
+              "release_opt_in_api_enabled",
           ):
               assert body[field] is True, field
           assert body["model_identity_consolidation_api_enabled"] is False
+          assert body["release_opt_out_api_enabled"] is False
           PY
             then
               exit 0
