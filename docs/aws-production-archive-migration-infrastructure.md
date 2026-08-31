@@ -31,7 +31,7 @@ The script fails closed unless all of these facts hold:
   parameters without changing the effective subjects;
 - the migration environment is protected and has no legacy identity;
 - the source template and two Lambda source files match commit
-  `c1013bee0b5b2f57956501e0258d27dc30413d2b` byte for byte;
+  `5397ca582e3d38a88ffda928a48a479a6e9afb6d` byte for byte;
 - the CloudFormation change set contains only the migration role, the unwrap
   role's v2 policy addition, and the generated Lambda function/version/alias
   update; and

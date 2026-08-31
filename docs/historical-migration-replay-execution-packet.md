@@ -39,7 +39,7 @@ The fixed reviewed implementation bindings are:
 | Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
 | Private plan builder | `scripts/prepare_historical_private_replay.py`, SHA-256 `2f1ae6a6e8710a0d0983aa7c2b3f64e77ebf2322da8154c04e39be084f4355e4` |
 | Public finalizer | `scripts/prepare_historical_public_authority.py`, SHA-256 `2b5c4e6d2a88c3f4d703de17889476f18d9b2922c2287da7918ae08c7600fdda` |
-| Migration infrastructure | `infrastructure/aws-key-adapter/template.yaml`, SHA-256 `f075b0439dfadd83930cb18051e595fa6d378b3a5e30c55cb2f1966e6820a45a`; operator script SHA-256 `bee43ece436377c5eb5ec717b3985ab669ef2662dd92dedcacc7039edd0c5d7a` |
+| Migration infrastructure | `infrastructure/aws-key-adapter/template.yaml`, SHA-256 `aac24318c973523a65b76af34b8e1408a5680f61b52c4fb996f93967253ef94d`; operator script SHA-256 `d8fed95053e166674dd1b426437cb7eaa2fe450a8699361f486c0da2f93147a3` |
 | Migration boundary | role `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`; environment `archive-migration-production`; review branch `archive-file-key-rewrap-v1`; confirmation `stage-envelope-migration` |
 | Deterministic migration report | SHA-256 `faa26e1aa47eb629966db03695eda4f949b6c9804166f0047f53e09d9cc83339` |
 

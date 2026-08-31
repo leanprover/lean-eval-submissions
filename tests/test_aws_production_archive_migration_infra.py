@@ -13,7 +13,7 @@ DOC = (
 
 class ProductionArchiveMigrationInfrastructureTests(unittest.TestCase):
     def test_source_and_capability_are_pinned(self) -> None:
-        self.assertIn("SOURCE_COMMIT=c1013bee0b5b2f57956501e0258d27dc30413d2b", SCRIPT)
+        self.assertIn("SOURCE_COMMIT=5397ca582e3d38a88ffda928a48a479a6e9afb6d", SCRIPT)
         self.assertEqual(SCRIPT.count("EXPECTED_"), 6)
         self.assertNotIn("sam build", SCRIPT)
         self.assertIn("date_time=(1980, 1, 1, 0, 0, 0)", SCRIPT)
