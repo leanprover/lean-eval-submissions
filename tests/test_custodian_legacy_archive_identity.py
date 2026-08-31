@@ -55,12 +55,21 @@ class CustodianLegacyArchiveIdentityTests(unittest.TestCase):
               printf 'true\\n'
               exit 0
             fi
+            if [[ "$1" == api && "$2" == */variables/AWS_WRAP_ROLE_ARN ]]; then
+              printf 'AWS_WRAP_ROLE_ARN=arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production\\n'
+              exit 0
+            fi
             if [[ " $* " == *' api --paginate --slurp '* &&
                   " $* " == *'/environments/archive-migration-production/secrets?per_page=100'* ]]; then
+              if [[ " $* " == *' --jq '* ]]; then exit 2; fi
               if [[ -s "$FAKE_GH_READBACK_FAILURE" && -s "$FAKE_GH_STATE" ]]; then
                 exit 1
               fi
-              if [[ -s "$FAKE_GH_STATE" ]]; then printf '1\\n'; else printf '0\\n'; fi
+              if [[ -s "$FAKE_GH_STATE" ]]; then
+                printf '[{"secrets":[{"name":"AUDIT_MIGRATION_READ_KEY"},{"name":"LEGACY_ARCHIVE_IDENTITY"}]}]\\n'
+              else
+                printf '[{"secrets":[{"name":"AUDIT_MIGRATION_READ_KEY"}]}]\\n'
+              fi
               exit 0
             fi
             if [[ "$1 $2 $3" == 'secret set LEGACY_ARCHIVE_IDENTITY' ]]; then
@@ -199,6 +208,7 @@ class CustodianLegacyArchiveIdentityTests(unittest.TestCase):
         self.assertIn('<&"$upload_fd"', source)
         self.assertIn('"/proc/self/fd/$upload_fd"', source)
         self.assertIn("--paginate --slurp", source)
+        self.assertNotIn("--slurp --jq", source)
         self.assertIn("[[ $# == 1 ]]", source)
 
 
