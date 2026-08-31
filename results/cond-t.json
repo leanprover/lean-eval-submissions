@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-08-31T21:54:15Z",
+      "benchmark_commit": "a0a06faa95f2ee15578675c6dacc596a83b17db3",
+      "declared_model": "OpenAI Codex (GPT-5.6 Sol)",
+      "intake": {
+        "issue_number": 1584,
+        "kind": "issue"
+      },
+      "problem_id": "chen_theorem",
+      "production_metadata": {
+        "production_description": "OpenAI Codex (GPT-5.6 Sol) migrated and adapted an existing Lean formalization into the generated Lean Eval workspace under user direction, normalized local module paths and namespaces, added the final theorem bridge, repaired Lean 4.33 compatibility issues, and completed local `lake build Solution` and default builds. The final theorem was audited to use only the permitted axioms.",
+        "solution_publication_date": "2026-09-01",
+        "solution_publication_status": "published"
+      },
+      "result_id": "r2_010b8c49bec0ab370ea95e5066c27e4cb15f0259ac38cc3a7154ece3d8cc22b6",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": true,
+        "ref": "a56f7d4b206eba030b51750fffed1c0075fde69d",
+        "repo": "Cond-t/thema-chen-theorem-lean-eval"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "Cond-t"
+}
