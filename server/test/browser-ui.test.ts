@@ -179,7 +179,12 @@ describe("browser release page", () => {
     expect(body).toContain('id="release-opt-in-submission-id"');
     expect(body).toContain('id="release-opt-in-button"');
     expect(body).toContain('aria-describedby="release-opt-in-help"');
-    expect(body).toContain("you can irreversibly schedule it");
+    expect(body).toContain(
+      "scheduling confirms that you are authorized to license the accepted source under the Apache License 2.0",
+    );
+    expect(body).toContain(
+      "irreversibly schedules it for release exactly two UTC calendar months after acceptance",
+    );
     expect(body).toContain('id="release-opt-in-status" role="status" aria-live="polite"');
     expect(body).toContain('button[aria-busy="true"] .spinner');
     expect(body).toContain('src="/release.js?v=release-opt-in-v2"');
