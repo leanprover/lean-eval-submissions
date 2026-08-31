@@ -5,9 +5,9 @@ set -euo pipefail
 # non-secret GitHub role selector. This script never receives the legacy
 # identity and never dispatches migration, replay, release, or State workflows.
 
-readonly SOURCE_COMMIT=c1013bee0b5b2f57956501e0258d27dc30413d2b
+readonly SOURCE_COMMIT=5397ca582e3d38a88ffda928a48a479a6e9afb6d
 readonly SOURCE_ROOT="https://raw.githubusercontent.com/leanprover/lean-eval-submissions/${SOURCE_COMMIT}"
-readonly EXPECTED_TEMPLATE_SHA=f075b0439dfadd83930cb18051e595fa6d378b3a5e30c55cb2f1966e6820a45a
+readonly EXPECTED_TEMPLATE_SHA=aac24318c973523a65b76af34b8e1408a5680f61b52c4fb996f93967253ef94d
 readonly EXPECTED_ADAPTER_SHA=8aee87e2e8704125d610f7d6d2957dc2e7c518fd12a948de8976d68169857ca1
 readonly EXPECTED_CONTRACT_SHA=b9cd5cee74228f09b7fb5e8d27ea33ef7584d69659814ca449adeb11b5d988d9
 
