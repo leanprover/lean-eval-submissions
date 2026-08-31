@@ -30,7 +30,7 @@ from typing import Any
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURE = ROOT / "configuration" / "staging-lifecycle-smoke-v1.json"
 EXPECTED_FIXTURE_SHA256 = (
-    "c65dc7c6bef495c9d1fc09a31a654f4759854e3b37940c3b05970c60913ff93f"
+    "4f2e45055c0bcb1e6cd2826ae15d0c203274df51aadbe9228025080750ee0385"
 )
 UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"

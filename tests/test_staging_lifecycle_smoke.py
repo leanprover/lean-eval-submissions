@@ -127,6 +127,17 @@ class StagingLifecycleSmokeTests(unittest.TestCase):
         self.assertEqual(
             fixture["headless_submission"]["publication_choice"], "scheduled"
         )
+        identity_nonce = "6b81f13b4e1c4f48994a0cf76a861d82"
+        self.assertIn(
+            identity_nonce, fixture["browser_submission"]["declared_model"]
+        )
+        self.assertIn(
+            identity_nonce, fixture["headless_submission"]["declared_model"]
+        )
+        self.assertNotEqual(
+            fixture["browser_submission"]["declared_model"],
+            fixture["headless_submission"]["declared_model"],
+        )
         mismatch = fixture["headless_source_mismatch"]
         self.assertEqual(mismatch["challenge_source_commit"], source["commit"])
         self.assertNotEqual(mismatch["submitted_source_commit"], source["commit"])
