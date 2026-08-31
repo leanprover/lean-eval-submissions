@@ -97,6 +97,10 @@ workflow artifact, worktree file, mutable tag, or branch head.
       `a8913f1c8b5073e5b7ab309ba10481b615ca4fc00e629e41a9e57962f3afebd4`,
       count 439, dedicated role ARN, protected environment, isolated review
       branch name, and apply confirmation.
+- [ ] Legacy identity preflight: custodian Kim Morrison (`@kim-em`) must derive
+      the public key from the supplied legacy identity and require fingerprint
+      `SHA256:4unwBywJxfq9LsOjygB+/NRHaXdBhvxKP+a3EEpqjoE` before installation.
+      Never record the private material or its path.
 - [ ] The exact controller commits, immutable image manifest digests, OIDC
       subjects and route scopes, serialization/lease limits, four-attempt cap,
       and terminal-disposition rules for the later bounded replay.
