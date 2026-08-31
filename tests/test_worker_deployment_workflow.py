@@ -1014,7 +1014,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                     "false",
                 )
                 expected_contract = (
-                    "8ae11456f0a439f91ec5822ec36adb93b76b0d96"
+                    "41f55135a8d5f36941e615e9ec9e4f5e32a786a5"
                     if environment == "staging"
                     else "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a"
                 )

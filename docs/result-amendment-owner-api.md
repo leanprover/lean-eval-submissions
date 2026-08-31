@@ -4,11 +4,11 @@ The submission Worker contains independently gated authenticated owner and
 maintainer APIs for the append-only result amendment contract at production
 State commit `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` and the independently
 reviewed staging State contract
-`8ae11456f0a439f91ec5822ec36adb93b76b0d96`.
+`41f55135a8d5f36941e615e9ec9e4f5e32a786a5`.
 
 | Environment | Owner API | Maintainer API and identities | State contract |
 | --- | --- | --- | --- |
-| Staging | `RESULT_AMENDMENT_OWNER_API_ENABLED=false` | `RESULT_AMENDMENT_MAINTAINER_API_ENABLED=false`; `RESULT_AMENDMENT_MAINTAINERS=[]` | `RESULT_OWNER_STATE_CONTRACT_COMMIT=8ae11456f0a439f91ec5822ec36adb93b76b0d96` |
+| Staging | `RESULT_AMENDMENT_OWNER_API_ENABLED=false` | `RESULT_AMENDMENT_MAINTAINER_API_ENABLED=false`; `RESULT_AMENDMENT_MAINTAINERS=[]` | `RESULT_OWNER_STATE_CONTRACT_COMMIT=41f55135a8d5f36941e615e9ec9e4f5e32a786a5` |
 | Production | `RESULT_AMENDMENT_OWNER_API_ENABLED=true` | `RESULT_AMENDMENT_MAINTAINER_API_ENABLED=true`; `RESULT_AMENDMENT_MAINTAINERS=[{"github_id":477956,"login":"kim-em"}]` | `RESULT_OWNER_STATE_CONTRACT_COMMIT=c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` |
 
 The gate is independent of submission intake and the legacy claim/backfill
@@ -201,7 +201,7 @@ State event as required review evidence but is not returned by the API.
 
 The production binding is protected State `main`
 `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a`; staging is independently bound to
-its reviewed contract commit `8ae11456f0a439f91ec5822ec36adb93b76b0d96`.
+its reviewed contract commit `41f55135a8d5f36941e615e9ec9e4f5e32a786a5`.
 Both contracts contain release-status schema version 2 and permanent
 effective-result reservations, but their repository-specific migration
 evidence and current graphs make their root subtree IDs intentionally

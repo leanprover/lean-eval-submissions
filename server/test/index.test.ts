@@ -76,7 +76,7 @@ describe("Worker routing", () => {
   });
 
   it("reports opt-in independently and keeps the reverse transition disabled", async () => {
-    const contract = "8ae11456f0a439f91ec5822ec36adb93b76b0d96";
+    const contract = "41f55135a8d5f36941e615e9ec9e4f5e32a786a5";
     const enabled = await handleRequest(
       new Request("https://example.test/healthz"),
       {
@@ -150,7 +150,7 @@ describe("Worker routing", () => {
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: configured,
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "8ae11456f0a439f91ec5822ec36adb93b76b0d96",
+          "41f55135a8d5f36941e615e9ec9e4f5e32a786a5",
       },
       LIFECYCLE,
     );
@@ -165,14 +165,14 @@ describe("Worker routing", () => {
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: "[]",
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "8ae11456f0a439f91ec5822ec36adb93b76b0d96",
+          "41f55135a8d5f36941e615e9ec9e4f5e32a786a5",
       },
       {
         ...ENV,
         RESULT_AMENDMENT_MAINTAINER_API_ENABLED: "true",
         RESULT_AMENDMENT_MAINTAINERS: "not-json",
         RESULT_OWNER_STATE_CONTRACT_COMMIT:
-          "8ae11456f0a439f91ec5822ec36adb93b76b0d96",
+          "41f55135a8d5f36941e615e9ec9e4f5e32a786a5",
       },
       {
         ...ENV,

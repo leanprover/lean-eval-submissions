@@ -3,7 +3,7 @@ import { decodeProductionMetadata, type ProductionMetadata } from "./api-contrac
 export const PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT =
   "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a" as const;
 export const STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT =
-  "8ae11456f0a439f91ec5822ec36adb93b76b0d96" as const;
+  "41f55135a8d5f36941e615e9ec9e4f5e32a786a5" as const;
 export const RESULT_OWNER_STATE_CONTRACT_COMMIT =
   PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT;
 
