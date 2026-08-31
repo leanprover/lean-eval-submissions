@@ -9,6 +9,9 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 PROCEDURE = ROOT / "docs" / "aws-release-production-trust-repair.md"
+AWS_ONLY_PROCEDURE = (
+    ROOT / "scripts" / "operator_production_release_trust_aws_only.sh"
+)
 
 
 class ProductionReleaseTrustRepairTests(unittest.TestCase):
@@ -262,6 +265,7 @@ exit {requested_status}
         self.assertFalse(operator_dir.exists())
         self.assertEqual(aws_calls, "")
 
+
     def test_lost_execute_response_never_deletes_or_reports_success(self) -> None:
         result, operator_dir, aws_calls, _ = self._run_cleanup_contract(
             owned=True,
@@ -447,6 +451,64 @@ exit {requested_status}
                     self._run_jq_contract(jq_filter, invalid, head=head).returncode,
                     0,
                 )
+
+
+class ProductionReleaseTrustAwsOnlyTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.procedure = AWS_ONLY_PROCEDURE.read_text()
+
+    def test_is_valid_bash_without_cloudshell_github_dependency(self) -> None:
+        result = subprocess.run(
+            ["bash", "-n", str(AWS_ONLY_PROCEDURE)],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotRegex(self.procedure, r"(?m)^\s*gh\s")
+
+    def test_limits_mutation_to_exact_production_trust_change_set(self) -> None:
+        self.assertNotIn("--use-previous-template", self.procedure)
+        self.assertIn(
+            '--template-body "file://$operator_dir/update-template.yaml"',
+            self.procedure,
+        )
+        self.assertIn(
+            "8f6acec8b91cffeb5ecae92a6ac83d906f77cb9fe1057b5a27e3f0f72b1deccd",
+            self.procedure,
+        )
+        self.assertIn("normalize_pinned_template", self.procedure)
+        self.assertIn('if template.endswith(b"\\n")', self.procedure)
+        self.assertIn("if template.count(old) != 1", self.procedure)
+        self.assertIn(
+            'cmp "$operator_dir/update-template.yaml" '
+            '"$operator_dir/post-template.yaml"',
+            self.procedure,
+        )
+        self.assertIn("(.Changes | length) == 1", self.procedure)
+        self.assertIn(
+            '.Changes[0].ResourceChange.LogicalResourceId == "ReleaseInvokerRole"',
+            self.procedure,
+        )
+        self.assertIn(
+            '.Changes[0].ResourceChange.Replacement == "False"',
+            self.procedure,
+        )
+        self.assertEqual(
+            self.procedure.count("aws cloudformation execute-change-set"), 1
+        )
+        self.assertNotIn("aws iam update-assume-role-policy", self.procedure)
+        self.assertNotIn("aws lambda invoke", self.procedure)
+
+    def test_reports_only_partial_aws_completion(self) -> None:
+        self.assertIn("PRODUCTION_RELEASE_TRUST_AWS_OK", self.procedure)
+        self.assertNotIn("PRODUCTION_RELEASE_TRUST_REPAIR_OK", self.procedure)
+        self.assertIn(
+            "repo:leanprover@7233018/lean-eval-releases@1340741242:"
+            "environment:release-production",
+            self.procedure,
+        )
 
 
 if __name__ == "__main__":
