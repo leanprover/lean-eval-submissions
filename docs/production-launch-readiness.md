@@ -226,10 +226,10 @@ production launch:
   production Worker version IDs: <intake, broker, replay>
   production canary source:
     repository: leanprover/lean-eval-state-staging
-    ref: production-canary-source-fixture-v1
-    commit: a2422110ed395ca737c6889a0601938f77d2925f
-  production canary problem: formalization-evaluation/two_plus_two@1
-  production canary model: LeanEval production launch canary a2422110ed395ca737c6889a0601938f77d2925f
+    ref: production-canary-source-fixture-v4
+    commit: 18595c8d06ec29d47940065644d16ae7cfbd1591
+  production canary problem: formalization-evaluation/substInv_X_sub_X_sq_eq_catalan@1
+  production canary model: LeanEval production launch canary 18595c8d06ec29d47940065644d16ae7cfbd1591
   production canary publication sequence: private, then visible irreversible publication opt-in
   production canary submission/result: <UUIDv7 and terminal result URL>
   production State commit after validation: <40-character SHA>
