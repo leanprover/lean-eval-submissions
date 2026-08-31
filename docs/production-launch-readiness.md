@@ -227,9 +227,9 @@ production launch:
   production canary source:
     repository: leanprover/lean-eval-state-staging
     ref: production-canary-source-fixture-v4
-    commit: d09f636bea099f444a058505d31ebafdd349855e
+    commit: 18595c8d06ec29d47940065644d16ae7cfbd1591
   production canary problem: formalization-evaluation/substInv_X_sub_X_sq_eq_catalan@1
-  production canary model: LeanEval production launch canary d09f636bea099f444a058505d31ebafdd349855e
+  production canary model: LeanEval production launch canary 18595c8d06ec29d47940065644d16ae7cfbd1591
   production canary publication sequence: private, then visible irreversible publication opt-in
   production canary submission/result: <UUIDv7 and terminal result URL>
   production State commit after validation: <40-character SHA>
