@@ -11,7 +11,7 @@
     "problem_id": "two_plus_two",
     "problem_group": "formalization-evaluation",
     "statement_revision": 1,
-    "declared_model": "LeanEval launch browser staging smoke e3f6db4d347e63ae21f5361437c8cfad5ee70f99",
+    "declared_model": "LeanEval final staging withheld smoke 6b81f13b4e1c4f48994a0cf76a861d82",
     "source_visibility": "private",
     "publication_choice": "withheld",
     "production_metadata": {
@@ -31,7 +31,7 @@
     "problem_id": "two_plus_two",
     "problem_group": "formalization-evaluation",
     "statement_revision": 1,
-    "declared_model": "LeanEval launch headless staging smoke e3f6db4d347e63ae21f5361437c8cfad5ee70f99",
+    "declared_model": "LeanEval final staging scheduled smoke 6b81f13b4e1c4f48994a0cf76a861d82",
     "source_visibility": "private",
     "publication_choice": "scheduled",
     "production_metadata": {
