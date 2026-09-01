@@ -38,7 +38,7 @@ Current deployed state:
 | Production replay | Commit `451856ebdd4ca4d875e43be7cd113678dea9e1b7`; general replay, historical-public replay, and staging acceptance disabled. |
 | Staging submission unit | Commit `a4ed8f7b811cbf647f446a3ca872ff48436ab5e0`; intake, lifecycle families, maintainer lists, publication opt-in, model consolidation, and publication opt-out currently read false after the bounded window. The staging-only dispatch promotion canary is intentionally true and is not a public lifecycle gate. Final cleanup remains pending until the corrected verifier proves every required false field. |
 | Staging replay | Commit `a4ed8f7b811cbf647f446a3ca872ff48436ab5e0`; general and historical-public replay disabled; staging acceptance enabled. |
-| Release controller | Commit `c0bcb97d87eeb17c0a2f1ef7e8bfc76502deb798`; current production and staging State contracts, including emergency removal, are pinned; repository variable `PUBLICATION_ENABLED` absent. The production publication-disabled credential preflight remains pending on this exact commit. |
+| Release controller | Commit `c0bcb97d87eeb17c0a2f1ef7e8bfc76502deb798`; current production and staging State contracts, including emergency removal, are pinned; repository variable `PUBLICATION_ENABLED` absent; the production publication-disabled credential preflight passes on this exact commit. |
 | Public entry and leaderboard | `https://lean-lang.org/eval/submit/` and `https://lean-eval-submission-server.lean-eval.workers.dev/` are live in disabled posture. Lifecycle-aware problem pages, including visible problem statements, are live. |
 
 The immutable dispatch ref for the protected submissions candidate is
