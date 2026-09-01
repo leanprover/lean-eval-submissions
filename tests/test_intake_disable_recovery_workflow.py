@@ -65,6 +65,34 @@ class IntakeDisableRecoveryWorkflowTests(unittest.TestCase):
             'actions/runs/$EVENT_RUN_ID/attempts/$EVENT_ATTEMPT', recovery
         )
         self.assertIn("automatic recovery trigger read-back differs", recovery)
+        self.assertIn(
+            "python ../scripts/validate_intake_recovery_controller.py",
+            recovery,
+        )
+        for argument in (
+            '--trigger-run-id "$EVENT_RUN_ID"',
+            '--trigger-run-attempt "$EVENT_ATTEMPT"',
+            '--trigger-commit "$EVENT_COMMIT"',
+            '--trigger-conclusion "$EVENT_CONCLUSION"',
+        ):
+            with self.subTest(argument=argument):
+                self.assertIn(argument, recovery)
+
+    def test_manual_recovery_does_not_forge_automatic_trigger_arguments(self) -> None:
+        recovery = job("disable-production-launch-gates")
+        self.assertIn('if [ "$EVENT_NAME" = workflow_run ]; then', recovery)
+        trigger_arguments = recovery.index(
+            '--trigger-run-id "$EVENT_RUN_ID"'
+        )
+        conditional = recovery.rfind(
+            'if [ "$EVENT_NAME" = workflow_run ]; then', 0, trigger_arguments
+        )
+        validator = recovery.index(
+            "python ../scripts/validate_intake_recovery_controller.py",
+            trigger_arguments,
+        )
+        self.assertLess(conditional, trigger_arguments)
+        self.assertLess(trigger_arguments, validator)
 
     def test_recovery_is_bound_to_protected_main_exact_controller_and_tag(self) -> None:
         recovery = job("disable-production-launch-gates")
