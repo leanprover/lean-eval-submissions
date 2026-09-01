@@ -26,8 +26,10 @@ a second transaction or replay system.
 | Private archive crosswalk | `evidence/historical-replay/private-crosswalks/dfdcbc0da3a3526f8a26e6a69cefa41cbcd92de7608752193b742fcd92b00a67.json` | 639 bound, 29 not found |
 | Private matrix source plan | `evidence/historical-replay/private-plans/d9561ad62098e0542656678f207b3360b0b295be975c292cbf729dc48d03bd5e.json` | 668 entries, 21 reused public profiles |
 | Private image matrix | `configuration/historical-private-replay-image-matrix-v1.json`, SHA-256 `54ad4c237d08e5d0e298dfc8f752b25c89ce30e79b396a2256b4216a1c0f772c` | 63 images, 639 Results |
+| Private Results snapshot | submissions commit `7fb2e762e5470ae1929dbe069dbcd0c8488b51d7`, store SHA-256 `9e998ab47ae719484e2ea283271086d2c66c95051837231014fd74392f4fb1c0` | 1,304 Results: 668 private |
 | Private audit source | audit commit `ad356e7bc5a2d650d9902ac3f6d352a0164360bc`, inventory digest `6b8867f41a13c3ba323746988058886e5dc73da7b509deaf01ccf9c36fe8d5d4` | 1,045 archives |
 | Selected schema-1 migration set | inventory digest `a8913f1c8b5073e5b7ab309ba10481b615ca4fc00e629e41a9e57962f3afebd4` | 439 unique archives |
+| Pre-mutation State comparison, not append authority | production commit `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f`; event-set digest `d3392218297ea11f6093b59e5252f3ae394887368e02cea40a58e6fd82a901b5`; public-v6 projection SHA-256 `381275d999fdd99540c6837adcda549f7cc6c8294e6431d442ce30b245057cb2` | 489 events; 0 replay series; 488 reviewed-unavailable Results |
 
 The fixed reviewed implementation bindings are:
 
@@ -45,8 +47,9 @@ The fixed reviewed implementation bindings are:
 
 Both replay controllers are restricted to protected `main`, use separate
 non-cancelling concurrency groups, allow at most four execution attempts, and
-bound each job to 360 minutes. Cleanup has a seven-hour deadline, receipts are
-retained for 24 hours, and each OIDC token lifetime is at most ten minutes.
+bound each job to 360 minutes. Cleanup has a seven-hour deadline and each OIDC
+token lifetime is at most ten minutes. Public replay emits no artifact; the
+private controller retains its source-free terminal receipt for 30 days.
 
 The old plan remains immutable source evidence; it is not current enqueue
 authority. The pinned State validator proves that exactly 20 of its Results now
@@ -88,35 +91,68 @@ workflow artifact, worktree file, mutable tag, or branch head.
       `5e7c181edef7569dcf2ecb2c33f7819adfb75b07`. It contains 63 profiles,
       639 `profile_qualified` entries, 29 `archive_not_found` entries, and
       zero `profile_pending` entries.
-- [ ] The exact reviewed submissions commit used by the migration workflow and
-      historical replay controllers, plus the migration workflow blob digest.
-- [ ] The production migration-infrastructure template digest and post-apply
-      readback: dedicated migration Encrypt role, replay v2 Decrypt support,
-      unchanged v1 statements, and the migration environment bound only to the
-      dedicated role.
-- [ ] The exact migration inputs: audit commit
+- [ ] Select the execution commit immediately before dispatch. It must equal
+      the then-current protected submissions `main`; the migration workflow
+      blob must retain SHA-256
+      `242da58b04478f7bf614f55b6ab78d01cd494b5b6df867681e2e5616ef848f64`.
+      Protected source commit `647160063758df5e21f9b64e7ec2e198dff6d481`
+      carries that exact blob and both reviewed controller blobs.
+- [ ] The production template is bound at SHA-256
+      `aac24318c973523a65b76af34b8e1408a5680f61b52c4fb996f93967253ef94d`,
+      and `archive-migration-production` directly defines only
+      `AWS_WRAP_ROLE_ARN` with the dedicated migration role plus
+      `AUDIT_MIGRATION_READ_KEY`. Complete the authenticated live
+      CloudFormation/IAM readback: exact migration-role
+      OIDC trust and Encrypt-only v2 policy, replay v1+v2 Decrypt support,
+      unchanged ordinary v1 roles and outputs, and unchanged staging stack.
+- [x] The exact migration inputs are audit commit
       `ad356e7bc5a2d650d9902ac3f6d352a0164360bc`, selected inventory digest
       `a8913f1c8b5073e5b7ab309ba10481b615ca4fc00e629e41a9e57962f3afebd4`,
-      count 439, dedicated role ARN, protected environment, isolated review
-      branch name, and apply confirmation.
+      count 439, role
+      `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`,
+      environment `archive-migration-production`, isolated review branch
+      `archive-file-key-rewrap-v1`, and apply confirmation
+      `stage-envelope-migration`. The review branch is absent before apply.
 - [ ] Legacy identity preflight: custodian Kim Morrison (`@kim-em`) must derive
       the public key from the supplied legacy identity and require fingerprint
       `SHA256:4unwBywJxfq9LsOjygB+/NRHaXdBhvxKP+a3EEpqjoE` before installation.
-      Never record the private material or its path.
-- [ ] The exact controller commits, immutable image manifest digests, OIDC
-      subjects and route scopes, serialization/lease limits, four-attempt cap,
-      and terminal-disposition rules for the later bounded replay.
-- [ ] The redacted leaderboard projection fields and proof that no private
-      locator, source, archive key, or plaintext can enter State, Results,
-      artifacts, logs, or publication.
-- [ ] Fail-closed recovery and rollback: leave audit `main` unchanged if
-      migration validation fails; keep replay variables absent; remove the
-      installed legacy identity, AWS session, scratch output, and review branch
-      when the bounded operation fails. Retain the reviewed migration role,
-      protected environment, and workflow for the separately bound final-cutoff
-      delta unless the entire migration lane is explicitly abandoned and
-      retired.
-- [ ] Explicit exclusions: no legacy-key destruction, final-cutoff delta,
+      Never record the private material or its path. The protected environment
+      does not directly define `LEGACY_ARCHIVE_IDENTITY` before this gate.
+- [x] Protected source commit
+      `647160063758df5e21f9b64e7ec2e198dff6d481` binds private-controller
+      SHA-256 `b0b2e1310ce3e71ee2738439a9d3c371259d976dc3a0556963072563f66eb76c`
+      and public-controller SHA-256
+      `4f8572f27d9e1c9d8013059135c7446b905cbda16226f5c7cd38ec2f65296a6e`.
+      The profile locators bind every immutable image manifest. Both lanes use
+      subject `repo:leanprover/lean-eval-submissions:environment:replay-production`,
+      exact workflow references on protected `main`, and ten-minute OIDC
+      tokens. Public audience
+      `lean-eval-historical-public-replay-production` is limited to POST on
+      `/api/v1/historical-public-replay`,
+      `/api/v1/historical-public-replay/status`,
+      `/api/v1/historical-public-replay/cleanup`, and
+      `/api/v1/historical-public-replay/cleanup-reservation`. Private audience
+      `lean-eval-historical-private-replay` is limited to POST on
+      `/api/v1/replay`, `/api/v1/replay/status`,
+      `/api/v1/historical-private-replay/reserve`, and
+      `/api/v1/historical-private-replay/cleanup`. Both lanes use
+      non-cancelling serialization, a seven-hour recovery lease, 360-minute
+      jobs, four attempts, and explicit terminal dispositions.
+- [x] Public projection v6 exposes only historical identity, visibility,
+      profile/measurement digests, transition time, and terminal replay or
+      unavailability fields. It redacts private archive, crosswalk, authority,
+      and key-envelope locators. Private State intentionally retains exact
+      content-addressed encrypted locators and digests; migration/replay does
+      not modify Results, and no source, key material, or plaintext enters a
+      public projection, artifact, log, release, or publication.
+- [ ] The source-bound recovery contract leaves audit `main` unchanged on
+      migration failure and removes identity, AWS session, scratch, and the
+      isolated review branch. The review branch is currently absent. Before
+      identity installation, verify that replay variables remain absent and
+      Cloudflare has no historical temporary executor. Retain the migration
+      role, protected environment, and workflow for the separately bound
+      final-cutoff delta unless the lane is explicitly abandoned and retired.
+- [x] Explicit exclusions: no legacy-key destruction, final-cutoff delta,
       intake or publication change, experimental checker, FC/disproof work,
       external PR/comment, or item outside the hashes in this packet.
 
