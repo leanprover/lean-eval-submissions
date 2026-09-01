@@ -157,6 +157,9 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         )
 
     def test_cli_accepts_only_visible_browser_submission_identity(self) -> None:
+        self.assertEqual(
+            self.driver.BROWSER_ATTRIBUTION_MAX_AGE, datetime.timedelta(hours=7)
+        )
         help_text = self.driver.parser().format_help()
         self.assertNotIn("--fixture", help_text)
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):

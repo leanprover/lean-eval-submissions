@@ -43,6 +43,9 @@ REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
 MAX_GIST_FILES = 16
 MAX_GIST_BYTES = 1024 * 1024
 RELEASE_JOB_NAMES = frozenset({"authorize-manual", "prepare-one", "unwrap-one"})
+MAX_STAGING_WINDOW = datetime.timedelta(minutes=300)
+DEFAULT_EVALUATION_TIMEOUT = datetime.timedelta(seconds=3600)
+BROWSER_ATTRIBUTION_MAX_AGE = MAX_STAGING_WINDOW + 2 * DEFAULT_EVALUATION_TIMEOUT
 
 
 class AcceptanceError(RuntimeError):
@@ -1236,7 +1239,7 @@ def validate_submission_binding(
     now = datetime.datetime.now(datetime.timezone.utc)
     if (
         received_at.tzinfo is None
-        or not datetime.timedelta() <= now - received_at <= datetime.timedelta(hours=2)
+        or not datetime.timedelta() <= now - received_at <= BROWSER_ATTRIBUTION_MAX_AGE
     ):
         raise AcceptanceError("submission is not attributable to this bounded run")
     uuid_timestamp = int(submission_id[:8] + submission_id[9:13], 16) / 1000
@@ -2040,7 +2043,11 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--gist-id", required=True)
         if name == "run":
             command.add_argument("--browser-submission-id", required=True)
-            command.add_argument("--evaluation-timeout", type=int, default=3600)
+            command.add_argument(
+                "--evaluation-timeout",
+                type=int,
+                default=int(DEFAULT_EVALUATION_TIMEOUT.total_seconds()),
+            )
     return result
 
 
