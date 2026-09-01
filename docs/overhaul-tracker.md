@@ -17,16 +17,17 @@ history, or replace the cross-repository execution runbook.
 
 - Protected `main` requires the `verify` aggregate check.
 - Production Workers report one coherent fail-closed live deployment at
-  `f09e30565ec8f180cb7b0a85935f9439f802a14c`.
-- The live deployment keeps production intake and every public production
-  lifecycle API configured and effectively disabled, with empty maintainer
-  allowlists, but its superseded State-contract pin makes it unsuitable as a
-  launch or rollback target.
-- This repair candidate tracks production intake, replay, every lifecycle API,
-  model consolidation, and the promotion canary as disabled, with empty
-  maintainer allowlists. It updates the production State-contract pin and must
-  be deployed and qualified as the coherent all-false rollback baseline before
-  a separate lifecycle candidate is prepared. Readiness remains `NO-GO`.
+  `451856ebdd4ca4d875e43be7cd113678dea9e1b7`.
+- That exact commit is the qualified all-false rollback baseline: production
+  intake, replay, every public lifecycle API, model consolidation, and the
+  promotion canary are configured and effectively disabled, with empty
+  maintainer allowlists and the current production State-contract pin.
+- This lifecycle candidate keeps production intake, replay, model
+  consolidation, and the promotion canary disabled while tracking the reviewed
+  result-owner, amendment-owner, amendment-maintainer, model-identity-owner,
+  model-identity-maintainer, and publication-opt-in gates as enabled. Both
+  production maintainer lists contain exactly `kim-em` / GitHub user `477956`.
+  It has not been deployed and readiness remains `NO-GO`.
 - Tracked staging intake and every staging lifecycle API remain all-false with
   empty maintainer allowlists.
 - General staging replay, historical-public replay, and production replay are
@@ -59,10 +60,9 @@ not this summary.
 - [x] Accepted, rejected, archive-failed, and evaluation-failed lifecycle
       transitions.
 - [x] Metadata backfill, repair/retraction request, maintainer-decision, and
-      model-alias/rename implementation behind independent gates. This repair
-      candidate keeps the complete production and staging lifecycle surface
-      all-false; a separate launch candidate may enable only the reviewed
-      production surface.
+      model-alias/rename implementation behind independent gates. This
+      candidate enables only the reviewed production surface; staging and the
+      separate compatible rollback baseline remain all-false.
 - [x] Official Lean build and nanoda replay formats with versioned checker and
       measurement fields.
 - [x] Protected finite-lease intake enablement and disable-only recovery.
@@ -96,11 +96,13 @@ not this summary.
       evidence.
 - [x] Prove that each launch gate returns to disabled and public health reports
       the effective state.
-- [ ] Merge and deploy the all-false repair baseline, then record its protected
-      CI, exact staging and production readback, and coherent rollback versions.
-- [ ] Prepare the separate lifecycle candidate and record its protected CI,
-      exact staging deployment/readback, immutable dispatch tag, and promotion
-      canary before rebuilding the launch packet.
+- [x] Deploy and qualify the merged all-false repair baseline
+      `451856ebdd4ca4d875e43be7cd113678dea9e1b7`; its exact staging and
+      production readback, coherent rollback versions, no-op recovery, and
+      readiness reconciliation are current.
+- [ ] Record this lifecycle candidate's protected CI, exact staging
+      deployment/readback, immutable dispatch tag, and promotion canary before
+      rebuilding the launch packet.
 
 Rerun a functional case only if its implementation path changes or the fresh
 checks expose drift. This is a bounded launch check, not a qualification

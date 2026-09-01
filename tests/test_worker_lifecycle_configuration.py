@@ -44,10 +44,10 @@ class WorkerLifecycleConfigurationTests(unittest.TestCase):
                     path = self.write(root, configuration(state))
                     self.assertEqual(read_lifecycle_state(path, "production"), state)
 
-    def test_tracked_configuration_is_an_all_false_baseline(self) -> None:
+    def test_tracked_configuration_has_reviewed_launch_state(self) -> None:
         tracked = pathlib.Path(__file__).resolve().parent.parent / "server/wrangler.jsonc"
         self.assertEqual(read_lifecycle_state(tracked, "staging"), "false")
-        self.assertEqual(read_lifecycle_state(tracked, "production"), "false")
+        self.assertEqual(read_lifecycle_state(tracked, "production"), "true")
 
     def test_rejects_partial_launch_or_consolidation_enablement(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

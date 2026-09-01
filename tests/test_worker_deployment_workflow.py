@@ -1023,7 +1023,14 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         }
         for environment, (configuration, base_url) in expected.items():
             with self.subTest(environment=environment):
-                expected_lifecycle = "false"
+                expected_lifecycle = (
+                    "true" if environment == "production" else "false"
+                )
+                expected_maintainers = (
+                    '[{"github_id":477956,"login":"kim-em"}]'
+                    if environment == "production"
+                    else "[]"
+                )
                 self.assertIs(configuration["workers_dev"], True)
                 self.assertIs(configuration["preview_urls"], False)
                 self.assertNotIn("routes", configuration)
@@ -1042,7 +1049,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     configuration["vars"]["RESULT_AMENDMENT_MAINTAINERS"],
-                    "[]",
+                    expected_maintainers,
                 )
                 self.assertEqual(
                     configuration["vars"]["MODEL_IDENTITY_OWNER_API_ENABLED"],
@@ -1054,7 +1061,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 )
                 self.assertEqual(
                     configuration["vars"]["MODEL_IDENTITY_MAINTAINERS"],
-                    "[]",
+                    expected_maintainers,
                 )
                 self.assertEqual(
                     configuration["vars"]["MODEL_IDENTITY_CONSOLIDATION_API_ENABLED"],
