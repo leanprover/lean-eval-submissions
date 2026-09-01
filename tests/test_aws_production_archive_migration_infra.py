@@ -94,7 +94,7 @@ class ProductionArchiveMigrationInfrastructureTests(unittest.TestCase):
         self.assertNotIn("aws kms encrypt", SCRIPT)
         self.assertNotIn("git push", SCRIPT)
         self.assertEqual(SCRIPT.count("LEGACY_ARCHIVE_IDENTITY"), 2)
-        self.assertIn("does not authorize migration", DOC)
+        self.assertIn("does not authorize actual migration", DOC)
 
     def test_requires_and_preserves_prebound_migration_selector(self) -> None:
         verify_selector = SCRIPT.index("echo step=verify-migration-role-selector")
