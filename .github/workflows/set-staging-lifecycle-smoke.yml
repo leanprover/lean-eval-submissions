@@ -242,15 +242,18 @@ jobs:
           set -euo pipefail
           body_file=$(mktemp)
           trap 'rm -f "$body_file"' EXIT
-          http_status=$(curl --silent --show-error --max-time 10 \
-            --user-agent "lean-eval-staging-denial-probe/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
-            --output "$body_file" \
-            --write-out '%{http_code}' \
-            --request POST \
-            https://lean-eval-submission-server-staging.lean-eval.workers.dev/api/v1/browser/submission-grants)
-          BROWSER_DENIAL_BODY_FILE="$body_file" \
-          BROWSER_DENIAL_HTTP_STATUS="$http_status" \
-          python - <<'PY'
+          verified=false
+          for attempt in $(seq 1 13); do
+            http_status=$(curl --silent --show-error --max-time 10 \
+              --user-agent "lean-eval-staging-denial-probe/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+              --output "$body_file" \
+              --write-out '%{http_code}' \
+              --request POST \
+              https://lean-eval-submission-server-staging.lean-eval.workers.dev/api/v1/browser/submission-grants) \
+              || http_status=000
+            if BROWSER_DENIAL_BODY_FILE="$body_file" \
+              BROWSER_DENIAL_HTTP_STATUS="$http_status" \
+              python - <<'PY'
           import json
           import os
 
@@ -263,8 +266,28 @@ jobs:
           assert int(os.environ["BROWSER_DENIAL_HTTP_STATUS"]) == case["expected_http_status"]
           with open(os.environ["BROWSER_DENIAL_BODY_FILE"], encoding="utf-8") as stream:
               body = json.load(stream)
-          assert body == {"error": case["expected_error"]}
+          if body == {"error": case["expected_error"]}:
+              raise SystemExit(0)
+          raise SystemExit(1)
           PY
+            then
+              verified=true
+              break
+            fi
+            if [ "$http_status" != 503 ] || \
+              [ "$(jq -r 'if . == {error: "intake_disabled"} then "retry" else "fail" end' \
+                "$body_file" 2>/dev/null || true)" != retry ]; then
+              echo "unauthenticated browser denial returned an unexpected response" >&2
+              exit 1
+            fi
+            if [ "$attempt" -lt 13 ]; then
+              sleep 5
+            fi
+          done
+          if [ "$verified" != true ]; then
+            echo "unauthenticated browser denial did not converge" >&2
+            exit 1
+          fi
 
       - name: Restore all launch gates to disabled after a failed mutation
         if: failure() && steps.armed.outputs.ready == 'true'
