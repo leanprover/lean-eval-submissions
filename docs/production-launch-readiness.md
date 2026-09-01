@@ -32,9 +32,9 @@ Final staging exercised lifecycle candidate
 launch workflow must deploy that same exact commit before intake is enabled.
 The separate intake-only launch change is PR `#1526` at exact head
 `7c28d96ac38443d491a4536c449cc2949109e7f9`, based on the lifecycle candidate
-above; its binary patch SHA-256 is
-`8ba1a41cd07876c2c60cf363a45d946dd839a40545d0b734f547cdd6eb8a44bd`.
-It remains unmerged until the lifecycle deployment is verified.
+above. The exact commit and parent bind its complete tree without relying on a
+Git-version-sensitive rendered patch digest. It remains unmerged until the
+lifecycle deployment is verified.
 The current production Worker baseline is
 `30bc92b3d46bd2a3ba1788433264fdd70ae3c74e`, with every launch capability
 disabled. Its active intake, broker, and replay Worker versions are
