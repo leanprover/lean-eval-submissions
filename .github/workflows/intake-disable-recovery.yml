@@ -201,6 +201,24 @@ jobs:
             echo "recovery controller identity is not an exact eligible deploy" >&2
             exit 1
           fi
+          validator_args=(
+            --event-name "$EVENT_NAME"
+            --live-commit "$LIVE_COMMIT"
+            --controller-run-id "$run_id"
+            --controller-run-attempt "$run_attempt"
+            --controller-commit "$commit"
+            --controller-status "$status"
+            --controller-conclusion "$conclusion"
+          )
+          if [ "$EVENT_NAME" = workflow_run ]; then
+            validator_args+=(
+              --trigger-run-id "$EVENT_RUN_ID"
+              --trigger-run-attempt "$EVENT_ATTEMPT"
+              --trigger-commit "$EVENT_COMMIT"
+              --trigger-conclusion "$EVENT_CONCLUSION"
+            )
+          fi
+          python ../scripts/validate_intake_recovery_controller.py "${validator_args[@]}"
           run=$(timeout 30s gh api \
             "repos/$REPOSITORY/actions/runs/$run_id/attempts/$run_attempt" \
             --jq '[.id, .run_attempt, .head_sha, .path, .event, .status, (.conclusion // "")] | @tsv')
