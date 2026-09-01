@@ -580,8 +580,8 @@ jobs:
             commit=$(python ../scripts/validate_cloudflare_rollback.py \
               production-state-readiness --response "$proof" \
               --http-status "$http_status" \
-              --expected-contract 9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f \
-              --expected-schema 2d19515da1b0798f00dd3e9809c3a2770fee8b27ce6323ac9b9e827db4c7ea27) \
+              --expected-contract 235a96c96462438c7680e6fb90fa0e6044ec1774 \
+              --expected-schema 5394e7f24901db390b16c97ac5ab781a407da6cedee60f96e3e9396bce549587) \
               || classification=$?
             if [ "$classification" -eq 0 ]; then break; fi
             if [ "$classification" -ne 75 ] || [ "$attempt" -eq 6 ]; then
@@ -764,9 +764,9 @@ jobs:
               or proof["intake_lease_expires_at"] != int(os.environ["INTAKE_LEASE_EXPIRES_AT"])
               or proof["state_branch_protected"] is not True
               or proof["state_commit"] != os.environ["STATE_COMMIT"]
-              or proof["state_contract_commit"] != "9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f"
+              or proof["state_contract_commit"] != "235a96c96462438c7680e6fb90fa0e6044ec1774"
               or proof["state_contract_verified"] is not True
-              or proof["state_event_schema_sha256"] != "2d19515da1b0798f00dd3e9809c3a2770fee8b27ce6323ac9b9e827db4c7ea27"
+              or proof["state_event_schema_sha256"] != "5394e7f24901db390b16c97ac5ab781a407da6cedee60f96e3e9396bce549587"
           ):
               raise SystemExit("protected State moved after the leased smoke proof")
           PY

@@ -6,8 +6,8 @@ production metadata. It never rewrites a Results record, changes its stable
 result ID, or reinterprets its grandfathered solution-publication policy.
 
 The implementation is bound to production State contract commit
-`9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` and staging contract commit
-`41f55135a8d5f36941e615e9ec9e4f5e32a786a5`. Before an owner operation, the
+`235a96c96462438c7680e6fb90fa0e6044ec1774` and staging contract commit
+`6105a6255ec40409bcce66c6cf6b6764e0e93ed4`. Before an owner operation, the
 Worker resolves protected State `main`, proves that it equals or descends from
 the repository-specific commit, and checks the exact current root entries for
 `README.md`, `docs`, `schema`, and `scripts`. The three tree entries bind their
@@ -25,8 +25,8 @@ The lifecycle launch candidate tracks these non-secret variables:
 
 | Environment | Owner API | State contract |
 | --- | --- | --- |
-| Staging | `LEGACY_RESULT_OWNER_API_ENABLED=false` | `41f55135a8d5f36941e615e9ec9e4f5e32a786a5` |
-| Production | `LEGACY_RESULT_OWNER_API_ENABLED=true` | `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` |
+| Staging | `LEGACY_RESULT_OWNER_API_ENABLED=false` | `6105a6255ec40409bcce66c6cf6b6764e0e93ed4` |
+| Production | `LEGACY_RESULT_OWNER_API_ENABLED=true` | `235a96c96462438c7680e6fb90fa0e6044ec1774` |
 
 The route exists only when the enable flag is exactly `true` and the contract
 commit is exact. This candidate enables the production owner API while keeping

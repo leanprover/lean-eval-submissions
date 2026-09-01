@@ -137,9 +137,9 @@
     "submission_base_url": "https://lean-eval-submission-server-staging.lean-eval.workers.dev",
     "state_repository": "leanprover/lean-eval-state-staging",
     "state_branch": "main",
-    "state_contract_commit": "41f55135a8d5f36941e615e9ec9e4f5e32a786a5",
+    "state_contract_commit": "6105a6255ec40409bcce66c6cf6b6764e0e93ed4",
     "state_script_sha256": {
-      "scripts/materialize_state.py": "405c6891045a46febabd801986731fabbf206ca1d373858abafc462409994130",
+      "scripts/materialize_state.py": "32617a49740a355f54332c7de3bb8f119f6bd9b4fec70b9188c582a8ae5b44e9",
       "scripts/model_identity.py": "32843986791427bd3cdaf407a857b177031eace9549b6aef5a9a4bc6577ca07b",
       "scripts/probe_performance_counters.py": "eb73807c0f7042f28130ac2d3300c17af384ade89fb46b6e3e96fcc56e59abcf",
       "scripts/public_projection.py": "2391e7574faff98763b2e8d60370f76876e8062eea5e1848a2d6a98579a0727b",
@@ -148,7 +148,7 @@
       "scripts/result_owner_indexes.py": "af1d4a81be54d1b9d362e71fccf996771ce9f58941c839f754f3097c30bfe99b",
       "scripts/result_release_status.py": "4aa1d4df03cfe3d3e44ac6448e4458412bffda93afd366b1dd589fe02d7280b4",
       "scripts/state.py": "b164faa350987d97d6b8de5912d477e14d18d82a3ed1b76b6d908ab3e3278463",
-      "scripts/validate_state.py": "f211b118d151aaa55fd15aff9363f97df14f6e21721f0d85fc2c6f66167dc6b4"
+      "scripts/validate_state.py": "1ca7dbc7618e9bdda94725e0bb3d5cdc00d22e94f0e9d3b8543d18be9e01930e"
     },
     "results_repository": "leanprover/lean-eval-submissions",
     "results_branch": "staging-results",
