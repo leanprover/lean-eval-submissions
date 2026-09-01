@@ -8,12 +8,17 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = (
     ROOT / ".github/workflows/historical-authoritative-replay.yml"
 ).read_text(encoding="utf-8")
+PRIVATE_WORKFLOW = (
+    ROOT / ".github/workflows/historical-private-replay.yml"
+).read_text(encoding="utf-8")
 
 
 class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
     def test_lane_is_manual_serialized_and_still_dark(self) -> None:
         self.assertIn("workflow_dispatch:", WORKFLOW)
         self.assertIn("cancel-in-progress: false", WORKFLOW)
+        self.assertIn("group: lean-eval-historical-replay-controller", WORKFLOW)
+        self.assertIn("group: lean-eval-historical-replay-controller", PRIVATE_WORKFLOW)
         self.assertIn("environment: replay-production", WORKFLOW)
         self.assertIn(
             "vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED == 'true'",
@@ -139,6 +144,49 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertIn("timeout-minutes: 360", WORKFLOW)
         self.assertNotIn("actions/upload-artifact", WORKFLOW)
         self.assertIn("runner-loss-cleanup-confirmed", failure_step)
+
+    def test_terminal_appends_refresh_and_retry_exact_current_state(self) -> None:
+        terminal = WORKFLOW.split(
+            "Append the exact reported historical terminal outcome", 1
+        )[1].split(
+            "Fail a started attempt explicitly if orchestration did not finish", 1
+        )[0]
+        failure = WORKFLOW.split(
+            "Fail a started attempt explicitly if orchestration did not finish", 1
+        )[1].split("Confirm credentials remained separated", 1)[0]
+        for append_step, label in ((terminal, "terminal"), (failure, "failure")):
+            self.assertIn("for cas_attempt in $(seq 1 4)", append_step)
+            self.assertIn("git -C state fetch --no-tags origin", append_step)
+            self.assertIn("git -C state merge --ff-only", append_step)
+            self.assertIn("state/scripts/state.py --root state validate", append_step)
+            self.assertIn("historical_replay_controller.py recover", append_step)
+            self.assertIn("started_event_id: $started", append_step)
+            self.assertIn("cmp \"$RUNNER_TEMP/started-event.json\"", append_step)
+            self.assertIn(
+                f'historical-{label}-state-publish-$cas_attempt', append_step
+            )
+            self.assertIn("git clone --quiet --no-hardlinks state", append_step)
+            self.assertIn('--expected-head "$expected"', append_step)
+            self.assertIn("cmp -s \"$last_event\"", append_step)
+            self.assertGreaterEqual(
+                append_step.count("state/scripts/state.py --root state validate"), 2
+            )
+            self.assertIn('merge-base --is-ancestor "$state_head"', append_step)
+            self.assertIn('test "$(jq -er .kind "$committed")" = none', append_step)
+            self.assertNotIn("EXPECTED_STATE_HEAD", append_step)
+
+    def test_public_state_refresh_identity_is_temporary_and_read_only(self) -> None:
+        install = WORKFLOW.split(
+            "Install one temporary read-only State refresh identity", 1
+        )[1].split("actions/setup-node", 1)[0]
+        cleanup = WORKFLOW.split(
+            "Confirm credentials remained separated and remove scratch", 1
+        )[1]
+        self.assertIn("PRODUCTION_STATE_READ_KEY", install)
+        self.assertNotIn("PRODUCTION_STATE_WRITE_KEY", install)
+        self.assertIn("historical-public-state-reader", cleanup)
+        self.assertIn("historical-public-state-known-hosts", cleanup)
+        self.assertIn("config --unset-all core.sshCommand", cleanup)
 
     def test_start_becomes_cleanup_required_before_the_request_can_escape(self) -> None:
         start_failed = WORKFLOW.index(
