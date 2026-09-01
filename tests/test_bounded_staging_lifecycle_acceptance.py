@@ -118,6 +118,29 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         ):
             self.assertIn(f'--var "{variable}:false"', self.watchdog)
 
+    def test_watchdog_all_false_health_checks_include_publication_opt_in(
+        self,
+    ) -> None:
+        initial = self.watchdog.index("Verify exact tag and initial all-false")
+        install = self.watchdog.index("npm ci")
+        armed = self.watchdog.index("Arm all-false recovery")
+        enabled = self.watchdog.index("Wait for the packet-bound enabled state")
+        restore = self.watchdog.index(
+            "Restore and verify every staging launch gate is disabled"
+        )
+        sections = {
+            "initial dark verification": self.watchdog[initial:install],
+            "armed recovery proof": self.watchdog[armed:enabled],
+            "final restore verification": self.watchdog[restore:],
+        }
+        for label, section in sections.items():
+            with self.subTest(site=label):
+                fields_start = section.index("for field in (")
+                fields_end = section.index("):", fields_start)
+                false_fields = section[fields_start:fields_end]
+                self.assertIn('"release_opt_in_api_enabled"', false_fields)
+                self.assertIn('"release_opt_out_api_enabled"', false_fields)
+
     def test_fixture_is_canonical_closed_and_hash_pinned(self) -> None:
         bounded = self.fixture["bounded_acceptance"]
         self.assertEqual(
