@@ -425,7 +425,7 @@ summaries:
 - `docs/historical-public-replay-profiles.md`;
 - `docs/historical-private-archive-crosswalk.md`;
 - `docs/historical-public-unavailability.md`; and
-- current setup and trust-repair instructions under `docs/`.
+- current setup and recovery instructions under `docs/`.
 
 ## Reconciliation checklist
 
