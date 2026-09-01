@@ -276,7 +276,13 @@ reason to install the identity before the pre-mutation packet is complete.
    `prepare_historical_private_replay.py state-events --selection full
    --append-ready` against that exact current head with non-overlapping times.
    Validate both candidate sets together against the current head before
-   committing either candidate.
+   committing either candidate. The one-shot combined State workflow consumes
+   the packet-input counts from
+   `configuration/historical-baseline-state-batch-v1.json`, closes every event,
+   task, Result, queue, view, and redacted historical projection digest, then
+   creates all 2,439 events in one non-force parent-bound State commit. Any
+   parent drift, overlap, duplicate, missing file, extra file, or projection
+   mismatch leaves State unchanged.
 5. Append the reviewed candidates, enable only the required historical
    controllers, drain both queues with bounded retries, and record a terminal
    replay or reviewed-unavailable disposition for every retained-baseline

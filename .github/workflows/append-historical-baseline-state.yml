@@ -1,0 +1,206 @@
+name: Append reviewed historical baseline to State
+
+# One-shot retained-baseline machinery. Merge only after production launch
+# cleanup. Delete after the retained baseline has been appended and drained.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_state_head:
+        description: Exact current protected production State parent
+        required: true
+        type: string
+      expected_audit_head:
+        description: Exact protected audit main after migration promotion
+        required: true
+        type: string
+      confirmation:
+        description: Enter append-reviewed-historical-baseline
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lean-eval-historical-baseline-state-append
+  cancel-in-progress: false
+
+jobs:
+  append:
+    if: inputs.confirmation == 'append-reviewed-historical-baseline'
+    environment: replay-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Require exact protected submissions main and bounded inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_STATE_HEAD: ${{ inputs.expected_state_head }}
+          EXPECTED_AUDIT_HEAD: ${{ inputs.expected_audit_head }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          test "$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '[.commit.sha,.protected] | @tsv')" = "$GITHUB_SHA"$'\ttrue'
+          [[ "$EXPECTED_STATE_HEAD" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_AUDIT_HEAD" =~ ^[0-9a-f]{40}$ ]]
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-state
+          ref: ${{ inputs.expected_state_head }}
+          path: state
+          fetch-depth: 0
+          persist-credentials: false
+          ssh-key: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-submissions
+          ref: 81e94fe2f4fc819300fd7d4e036f00124166784f
+          path: public-qualification-source
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-state
+          ref: 0c943edde8a247b8670e10339b80fc65be6c0f33
+          path: public-state-contract
+          fetch-depth: 1
+          persist-credentials: false
+          ssh-key: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          ref: ${{ inputs.expected_audit_head }}
+          path: audit
+          fetch-depth: 0
+          persist-credentials: false
+          ssh-key: ${{ secrets.AUDIT_READ_KEY }}
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11.10'
+
+      - name: Install exact State validation dependency
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --only-binary=:all: \
+            --require-hashes -r requirements-jsonschema-workflow.txt
+
+      - name: Prove both private checkouts are the exact current protected heads
+        env:
+          EXPECTED_STATE_HEAD: ${{ inputs.expected_state_head }}
+          EXPECTED_AUDIT_HEAD: ${{ inputs.expected_audit_head }}
+        run: |
+          set -euo pipefail
+          test "$(git -C state rev-parse HEAD)" = "$EXPECTED_STATE_HEAD"
+          test "$(git -C audit rev-parse HEAD)" = "$EXPECTED_AUDIT_HEAD"
+          test "$(git -C state ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_STATE_HEAD"
+          test "$(git -C audit ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_AUDIT_HEAD"
+          test -z "$(git -C state status --porcelain)"
+          test -z "$(git -C audit status --porcelain)"
+          python state/scripts/state.py --root state validate
+
+      - name: Normalize exact offline controller repository identities
+        run: |
+          set -euo pipefail
+          normalize() {
+            root=$1
+            repository=$2
+            observed=$(git -C "$root" remote get-url origin)
+            case "$observed" in
+              "https://github.com/$repository"|"https://github.com/$repository.git"|"git@github.com:$repository.git") ;;
+              *) echo "unexpected origin for $repository" >&2; exit 1 ;;
+            esac
+            git -C "$root" remote set-url origin "https://github.com/$repository.git"
+          }
+          normalize . leanprover/lean-eval-submissions
+          normalize state leanprover/lean-eval-state
+          normalize public-state-contract leanprover/lean-eval-state
+          normalize public-qualification-source leanprover/lean-eval-submissions
+
+      - name: Construct both ordinary candidate lanes with nonoverlapping time windows
+        env:
+          EXPECTED_STATE_HEAD: ${{ inputs.expected_state_head }}
+          EXPECTED_AUDIT_HEAD: ${{ inputs.expected_audit_head }}
+        run: |
+          set -euo pipefail
+          umask 077
+          first=$(python - <<'PY'
+          import datetime as dt
+          import json
+          import pathlib
+
+          latest = max(
+              json.loads(path.read_text())["occurred_at"]
+              for path in pathlib.Path("state/events").glob("*/*.json")
+          )
+          after_state = dt.datetime.fromisoformat(latest.replace("Z", "+00:00")) + dt.timedelta(milliseconds=1)
+          now = dt.datetime.now(dt.timezone.utc)
+          chosen = max(after_state, now)
+          print(chosen.isoformat(timespec="milliseconds").replace("+00:00", "Z"))
+          PY
+          )
+          seed=$(printf '%s\0%s\0%s\0%s' "$GITHUB_SHA" "$EXPECTED_STATE_HEAD" "$EXPECTED_AUDIT_HEAD" "$first" | sha256sum | cut -d' ' -f1)
+          public_count=$(jq -er .lanes.public.event_count configuration/historical-baseline-state-batch-v1.json)
+          private_first=$(python - "$first" "$public_count" <<'PY'
+          import datetime as dt
+          import sys
+
+          first = dt.datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00"))
+          print((first + dt.timedelta(milliseconds=int(sys.argv[2]))).isoformat(timespec="milliseconds").replace("+00:00", "Z"))
+          PY
+          )
+          python scripts/prepare_historical_public_authority.py finalize-batch \
+            --qualification-commit 81e94fe2f4fc819300fd7d4e036f00124166784f \
+            --qualification-repository-root public-qualification-source \
+            --state-root public-state-contract \
+            --first-occurred-at "$first" \
+            --event-id-seed "$seed" \
+            --output-directory "$RUNNER_TEMP/public-candidate"
+          python scripts/prepare_historical_private_replay.py state-events \
+            --plan evidence/private-replay/plans/08992e62486c2b000bf4914c80cbfe734a3aa9d0d07dab481b40cd8684fe268d.json \
+            --authority-commit "$GITHUB_SHA" \
+            --selection full \
+            --audit-root audit \
+            --audit-commit "$EXPECTED_AUDIT_HEAD" \
+            --state-root state \
+            --state-commit "$EXPECTED_STATE_HEAD" \
+            --append-ready \
+            --first-occurred-at "$private_first" \
+            --output-directory "$RUNNER_TEMP/private-candidate"
+
+      - name: Close and validate one exact combined candidate against one State parent
+        env:
+          EXPECTED_STATE_HEAD: ${{ inputs.expected_state_head }}
+        run: |
+          set -euo pipefail
+          python scripts/prepare_historical_baseline_state_batch.py \
+            --state-root state \
+            --state-head "$EXPECTED_STATE_HEAD" \
+            --expectation configuration/historical-baseline-state-batch-v1.json \
+            --public-candidate-root "$RUNNER_TEMP/public-candidate" \
+            --private-candidate-root "$RUNNER_TEMP/private-candidate" \
+            --output-directory "$RUNNER_TEMP/combined-candidate"
+
+      - name: Append the closed candidate in one create-only State CAS commit
+        env:
+          EXPECTED_STATE_HEAD: ${{ inputs.expected_state_head }}
+          STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
+        run: |
+          set -euo pipefail
+          scripts/publish_replay_state_batch \
+            --root state \
+            --candidate-root "$RUNNER_TEMP/combined-candidate" \
+            --manifest "$RUNNER_TEMP/combined-candidate/historical-baseline-state-append-candidate.json" \
+            --expected-head "$EXPECTED_STATE_HEAD" \
+            --message "Append reviewed historical replay baseline"
