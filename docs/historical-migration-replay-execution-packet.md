@@ -76,16 +76,18 @@ private unavailable dispositions are not appended again.
 Fill these values only from committed canonical outputs. Do not substitute a
 workflow artifact, worktree file, mutable tag, or branch head.
 
-- [ ] One submissions commit containing all 63 canonical private execution
-      profile files produced by immutable image build, publication readback,
-      and offline inspection. Bind the canonical descriptor set of exactly
-      `{path, sha256}` and its SHA-256, using the same serialization as the
-      public batch finalizer. Validate benchmark-commit and execution-profile
-      identities separately; they are not descriptor-set hash fields.
-- [ ] One regenerated private replay plan at its digest-derived path and one
-      commit containing it. It must contain 63 profiles, 639
-      `profile_qualified` bound entries, and the same 29
-      `archive_not_found` entries.
+- [x] The 63 canonical private execution profiles are bound at submissions
+      commit `c3c2a3b1617f4f90b8b2cae86738abad7dca3f0c` and protected through
+      authority merge `5e7c181edef7569dcf2ecb2c33f7819adfb75b07`. Their exact
+      `{path, sha256}` locators are closed by the private replay plan.
+- [x] The content-addressed private replay plan has SHA-256
+      `08992e62486c2b000bf4914c80cbfe734a3aa9d0d07dab481b40cd8684fe268d`
+      at
+      `evidence/private-replay/plans/08992e62486c2b000bf4914c80cbfe734a3aa9d0d07dab481b40cd8684fe268d.json`,
+      protected through authority merge
+      `5e7c181edef7569dcf2ecb2c33f7819adfb75b07`. It contains 63 profiles,
+      639 `profile_qualified` entries, 29 `archive_not_found` entries, and
+      zero `profile_pending` entries.
 - [ ] The exact reviewed submissions commit used by the migration workflow and
       historical replay controllers, plus the migration workflow blob digest.
 - [ ] The production migration-infrastructure template digest and post-apply
@@ -168,12 +170,13 @@ reason to install the identity before the pre-mutation packet is complete.
 
 ## Packet-bound execution order
 
-1. Build, publish, inspect, and commit the 63 private profile objects, then run
-   `prepare_historical_private_replay.py plan` with all 63 paths and their one
-   exact containing commit. Commit the digest-derived plan.
-2. Complete the pre-mutation authorization bindings, apply and verify the
-   bounded migration infrastructure, and only then have the custodian install
-   the legacy identity for the exact protected workflow run.
+1. Validate the protected private replay plan and all 63 profile locators at
+   authority merge `5e7c181edef7569dcf2ecb2c33f7819adfb75b07`, then complete the
+   remaining pre-mutation authorization bindings. Do not rebuild or requalify
+   the completed private profiles.
+2. Apply and verify the bounded migration infrastructure, and only then have
+   the custodian install the legacy identity for the exact protected workflow
+   run.
 3. Run the archive migration workflow against the exact audit commit and
    selected inventory digest. Complete the post-migration readback, then apply
    the exact staged patch to the separately bound current audit head and
