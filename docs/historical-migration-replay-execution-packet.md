@@ -40,7 +40,7 @@ The fixed reviewed implementation bindings are:
 | Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `4f8572f27d9e1c9d8013059135c7446b905cbda16226f5c7cd38ec2f65296a6e` |
 | Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
 | Private plan builder | `scripts/prepare_historical_private_replay.py`, SHA-256 `2f1ae6a6e8710a0d0983aa7c2b3f64e77ebf2322da8154c04e39be084f4355e4` |
-| Public finalizer | `scripts/prepare_historical_public_authority.py`, SHA-256 `2b5c4e6d2a88c3f4d703de17889476f18d9b2922c2287da7918ae08c7600fdda` |
+| Public finalizer | `scripts/prepare_historical_public_authority.py`, SHA-256 `59e611fd468e700b766343adc2f3a861ed2fa3c182761ef2ba7f6efd66434d6b` |
 | Migration infrastructure | `infrastructure/aws-key-adapter/template.yaml`, SHA-256 `aac24318c973523a65b76af34b8e1408a5680f61b52c4fb996f93967253ef94d`; operator script SHA-256 `d8fed95053e166674dd1b426437cb7eaa2fe450a8699361f486c0da2f93147a3` |
 | Migration boundary | role `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`; environment `archive-migration-production`; review branch `archive-file-key-rewrap-v1`; confirmation `stage-envelope-migration` |
 | Deterministic migration report | SHA-256 `faa26e1aa47eb629966db03695eda4f949b6c9804166f0047f53e09d9cc83339` |

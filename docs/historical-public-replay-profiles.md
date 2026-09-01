@@ -30,57 +30,32 @@ manifests.
 The committed matrix has SHA-256
 `a674707eea7a9556576c8dcbe57bcf6b4f44362d2bdfd47895fb7c783554f39c`.
 It binds final plan `d6e81393…`, toolchain registry `4f2f3737…`, and component
-lock `68b5a58c…`; all 35 entries remain explicitly `unqualified`.
+lock `68b5a58c…`. The matrix remains a record of the pre-qualification build
+inputs; all 35 corresponding qualified execution profiles are now frozen
+under `evidence/public-replay/profiles/`.
 
-All thirty-five current-matrix qualification objects are frozen under
-`evidence/public-replay/profiles/`. Appending State qualification and enqueue
-events remains gated on the exact immutable historical execution packet.
+The temporary workflow, controller, isolated Worker, container application,
+and preparation lane used to create those profiles have been retired. Their
+paths and digests remain inside the immutable profile objects as historical
+provenance and are verified from the recorded Git commits. They are not live
+instructions and cannot be dispatched from the current tree. Appending State
+qualification and enqueue events remains gated on the exact immutable
+historical execution packet.
 
-## Qualification boundary
+## Retained authority boundary
 
-The matrix deliberately says `qualification_status: unqualified`. A matrix
-entry is a build input, not a State qualification object. It cannot be used as
-`historical_result.replay_profile_qualified` evidence until all three named
-requirements are complete:
+The matrix deliberately remains `qualification_status: unqualified`: it is a
+historical build input, not State authority. Authority comes only from the 35
+committed `historical_public_replay_profile_qualification` objects. Each binds
+one benchmark commit and tree, immutable registry manifest digest, runner and
+measurement configuration, and the exact historical controller commits that
+produced its evidence.
 
-1. `historical_public_runner_v1`: a reviewed runner/controller contract must
-   fetch one exact public commit before the untrusted network-disabled phase,
-   bind the fetched tree, and execute the separate historical public queue
-   shape without inventing a submission UUID or private archive.
-2. `immutable_registry_publication_v1`: one image per exact benchmark commit
-   must be built from the matrix lock, verified offline, pushed under a
-   create-only tag, and resolved to an immutable manifest digest.
-3. `cloudflare_staging_runtime_probe_v1`: each immutable image must prove its
-   exact baked benchmark/toolchain lock, fixed runner command, network
-   isolation, destruction, architecture, kernel, CPU, and memory boundary in
-   staging.
-
-The first boundary is specified by
-[`historical-public-runner.md`](historical-public-runner.md). Its controller
-accepts only the exact reviewed plan, matrix, contract digests, request ID, and
-result ID. It verifies exact public source and benchmark Git commits and trees,
-creates a deterministic source archive, and hands a separate runner a closed
-JSON object. The runner revalidates the matrix entry and baked benchmark tree,
-actively checks that networking is disabled, and then invokes the fixed
-evaluator command. This implementation does not change the private replay
-request or endpoint. It also does not make any matrix entry qualified: the
-immutable image publication and staging runtime evidence are still absent.
-
-Only then may the runtime evidence be frozen into an execution profile. The
-profile digest includes the unique image manifest digest, so the 35 benchmark
-images produce 35 independently reviewed execution profiles even where their
-Lean and checker component versions coincide. Each qualification object must
-be committed at
-`evidence/public-replay/profiles/<execution-profile-digest>.json`; appending
-State qualification events and enqueue events remains a later, separately
-reviewed action.
-
-The fail-closed preparation and post-commit finalization boundary for that
-later action is specified in
-[`historical-public-authority-preparation.md`](historical-public-authority-preparation.md).
-It consumes the exact version-2 qualification artifact ZIPs and remains blocked
-until the frozen profile is reviewed and committed; it never writes State or
-enqueues replay.
+The retained offline `finalize-batch` command validates those objects and the
+packet-pinned State contract before emitting a create-only append candidate.
+It cannot build or qualify an image, deploy a Worker, write State, or enqueue
+replay by itself. No command in the current tree creates an additional public
+qualification profile.
 
 ## Execution boundary
 
@@ -91,12 +66,10 @@ encrypted archive. The dedicated historical controller/runner therefore uses
 `schemas/historical-public-runner-handoff-v1.schema.json` and does not alter or
 reuse the private endpoint's request shape.
 
-`Dockerfile.historical-public-replay` and
-`historical-public-image-qualification.yml` now select exactly one unqualified
-matrix entry, recover its locked build inputs, bake its benchmark markers, and
-reject a caller-supplied commit that is not in the matrix. This satisfies the
-per-entry build-selection contract but does not qualify any entry: registry
-publication and the staging probe remain the separate requirements above.
+`Dockerfile.historical-public-replay` retains the exact image recipe needed to
+replay the already-qualified profiles. The retired qualification workflow is
+available only through the immutable controller commits named by those
+profiles; it is intentionally absent from the current tree.
 
 Exact prerelease toolchains are now admitted by the shared execution-profile
 validators, and the authoritative evaluator can read both historical and
