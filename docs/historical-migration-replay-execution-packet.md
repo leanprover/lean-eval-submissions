@@ -36,8 +36,8 @@ The fixed reviewed implementation bindings are:
 | Component | Exact binding |
 | --- | --- |
 | Migration workflow | `.github/workflows/migrate-archive-envelopes.yml`, SHA-256 `242da58b04478f7bf614f55b6ab78d01cd494b5b6df867681e2e5616ef848f64` |
-| Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `b0b2e1310ce3e71ee2738439a9d3c371259d976dc3a0556963072563f66eb76c` |
-| Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `4f8572f27d9e1c9d8013059135c7446b905cbda16226f5c7cd38ec2f65296a6e` |
+| Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `402e8cab4e8d308cbca36ddcfe7060482a243b9c6aad29ba91b78a3dd1e672c8` |
+| Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `a7a51ef85c259039177784c9d886f8c8bdf8f41daf1d11a4270a968ff7a412f6` |
 | Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
 | Private plan builder | `scripts/prepare_historical_private_replay.py`, SHA-256 `2f1ae6a6e8710a0d0983aa7c2b3f64e77ebf2322da8154c04e39be084f4355e4` |
 | Public finalizer | `scripts/prepare_historical_public_authority.py`, SHA-256 `2b5c4e6d2a88c3f4d703de17889476f18d9b2922c2287da7918ae08c7600fdda` |
@@ -45,11 +45,13 @@ The fixed reviewed implementation bindings are:
 | Migration boundary | role `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`; environment `archive-migration-production`; review branch `archive-file-key-rewrap-v1`; confirmation `stage-envelope-migration` |
 | Deterministic migration report | SHA-256 `faa26e1aa47eb629966db03695eda4f949b6c9804166f0047f53e09d9cc83339` |
 
-Both replay controllers are restricted to protected `main`, use separate
-non-cancelling concurrency groups, allow at most four execution attempts, and
-bound each job to 360 minutes. Cleanup has a seven-hour deadline and each OIDC
-token lifetime is at most ten minutes. Public replay emits no artifact; the
-private controller retains its source-free terminal receipt for 30 days.
+Both replay controllers are restricted to protected `main`, use one shared
+non-cancelling concurrency group, allow at most four execution attempts, and
+bound each job to 360 minutes. The shared group prevents public and private
+historical execution from overlapping. Cleanup has a seven-hour deadline and
+each OIDC token lifetime is at most ten minutes. Public replay emits no
+artifact; the private controller retains its source-free terminal receipt for
+30 days.
 
 The old plan remains immutable source evidence; it is not current enqueue
 authority. The pinned State validator proves that exactly 20 of its Results now
@@ -96,7 +98,9 @@ workflow artifact, worktree file, mutable tag, or branch head.
       blob must retain SHA-256
       `242da58b04478f7bf614f55b6ab78d01cd494b5b6df867681e2e5616ef848f64`.
       Protected source commit `647160063758df5e21f9b64e7ec2e198dff6d481`
-      carries that exact blob and both reviewed controller blobs.
+      carries that exact migration blob. Controller source commit
+      `43ed323af66aad45b7486fb30cb2cb2fa1682474` carries both reviewed
+      controller blobs.
 - [ ] The production template is bound at SHA-256
       `aac24318c973523a65b76af34b8e1408a5680f61b52c4fb996f93967253ef94d`,
       and `archive-migration-production` directly defines only
@@ -118,11 +122,11 @@ workflow artifact, worktree file, mutable tag, or branch head.
       `SHA256:4unwBywJxfq9LsOjygB+/NRHaXdBhvxKP+a3EEpqjoE` before installation.
       Never record the private material or its path. The protected environment
       does not directly define `LEGACY_ARCHIVE_IDENTITY` before this gate.
-- [x] Protected source commit
-      `647160063758df5e21f9b64e7ec2e198dff6d481` binds private-controller
-      SHA-256 `b0b2e1310ce3e71ee2738439a9d3c371259d976dc3a0556963072563f66eb76c`
+- [x] Controller source commit
+      `43ed323af66aad45b7486fb30cb2cb2fa1682474` binds private-controller
+      SHA-256 `402e8cab4e8d308cbca36ddcfe7060482a243b9c6aad29ba91b78a3dd1e672c8`
       and public-controller SHA-256
-      `4f8572f27d9e1c9d8013059135c7446b905cbda16226f5c7cd38ec2f65296a6e`.
+      `a7a51ef85c259039177784c9d886f8c8bdf8f41daf1d11a4270a968ff7a412f6`.
       The profile locators bind every immutable image manifest. Both lanes use
       subject `repo:leanprover/lean-eval-submissions:environment:replay-production`,
       exact workflow references on protected `main`, and ten-minute OIDC
