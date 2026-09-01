@@ -17,26 +17,32 @@ Protected `main` commits at the packet baseline:
 
 | Repository | Commit |
 | --- | --- |
-| `leanprover/lean-eval` | `d448950a4d1fd33255e1c1be922a48b6a1b736c8` |
-| `leanprover/lean-eval-submissions` | `30bc92b3d46bd2a3ba1788433264fdd70ae3c74e` |
-| `leanprover/lean-eval-leaderboard` | `bf534c149e204a286a5cd9bbaff449449567834b` |
-| `leanprover/lean-eval-state` | `07e68200ee20efdd363cea16c1d08a13971acc2e` |
-| `leanprover/lean-eval-state-staging` | `869e098021073462fc36d7de3f7aa3b58df0b9d4` |
-| `leanprover/lean-eval-releases` | `4f3d4cdd11d41e93294ba7821899923375ba360f` |
+| `leanprover/lean-eval` | `a0a06faa95f2ee15578675c6dacc596a83b17db3` |
+| `leanprover/lean-eval-submissions` | `f09e30565ec8f180cb7b0a85935f9439f802a14c` |
+| `leanprover/lean-eval-leaderboard` | `61a7193b94b027049b8e912e7ca8c9070424004f` |
+| `leanprover/lean-eval-state` | `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` |
+| `leanprover/lean-eval-state-staging` | `a15552ad0fa4c13df1fa3ed7d9d83b8e8d4fba2d` |
+| `leanprover/lean-eval-releases` | `a8ad23df2cf69671bd4406ae74b10c009a3daa64` |
 | `leanprover/lean-eval-generator` | `010b01634cccda2db538cf9b09e6f26ddc453743` |
-| `leanprover/lean-eval-audit` | `eadf24b2b4a99c56ef59a43811eab9d54ae013ac` |
+| `leanprover/lean-eval-audit` | `521269726459b58c1e44039b6d51b550048b59d6` |
 
-The protected launch workflow must replace the submissions binding above with
-the exact merged capability configuration it deploys, and final staging must
-have exercised that same commit and its immutable
-`lean-eval-dispatch/<commit>` tag. The current production Worker baseline is
+Final staging is exercising the submissions commit above through immutable tag
+`lean-eval-dispatch/f09e30565ec8f180cb7b0a85935f9439f802a14c`. The protected
+launch workflow must deploy that same exact commit before intake is enabled.
+The current production Worker baseline is
 `30bc92b3d46bd2a3ba1788433264fdd70ae3c74e`, with every launch capability
-disabled. Record the exact final staging and launch versions in section 9.
+disabled. Its active intake, broker, and replay Worker versions are
+`f6f7cd06-306a-41ee-a26c-fe8fcddbfd8c`,
+`4ff853f6-892e-4ac8-91eb-b379a3f604e2`, and
+`003a9c98-8bab-4e19-bfde-0fa0f9ed695e`, respectively. Record the exact final
+staging and launch versions in section 9.
 
 ## 2. Capability decision
 
-The launch sequence consists of five separately visible, reversible actions.
-Standing maintainer authorization covers them after every gate in this packet
+The launch sequence consists of separately visible actions. Capability gates
+have explicit pause or rollback paths; the canary's publication opt-in is
+irreversible, and publishing the announcement starts the overlap. Standing
+maintainer authorization covers the sequence after every gate in this packet
 reads `GO`.
 
 | Capability | Current production state | Launch state |
@@ -65,12 +71,12 @@ model consolidation, replay, or publication.
 
 | Gate | Current result |
 | --- | --- |
-| Disabled baseline | Production intake, general replay, historical-public replay, every public lifecycle family, model consolidation, and the promotion canary are effectively disabled. Protected production State validates at `07e68200ee20efdd363cea16c1d08a13971acc2e`; the deployed lifecycle contract pin remains its validated ancestor `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a`. The release queue is empty. The public leaderboard retains stable problem pages and visible statements. |
+| Disabled baseline | Production intake, general replay, historical-public replay, every public lifecycle family, model consolidation, and the promotion canary are effectively disabled. Protected production State validates at `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f`; the deployed lifecycle contract pin remains its validated ancestor `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a`. The release queue is empty. The public leaderboard retains stable problem pages and visible statements. |
 | Archive boundary | Schema-version-3 archive-before-evaluation is deployed. Production archive authority is connected to the Encrypt-only Wrap role and has a qualified decrypt denial. The evaluation lane has no Wrap or unwrap authority. |
 | Staging release boundary | Qualified: exact one-submission scope, consume-before-unwrap, identical reuse refusal, authority removal before reconstruction, source allowlisting, no plaintext artifact, no State/Git mutation, and cleanup. Publication and production authority remained absent. |
 | Production release preflight | Qualified at release commit `a02e06e7ce5258cdde23b6dee79666355b947a21`, with publication absent and no due work. The controller State-write, audit-read, and exact ID-bearing `release-production` OIDC trust preflights all pass. No production archive was decrypted or published. |
 | Entry and submitter UI | The static `https://lean-lang.org/eval/submit/` entry page and the stable production application at `https://lean-eval-submission-server.lean-eval.workers.dev/` are live in disabled posture. The entry page states the policy and links to the Worker origin; the Worker supplies OAuth feedback, preserved form values, progress spinners, and status. One-way publication opt-in is kept separate from new intake on the dedicated `/release/` page when enabled. No LeanEval hostname or DNS change is required. |
-| Exact-version staging | **PENDING:** record the successful browser and source-bound submissions, denial cases, archive/Result/State/scheduling checks, publication-disabled reconstruction, redaction checks, all-false rollback, and validated final staging State in section 9. |
+| Exact-version staging | Browser submission `01a05c13-2269-747c-8b15-6a0eb5d95a76` and source-bound submission `01a05c13-ce49-7028-a69f-e072bbbcac83` passed archive, evaluation, Result, and State validation on exact commit `f09e30565ec8f180cb7b0a85935f9439f802a14c`. **PENDING:** finish the bounded owner-lifecycle cases, publication-disabled reconstruction, redaction checks, all-false rollback, and final State validation recorded in section 9. |
 
 Any non-coherent Worker deployment, nonempty due-release queue, failed final
 staging case, or unexpected State event changes this packet to `NO-GO`.
@@ -174,9 +180,10 @@ implementation][worker-form]. It tells submitters that:
 ## 8. Repository announcement
 
 Publish only after the first four production actions have succeeded. The
-overlap starts at the recorded enablement timestamp. Before publishing,
-calculate and record the explicit UTC calendar closure date 28 days later; do
-not publish a relative-date placeholder. Repository publication is covered by
+overlap starts at the recorded announcement-publication timestamp, not at an
+earlier capability-enablement time. Before publishing, calculate and record
+the explicit UTC calendar closure date 28 days after that timestamp; do not
+publish a relative-date placeholder. Repository publication is covered by
 standing authorization; a Zulip post still requires separate exact approval.
 
 The announcement must include all of the following reviewed facts:
@@ -206,14 +213,30 @@ still true.
 
 ```text
 production release trust:
-  repaired/read back at: <UTC timestamp>
-  publication-disabled preflight: <successful Actions URL>
+  repaired/read back at: 2026-09-01T08:31:49Z
+  publication-disabled preflights:
+    controller: https://github.com/leanprover/lean-eval-releases/actions/runs/33487460923
+    audit read: https://github.com/leanprover/lean-eval-releases/actions/runs/33487462999
+    OIDC trust: https://github.com/leanprover/lean-eval-releases/actions/runs/33487464866
 
 final exact-version staging:
-  submissions candidate commit: <40-character SHA>
-  immutable dispatch tag: lean-eval-dispatch/<same SHA>
-  browser submission ID: <UUIDv7>
-  source-bound submission ID: <UUIDv7>
+  submissions candidate commit: f09e30565ec8f180cb7b0a85935f9439f802a14c
+  immutable dispatch tag: lean-eval-dispatch/f09e30565ec8f180cb7b0a85935f9439f802a14c
+  base staging deployment job: https://github.com/leanprover/lean-eval-submissions/actions/runs/33485886104/job/99786227452
+  base staging promotion-canary job: https://github.com/leanprover/lean-eval-submissions/actions/runs/33485886104/job/99786472062
+  base staging Worker version IDs:
+    intake: 7d56a757-11a5-48ad-bd33-37aab2c1a837
+    broker: 6cd807ea-1b60-4f27-8567-167dd21289a5
+    replay: 438d5e80-faa2-470f-8a97-5f0600e54aa8
+  browser/headless acceptance intake version: 663ede5c-de99-4bff-8ff6-8d2ffd576824
+  browser/headless activation job: https://github.com/leanprover/lean-eval-submissions/actions/runs/33486313551/job/99787601214
+  browser submission ID: 01a05c13-2269-747c-8b15-6a0eb5d95a76
+  source-bound submission ID: 01a05c13-ce49-7028-a69f-e072bbbcac83
+  owner-lifecycle target intake version: b5f6f909-2e94-481f-892a-9d73c84be050
+  owner-lifecycle target activation job: https://github.com/leanprover/lean-eval-submissions/actions/runs/33492047402/job/99805548900
+  owner-lifecycle target submission/result: 01a05c49-8061-732c-a838-ec9e0a75cfb2 / <Result ID>
+  final lifecycle-enabled intake version/run: <version ID and successful Actions URL>
+  final all-false intake version/run: <version ID and successful Actions URL>
   staging State commit after validation: <40-character SHA>
   publication-disabled reconstruction: <successful Actions URL>
   bounded lifecycle result: <successful Actions URL or compact result URL>
@@ -223,7 +246,10 @@ production launch:
   enabled at: <UTC timestamp>
   release-controller change/readback: <URL>
   lifecycle deployment commit/run: <40-character SHA and Actions URL>
+  intake-only protected staging promotion canary: <successful Actions URL>
   intake deployment commit/run: <40-character SHA and Actions URL>
+  intake finite-lease activation/readback: <successful Actions URL or compact result URL>
+  intake durable transition/readback: <successful Actions URL or compact result URL>
   production Worker version IDs: <intake, broker, replay>
   production canary source:
     repository: leanprover/lean-eval-state-staging
@@ -236,5 +262,6 @@ production launch:
   production State commit after validation: <40-character SHA>
   production health/readiness: <URL>
   repository announcement: <URL>
+  announcement published at: <UTC timestamp>
   target issue-intake closure date: <YYYY-MM-DD>
 ```
