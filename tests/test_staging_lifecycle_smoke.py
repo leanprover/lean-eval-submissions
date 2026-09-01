@@ -98,6 +98,10 @@ class StagingLifecycleSmokeTests(unittest.TestCase):
         )
         self.assertIn('case = fixture["browser_unauthenticated_request"]', self.text)
         self.assertIn('body == {"error": case["expected_error"]}', self.text)
+        self.assertIn(
+            '--user-agent "lean-eval-staging-denial-probe/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"',
+            self.text,
+        )
         denial_step = self.text.split(
             "      - name: Verify unauthenticated browser mutation is denied\n", 1
         )[1].split("\n      - name:", 1)[0]
