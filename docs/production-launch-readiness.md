@@ -1,6 +1,6 @@
 # Production launch readiness packet
 
-Status: **NO-GO — exact-head packet validation is pending**
+Status: **GO**
 
 Scope authority: [LeanEval completion plan, section 7.5][completion-plan]
 
@@ -18,7 +18,7 @@ Protected `main` commits at the packet baseline:
 | Repository | Commit |
 | --- | --- |
 | `leanprover/lean-eval` | `a0a06faa95f2ee15578675c6dacc596a83b17db3` |
-| `leanprover/lean-eval-submissions` | `15d9df2b22e924549130edf130486520ef5e419e` |
+| `leanprover/lean-eval-submissions` | `d0abf0c89f75f486fb17d5a6adfe80125663a61f` |
 | `leanprover/lean-eval-leaderboard` | `b6df2533e2a6ceea8a6ed6eff5527cc3aef3e7c2` |
 | `leanprover/lean-eval-state` | `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` |
 | `leanprover/lean-eval-state-staging` | `a2b0f4a8a2b5ddcffc556f5b3752e08f10af8389` |
@@ -271,7 +271,7 @@ production launch:
     ref: production-canary-source-fixture-v4
     commit: 18595c8d06ec29d47940065644d16ae7cfbd1591
   production canary problem: formalization-evaluation/substInv_X_sub_X_sq_eq_catalan@1
-  production canary model: LeanEval production launch canary 18595c8d06ec29d47940065644d16ae7cfbd1591
+  production canary model: LeanEval production launch canary
   production canary publication sequence: private, then visible irreversible publication opt-in
   production canary submission/result: <UUIDv7 and terminal result URL>
   production State commit after validation: <40-character SHA>
