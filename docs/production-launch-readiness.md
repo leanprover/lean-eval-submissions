@@ -234,9 +234,9 @@ final exact-version staging:
   source-bound submission ID: 01a05c13-ce49-7028-a69f-e072bbbcac83
   owner-lifecycle target intake version: b5f6f909-2e94-481f-892a-9d73c84be050
   owner-lifecycle target activation job: https://github.com/leanprover/lean-eval-submissions/actions/runs/33492047402/job/99805548900
-  owner-lifecycle target submission/result: 01a05c49-8061-732c-a838-ec9e0a75cfb2 / <Result ID>
-  final lifecycle-enabled intake version/run: <version ID and successful Actions URL>
-  final all-false intake version/run: <version ID and successful Actions URL>
+  owner-lifecycle target submission/result: 01a05c49-8061-732c-a838-ec9e0a75cfb2 / r2_b82a6eda570fcc9ba9717195a06a1e1e13d4598ef6d1da8e96b3c60aa1130971
+  final lifecycle-enabled intake version/run: 7e99e771-8dc1-466d-b977-aec2b8162918 / https://github.com/leanprover/lean-eval-submissions/actions/runs/33496203964
+  final all-false intake version/run: 05a4b63d-0ad9-49b1-a646-5f01df01eafd / https://github.com/leanprover/lean-eval-submissions/actions/runs/33496329513
   staging State commit after validation: <40-character SHA>
   publication-disabled reconstruction: <successful Actions URL>
   bounded lifecycle result: <successful Actions URL or compact result URL>
