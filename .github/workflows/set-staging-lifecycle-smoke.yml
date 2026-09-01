@@ -243,6 +243,7 @@ jobs:
           body_file=$(mktemp)
           trap 'rm -f "$body_file"' EXIT
           http_status=$(curl --silent --show-error --max-time 10 \
+            --user-agent "lean-eval-staging-denial-probe/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --output "$body_file" \
             --write-out '%{http_code}' \
             --request POST \
