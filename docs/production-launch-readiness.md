@@ -1,6 +1,6 @@
 # Production launch readiness packet
 
-Status: **NO-GO — final staging and launch-packet refresh are pending**
+Status: **GO**
 
 Scope authority: [LeanEval completion plan, section 7.5][completion-plan]
 
@@ -17,26 +17,38 @@ Protected `main` commits at the packet baseline:
 
 | Repository | Commit |
 | --- | --- |
-| `leanprover/lean-eval` | `d448950a4d1fd33255e1c1be922a48b6a1b736c8` |
-| `leanprover/lean-eval-submissions` | `30bc92b3d46bd2a3ba1788433264fdd70ae3c74e` |
-| `leanprover/lean-eval-leaderboard` | `bf534c149e204a286a5cd9bbaff449449567834b` |
-| `leanprover/lean-eval-state` | `07e68200ee20efdd363cea16c1d08a13971acc2e` |
-| `leanprover/lean-eval-state-staging` | `869e098021073462fc36d7de3f7aa3b58df0b9d4` |
-| `leanprover/lean-eval-releases` | `4f3d4cdd11d41e93294ba7821899923375ba360f` |
+| `leanprover/lean-eval` | `bcc165c27c6c546b27408454af35e3533e966463` |
+| `leanprover/lean-eval-submissions` | `d0abf0c89f75f486fb17d5a6adfe80125663a61f` |
+| `leanprover/lean-eval-leaderboard` | `b6df2533e2a6ceea8a6ed6eff5527cc3aef3e7c2` |
+| `leanprover/lean-eval-state` | `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` |
+| `leanprover/lean-eval-state-staging` | `a2b0f4a8a2b5ddcffc556f5b3752e08f10af8389` |
+| `leanprover/lean-eval-releases` | `a02e06e7ce5258cdde23b6dee79666355b947a21` |
 | `leanprover/lean-eval-generator` | `010b01634cccda2db538cf9b09e6f26ddc453743` |
-| `leanprover/lean-eval-audit` | `eadf24b2b4a99c56ef59a43811eab9d54ae013ac` |
+| `leanprover/lean-eval-audit` | `f50c46574dd719486a01272e3eaeced396ac5ada` |
 
-The protected launch workflow must replace the submissions binding above with
-the exact merged capability configuration it deploys, and final staging must
-have exercised that same commit and its immutable
-`lean-eval-dispatch/<commit>` tag. The current production Worker baseline is
+Final staging exercised lifecycle candidate
+`f09e30565ec8f180cb7b0a85935f9439f802a14c` through immutable tag
+`lean-eval-dispatch/f09e30565ec8f180cb7b0a85935f9439f802a14c`. The protected
+launch workflow must deploy that same exact commit before intake is enabled.
+The separate intake-only launch change is PR `#1526` at exact head
+`7c28d96ac38443d491a4536c449cc2949109e7f9`, based on the lifecycle candidate
+above. The exact commit binds its complete tree without relying on a
+Git-version-sensitive rendered patch digest. It remains unmerged until the
+lifecycle deployment is verified.
+The current production Worker baseline is
 `30bc92b3d46bd2a3ba1788433264fdd70ae3c74e`, with every launch capability
-disabled. Record the exact final staging and launch versions in section 9.
+disabled. Its active intake, broker, and replay Worker versions are
+`f6f7cd06-306a-41ee-a26c-fe8fcddbfd8c`,
+`4ff853f6-892e-4ac8-91eb-b379a3f604e2`, and
+`003a9c98-8bab-4e19-bfde-0fa0f9ed695e`, respectively. Record the exact final
+staging and launch versions in section 9.
 
 ## 2. Capability decision
 
-The launch sequence consists of five separately visible, reversible actions.
-Standing maintainer authorization covers them after every gate in this packet
+The launch sequence consists of separately visible actions. Capability gates
+have explicit pause or rollback paths; the canary's publication opt-in is
+irreversible, and publishing the announcement starts the overlap. Standing
+maintainer authorization covers the sequence after every gate in this packet
 reads `GO`.
 
 | Capability | Current production state | Launch state |
@@ -65,12 +77,12 @@ model consolidation, replay, or publication.
 
 | Gate | Current result |
 | --- | --- |
-| Disabled baseline | Production intake, general replay, historical-public replay, every public lifecycle family, model consolidation, and the promotion canary are effectively disabled. Protected production State validates at `07e68200ee20efdd363cea16c1d08a13971acc2e`; the deployed lifecycle contract pin remains its validated ancestor `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a`. The release queue is empty. The public leaderboard retains stable problem pages and visible statements. |
+| Disabled baseline | Production intake, general replay, historical-public replay, every public lifecycle family, model consolidation, and the promotion canary are effectively disabled. Protected production State validates at `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f`; the deployed lifecycle contract pin remains its validated ancestor `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a`. The release queue is empty. The public leaderboard retains stable problem pages and visible statements. |
 | Archive boundary | Schema-version-3 archive-before-evaluation is deployed. Production archive authority is connected to the Encrypt-only Wrap role and has a qualified decrypt denial. The evaluation lane has no Wrap or unwrap authority. |
 | Staging release boundary | Qualified: exact one-submission scope, consume-before-unwrap, identical reuse refusal, authority removal before reconstruction, source allowlisting, no plaintext artifact, no State/Git mutation, and cleanup. Publication and production authority remained absent. |
 | Production release preflight | Qualified at release commit `a02e06e7ce5258cdde23b6dee79666355b947a21`, with publication absent and no due work. The controller State-write, audit-read, and exact ID-bearing `release-production` OIDC trust preflights all pass. No production archive was decrypted or published. |
 | Entry and submitter UI | The static `https://lean-lang.org/eval/submit/` entry page and the stable production application at `https://lean-eval-submission-server.lean-eval.workers.dev/` are live in disabled posture. The entry page states the policy and links to the Worker origin; the Worker supplies OAuth feedback, preserved form values, progress spinners, and status. One-way publication opt-in is kept separate from new intake on the dedicated `/release/` page when enabled. No LeanEval hostname or DNS change is required. |
-| Exact-version staging | **PENDING:** record the successful browser and source-bound submissions, denial cases, archive/Result/State/scheduling checks, publication-disabled reconstruction, redaction checks, all-false rollback, and validated final staging State in section 9. |
+| Exact-version staging | Browser submission `01a05c13-2269-747c-8b15-6a0eb5d95a76` and source-bound submission `01a05c13-ce49-7028-a69f-e072bbbcac83` passed archive, evaluation, Result, and State validation on exact commit `f09e30565ec8f180cb7b0a85935f9439f802a14c`. The bounded owner and maintainer lifecycle cases, authorization denials, redaction checks, lifecycle/intake all-false rollback, publication-disabled reconstruction, fixture cleanup, and final State validation pass. The protected staging promotion canary remains enabled for guarded deployment checks. |
 
 Any non-coherent Worker deployment, nonempty due-release queue, failed final
 staging case, or unexpected State event changes this packet to `NO-GO`.
@@ -174,10 +186,16 @@ implementation][worker-form]. It tells submitters that:
 ## 8. Repository announcement
 
 Publish only after the first four production actions have succeeded. The
-overlap starts at the recorded enablement timestamp. Before publishing,
-calculate and record the explicit UTC calendar closure date 28 days later; do
-not publish a relative-date placeholder. Repository publication is covered by
+overlap starts at the recorded announcement-publication timestamp, not at an
+earlier capability-enablement time. Before publishing, calculate and record
+the explicit UTC calendar closure date 28 days after that timestamp; do not
+publish a relative-date placeholder. Repository publication is covered by
 standing authorization; a Zulip post still requires separate exact approval.
+
+The launch-copy candidate is draft `leanprover/lean-eval` PR `#592` at exact
+head `00b91e4f0943f0212d9184a951d3a08a1ab4244e`. Keep it draft until the
+announcement timestamp and explicit target closure date replace every relative
+date, and require all conditions below in its exact final diff before merge.
 
 The announcement must include all of the following reviewed facts:
 
@@ -200,41 +218,65 @@ The announcement must include all of the following reviewed facts:
 
 ## 9. Finalization record
 
-These are the only facts intentionally left open. Fill them after the named
-operation, then change the top-level status to `GO` only if every gate above is
-still true.
+The final-staging fields below are the last prelaunch facts. Fill them and
+change the top-level status to `GO` only if every gate above is still true. The
+production-launch fields are the post-action finalization record: they remain
+open in the prelaunch `GO` packet and must be filled immediately after each
+named production action.
 
 ```text
 production release trust:
-  repaired/read back at: <UTC timestamp>
-  publication-disabled preflight: <successful Actions URL>
+  repaired/read back at: 2026-09-01T08:31:49Z
+  publication-disabled preflights:
+    controller: https://github.com/leanprover/lean-eval-releases/actions/runs/33506648194
+    audit read: https://github.com/leanprover/lean-eval-releases/actions/runs/33506650386
+    OIDC trust: https://github.com/leanprover/lean-eval-releases/actions/runs/33506652823
 
 final exact-version staging:
-  submissions candidate commit: <40-character SHA>
-  immutable dispatch tag: lean-eval-dispatch/<same SHA>
-  browser submission ID: <UUIDv7>
-  source-bound submission ID: <UUIDv7>
-  staging State commit after validation: <40-character SHA>
-  publication-disabled reconstruction: <successful Actions URL>
-  bounded lifecycle result: <successful Actions URL or compact result URL>
-  all-false rollback/readback: <successful Actions URL or compact result URL>
+  submissions candidate commit: f09e30565ec8f180cb7b0a85935f9439f802a14c
+  immutable dispatch tag: lean-eval-dispatch/f09e30565ec8f180cb7b0a85935f9439f802a14c
+  base staging deployment job: https://github.com/leanprover/lean-eval-submissions/actions/runs/33485886104/job/99786227452
+  base staging promotion-canary job: https://github.com/leanprover/lean-eval-submissions/actions/runs/33485886104/job/99786472062
+  base staging Worker version IDs:
+    intake: 7d56a757-11a5-48ad-bd33-37aab2c1a837
+    broker: 6cd807ea-1b60-4f27-8567-167dd21289a5
+    replay: 438d5e80-faa2-470f-8a97-5f0600e54aa8
+  browser/headless acceptance intake version: 663ede5c-de99-4bff-8ff6-8d2ffd576824
+  browser/headless activation job: https://github.com/leanprover/lean-eval-submissions/actions/runs/33486313551/job/99787601214
+  browser submission ID: 01a05c13-2269-747c-8b15-6a0eb5d95a76
+  source-bound submission ID: 01a05c13-ce49-7028-a69f-e072bbbcac83
+  owner-lifecycle target intake version: b5f6f909-2e94-481f-892a-9d73c84be050
+  owner-lifecycle target activation job: https://github.com/leanprover/lean-eval-submissions/actions/runs/33492047402/job/99805548900
+  owner-lifecycle target submission/result: 01a05c49-8061-732c-a838-ec9e0a75cfb2 / r2_b82a6eda570fcc9ba9717195a06a1e1e13d4598ef6d1da8e96b3c60aa1130971
+  final lifecycle-enabled intake version/run: 67ffd9e1-35cb-4d2b-bd2b-7316a74e5792 / https://github.com/leanprover/lean-eval-submissions/actions/runs/33501301603
+  final lifecycle/intake-disabled staging intake version/run: 45d085ae-3baa-4063-a642-de9da369c379 / https://github.com/leanprover/lean-eval-submissions/actions/runs/33501432175
+  staging State commit after validation: a2b0f4a8a2b5ddcffc556f5b3752e08f10af8389
+  staging Results commit after validation: 06bfd1ed3f7a11db5cb33f5a581330077e55e80e
+  publication-disabled reconstruction: https://github.com/leanprover/lean-eval-releases/actions/runs/33506645494
+  bounded lifecycle result: https://github.com/leanprover/lean-eval-submissions/actions/runs/33501400059
+  lifecycle/intake all-false rollback/readback: https://github.com/leanprover/lean-eval-submissions/actions/runs/33501432175
+  leaderboard deployment/readback: https://github.com/leanprover/lean-eval-leaderboard/actions/runs/33506442829 / https://lean-lang.org/eval/static/lifecycle-preview.js
 
 production launch:
-  enabled at: <UTC timestamp>
-  release-controller change/readback: <URL>
+  release controller enabled/read back at: <UTC timestamp and URL>
+  lifecycle APIs enabled/read back at: <UTC timestamp>
   lifecycle deployment commit/run: <40-character SHA and Actions URL>
+  intake-only protected staging promotion canary: <successful Actions URL>
   intake deployment commit/run: <40-character SHA and Actions URL>
+  intake finite-lease activated/read back at: <UTC timestamp and successful Actions URL or compact result URL>
+  intake durable transition/read back at: <UTC timestamp and successful Actions URL or compact result URL>
   production Worker version IDs: <intake, broker, replay>
   production canary source:
     repository: leanprover/lean-eval-state-staging
     ref: production-canary-source-fixture-v4
     commit: 18595c8d06ec29d47940065644d16ae7cfbd1591
   production canary problem: formalization-evaluation/substInv_X_sub_X_sq_eq_catalan@1
-  production canary model: LeanEval production launch canary 18595c8d06ec29d47940065644d16ae7cfbd1591
+  production canary model: LeanEval production launch canary
   production canary publication sequence: private, then visible irreversible publication opt-in
   production canary submission/result: <UUIDv7 and terminal result URL>
   production State commit after validation: <40-character SHA>
   production health/readiness: <URL>
   repository announcement: <URL>
+  announcement published at: <UTC timestamp>
   target issue-intake closure date: <YYYY-MM-DD>
 ```
