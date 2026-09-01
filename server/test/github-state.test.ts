@@ -16,6 +16,7 @@ import {
 import { modelAliasKey, modelIdentityId, type ModelIdentityView } from "../src/model-identity";
 import type {
   StateEvent,
+  SubmissionResultIdentityConflictedEvent,
   WritableResultLifecycleEvent,
   WritableSubmissionLifecycleEvent,
   WritableStateEvent,
@@ -55,33 +56,33 @@ const HEAD = "1".repeat(40);
 const TREE = "2".repeat(40);
 const NEW_TREE = "3".repeat(40);
 const NEW_COMMIT = "4".repeat(40);
-const RESULT_OWNER_CONTRACT_COMMIT = "9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f";
+const RESULT_OWNER_CONTRACT_COMMIT = "235a96c96462438c7680e6fb90fa0e6044ec1774";
 const RESULT_OWNER_CONTRACT_ROOT_ENTRIES = {
-  "README.md": { mode: "100644", type: "blob", sha: "20c4131d85e51435fb654b71761a3456c36f8218" },
-  docs: { mode: "040000", type: "tree", sha: "5d3923158bd8f620f184fee5a4d00924220464fa" },
-  schema: { mode: "040000", type: "tree", sha: "2c0004214d90b82cf895e79a91c239ac9e7bbf67" },
-  scripts: { mode: "040000", type: "tree", sha: "ed830aea8fe7a4a0e6db7acdcf82f23cb24a296d" },
+  "README.md": { mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
+  docs: { mode: "040000", type: "tree", sha: "7401f6bf26083ebbc0db05f11cd90007d2a74f80" },
+  schema: { mode: "040000", type: "tree", sha: "4cfe7363c7d8ab2d8ebf0cb2c4e26697c27ab680" },
+  scripts: { mode: "040000", type: "tree", sha: "402b090e3b9d3bf233fdc410ab684f108999d725" },
 } as const;
-const STAGING_RESULT_OWNER_CONTRACT_COMMIT = "41f55135a8d5f36941e615e9ec9e4f5e32a786a5";
+const STAGING_RESULT_OWNER_CONTRACT_COMMIT = "6105a6255ec40409bcce66c6cf6b6764e0e93ed4";
 const STAGING_RESULT_OWNER_CONTRACT_ROOT_ENTRIES = {
-  "README.md": { mode: "100644", type: "blob", sha: "6003acae198da58eaadf78c947c22c9428422e8b" },
-  docs: { mode: "040000", type: "tree", sha: "6e84b8e6de38b0ff8ebc36a917bd99127116baaa" },
-  schema: { mode: "040000", type: "tree", sha: "3f4c615f308beb357a08a24f78aab40467beaf5d" },
-  scripts: { mode: "040000", type: "tree", sha: "5de5ef033c295a8f5cab4434b004fb6d42c96252" },
+  "README.md": { mode: "100644", type: "blob", sha: "0a7f7627a6b46cd3bbc1519d44e8450251bc5d84" },
+  docs: { mode: "040000", type: "tree", sha: "79c424f2c6ad4442f77d2878625cc102c4e476ee" },
+  schema: { mode: "040000", type: "tree", sha: "5d3218039b1c4079d751fb54a30b1516917a81cd" },
+  scripts: { mode: "040000", type: "tree", sha: "6527eafbad98ed43206e9e26f1731ae16d4fc995" },
 } as const;
-const MODEL_IDENTITY_CONTRACT_COMMIT = "9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f";
+const MODEL_IDENTITY_CONTRACT_COMMIT = "235a96c96462438c7680e6fb90fa0e6044ec1774";
 const MODEL_IDENTITY_CONTRACT_ROOT_ENTRIES = {
-  "README.md": { mode: "100644", type: "blob", sha: "20c4131d85e51435fb654b71761a3456c36f8218" },
-  docs: { mode: "040000", type: "tree", sha: "5d3923158bd8f620f184fee5a4d00924220464fa" },
-  schema: { mode: "040000", type: "tree", sha: "2c0004214d90b82cf895e79a91c239ac9e7bbf67" },
-  scripts: { mode: "040000", type: "tree", sha: "ed830aea8fe7a4a0e6db7acdcf82f23cb24a296d" },
+  "README.md": { mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
+  docs: { mode: "040000", type: "tree", sha: "7401f6bf26083ebbc0db05f11cd90007d2a74f80" },
+  schema: { mode: "040000", type: "tree", sha: "4cfe7363c7d8ab2d8ebf0cb2c4e26697c27ab680" },
+  scripts: { mode: "040000", type: "tree", sha: "402b090e3b9d3bf233fdc410ab684f108999d725" },
 } as const;
-const STAGING_MODEL_IDENTITY_CONTRACT_COMMIT = "41f55135a8d5f36941e615e9ec9e4f5e32a786a5";
+const STAGING_MODEL_IDENTITY_CONTRACT_COMMIT = "6105a6255ec40409bcce66c6cf6b6764e0e93ed4";
 const STAGING_MODEL_IDENTITY_CONTRACT_ROOT_ENTRIES = {
-  "README.md": { mode: "100644", type: "blob", sha: "6003acae198da58eaadf78c947c22c9428422e8b" },
-  docs: { mode: "040000", type: "tree", sha: "6e84b8e6de38b0ff8ebc36a917bd99127116baaa" },
-  schema: { mode: "040000", type: "tree", sha: "3f4c615f308beb357a08a24f78aab40467beaf5d" },
-  scripts: { mode: "040000", type: "tree", sha: "5de5ef033c295a8f5cab4434b004fb6d42c96252" },
+  "README.md": { mode: "100644", type: "blob", sha: "0a7f7627a6b46cd3bbc1519d44e8450251bc5d84" },
+  docs: { mode: "040000", type: "tree", sha: "79c424f2c6ad4442f77d2878625cc102c4e476ee" },
+  schema: { mode: "040000", type: "tree", sha: "5d3218039b1c4079d751fb54a30b1516917a81cd" },
+  scripts: { mode: "040000", type: "tree", sha: "6527eafbad98ed43206e9e26f1731ae16d4fc995" },
 } as const;
 
 const EVENT: StateEvent = {
@@ -398,6 +399,34 @@ const RESULT_VIEW: SubmissionView = {
   ...ACCEPTED_VIEW,
   result_id: RESULT_ID,
   result_event_id: RESULT_EVENT.event_id,
+};
+const EXISTING_RESULT_AUTHORITY_ID = "0198abcd-1111-7000-8000-000000000099";
+const RESULT_CONFLICT_EVENT: SubmissionResultIdentityConflictedEvent = {
+  schema_version: 1,
+  event_id: "0198abcd-1111-7000-8000-000000000008",
+  event_type: "submission.result_identity_conflicted",
+  occurred_at: RESULT_EVENT.occurred_at,
+  subject_id: SUBMISSION_ID,
+  causation_event_id: EVALUATION_ACCEPTED.event_id,
+  actor: { kind: "system" },
+  payload: {
+    result_id: RESULT_ID,
+    authority_event_id: EXISTING_RESULT_AUTHORITY_ID,
+    existing_kind: "recorded",
+    reason_code: "duplicate_result_identity",
+  },
+};
+const RESULT_CONFLICT_VIEW: SubmissionView = {
+  ...ACCEPTED_VIEW,
+  schema_version: 3,
+  result_id: null,
+  result_event_id: null,
+  result_disposition: {
+    status: "identity_conflict",
+    event_id: RESULT_CONFLICT_EVENT.event_id,
+    occurred_at: RESULT_CONFLICT_EVENT.occurred_at,
+    ...RESULT_CONFLICT_EVENT.payload,
+  },
 };
 const RESULT_AMENDMENT_VIEW = initialResultAmendmentView({
   resultId: RESULT_ID,
@@ -2818,6 +2847,7 @@ describe("atomic Git State append", () => {
     )).rejects.toMatchObject({
       name: "ResultIdentityCollisionError",
       existingKind: "claimed",
+      authorityEventId: CLAIM_EVENT_ID,
     } satisfies Partial<ResultIdentityCollisionError>);
 
     clearResultOwnerContractProofCacheForTest();
@@ -2838,9 +2868,69 @@ describe("atomic Git State append", () => {
     )).rejects.toMatchObject({
       name: "ResultIdentityCollisionError",
       existingKind: "recorded",
+      authorityEventId: "0198abcd-1111-7000-8000-000000000009",
     } satisfies Partial<ResultIdentityCollisionError>);
     expect([...claimed.mock.calls, ...recorded.mock.calls].some((call) =>
       call[1]?.method === "POST")).toBe(false);
+  });
+
+  it("atomically terminates a duplicate result without creating a second authority or release", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(ACCEPTED_VIEW),
+      contents(RECEIVED),
+      contents(METADATA),
+      contents(ARCHIVE_EVENT),
+      contents(EVALUATION_ACCEPTED),
+      contents(EVALUATION_STARTED),
+      new Response(null, { status: 404 }),
+      contents(recordedGuard(RESULT_ID, EXISTING_RESULT_AUTHORITY_ID)),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    await expect(repository(fetcher).recordResultIdentityConflict(
+      RESULT_CONFLICT_EVENT,
+      EVALUATION_ACCEPTED.event_id,
+      RESULT_CONFLICT_VIEW,
+    )).resolves.toEqual({ commit: NEW_COMMIT, created: true, view: RESULT_CONFLICT_VIEW });
+    const treeRequest = fetcher.mock.calls.find(([input, init]) =>
+      fetchUrl(input).endsWith("/git/trees") && init?.method === "POST")?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
+    expect(tree.tree.map((entry) => entry.path)).toEqual([
+      `events/01/${RESULT_CONFLICT_EVENT.event_id}.json`,
+      `views/submissions/01/${SUBMISSION_ID}.json`,
+    ]);
+    expect(treeRequest).not.toContain("release.scheduled");
+    expect(treeRequest).not.toContain("views/result-identities");
+    expect(treeRequest).not.toContain("views/result-amendments");
+    expect(treeRequest).not.toContain("views/result-release-status");
+  });
+
+  it("acknowledges an exact duplicate-result disposition retry without a write", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(RESULT_CONFLICT_VIEW),
+      contents(RECEIVED),
+      contents(METADATA),
+      contents(ARCHIVE_EVENT),
+      contents(EVALUATION_ACCEPTED),
+      contents(RESULT_CONFLICT_EVENT),
+      contents(EVALUATION_STARTED),
+      contents(RESULT_CONFLICT_EVENT),
+      contents(recordedGuard(RESULT_ID, EXISTING_RESULT_AUTHORITY_ID)),
+    ]);
+    await expect(repository(fetcher).recordResultIdentityConflict(
+      RESULT_CONFLICT_EVENT,
+      EVALUATION_ACCEPTED.event_id,
+      RESULT_CONFLICT_VIEW,
+    )).resolves.toEqual({ commit: HEAD, created: false, view: RESULT_CONFLICT_VIEW });
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
   });
 
   it("accepts only an exact same-authority record replay and refuses a missing guard", async () => {

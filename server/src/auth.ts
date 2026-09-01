@@ -384,12 +384,14 @@ export async function lifecycleEventId(
     | "evaluation.accepted"
     | "evaluation.rejected"
     | "evaluation.failed"
+    | "submission.result_identity_conflicted"
     | "result.recorded"
     | "release.scheduled",
   subjectId: string,
   occurredAt: string,
 ): Promise<string> {
-  const submissionEvent = eventType.startsWith("archive.") || eventType.startsWith("evaluation.");
+  const submissionEvent = eventType.startsWith("archive.") || eventType.startsWith("evaluation.") ||
+    eventType === "submission.result_identity_conflicted";
   if (
     (submissionEvent && !isUuidV7(subjectId)) ||
     (!submissionEvent && !/^r2_[0-9a-f]{64}$/.test(subjectId))

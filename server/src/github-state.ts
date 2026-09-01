@@ -8,6 +8,7 @@ import {
   type ResultRecordedEvent,
   type ResultAmendmentSystemEvent,
   type ResultRetractionRequestedEvent,
+  type SubmissionResultIdentityConflictedEvent,
   type WritableSubmissionLifecycleEvent,
   type WritableStateEvent,
   type ModelIdentityDecisionEvent,
@@ -140,19 +141,19 @@ const RESULT_OWNER_CONTRACTS: Readonly<Record<string, ResultOwnerContract>> = {
   [PRODUCTION_STATE_REPOSITORY]: {
     commit: PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT,
     rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "20c4131d85e51435fb654b71761a3456c36f8218" },
-      docs: { mode: "040000", type: "tree", sha: "5d3923158bd8f620f184fee5a4d00924220464fa" },
-      schema: { mode: "040000", type: "tree", sha: "2c0004214d90b82cf895e79a91c239ac9e7bbf67" },
-      scripts: { mode: "040000", type: "tree", sha: "ed830aea8fe7a4a0e6db7acdcf82f23cb24a296d" },
+      "README.md": { mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
+      docs: { mode: "040000", type: "tree", sha: "7401f6bf26083ebbc0db05f11cd90007d2a74f80" },
+      schema: { mode: "040000", type: "tree", sha: "4cfe7363c7d8ab2d8ebf0cb2c4e26697c27ab680" },
+      scripts: { mode: "040000", type: "tree", sha: "402b090e3b9d3bf233fdc410ab684f108999d725" },
     },
   },
   [STAGING_STATE_REPOSITORY]: {
     commit: STAGING_RESULT_OWNER_STATE_CONTRACT_COMMIT,
     rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "6003acae198da58eaadf78c947c22c9428422e8b" },
-      docs: { mode: "040000", type: "tree", sha: "6e84b8e6de38b0ff8ebc36a917bd99127116baaa" },
-      schema: { mode: "040000", type: "tree", sha: "3f4c615f308beb357a08a24f78aab40467beaf5d" },
-      scripts: { mode: "040000", type: "tree", sha: "5de5ef033c295a8f5cab4434b004fb6d42c96252" },
+      "README.md": { mode: "100644", type: "blob", sha: "0a7f7627a6b46cd3bbc1519d44e8450251bc5d84" },
+      docs: { mode: "040000", type: "tree", sha: "79c424f2c6ad4442f77d2878625cc102c4e476ee" },
+      schema: { mode: "040000", type: "tree", sha: "5d3218039b1c4079d751fb54a30b1516917a81cd" },
+      scripts: { mode: "040000", type: "tree", sha: "6527eafbad98ed43206e9e26f1731ae16d4fc995" },
     },
   },
 };
@@ -160,19 +161,19 @@ const MODEL_IDENTITY_CONTRACTS: Readonly<Record<string, ModelIdentityContract>> 
   [PRODUCTION_STATE_REPOSITORY]: {
     commit: PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
     rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "20c4131d85e51435fb654b71761a3456c36f8218" },
-      docs: { mode: "040000", type: "tree", sha: "5d3923158bd8f620f184fee5a4d00924220464fa" },
-      schema: { mode: "040000", type: "tree", sha: "2c0004214d90b82cf895e79a91c239ac9e7bbf67" },
-      scripts: { mode: "040000", type: "tree", sha: "ed830aea8fe7a4a0e6db7acdcf82f23cb24a296d" },
+      "README.md": { mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
+      docs: { mode: "040000", type: "tree", sha: "7401f6bf26083ebbc0db05f11cd90007d2a74f80" },
+      schema: { mode: "040000", type: "tree", sha: "4cfe7363c7d8ab2d8ebf0cb2c4e26697c27ab680" },
+      scripts: { mode: "040000", type: "tree", sha: "402b090e3b9d3bf233fdc410ab684f108999d725" },
     },
   },
   [STAGING_STATE_REPOSITORY]: {
     commit: STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
     rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "6003acae198da58eaadf78c947c22c9428422e8b" },
-      docs: { mode: "040000", type: "tree", sha: "6e84b8e6de38b0ff8ebc36a917bd99127116baaa" },
-      schema: { mode: "040000", type: "tree", sha: "3f4c615f308beb357a08a24f78aab40467beaf5d" },
-      scripts: { mode: "040000", type: "tree", sha: "5de5ef033c295a8f5cab4434b004fb6d42c96252" },
+      "README.md": { mode: "100644", type: "blob", sha: "0a7f7627a6b46cd3bbc1519d44e8450251bc5d84" },
+      docs: { mode: "040000", type: "tree", sha: "79c424f2c6ad4442f77d2878625cc102c4e476ee" },
+      schema: { mode: "040000", type: "tree", sha: "5d3218039b1c4079d751fb54a30b1516917a81cd" },
+      scripts: { mode: "040000", type: "tree", sha: "6527eafbad98ed43206e9e26f1731ae16d4fc995" },
     },
   },
 };
@@ -343,11 +344,13 @@ export class ModelIdentityStateError extends Error {
 
 export class ResultIdentityCollisionError extends Error {
   readonly existingKind: "claimed" | "recorded";
+  readonly authorityEventId: string | null;
 
-  constructor(existingKind: "claimed" | "recorded") {
+  constructor(existingKind: "claimed" | "recorded", authorityEventId: string | null = null) {
     super(`result identity is already reserved by ${existingKind} authority`);
     this.name = "ResultIdentityCollisionError";
     this.existingKind = existingKind;
+    this.authorityEventId = authorityEventId;
   }
 }
 
@@ -1345,10 +1348,10 @@ async function readSubmissionAt(
     throw new GitHubStateError(502, `${path} is invalid: ${String(error)}`);
   }
   if (view.submission_id !== submissionId) throw new GitHubStateError(502, `${path} has the wrong submission identity`);
-  const archiveEventId = view.schema_version === 2 && view.archive.status !== "pending"
+  const archiveEventId = view.schema_version !== 1 && view.archive.status !== "pending"
     ? view.archive.event_id
     : null;
-  const evaluationEventId = view.schema_version === 2 && view.evaluation.status !== "pending"
+  const evaluationEventId = view.schema_version !== 1 && view.evaluation.status !== "pending"
     ? view.evaluation.event_id
     : null;
   const eventIds = new Set([
@@ -1357,10 +1360,11 @@ async function readSubmissionAt(
     ...(view.publication_event_id === null ? [] : [view.publication_event_id]),
     ...(archiveEventId === null ? [] : [archiveEventId]),
     ...(evaluationEventId === null ? [] : [evaluationEventId]),
-    ...(view.schema_version === 2 && view.result_event_id !== null ? [view.result_event_id] : []),
+    ...(view.schema_version !== 1 && view.result_event_id !== null ? [view.result_event_id] : []),
+    ...(view.schema_version === 3 ? [view.result_disposition.event_id] : []),
   ]);
   const events = await Promise.all([...eventIds].map((eventId) => readEventAt(config, fetcher, eventId, commit)));
-  if (view.schema_version === 2 && evaluationEventId !== null && !new Set(["pending", "running"]).has(view.evaluation.status)) {
+  if (view.schema_version !== 1 && evaluationEventId !== null && !new Set(["pending", "running"]).has(view.evaluation.status)) {
     const terminal = events.find((event) => event.event_id === evaluationEventId);
     const terminalCause = terminal?.causation_event_id;
     if (terminalCause === null || terminalCause === undefined) {
@@ -1418,7 +1422,7 @@ async function readSubmissionAt(
   if (!eventIds.has(view.mutation_event_id)) {
     throw new GitHubStateError(502, `${path} mutation head is not a referenced owner mutation`);
   }
-  if (view.schema_version === 2) {
+  if (view.schema_version !== 1) {
     if (view.archive.status !== "pending") {
       const archive = events.find((event) => event.event_id === archiveEventId);
       const expectedArchive = archive === undefined ? null : {
@@ -1466,6 +1470,22 @@ async function readSubmissionAt(
         result.payload.submission_id !== submissionId
       ) {
         throw new GitHubStateError(502, `${path} result identity does not match its lifecycle event`);
+      }
+    }
+    if (view.schema_version === 3) {
+      const conflict = events.find((event) => event.event_id === view.result_disposition.event_id);
+      if (
+        conflict?.event_type !== "submission.result_identity_conflicted" ||
+        conflict.subject_id !== submissionId ||
+        conflict.causation_event_id !== evaluationEventId ||
+        canonicalJson({
+          event_id: conflict.event_id,
+          occurred_at: conflict.occurred_at,
+          status: "identity_conflict",
+          ...conflict.payload,
+        }) !== canonicalJson(view.result_disposition)
+      ) {
+        throw new GitHubStateError(502, `${path} result conflict disposition does not match its lifecycle event`);
       }
     }
   }
@@ -2703,6 +2723,14 @@ export class GitHubStateRepository {
       }
       if (current.mutation_event_id !== expectedMutationEventId) throw new StateEventConflictError(path);
       if (event.event_id <= current.mutation_event_id) throw new StateEventConflictError(path);
+      if (
+        current.schema_version === 3 &&
+        (decodedView.schema_version !== 3 ||
+          canonicalJson(decodedView.result_disposition) !==
+            canonicalJson(current.result_disposition))
+      ) {
+        throw new StateEventConflictError(path);
+      }
       const existing = await readPathAt(this.#config, this.#fetcher, path, snapshot.headSha);
       if (existing.found) throw new StateEventConflictError(path);
       const commit = await createCommit(
@@ -2758,6 +2786,9 @@ export class GitHubStateRepository {
       );
       if (current?.owner_login !== ownerLogin) {
         throw new GitHubStateError(404, "submission view does not exist");
+      }
+      if (current.schema_version === 3) {
+        throw new StateEventConflictError(viewPath);
       }
       if (current.publication_choice === "scheduled") {
         const releaseRequired = current.result_id !== null &&
@@ -3224,10 +3255,10 @@ export class GitHubStateRepository {
           throw new StateEventConflictError(identityPath);
         }
         if (guard.record_kind === "claimed") {
-          throw new ResultIdentityCollisionError("claimed");
+          throw new ResultIdentityCollisionError("claimed", guard.authority_event_id);
         }
         if (guard.authority_event_id !== result.event_id) {
-          throw new ResultIdentityCollisionError("recorded");
+          throw new ResultIdentityCollisionError("recorded", guard.authority_event_id);
         }
         // A same-authority recorded guard and event are created atomically with
         // the matching submission view. Missing that view is corruption, not a
@@ -3264,6 +3295,108 @@ export class GitHubStateRepository {
       await pause(attempt);
     }
     throw new Error("unreachable result recording attempt");
+  }
+
+  async recordResultIdentityConflict(
+    event: SubmissionResultIdentityConflictedEvent,
+    expectedLifecycleEventId: string,
+    nextView: SubmissionView,
+  ): Promise<{ commit: string; created: boolean; view: SubmissionView }> {
+    validateStateEvent(event);
+    const decodedView = decodeSubmissionView(nextView);
+    if (
+      decodedView.schema_version !== 3 ||
+      event.subject_id !== decodedView.submission_id ||
+      event.causation_event_id !== expectedLifecycleEventId ||
+      canonicalJson(decodedView.result_disposition) !== canonicalJson({
+        status: "identity_conflict",
+        event_id: event.event_id,
+        occurred_at: event.occurred_at,
+        ...event.payload,
+      })
+    ) {
+      throw new TypeError("result identity conflict disagrees with the submission view");
+    }
+    const eventPath = stateEventPath(event);
+    const viewPath = submissionViewPath(decodedView.submission_id);
+    const identityPath = resultIdentityPath(event.payload.result_id);
+    for (let attempt = 0; attempt <= MAX_WRITE_ATTEMPTS; attempt += 1) {
+      const snapshot = await this.#resultOwnerSnapshot();
+      const current = await readSubmissionAt(
+        this.#config,
+        this.#fetcher,
+        decodedView.submission_id,
+        snapshot.headSha,
+      );
+      if (current === null) throw new GitHubStateError(404, "submission view does not exist");
+      const [eventEntry, guardEntry] = await Promise.all([
+        readPathAt(this.#config, this.#fetcher, eventPath, snapshot.headSha),
+        readPathAt(this.#config, this.#fetcher, identityPath, snapshot.headSha),
+      ]);
+      let guard;
+      try {
+        guard = decodeResultIdentityGuard(guardEntry.found ? guardEntry.value : null);
+      } catch {
+        throw new StateEventConflictError(identityPath);
+      }
+      if (
+        guard.result_id !== event.payload.result_id ||
+        guard.authority_event_id !== event.payload.authority_event_id ||
+        guard.record_kind !== event.payload.existing_kind
+      ) {
+        throw new StateEventConflictError(identityPath);
+      }
+      if (
+        current.schema_version === 3 &&
+        current.result_disposition.event_id === event.event_id
+      ) {
+        if (
+          !eventEntry.found ||
+          canonicalJson(eventEntry.value) !== canonicalJson(event) ||
+          canonicalJson(current) !== canonicalJson(decodedView)
+        ) {
+          throw new StateEventConflictError(viewPath);
+        }
+        return { commit: snapshot.headSha, created: false, view: current };
+      }
+      if (
+        current.schema_version !== 2 ||
+        current.result_id !== null ||
+        current.result_event_id !== null ||
+        current.evaluation.status !== "accepted" ||
+        latestLifecycleEventId(current) !== expectedLifecycleEventId ||
+        current.mutation_event_id !== decodedView.mutation_event_id ||
+        eventEntry.found
+      ) {
+        throw new StateEventConflictError(viewPath);
+      }
+      const expectedView = {
+        ...current,
+        schema_version: 3,
+        result_id: null,
+        result_event_id: null,
+        result_disposition: decodedView.result_disposition,
+      };
+      if (canonicalJson(decodedView) !== canonicalJson(expectedView)) {
+        throw new StateEventConflictError(viewPath);
+      }
+      const commit = await createCommit(
+        this.#config,
+        this.#fetcher,
+        snapshot,
+        [event],
+        [{ path: viewPath, value: decodedView }],
+        `Record duplicate result identity for ${decodedView.submission_id}`,
+      );
+      if ((await updateReference(this.#config, this.#fetcher, commit)) === "applied") {
+        return { commit, created: true, view: decodedView };
+      }
+      if (attempt === MAX_WRITE_ATTEMPTS) {
+        throw new GitHubStateError(409, "State branch kept changing during result conflict recording");
+      }
+      await pause(attempt);
+    }
+    throw new Error("unreachable result identity conflict attempt");
   }
 
   async #resultAmendmentAt(

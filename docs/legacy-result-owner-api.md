@@ -6,8 +6,8 @@ production metadata. It never rewrites a Results record, changes its stable
 result ID, or reinterprets its grandfathered solution-publication policy.
 
 The implementation is bound to production State contract commit
-`9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` and staging contract commit
-`41f55135a8d5f36941e615e9ec9e4f5e32a786a5`. Before an owner operation, the
+`235a96c96462438c7680e6fb90fa0e6044ec1774` and staging contract commit
+`6105a6255ec40409bcce66c6cf6b6764e0e93ed4`. Before an owner operation, the
 Worker resolves protected State `main`, proves that it equals or descends from
 the repository-specific commit, and checks the exact current root entries for
 `README.md`, `docs`, `schema`, and `scripts`. The three tree entries bind their
@@ -25,8 +25,8 @@ The lifecycle launch candidate tracks these non-secret variables:
 
 | Environment | Owner API | State contract |
 | --- | --- | --- |
-| Staging | `LEGACY_RESULT_OWNER_API_ENABLED=false` | `41f55135a8d5f36941e615e9ec9e4f5e32a786a5` |
-| Production | `LEGACY_RESULT_OWNER_API_ENABLED=true` | `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` |
+| Staging | `LEGACY_RESULT_OWNER_API_ENABLED=false` | `6105a6255ec40409bcce66c6cf6b6764e0e93ed4` |
+| Production | `LEGACY_RESULT_OWNER_API_ENABLED=true` | `235a96c96462438c7680e6fb90fa0e6044ec1774` |
 
 The route exists only when the enable flag is exactly `true` and the contract
 commit is exact. This candidate enables the production owner API while keeping
@@ -165,13 +165,16 @@ causal mutation. No branch is rewound.
 - A changed same-key body, partial/forged indexes, stale causal head, recorded
   result collision, or occupied event path returns 409.
 - A missing claim or different owner returns the same 404 response.
-- A claim whose tuple is already reserved by `result.recorded`, a modern result
-  whose tuple is reserved by `result.claimed`, or a duplicate modern tuple
-  returns terminal `result_identity_conflict` 409. This is deliberately not a
-  retryable callback failure: the first authority remains canonical, no second
-  event/view is written, and operator reconciliation chooses a genuinely new
-  statement revision or other corrected identity input instead of retrying the
-  collision forever.
+- A claim whose tuple is already reserved by `result.recorded` remains a 409.
+  When the authenticated modern result callback encounters either a
+  `result.claimed` guard or a different `result.recorded` authority for the
+  same deterministic identity, it records one terminal
+  `submission.result_identity_conflicted` event and schema-version-3
+  submission view and returns 201 (or 200 for an exact retry). The first
+  authority remains canonical. No second result authority, base Result,
+  identity reservation, amendment, release, or owner association is created;
+  operator reconciliation may instead choose a genuinely new statement
+  revision or other corrected identity input.
 - Repeated owner-operation protected-main CAS loss returns 409. CAS exhaustion
   in lifecycle callbacks remains a retryable 503; State/provider unavailability
   and contract drift return 503. A protected Results head moving between the

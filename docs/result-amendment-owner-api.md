@@ -2,14 +2,14 @@
 
 The submission Worker contains independently gated authenticated owner and
 maintainer APIs for the append-only result amendment contract at production
-State commit `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` and the independently
+State commit `235a96c96462438c7680e6fb90fa0e6044ec1774` and the independently
 reviewed staging State contract
-`41f55135a8d5f36941e615e9ec9e4f5e32a786a5`.
+`6105a6255ec40409bcce66c6cf6b6764e0e93ed4`.
 
 | Environment | Owner API | Maintainer API and identities | State contract |
 | --- | --- | --- | --- |
-| Staging | `RESULT_AMENDMENT_OWNER_API_ENABLED=false` | `RESULT_AMENDMENT_MAINTAINER_API_ENABLED=false`; `RESULT_AMENDMENT_MAINTAINERS=[]` | `RESULT_OWNER_STATE_CONTRACT_COMMIT=41f55135a8d5f36941e615e9ec9e4f5e32a786a5` |
-| Production | `RESULT_AMENDMENT_OWNER_API_ENABLED=true` | `RESULT_AMENDMENT_MAINTAINER_API_ENABLED=true`; `RESULT_AMENDMENT_MAINTAINERS=[{"github_id":477956,"login":"kim-em"}]` | `RESULT_OWNER_STATE_CONTRACT_COMMIT=9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` |
+| Staging | `RESULT_AMENDMENT_OWNER_API_ENABLED=false` | `RESULT_AMENDMENT_MAINTAINER_API_ENABLED=false`; `RESULT_AMENDMENT_MAINTAINERS=[]` | `RESULT_OWNER_STATE_CONTRACT_COMMIT=6105a6255ec40409bcce66c6cf6b6764e0e93ed4` |
+| Production | `RESULT_AMENDMENT_OWNER_API_ENABLED=true` | `RESULT_AMENDMENT_MAINTAINER_API_ENABLED=true`; `RESULT_AMENDMENT_MAINTAINERS=[{"github_id":477956,"login":"kim-em"}]` | `RESULT_OWNER_STATE_CONTRACT_COMMIT=235a96c96462438c7680e6fb90fa0e6044ec1774` |
 
 The gate is independent of submission intake and the legacy claim/backfill
 gate. A disabled route returns 404 before authentication, provider access, or a
@@ -201,8 +201,8 @@ State event as required review evidence but is not returned by the API.
 ## Protected State binding
 
 The production binding is protected State `main`
-`9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f`; staging is independently bound to
-its reviewed contract commit `41f55135a8d5f36941e615e9ec9e4f5e32a786a5`.
+`235a96c96462438c7680e6fb90fa0e6044ec1774`; staging is independently bound to
+its reviewed contract commit `6105a6255ec40409bcce66c6cf6b6764e0e93ed4`.
 Both contracts contain release-status schema version 2 and permanent
 effective-result reservations, but their repository-specific migration
 evidence and current graphs make their root subtree IDs intentionally

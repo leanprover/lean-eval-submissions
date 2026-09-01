@@ -237,4 +237,35 @@ describe("State event contract", () => {
       payload: { ...scheduled.payload, result_id: `r2_${"b".repeat(64)}` },
     })).toThrow(/disagrees/u);
   });
+
+  it("validates the closed terminal duplicate-result disposition event", () => {
+    const conflict = {
+      schema_version: 1,
+      event_id: "0198abcd-4444-7000-8000-000000000003",
+      event_type: "submission.result_identity_conflicted",
+      occurred_at: "2026-08-20T06:07:12.000Z",
+      subject_id: "0198abcd-4444-7000-8000-000000000001",
+      causation_event_id: "0198abcd-4444-7000-8000-000000000002",
+      actor: { kind: "system" },
+      payload: {
+        result_id: `r2_${"a".repeat(64)}`,
+        authority_event_id: "0198abcd-4444-7000-8000-000000000099",
+        existing_kind: "recorded",
+        reason_code: "duplicate_result_identity",
+      },
+    } as const;
+    expect(() => validateStateEvent(conflict)).not.toThrow();
+    expect(() => validateStateEvent({
+      ...conflict,
+      payload: { ...conflict.payload, existing_kind: "adopted" },
+    })).toThrow(/existing_kind/u);
+    expect(() => validateStateEvent({
+      ...conflict,
+      payload: { ...conflict.payload, owner_login: "alice" },
+    })).toThrow(/fields/u);
+    expect(() => validateStateEvent({
+      ...conflict,
+      payload: { ...conflict.payload, reason_code: "retry_duplicate" },
+    })).toThrow(/reason_code/u);
+  });
 });

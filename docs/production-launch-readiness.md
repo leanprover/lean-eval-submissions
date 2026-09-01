@@ -28,8 +28,8 @@ Protected `main` commits at the packet baseline:
 | `leanprover/lean-eval` | `bcc165c27c6c546b27408454af35e3533e966463` |
 | `leanprover/lean-eval-submissions` | `451856ebdd4ca4d875e43be7cd113678dea9e1b7` |
 | `leanprover/lean-eval-leaderboard` | `b6df2533e2a6ceea8a6ed6eff5527cc3aef3e7c2` |
-| `leanprover/lean-eval-state` | `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` |
-| `leanprover/lean-eval-state-staging` | `d2d6f74f8d7b0a169689a2e9b4b5873709c2f827` |
+| `leanprover/lean-eval-state` | `235a96c96462438c7680e6fb90fa0e6044ec1774` |
+| `leanprover/lean-eval-state-staging` | `6105a6255ec40409bcce66c6cf6b6764e0e93ed4` |
 | `leanprover/lean-eval-releases` | `3c68d99f3de7060f7f0fdacf9340354775546c05` |
 | `leanprover/lean-eval-generator` | `010b01634cccda2db538cf9b09e6f26ddc453743` |
 | `leanprover/lean-eval-audit` | `f50c46574dd719486a01272e3eaeced396ac5ada` |
@@ -77,7 +77,7 @@ model consolidation, replay, or publication.
 
 | Gate | Current result |
 | --- | --- |
-| Disabled baseline | Qualified at live commit `451856ebdd4ca4d875e43be7cd113678dea9e1b7`: production intake, general replay, historical-public replay, every public lifecycle family, model consolidation, and the promotion canary are effectively disabled. Protected production State is `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f`; the release queue is empty. The public leaderboard retains stable problem pages and visible statements. |
+| Disabled baseline | Qualified at live commit `451856ebdd4ca4d875e43be7cd113678dea9e1b7`: production intake, general replay, historical-public replay, every public lifecycle family, model consolidation, and the promotion canary are effectively disabled. The baseline qualification used State `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f`; protected production State is now its reviewed descendant `235a96c96462438c7680e6fb90fa0e6044ec1774`, and the release queue is empty. The public leaderboard retains stable problem pages and visible statements. |
 | Archive boundary | Schema-version-3 archive-before-evaluation is deployed. Production archive authority is connected to the Encrypt-only Wrap role and has a qualified decrypt denial. The evaluation lane has no Wrap or unwrap authority. |
 | Staging release boundary | Qualified: exact one-submission scope, consume-before-unwrap, identical reuse refusal, authority removal before reconstruction, source allowlisting, no plaintext artifact, no State/Git mutation, and cleanup. Publication and production authority remained absent. |
 | Production release preflight | Qualified at release commit `3c68d99f3de7060f7f0fdacf9340354775546c05`: publication-disabled controller, State-write, audit-read, and exact ID-bearing `release-production` OIDC preflights pass. Re-read those bindings during the final packet audit; this Worker repair does not require repeating the campaign. No production archive may be decrypted or published while the packet is `NO-GO`. |

@@ -74,7 +74,7 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
     ) -> None:
         self.assertIn("environment: cloudflare-staging", self.watchdog)
         self.assertNotIn("cloudflare-production", self.watchdog)
-        self.assertIn("timeout-minutes: 125", self.watchdog)
+        self.assertIn("timeout-minutes: 350", self.watchdog)
         initial = self.watchdog.index("Verify exact tag and initial all-false")
         install = self.watchdog.index("npm ci")
         armed = self.watchdog.index("Arm all-false recovery")
@@ -92,7 +92,7 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             self.watchdog,
         )
         self.assertIn(
-            "window_minutes must be an integer from 15 through 90", self.watchdog
+            "window_minutes must be an integer from 15 through 300", self.watchdog
         )
         enabled_health = self.watchdog[enabled:hold]
         enabled_fields_start = enabled_health.index("for field in (")
@@ -140,11 +140,11 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             },
         )
         self.assertEqual(
-            bounded["release_commit"], "a8ad23df2cf69671bd4406ae74b10c009a3daa64"
+            bounded["release_commit"], "3c68d99f3de7060f7f0fdacf9340354775546c05"
         )
         self.assertEqual(bounded["release_ref"], "main")
         self.assertEqual(
-            bounded["state_contract_commit"], "41f55135a8d5f36941e615e9ec9e4f5e32a786a5"
+            bounded["state_contract_commit"], "6105a6255ec40409bcce66c6cf6b6764e0e93ed4"
         )
         self.assertEqual(len(bounded["state_script_sha256"]), 10)
         self.assertEqual(
@@ -157,6 +157,9 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         )
 
     def test_cli_accepts_only_visible_browser_submission_identity(self) -> None:
+        self.assertEqual(
+            self.driver.BROWSER_ATTRIBUTION_MAX_AGE, datetime.timedelta(hours=7)
+        )
         help_text = self.driver.parser().format_help()
         self.assertNotIn("--fixture", help_text)
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
@@ -303,16 +306,22 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             mock.patch.object(
                 self.driver,
                 "gh_json_or_authenticated_404",
-                side_effect=[response, None],
+                side_effect=[response, response, None],
             ) as read,
             mock.patch.object(self.driver, "gh_json", return_value=None) as write,
+            mock.patch.object(self.driver.time, "sleep") as pause,
         ):
             self.driver.remove_created_tag(mutation)
         self.assertEqual(
             read.call_args_list,
-            [mock.call([mutation.tag_endpoint]), mock.call([mutation.tag_endpoint])],
+            [
+                mock.call([mutation.tag_endpoint]),
+                mock.call([mutation.tag_endpoint]),
+                mock.call([mutation.tag_endpoint]),
+            ],
         )
         write.assert_called_once_with([mutation.tag_delete_endpoint], method="DELETE")
+        pause.assert_called_once_with(0.5)
         self.assertFalse(mutation.tag_created)
 
     def test_gist_transport_is_tmpfs_atomic_and_has_no_patch_or_debug_env(self) -> None:
@@ -425,7 +434,9 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
                 mock.patch.object(
                     self.driver, "secret_git", side_effect=secret_git
                 ),
-                mock.patch.object(self.driver, "gh_json", return_value=changed),
+                mock.patch.object(
+                    self.driver, "consistent_gist_json", return_value=changed
+                ),
             ):
                 self.driver.gist_cas_write(mutation)
 
@@ -482,7 +493,7 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
                     self.subTest(should_restore=should_restore),
                     mock.patch.object(
                         self.driver,
-                        "gh_json",
+                        "consistent_gist_json",
                         side_effect=(prior, current),
                     ),
                     mock.patch.object(
@@ -545,7 +556,9 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             (repository / mutation.filename).write_text(challenge, encoding="utf-8")
             with (
                 mock.patch.object(
-                    self.driver, "gh_json", side_effect=(changed, restored)
+                    self.driver,
+                    "consistent_gist_json",
+                    side_effect=(changed, restored),
                 ),
                 mock.patch.object(
                     self.driver,
@@ -603,6 +616,94 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         response["files"] = {"other": {"truncated": True, "content": "redacted"}}
         with self.assertRaisesRegex(self.driver.AcceptanceError, "unsupported"):
             self.driver.gist_git_snapshot(response, mutation.gist_id, mutation.filename)
+
+    def test_gist_rest_snapshot_waits_for_authoritative_git_head(self) -> None:
+        mutation = self.mutation()
+        stale = self.gist_response(mutation, "1" * 40, None)
+        current = self.gist_response(mutation, "2" * 40, None)
+        with (
+            mock.patch.object(
+                self.driver, "gh_json", side_effect=(stale, current)
+            ) as github,
+            mock.patch.object(
+                self.driver,
+                "run",
+                return_value=f"{'2' * 40}\tHEAD",
+            ) as git,
+            mock.patch.object(self.driver.time, "sleep") as pause,
+        ):
+            observed = self.driver.consistent_gist_json(mutation.gist_id)
+        self.assertEqual(observed, current)
+        self.assertEqual(github.call_count, 2)
+        self.assertEqual(git.call_count, 2)
+        pause.assert_called_once_with(0.5)
+
+    def test_tag_creation_waits_for_exact_rest_response(self) -> None:
+        mutation = self.mutation()
+        exact = {
+            "ref": f"refs/tags/{mutation.tag}",
+            "node_id": "node",
+            "url": "https://api.github.test/ref",
+            "object": {
+                "sha": mutation.commit,
+                "type": "commit",
+                "url": "https://api.github.test/commit",
+            },
+        }
+        with (
+            mock.patch.object(
+                self.driver,
+                "gh_json_or_authenticated_404",
+                side_effect=(None, exact),
+            ) as github,
+            mock.patch.object(self.driver.time, "sleep") as pause,
+        ):
+            self.driver.wait_for_exact_tag(
+                mutation.repository, mutation.tag, mutation.commit
+            )
+        self.assertEqual(github.call_count, 2)
+        pause.assert_called_once_with(0.5)
+
+    def test_exact_tag_post_still_waits_for_get_visibility(self) -> None:
+        mutation = self.mutation()
+        challenge = "signed-secret"
+        initial = self.gist_response(mutation, mutation.prior_gist_head, None)
+        exact = {
+            "ref": f"refs/tags/{mutation.tag}",
+            "node_id": "node",
+            "url": "https://api.github.test/ref",
+            "object": {
+                "sha": mutation.commit,
+                "type": "commit",
+                "url": "https://api.github.test/commit",
+            },
+        }
+
+        def gist_write(lease):
+            lease.written_gist_head = "2" * 40
+            lease.gist_changed = True
+
+        with (
+            mock.patch.object(
+                self.driver, "consistent_gist_json", return_value=initial
+            ),
+            mock.patch.object(
+                self.driver,
+                "gh_json_or_authenticated_404",
+                side_effect=(None, None, exact),
+            ) as read,
+            mock.patch.object(self.driver, "gh_json", return_value=exact) as write,
+            mock.patch.object(self.driver, "gist_cas_write", side_effect=gist_write),
+            mock.patch.object(self.driver, "require_target_bound_confirmation"),
+            mock.patch.object(self.driver.time, "sleep") as pause,
+        ):
+            created = self.driver.apply_exact_proof_and_tag(
+                self.fixture, mutation.gist_id, challenge, mutation.tag
+            )
+        self.assertTrue(created.tag_created)
+        self.assertEqual(read.call_count, 3)
+        write.assert_called_once()
+        pause.assert_called_once_with(0.5)
 
     def test_secret_git_environment_drops_debug_and_unrelated_credentials(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -726,6 +827,11 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
             mock.patch.object(self.driver, "gh_json", side_effect=github),
             mock.patch.object(
                 self.driver,
+                "consistent_gist_json",
+                side_effect=(initial, changed),
+            ),
+            mock.patch.object(
+                self.driver,
                 "gh_json_or_authenticated_404",
                 side_effect=lambda _args: next(tag_reads),
             ),
@@ -752,12 +858,12 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         intervening = self.gist_response(mutation, "3" * 40, "operator edit")
         with (
             mock.patch.object(
-                self.driver, "gh_json", return_value=intervening
+                self.driver, "consistent_gist_json", return_value=intervening
             ) as github,
             self.assertRaisesRegex(self.driver.AcceptanceError, "refusing CAS restore"),
         ):
             self.driver.restore_gist(mutation)
-        github.assert_called_once_with([f"gists/{mutation.gist_id}"])
+        github.assert_called_once_with(mutation.gist_id)
 
     def test_lost_restore_response_reconciles_only_exact_prior_state(self) -> None:
         mutation = self.mutation()
@@ -768,9 +874,11 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         mutation.written_file_sha256 = hashlib.sha256(b"signed-secret").hexdigest()
         mutation.gist_restore_started = True
         prior = self.gist_response(mutation, mutation.prior_gist_head, None)
-        with mock.patch.object(self.driver, "gh_json", return_value=prior) as github:
+        with mock.patch.object(
+            self.driver, "consistent_gist_json", return_value=prior
+        ) as github:
             self.driver.restore_gist(mutation)
-        github.assert_called_once_with([f"gists/{mutation.gist_id}"])
+        github.assert_called_once_with(mutation.gist_id)
         self.assertFalse(mutation.gist_changed)
         self.assertIsNone(mutation.gist_branch)
         self.assertIsNone(mutation.written_file_content)
@@ -904,6 +1012,11 @@ class BoundedStagingLifecycleAcceptanceTests(unittest.TestCase):
         with (
             mock.patch.object(self.driver, "verify_candidate_checkout") as checkout,
             mock.patch.object(self.driver, "gh_json", side_effect=github_response),
+            mock.patch.object(
+                self.driver,
+                "consistent_gist_json",
+                return_value=github_response(["gists/" + "a" * 20]),
+            ),
             mock.patch.object(self.driver, "health", return_value=False),
         ):
             self.driver.fixture_preflight(self.fixture, "a" * 20, "b" * 40)

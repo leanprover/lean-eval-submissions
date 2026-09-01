@@ -158,6 +158,12 @@ export type EvaluationFailedEvent = SubmissionLifecycleEvent<"evaluation.failed"
   reason_code: string;
   retryable: boolean;
 }>;
+export type SubmissionResultIdentityConflictedEvent = SubmissionLifecycleEvent<"submission.result_identity_conflicted", {
+  result_id: string;
+  authority_event_id: string;
+  existing_kind: "claimed" | "recorded";
+  reason_code: "duplicate_result_identity";
+}>;
 export type WritableSubmissionLifecycleEvent =
   | ArchiveCompletedEvent
   | ArchiveFailedEvent
@@ -268,6 +274,7 @@ export type WritableStateEvent =
   | SubmissionMetadataAmendedEvent
   | SubmissionPublicationChangedEvent
   | WritableSubmissionLifecycleEvent
+  | SubmissionResultIdentityConflictedEvent
   | WritableResultLifecycleEvent
   | WritableResultOwnerEvent
   | WritableModelIdentityOwnerEvent
@@ -280,6 +287,7 @@ type LifecycleEventType =
   | "evaluation.failed"
   | "evaluation.rejected"
   | "evaluation.started"
+  | "submission.result_identity_conflicted"
   | "release.cancelled"
   | "release.failed"
   | "release.published"
@@ -651,6 +659,7 @@ const LIFECYCLE_FIELDS: Readonly<Record<LifecycleEventType, readonly string[]>> 
   "evaluation.accepted": ["attempt", "evaluator_version"],
   "evaluation.rejected": ["attempt", "reason_code"],
   "evaluation.failed": ["attempt", "reason_code", "retryable"],
+  "submission.result_identity_conflicted": ["authority_event_id", "existing_kind", "reason_code", "result_id"],
   "result.recorded": ["problem_id", "result_commit", "statement_revision", "submission_id", "tree_digest"],
   "replay.enqueued": ["checker", "execution_profile_digest", "measurement_config_digest", "result_id"],
   "replay.started": ["attempt", "runner_profile"],
@@ -672,7 +681,8 @@ function validateLifecycleEvent(event: Record<string, unknown>, kind: LifecycleE
   if (typeof event.causation_event_id !== "string" || !UUID_V7.test(event.causation_event_id)) {
     throw new TypeError("lifecycle event cause must be a lowercase UUIDv7");
   }
-  const submissionSubject = kind.startsWith("archive.") || kind.startsWith("evaluation.");
+  const submissionSubject = kind.startsWith("archive.") || kind.startsWith("evaluation.") ||
+    kind === "submission.result_identity_conflicted";
   const subjectPattern = submissionSubject ? UUID_V7 : kind.startsWith("replay.") ? REPLAY_ID : RESULT_ID;
   if (typeof event.subject_id !== "string" || !subjectPattern.test(event.subject_id)) {
     throw new TypeError("lifecycle event subject is invalid");
@@ -723,6 +733,17 @@ function validateLifecycleEvent(event: Record<string, unknown>, kind: LifecycleE
     if (typeof payload.submission_id !== "string" || !UUID_V7.test(payload.submission_id)) throw new TypeError("submission_id is invalid");
     if (typeof payload.problem_id !== "string" || !PROBLEM_ID.test(payload.problem_id)) throw new TypeError("problem_id is invalid");
     positive("statement_revision");
+  }
+  if (kind === "submission.result_identity_conflicted") {
+    if (typeof payload.authority_event_id !== "string" || !UUID_V7.test(payload.authority_event_id)) {
+      throw new TypeError("result identity conflict authority_event_id is invalid");
+    }
+    if (payload.existing_kind !== "claimed" && payload.existing_kind !== "recorded") {
+      throw new TypeError("result identity conflict existing_kind is invalid");
+    }
+    if (payload.reason_code !== "duplicate_result_identity") {
+      throw new TypeError("result identity conflict reason_code is invalid");
+    }
   }
   if ("result_id" in payload && (typeof payload.result_id !== "string" || !RESULT_ID.test(payload.result_id))) throw new TypeError("result_id is invalid");
   if (kind === "release.scheduled" && payload.result_id !== event.subject_id) {

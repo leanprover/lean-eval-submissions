@@ -16,7 +16,7 @@
     "server/src/state-event.ts",
     "server/src/submission-view.ts"
   ],
-  "lifecycle_callback_contract_sha256": "04975602c49d2652b68c44a833e33191bdfabc7698a279a66401a919cb481974",
+  "lifecycle_callback_contract_sha256": "a3852d1627d1ebe617986cb254cc9aee1fcd8960c38b723c96932e60179f77ae",
   "replay_durable_object_migration_tags": [
     "v1",
     "v2"
@@ -24,9 +24,9 @@
   "scheduled_reconciliation_when_intake_disabled": "no_op",
   "schema_version": 1,
   "state_event_schema_path": "schema/state-event-v1.schema.json",
-  "state_event_schema_sha256": "2d19515da1b0798f00dd3e9809c3a2770fee8b27ce6323ac9b9e827db4c7ea27",
+  "state_event_schema_sha256": "5394e7f24901db390b16c97ac5ab781a407da6cedee60f96e3e9396bce549587",
   "state_event_schema_version": 1,
-  "state_main_commit": "9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f",
+  "state_main_commit": "235a96c96462438c7680e6fb90fa0e6044ec1774",
   "state_repository": "leanprover/lean-eval-state",
   "wrangler_version": "4.124.0"
 }
