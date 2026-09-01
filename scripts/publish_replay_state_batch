@@ -1,0 +1,152 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: publish_replay_state_batch --root DIR --candidate-root DIR --manifest FILE --expected-head SHA --message TEXT" >&2
+  exit 2
+}
+
+state_root=
+candidate_root=
+manifest=
+expected_head=
+commit_message=
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --root) state_root=${2:-}; shift 2 ;;
+    --candidate-root) candidate_root=${2:-}; shift 2 ;;
+    --manifest) manifest=${2:-}; shift 2 ;;
+    --expected-head) expected_head=${2:-}; shift 2 ;;
+    --message) commit_message=${2:-}; shift 2 ;;
+    *) usage ;;
+  esac
+done
+
+if [ -z "$state_root" ] || [ -z "$candidate_root" ] || [ -z "$manifest" ] || [ -z "$expected_head" ] || [ -z "$commit_message" ]; then
+  usage
+fi
+if ! printf '%s' "$expected_head" | grep -Eq '^[0-9a-f]{40}$'; then
+  echo "expected State head is not a lowercase commit SHA" >&2
+  exit 1
+fi
+if [ -z "${STATE_WRITE_KEY:-}" ] || [ -z "${RUNNER_TEMP:-}" ]; then
+  echo "isolated State writer credential or runner scratch is unavailable" >&2
+  exit 1
+fi
+if [ "$(git -C "$state_root" rev-parse HEAD)" != "$expected_head" ] || [ -n "$(git -C "$state_root" status --porcelain)" ]; then
+  echo "State checkout is not the clean expected parent" >&2
+  exit 1
+fi
+if [ "$(jq -r .environment "$state_root/state.json")" != production ]; then
+  echo "State checkout is not production" >&2
+  exit 1
+fi
+
+manifest_root=$(dirname "$manifest")
+if [ "$(cd "$manifest_root" && pwd -P)" != "$(cd "$candidate_root" && pwd -P)" ]; then
+  echo "manifest is not inside the exact candidate root" >&2
+  exit 1
+fi
+jq -e --arg head "$expected_head" '
+  .schema_version == 1 and
+  .kind == "historical_baseline_state_append_candidate" and
+  .activation_status == "reviewed_but_not_appended" and
+  .state.repository == "leanprover/lean-eval-state" and
+  .state.expected_head == $head and
+  (.event_files | type == "array" and length > 0) and
+  (.expectation.total_event_count == (.event_files | length)) and
+  ([.event_files[].path] | length == (unique | length)) and
+  (([.lanes.public.event_files[], .lanes.private.event_files[]] | sort) == (.event_files | sort)) and
+  (.expectation.total_task_count == (.lanes.public.task_count + .lanes.private.task_count))
+' "$manifest" >/dev/null
+
+manifest_event_set=$(python - "$manifest" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+value = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
+raw = (json.dumps(value["event_files"], ensure_ascii=True, indent=2, sort_keys=True) + "\n").encode()
+print(hashlib.sha256(raw).hexdigest())
+PY
+)
+if [ "$manifest_event_set" != "$(jq -er .event_set_sha256 "$manifest")" ]; then
+  echo "candidate manifest event-set digest is invalid" >&2
+  exit 1
+fi
+
+mapfile -t event_paths < <(jq -er '.event_files[].path' "$manifest")
+mapfile -t actual_paths < <(cd "$candidate_root" && find events -type f -name '*.json' -print | LC_ALL=C sort)
+mapfile -t expected_paths < <(printf '%s\n' "${event_paths[@]}" | LC_ALL=C sort)
+if [ "${#actual_paths[@]}" -ne "${#expected_paths[@]}" ] || [ "$(printf '%s\n' "${actual_paths[@]}")" != "$(printf '%s\n' "${expected_paths[@]}")" ]; then
+  echo "candidate event tree contains missing or extra files" >&2
+  exit 1
+fi
+
+for relative in "${expected_paths[@]}"; do
+  if ! printf '%s' "$relative" | grep -Eq '^events/[0-9a-f]{2}/[0-9a-f-]{36}\.json$'; then
+    echo "candidate event path is unsafe" >&2
+    exit 1
+  fi
+  expected_digest=$(jq -er --arg path "$relative" '.event_files[] | select(.path == $path) | .sha256' "$manifest")
+  if [ "$(sha256sum "$candidate_root/$relative" | awk '{print $1}')" != "$expected_digest" ]; then
+    echo "candidate event digest changed" >&2
+    exit 1
+  fi
+  published=$(python "$state_root/scripts/state.py" --root "$state_root" append "$candidate_root/$relative")
+  if [ "$published" != "$relative" ]; then
+    echo "State append path differs from the closed candidate" >&2
+    exit 1
+  fi
+done
+python "$state_root/scripts/state.py" --root "$state_root" validate >/dev/null
+git -C "$state_root" add -- events
+if [ "$(git -C "$state_root" diff --cached --name-only | LC_ALL=C sort)" != "$(printf '%s\n' "${expected_paths[@]}")" ]; then
+  echo "State batch staged anything other than the closed event set" >&2
+  exit 1
+fi
+if [ "$(git -C "$state_root" diff --cached --name-status | cut -f1 | LC_ALL=C sort -u)" != A ]; then
+  echo "State batch is not create-only" >&2
+  exit 1
+fi
+
+git -C "$state_root" config user.name lean-eval-replay-controller
+git -C "$state_root" config user.email 41898282+github-actions[bot]@users.noreply.github.com
+git -C "$state_root" commit --no-gpg-sign --message "$commit_message" >/dev/null
+new_commit=$(git -C "$state_root" rev-parse HEAD)
+
+key_file=$(mktemp "$RUNNER_TEMP/replay-state-batch-writer.XXXXXX")
+known_hosts=$(mktemp "$RUNNER_TEMP/replay-state-batch-known-hosts.XXXXXX")
+reconciled_ref=refs/replay-controller/reconciled-batch-main
+cleanup() {
+  unset STATE_WRITE_KEY
+  git -C "$state_root" update-ref -d "$reconciled_ref" >/dev/null 2>&1 || true
+  if [ -f "$key_file" ]; then shred --remove "$key_file"; fi
+  if [ -f "$known_hosts" ]; then shred --remove "$known_hosts"; fi
+}
+trap cleanup EXIT
+chmod 0600 "$key_file" "$known_hosts"
+printf '%s\n' "$STATE_WRITE_KEY" > "$key_file"
+printf '%s\n' \
+  'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+  > "$known_hosts"
+ssh_command="ssh -i $key_file -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3"
+git -C "$state_root" update-ref -d "$reconciled_ref"
+GIT_SSH_COMMAND="$ssh_command" \
+  git -C "$state_root" push --porcelain git@github.com:leanprover/lean-eval-state.git \
+  HEAD:refs/heads/main >&2 || true
+if ! GIT_SSH_COMMAND="$ssh_command" git -C "$state_root" fetch --no-tags \
+  git@github.com:leanprover/lean-eval-state.git \
+  "+refs/heads/main:$reconciled_ref" >&2; then
+  echo "State main could not be fetched after the batch reference update attempt" >&2
+  exit 1
+fi
+remote_head=$(git -C "$state_root" rev-parse "$reconciled_ref")
+if ! git -C "$state_root" merge-base --is-ancestor "$new_commit" "$remote_head"; then
+  echo "State batch reference update was not reconciled into fetched remote main" >&2
+  exit 1
+fi
+git -C "$state_root" merge --ff-only "$remote_head" >/dev/null
+git -C "$state_root" update-ref -d "$reconciled_ref"
+printf '%s\n' "$remote_head"
