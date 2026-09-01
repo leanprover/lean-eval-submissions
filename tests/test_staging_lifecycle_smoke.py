@@ -105,6 +105,16 @@ class StagingLifecycleSmokeTests(unittest.TestCase):
         denial_step = self.text.split(
             "      - name: Verify unauthenticated browser mutation is denied\n", 1
         )[1].split("\n      - name:", 1)[0]
+        self.assertIn("for attempt in $(seq 1 13); do", denial_step)
+        self.assertIn('if [ "$attempt" -lt 13 ]; then', denial_step)
+        self.assertIn("sleep 5", denial_step)
+        self.assertIn('[ "$http_status" != 503 ]', denial_step)
+        self.assertIn('{error: "intake_disabled"}', denial_step)
+        self.assertIn(
+            "unauthenticated browser denial returned an unexpected response",
+            denial_step,
+        )
+        self.assertIn("unauthenticated browser denial did not converge", denial_step)
         self.assertNotIn("authorization", denial_step.lower())
         self.assertNotIn("cookie", denial_step.lower())
 
