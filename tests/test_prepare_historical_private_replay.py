@@ -31,7 +31,8 @@ CROSSWALK_COMMIT = "da421bf6a55f3234719151d8a2422da3b2febf23"
 RESULTS_COMMIT = "7fb2e762e5470ae1929dbe069dbcd0c8488b51d7"
 PROFILE_COMMIT = "faf631452b399ecbab3bd2981e8052390bac5a99"
 UNAVAILABILITY_PLAN_SHA256 = "d9561ad62098e0542656678f207b3360b0b295be975c292cbf729dc48d03bd5e"
-PRIVATE_PLAN_SHA256 = "85c21beb341fbfe5ffd877b935149ffe577dc7312c9bb65506e270674c6453c4"
+PRIVATE_PLAN_SHA256 = "08992e62486c2b000bf4914c80cbfe734a3aa9d0d07dab481b40cd8684fe268d"
+PRIVATE_PROFILE_COMMIT = "c3c2a3b1617f4f90b8b2cae86738abad7dca3f0c"
 PROTECTED_STATE_COMMIT = "3dcf596b696b9f1f11de2e3c6127664fd0504884"
 CROSSWALK = (
     ROOT
@@ -385,12 +386,19 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
             self.plan["replay_readiness_counts"],
             {
                 "archive_not_found": 29,
-                "profile_pending": 639,
-                "profile_qualified": 0,
+                "profile_pending": 0,
+                "profile_qualified": 639,
             },
         )
         self.assertEqual(len(self.plan["entries"]), 668)
-        self.assertEqual(self.plan["profiles"], {})
+        self.assertEqual(len(self.plan["profiles"]), 63)
+        self.assertEqual(
+            {
+                profile["private_profile"]["commit"]
+                for profile in self.plan["profiles"].values()
+            },
+            {PRIVATE_PROFILE_COMMIT},
+        )
         identifiers = [entry["result_id"] for entry in self.plan["entries"]]
         self.assertEqual(identifiers, sorted(set(identifiers)))
 
@@ -453,13 +461,18 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
     def test_builder_reproduces_the_committed_plan(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             results = materialize_results_tree(RESULTS_COMMIT, pathlib.Path(directory))
-            with mock.patch.object(private_replay, "verify_checkout"):
+            with (
+                mock.patch.object(private_replay, "verify_checkout"),
+                mock.patch.object(private_replay, "_require_canonical_results_remote"),
+            ):
                 rebuilt = private_replay.build_plan(
                     crosswalk_path=CROSSWALK,
                     crosswalk_commit=CROSSWALK_COMMIT,
                     results_root=results,
-                    private_profiles=[],
-                    private_profile_commit=None,
+                    private_profiles=sorted(
+                        (ROOT / private_replay.PRIVATE_PROFILE_PREFIX).glob("*.json")
+                    ),
+                    private_profile_commit=PRIVATE_PROFILE_COMMIT,
                 )
         self.assertEqual(private_replay.canonical(rebuilt), self.raw)
 
@@ -1139,25 +1152,7 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
                 private_replay.validate_embedded_private_profiles(forged, root, commit)
 
     def test_append_ready_rejects_nonexistent_embedded_private_profile(self) -> None:
-        selected_entry, profile = self.qualified_fixture()
         plan = copy.deepcopy(self.plan)
-        entry = next(
-            item
-            for item in plan["entries"]
-            if item["result_id"] == selected_entry["result_id"]
-        )
-        entry["replay_profile_status"] = "profile_qualified"
-        entry["execution_profile_digest"] = selected_entry[
-            "execution_profile_digest"
-        ]
-        plan["replay_readiness_counts"] = {
-            "archive_not_found": 29,
-            "profile_pending": 638,
-            "profile_qualified": 1,
-        }
-        plan["profiles"] = {
-            selected_entry["execution_profile_digest"]: profile
-        }
         private_replay.validate_plan(plan)
         raw = private_replay.canonical(plan)
         digest = hashlib.sha256(raw).hexdigest()
