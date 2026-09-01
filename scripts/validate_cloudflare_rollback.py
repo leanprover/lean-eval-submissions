@@ -72,6 +72,44 @@ COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 MAX_CONTRACT_FILE_BYTES = 2 * 1024 * 1024
 MAX_JSON_BYTES = 4 * 1024 * 1024
+CONVERGENCE_RETRY_EXIT = 75
+PRODUCTION_STATE_READINESS_FIELDS = {
+    "environment",
+    "intake_configured_enabled",
+    "intake_effective_enabled",
+    "intake_enabled",
+    "intake_enablement_mode",
+    "intake_lease_expires_at",
+    "state_branch_protected",
+    "state_commit",
+    "state_contract_commit",
+    "state_contract_verified",
+    "state_event_schema_sha256",
+    "status",
+}
+PRODUCTION_HEALTH_FIELDS = {
+    "status",
+    "service",
+    "deployed_commit",
+    "environment",
+    "intake_configured_enabled",
+    "intake_effective_enabled",
+    "intake_enabled",
+    "intake_enablement_mode",
+    "intake_lease_expires_at",
+    "legacy_result_owner_api_enabled",
+    "result_amendment_owner_api_enabled",
+    "result_amendment_maintainer_api_enabled",
+    "model_identity_owner_api_enabled",
+    "model_identity_maintainer_api_enabled",
+    "model_identity_consolidation_api_enabled",
+    "model_identity_write_max_subrequests",
+    "model_identity_consolidation_api",
+    "release_opt_in_api_enabled",
+    "release_opt_out_api_enabled",
+    "promotion_canary_configured_enabled",
+    "promotion_canary_enabled",
+}
 INTAKE_LEASE_BINDINGS = {
     "INTAKE_ENABLED",
     "INTAKE_ENABLEMENT_MODE",
@@ -1348,6 +1386,166 @@ def validate_health(
         raise RollbackValidationError(f"{component} health differs: {wrong}")
 
 
+def classify_production_state_readiness(
+    response: dict[str, Any],
+    http_status: int,
+    expected_contract: str,
+    expected_schema: str,
+) -> str | None:
+    """Return the qualified State commit, or ``None`` for one safe retry."""
+    if COMMIT.fullmatch(expected_contract) is None or DIGEST.fullmatch(
+        expected_schema
+    ) is None:
+        raise RollbackValidationError(
+            "production State readiness expectations are invalid"
+        )
+    if http_status == 503:
+        if set(response) != {"status", "reason"} or response.get(
+            "status"
+        ) != "not_ready":
+            raise RollbackValidationError(
+                "production State readiness 503 is not a closed response"
+            )
+        reason = response.get("reason")
+        if reason == "state_unavailable":
+            return None
+        if reason == "state_credential_missing":
+            raise RollbackValidationError(
+                "production State readiness reported state_credential_missing"
+            )
+        raise RollbackValidationError(
+            "production State readiness 503 has an unsupported reason"
+        )
+    if http_status == 404:
+        raise RollbackValidationError(
+            "production State readiness authorization was rejected"
+        )
+    if http_status != 200:
+        raise RollbackValidationError(
+            "production State readiness returned an unexpected HTTP status"
+        )
+    if set(response) != PRODUCTION_STATE_READINESS_FIELDS:
+        raise RollbackValidationError(
+            "production State readiness proof is not a closed document"
+        )
+    state_commit = response.get("state_commit")
+    if (
+        response.get("status") != "state_writer_ready"
+        or response.get("environment") != "production"
+        or response.get("intake_configured_enabled") is not False
+        or response.get("intake_effective_enabled") is not False
+        or response.get("intake_enabled") is not False
+        or response.get("intake_enablement_mode") != "disabled"
+        or response.get("intake_lease_expires_at") is not None
+        or response.get("state_branch_protected") is not True
+        or response.get("state_contract_verified") is not True
+        or response.get("state_contract_commit") != expected_contract
+        or response.get("state_event_schema_sha256") != expected_schema
+        or not isinstance(state_commit, str)
+        or COMMIT.fullmatch(state_commit) is None
+    ):
+        raise RollbackValidationError(
+            "production State readiness proof differs from the reviewed contract"
+        )
+    return state_commit
+
+
+def classify_all_false_production_health(
+    response: dict[str, Any],
+    http_status: int,
+    expected_commit: str,
+) -> bool:
+    """Return readiness, distinguishing one valid stale rollout from corruption."""
+    if COMMIT.fullmatch(expected_commit) is None:
+        raise RollbackValidationError(
+            "all-false health expected commit is invalid"
+        )
+    if http_status != 200:
+        raise RollbackValidationError(
+            "all-false production health returned an unexpected HTTP status"
+        )
+    if set(response) != PRODUCTION_HEALTH_FIELDS:
+        raise RollbackValidationError(
+            "all-false production health is not a closed document"
+        )
+    boolean_fields = {
+        "intake_configured_enabled",
+        "intake_effective_enabled",
+        "intake_enabled",
+        "legacy_result_owner_api_enabled",
+        "result_amendment_owner_api_enabled",
+        "result_amendment_maintainer_api_enabled",
+        "model_identity_owner_api_enabled",
+        "model_identity_maintainer_api_enabled",
+        "model_identity_consolidation_api_enabled",
+        "release_opt_in_api_enabled",
+        "release_opt_out_api_enabled",
+        "promotion_canary_configured_enabled",
+        "promotion_canary_enabled",
+    }
+    deployed_commit = response.get("deployed_commit")
+    lease_expiry = response.get("intake_lease_expires_at")
+    intake_configured = response.get("intake_configured_enabled")
+    intake_effective = response.get("intake_effective_enabled")
+    intake_mode = response.get("intake_enablement_mode")
+    intake_semantics_valid = (
+        (
+            intake_mode == "disabled"
+            and intake_configured is False
+            and intake_effective is False
+            and lease_expiry is None
+        )
+        or (
+            intake_mode == "durable"
+            and intake_configured is True
+            and intake_effective is True
+            and lease_expiry is None
+        )
+        or (
+            intake_mode == "leased"
+            and intake_configured is True
+            and type(intake_effective) is bool
+            and type(lease_expiry) is int
+            and lease_expiry > 0
+        )
+    )
+    if (
+        response.get("status") != "ok"
+        or response.get("service") != "lean-eval-submission"
+        or response.get("environment") != "production"
+        or not isinstance(deployed_commit, str)
+        or COMMIT.fullmatch(deployed_commit) is None
+        or any(type(response.get(field)) is not bool for field in boolean_fields)
+        or response.get("intake_enabled") is not intake_effective
+        or not intake_semantics_valid
+        or response.get("model_identity_write_max_subrequests") != 400
+        or response.get("model_identity_consolidation_api")
+        != "atomic_reverse_impact_v1"
+    ):
+        raise RollbackValidationError(
+            "all-false production health is malformed"
+        )
+    expected = {
+        "deployed_commit": expected_commit,
+        "intake_configured_enabled": False,
+        "intake_effective_enabled": False,
+        "intake_enabled": False,
+        "intake_enablement_mode": "disabled",
+        "intake_lease_expires_at": None,
+        "legacy_result_owner_api_enabled": False,
+        "result_amendment_owner_api_enabled": False,
+        "result_amendment_maintainer_api_enabled": False,
+        "model_identity_owner_api_enabled": False,
+        "model_identity_maintainer_api_enabled": False,
+        "model_identity_consolidation_api_enabled": False,
+        "release_opt_in_api_enabled": False,
+        "release_opt_out_api_enabled": False,
+        "promotion_canary_configured_enabled": False,
+        "promotion_canary_enabled": False,
+    }
+    return all(response.get(name) == value for name, value in expected.items())
+
+
 def _descriptor_digest(version: dict[str, Any], component: str) -> str:
     raw = json.dumps(
         _capability_descriptors(version, component),
@@ -1608,6 +1806,17 @@ def parser() -> argparse.ArgumentParser:
     health.add_argument("--health", type=pathlib.Path, required=True)
     health.add_argument("--require-intake-disabled", action="store_true")
 
+    state_readiness = commands.add_parser("production-state-readiness")
+    state_readiness.add_argument("--response", type=pathlib.Path, required=True)
+    state_readiness.add_argument("--http-status", type=int, required=True)
+    state_readiness.add_argument("--expected-contract", required=True)
+    state_readiness.add_argument("--expected-schema", required=True)
+
+    all_false_health = commands.add_parser("all-false-production-health")
+    all_false_health.add_argument("--response", type=pathlib.Path, required=True)
+    all_false_health.add_argument("--http-status", type=int, required=True)
+    all_false_health.add_argument("--expected-commit", required=True)
+
     prestate = commands.add_parser("prestate")
     prestate.add_argument("--plan", type=pathlib.Path, required=True)
     for component_name in ("intake", "broker", "replay"):
@@ -1658,6 +1867,31 @@ def main() -> int:
         elif args.command == "container-id":
             value = json.loads(args.list.read_text(encoding="utf-8"))
             print(container_id(value, args.application))
+        elif args.command == "production-state-readiness":
+            state_commit = classify_production_state_readiness(
+                _object(args.response),
+                args.http_status,
+                args.expected_contract,
+                args.expected_schema,
+            )
+            if state_commit is None:
+                print(
+                    "production State readiness retryable: state_unavailable",
+                    file=sys.stderr,
+                )
+                return CONVERGENCE_RETRY_EXIT
+            print(state_commit)
+        elif args.command == "all-false-production-health":
+            if not classify_all_false_production_health(
+                _object(args.response),
+                args.http_status,
+                args.expected_commit,
+            ):
+                print(
+                    "all-false production health retryable: stale",
+                    file=sys.stderr,
+                )
+                return CONVERGENCE_RETRY_EXIT
         elif args.command == "prestate":
             args.output.write_text(
                 json.dumps(build_prestate(args), indent=2, sort_keys=True) + "\n",

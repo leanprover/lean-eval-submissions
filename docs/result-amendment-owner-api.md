@@ -2,21 +2,21 @@
 
 The submission Worker contains independently gated authenticated owner and
 maintainer APIs for the append-only result amendment contract at production
-State commit `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` and the independently
+State commit `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` and the independently
 reviewed staging State contract
 `41f55135a8d5f36941e615e9ec9e4f5e32a786a5`.
 
 | Environment | Owner API | Maintainer API and identities | State contract |
 | --- | --- | --- | --- |
 | Staging | `RESULT_AMENDMENT_OWNER_API_ENABLED=false` | `RESULT_AMENDMENT_MAINTAINER_API_ENABLED=false`; `RESULT_AMENDMENT_MAINTAINERS=[]` | `RESULT_OWNER_STATE_CONTRACT_COMMIT=41f55135a8d5f36941e615e9ec9e4f5e32a786a5` |
-| Production | `RESULT_AMENDMENT_OWNER_API_ENABLED=true` | `RESULT_AMENDMENT_MAINTAINER_API_ENABLED=true`; `RESULT_AMENDMENT_MAINTAINERS=[{"github_id":477956,"login":"kim-em"}]` | `RESULT_OWNER_STATE_CONTRACT_COMMIT=c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` |
+| Production | `RESULT_AMENDMENT_OWNER_API_ENABLED=false` | `RESULT_AMENDMENT_MAINTAINER_API_ENABLED=false`; `RESULT_AMENDMENT_MAINTAINERS=[]` | `RESULT_OWNER_STATE_CONTRACT_COMMIT=9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` |
 
 The gate is independent of submission intake and the legacy claim/backfill
 gate. A disabled route returns 404 before authentication, provider access, or a
 State read. An enabled route still requires the exact State contract pin. The
-tracked production enablement is a launch candidate rather than a runtime
-`GO` claim; production intake remains independently disabled and staging keeps
-the all-false lifecycle posture.
+tracked repair configuration is an all-false compatible rollback baseline,
+not a runtime `GO` claim. A separate launch candidate may enable selected
+production lifecycle gates; production intake remains independently gated.
 
 ## Owner retraction request
 
@@ -66,16 +66,17 @@ evidence, source locators, release state, and State commit are not returned.
 
 Approval, rejection, maintainer override, and terminal retraction use a
 separate, fail-closed maintainer identity boundary and independent feature gate.
-The launch candidate enables that gate only in production for the exact closed
-maintainer list; staging remains dark. The existing lifecycle callback bearer
-token still identifies only an automation client and never grants human
-maintainer authority; equivalent paths under `/internal/` do not exist.
+Any launch candidate may enable that gate only in production for the exact
+closed maintainer list; the compatible baseline and staging remain dark. The
+existing lifecycle callback bearer token still identifies only an automation
+client and never grants human maintainer authority; equivalent paths under
+`/internal/` do not exist.
 
 `RESULT_AMENDMENT_MAINTAINERS` is a bounded closed JSON array of exact GitHub
 numeric ID/lowercase-login pairs. Both values must match the authenticated
-session, and IDs and logins must each be unique. The tracked production value
-contains exactly `kim-em` / GitHub user `477956`; staging and the all-false
-rollback configuration use the empty array. Rollback validates the exact
+session, and IDs and logins must each be unique. The tracked production and
+staging baselines use the empty array; a separately reviewed launch candidate
+may contain exactly `kim-em` / GitHub user `477956`. Rollback validates the exact
 configuration but deliberately records only the supported/enabled booleans:
 the allowlist is never copied into health, rollback plans, prestate evidence,
 or workflow summaries.
@@ -171,9 +172,9 @@ and rejected repairs do not reserve their proposed tuple. The protected State
 validator derives the permanent reservation set from immutable authority and
 applied-repair events; staging's two existing authorities were migrated to
 exact reservations, while production's empty authority set required none.
-The tracked production gates are enabled in the lifecycle-only launch
-candidate, while staging remains dark. This is not a runtime enablement claim:
-the readiness packet and pre-deployment checks still apply.
+The tracked production and staging gates remain dark in the compatible
+rollback baseline. A separately reviewed lifecycle-only launch candidate still
+requires the readiness packet and pre-deployment checks.
 
 ## Maintainer retraction decisions
 
@@ -200,7 +201,7 @@ State event as required review evidence but is not returned by the API.
 ## Protected State binding
 
 The production binding is protected State `main`
-`c6a4bb67b55609ae7215bdd3cac2378b2db42a0a`; staging is independently bound to
+`9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f`; staging is independently bound to
 its reviewed contract commit `41f55135a8d5f36941e615e9ec9e4f5e32a786a5`.
 Both contracts contain release-status schema version 2 and permanent
 effective-result reservations, but their repository-specific migration
@@ -212,10 +213,10 @@ refresh the corresponding proof and requalify before an owner write.
 ## Operational invariants
 
 - Production intake, replay, and publication remain independently disabled.
-- Staging owner and maintainer amendment flags remain false and its maintainer
-  list is empty. The launch candidate tracks both production flags as true and
-  the exact `kim-em` / GitHub user `477956` identity pair. The all-false
-  rollback target disables both flags and clears both environment lists.
+- Both tracked environments keep the owner and maintainer amendment flags false
+  and their maintainer lists empty. A separate launch candidate may set both
+  production flags true with exactly `kim-em` / GitHub user `477956`; the
+  compatible rollback target remains all-false.
 - The Worker proves protected State main descends from the repository's
   reviewed commit and checks its current non-recursive root tree contains
   exactly one correctly typed and hash-bound `README.md`, `docs`, `schema`, and
@@ -241,5 +242,5 @@ refresh the corresponding proof and requalify before an owner write.
   the comparator, reservation read, or both. Before enablement, the deployed
   Workers plan must provide a per-request external-subrequest allowance of at
   least 369; a 50-subrequest free plan is insufficient. Do not deploy the
-  tracked production enablement if this prerequisite is not proved.
+  separate production enablement if this prerequisite is not proved.
 - No AWS role, private source fetch, replay executor, or deployment is involved.

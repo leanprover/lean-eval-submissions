@@ -6,7 +6,7 @@ production metadata. It never rewrites a Results record, changes its stable
 result ID, or reinterprets its grandfathered solution-publication policy.
 
 The implementation is bound to production State contract commit
-`c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` and staging contract commit
+`9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` and staging contract commit
 `41f55135a8d5f36941e615e9ec9e4f5e32a786a5`. Before an owner operation, the
 Worker resolves protected State `main`, proves that it equals or descends from
 the repository-specific commit, and checks the exact current root entries for
@@ -21,19 +21,19 @@ before a write.
 
 ## Safe configuration
 
-The launch candidate tracks these non-secret variables:
+The compatible rollback baseline tracks these non-secret variables:
 
 | Environment | Owner API | State contract |
 | --- | --- | --- |
 | Staging | `LEGACY_RESULT_OWNER_API_ENABLED=false` | `41f55135a8d5f36941e615e9ec9e4f5e32a786a5` |
-| Production | `LEGACY_RESULT_OWNER_API_ENABLED=true` | `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` |
+| Production | `LEGACY_RESULT_OWNER_API_ENABLED=false` | `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` |
 
 The route exists only when the enable flag is exactly `true` and the contract
-commit is exact. The launch candidate enables the production owner API while
-keeping staging dark. This does not enable submission intake: production
-`INTAKE_ENABLED` remains independently false. OAuth start/callback may operate
-while intake is disabled only when the owner API gate is enabled; submission
-routes remain disabled.
+commit is exact. This compatible rollback baseline keeps both environments
+dark. A separately reviewed launch candidate may enable the production owner
+API without enabling submission intake. OAuth start/callback may operate while
+intake is disabled only when the owner API gate is enabled; submission routes
+remain disabled.
 
 The protected bindings above contain the reviewed owner/amendment contract,
 monotone release-status version 2, and permanent effective-result identity
@@ -193,9 +193,9 @@ inconsistency. The live result-completion callback always enters this
 repository replay check even when its submission view already names a result;
 it never returns `already_recorded` solely from the view.
 
-Immediately before deploying the tracked production enablement, or before any
-future staging enablement, repeat these read-only gates against the exact
-intended deployment inputs:
+Immediately before deploying a separately reviewed production enablement, or
+before any future staging enablement, repeat these read-only gates against the
+exact intended deployment inputs:
 
 1. Validate production State and prove its protected `main` still descends from
    the pinned contract. Before the first compatible deployment, require zero
@@ -218,6 +218,6 @@ After the first result-owner event or guard exists, never roll back the Worker
 to a commit that lacks these event decoders and identity-path reservations.
 Disable the route with a forward deployment of this compatible implementation,
 then repair or forward-deploy. State events and guards are append-only and are
-not deleted during rollback. The tracked launch configuration does not claim
-that production is already deployed or that its readiness packet is `GO`;
-staging remains disabled.
+not deleted during rollback. The tracked repair configuration is an all-false
+compatible rollback baseline; it does not claim that production is enabled or
+that its readiness packet is `GO`. Staging remains disabled.

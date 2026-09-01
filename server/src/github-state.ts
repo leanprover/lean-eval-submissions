@@ -140,10 +140,10 @@ const RESULT_OWNER_CONTRACTS: Readonly<Record<string, ResultOwnerContract>> = {
   [PRODUCTION_STATE_REPOSITORY]: {
     commit: PRODUCTION_RESULT_OWNER_STATE_CONTRACT_COMMIT,
     rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "7b62f1d8f6163fae029eba2c3bed2cdca306db5e" },
-      docs: { mode: "040000", type: "tree", sha: "d86908a7a5dc214ec9e12b2049d1cb69c30161af" },
-      schema: { mode: "040000", type: "tree", sha: "d391a2bcda4cffb883cc0b39dcc29f22bf8e4329" },
-      scripts: { mode: "040000", type: "tree", sha: "cb41e84264627f91deca3d2be52e99fc65d905f1" },
+      "README.md": { mode: "100644", type: "blob", sha: "20c4131d85e51435fb654b71761a3456c36f8218" },
+      docs: { mode: "040000", type: "tree", sha: "5d3923158bd8f620f184fee5a4d00924220464fa" },
+      schema: { mode: "040000", type: "tree", sha: "2c0004214d90b82cf895e79a91c239ac9e7bbf67" },
+      scripts: { mode: "040000", type: "tree", sha: "ed830aea8fe7a4a0e6db7acdcf82f23cb24a296d" },
     },
   },
   [STAGING_STATE_REPOSITORY]: {
@@ -160,10 +160,10 @@ const MODEL_IDENTITY_CONTRACTS: Readonly<Record<string, ModelIdentityContract>> 
   [PRODUCTION_STATE_REPOSITORY]: {
     commit: PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT,
     rootEntries: {
-      "README.md": { mode: "100644", type: "blob", sha: "7b62f1d8f6163fae029eba2c3bed2cdca306db5e" },
-      docs: { mode: "040000", type: "tree", sha: "d86908a7a5dc214ec9e12b2049d1cb69c30161af" },
-      schema: { mode: "040000", type: "tree", sha: "d391a2bcda4cffb883cc0b39dcc29f22bf8e4329" },
-      scripts: { mode: "040000", type: "tree", sha: "cb41e84264627f91deca3d2be52e99fc65d905f1" },
+      "README.md": { mode: "100644", type: "blob", sha: "20c4131d85e51435fb654b71761a3456c36f8218" },
+      docs: { mode: "040000", type: "tree", sha: "5d3923158bd8f620f184fee5a4d00924220464fa" },
+      schema: { mode: "040000", type: "tree", sha: "2c0004214d90b82cf895e79a91c239ac9e7bbf67" },
+      scripts: { mode: "040000", type: "tree", sha: "ed830aea8fe7a4a0e6db7acdcf82f23cb24a296d" },
     },
   },
   [STAGING_STATE_REPOSITORY]: {

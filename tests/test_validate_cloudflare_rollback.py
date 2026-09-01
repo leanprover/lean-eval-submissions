@@ -10,7 +10,8 @@ from scripts import validate_cloudflare_rollback as rollback
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 COMMIT = "a" * 40
-PROTECTED_STATE_COMMIT = "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a"
+PROTECTED_STATE_COMMIT = "9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f"
+STATE_SCHEMA_SHA256 = "2d19515da1b0798f00dd3e9809c3a2770fee8b27ce6323ac9b9e827db4c7ea27"
 INTAKE_VERSION = "11111111-1111-1111-1111-111111111111"
 BROKER_VERSION = "22222222-2222-2222-2222-222222222222"
 REPLAY_VERSION = "33333333-3333-3333-3333-333333333333"
@@ -156,6 +157,155 @@ class RollbackContractCoverageTests(unittest.TestCase):
             ):
                 rollback._validate_qualification_header(qualification, target)
 
+
+class ProductionConvergenceClassificationTests(unittest.TestCase):
+    def readiness(self) -> dict[str, object]:
+        return {
+            "environment": "production",
+            "intake_configured_enabled": False,
+            "intake_effective_enabled": False,
+            "intake_enabled": False,
+            "intake_enablement_mode": "disabled",
+            "intake_lease_expires_at": None,
+            "state_branch_protected": True,
+            "state_commit": PROTECTED_STATE_COMMIT,
+            "state_contract_commit": PROTECTED_STATE_COMMIT,
+            "state_contract_verified": True,
+            "state_event_schema_sha256": STATE_SCHEMA_SHA256,
+            "status": "state_writer_ready",
+        }
+
+    def health(self) -> dict[str, object]:
+        return {
+            "status": "ok",
+            "service": "lean-eval-submission",
+            "deployed_commit": COMMIT,
+            "environment": "production",
+            "intake_configured_enabled": False,
+            "intake_effective_enabled": False,
+            "intake_enabled": False,
+            "intake_enablement_mode": "disabled",
+            "intake_lease_expires_at": None,
+            "legacy_result_owner_api_enabled": False,
+            "result_amendment_owner_api_enabled": False,
+            "result_amendment_maintainer_api_enabled": False,
+            "model_identity_owner_api_enabled": False,
+            "model_identity_maintainer_api_enabled": False,
+            "model_identity_consolidation_api_enabled": False,
+            "model_identity_write_max_subrequests": 400,
+            "model_identity_consolidation_api": "atomic_reverse_impact_v1",
+            "release_opt_in_api_enabled": False,
+            "release_opt_out_api_enabled": False,
+            "promotion_canary_configured_enabled": False,
+            "promotion_canary_enabled": False,
+        }
+
+    def test_accepts_only_the_exact_closed_state_readiness_proof(self) -> None:
+        self.assertEqual(
+            rollback.classify_production_state_readiness(
+                self.readiness(),
+                200,
+                PROTECTED_STATE_COMMIT,
+                STATE_SCHEMA_SHA256,
+            ),
+            PROTECTED_STATE_COMMIT,
+        )
+        malformed = self.readiness()
+        malformed["unexpected"] = True
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "not a closed document"
+        ):
+            rollback.classify_production_state_readiness(
+                malformed,
+                200,
+                PROTECTED_STATE_COMMIT,
+                STATE_SCHEMA_SHA256,
+            )
+
+    def test_retries_only_closed_state_unavailable(self) -> None:
+        self.assertIsNone(
+            rollback.classify_production_state_readiness(
+                {"status": "not_ready", "reason": "state_unavailable"},
+                503,
+                PROTECTED_STATE_COMMIT,
+                STATE_SCHEMA_SHA256,
+            )
+        )
+        fatal_responses = [
+            (503, {"status": "not_ready", "reason": "state_credential_missing"}),
+            (
+                503,
+                {
+                    "status": "not_ready",
+                    "reason": "state_unavailable",
+                    "detail": "private",
+                },
+            ),
+            (503, {"status": "not_ready", "reason": "unexpected"}),
+            (404, {"error": "not_found"}),
+            (500, {"status": "not_ready", "reason": "state_unavailable"}),
+        ]
+        for status, response in fatal_responses:
+            with self.subTest(status=status, response=response), self.assertRaises(
+                rollback.RollbackValidationError
+            ):
+                rollback.classify_production_state_readiness(
+                    response,
+                    status,
+                    PROTECTED_STATE_COMMIT,
+                    STATE_SCHEMA_SHA256,
+                )
+
+    def test_accepts_exact_all_false_health_and_retries_valid_stale_health(self) -> None:
+        self.assertTrue(
+            rollback.classify_all_false_production_health(
+                self.health(), 200, COMMIT
+            )
+        )
+        stale = self.health()
+        stale["legacy_result_owner_api_enabled"] = True
+        self.assertFalse(
+            rollback.classify_all_false_production_health(stale, 200, COMMIT)
+        )
+        stale_commit = self.health()
+        stale_commit["deployed_commit"] = "b" * 40
+        self.assertFalse(
+            rollback.classify_all_false_production_health(
+                stale_commit, 200, COMMIT
+            )
+        )
+        durable = self.health()
+        durable["intake_configured_enabled"] = True
+        durable["intake_effective_enabled"] = True
+        durable["intake_enabled"] = True
+        durable["intake_enablement_mode"] = "durable"
+        self.assertFalse(
+            rollback.classify_all_false_production_health(durable, 200, COMMIT)
+        )
+
+    def test_rejects_malformed_or_non_200_health_without_retry(self) -> None:
+        malformed = self.health()
+        malformed["unexpected"] = True
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "not a closed document"
+        ):
+            rollback.classify_all_false_production_health(malformed, 200, COMMIT)
+        wrong_type = self.health()
+        wrong_type["release_opt_in_api_enabled"] = "false"
+        with self.assertRaisesRegex(rollback.RollbackValidationError, "malformed"):
+            rollback.classify_all_false_production_health(wrong_type, 200, COMMIT)
+        invalid_mode = self.health()
+        invalid_mode["intake_enablement_mode"] = "invalid"
+        with self.assertRaisesRegex(rollback.RollbackValidationError, "malformed"):
+            rollback.classify_all_false_production_health(invalid_mode, 200, COMMIT)
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "unexpected HTTP status"
+        ):
+            rollback.classify_all_false_production_health(
+                {"status": "not_ready", "reason": "state_unavailable"},
+                503,
+                COMMIT,
+            )
 
 class CloudflareRollbackValidationTests(unittest.TestCase):
     def test_current_protected_state_contract_is_coherent_across_rollback_inputs(
@@ -548,12 +698,12 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         self.assertIs(plan["release_opt_in_api_enabled"], False)
         self.assertIs(plan["release_opt_out_api_contract_supported"], True)
         self.assertIs(plan["release_opt_out_api_enabled"], False)
-        self.assertEqual(plan["model_identity_state_contract_commit"], "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a")
+        self.assertEqual(plan["model_identity_state_contract_commit"], PROTECTED_STATE_COMMIT)
         self.assertNotIn("MODEL_IDENTITY_MAINTAINERS", plan)
         self.assertNotIn("RESULT_AMENDMENT_MAINTAINERS", plan)
         self.assertEqual(
             plan["result_owner_state_contract_commit"],
-            "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a",
+            PROTECTED_STATE_COMMIT,
         )
         self.assertIs(plan["promotion_canary_enabled"], False)
         self.assertIs(plan["replay_enabled"], False)
@@ -1421,10 +1571,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "replay_enabled": False,
                 "staging_acceptance_enabled": False,
                 "result_owner_state_contract_commit": (
-                    "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a"
+                    PROTECTED_STATE_COMMIT
                 ),
                 "model_identity_state_contract_commit": (
-                    "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a"
+                    PROTECTED_STATE_COMMIT
                 ),
             },
         )

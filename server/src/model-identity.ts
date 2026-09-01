@@ -15,7 +15,7 @@ export const MODEL_IDENTITY_CONSOLIDATION_CAPABILITY:
   ModelIdentityConsolidationCapability = "atomic_reverse_impact_v1";
 
 export const PRODUCTION_MODEL_IDENTITY_STATE_CONTRACT_COMMIT =
-  "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a";
+  "9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f";
 export const STAGING_MODEL_IDENTITY_STATE_CONTRACT_COMMIT =
   "41f55135a8d5f36941e615e9ec9e4f5e32a786a5";
 export const MODEL_IDENTITY_REVERSE_IMPACT_MAX_VIEWS = 32;

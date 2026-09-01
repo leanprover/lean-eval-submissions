@@ -58,7 +58,7 @@ HISTORICAL_AUTHORITY_PREPARATION = (
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
     def test_deploy_and_rollback_bind_current_state_and_atomic_model_health(self) -> None:
-        expected = "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a"
+        expected = "9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f"
         self.assertEqual(QUALIFICATION["state_main_commit"], expected)
         self.assertGreaterEqual(DEPLOY.count(expected), 2)
         self.assertEqual(
@@ -811,15 +811,21 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         )[1].split("- name: Prepare the exact Worker-enforced intake lease", 1)[0]
         self.assertIn(QUALIFICATION["state_main_commit"], state_gate)
         self.assertIn(QUALIFICATION["state_event_schema_sha256"], state_gate)
-        self.assertIn("state_branch_protected", state_gate)
-        self.assertIn("state_contract_verified", state_gate)
+        self.assertIn("production-state-readiness", state_gate)
         self.assertIn("--request POST", state_gate)
         self.assertIn("/readyz", state_gate)
+        self.assertIn("for attempt in $(seq 1 6)", state_gate)
+        self.assertIn("--write-out '%{http_code}'", state_gate)
+        self.assertIn('classification" -ne 75', state_gate)
+        self.assertNotIn("--fail-with-body", state_gate)
+        self.assertNotIn("cat \"$proof\"", state_gate)
+        self.assertIn("PRODUCTION_STATE_READINESS_FIELDS", ROLLBACK_VALIDATOR)
+        self.assertIn("state_credential_missing", ROLLBACK_VALIDATOR)
         self.assertNotIn("lean-eval-state/", state_gate)
         self.assertNotIn("github.token", state_gate)
 
     def test_runtime_and_historical_finalizer_bind_distinct_state_views(self) -> None:
-        state_commit = "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a"
+        state_commit = "9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f"
         historical_state_commit = "0c943edde8a247b8670e10339b80fc65be6c0f33"
         runtime_schema = QUALIFICATION["state_event_schema_sha256"]
         complete_ledger_schema = (
@@ -830,7 +836,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         # unchanged runtime projection, now read from the current State commit.
         self.assertEqual(QUALIFICATION["state_main_commit"], state_commit)
         self.assertEqual(WORKER_APP.count(f'"{runtime_schema}"'), 1)
-        self.assertEqual(DEPLOY.count(f'"{runtime_schema}"'), 2)
+        self.assertEqual(DEPLOY.count(runtime_schema), 2)
 
         # The offline finalizer remains bound to the reviewed historical
         # snapshot. Its commit is distinct from the rollback-qualified runtime
@@ -891,6 +897,12 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('--var "RELEASE_OPT_IN_API_ENABLED:false"', RECOVERY)
         self.assertIn('--var "RELEASE_OPT_OUT_API_ENABLED:false"', RECOVERY)
         self.assertIn('--var "MODEL_IDENTITY_CONSOLIDATION_API_ENABLED:false"', RECOVERY)
+        self.assertIn("all-false-production-health", RECOVERY)
+        self.assertIn("for attempt in $(seq 1 13)", RECOVERY)
+        self.assertIn('classification" -ne 75', RECOVERY)
+        self.assertIn("PRODUCTION_HEALTH_FIELDS", ROLLBACK_VALIDATOR)
+        self.assertIn('"release_opt_in_api_enabled": False', ROLLBACK_VALIDATOR)
+        self.assertNotIn('cat "$response"', RECOVERY)
         self.assertNotIn("INTAKE_ENABLED:true", RECOVERY)
         self.assertNotIn("intake-finalization-failsafe", RECOVERY)
 
@@ -987,7 +999,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         }
         for environment, (configuration, base_url) in expected.items():
             with self.subTest(environment=environment):
-                expected_lifecycle = "true" if environment == "production" else "false"
+                expected_lifecycle = "false"
                 self.assertIs(configuration["workers_dev"], True)
                 self.assertIs(configuration["preview_urls"], False)
                 self.assertNotIn("routes", configuration)
@@ -999,6 +1011,26 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 self.assertEqual(
                     configuration["vars"]["RESULT_AMENDMENT_OWNER_API_ENABLED"],
                     expected_lifecycle,
+                )
+                self.assertEqual(
+                    configuration["vars"]["RESULT_AMENDMENT_MAINTAINER_API_ENABLED"],
+                    expected_lifecycle,
+                )
+                self.assertEqual(
+                    configuration["vars"]["RESULT_AMENDMENT_MAINTAINERS"],
+                    "[]",
+                )
+                self.assertEqual(
+                    configuration["vars"]["MODEL_IDENTITY_OWNER_API_ENABLED"],
+                    expected_lifecycle,
+                )
+                self.assertEqual(
+                    configuration["vars"]["MODEL_IDENTITY_MAINTAINER_API_ENABLED"],
+                    expected_lifecycle,
+                )
+                self.assertEqual(
+                    configuration["vars"]["MODEL_IDENTITY_MAINTAINERS"],
+                    "[]",
                 )
                 self.assertEqual(
                     configuration["vars"]["MODEL_IDENTITY_CONSOLIDATION_API_ENABLED"],
@@ -1015,7 +1047,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 expected_contract = (
                     "41f55135a8d5f36941e615e9ec9e4f5e32a786a5"
                     if environment == "staging"
-                    else "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a"
+                    else "9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f"
                 )
                 self.assertEqual(
                     configuration["vars"]["RESULT_OWNER_STATE_CONTRACT_COMMIT"],
