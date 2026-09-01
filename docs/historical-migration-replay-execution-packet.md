@@ -206,8 +206,8 @@ reason to install the identity before the pre-mutation packet is complete.
    post-migration readback.
 8. Only after final-delta promotion and readback, remove the installed identity
    and session material, one-shot migration workflow, protected migration
-   environment, dedicated migration Encrypt role and stack output, and
-   temporary private image-build workflow. The custodian must then destroy the
+   environment, and dedicated migration Encrypt role and stack output. The
+   custodian must then destroy the
    offline master and verify that no installed or working copy remains. Retain
    v2 replay Decrypt support, the schema-3 file-key replay implementation, and
    the versioned replay/checker records. Enable the historical controllers only
