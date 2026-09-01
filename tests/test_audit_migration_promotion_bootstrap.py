@@ -40,7 +40,7 @@ class AuditPromotionBootstrapTests(unittest.TestCase):
     def test_uses_cas_and_deletes_only_after_verified_main(self) -> None:
         cas = self.workflow.index("--force-with-lease=refs/heads/main:$base")
         main_tree = self.workflow.index(
-            'git -C audit rev-parse refs/remotes/origin/main^{tree}'
+            "git -C audit rev-parse 'refs/remotes/origin/main^{tree}'"
         )
         delete_step = self.workflow.index(
             "- name: Delete only the verified contract branch"

@@ -88,7 +88,7 @@ jobs:
           test "$(git -C audit rev-parse refs/remotes/origin/main)" = "$base"
           test "$(git -C audit rev-parse refs/remotes/origin/$branch)" = "$head"
           test "$(git -C audit rev-parse "$head^")" = "$base"
-          test "$(git -C audit rev-parse "$head^{tree}")" = "$tree"
+          test "$(git -C audit rev-parse "${head}^{tree}")" = "$tree"
           test "$(git -C audit diff --name-only -z "$base" "$head" | sha256sum | cut -d' ' -f1)" = \
             30b5a9d92c9d1240d95d20ea6ee47bd3f79f0a6a68e47500ca4b09ebd90cefd4
           test "$(git -C audit diff --name-only "$base" "$head" | wc -l)" = 6
@@ -124,7 +124,7 @@ jobs:
           test "$(git -C audit ls-remote --exit-code origin refs/heads/main | cut -f1)" = "$head"
           git -C audit fetch --no-tags origin \
             "+refs/heads/main:refs/remotes/origin/main"
-          test "$(git -C audit rev-parse refs/remotes/origin/main^{tree})" = "$tree"
+          test "$(git -C audit rev-parse 'refs/remotes/origin/main^{tree}')" = "$tree"
           cleanup
           trap - EXIT
 
@@ -160,11 +160,13 @@ jobs:
 
       - name: Record bootstrap result
         run: |
+          readonly head=77cdadf733b20b8fdb274f7f7be5d314dba850ad
+          readonly tree=a6dd8ab53ac50ec047239820f969d913501f118a
           {
             echo '### Audit migration promotion contract bootstrapped'
             echo
-            echo '- protected audit main: `77cdadf733b20b8fdb274f7f7be5d314dba850ad`'
-            echo '- protected audit tree: `a6dd8ab53ac50ec047239820f969d913501f118a`'
+            echo "- protected audit main: \`$head\`"
+            echo "- protected audit tree: \`$tree\`"
             echo '- exact reviewed feature branch deleted after protected-main readback'
             echo '- no archive data, migration branch, credential, or ruleset changed'
           } >> "$GITHUB_STEP_SUMMARY"
