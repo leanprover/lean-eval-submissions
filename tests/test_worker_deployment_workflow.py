@@ -80,14 +80,22 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             3,
         )
         self.assertIn('body["release_opt_out_api_enabled"] is False', DEPLOY)
-        self.assertIn("state-proof.json", ROLLBACK)
+        self.assertIn("state-comparison.json", ROLLBACK)
         self.assertIn('"RESULT_OWNER_STATE_CONTRACT_COMMIT"', ROLLBACK_VALIDATOR)
 
-    def test_private_state_proofs_use_the_single_repository_worker_credential(self) -> None:
+    def test_rollback_uses_independent_public_state_proof_before_mutation(self) -> None:
         self.assertNotIn("repos/leanprover/lean-eval-state", DEPLOY)
-        self.assertNotIn("repos/leanprover/lean-eval-state", ROLLBACK)
+        self.assertIn("repos/$state_repository/branches/main", ROLLBACK)
+        self.assertIn("repos/$state_repository/compare/$state_contract...$state_live", ROLLBACK)
+        self.assertIn("repos/$state_repository/git/commits/$state_contract", ROLLBACK)
+        self.assertIn("repos/$state_repository/git/commits/$state_live", ROLLBACK)
+        self.assertIn("repos/$state_repository/git/trees/$state_contract_tree", ROLLBACK)
+        self.assertIn("repos/$state_repository/git/trees/$state_live_tree", ROLLBACK)
+        self.assertIn("--jq '{content,encoding,path,sha,type,url}'", ROLLBACK)
+        self.assertIn("base64.b64decode", ROLLBACK_VALIDATOR)
+        self.assertIn("GH_TOKEN: ${{ github.token }}", ROLLBACK)
+        self.assertNotIn("GITHUB_STATE_TOKEN", ROLLBACK)
         self.assertIn("state_contract_verified", DEPLOY)
-        self.assertIn("state-proof.json", ROLLBACK)
 
     def test_staging_deploy_proves_the_results_branch_is_protected(self) -> None:
         staging = DEPLOY.split("  deploy-staging:", 1)[1].split(
@@ -629,11 +637,19 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("cloudflare-rollback-qualification-v1.json", ROLLBACK)
         self.assertEqual(ROLLBACK.count("compatible-capabilities"), 1)
         self.assertIn("Preserve source-free pre-mutation recovery state", ROLLBACK)
-        self.assertIn("--state-proof", ROLLBACK)
-        self.assertNotIn("--state-main", ROLLBACK)
-        self.assertNotIn("--state-schema", ROLLBACK)
-        self.assertNotIn("lean-eval-state/contents", ROLLBACK)
-        self.assertIn("protected State main moved after rollback qualification", ROLLBACK)
+        self.assertNotIn("--state-proof", ROLLBACK)
+        for argument in (
+            "--state-main",
+            "--state-comparison",
+            "--state-contract-commit",
+            "--state-live-commit",
+            "--state-contract-tree",
+            "--state-live-tree",
+            "--state-schema",
+        ):
+            self.assertIn(argument, ROLLBACK)
+        self.assertIn(".state_contract.contract_commit", ROLLBACK)
+        self.assertNotIn("active-intake-attestation", ROLLBACK)
         self.assertIn("validate_cloudflare_rollback.py prestate", ROLLBACK)
         artifact = ROLLBACK.split(
             "- name: Preserve source-free pre-mutation recovery state", 1
@@ -677,13 +693,21 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "Verify disabled intake before dependency mutation", 1
         )[1].split("Deploy exact target broker code", 1)[0]
         self.assertEqual(paused_verification.count("--require-intake-disabled"), 2)
+        self.assertIn("production-state-readiness", paused_verification)
+        self.assertIn("for attempt in $(seq 1 6)", paused_verification)
+        self.assertIn("target-state-proof.json", paused_verification)
+        self.assertNotIn("active-intake-attestation", ROLLBACK[:intake])
+        final = ROLLBACK[final_intake:]
+        self.assertIn("production-state-readiness", final)
+        self.assertIn("for attempt in $(seq 1 6)", final)
+        self.assertNotIn("unchanged protected State", final)
         self.assertNotIn("INTAKE_ENABLED:true", ROLLBACK)
         self.assertNotIn("intake-finalization-failsafe", ROLLBACK)
         self.assertIn("--require-intake-disabled", ROLLBACK[final_intake:])
         plan_step = ROLLBACK.split(
             "Validate and prepare the complete replay-disabled rollback unit", 1
         )[1].split("Preserve source-free pre-mutation recovery state", 1)[0]
-        self.assertNotIn("--require-intake-disabled", plan_step)
+        self.assertEqual(plan_step.count("--require-intake-disabled"), 1)
 
     def test_production_smoke_uses_the_reviewed_intake_configuration(self) -> None:
         production = DEPLOY.split("\n  deploy-production:", 1)[1]

@@ -9,11 +9,12 @@ launch contract and the exact facts a maintainer must review before enabling a
 capability. Update values in place; do not add a run history or evidence
 appendix.
 
-This repair invalidates the prior f09 launch candidate and packet binding. The
-exact replacement submissions commit, protected checks, staging deployment,
-production rollback unit, and launch-controller evidence do not exist yet and
-must be supplied by a subsequent packet update. Nothing in this document
-currently authorizes production enablement.
+This repair supersedes the prior f09 launch binding without discarding its
+bounded functional evidence. The exact repair baseline, lifecycle candidate,
+protected checks, staging deployment, and production rollback unit must be
+supplied by a subsequent packet update. Existing release-controller evidence
+must be read back, not needlessly repeated.
+Nothing in this document currently authorizes production enablement.
 
 [completion-plan]: https://github.com/leanprover/lean-eval/blob/main/docs/overhaul-completion-plan.md#75-production-launch-readiness-packet
 
@@ -28,16 +29,18 @@ Protected `main` commits at the packet baseline:
 | `leanprover/lean-eval-leaderboard` | `b6df2533e2a6ceea8a6ed6eff5527cc3aef3e7c2` |
 | `leanprover/lean-eval-state` | `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` |
 | `leanprover/lean-eval-state-staging` | `a2b0f4a8a2b5ddcffc556f5b3752e08f10af8389` |
-| `leanprover/lean-eval-releases` | `<revalidated protected-main commit required>` |
+| `leanprover/lean-eval-releases` | `3c68d99f3de7060f7f0fdacf9340354775546c05` |
 | `leanprover/lean-eval-generator` | `010b01634cccda2db538cf9b09e6f26ddc453743` |
 | `leanprover/lean-eval-audit` | `f50c46574dd719486a01272e3eaeced396ac5ada` |
 
-The prior f09 candidate, its dispatch tag, intake-only PR `#1526`, and the old
-30bc rollback baseline are not a valid launch unit after this repair. Production
-is fail-closed, but a subsequent packet must bind the repair merge, its exact
-staging evidence, the replacement intake-only head, and a freshly verified
-coherent rollback unit before restoring `GO`. Record those exact values in
-section 9; do not reuse the superseded values.
+The prior f09 candidate and old 30bc rollback baseline are not a valid launch
+unit after this repair. Production is fail-closed, but a subsequent packet must
+bind the repair merge, the separate lifecycle candidate, their fresh protected
+CI and exact-version staging evidence, and a freshly verified coherent rollback
+unit before restoring `GO`. Revalidate intake-only PR `#1526` at exact head
+`7c28d96ac38443d491a4536c449cc2949109e7f9` against that unit and refresh it only
+if its bounded patch no longer applies cleanly. Record the resulting exact
+values in section 9; do not reuse superseded deployment bindings.
 
 ## 2. Capability decision
 
@@ -76,9 +79,9 @@ model consolidation, replay, or publication.
 | Disabled baseline | Production intake, general replay, historical-public replay, every public lifecycle family, model consolidation, and the promotion canary are effectively disabled. Protected production State is `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f`; the currently deployed f09 Worker retains the superseded contract pin and is not launch-qualified. The release queue is empty. The public leaderboard retains stable problem pages and visible statements. |
 | Archive boundary | Schema-version-3 archive-before-evaluation is deployed. Production archive authority is connected to the Encrypt-only Wrap role and has a qualified decrypt denial. The evaluation lane has no Wrap or unwrap authority. |
 | Staging release boundary | Qualified: exact one-submission scope, consume-before-unwrap, identical reuse refusal, authority removal before reconstruction, source allowlisting, no plaintext artifact, no State/Git mutation, and cleanup. Publication and production authority remained absent. |
-| Production release preflight | Replacement publication-disabled controller, State-write, audit-read, and exact ID-bearing OIDC preflights must be rebound after this repair merges. No production archive may be decrypted or published while the packet is `NO-GO`. |
+| Production release preflight | Qualified at release commit `3c68d99f3de7060f7f0fdacf9340354775546c05`: publication-disabled controller, State-write, audit-read, and exact ID-bearing `release-production` OIDC preflights pass. Re-read those bindings during the final packet audit; this Worker repair does not require repeating the campaign. No production archive may be decrypted or published while the packet is `NO-GO`. |
 | Entry and submitter UI | The static `https://lean-lang.org/eval/submit/` entry page and the stable production application at `https://lean-eval-submission-server.lean-eval.workers.dev/` are live in disabled posture. The entry page states the policy and links to the Worker origin; the Worker supplies OAuth feedback, preserved form values, progress spinners, and status. One-way publication opt-in is kept separate from new intake on the dedicated `/release/` page when enabled. No LeanEval hostname or DNS change is required. |
-| Exact-version staging | The prior f09 staging packet is superseded by this runtime repair. Replacement exact-version staging, owner/maintainer lifecycle checks, all-false recovery, and final State validation are required before `GO` can be restored. |
+| Exact-version staging | The prior f09 bounded browser, source-bound, owner/maintainer, denial, redaction, reconstruction, and all-false functional evidence remains valid. Fresh protected CI, exact-version staging deployment/readback, promotion canary, and all-false recovery are required for the repair baseline and separate lifecycle candidate before `GO` can be restored. Repeat a bounded functional case only if those changes affect its path or the fresh checks expose drift. |
 
 Any non-coherent Worker deployment, nonempty due-release queue, failed final
 staging case, or unexpected State event changes this packet to `NO-GO`.
@@ -214,31 +217,35 @@ The announcement must include all of the following reviewed facts:
 
 ## 9. Finalization record
 
-The fields below are an invalidated template. Replace the superseded f09 and
-30bc material, then change the top-level status to `GO` only after every gate is
-re-established against the repair merge. The production-launch fields are the
-post-action finalization record and must be filled immediately after each named
-production action.
+The fields below are a pending template. Bind the repair baseline and separate
+lifecycle candidate without treating the prior functional checks as erased,
+then change the top-level status to `GO` only after every gate is re-established.
+The production-launch fields are the post-action finalization record and must
+be filled immediately after each named production action.
 
 ```text
 production release trust:
-  protected release commit: <40-character SHA>
-  repaired/read back at: <UTC timestamp>
+  protected release commit: 3c68d99f3de7060f7f0fdacf9340354775546c05
+  repaired/read back at: 2026-09-01T15:11:16Z
   publication-disabled preflights:
-    controller: <successful Actions URL>
-    audit read: <successful Actions URL>
-    OIDC trust: <successful Actions URL>
+    controller: https://github.com/leanprover/lean-eval-releases/actions/runs/33524122775
+    audit read: https://github.com/leanprover/lean-eval-releases/actions/runs/33524126922
+    OIDC trust: https://github.com/leanprover/lean-eval-releases/actions/runs/33524130789
 
 final exact-version staging:
   replacement repair merge commit: <40-character protected-main SHA>
+  lifecycle candidate commit: <40-character protected-main SHA>
   immutable dispatch tag: <lean-eval-dispatch/full-SHA>
   protected checks and staging deployment: <successful Actions URLs>
   staging Worker version IDs: <intake, broker, replay>
-  browser/headless acceptance: <submission IDs and successful Actions URL>
-  bounded lifecycle and all-false recovery: <successful Actions URLs>
+  preserved bounded functional evidence:
+    browser/headless: https://github.com/leanprover/lean-eval-submissions/actions/runs/33486313551
+    submission IDs: 01a05c13-2269-747c-8b15-6a0eb5d95a76 / 01a05c13-ce49-7028-a69f-e072bbbcac83
+    owner/maintainer/denial/opt-in: https://github.com/leanprover/lean-eval-submissions/actions/runs/33501400059
+    publication-disabled reconstruction: https://github.com/leanprover/lean-eval-releases/actions/runs/33506645494
+    leaderboard: https://github.com/leanprover/lean-eval-leaderboard/actions/runs/33506442829
+  fresh all-false recovery: <successful Actions URL>
   final staging State and Results commits: <40-character SHAs>
-  publication-disabled reconstruction: <successful Actions URL>
-  leaderboard deployment/readback: <successful Actions URL and canonical asset>
 
 production launch:
   release controller enabled/read back at: <UTC timestamp and URL>

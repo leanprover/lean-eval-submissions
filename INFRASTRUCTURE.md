@@ -399,7 +399,11 @@ reviewed target commit and its exact intake, broker, and replay version IDs.
 The workflow redeploys exact target code/configuration while retaining current
 secret values; it never activates an old Cloudflare version directly. Replay
 is restored from the target's reviewed container image digest. Rollback is
-disable-only and must finish with production intake effectively disabled.
+disable-only and must finish with production intake effectively disabled. Its
+pre-mutation proof independently verifies that protected State is the reviewed
+contract or a descendant with unchanged guarded roots and schema. After the
+target intake Worker is restored, its authenticated readiness proof must pass
+before broker or replay mutation.
 
 Rollback does not revert or rewrite State, Results, releases, AWS resources,
 credentials, or repository history. If the non-atomic multi-component deploy

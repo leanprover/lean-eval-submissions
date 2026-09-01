@@ -1,9 +1,10 @@
 # lean-eval submission Worker
 
 This directory contains the Cloudflare Worker that will replace GitHub Issues
-as the submission intake boundary. The tracked production configuration enables
-the reviewed lifecycle APIs while keeping new intake disabled; staging keeps
-both surfaces disabled. The emergency rollback posture sets
+as the submission intake boundary. The tracked repair configuration keeps new
+intake and every lifecycle API disabled in production and staging. A separate
+launch candidate may enable only the reviewed production lifecycle APIs after
+this baseline is qualified. The emergency rollback posture sets
 `INTAKE_ENABLED=false`, uses `INTAKE_ENABLEMENT_MODE=disabled`, disables every
 public lifecycle gate, and clears both maintainer arrays.
 
@@ -152,11 +153,12 @@ contract testing:
   Consolidation additionally requires the exact-`true`
   `MODEL_IDENTITY_CONSOLIDATION_API_ENABLED` gate, so the smaller owner surface
   can be enabled without it.
-  The tracked production configuration enables the launch-approved owner and
-  maintainer route families for exactly the configured maintainer identity;
-  staging keeps them disabled. Model consolidation remains disabled in both
-  environments, and the lifecycle routes do not depend on or enable submission
-  intake.
+  The tracked repair configuration keeps the owner and maintainer route
+  families disabled with empty maintainer lists in both environments. A
+  separate production launch candidate may enable the approved families for
+  exactly the configured maintainer identity. Model consolidation remains
+  disabled in both environments, and the lifecycle routes do not depend on or
+  enable submission intake.
 
 All JSON objects use exact-field decoders, request bodies are limited to 16
 KiB, and submitter-controlled text has explicit Unicode/control-character and
@@ -283,7 +285,7 @@ credentials, or upstream response bodies.
 
 State independently reconstructs archive/evaluation/result summaries from the
 immutable event graph and rejects a stale or fabricated view. Production intake
-remains disabled in this tracked lifecycle-only state. Later intake enablement
+remains disabled in this tracked all-false repair state. Later intake enablement
 must use the finite-lease controller before durable mode; lease expiry or
 recovery returns intake to the fail-closed disabled posture. Do not treat a
 queued State record alone as a completed pipeline.
