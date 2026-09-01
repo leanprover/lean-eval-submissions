@@ -96,6 +96,7 @@ jobs:
               "result_amendment_maintainer_api_enabled",
               "model_identity_owner_api_enabled",
               "model_identity_maintainer_api_enabled",
+              "release_opt_in_api_enabled",
               "release_opt_out_api_enabled",
           ):
               assert body[field] is False, field
@@ -132,6 +133,7 @@ jobs:
               "model_identity_owner_api_enabled",
               "model_identity_maintainer_api_enabled",
               "model_identity_consolidation_api_enabled",
+              "release_opt_in_api_enabled",
               "release_opt_out_api_enabled",
           ):
               assert body[field] is False, field
@@ -238,6 +240,7 @@ jobs:
               "model_identity_owner_api_enabled",
               "model_identity_maintainer_api_enabled",
               "model_identity_consolidation_api_enabled",
+              "release_opt_in_api_enabled",
               "release_opt_out_api_enabled",
           ):
               assert body[field] is False, field
