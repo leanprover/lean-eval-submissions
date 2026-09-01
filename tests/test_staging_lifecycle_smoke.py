@@ -131,7 +131,7 @@ class StagingLifecycleSmokeTests(unittest.TestCase):
         self.assertEqual(
             fixture["headless_submission"]["publication_choice"], "scheduled"
         )
-        identity_nonce = "6b81f13b4e1c4f48994a0cf76a861d82"
+        identity_nonce = "4aee1224a07f4eb985e752861a117001"
         self.assertIn(
             identity_nonce, fixture["browser_submission"]["declared_model"]
         )

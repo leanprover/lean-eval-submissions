@@ -8,10 +8,10 @@ on:
         required: true
         type: string
       window_minutes:
-        description: 'Maximum acceptance window (15-90 minutes)'
+        description: 'Maximum acceptance window (15-300 minutes)'
         required: true
         type: number
-        default: 60
+        default: 300
       activation_timeout_minutes:
         description: 'Maximum wait for the packet-bound enable dispatch (5-15 minutes)'
         required: true
@@ -33,7 +33,7 @@ concurrency:
 jobs:
   disable-watchdog:
     runs-on: ubuntu-24.04
-    timeout-minutes: 125
+    timeout-minutes: 350
     environment: cloudflare-staging
     defaults:
       run:
@@ -69,8 +69,8 @@ jobs:
             exit 1
           fi
           test "$(git rev-parse "refs/tags/lean-eval-dispatch/$EXPECTED_COMMIT^{commit}")" = "$EXPECTED_COMMIT"
-          if ! [[ "$WINDOW_MINUTES" =~ ^[0-9]+$ ]] || [ "$WINDOW_MINUTES" -lt 15 ] || [ "$WINDOW_MINUTES" -gt 90 ]; then
-            echo "window_minutes must be an integer from 15 through 90" >&2
+          if ! [[ "$WINDOW_MINUTES" =~ ^[0-9]+$ ]] || [ "$WINDOW_MINUTES" -lt 15 ] || [ "$WINDOW_MINUTES" -gt 300 ]; then
+            echo "window_minutes must be an integer from 15 through 300" >&2
             exit 1
           fi
           if ! [[ "$ACTIVATION_TIMEOUT_MINUTES" =~ ^[0-9]+$ ]] || [ "$ACTIVATION_TIMEOUT_MINUTES" -lt 5 ] || [ "$ACTIVATION_TIMEOUT_MINUTES" -gt 15 ]; then

@@ -30,7 +30,7 @@ from typing import Any
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 DEFAULT_FIXTURE = ROOT / "configuration" / "staging-lifecycle-smoke-v1.json"
 EXPECTED_FIXTURE_SHA256 = (
-    "4f2e45055c0bcb1e6cd2826ae15d0c203274df51aadbe9228025080750ee0385"
+    "27ce7d9a792f77b8ffa993a55600736b9d690598db7552f4c86bd9c061f087a6"
 )
 UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
@@ -251,7 +251,7 @@ def fixture_preflight(
         "release_repository": "leanprover/lean-eval-releases",
         "release_workflow": "credentialed-release-staging-smoke.yml",
         "release_ref": "main",
-        "release_commit": "a8ad23df2cf69671bd4406ae74b10c009a3daa64",
+        "release_commit": "3c68d99f3de7060f7f0fdacf9340354775546c05",
         "release_run_name_prefix": "Reconstruct staging submission ",
         "fixture_gist_file": "lean-eval-proof.txt",
         "retire_after": "one accepted bounded staging lifecycle run",
@@ -306,7 +306,7 @@ def fixture_preflight(
     commit = gh_json([f"repos/{source['repository']}/commits/{source['commit']}"])
     if commit.get("sha") != source["commit"]:
         raise AcceptanceError("fixture commit is unavailable")
-    gist = gh_json([f"gists/{gist_id}"])
+    gist = consistent_gist_json(gist_id)
     if gist.get("owner", {}).get("login", "").lower() != source["owner_login"]:
         raise AcceptanceError("gist is not owned by the exact fixture owner")
     if gist.get("public") is not False:
@@ -348,6 +348,31 @@ def gh_json_or_authenticated_404(args: list[str]) -> Any | None:
     raise AcceptanceError(f"GitHub API lookup did not return exact 404: {diagnostic}")
 
 
+def consistent_gist_json(gist_id: str) -> Any:
+    """Read Gist metadata only after REST agrees with the authoritative Git head."""
+    for attempt in range(30):
+        value = gh_json([f"gists/{gist_id}"])
+        history = value.get("history") if isinstance(value, dict) else None
+        api_head = (
+            history[0].get("version")
+            if isinstance(history, list)
+            and history
+            and isinstance(history[0], dict)
+            else None
+        )
+        remote = run(
+            ["git", "ls-remote", f"https://gist.github.com/{gist_id}.git", "HEAD"]
+        )
+        fields = remote.split()
+        git_head = fields[0] if len(fields) == 2 and fields[1] == "HEAD" else None
+        if api_head == git_head and isinstance(api_head, str):
+            require_match(COMMIT, api_head, "secret gist Git head")
+            return value
+        if attempt < 29:
+            time.sleep(0.5)
+    raise AcceptanceError("secret Gist REST snapshot did not converge to its Git head")
+
+
 def verify_exact_tag_response(
     value: Any, repository: str, tag: str, commit: str
 ) -> None:
@@ -369,6 +394,21 @@ def verify_exact_tag_response(
         raise AcceptanceError(
             f"GitHub returned an inexact tag response for {repository}"
         )
+
+
+def wait_for_exact_tag(repository: str, tag: str, commit: str) -> None:
+    """Wait for a proven-created tag to become visible through its exact GET."""
+    endpoint = f"repos/{repository}/git/ref/tags/{tag}"
+    for attempt in range(30):
+        current = gh_json_or_authenticated_404([endpoint])
+        if current is not None:
+            verify_exact_tag_response(current, repository, tag, commit)
+            return
+        if attempt < 29:
+            time.sleep(0.5)
+    raise AcceptanceError(
+        f"GitHub did not converge to the exact tag response for {repository}"
+    )
 
 
 def gist_file_content(
@@ -701,7 +741,7 @@ def gist_cas_write(mutation: FixtureMutation) -> None:
         mutation.gist_changed = True
     finally:
         temporary.cleanup()
-    current = gh_json([f"gists/{mutation.gist_id}"])
+    current = consistent_gist_json(mutation.gist_id)
     head, present, content = gist_git_snapshot(
         current, mutation.gist_id, mutation.filename
     )
@@ -725,7 +765,7 @@ def restore_gist(mutation: FixtureMutation) -> None:
         or mutation.written_file_sha256 is None
     ):
         raise AcceptanceError("secret gist CAS restore identity is incomplete")
-    current = gh_json([f"gists/{mutation.gist_id}"])
+    current = consistent_gist_json(mutation.gist_id)
     head, present, content = gist_git_snapshot(
         current, mutation.gist_id, mutation.filename
     )
@@ -786,7 +826,7 @@ def restore_gist(mutation: FixtureMutation) -> None:
         )
     finally:
         temporary.cleanup()
-    restored = gh_json([f"gists/{mutation.gist_id}"])
+    restored = consistent_gist_json(mutation.gist_id)
     restored_head, restored_present, restored_content = gist_git_snapshot(
         restored, mutation.gist_id, mutation.filename
     )
@@ -818,9 +858,17 @@ def remove_created_tag(mutation: FixtureMutation) -> None:
         raise AcceptanceError(
             "generated fixture tag deletion returned an inexact response"
         )
-    if gh_json_or_authenticated_404([mutation.tag_endpoint]) is not None:
-        raise AcceptanceError("generated fixture tag deletion did not verify")
-    mutation.tag_created = False
+    for attempt in range(30):
+        remaining = gh_json_or_authenticated_404([mutation.tag_endpoint])
+        if remaining is None:
+            mutation.tag_created = False
+            return
+        verify_exact_tag_response(
+            remaining, mutation.repository, mutation.tag, mutation.commit
+        )
+        if attempt < 29:
+            time.sleep(0.5)
+    raise AcceptanceError("generated fixture tag deletion did not converge")
 
 
 def cleanup_fixture_mutation(mutation: FixtureMutation, *, remove_tag: bool) -> None:
@@ -849,7 +897,7 @@ def apply_exact_proof_and_tag(
 ) -> FixtureMutation:
     bounded = fixture["bounded_acceptance"]
     source = fixture["source"]
-    gist = gh_json([f"gists/{gist_id}"])
+    gist = consistent_gist_json(gist_id)
     prior_head, prior_present, prior_content = gist_git_snapshot(
         gist, gist_id, bounded["fixture_gist_file"]
     )
@@ -882,17 +930,12 @@ def apply_exact_proof_and_tag(
             tag_response, source["repository"], tag, source["commit"]
         )
         mutation.tag_created = True
-        verify_exact_tag_response(
-            gh_json_or_authenticated_404([mutation.tag_endpoint]),
-            source["repository"],
-            tag,
-            source["commit"],
-        )
+        wait_for_exact_tag(source["repository"], tag, source["commit"])
         return mutation
     except BaseException:
         try:
             ambiguous_tag = False
-            current_gist = gh_json([f"gists/{gist_id}"])
+            current_gist = consistent_gist_json(gist_id)
             current_head, current_present, current_content = gist_git_snapshot(
                 current_gist, gist_id, mutation.filename
             )
@@ -1997,7 +2040,7 @@ def parser() -> argparse.ArgumentParser:
         command.add_argument("--gist-id", required=True)
         if name == "run":
             command.add_argument("--browser-submission-id", required=True)
-            command.add_argument("--evaluation-timeout", type=int, default=1800)
+            command.add_argument("--evaluation-timeout", type=int, default=3600)
     return result
 
 
