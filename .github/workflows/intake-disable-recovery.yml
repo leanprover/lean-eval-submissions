@@ -184,9 +184,15 @@ jobs:
               echo "automatic recovery trigger read-back differs" >&2
               exit 1
             fi
-            latest=$(timeout 30s gh api \
-              "repos/$REPOSITORY/actions/workflows/deploy-worker.yml/runs?per_page=100" \
-              --jq '.workflow_runs | max_by(.run_number) | [.id, .run_attempt, .head_sha, .status, (.conclusion // "")] | @tsv')
+            latest_candidates=$(timeout 30s gh api \
+              "repos/$REPOSITORY/actions/workflows/deploy-worker.yml/runs?branch=main&per_page=100")
+            latest=$(jq -er --arg repo "$REPOSITORY" '
+              [.workflow_runs[] |
+               select(.head_branch=="main" and .head_repository.full_name==$repo and
+                      (.event=="push" or .event=="workflow_dispatch"))] |
+              max_by(.run_number) |
+              [.id, .run_attempt, .head_sha, .status, (.conclusion // "")] | @tsv' \
+              <<< "$latest_candidates")
             IFS=$'\t' read -r latest_run_id latest_run_attempt latest_commit latest_status latest_conclusion <<< "$latest"
             latest_readback=$(timeout 30s gh api \
               "repos/$REPOSITORY/actions/runs/$latest_run_id/attempts/$latest_run_attempt" \

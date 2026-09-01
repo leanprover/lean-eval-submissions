@@ -1,5 +1,7 @@
+import json
 import pathlib
 import re
+import subprocess
 import unittest
 
 
@@ -86,7 +88,7 @@ class IntakeDisableRecoveryWorkflowTests(unittest.TestCase):
     def test_automatic_recovery_binds_global_latest_current_attempt(self) -> None:
         recovery = job("disable-production-launch-gates")
         global_query = (
-            'actions/workflows/deploy-worker.yml/runs?per_page=100'
+            'actions/workflows/deploy-worker.yml/runs?branch=main&per_page=100'
         )
         live_query = (
             'actions/workflows/deploy-worker.yml/runs?branch=main&head_sha=$LIVE_COMMIT&per_page=100'
@@ -102,6 +104,56 @@ class IntakeDisableRecoveryWorkflowTests(unittest.TestCase):
             "globally latest deployment current-attempt read-back differs",
             recovery,
         )
+
+    def test_global_latest_filter_ignores_newer_pull_request_run(self) -> None:
+        recovery = job("disable-production-launch-gates")
+        marker = 'latest=$(jq -er --arg repo "$REPOSITORY" \'\n'
+        start = recovery.index(marker) + len(marker)
+        end = recovery.index("' \\\n              <<< \"$latest_candidates\")", start)
+        expression = recovery[start:end]
+        fixture = {
+            "workflow_runs": [
+                {
+                    "id": 100,
+                    "run_attempt": 1,
+                    "run_number": 10,
+                    "head_sha": "a" * 40,
+                    "head_branch": "main",
+                    "head_repository": {
+                        "full_name": "leanprover/lean-eval-submissions"
+                    },
+                    "event": "push",
+                    "status": "completed",
+                    "conclusion": "failure",
+                },
+                {
+                    "id": 101,
+                    "run_attempt": 1,
+                    "run_number": 11,
+                    "head_sha": "b" * 40,
+                    "head_branch": "feature",
+                    "head_repository": {
+                        "full_name": "leanprover/lean-eval-submissions"
+                    },
+                    "event": "pull_request",
+                    "status": "completed",
+                    "conclusion": "success",
+                },
+            ]
+        }
+        selected = subprocess.check_output(
+            [
+                "jq",
+                "-er",
+                "--arg",
+                "repo",
+                "leanprover/lean-eval-submissions",
+                expression,
+            ],
+            input=json.dumps(fixture),
+            text=True,
+        )
+        self.assertEqual(selected, f"100\t1\t{'a' * 40}\tcompleted\tfailure\n")
 
     def test_manual_recovery_does_not_forge_automatic_trigger_arguments(self) -> None:
         recovery = job("disable-production-launch-gates")
