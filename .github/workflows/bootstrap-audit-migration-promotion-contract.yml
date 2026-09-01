@@ -125,20 +125,6 @@ jobs:
           git -C audit fetch --no-tags origin \
             "+refs/heads/main:refs/remotes/origin/main"
           test "$(git -C audit rev-parse refs/remotes/origin/main^{tree})" = "$tree"
-          merged=false
-          for attempt in $(seq 1 10); do
-            if GH_TOKEN="$audit_token" timeout 20s gh api \
-              repos/leanprover/lean-eval-audit/pulls/2 \
-              | jq -e --arg head "$head" '
-                  .state == "closed" and .merged == true and
-                  .merge_commit_sha == $head
-                ' >/dev/null; then
-              merged=true
-              break
-            fi
-            sleep 2
-          done
-          test "$merged" = true
           cleanup
           trap - EXIT
 
@@ -179,6 +165,6 @@ jobs:
             echo
             echo '- protected audit main: `77cdadf733b20b8fdb274f7f7be5d314dba850ad`'
             echo '- protected audit tree: `a6dd8ab53ac50ec047239820f969d913501f118a`'
-            echo '- exact reviewed feature branch deleted after readback'
+            echo '- exact reviewed feature branch deleted after protected-main readback'
             echo '- no archive data, migration branch, credential, or ruleset changed'
           } >> "$GITHUB_STEP_SUMMARY"

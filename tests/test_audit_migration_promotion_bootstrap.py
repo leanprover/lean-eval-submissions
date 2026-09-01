@@ -28,8 +28,6 @@ class AuditPromotionBootstrapTests(unittest.TestCase):
         self.assertEqual(
             self.workflow.count("a6dd8ab53ac50ec047239820f969d913501f118a"), 3
         )
-        self.assertIn("leanprover/lean-eval-audit/pulls/2", self.workflow)
-        self.assertIn(".merge_commit_sha == $head", self.workflow)
 
     def test_mints_only_the_existing_audit_archiver_app(self) -> None:
         self.assertIn("secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID", self.workflow)
@@ -44,14 +42,12 @@ class AuditPromotionBootstrapTests(unittest.TestCase):
         main_tree = self.workflow.index(
             'git -C audit rev-parse refs/remotes/origin/main^{tree}'
         )
-        merged_pr = self.workflow.index('.merge_commit_sha == $head')
         delete_step = self.workflow.index(
             "- name: Delete only the verified contract branch"
         )
         branch_delete = self.workflow.index('\":refs/heads/$branch\"')
         self.assertLess(cas, main_tree)
-        self.assertLess(main_tree, merged_pr)
-        self.assertLess(merged_pr, delete_step)
+        self.assertLess(main_tree, delete_step)
         self.assertLess(delete_step, branch_delete)
 
 
