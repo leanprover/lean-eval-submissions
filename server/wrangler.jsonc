@@ -97,8 +97,8 @@
       "vars": {
         "DEPLOYED_COMMIT": "development",
         "DEPLOYMENT_ENVIRONMENT": "production",
-        "INTAKE_ENABLED": "false",
-        "INTAKE_ENABLEMENT_MODE": "disabled",
+        "INTAKE_ENABLED": "true",
+        "INTAKE_ENABLEMENT_MODE": "durable",
         "PROMOTION_CANARY_ENABLED": "false",
         "LEGACY_RESULT_OWNER_API_ENABLED": "true",
         "RESULT_AMENDMENT_OWNER_API_ENABLED": "true",

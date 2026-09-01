@@ -1,6 +1,6 @@
 # Submission intake threat model
 
-Status: reviewed launch contract; tracked production intake remains disabled.
+Status: reviewed launch contract; tracked production intake is durable-enabled.
 Last reviewed: 2026-08-30.
 
 ## Assets and trust boundaries
