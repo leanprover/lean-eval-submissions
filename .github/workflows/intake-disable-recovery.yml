@@ -184,6 +184,18 @@ jobs:
               echo "automatic recovery trigger read-back differs" >&2
               exit 1
             fi
+            latest=$(timeout 30s gh api \
+              "repos/$REPOSITORY/actions/workflows/deploy-worker.yml/runs?per_page=100" \
+              --jq '.workflow_runs | max_by(.run_number) | [.id, .run_attempt, .head_sha, .status, (.conclusion // "")] | @tsv')
+            IFS=$'\t' read -r latest_run_id latest_run_attempt latest_commit latest_status latest_conclusion <<< "$latest"
+            latest_readback=$(timeout 30s gh api \
+              "repos/$REPOSITORY/actions/runs/$latest_run_id/attempts/$latest_run_attempt" \
+              --jq '[.id, .run_attempt, .head_sha, .path, .event, .status, (.conclusion // "")] | @tsv')
+            if [ "$latest_readback" != "$latest_run_id"$'\t'"$latest_run_attempt"$'\t'"$latest_commit"$'\t.github/workflows/deploy-worker.yml\tpush\t'"$latest_status"$'\t'"$latest_conclusion" ] &&
+               [ "$latest_readback" != "$latest_run_id"$'\t'"$latest_run_attempt"$'\t'"$latest_commit"$'\t.github/workflows/deploy-worker.yml\tworkflow_dispatch\t'"$latest_status"$'\t'"$latest_conclusion" ]; then
+              echo "globally latest deployment current-attempt read-back differs" >&2
+              exit 1
+            fi
           fi
           controller=$(timeout 30s gh api \
             "repos/$REPOSITORY/actions/workflows/deploy-worker.yml/runs?branch=main&head_sha=$LIVE_COMMIT&per_page=100" \
@@ -212,6 +224,11 @@ jobs:
           )
           if [ "$EVENT_NAME" = workflow_run ]; then
             validator_args+=(
+              --latest-run-id "$latest_run_id"
+              --latest-run-attempt "$latest_run_attempt"
+              --latest-commit "$latest_commit"
+              --latest-status "$latest_status"
+              --latest-conclusion "$latest_conclusion"
               --trigger-run-id "$EVENT_RUN_ID"
               --trigger-run-attempt "$EVENT_ATTEMPT"
               --trigger-commit "$EVENT_COMMIT"

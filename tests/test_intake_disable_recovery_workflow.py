@@ -70,6 +70,11 @@ class IntakeDisableRecoveryWorkflowTests(unittest.TestCase):
             recovery,
         )
         for argument in (
+            '--latest-run-id "$latest_run_id"',
+            '--latest-run-attempt "$latest_run_attempt"',
+            '--latest-commit "$latest_commit"',
+            '--latest-status "$latest_status"',
+            '--latest-conclusion "$latest_conclusion"',
             '--trigger-run-id "$EVENT_RUN_ID"',
             '--trigger-run-attempt "$EVENT_ATTEMPT"',
             '--trigger-commit "$EVENT_COMMIT"',
@@ -77,6 +82,26 @@ class IntakeDisableRecoveryWorkflowTests(unittest.TestCase):
         ):
             with self.subTest(argument=argument):
                 self.assertIn(argument, recovery)
+
+    def test_automatic_recovery_binds_global_latest_current_attempt(self) -> None:
+        recovery = job("disable-production-launch-gates")
+        global_query = (
+            'actions/workflows/deploy-worker.yml/runs?per_page=100'
+        )
+        live_query = (
+            'actions/workflows/deploy-worker.yml/runs?branch=main&head_sha=$LIVE_COMMIT&per_page=100'
+        )
+        self.assertIn(global_query, recovery)
+        self.assertIn(live_query, recovery)
+        self.assertLess(recovery.index(global_query), recovery.index(live_query))
+        self.assertIn(
+            'actions/runs/$latest_run_id/attempts/$latest_run_attempt',
+            recovery,
+        )
+        self.assertIn(
+            "globally latest deployment current-attempt read-back differs",
+            recovery,
+        )
 
     def test_manual_recovery_does_not_forge_automatic_trigger_arguments(self) -> None:
         recovery = job("disable-production-launch-gates")
