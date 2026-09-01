@@ -381,6 +381,8 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         result_callback = self.text.split("\n  result_state:", 1)[1].split("\n  # Catches", 1)[0]
         self.assertIn("/internal/v1/result-completed", result_callback)
         self.assertIn("name: submission-result-completion", result_callback)
+        self.assertIn('"result_identity_conflicted"', result_callback)
+        self.assertIn('"already_result_identity_conflicted"', result_callback)
         self.assertNotIn("submission-results", result_callback)
         self.assertNotIn("actions/checkout", result_callback)
 

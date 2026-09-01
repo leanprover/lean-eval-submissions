@@ -70,6 +70,18 @@ the evaluation-acceptance timestamp plus two calendar months, clamped to the
 last day of the target month. Withheld and open-conjecture results are not
 scheduled.
 
+If the deterministic result ID is already guarded by an earlier `claimed` or
+`recorded` authority, the first authority remains canonical. Instead of
+retrying forever or adopting that authority, the callback atomically appends
+one `submission.result_identity_conflicted` event and a schema-version-3
+submission view whose `result_disposition.status` is `identity_conflict`.
+The view keeps its flat `result_id` and `result_event_id` null. This terminal
+receipt creates no second result authority, reservation, amendment, owner
+association, or release schedule; an exact callback retry is read-only.
+Submission metadata amendments preserve the terminal disposition. Publication
+opt-in rejects the conflicted view rather than presenting it as a result that
+is still pending.
+
 ## Per-user file
 
 ```json

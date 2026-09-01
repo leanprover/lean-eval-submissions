@@ -60,6 +60,16 @@ export type EvaluationSummary =
   | (EvaluationBase & Readonly<{ status: "rejected"; reason_code: string }>)
   | (EvaluationBase & Readonly<{ status: "failed"; reason_code: string; retryable: boolean }>);
 
+export type ResultIdentityConflictDisposition = Readonly<{
+  status: "identity_conflict";
+  event_id: string;
+  occurred_at: string;
+  result_id: string;
+  authority_event_id: string;
+  existing_kind: "claimed" | "recorded";
+  reason_code: "duplicate_result_identity";
+}>;
+
 type SubmissionViewCommon = Readonly<{
   submission_id: string;
   owner_login: string;
@@ -93,6 +103,14 @@ export type SubmissionView =
       evaluation: EvaluationSummary;
       result_id: string | null;
       result_event_id: string | null;
+    }>)
+  | (SubmissionViewCommon & Readonly<{
+      schema_version: 3;
+      archive: ArchiveSummary;
+      evaluation: EvaluationSummary;
+      result_id: null;
+      result_event_id: null;
+      result_disposition: ResultIdentityConflictDisposition;
     }>);
 
 export type DispatchOutbox = Readonly<{
@@ -145,7 +163,7 @@ function eventMarker(value: Record<string, unknown>, label: string): void {
   timestamp(value.occurred_at, `${label} occurred_at`);
 }
 
-function decodeArchiveSummary(value: unknown, version: 1 | 2, submissionId: string): ArchiveSummary {
+function decodeArchiveSummary(value: unknown, version: 1 | 2 | 3, submissionId: string): ArchiveSummary {
   const archive = object(value, "submission view archive");
   if (archive.status === "pending") {
     exact(archive, ["status"], "submission view archive");
@@ -182,7 +200,7 @@ function decodeArchiveSummary(value: unknown, version: 1 | 2, submissionId: stri
   throw new TypeError("submission view archive status is invalid");
 }
 
-function decodeEvaluationSummary(value: unknown, version: 1 | 2): EvaluationSummary {
+function decodeEvaluationSummary(value: unknown, version: 1 | 2 | 3): EvaluationSummary {
   const evaluation = object(value, "submission view evaluation");
   if (evaluation.status === "pending") {
     exact(evaluation, ["status"], "submission view evaluation");
@@ -238,9 +256,14 @@ export function decodeSubmissionView(value: unknown): SubmissionView {
     "owner_login", "production_metadata", "publication_choice", "publication_event_id", "received_event_id",
     "result_id", "schema_version", "submission", "submission_id",
   ];
-  if (view.schema_version === 2) expectedFields.push("result_event_id");
+  if (view.schema_version === 2 || view.schema_version === 3) expectedFields.push("result_event_id");
+  if (view.schema_version === 3) expectedFields.push("result_disposition");
   exact(view, expectedFields, "submission view");
-  if ((view.schema_version !== 1 && view.schema_version !== 2) || typeof view.submission_id !== "string" || !isUuidV7(view.submission_id)) {
+  if (
+    (view.schema_version !== 1 && view.schema_version !== 2 && view.schema_version !== 3) ||
+    typeof view.submission_id !== "string" ||
+    !isUuidV7(view.submission_id)
+  ) {
     throw new TypeError("submission view identity is invalid");
   }
   if (typeof view.owner_login !== "string" || !LOGIN.test(view.owner_login)) throw new TypeError("submission view owner is invalid");
@@ -273,6 +296,29 @@ export function decodeSubmissionView(value: unknown): SubmissionView {
   }
   if (view.schema_version === 2 && (view.result_id === null) !== (view.result_event_id === null)) {
     throw new TypeError("submission view result and event identities disagree");
+  }
+  let resultDisposition: ResultIdentityConflictDisposition | undefined;
+  if (view.schema_version === 3) {
+    if (view.result_id !== null || view.result_event_id !== null) {
+      throw new TypeError("submission view conflict disposition cannot name a recorded result event");
+    }
+    const disposition = object(view.result_disposition, "submission view result disposition");
+    exact(disposition, [
+      "authority_event_id", "event_id", "existing_kind", "occurred_at", "reason_code", "result_id", "status",
+    ], "submission view result disposition");
+    eventMarker(disposition, "submission view result disposition");
+    if (
+      disposition.status !== "identity_conflict" ||
+      typeof disposition.result_id !== "string" ||
+      !RESULT_ID.test(disposition.result_id) ||
+      typeof disposition.authority_event_id !== "string" ||
+      !EVENT_REF.test(disposition.authority_event_id) ||
+      (disposition.existing_kind !== "claimed" && disposition.existing_kind !== "recorded") ||
+      disposition.reason_code !== "duplicate_result_identity"
+    ) {
+      throw new TypeError("submission view result conflict disposition is invalid");
+    }
+    resultDisposition = disposition as ResultIdentityConflictDisposition;
   }
   const dispatch = object(view.dispatch, "submission view dispatch");
   exact(dispatch, ["attempts", "last_error_code", "requested_at", "status", "updated_at", "workflow_ref"], "submission view dispatch");
@@ -309,11 +355,13 @@ export function decodeSubmissionView(value: unknown): SubmissionView {
     production_metadata: metadata,
     archive,
     evaluation,
+    ...(resultDisposition === undefined ? {} : { result_disposition: resultDisposition }),
     dispatch: dispatch as SubmissionView["dispatch"],
   } as SubmissionView;
 }
 
 export function latestLifecycleEventId(view: SubmissionView): string {
+  if (view.schema_version === 3) return view.result_disposition.event_id;
   if (view.schema_version === 2 && view.result_event_id !== null) return view.result_event_id;
   if (view.evaluation.status !== "pending") return view.evaluation.event_id;
   if (view.archive.status !== "pending") return view.archive.event_id;

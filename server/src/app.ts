@@ -97,6 +97,7 @@ import {
   type EvaluationStartedEvent,
   type ReleaseScheduledEvent,
   type ResultRecordedEvent,
+  type SubmissionResultIdentityConflictedEvent,
   type WritableStateEvent,
   type WritableResultLifecycleEvent,
   type WritableSubmissionLifecycleEvent,
@@ -229,6 +230,11 @@ export type StateAccess = Readonly<{
   ): Promise<{ created: boolean; view: SubmissionView }>;
   recordAcceptedResult(
     events: readonly WritableResultLifecycleEvent[],
+    expectedLifecycleEventId: string,
+    nextView: SubmissionView,
+  ): Promise<{ created: boolean; view: SubmissionView }>;
+  recordResultIdentityConflict(
+    event: SubmissionResultIdentityConflictedEvent,
     expectedLifecycleEventId: string,
     nextView: SubmissionView,
   ): Promise<{ created: boolean; view: SubmissionView }>;
@@ -1702,6 +1708,52 @@ async function resultCompleted(
   ) {
     throw new GitHubProviderError(409, "verified result disagreed with completion");
   }
+  const conflictEventId = await lifecycleEventId(
+    "submission.result_identity_conflicted",
+    view.submission_id,
+    completion.occurred_at,
+  );
+  if (view.schema_version === 3) {
+    const disposition = view.result_disposition;
+    if (
+      disposition.event_id !== conflictEventId ||
+      disposition.occurred_at !== completion.occurred_at ||
+      disposition.result_id !== completion.result_id
+    ) {
+      throw new StateEventConflictError(`result completion ${completion.result_id}`);
+    }
+    const conflict: SubmissionResultIdentityConflictedEvent = {
+      schema_version: 1,
+      event_id: disposition.event_id,
+      event_type: "submission.result_identity_conflicted",
+      occurred_at: disposition.occurred_at,
+      subject_id: view.submission_id,
+      causation_event_id: view.evaluation.event_id,
+      actor: { kind: "system" },
+      payload: {
+        result_id: disposition.result_id,
+        authority_event_id: disposition.authority_event_id,
+        existing_kind: disposition.existing_kind,
+        reason_code: disposition.reason_code,
+      },
+    };
+    const outcome = await ledger.recordResultIdentityConflict(
+      conflict,
+      view.evaluation.event_id,
+      view,
+    );
+    return json({
+      status: outcome.created
+        ? "result_identity_conflicted"
+        : "already_result_identity_conflicted",
+      submission_id: view.submission_id,
+      result_id: disposition.result_id,
+      event_id: disposition.event_id,
+      authority_event_id: disposition.authority_event_id,
+      existing_kind: disposition.existing_kind,
+      release_event_id: null,
+    }, outcome.created ? 201 : 200);
+  }
   if (view.result_id !== null) {
     if (view.result_id !== completion.result_id || view.result_event_id === null) {
       throw new StateEventConflictError(`result completion ${completion.result_id}`);
@@ -1761,11 +1813,61 @@ async function resultCompleted(
   const events: WritableResultLifecycleEvent[] = release === undefined
     ? [result]
     : [result, release];
-  const outcome = await ledger.recordAcceptedResult(
-    events,
-    view.evaluation.event_id,
-    nextView,
-  );
+  let outcome: Awaited<ReturnType<StateAccess["recordAcceptedResult"]>>;
+  try {
+    outcome = await ledger.recordAcceptedResult(
+      events,
+      view.evaluation.event_id,
+      nextView,
+    );
+  } catch (error) {
+    if (!(error instanceof ResultIdentityCollisionError) || error.authorityEventId === null) {
+      throw error;
+    }
+    const conflict: SubmissionResultIdentityConflictedEvent = {
+      schema_version: 1,
+      event_id: conflictEventId,
+      event_type: "submission.result_identity_conflicted",
+      occurred_at: completion.occurred_at,
+      subject_id: view.submission_id,
+      causation_event_id: view.evaluation.event_id,
+      actor: { kind: "system" },
+      payload: {
+        result_id: completion.result_id,
+        authority_event_id: error.authorityEventId,
+        existing_kind: error.existingKind,
+        reason_code: "duplicate_result_identity",
+      },
+    };
+    const conflictView: SubmissionView = {
+      ...view,
+      schema_version: 3,
+      result_id: null,
+      result_event_id: null,
+      result_disposition: {
+        status: "identity_conflict",
+        event_id: conflict.event_id,
+        occurred_at: conflict.occurred_at,
+        ...conflict.payload,
+      },
+    };
+    const conflictOutcome = await ledger.recordResultIdentityConflict(
+      conflict,
+      view.evaluation.event_id,
+      conflictView,
+    );
+    return json({
+      status: conflictOutcome.created
+        ? "result_identity_conflicted"
+        : "already_result_identity_conflicted",
+      submission_id: view.submission_id,
+      result_id: completion.result_id,
+      event_id: conflict.event_id,
+      authority_event_id: error.authorityEventId,
+      existing_kind: error.existingKind,
+      release_event_id: null,
+    }, conflictOutcome.created ? 201 : 200);
+  }
   return json({
     status: outcome.created ? "recorded" : "already_recorded",
     submission_id: view.submission_id,
@@ -1805,6 +1907,7 @@ function statusFor(view: SubmissionView): Record<string, unknown> {
     archive: view.archive,
     evaluation: view.evaluation,
     result_id: view.result_id,
+    result_disposition: view.schema_version === 3 ? view.result_disposition : null,
     dispatch: view.dispatch,
   };
 }
@@ -1922,6 +2025,9 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     const submissionId = browserPublicationOptInMatch[1];
     const current = await ledger.readSubmission(submissionId);
     if (current?.owner_login !== authenticated.login) return json({ error: "not_found" }, 404);
+    if (current.schema_version === 3) {
+      return json({ error: "result_identity_conflicted" }, 409);
+    }
     const identity = nextSubmissionMutationIdentity(current.mutation_event_id, nowMilliseconds);
     const releaseMilliseconds = Date.parse(identity.occurredAt) + 1;
     const releaseIdentity = {
@@ -2322,6 +2428,9 @@ async function apiRequest(request: Request, env: RuntimeEnv, dependencies: ApiDe
     }
     if (request.method === "PUT" && match[2] === "publication") {
       requireReleaseOptInApi(env);
+      if (current.schema_version === 3) {
+        return json({ error: "result_identity_conflicted" }, 409);
+      }
       const choice: PublicationChoice = decodePublicationChoice(await readJson(request));
       if (choice !== "scheduled") {
         throw new ApiDecodeError("publication choice may only change from withheld to scheduled");

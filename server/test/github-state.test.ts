@@ -16,6 +16,7 @@ import {
 import { modelAliasKey, modelIdentityId, type ModelIdentityView } from "../src/model-identity";
 import type {
   StateEvent,
+  SubmissionResultIdentityConflictedEvent,
   WritableResultLifecycleEvent,
   WritableSubmissionLifecycleEvent,
   WritableStateEvent,
@@ -398,6 +399,34 @@ const RESULT_VIEW: SubmissionView = {
   ...ACCEPTED_VIEW,
   result_id: RESULT_ID,
   result_event_id: RESULT_EVENT.event_id,
+};
+const EXISTING_RESULT_AUTHORITY_ID = "0198abcd-1111-7000-8000-000000000099";
+const RESULT_CONFLICT_EVENT: SubmissionResultIdentityConflictedEvent = {
+  schema_version: 1,
+  event_id: "0198abcd-1111-7000-8000-000000000008",
+  event_type: "submission.result_identity_conflicted",
+  occurred_at: RESULT_EVENT.occurred_at,
+  subject_id: SUBMISSION_ID,
+  causation_event_id: EVALUATION_ACCEPTED.event_id,
+  actor: { kind: "system" },
+  payload: {
+    result_id: RESULT_ID,
+    authority_event_id: EXISTING_RESULT_AUTHORITY_ID,
+    existing_kind: "recorded",
+    reason_code: "duplicate_result_identity",
+  },
+};
+const RESULT_CONFLICT_VIEW: SubmissionView = {
+  ...ACCEPTED_VIEW,
+  schema_version: 3,
+  result_id: null,
+  result_event_id: null,
+  result_disposition: {
+    status: "identity_conflict",
+    event_id: RESULT_CONFLICT_EVENT.event_id,
+    occurred_at: RESULT_CONFLICT_EVENT.occurred_at,
+    ...RESULT_CONFLICT_EVENT.payload,
+  },
 };
 const RESULT_AMENDMENT_VIEW = initialResultAmendmentView({
   resultId: RESULT_ID,
@@ -2818,6 +2847,7 @@ describe("atomic Git State append", () => {
     )).rejects.toMatchObject({
       name: "ResultIdentityCollisionError",
       existingKind: "claimed",
+      authorityEventId: CLAIM_EVENT_ID,
     } satisfies Partial<ResultIdentityCollisionError>);
 
     clearResultOwnerContractProofCacheForTest();
@@ -2838,9 +2868,69 @@ describe("atomic Git State append", () => {
     )).rejects.toMatchObject({
       name: "ResultIdentityCollisionError",
       existingKind: "recorded",
+      authorityEventId: "0198abcd-1111-7000-8000-000000000009",
     } satisfies Partial<ResultIdentityCollisionError>);
     expect([...claimed.mock.calls, ...recorded.mock.calls].some((call) =>
       call[1]?.method === "POST")).toBe(false);
+  });
+
+  it("atomically terminates a duplicate result without creating a second authority or release", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(ACCEPTED_VIEW),
+      contents(RECEIVED),
+      contents(METADATA),
+      contents(ARCHIVE_EVENT),
+      contents(EVALUATION_ACCEPTED),
+      contents(EVALUATION_STARTED),
+      new Response(null, { status: 404 }),
+      contents(recordedGuard(RESULT_ID, EXISTING_RESULT_AUTHORITY_ID)),
+      json({ sha: NEW_TREE }, 201),
+      json({ sha: NEW_COMMIT }, 201),
+      json({ object: { sha: NEW_COMMIT } }),
+    ]);
+    await expect(repository(fetcher).recordResultIdentityConflict(
+      RESULT_CONFLICT_EVENT,
+      EVALUATION_ACCEPTED.event_id,
+      RESULT_CONFLICT_VIEW,
+    )).resolves.toEqual({ commit: NEW_COMMIT, created: true, view: RESULT_CONFLICT_VIEW });
+    const treeRequest = fetcher.mock.calls.find(([input, init]) =>
+      fetchUrl(input).endsWith("/git/trees") && init?.method === "POST")?.[1]?.body;
+    if (typeof treeRequest !== "string") throw new TypeError("tree body was not text");
+    const tree = JSON.parse(treeRequest) as { tree: { path: string; content: string }[] };
+    expect(tree.tree.map((entry) => entry.path)).toEqual([
+      `events/01/${RESULT_CONFLICT_EVENT.event_id}.json`,
+      `views/submissions/01/${SUBMISSION_ID}.json`,
+    ]);
+    expect(treeRequest).not.toContain("release.scheduled");
+    expect(treeRequest).not.toContain("views/result-identities");
+    expect(treeRequest).not.toContain("views/result-amendments");
+    expect(treeRequest).not.toContain("views/result-release-status");
+  });
+
+  it("acknowledges an exact duplicate-result disposition retry without a write", async () => {
+    const fetcher = sequence([
+      json({ object: { sha: HEAD } }),
+      json({ tree: { sha: TREE } }),
+      ...resultOwnerContractProofResponses(),
+      contents(RESULT_CONFLICT_VIEW),
+      contents(RECEIVED),
+      contents(METADATA),
+      contents(ARCHIVE_EVENT),
+      contents(EVALUATION_ACCEPTED),
+      contents(RESULT_CONFLICT_EVENT),
+      contents(EVALUATION_STARTED),
+      contents(RESULT_CONFLICT_EVENT),
+      contents(recordedGuard(RESULT_ID, EXISTING_RESULT_AUTHORITY_ID)),
+    ]);
+    await expect(repository(fetcher).recordResultIdentityConflict(
+      RESULT_CONFLICT_EVENT,
+      EVALUATION_ACCEPTED.event_id,
+      RESULT_CONFLICT_VIEW,
+    )).resolves.toEqual({ commit: HEAD, created: false, view: RESULT_CONFLICT_VIEW });
+    expect(fetcher.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false);
   });
 
   it("accepts only an exact same-authority record replay and refuses a missing guard", async () => {

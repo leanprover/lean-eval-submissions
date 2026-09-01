@@ -1530,7 +1530,12 @@ jobs:
 
           with open(os.environ["RESPONSE_FILE"], encoding="utf-8") as stream:
               payload = json.load(stream)
-          if payload.get("status") not in {"recorded", "already_recorded"}:
+          if payload.get("status") not in {
+              "recorded",
+              "already_recorded",
+              "result_identity_conflicted",
+              "already_result_identity_conflicted",
+          }:
               raise SystemExit("result completion callback did not confirm State")
           if payload.get("submission_id") != os.environ["SUBMISSION_ID"]:
               raise SystemExit("result completion callback confirmed the wrong submission")

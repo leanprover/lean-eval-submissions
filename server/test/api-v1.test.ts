@@ -64,6 +64,7 @@ import {
 } from "../src/result-amendment";
 import {
   validateStateEvent,
+  type SubmissionResultIdentityConflictedEvent,
   type WritableResultLifecycleEvent,
   type WritableStateEvent,
   type WritableSubmissionLifecycleEvent,
@@ -216,6 +217,31 @@ class MemoryState implements StateAccess {
     }
     const decoded = decodeSubmissionView(nextView);
     this.events.push(...events);
+    this.views.set(decoded.submission_id, decoded);
+    return Promise.resolve({ created: true, view: decoded });
+  }
+
+  recordResultIdentityConflict(
+    event: SubmissionResultIdentityConflictedEvent,
+    expectedLifecycleEventId: string,
+    nextView: SubmissionView,
+  ): Promise<{ created: boolean; view: SubmissionView }> {
+    validateStateEvent(event);
+    const current = this.views.get(nextView.submission_id);
+    if (
+      current?.schema_version === 3 &&
+      current.result_disposition.event_id === event.event_id
+    ) {
+      if (JSON.stringify(current) !== JSON.stringify(nextView)) {
+        throw new StateEventConflictError(event.event_id);
+      }
+      return Promise.resolve({ created: false, view: current });
+    }
+    if (!current || latestLifecycleEventId(current) !== expectedLifecycleEventId) {
+      throw new Error("result identity conflict lifecycle conflict");
+    }
+    const decoded = decodeSubmissionView(nextView);
+    this.events.push(event);
     this.views.set(decoded.submission_id, decoded);
     return Promise.resolve({ created: true, view: decoded });
   }
@@ -1069,14 +1095,19 @@ describe("strict API contract", () => {
     });
     expect(resultFetch).toHaveBeenCalledOnce();
 
-    const eventCount = state.events.length;
+    const duplicateSubmissionId = "019debcf-cb48-7000-8000-000000000002";
+    const duplicateAccepted = acceptedView(duplicateSubmissionId);
+    state.views.set(duplicateSubmissionId, duplicateAccepted);
+    const authorityEventId = "019debcf-cb48-7000-8000-000000000099";
     const guardCheck = vi.spyOn(state, "recordAcceptedResult").mockRejectedValue(
-      new StateEventConflictError(`views/result-identities/${resultId}.json`),
+      new ResultIdentityCollisionError("recorded", authorityEventId),
     );
-    const retryRequest = jsonRequest("/internal/v1/result-completed", completion);
-    retryRequest.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
-    const retry = await handleRequest(
-      retryRequest,
+    const conflictWrite = vi.spyOn(state, "recordResultIdentityConflict");
+    const duplicateCompletion = { ...completion, submission_id: duplicateSubmissionId };
+    const duplicateRequest = jsonRequest("/internal/v1/result-completed", duplicateCompletion);
+    duplicateRequest.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+    const duplicate = await handleRequest(
+      duplicateRequest,
       { ...ENV, INTAKE_ENABLED: "false" },
       LIFECYCLE,
       {
@@ -1084,10 +1115,155 @@ describe("strict API contract", () => {
         provider: new GitHubProvider(undefined, undefined, undefined, undefined, resultFetch),
       },
     );
-    expect(retry.status).toBe(409);
-    await expect(retry.json()).resolves.toEqual({ error: "idempotency_conflict" });
+    expect(duplicate.status).toBe(201);
+    const conflictEventId = await lifecycleEventId(
+      "submission.result_identity_conflicted",
+      duplicateSubmissionId,
+      completion.occurred_at,
+    );
+    await expect(duplicate.json()).resolves.toEqual({
+      status: "result_identity_conflicted",
+      submission_id: duplicateSubmissionId,
+      result_id: resultId,
+      event_id: conflictEventId,
+      authority_event_id: authorityEventId,
+      existing_kind: "recorded",
+      release_event_id: null,
+    });
     expect(guardCheck).toHaveBeenCalledOnce();
+    expect(conflictWrite).toHaveBeenCalledOnce();
+    expect(state.events.at(-1)).toEqual({
+      schema_version: 1,
+      event_id: conflictEventId,
+      event_type: "submission.result_identity_conflicted",
+      occurred_at: completion.occurred_at,
+      subject_id: duplicateSubmissionId,
+      causation_event_id: duplicateAccepted.evaluation.status === "accepted"
+        ? duplicateAccepted.evaluation.event_id
+        : "unreachable",
+      actor: { kind: "system" },
+      payload: {
+        result_id: resultId,
+        authority_event_id: authorityEventId,
+        existing_kind: "recorded",
+        reason_code: "duplicate_result_identity",
+      },
+    });
+    expect(state.views.get(duplicateSubmissionId)).toMatchObject({
+      schema_version: 3,
+      result_id: null,
+      result_event_id: null,
+      result_disposition: {
+        status: "identity_conflict",
+        event_id: conflictEventId,
+        result_id: resultId,
+        authority_event_id: authorityEventId,
+        existing_kind: "recorded",
+        reason_code: "duplicate_result_identity",
+      },
+    });
+
+    const eventCount = state.events.length;
+    const exactRetry = jsonRequest("/internal/v1/result-completed", duplicateCompletion);
+    exactRetry.headers.set("authorization", `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`);
+    const retry = await handleRequest(
+      exactRetry,
+      { ...ENV, INTAKE_ENABLED: "false" },
+      LIFECYCLE,
+      {
+        state,
+        provider: new GitHubProvider(undefined, undefined, undefined, undefined, resultFetch),
+      },
+    );
+    expect(retry.status).toBe(200);
+    await expect(retry.json()).resolves.toMatchObject({
+      status: "already_result_identity_conflicted",
+      submission_id: duplicateSubmissionId,
+      result_id: resultId,
+      event_id: conflictEventId,
+      release_event_id: null,
+    });
     expect(state.events).toHaveLength(eventCount);
+    expect(guardCheck).toHaveBeenCalledOnce();
+    expect(conflictWrite).toHaveBeenCalledTimes(2);
+
+    const alice: BrowserSession = {
+      kind: "browser_session",
+      login: "alice",
+      github_id: 42,
+      issued_at: Math.floor(NOW_MS / 1000),
+      expires_at: Math.floor(NOW_MS / 1000) + 3600,
+    };
+    const authorization = `Bearer ${await signToken(SECRET, alice)}`;
+    const metadata = await handleRequest(
+      new Request(`https://submit.test/api/v1/submissions/${duplicateSubmissionId}/metadata`, {
+        method: "PATCH",
+        headers: {
+          authorization,
+          "content-type": "application/json",
+          "idempotency-key": "019debd0-1000-7000-8000-000000000001",
+        },
+        body: JSON.stringify({ production_metadata: { notes: "conflict retained" } }),
+      }),
+      ENV,
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(metadata.status).toBe(200);
+    expect(state.views.get(duplicateSubmissionId)).toMatchObject({
+      schema_version: 3,
+      production_metadata: { notes: "conflict retained" },
+      result_disposition: { event_id: conflictEventId, status: "identity_conflict" },
+    });
+
+    const afterMetadata = state.events.length;
+    const retryAfterMetadataRequest = jsonRequest(
+      "/internal/v1/result-completed",
+      duplicateCompletion,
+    );
+    retryAfterMetadataRequest.headers.set(
+      "authorization",
+      `Bearer ${ENV.LIFECYCLE_CALLBACK_TOKEN}`,
+    );
+    const retryAfterMetadata = await handleRequest(
+      retryAfterMetadataRequest,
+      { ...ENV, INTAKE_ENABLED: "false" },
+      LIFECYCLE,
+      {
+        state,
+        provider: new GitHubProvider(undefined, undefined, undefined, undefined, resultFetch),
+      },
+    );
+    expect(retryAfterMetadata.status).toBe(200);
+    await expect(retryAfterMetadata.json()).resolves.toMatchObject({
+      status: "already_result_identity_conflicted",
+      submission_id: duplicateSubmissionId,
+      result_id: resultId,
+      event_id: conflictEventId,
+      release_event_id: null,
+    });
+    expect(state.events).toHaveLength(afterMetadata);
+    expect(guardCheck).toHaveBeenCalledOnce();
+    expect(conflictWrite).toHaveBeenCalledTimes(3);
+
+    const beforePublication = state.events.length;
+    const publication = await handleRequest(
+      new Request(`https://submit.test/api/v1/submissions/${duplicateSubmissionId}/publication`, {
+        method: "PUT",
+        headers: {
+          authorization,
+          "content-type": "application/json",
+          "idempotency-key": "019debd0-1000-7000-8000-000000000002",
+        },
+        body: JSON.stringify({ publication_choice: "scheduled" }),
+      }),
+      { ...ENV, RELEASE_OPT_IN_API_ENABLED: "true" },
+      LIFECYCLE,
+      { now: () => NOW_MS, state },
+    );
+    expect(publication.status).toBe(409);
+    await expect(publication.json()).resolves.toEqual({ error: "result_identity_conflicted" });
+    expect(state.events).toHaveLength(beforePublication);
   });
 
   it("fails closed with 429 when the Cloudflare limiter denies or errors", async () => {

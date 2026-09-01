@@ -165,13 +165,16 @@ causal mutation. No branch is rewound.
 - A changed same-key body, partial/forged indexes, stale causal head, recorded
   result collision, or occupied event path returns 409.
 - A missing claim or different owner returns the same 404 response.
-- A claim whose tuple is already reserved by `result.recorded`, a modern result
-  whose tuple is reserved by `result.claimed`, or a duplicate modern tuple
-  returns terminal `result_identity_conflict` 409. This is deliberately not a
-  retryable callback failure: the first authority remains canonical, no second
-  event/view is written, and operator reconciliation chooses a genuinely new
-  statement revision or other corrected identity input instead of retrying the
-  collision forever.
+- A claim whose tuple is already reserved by `result.recorded` remains a 409.
+  When the authenticated modern result callback encounters either a
+  `result.claimed` guard or a different `result.recorded` authority for the
+  same deterministic identity, it records one terminal
+  `submission.result_identity_conflicted` event and schema-version-3
+  submission view and returns 201 (or 200 for an exact retry). The first
+  authority remains canonical. No second result authority, base Result,
+  identity reservation, amendment, release, or owner association is created;
+  operator reconciliation may instead choose a genuinely new statement
+  revision or other corrected identity input.
 - Repeated owner-operation protected-main CAS loss returns 409. CAS exhaustion
   in lifecycle callbacks remains a retryable 503; State/provider unavailability
   and contract drift return 503. A protected Results head moving between the
