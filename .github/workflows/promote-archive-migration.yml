@@ -49,10 +49,10 @@ permissions:
 
 jobs:
   promote:
-    uses: leanprover/lean-eval-audit/.github/workflows/promote-archive-migration.yml@77cdadf733b20b8fdb274f7f7be5d314dba850ad
+    uses: leanprover/lean-eval-audit/.github/workflows/promote-archive-migration.yml@73bdfca3408b1c69edd836a0ca91e7ec41f9384c
     with:
       expected_caller_commit: ${{ inputs.expected_workflow_commit }}
-      expected_contract_commit: 77cdadf733b20b8fdb274f7f7be5d314dba850ad
+      expected_contract_commit: 73bdfca3408b1c69edd836a0ca91e7ec41f9384c
       source_audit_commit: ${{ inputs.source_audit_commit }}
       staged_migration_commit: ${{ inputs.staged_migration_commit }}
       expected_staged_tree: ${{ inputs.expected_staged_tree }}

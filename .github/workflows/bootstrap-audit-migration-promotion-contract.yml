@@ -54,7 +54,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval-audit
-          ref: 77cdadf733b20b8fdb274f7f7be5d314dba850ad
+          ref: 73bdfca3408b1c69edd836a0ca91e7ec41f9384c
           path: audit
           fetch-depth: 2
           persist-credentials: false
@@ -66,8 +66,8 @@ jobs:
         run: |
           set -euo pipefail
           readonly base=f50c46574dd719486a01272e3eaeced396ac5ada
-          readonly head=77cdadf733b20b8fdb274f7f7be5d314dba850ad
-          readonly tree=a6dd8ab53ac50ec047239820f969d913501f118a
+          readonly head=73bdfca3408b1c69edd836a0ca91e7ec41f9384c
+          readonly tree=c3bfd81b2b25d78f727ce75c2598889c0a83a9fb
           readonly branch=feat/migration-promotion-cas
           test -n "$AUDIT_TOKEN"
           audit_token=$AUDIT_TOKEN
@@ -103,8 +103,8 @@ jobs:
         run: |
           set -euo pipefail
           readonly base=f50c46574dd719486a01272e3eaeced396ac5ada
-          readonly head=77cdadf733b20b8fdb274f7f7be5d314dba850ad
-          readonly tree=a6dd8ab53ac50ec047239820f969d913501f118a
+          readonly head=73bdfca3408b1c69edd836a0ca91e7ec41f9384c
+          readonly tree=c3bfd81b2b25d78f727ce75c2598889c0a83a9fb
           test -n "$AUDIT_TOKEN"
           audit_token=$AUDIT_TOKEN
           unset AUDIT_TOKEN
@@ -133,7 +133,7 @@ jobs:
           AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}
         run: |
           set -euo pipefail
-          readonly head=77cdadf733b20b8fdb274f7f7be5d314dba850ad
+          readonly head=73bdfca3408b1c69edd836a0ca91e7ec41f9384c
           readonly branch=feat/migration-promotion-cas
           test -n "$AUDIT_TOKEN"
           basic_auth=$(printf 'x-access-token:%s' "$AUDIT_TOKEN" | base64 -w0)
@@ -160,8 +160,8 @@ jobs:
 
       - name: Record bootstrap result
         run: |
-          readonly head=77cdadf733b20b8fdb274f7f7be5d314dba850ad
-          readonly tree=a6dd8ab53ac50ec047239820f969d913501f118a
+          readonly head=73bdfca3408b1c69edd836a0ca91e7ec41f9384c
+          readonly tree=c3bfd81b2b25d78f727ce75c2598889c0a83a9fb
           {
             echo '### Audit migration promotion contract bootstrapped'
             echo
