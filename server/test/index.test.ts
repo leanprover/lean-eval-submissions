@@ -293,13 +293,13 @@ describe("Worker routing", () => {
   });
 
   it("returns a closed protected-contract proof for production readiness", async () => {
-    const contract = "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a";
+    const contract = "9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f";
     const tree = "2".repeat(40);
     const rootEntries = [
-      { path: "README.md", mode: "100644", type: "blob", sha: "7b62f1d8f6163fae029eba2c3bed2cdca306db5e" },
-      { path: "docs", mode: "040000", type: "tree", sha: "d86908a7a5dc214ec9e12b2049d1cb69c30161af" },
-      { path: "schema", mode: "040000", type: "tree", sha: "d391a2bcda4cffb883cc0b39dcc29f22bf8e4329" },
-      { path: "scripts", mode: "040000", type: "tree", sha: "cb41e84264627f91deca3d2be52e99fc65d905f1" },
+      { path: "README.md", mode: "100644", type: "blob", sha: "20c4131d85e51435fb654b71761a3456c36f8218" },
+      { path: "docs", mode: "040000", type: "tree", sha: "5d3923158bd8f620f184fee5a4d00924220464fa" },
+      { path: "schema", mode: "040000", type: "tree", sha: "2c0004214d90b82cf895e79a91c239ac9e7bbf67" },
+      { path: "scripts", mode: "040000", type: "tree", sha: "ed830aea8fe7a4a0e6db7acdcf82f23cb24a296d" },
     ] as const;
     const replies = [
       Response.json({ permissions: { push: true } }),

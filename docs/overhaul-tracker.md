@@ -16,17 +16,17 @@ history, or replace the cross-repository execution runbook.
 ## Current safe baseline
 
 - Protected `main` requires the `verify` aggregate check.
-- Staging and production Workers report one coherent live deployment at
-  `30bc92b3d46bd2a3ba1788433264fdd70ae3c74e`.
+- Production Workers report one coherent fail-closed live deployment at
+  `f09e30565ec8f180cb7b0a85935f9439f802a14c`.
 - The live deployment keeps production intake and every public production
   lifecycle API configured and effectively disabled, with empty maintainer
-  allowlists.
-- This launch candidate keeps production intake disabled while tracking the
-  reviewed result-owner, amendment-owner, amendment-maintainer,
-  model-identity-owner, model-identity-maintainer, and publication-opt-in gates as
-  enabled for exactly `kim-em` / GitHub user `477956` where maintainer
-  authority is required. It has not been deployed and readiness remains
-  `NO-GO`.
+  allowlists, but its superseded State-contract pin makes it unsuitable as a
+  launch or rollback target.
+- This repair candidate tracks production intake, replay, every lifecycle API,
+  model consolidation, and the promotion canary as disabled, with empty
+  maintainer allowlists. It updates the production State-contract pin and must
+  be deployed and qualified as the coherent all-false rollback baseline before
+  a separate lifecycle candidate is prepared. Readiness remains `NO-GO`.
 - Tracked staging intake and every staging lifecycle API remain all-false with
   empty maintainer allowlists.
 - General staging replay, historical-public replay, and production replay are
@@ -59,9 +59,10 @@ not this summary.
 - [x] Accepted, rejected, archive-failed, and evaluation-failed lifecycle
       transitions.
 - [x] Metadata backfill, repair/retraction request, maintainer-decision, and
-      model-alias/rename implementation behind independent gates. This launch
-      candidate enables the reviewed production lifecycle surface only;
-      staging and the live production lifecycle surface remain all-false.
+      model-alias/rename implementation behind independent gates. This repair
+      candidate keeps the complete production and staging lifecycle surface
+      all-false; a separate launch candidate may enable only the reviewed
+      production surface.
 - [x] Official Lean build and nanoda replay formats with versioned checker and
       measurement fields.
 - [x] Protected finite-lease intake enablement and disable-only recovery.
@@ -89,20 +90,21 @@ not this summary.
       maintainer decisions.
 - [x] Prepare one success and one authorization/validation denial fixture for
       model alias/rename.
-- [ ] Prepare one private-to-scheduled publication opt-in case and verify its
-      atomic scheduling effect after a Result exists.
+- [x] Preserve the bounded f09 browser/headless, owner/maintainer denial,
+      private-to-scheduled opt-in, publication-disabled reconstruction,
+      leaderboard, and all-false recovery results as unchanged-feature
+      evidence.
 - [x] Prove that each launch gate returns to disabled and public health reports
       the effective state.
-- [ ] Prepare one browser and one source-bound headless staging submission at
-      the exact proposed launch commits. Its source commit and one-time tag are
-      confined to a temporary non-default branch in the allowlisted private
-      staging State repository; only the target-bound secret-Gist proof remains
-      outside the repository family and is covered by standing authorization.
-- [ ] Complete one exact-version staging lifecycle from archive through State,
-      Result, scheduled release, publication-disabled reconstruction, and
-      rollback.
+- [ ] Merge and deploy the all-false repair baseline, then record its protected
+      CI, exact staging and production readback, and coherent rollback versions.
+- [ ] Prepare the separate lifecycle candidate and record its protected CI,
+      exact staging deployment/readback, immutable dispatch tag, and promotion
+      canary before rebuilding the launch packet.
 
-These are bounded smoke cases, not a combinatorial staging matrix.
+Rerun a functional case only if its implementation path changes or the fresh
+checks expose drift. This is a bounded launch check, not a qualification
+campaign.
 
 ### Credential-boundary work
 

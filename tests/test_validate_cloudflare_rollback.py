@@ -1,4 +1,5 @@
 import argparse
+import base64
 import hashlib
 import json
 import pathlib
@@ -10,10 +11,37 @@ from scripts import validate_cloudflare_rollback as rollback
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 COMMIT = "a" * 40
-PROTECTED_STATE_COMMIT = "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a"
+PROTECTED_STATE_COMMIT = "9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f"
+STATE_SCHEMA_SHA256 = "2d19515da1b0798f00dd3e9809c3a2770fee8b27ce6323ac9b9e827db4c7ea27"
 INTAKE_VERSION = "11111111-1111-1111-1111-111111111111"
 BROKER_VERSION = "22222222-2222-2222-2222-222222222222"
 REPLAY_VERSION = "33333333-3333-3333-3333-333333333333"
+
+
+def production_health(commit: str = COMMIT) -> dict[str, object]:
+    return {
+        "status": "ok",
+        "service": "lean-eval-submission",
+        "deployed_commit": commit,
+        "environment": "production",
+        "intake_configured_enabled": False,
+        "intake_effective_enabled": False,
+        "intake_enabled": False,
+        "intake_enablement_mode": "disabled",
+        "intake_lease_expires_at": None,
+        "legacy_result_owner_api_enabled": False,
+        "result_amendment_owner_api_enabled": False,
+        "result_amendment_maintainer_api_enabled": False,
+        "model_identity_owner_api_enabled": False,
+        "model_identity_maintainer_api_enabled": False,
+        "model_identity_consolidation_api_enabled": False,
+        "model_identity_write_max_subrequests": 400,
+        "model_identity_consolidation_api": "atomic_reverse_impact_v1",
+        "release_opt_in_api_enabled": False,
+        "release_opt_out_api_enabled": False,
+        "promotion_canary_configured_enabled": False,
+        "promotion_canary_enabled": False,
+    }
 
 
 class RollbackContractCoverageTests(unittest.TestCase):
@@ -157,6 +185,133 @@ class RollbackContractCoverageTests(unittest.TestCase):
                 rollback._validate_qualification_header(qualification, target)
 
 
+class ProductionConvergenceClassificationTests(unittest.TestCase):
+    def readiness(self) -> dict[str, object]:
+        return {
+            "environment": "production",
+            "intake_configured_enabled": False,
+            "intake_effective_enabled": False,
+            "intake_enabled": False,
+            "intake_enablement_mode": "disabled",
+            "intake_lease_expires_at": None,
+            "state_branch_protected": True,
+            "state_commit": PROTECTED_STATE_COMMIT,
+            "state_contract_commit": PROTECTED_STATE_COMMIT,
+            "state_contract_verified": True,
+            "state_event_schema_sha256": STATE_SCHEMA_SHA256,
+            "status": "state_writer_ready",
+        }
+
+    def health(self) -> dict[str, object]:
+        return production_health()
+
+    def test_accepts_only_the_exact_closed_state_readiness_proof(self) -> None:
+        self.assertEqual(
+            rollback.classify_production_state_readiness(
+                self.readiness(),
+                200,
+                PROTECTED_STATE_COMMIT,
+                STATE_SCHEMA_SHA256,
+            ),
+            PROTECTED_STATE_COMMIT,
+        )
+        malformed = self.readiness()
+        malformed["unexpected"] = True
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "not a closed document"
+        ):
+            rollback.classify_production_state_readiness(
+                malformed,
+                200,
+                PROTECTED_STATE_COMMIT,
+                STATE_SCHEMA_SHA256,
+            )
+
+    def test_retries_only_closed_state_unavailable(self) -> None:
+        self.assertIsNone(
+            rollback.classify_production_state_readiness(
+                {"status": "not_ready", "reason": "state_unavailable"},
+                503,
+                PROTECTED_STATE_COMMIT,
+                STATE_SCHEMA_SHA256,
+            )
+        )
+        fatal_responses = [
+            (503, {"status": "not_ready", "reason": "state_credential_missing"}),
+            (
+                503,
+                {
+                    "status": "not_ready",
+                    "reason": "state_unavailable",
+                    "detail": "private",
+                },
+            ),
+            (503, {"status": "not_ready", "reason": "unexpected"}),
+            (404, {"error": "not_found"}),
+            (500, {"status": "not_ready", "reason": "state_unavailable"}),
+        ]
+        for status, response in fatal_responses:
+            with self.subTest(status=status, response=response), self.assertRaises(
+                rollback.RollbackValidationError
+            ):
+                rollback.classify_production_state_readiness(
+                    response,
+                    status,
+                    PROTECTED_STATE_COMMIT,
+                    STATE_SCHEMA_SHA256,
+                )
+
+    def test_accepts_exact_all_false_health_and_retries_valid_stale_health(self) -> None:
+        self.assertTrue(
+            rollback.classify_all_false_production_health(
+                self.health(), 200, COMMIT
+            )
+        )
+        stale = self.health()
+        stale["legacy_result_owner_api_enabled"] = True
+        self.assertFalse(
+            rollback.classify_all_false_production_health(stale, 200, COMMIT)
+        )
+        stale_commit = self.health()
+        stale_commit["deployed_commit"] = "b" * 40
+        self.assertFalse(
+            rollback.classify_all_false_production_health(
+                stale_commit, 200, COMMIT
+            )
+        )
+        durable = self.health()
+        durable["intake_configured_enabled"] = True
+        durable["intake_effective_enabled"] = True
+        durable["intake_enabled"] = True
+        durable["intake_enablement_mode"] = "durable"
+        self.assertFalse(
+            rollback.classify_all_false_production_health(durable, 200, COMMIT)
+        )
+
+    def test_rejects_malformed_or_non_200_health_without_retry(self) -> None:
+        malformed = self.health()
+        malformed["unexpected"] = True
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "not a closed document"
+        ):
+            rollback.classify_all_false_production_health(malformed, 200, COMMIT)
+        wrong_type = self.health()
+        wrong_type["release_opt_in_api_enabled"] = "false"
+        with self.assertRaisesRegex(rollback.RollbackValidationError, "malformed"):
+            rollback.classify_all_false_production_health(wrong_type, 200, COMMIT)
+        invalid_mode = self.health()
+        invalid_mode["intake_enablement_mode"] = "invalid"
+        with self.assertRaisesRegex(rollback.RollbackValidationError, "malformed"):
+            rollback.classify_all_false_production_health(invalid_mode, 200, COMMIT)
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "unexpected HTTP status"
+        ):
+            rollback.classify_all_false_production_health(
+                {"status": "not_ready", "reason": "state_unavailable"},
+                503,
+                COMMIT,
+            )
+
 class CloudflareRollbackValidationTests(unittest.TestCase):
     def test_current_protected_state_contract_is_coherent_across_rollback_inputs(
         self,
@@ -280,27 +435,62 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         state_schema = self.directory / "state-event-schema.json"
         state_schema.write_bytes(state_schema_raw)
         self.paths["state_schema"] = state_schema
-        state_proof = self.directory / "state-proof.json"
+        state_schema_blob = hashlib.sha1(
+            b"blob "
+            + str(len(state_schema_raw)).encode("ascii")
+            + b"\0"
+            + state_schema_raw,
+            usedforsecurity=False,
+        ).hexdigest()
+        state_schema_proof = self.directory / "state-schema-proof.json"
         self._write(
-            state_proof,
+            state_schema_proof,
             {
-                "environment": "production",
-                "intake_configured_enabled": False,
-                "intake_effective_enabled": False,
-                "intake_enabled": False,
-                "intake_enablement_mode": "disabled",
-                "intake_lease_expires_at": None,
-                "state_branch_protected": True,
-                "state_commit": state_commit,
-                "state_contract_commit": state_commit,
-                "state_contract_verified": True,
-                "state_event_schema_sha256": qualification_value[
-                    "state_event_schema_sha256"
-                ],
-                "status": "state_writer_ready",
+                "content": base64.b64encode(state_schema_raw).decode("ascii"),
+                "encoding": "base64",
+                "path": "schema/state-event-v1.schema.json",
+                "sha": state_schema_blob,
+                "type": "file",
+                "url": (
+                    "https://api.github.com/repos/leanprover/lean-eval-state/"
+                    f"contents/schema/state-event-v1.schema.json?ref={state_commit}"
+                ),
             },
         )
-        self.paths["state_proof"] = state_proof
+        self.paths["state_schema_proof"] = state_schema_proof
+        state_comparison = self.directory / "state-comparison.json"
+        self._write(
+            state_comparison,
+            {
+                "base_commit": state_commit,
+                "merge_base_commit": state_commit,
+                "status": "identical",
+                "url": (
+                    "https://api.github.com/repos/leanprover/lean-eval-state/"
+                    f"compare/{state_commit}...{state_commit}"
+                ),
+            },
+        )
+        self.paths["state_comparison"] = state_comparison
+        state_tree_sha = "1" * 40
+        for label in ("contract", "live"):
+            commit_path = self.directory / f"state-{label}-commit.json"
+            self._write(commit_path, {"commit": state_commit, "tree": state_tree_sha})
+            self.paths[f"state_{label}_commit"] = commit_path
+        root_entries = [
+            {"mode": "100644", "path": "README.md", "sha": "2" * 40, "type": "blob"},
+            {"mode": "040000", "path": "docs", "sha": "3" * 40, "type": "tree"},
+            {"mode": "040000", "path": "schema", "sha": "4" * 40, "type": "tree"},
+            {"mode": "040000", "path": "scripts", "sha": "5" * 40, "type": "tree"},
+            {"mode": "040000", "path": "events", "sha": "6" * 40, "type": "tree"},
+        ]
+        for label in ("contract", "live"):
+            tree_path = self.directory / f"state-{label}-tree.json"
+            self._write(
+                tree_path,
+                {"sha": state_tree_sha, "tree": root_entries, "truncated": False},
+            )
+            self.paths[f"state_{label}_tree"] = tree_path
 
         intake_bindings = self._variable_bindings("intake")
         intake_bindings.append(
@@ -413,14 +603,21 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
             target_root=ROOT,
             state_main=self.paths["state_main"],
             state_schema=self.paths["state_schema"],
-            state_proof=None,
+            state_comparison=None,
+            state_contract_commit=None,
+            state_live_commit=None,
+            state_contract_tree=None,
+            state_live_tree=None,
         )
 
-    def _proof_arguments(self) -> argparse.Namespace:
+    def _descendant_arguments(self) -> argparse.Namespace:
         arguments = self._arguments()
-        arguments.state_main = None
-        arguments.state_schema = None
-        arguments.state_proof = self.paths["state_proof"]
+        arguments.state_comparison = self.paths["state_comparison"]
+        arguments.state_contract_commit = self.paths["state_contract_commit"]
+        arguments.state_live_commit = self.paths["state_live_commit"]
+        arguments.state_contract_tree = self.paths["state_contract_tree"]
+        arguments.state_live_tree = self.paths["state_live_tree"]
+        arguments.state_schema = self.paths["state_schema_proof"]
         return arguments
 
     @staticmethod
@@ -548,20 +745,73 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         self.assertIs(plan["release_opt_in_api_enabled"], False)
         self.assertIs(plan["release_opt_out_api_contract_supported"], True)
         self.assertIs(plan["release_opt_out_api_enabled"], False)
-        self.assertEqual(plan["model_identity_state_contract_commit"], "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a")
+        self.assertEqual(plan["model_identity_state_contract_commit"], PROTECTED_STATE_COMMIT)
         self.assertNotIn("MODEL_IDENTITY_MAINTAINERS", plan)
         self.assertNotIn("RESULT_AMENDMENT_MAINTAINERS", plan)
         self.assertEqual(
             plan["result_owner_state_contract_commit"],
-            "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a",
+            PROTECTED_STATE_COMMIT,
         )
         self.assertIs(plan["promotion_canary_enabled"], False)
         self.assertIs(plan["replay_enabled"], False)
 
-    def test_builds_the_same_plan_from_a_closed_worker_state_proof(self) -> None:
+    def test_builds_the_same_plan_from_an_independent_state_proof(self) -> None:
         legacy = rollback.build_plan(self._arguments())
-        proof = rollback.build_plan(self._proof_arguments())
+        proof = rollback.build_plan(self._descendant_arguments())
         self.assertEqual(proof, legacy)
+        self.assertEqual(
+            proof["state_contract"]["contract_commit"], PROTECTED_STATE_COMMIT
+        )
+        self.assertEqual(
+            proof["state_contract"]["live_commit"], PROTECTED_STATE_COMMIT
+        )
+
+    def test_independent_state_proof_accepts_a_verified_protected_descendant(self) -> None:
+        descendant = "e" * 40
+        self._write(
+            self.paths["state_main"], {"commit": descendant, "protected": True}
+        )
+        self._write(
+            self.paths["state_comparison"],
+            {
+                "base_commit": PROTECTED_STATE_COMMIT,
+                "merge_base_commit": PROTECTED_STATE_COMMIT,
+                "status": "ahead",
+                "url": (
+                    "https://api.github.com/repos/leanprover/lean-eval-state/"
+                    f"compare/{PROTECTED_STATE_COMMIT}...{descendant}"
+                ),
+            },
+        )
+        live_commit = rollback._object(self.paths["state_live_commit"])
+        live_commit["commit"] = descendant
+        live_commit["tree"] = "7" * 40
+        self._write(self.paths["state_live_commit"], live_commit)
+        live_tree = rollback._object(self.paths["state_live_tree"])
+        live_tree["sha"] = "7" * 40
+        for entry in live_tree["tree"]:
+            if entry["path"] == "events":
+                entry["sha"] = "8" * 40
+        self._write(self.paths["state_live_tree"], live_tree)
+        schema_proof = rollback._object(self.paths["state_schema_proof"])
+        schema_proof["url"] = (
+            "https://api.github.com/repos/leanprover/lean-eval-state/"
+            f"contents/schema/state-event-v1.schema.json?ref={descendant}"
+        )
+        self._write(self.paths["state_schema_proof"], schema_proof)
+
+        plan = rollback.build_plan(self._descendant_arguments())
+
+        self.assertEqual(
+            plan["state_contract"]["contract_commit"], PROTECTED_STATE_COMMIT
+        )
+        self.assertEqual(plan["state_contract"]["live_commit"], descendant)
+        self.assertEqual(
+            plan["result_owner_state_contract_commit"], PROTECTED_STATE_COMMIT
+        )
+        self.assertEqual(
+            plan["model_identity_state_contract_commit"], PROTECTED_STATE_COMMIT
+        )
 
     def test_model_identity_gate_requires_closed_identity_pair_pin_and_limit(self) -> None:
         variables = self.configs["intake"]["env"]["production"]["vars"]
@@ -583,22 +833,140 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
         ):
             rollback.build_plan(self._arguments())
 
-    def test_worker_state_proof_rejects_drift_enablement_and_extra_fields(self) -> None:
-        original = rollback._object(self.paths["state_proof"])
+    def test_independent_state_proof_rejects_ancestry_root_and_schema_drift(self) -> None:
+        comparison = rollback._object(self.paths["state_comparison"])
+        comparison["status"] = "diverged"
+        self._write(self.paths["state_comparison"], comparison)
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "exact descendant"
+        ):
+            rollback.build_plan(self._descendant_arguments())
+
+        comparison["status"] = "identical"
+        self._write(self.paths["state_comparison"], comparison)
+        live_tree = rollback._object(self.paths["state_live_tree"])
+        live_tree["tree"][1]["sha"] = "f" * 40
+        self._write(self.paths["state_live_tree"], live_tree)
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "changed a reviewed contract root"
+        ):
+            rollback.build_plan(self._descendant_arguments())
+
+        contract_tree = rollback._object(self.paths["state_contract_tree"])
+        self._write(self.paths["state_live_tree"], contract_tree)
+        schema_proof = rollback._object(self.paths["state_schema_proof"])
+        changed_schema = b'{"fixture":"changed"}\n'
+        schema_proof["content"] = base64.b64encode(changed_schema).decode("ascii")
+        schema_proof["sha"] = hashlib.sha1(
+            b"blob "
+            + str(len(changed_schema)).encode("ascii")
+            + b"\0"
+            + changed_schema,
+            usedforsecurity=False,
+        ).hexdigest()
+        self._write(self.paths["state_schema_proof"], schema_proof)
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "reviewed event schema"
+        ):
+            rollback.build_plan(self._descendant_arguments())
+
+    def test_independent_state_proof_rejects_malformed_root_and_commit_binding(self) -> None:
+        original = rollback._object(self.paths["state_live_tree"])
+        hostile_trees = []
+        missing = json.loads(json.dumps(original))
+        missing["tree"] = [
+            entry for entry in missing["tree"] if entry["path"] != "README.md"
+        ]
+        hostile_trees.append(missing)
+        duplicate = json.loads(json.dumps(original))
+        duplicate["tree"].append(dict(duplicate["tree"][0]))
+        hostile_trees.append(duplicate)
+        wrong_type = json.loads(json.dumps(original))
+        wrong_type["tree"][0]["type"] = "tree"
+        hostile_trees.append(wrong_type)
+        extra_field = json.loads(json.dumps(original))
+        extra_field["tree"][0]["url"] = "https://example.invalid"
+        hostile_trees.append(extra_field)
+        for tree in hostile_trees:
+            with self.subTest(tree=tree):
+                self._write(self.paths["state_live_tree"], tree)
+                with self.assertRaises(rollback.RollbackValidationError):
+                    rollback.build_plan(self._descendant_arguments())
+
+        self._write(self.paths["state_live_tree"], original)
+        live_commit = rollback._object(self.paths["state_live_commit"])
+        live_commit["tree"] = "f" * 40
+        self._write(self.paths["state_live_commit"], live_commit)
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "root tree proof is incomplete"
+        ):
+            rollback.build_plan(self._descendant_arguments())
+
+    def test_independent_state_proof_requires_protected_branch_and_exact_merge_base(
+        self,
+    ) -> None:
+        self._write(
+            self.paths["state_main"],
+            {"commit": PROTECTED_STATE_COMMIT, "protected": False},
+        )
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "exact protected commit"
+        ):
+            rollback.build_plan(self._descendant_arguments())
+
+        self._write(
+            self.paths["state_main"],
+            {"commit": PROTECTED_STATE_COMMIT, "protected": True},
+        )
+        comparison = rollback._object(self.paths["state_comparison"])
+        comparison["merge_base_commit"] = "f" * 40
+        self._write(self.paths["state_comparison"], comparison)
+        with self.assertRaisesRegex(
+            rollback.RollbackValidationError, "exact descendant"
+        ):
+            rollback.build_plan(self._descendant_arguments())
+
+    def test_independent_state_proof_rejects_every_partial_input_set(self) -> None:
+        fields = (
+            "state_comparison",
+            "state_contract_commit",
+            "state_live_commit",
+            "state_contract_tree",
+            "state_live_tree",
+        )
+        for field in fields:
+            with self.subTest(field=field):
+                arguments = self._descendant_arguments()
+                setattr(arguments, field, None)
+                with self.assertRaisesRegex(
+                    rollback.RollbackValidationError,
+                    "one complete State qualification proof",
+                ):
+                    rollback.build_plan(arguments)
+
+    def test_independent_schema_source_is_exactly_decoded_and_bound(self) -> None:
+        original = rollback._object(self.paths["state_schema_proof"])
+        wrapped = dict(original)
+        content = wrapped["content"]
+        wrapped["content"] = f"{content[:8]}\n{content[8:]}\n"
+        self._write(self.paths["state_schema_proof"], wrapped)
+        rollback.build_plan(self._descendant_arguments())
+
         hostile = [
-            {**original, "state_branch_protected": False},
-            {**original, "state_contract_verified": False},
-            {**original, "state_commit": "e" * 40},
-            {**original, "state_event_schema_sha256": "e" * 64},
-            {**original, "intake_effective_enabled": True},
-            {**original, "private_detail": "must not be accepted"},
+            {**original, "encoding": "utf-8"},
+            {**original, "path": "schema/other.json"},
+            {**original, "sha": "not-a-git-object"},
+            {**original, "sha": "f" * 40},
+            {**original, "type": "symlink"},
+            {**original, "url": "https://api.github.com/repos/other/repo/contents/x"},
+            {**original, "extra": True},
+            {**original, "content": "not base64!"},
         ]
         for proof in hostile:
             with self.subTest(proof=proof):
-                self._write(self.paths["state_proof"], proof)
+                self._write(self.paths["state_schema_proof"], proof)
                 with self.assertRaises(rollback.RollbackValidationError):
-                    rollback.build_plan(self._proof_arguments())
-        self._write(self.paths["state_proof"], original)
+                    rollback.build_plan(self._descendant_arguments())
 
     def test_rejects_production_rollback_with_promotion_canary_enabled(self) -> None:
         self.configs["intake"]["env"]["production"]["vars"][
@@ -1421,10 +1789,10 @@ class CloudflareRollbackValidationTests(unittest.TestCase):
                 "replay_enabled": False,
                 "staging_acceptance_enabled": False,
                 "result_owner_state_contract_commit": (
-                    "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a"
+                    PROTECTED_STATE_COMMIT
                 ),
                 "model_identity_state_contract_commit": (
-                    "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a"
+                    PROTECTED_STATE_COMMIT
                 ),
             },
         )

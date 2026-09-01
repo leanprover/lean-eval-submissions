@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import hashlib
 import json
 import math
@@ -72,6 +74,50 @@ COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 MAX_CONTRACT_FILE_BYTES = 2 * 1024 * 1024
 MAX_JSON_BYTES = 4 * 1024 * 1024
+CONVERGENCE_RETRY_EXIT = 75
+STATE_CONTRACT_ROOT_KINDS = {
+    "README.md": ("100644", "blob"),
+    "docs": ("040000", "tree"),
+    "schema": ("040000", "tree"),
+    "scripts": ("040000", "tree"),
+}
+PRODUCTION_STATE_READINESS_FIELDS = {
+    "environment",
+    "intake_configured_enabled",
+    "intake_effective_enabled",
+    "intake_enabled",
+    "intake_enablement_mode",
+    "intake_lease_expires_at",
+    "state_branch_protected",
+    "state_commit",
+    "state_contract_commit",
+    "state_contract_verified",
+    "state_event_schema_sha256",
+    "status",
+}
+PRODUCTION_HEALTH_FIELDS = {
+    "status",
+    "service",
+    "deployed_commit",
+    "environment",
+    "intake_configured_enabled",
+    "intake_effective_enabled",
+    "intake_enabled",
+    "intake_enablement_mode",
+    "intake_lease_expires_at",
+    "legacy_result_owner_api_enabled",
+    "result_amendment_owner_api_enabled",
+    "result_amendment_maintainer_api_enabled",
+    "model_identity_owner_api_enabled",
+    "model_identity_maintainer_api_enabled",
+    "model_identity_consolidation_api_enabled",
+    "model_identity_write_max_subrequests",
+    "model_identity_consolidation_api",
+    "release_opt_in_api_enabled",
+    "release_opt_out_api_enabled",
+    "promotion_canary_configured_enabled",
+    "promotion_canary_enabled",
+}
 INTAKE_LEASE_BINDINGS = {
     "INTAKE_ENABLED",
     "INTAKE_ENABLEMENT_MODE",
@@ -264,66 +310,173 @@ def _validate_qualification(
         )
     return {
         "repository": qualification["state_repository"],
-        "commit": state_commit,
+        "contract_commit": qualification["state_main_commit"],
+        "live_commit": state_commit,
         "path": qualification["state_event_schema_path"],
         "sha256": state_digest,
         "callback_contract_sha256": callback_digest,
     }
 
 
-def _validate_qualification_proof(
+def _commit_tree(value: dict[str, Any], expected_commit: str, label: str) -> str:
+    if set(value) != {"commit", "tree"}:
+        raise RollbackValidationError(f"{label} State commit proof is not closed")
+    tree = value.get("tree")
+    if value.get("commit") != expected_commit or not isinstance(
+        tree, str
+    ) or COMMIT.fullmatch(tree) is None:
+        raise RollbackValidationError(f"{label} State commit/tree binding is invalid")
+    return tree
+
+
+def _root_entries(
+    value: dict[str, Any], expected_tree: str, label: str
+) -> dict[str, tuple[str, str, str]]:
+    if set(value) != {"sha", "tree", "truncated"}:
+        raise RollbackValidationError(f"{label} State root tree proof is not closed")
+    entries = value.get("tree")
+    if (
+        value.get("sha") != expected_tree
+        or value.get("truncated") is not False
+        or not isinstance(entries, list)
+    ):
+        raise RollbackValidationError(f"{label} State root tree proof is incomplete")
+    result: dict[str, tuple[str, str, str]] = {}
+    for path, expected_kind in STATE_CONTRACT_ROOT_KINDS.items():
+        matches = [
+            entry
+            for entry in entries
+            if isinstance(entry, dict) and entry.get("path") == path
+        ]
+        if len(matches) != 1 or set(matches[0]) != {"mode", "path", "sha", "type"}:
+            raise RollbackValidationError(
+                f"{label} State contract root entry {path} is not unique and closed"
+            )
+        entry = matches[0]
+        mode = entry.get("mode")
+        kind = entry.get("type")
+        sha = entry.get("sha")
+        if (
+            not isinstance(mode, str)
+            or re.fullmatch(r"[0-7]{6}", mode) is None
+            or kind not in {"blob", "tree"}
+            or (mode, kind) != expected_kind
+            or not isinstance(sha, str)
+            or COMMIT.fullmatch(sha) is None
+        ):
+            raise RollbackValidationError(
+                f"{label} State contract root entry {path} is invalid"
+            )
+        result[path] = (mode, kind, sha)
+    return result
+
+
+def _github_file_contents(
+    value: dict[str, Any], repository: str, path: str, commit: str
+) -> bytes:
+    expected_fields = {"content", "encoding", "path", "sha", "type", "url"}
+    expected_url = (
+        f"https://api.github.com/repos/{repository}/contents/{path}?ref={commit}"
+    )
+    content = value.get("content")
+    sha = value.get("sha")
+    if (
+        set(value) != expected_fields
+        or value.get("encoding") != "base64"
+        or value.get("path") != path
+        or value.get("type") != "file"
+        or value.get("url") != expected_url
+        or not isinstance(content, str)
+        or not isinstance(sha, str)
+        or COMMIT.fullmatch(sha) is None
+    ):
+        raise RollbackValidationError("live State schema source proof is not closed")
+    try:
+        raw = base64.b64decode("".join(content.splitlines()), validate=True)
+    except (ValueError, binascii.Error) as error:
+        raise RollbackValidationError(
+            "live State schema source is not canonical base64"
+        ) from error
+    if not raw or len(raw) > MAX_CONTRACT_FILE_BYTES:
+        raise RollbackValidationError("live State event schema is empty or oversized")
+    git_blob = hashlib.sha1(
+        b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw,
+        usedforsecurity=False,
+    ).hexdigest()
+    if sha != git_blob:
+        raise RollbackValidationError(
+            "live State schema source does not match its Git blob identity"
+        )
+    return raw
+
+
+def _validate_descendant_qualification(
     qualification: dict[str, Any],
     target_root: pathlib.Path,
-    proof: dict[str, Any],
+    state_main: dict[str, Any],
+    comparison: dict[str, Any],
+    contract_commit: dict[str, Any],
+    live_commit: dict[str, Any],
+    contract_tree: dict[str, Any],
+    live_tree: dict[str, Any],
+    state_schema: dict[str, Any],
 ) -> dict[str, Any]:
     callback_digest = _validate_qualification_header(qualification, target_root)
-    expected_fields = {
-        "environment",
-        "intake_configured_enabled",
-        "intake_effective_enabled",
-        "intake_enabled",
-        "intake_enablement_mode",
-        "intake_lease_expires_at",
-        "state_branch_protected",
-        "state_commit",
-        "state_contract_commit",
-        "state_contract_verified",
-        "state_event_schema_sha256",
-        "status",
-    }
-    if set(proof) != expected_fields:
-        raise RollbackValidationError("live State readiness proof is not closed")
-    state_commit = proof.get("state_commit")
+    if set(state_main) != {"commit", "protected"}:
+        raise RollbackValidationError("live State main proof is not closed")
+    live_sha = state_main.get("commit")
     if (
-        proof.get("status") != "state_writer_ready"
-        or proof.get("environment") != "production"
-        or proof.get("intake_configured_enabled") is not False
-        or proof.get("intake_effective_enabled") is not False
-        or proof.get("intake_enabled") is not False
-        or proof.get("intake_enablement_mode") != "disabled"
-        or proof.get("intake_lease_expires_at") is not None
-        or proof.get("state_branch_protected") is not True
-        or proof.get("state_contract_verified") is not True
-        or not isinstance(state_commit, str)
-        or COMMIT.fullmatch(state_commit) is None
+        state_main.get("protected") is not True
+        or not isinstance(live_sha, str)
+        or COMMIT.fullmatch(live_sha) is None
     ):
         raise RollbackValidationError(
-            "live State readiness did not prove the disabled protected boundary"
+            "live State main is not an exact protected commit"
         )
+    contract_sha = qualification["state_main_commit"]
+    if set(comparison) != {"base_commit", "merge_base_commit", "status", "url"}:
+        raise RollbackValidationError("State ancestry proof is not closed")
+    expected_url = (
+        "https://api.github.com/repos/"
+        f"{qualification['state_repository']}/compare/{contract_sha}...{live_sha}"
+    )
+    expected_status = "identical" if live_sha == contract_sha else "ahead"
     if (
-        proof.get("state_contract_commit") != qualification["state_main_commit"]
-        or state_commit != qualification["state_main_commit"]
-        or proof.get("state_event_schema_sha256")
-        != qualification["state_event_schema_sha256"]
+        comparison.get("status") != expected_status
+        or comparison.get("base_commit") != contract_sha
+        or comparison.get("merge_base_commit") != contract_sha
+        or comparison.get("url") != expected_url
     ):
         raise RollbackValidationError(
-            "target qualification is not bound to the live State readiness proof"
+            "protected State main is not an exact descendant of the reviewed contract"
+        )
+    contract_tree_sha = _commit_tree(
+        contract_commit, contract_sha, "contract"
+    )
+    live_tree_sha = _commit_tree(live_commit, live_sha, "live")
+    expected_roots = _root_entries(contract_tree, contract_tree_sha, "contract")
+    current_roots = _root_entries(live_tree, live_tree_sha, "live")
+    if current_roots != expected_roots:
+        raise RollbackValidationError(
+            "protected State descendant changed a reviewed contract root entry"
+        )
+    state_schema_bytes = _github_file_contents(
+        state_schema,
+        qualification["state_repository"],
+        qualification["state_event_schema_path"],
+        live_sha,
+    )
+    state_digest = hashlib.sha256(state_schema_bytes).hexdigest()
+    if qualification["state_event_schema_sha256"] != state_digest:
+        raise RollbackValidationError(
+            "protected State descendant does not match the reviewed event schema"
         )
     return {
         "repository": qualification["state_repository"],
-        "commit": state_commit,
+        "contract_commit": contract_sha,
+        "live_commit": live_sha,
         "path": qualification["state_event_schema_path"],
-        "sha256": qualification["state_event_schema_sha256"],
+        "sha256": state_digest,
         "callback_contract_sha256": callback_digest,
     }
 
@@ -649,16 +802,35 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
     broker_config = _object(args.broker_config)
     replay_config = _object(args.replay_config)
     qualification = _object(args.qualification)
-    state_proof = getattr(args, "state_proof", None)
     state_main = getattr(args, "state_main", None)
     state_schema = getattr(args, "state_schema", None)
-    if state_proof is not None:
-        state_contract = _validate_qualification_proof(
+    descendant_inputs = [
+        getattr(args, name, None)
+        for name in (
+            "state_comparison",
+            "state_contract_commit",
+            "state_live_commit",
+            "state_contract_tree",
+            "state_live_tree",
+        )
+    ]
+    if state_main is not None and state_schema is not None and all(descendant_inputs):
+        state_contract = _validate_descendant_qualification(
             qualification,
             args.target_root,
-            _object(state_proof),
+            _object(state_main),
+            _object(args.state_comparison),
+            _object(args.state_contract_commit),
+            _object(args.state_live_commit),
+            _object(args.state_contract_tree),
+            _object(args.state_live_tree),
+            _object(state_schema),
         )
-    elif state_main is not None and state_schema is not None:
+    elif (
+        state_main is not None
+        and state_schema is not None
+        and not any(descendant_inputs)
+    ):
         state_contract = _validate_qualification(
             qualification,
             args.target_root,
@@ -667,7 +839,7 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         )
     else:
         raise RollbackValidationError(
-            "rollback plan requires one closed State qualification proof"
+            "rollback plan requires one complete State qualification proof"
         )
     intake_selected = _environment(intake_config, args.environment, "intake config")
     broker_selected = _environment(broker_config, args.environment, "broker config")
@@ -996,7 +1168,10 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         raise RollbackValidationError(
             "RESULT_OWNER_STATE_CONTRACT_COMMIT is not a full lowercase commit"
         )
-    if owner_state_commit is not None and owner_state_commit != state_contract["commit"]:
+    if (
+        owner_state_commit is not None
+        and owner_state_commit != state_contract["contract_commit"]
+    ):
         raise RollbackValidationError(
             "result owner API contract is not bound to current protected State"
         )
@@ -1014,7 +1189,10 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         raise RollbackValidationError(
             "MODEL_IDENTITY_STATE_CONTRACT_COMMIT is not a full lowercase commit"
         )
-    if model_state_commit is not None and model_state_commit != state_contract["commit"]:
+    if (
+        model_state_commit is not None
+        and model_state_commit != state_contract["contract_commit"]
+    ):
         raise RollbackValidationError(
             "model identity API contract is not bound to current protected State"
         )
@@ -1348,6 +1526,166 @@ def validate_health(
         raise RollbackValidationError(f"{component} health differs: {wrong}")
 
 
+def classify_production_state_readiness(
+    response: dict[str, Any],
+    http_status: int,
+    expected_contract: str,
+    expected_schema: str,
+) -> str | None:
+    """Return the qualified State commit, or ``None`` for one safe retry."""
+    if COMMIT.fullmatch(expected_contract) is None or DIGEST.fullmatch(
+        expected_schema
+    ) is None:
+        raise RollbackValidationError(
+            "production State readiness expectations are invalid"
+        )
+    if http_status == 503:
+        if set(response) != {"status", "reason"} or response.get(
+            "status"
+        ) != "not_ready":
+            raise RollbackValidationError(
+                "production State readiness 503 is not a closed response"
+            )
+        reason = response.get("reason")
+        if reason == "state_unavailable":
+            return None
+        if reason == "state_credential_missing":
+            raise RollbackValidationError(
+                "production State readiness reported state_credential_missing"
+            )
+        raise RollbackValidationError(
+            "production State readiness 503 has an unsupported reason"
+        )
+    if http_status == 404:
+        raise RollbackValidationError(
+            "production State readiness authorization was rejected"
+        )
+    if http_status != 200:
+        raise RollbackValidationError(
+            "production State readiness returned an unexpected HTTP status"
+        )
+    if set(response) != PRODUCTION_STATE_READINESS_FIELDS:
+        raise RollbackValidationError(
+            "production State readiness proof is not a closed document"
+        )
+    state_commit = response.get("state_commit")
+    if (
+        response.get("status") != "state_writer_ready"
+        or response.get("environment") != "production"
+        or response.get("intake_configured_enabled") is not False
+        or response.get("intake_effective_enabled") is not False
+        or response.get("intake_enabled") is not False
+        or response.get("intake_enablement_mode") != "disabled"
+        or response.get("intake_lease_expires_at") is not None
+        or response.get("state_branch_protected") is not True
+        or response.get("state_contract_verified") is not True
+        or response.get("state_contract_commit") != expected_contract
+        or response.get("state_event_schema_sha256") != expected_schema
+        or not isinstance(state_commit, str)
+        or COMMIT.fullmatch(state_commit) is None
+    ):
+        raise RollbackValidationError(
+            "production State readiness proof differs from the reviewed contract"
+        )
+    return state_commit
+
+
+def classify_all_false_production_health(
+    response: dict[str, Any],
+    http_status: int,
+    expected_commit: str,
+) -> bool:
+    """Return readiness, distinguishing one valid stale rollout from corruption."""
+    if COMMIT.fullmatch(expected_commit) is None:
+        raise RollbackValidationError(
+            "all-false health expected commit is invalid"
+        )
+    if http_status != 200:
+        raise RollbackValidationError(
+            "all-false production health returned an unexpected HTTP status"
+        )
+    if set(response) != PRODUCTION_HEALTH_FIELDS:
+        raise RollbackValidationError(
+            "all-false production health is not a closed document"
+        )
+    boolean_fields = {
+        "intake_configured_enabled",
+        "intake_effective_enabled",
+        "intake_enabled",
+        "legacy_result_owner_api_enabled",
+        "result_amendment_owner_api_enabled",
+        "result_amendment_maintainer_api_enabled",
+        "model_identity_owner_api_enabled",
+        "model_identity_maintainer_api_enabled",
+        "model_identity_consolidation_api_enabled",
+        "release_opt_in_api_enabled",
+        "release_opt_out_api_enabled",
+        "promotion_canary_configured_enabled",
+        "promotion_canary_enabled",
+    }
+    deployed_commit = response.get("deployed_commit")
+    lease_expiry = response.get("intake_lease_expires_at")
+    intake_configured = response.get("intake_configured_enabled")
+    intake_effective = response.get("intake_effective_enabled")
+    intake_mode = response.get("intake_enablement_mode")
+    intake_semantics_valid = (
+        (
+            intake_mode == "disabled"
+            and intake_configured is False
+            and intake_effective is False
+            and lease_expiry is None
+        )
+        or (
+            intake_mode == "durable"
+            and intake_configured is True
+            and intake_effective is True
+            and lease_expiry is None
+        )
+        or (
+            intake_mode == "leased"
+            and intake_configured is True
+            and type(intake_effective) is bool
+            and type(lease_expiry) is int
+            and lease_expiry > 0
+        )
+    )
+    if (
+        response.get("status") != "ok"
+        or response.get("service") != "lean-eval-submission"
+        or response.get("environment") != "production"
+        or not isinstance(deployed_commit, str)
+        or COMMIT.fullmatch(deployed_commit) is None
+        or any(type(response.get(field)) is not bool for field in boolean_fields)
+        or response.get("intake_enabled") is not intake_effective
+        or not intake_semantics_valid
+        or response.get("model_identity_write_max_subrequests") != 400
+        or response.get("model_identity_consolidation_api")
+        != "atomic_reverse_impact_v1"
+    ):
+        raise RollbackValidationError(
+            "all-false production health is malformed"
+        )
+    expected = {
+        "deployed_commit": expected_commit,
+        "intake_configured_enabled": False,
+        "intake_effective_enabled": False,
+        "intake_enabled": False,
+        "intake_enablement_mode": "disabled",
+        "intake_lease_expires_at": None,
+        "legacy_result_owner_api_enabled": False,
+        "result_amendment_owner_api_enabled": False,
+        "result_amendment_maintainer_api_enabled": False,
+        "model_identity_owner_api_enabled": False,
+        "model_identity_maintainer_api_enabled": False,
+        "model_identity_consolidation_api_enabled": False,
+        "release_opt_in_api_enabled": False,
+        "release_opt_out_api_enabled": False,
+        "promotion_canary_configured_enabled": False,
+        "promotion_canary_enabled": False,
+    }
+    return all(response.get(name) == value for name, value in expected.items())
+
+
 def _descriptor_digest(version: dict[str, Any], component: str) -> str:
     raw = json.dumps(
         _capability_descriptors(version, component),
@@ -1556,7 +1894,11 @@ def parser() -> argparse.ArgumentParser:
     plan.add_argument("--target-root", type=pathlib.Path, required=True)
     plan.add_argument("--state-main", type=pathlib.Path)
     plan.add_argument("--state-schema", type=pathlib.Path)
-    plan.add_argument("--state-proof", type=pathlib.Path)
+    plan.add_argument("--state-comparison", type=pathlib.Path)
+    plan.add_argument("--state-contract-commit", type=pathlib.Path)
+    plan.add_argument("--state-live-commit", type=pathlib.Path)
+    plan.add_argument("--state-contract-tree", type=pathlib.Path)
+    plan.add_argument("--state-live-tree", type=pathlib.Path)
 
     component = commands.add_parser("component")
     component.add_argument(
@@ -1608,6 +1950,17 @@ def parser() -> argparse.ArgumentParser:
     health.add_argument("--health", type=pathlib.Path, required=True)
     health.add_argument("--require-intake-disabled", action="store_true")
 
+    state_readiness = commands.add_parser("production-state-readiness")
+    state_readiness.add_argument("--response", type=pathlib.Path, required=True)
+    state_readiness.add_argument("--http-status", type=int, required=True)
+    state_readiness.add_argument("--expected-contract", required=True)
+    state_readiness.add_argument("--expected-schema", required=True)
+
+    all_false_health = commands.add_parser("all-false-production-health")
+    all_false_health.add_argument("--response", type=pathlib.Path, required=True)
+    all_false_health.add_argument("--http-status", type=int, required=True)
+    all_false_health.add_argument("--expected-commit", required=True)
+
     prestate = commands.add_parser("prestate")
     prestate.add_argument("--plan", type=pathlib.Path, required=True)
     for component_name in ("intake", "broker", "replay"):
@@ -1658,6 +2011,31 @@ def main() -> int:
         elif args.command == "container-id":
             value = json.loads(args.list.read_text(encoding="utf-8"))
             print(container_id(value, args.application))
+        elif args.command == "production-state-readiness":
+            state_commit = classify_production_state_readiness(
+                _object(args.response),
+                args.http_status,
+                args.expected_contract,
+                args.expected_schema,
+            )
+            if state_commit is None:
+                print(
+                    "production State readiness retryable: state_unavailable",
+                    file=sys.stderr,
+                )
+                return CONVERGENCE_RETRY_EXIT
+            print(state_commit)
+        elif args.command == "all-false-production-health":
+            if not classify_all_false_production_health(
+                _object(args.response),
+                args.http_status,
+                args.expected_commit,
+            ):
+                print(
+                    "all-false production health retryable: stale",
+                    file=sys.stderr,
+                )
+                return CONVERGENCE_RETRY_EXIT
         elif args.command == "prestate":
             args.output.write_text(
                 json.dumps(build_prestate(args), indent=2, sort_keys=True) + "\n",

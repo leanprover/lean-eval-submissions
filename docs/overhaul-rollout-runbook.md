@@ -19,30 +19,30 @@ client secrets in documentation, issues, pull requests, logs, or artifacts.
 
 ## 1. Current posture
 
-Keep the not-yet-deployed candidate distinct from live service state.
+Keep the not-yet-deployed repair baseline distinct from live service state.
 
-The launch candidate tracks:
+The repair baseline tracks:
 
 - production intake disabled;
 - staging and production general replay disabled;
 - historical-public replay disabled;
 - production acceptance endpoints disabled;
-- production result-owner, amendment-owner, amendment-maintainer,
-  model-identity-owner, model-identity-maintainer, and publication-opt-in APIs
-  enabled;
-- exactly `kim-em` / GitHub user `477956` in both production maintainer lists;
+- every production lifecycle and publication-choice API disabled;
+- empty production maintainer lists;
 - staging intake and every staging lifecycle API all-false with empty
   maintainer lists;
 - model consolidation disabled in both environments; and
 - release publication disabled in `leanprover/lean-eval-releases`.
 
 It has not been deployed and the launch-readiness packet remains `NO-GO`. The
-live staging and production Workers are still deployed at
-`30bc92b3d46bd2a3ba1788433264fdd70ae3c74e`: production intake and every public
-production lifecycle API are effectively disabled, both live production
-maintainer lists are empty, and live staging intake and lifecycle APIs remain
-all-false. The bounded staging acceptance and promotion-canary exceptions keep
-their separately documented staging-only posture.
+live production Workers are deployed at
+`f09e30565ec8f180cb7b0a85935f9439f802a14c`: production intake and every public
+production lifecycle API are effectively disabled and both live production
+maintainer lists are empty, but the superseded State-contract pin makes that
+commit unsuitable as a launch or rollback target. Live staging intake and
+lifecycle APIs remain all-false. The bounded staging acceptance and
+promotion-canary exceptions keep their separately documented staging-only
+posture.
 
 Verify live state before relying on it:
 
@@ -57,12 +57,11 @@ python3 -m json.tool "$tmp_dir/health.json"
 
 Remove the temporary directory after inspection. The monitor compares live
 health with the checked-out tracked configuration. It is therefore expected to
-report a mismatch on this not-yet-deployed launch candidate; use the exact
-deployed commit when verifying the current all-false live baseline. After
-deployment, a ready report must bind all four public Worker health endpoints to
-one full deployed commit and the tracked candidate configuration. Also inspect
-the latest protected deployment and the canonical readiness issue; endpoint
-health alone does not prove that a rollout is not stuck.
+report a mismatch until this repair baseline is deployed. After deployment, a
+ready report must bind all four public Worker health endpoints to one full
+deployed commit and the tracked all-false configuration. Also inspect the
+latest protected deployment and the canonical readiness issue; endpoint health
+alone does not prove that a rollout is not stuck.
 
 ## 2. Ordinary protected deployment
 
@@ -330,13 +329,16 @@ closed maintainer arrays in `server/wrangler.jsonc` form one reviewed rollout
 state. [`worker_lifecycle_configuration.py`](../scripts/worker_lifecycle_configuration.py)
 requires all six launch flags to be identical, requires exactly one canonical
 maintainer identity per maintainer family when enabled and none when disabled,
-and always rejects model-consolidation enablement. The normal protected
-deployment controller reads that state, binds it to the immutable dispatch tag,
-enters `cloudflare-production`, and verifies every effective public health
-field. This branch is the single-purpose lifecycle configuration candidate.
-Do not deploy it until the production launch packet is complete and still
-reads `GO`; do not combine its deployment with intake enablement, release
-publication, refactoring, or unrelated implementation changes.
+and always rejects model-consolidation enablement. First deploy and qualify the
+tracked all-false repair baseline as the coherent rollback unit. Then prepare a
+separate single-purpose lifecycle candidate that changes only the reviewed
+lifecycle state, stage it, and bind it in the launch packet. The normal
+protected deployment controller reads that state, binds it to the immutable
+dispatch tag, enters `cloudflare-production`, and verifies every effective
+public health field. Do not deploy the lifecycle candidate to production until
+the packet is complete and still reads `GO`; do not combine its deployment with
+intake enablement, release publication, refactoring, or unrelated implementation
+changes.
 
 The same disable-only recovery used for intake also returns every lifecycle
 gate to false. It validates the exact recovered Worker version against explicit
@@ -374,19 +376,15 @@ The qualified staging release boundary is limited to:
 
 ## 7. Exact-version staging rehearsal
 
-Use synthetic private repositories owned for staging. Against the exact
-candidate commits:
-
-1. submit once through browser OAuth;
-2. submit once through the source-bound headless flow;
-3. include one deliberate invalid or unauthorized request;
-4. prove archive-before-evaluation and schema-version-3 binding;
-5. verify terminal Result and append-only State events;
-6. verify release scheduling and the redacted leaderboard projection;
-7. reconstruct one accepted archive with publication disabled; and
-8. exercise the reviewed disable/rollback path and validate staging State.
-
-Do not rerun broad historical matrices to refresh timestamps.
+Retain the bounded f09 browser/headless, owner/maintainer denial,
+private-to-scheduled opt-in, archive/result/State, publication-disabled
+reconstruction, leaderboard, and all-false recovery results as
+unchanged-feature evidence. For the repair baseline and separate lifecycle
+candidate, require fresh protected CI, exact staging deployment/readback, the
+immutable dispatch tag, the staging promotion canary, and one fresh all-false
+recovery of the baseline. Rerun a functional case only if its implementation
+path changes or those fresh checks expose drift. Do not rerun broad functional
+or historical matrices merely to refresh timestamps.
 
 The compact production go/no-go record is
 [`production-launch-readiness.md`](production-launch-readiness.md). Keep its
@@ -421,7 +419,10 @@ reviewed target commit and its broker, replay, and intake version IDs. The
 workflow redeploys exact target code while retaining current secret values; it
 does not activate historical Cloudflare versions directly. It restores the
 replay container from the exact reviewed image digest and leaves intake
-disabled.
+disabled. Before mutation it independently proves that protected State is the
+reviewed contract or a descendant with unchanged guarded roots and schema.
+After restoring target intake, require its authenticated readiness proof before
+changing broker or replay.
 
 Rollback never rewrites State, Results, releases, AWS resources, credentials,
 or GitHub repository history. If the multi-component deploy is interrupted,

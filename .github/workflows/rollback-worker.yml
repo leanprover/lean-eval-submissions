@@ -66,7 +66,6 @@ jobs:
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
           GH_TOKEN: ${{ github.token }}
           INTAKE_VERSION: ${{ inputs.intake_version_id }}
-          READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
           REPLAY_VERSION: ${{ inputs.replay_version_id }}
           REPOSITORY: ${{ github.repository }}
         run: |
@@ -122,6 +121,7 @@ jobs:
           npx wrangler versions view "$original_replay" \
             --config wrangler.replay.jsonc --env production --json \
             > "$plan_dir/original-replay-version.json"
+
           npx wrangler containers list --config wrangler.replay.jsonc \
             --env production --json > "$plan_dir/original-container-list.json"
           original_container=$(python ../scripts/validate_cloudflare_rollback.py \
@@ -138,12 +138,45 @@ jobs:
           npx wrangler versions view "$REPLAY_VERSION" \
             --config wrangler.replay.jsonc --env production --json > "$plan_dir/replay-version.json"
 
-          curl --fail-with-body --silent --show-error --proto '=https' \
-            --max-redirs 0 --max-time 30 \
-            --request POST \
-            --header "Authorization: Bearer ${READINESS_TOKEN}" \
-            --output "$plan_dir/state-proof.json" \
-            https://lean-eval-submission-server.lean-eval.workers.dev/readyz
+          qualification="$plan_dir/target/.audit/cloudflare-rollback-qualification-v1.json"
+          state_repository=$(jq -er .state_repository "$qualification")
+          state_contract=$(jq -er .state_main_commit "$qualification")
+          state_schema_path=$(jq -er .state_event_schema_path "$qualification")
+          if [ "$state_repository" != leanprover/lean-eval-state ] || \
+             [[ ! "$state_contract" =~ ^[0-9a-f]{40}$ ]] || \
+             [ "$state_schema_path" != schema/state-event-v1.schema.json ]; then
+            echo "rollback qualification has unsafe State source coordinates" >&2
+            exit 1
+          fi
+          gh api "repos/$state_repository/branches/main" \
+            --jq '{commit:.commit.sha,protected:.protected}' \
+            > "$plan_dir/state-main.json"
+          state_live=$(jq -er .commit "$plan_dir/state-main.json")
+          if [[ ! "$state_live" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "protected State main did not resolve to a full lowercase Git SHA" >&2
+            exit 1
+          fi
+          gh api "repos/$state_repository/compare/$state_contract...$state_live" \
+            --jq '{base_commit:.base_commit.sha,merge_base_commit:.merge_base_commit.sha,status,url}' \
+            > "$plan_dir/state-comparison.json"
+          gh api "repos/$state_repository/git/commits/$state_contract" \
+            --jq '{commit:.sha,tree:.tree.sha}' \
+            > "$plan_dir/state-contract-commit.json"
+          gh api "repos/$state_repository/git/commits/$state_live" \
+            --jq '{commit:.sha,tree:.tree.sha}' \
+            > "$plan_dir/state-live-commit.json"
+          state_contract_tree=$(jq -er .tree "$plan_dir/state-contract-commit.json")
+          state_live_tree=$(jq -er .tree "$plan_dir/state-live-commit.json")
+          gh api "repos/$state_repository/git/trees/$state_contract_tree" \
+            --jq '{sha,truncated,tree:[.tree[]|{mode,path,sha,type}]}' \
+            > "$plan_dir/state-contract-tree.json"
+          gh api "repos/$state_repository/git/trees/$state_live_tree" \
+            --jq '{sha,truncated,tree:[.tree[]|{mode,path,sha,type}]}' \
+            > "$plan_dir/state-live-tree.json"
+          gh api \
+            "repos/$state_repository/contents/$state_schema_path?ref=$state_live" \
+            --jq '{content,encoding,path,sha,type,url}' \
+            > "$plan_dir/state-schema.json"
 
           python ../scripts/validate_cloudflare_rollback.py plan \
             --expected-commit "$EXPECTED_COMMIT" \
@@ -161,8 +194,15 @@ jobs:
             --qualification \
             "$plan_dir/target/.audit/cloudflare-rollback-qualification-v1.json" \
             --target-root "$plan_dir/target" \
-            --state-proof "$plan_dir/state-proof.json" \
+            --state-main "$plan_dir/state-main.json" \
+            --state-comparison "$plan_dir/state-comparison.json" \
+            --state-contract-commit "$plan_dir/state-contract-commit.json" \
+            --state-live-commit "$plan_dir/state-live-commit.json" \
+            --state-contract-tree "$plan_dir/state-contract-tree.json" \
+            --state-live-tree "$plan_dir/state-live-tree.json" \
+            --state-schema "$plan_dir/state-schema.json" \
             --require-replay-disabled \
+            --require-intake-disabled \
             --output "$plan_dir/plan.json"
 
           for component in intake broker replay; do
@@ -214,30 +254,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
-          READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
         run: |
           set -euo pipefail
-          plan_dir="$RUNNER_TEMP/lean-eval-rollback"
-          qualified_state=$(jq -er .state_contract.commit "$plan_dir/plan.json")
-          curl --fail-with-body --silent --show-error --proto '=https' \
-            --max-redirs 0 --max-time 30 \
-            --request POST \
-            --header "Authorization: Bearer ${READINESS_TOKEN}" \
-            --output "$plan_dir/state-proof-before-mutation.json" \
-            https://lean-eval-submission-server.lean-eval.workers.dev/readyz
-          QUALIFIED_STATE="$qualified_state" PLAN_DIR="$plan_dir" python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          root = Path(os.environ["PLAN_DIR"])
-          with (root / "state-proof.json").open(encoding="utf-8") as stream:
-              qualified = json.load(stream)
-          with (root / "state-proof-before-mutation.json").open(encoding="utf-8") as stream:
-              current = json.load(stream)
-          if current != qualified or current.get("state_commit") != os.environ["QUALIFIED_STATE"]:
-              raise SystemExit("protected State main moved after rollback qualification")
-          PY
           target="$RUNNER_TEMP/lean-eval-rollback/target/server"
           # The validated secrets.required allowlist inherits live secrets while
           # a full variable deploy clears every residual INTAKE_LEASE_* binding.
@@ -253,7 +271,9 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           EXPECTED_COMMIT: ${{ inputs.expected_commit }}
+          READINESS_TOKEN: ${{ secrets.READINESS_TOKEN }}
         run: |
+          set -euo pipefail
           plan_dir="$RUNNER_TEMP/lean-eval-rollback"
           npx wrangler deployments status --config wrangler.jsonc \
             --env production --json > "$plan_dir/intake-status.json"
@@ -277,6 +297,34 @@ jobs:
             --plan "$plan_dir/plan.json" --component intake \
             --health "$plan_dir/intake-health.json" \
             --require-intake-disabled
+          contract=$(jq -er .state_contract.contract_commit "$plan_dir/plan.json")
+          schema=$(jq -er .state_contract.sha256 "$plan_dir/plan.json")
+          proof="$plan_dir/target-state-proof.json"
+          state_commit=""
+          for attempt in $(seq 1 6); do
+            http_status=$(curl --silent --show-error --proto '=https' \
+              --max-redirs 0 --max-time 30 \
+              --request POST \
+              --header "Authorization: Bearer ${READINESS_TOKEN}" \
+              --output "$proof" --write-out '%{http_code}' \
+              https://lean-eval-submission-server.lean-eval.workers.dev/readyz)
+            classification=0
+            state_commit=$(python ../scripts/validate_cloudflare_rollback.py \
+              production-state-readiness --response "$proof" \
+              --http-status "$http_status" \
+              --expected-contract "$contract" --expected-schema "$schema") \
+              || classification=$?
+            if [ "$classification" -eq 0 ]; then break; fi
+            if [ "$classification" -ne 75 ] || [ "$attempt" -eq 6 ]; then
+              echo "target State readiness did not converge before dependency mutation" >&2
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+          if [[ ! "$state_commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "target State readiness returned no qualified commit" >&2
+            exit 1
+          fi
 
       - name: Deploy exact target broker code with current secrets
         env:
@@ -395,25 +443,34 @@ jobs:
           python ../scripts/validate_cloudflare_rollback.py health \
             --plan "$plan_dir/plan.json" --component intake \
             --health "$plan_dir/final-intake-health.json" --require-intake-disabled
-          curl --fail-with-body --silent --show-error --proto '=https' \
-            --max-redirs 0 --max-time 30 \
-            --request POST \
-            --header "Authorization: Bearer ${READINESS_TOKEN}" \
-            --output "$plan_dir/final-state-proof.json" \
-            https://lean-eval-submission-server.lean-eval.workers.dev/readyz
-          PLAN_DIR="$plan_dir" python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          root = Path(os.environ["PLAN_DIR"])
-          with (root / "state-proof.json").open(encoding="utf-8") as stream:
-              qualified = json.load(stream)
-          with (root / "final-state-proof.json").open(encoding="utf-8") as stream:
-              current = json.load(stream)
-          if current != qualified:
-              raise SystemExit("disabled rollback cannot prove unchanged protected State")
-          PY
+          contract=$(jq -er .state_contract.contract_commit "$plan_dir/plan.json")
+          schema=$(jq -er .state_contract.sha256 "$plan_dir/plan.json")
+          proof="$plan_dir/final-state-proof.json"
+          state_commit=""
+          for attempt in $(seq 1 6); do
+            http_status=$(curl --silent --show-error --proto '=https' \
+              --max-redirs 0 --max-time 30 \
+              --request POST \
+              --header "Authorization: Bearer ${READINESS_TOKEN}" \
+              --output "$proof" --write-out '%{http_code}' \
+              https://lean-eval-submission-server.lean-eval.workers.dev/readyz)
+            classification=0
+            state_commit=$(python ../scripts/validate_cloudflare_rollback.py \
+              production-state-readiness --response "$proof" \
+              --http-status "$http_status" \
+              --expected-contract "$contract" --expected-schema "$schema") \
+              || classification=$?
+            if [ "$classification" -eq 0 ]; then break; fi
+            if [ "$classification" -ne 75 ] || [ "$attempt" -eq 6 ]; then
+              echo "final target State readiness did not converge" >&2
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+          if [[ ! "$state_commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "final target State readiness returned no qualified commit" >&2
+            exit 1
+          fi
           echo "Restored intake version: $deployed_version" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove rollback scratch

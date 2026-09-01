@@ -1,10 +1,10 @@
 # Model identity producer API
 
 The submission Worker provides authenticated model-identity owner and
-maintainer routes backed by protected State. The launch candidate enables the
-owner and maintainer routes in production for the reviewed maintainer identity,
-while staging remains dark. These routes are independently gated from
-submission intake, which remains disabled in the lifecycle-only candidate.
+maintainer routes backed by protected State. The compatible tracked baseline
+keeps both routes dark in production and staging. A separately reviewed launch
+candidate may enable the production routes for the reviewed maintainer
+identity. These routes are independently gated from submission intake.
 
 ## Launch routes and authority
 
@@ -52,10 +52,11 @@ identities.
 The implemented consolidation route has a third gate,
 `MODEL_IDENTITY_CONSOLIDATION_API_ENABLED`, which is effective only when the
 owner gate and exact State contract are also effective. All three flags remain
-`false` in tracked staging. In production, the owner and maintainer flags are
-`true` and the closed maintainer list contains exactly `kim-em` / GitHub user
-`477956`; the consolidation flag remains `false`. Consolidation is not part of
-this launch and must not be exercised as a launch test.
+`false` in both tracked environments, and both maintainer lists are empty. A
+separate production launch candidate may enable the owner and maintainer flags
+with a closed list containing exactly `kim-em` / GitHub user `477956`; the
+consolidation flag remains `false`. Consolidation is not part of this launch and
+must not be exercised as a launch test.
 
 ## Bounded launch smoke
 

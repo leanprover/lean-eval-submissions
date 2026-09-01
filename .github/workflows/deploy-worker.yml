@@ -568,53 +568,32 @@ jobs:
         run: |
           set -euo pipefail
           proof="$RUNNER_TEMP/lean-eval-production-finalization/state-proof.json"
-          curl --fail-with-body --silent --show-error --proto '=https' \
-            --max-redirs 0 --max-time 30 \
-            --request POST \
-            --header "Authorization: Bearer ${READINESS_TOKEN}" \
-            --output "$proof" \
-            https://lean-eval-submission-server.lean-eval.workers.dev/readyz
-          commit=$(STATE_PROOF="$proof" python - <<'PY'
-          import json
-          import os
-          import re
-
-          with open(os.environ["STATE_PROOF"], encoding="utf-8") as stream:
-              proof = json.load(stream)
-          expected = {
-              "environment",
-              "intake_configured_enabled",
-              "intake_effective_enabled",
-              "intake_enabled",
-              "intake_enablement_mode",
-              "intake_lease_expires_at",
-              "state_branch_protected",
-              "state_commit",
-              "state_contract_commit",
-              "state_contract_verified",
-              "state_event_schema_sha256",
-              "status",
-          }
-          if set(proof) != expected:
-              raise SystemExit("production State readiness proof is not closed")
-          if (
-              proof["status"] != "state_writer_ready"
-              or proof["environment"] != "production"
-              or proof["intake_configured_enabled"] is not False
-              or proof["intake_effective_enabled"] is not False
-              or proof["intake_enabled"] is not False
-              or proof["intake_enablement_mode"] != "disabled"
-              or proof["intake_lease_expires_at"] is not None
-              or proof["state_branch_protected"] is not True
-              or proof["state_contract_verified"] is not True
-              or proof["state_contract_commit"] != "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a"
-              or proof["state_event_schema_sha256"] != "2d19515da1b0798f00dd3e9809c3a2770fee8b27ce6323ac9b9e827db4c7ea27"
-              or re.fullmatch(r"[0-9a-f]{40}", proof["state_commit"]) is None
-          ):
-              raise SystemExit("production State readiness proof did not bind the reviewed contract")
-          print(proof["state_commit"])
-          PY
-          )
+          commit=""
+          for attempt in $(seq 1 6); do
+            http_status=$(curl --silent --show-error --proto '=https' \
+              --max-redirs 0 --max-time 30 \
+              --request POST \
+              --header "Authorization: Bearer ${READINESS_TOKEN}" \
+              --output "$proof" --write-out '%{http_code}' \
+              https://lean-eval-submission-server.lean-eval.workers.dev/readyz)
+            classification=0
+            commit=$(python ../scripts/validate_cloudflare_rollback.py \
+              production-state-readiness --response "$proof" \
+              --http-status "$http_status" \
+              --expected-contract 9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f \
+              --expected-schema 2d19515da1b0798f00dd3e9809c3a2770fee8b27ce6323ac9b9e827db4c7ea27) \
+              || classification=$?
+            if [ "$classification" -eq 0 ]; then break; fi
+            if [ "$classification" -ne 75 ] || [ "$attempt" -eq 6 ]; then
+              echo "production State readiness did not converge" >&2
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
+          if [[ ! "$commit" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "production State readiness returned no qualified commit" >&2
+            exit 1
+          fi
           echo "commit=$commit" >> "$GITHUB_OUTPUT"
 
       - name: Prepare the exact Worker-enforced intake lease
@@ -785,7 +764,7 @@ jobs:
               or proof["intake_lease_expires_at"] != int(os.environ["INTAKE_LEASE_EXPIRES_AT"])
               or proof["state_branch_protected"] is not True
               or proof["state_commit"] != os.environ["STATE_COMMIT"]
-              or proof["state_contract_commit"] != "c6a4bb67b55609ae7215bdd3cac2378b2db42a0a"
+              or proof["state_contract_commit"] != "9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f"
               or proof["state_contract_verified"] is not True
               or proof["state_event_schema_sha256"] != "2d19515da1b0798f00dd3e9809c3a2770fee8b27ce6323ac9b9e827db4c7ea27"
           ):

@@ -356,27 +356,21 @@ jobs:
             --config "$target/wrangler.jsonc" --version "$RUNNER_TEMP/recovery-version.json" \
             --version-id "$version" --require-intake-disabled \
             --require-launch-gates-disabled
-          body=$(curl --fail --silent --show-error --proto '=https' --max-redirs 0 \
-            --max-time 10 --retry 12 --retry-all-errors --retry-max-time 120 \
-            https://lean-eval-submission-server.lean-eval.workers.dev/healthz)
-          HEALTH_BODY="$body" python - <<'PY'
-          import json, os
-          body = json.loads(os.environ["HEALTH_BODY"])
-          assert body["deployed_commit"] == os.environ["TARGET_COMMIT"]
-          assert body["intake_configured_enabled"] is False
-          assert body["intake_effective_enabled"] is False
-          assert body["intake_enablement_mode"] == "disabled"
-          assert body["intake_lease_expires_at"] is None
-          for field in (
-              "legacy_result_owner_api_enabled",
-              "result_amendment_owner_api_enabled",
-              "result_amendment_maintainer_api_enabled",
-              "model_identity_owner_api_enabled",
-              "model_identity_maintainer_api_enabled",
-              "model_identity_consolidation_api_enabled",
-              "release_opt_out_api_enabled",
-          ):
-              assert body[field] is False, field
-          assert body["promotion_canary_configured_enabled"] is False
-          assert body["promotion_canary_enabled"] is False
-          PY
+          response="$RUNNER_TEMP/launch-disable-recovery/health.json"
+          for attempt in $(seq 1 13); do
+            http_status=$(curl --silent --show-error --proto '=https' \
+              --max-redirs 0 --max-time 10 \
+              --output "$response" --write-out '%{http_code}' \
+              https://lean-eval-submission-server.lean-eval.workers.dev/healthz)
+            classification=0
+            python ../scripts/validate_cloudflare_rollback.py \
+              all-false-production-health --response "$response" \
+              --http-status "$http_status" --expected-commit "$TARGET_COMMIT" \
+              || classification=$?
+            if [ "$classification" -eq 0 ]; then break; fi
+            if [ "$classification" -ne 75 ] || [ "$attempt" -eq 13 ]; then
+              echo "all-false production health did not converge" >&2
+              exit 1
+            fi
+            sleep 5
+          done

@@ -22,7 +22,7 @@ Last reconciled: **2026-09-01**
 
 | Contract | Current value |
 | --- | --- |
-| Production State contract pin | `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a` |
+| Production State contract pin | `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f` |
 | Portable staging State contract pin | `41f55135a8d5f36941e615e9ec9e4f5e32a786a5` |
 | Replay image tag | `lean-eval-authoritative:4026b18d5e679b07be1961d538a51ad689a9d8d4` |
 | Replay image digest | `sha256:f61b6be446c3bc355c2eefddc3b376226acee89ca562e66f3b283576a32bb20b` |
@@ -141,8 +141,9 @@ secrets are unavailable to pull-request jobs.
 
 [`deploy-worker.yml`](.github/workflows/deploy-worker.yml) is the normal
 deployment path. It validates code, deploys staging, runs the promotion canary,
-then deploys production with tracked intake and replay disabled and lifecycle
-gates in their reviewed tracked state. The protected
+then deploys production with tracked intake, replay, and every lifecycle gate
+disabled. A separate launch candidate may enable only the reviewed lifecycle
+gates after this compatible all-false baseline is qualified. The protected
 `submission-dispatch-promotion` environment (`20259251430`) requires reviewer
 `kim-em` and contains only `DISPATCH_PROMOTION_APPROVAL_GUARD`. Tag ruleset
 `21094118` rejects update or deletion of
@@ -398,7 +399,11 @@ reviewed target commit and its exact intake, broker, and replay version IDs.
 The workflow redeploys exact target code/configuration while retaining current
 secret values; it never activates an old Cloudflare version directly. Replay
 is restored from the target's reviewed container image digest. Rollback is
-disable-only and must finish with production intake effectively disabled.
+disable-only and must finish with production intake effectively disabled. Its
+pre-mutation proof independently verifies that protected State is the reviewed
+contract or a descendant with unchanged guarded roots and schema. After the
+target intake Worker is restored, its authenticated readiness proof must pass
+before broker or replay mutation.
 
 Rollback does not revert or rewrite State, Results, releases, AWS resources,
 credentials, or repository history. If the non-atomic multi-component deploy
