@@ -565,6 +565,29 @@
         "ref": "34357f2f94f39e293b1d2b127b7f298654d39cf7",
         "repo": "leanprover/lean-eval-state-staging"
       }
+    },
+    {
+      "accepted_at": "2026-09-01T10:09:20Z",
+      "benchmark_commit": "a0a06faa95f2ee15578675c6dacc596a83b17db3",
+      "declared_model": "LeanEval staging resume session 967041459a0d646d3a750f5a4fa209a8",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a05c49-8061-732c-a838-ec9e0a75cfb2"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "harness": "bounded staging lifecycle smoke",
+        "human_involvement": "Selected and submitted by the staging operator",
+        "web_access": false
+      },
+      "result_id": "r2_b82a6eda570fcc9ba9717195a06a1e1e13d4598ef6d1da8e96b3c60aa1130971",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "34357f2f94f39e293b1d2b127b7f298654d39cf7",
+        "repo": "leanprover/lean-eval-state-staging"
+      }
     }
   ],
   "schema_version": 2,
