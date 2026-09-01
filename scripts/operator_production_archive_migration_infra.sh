@@ -24,7 +24,6 @@ readonly RELEASE_PREFIX=leanprover@7233018/lean-eval-releases@1340741242
 readonly MIGRATION_ROLE=lean-eval-archive-migration-wrap-production
 readonly MIGRATION_ROLE_ARN=arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production
 readonly WRAP_ROLE=lean-eval-archive-wrap-production
-readonly WRAP_ROLE_ARN=arn:aws:iam::161072922960:role/lean-eval-archive-wrap-production
 readonly FUNCTION_ROLE=lean-eval-archive-unwrap-function-production
 readonly FUNCTION_NAME=lean-eval-archive-unwrap-production
 readonly FUNCTION_ALIAS_ARN=arn:aws:lambda:us-east-1:161072922960:function:lean-eval-archive-unwrap-production:live
@@ -103,9 +102,9 @@ jq -e '
 ' "$ops/environment-before.json" >/dev/null
 gh api "repos/$REPOSITORY/environments/$ENVIRONMENT/variables" \
   > "$ops/environment-variables-before.json"
-jq -e --arg old "$WRAP_ROLE_ARN" '
+jq -e --arg migration "$MIGRATION_ROLE_ARN" '
   .total_count == 1 and
-  [.variables[] | {name, value}] == [{name: "AWS_WRAP_ROLE_ARN", value: $old}]
+  [.variables[] | {name, value}] == [{name: "AWS_WRAP_ROLE_ARN", value: $migration}]
 ' "$ops/environment-variables-before.json" >/dev/null
 gh api "repos/$REPOSITORY/environments/$ENVIRONMENT/secrets" \
   > "$ops/environment-secrets-before.json"
@@ -525,11 +524,15 @@ jq -e --arg arn "$FUNCTION_ALIAS_ARN" '
 test "$(jq -r .FunctionVersion "$ops/alias-before.json")" != \
   "$(jq -r .FunctionVersion "$ops/alias-after.json")"
 
-echo step=connect-migration-role-selector
-gh variable set AWS_WRAP_ROLE_ARN --repo "$REPOSITORY" --env "$ENVIRONMENT" \
-  --body "$MIGRATION_ROLE_ARN"
-test "$(gh api "repos/$REPOSITORY/environments/$ENVIRONMENT/variables/AWS_WRAP_ROLE_ARN" \
-  --jq .value)" = "$MIGRATION_ROLE_ARN"
+echo step=verify-migration-role-selector
+gh api "repos/$REPOSITORY/environments/$ENVIRONMENT/variables" \
+  > "$ops/environment-variables-after.json"
+cmp "$ops/environment-variables-before.json" \
+  "$ops/environment-variables-after.json"
+jq -e --arg migration "$MIGRATION_ROLE_ARN" '
+  .total_count == 1 and
+  [.variables[] | {name, value}] == [{name: "AWS_WRAP_ROLE_ARN", value: $migration}]
+' "$ops/environment-variables-after.json" >/dev/null
 test "$(gh api "repos/$REPOSITORY/environments/$ENVIRONMENT/secrets" \
   --jq '[.secrets[].name | select(. == "LEGACY_ARCHIVE_IDENTITY")] | length')" = 0
 

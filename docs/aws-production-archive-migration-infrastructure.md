@@ -8,9 +8,9 @@ OIDC trust.
 The operation is deliberately narrower than the migration itself. It does not
 install `LEGACY_ARCHIVE_IDENTITY`, dispatch the migration or replay workflows,
 invoke the unwrap Lambda, write Git or State, or enable intake, replay, or
-publication. Its final GitHub mutation only replaces the unusable ordinary
-Wrap-role ARN in `archive-migration-production` with the new dedicated role
-ARN.
+publication. The GitHub environment is already prebound to the dedicated role
+ARN. The operation requires that exact selector before the AWS change and
+reads it back unchanged afterward; it performs no GitHub mutation.
 
 Run `scripts/operator_production_archive_migration_infra.sh` from the reviewed
 repository commit in an AWS CLI session authenticated as account
@@ -29,7 +29,8 @@ The script fails closed unless all of these facts hold:
   `ReleaseGitHubRepository` parameter names with their exact current subject
   values; the update replaces those names with the reviewed subject-prefix
   parameters without changing the effective subjects;
-- the migration environment is protected and has no legacy identity;
+- the migration environment is protected, is prebound to the exact dedicated
+  migration role ARN, and has no legacy identity;
 - the source template and two Lambda source files match commit
   `5397ca582e3d38a88ffda928a48a479a6e9afb6d` byte for byte;
 - the CloudFormation change set contains only the migration role, the unwrap
@@ -44,6 +45,9 @@ On success the final line is:
 PRODUCTION_ARCHIVE_MIGRATION_INFRA_OK
 ```
 
-Provisioning does not authorize migration. The separate protected workflow
-still requires its exact reviewed inputs, the absent legacy identity, and its
-own early preflight before it can stage a review branch.
+Provisioning makes the prebound selector effective as soon as the AWS stack
+update creates the dedicated role, so admitted jobs can assume its v2
+Encrypt-only authority. It does not authorize actual migration: the legacy
+identity is absent and the separate protected workflow still requires its
+exact reviewed inputs and its own early preflight before it can stage a review
+branch.

@@ -16,7 +16,7 @@ performed by the maintainer because the agent lacks access is an operator
 handoff, not a new permission gate. The remaining approval exceptions are
 listed in [`docs/overhaul-tracker.md`](docs/overhaul-tracker.md).
 
-Last reconciled: **2026-08-27**
+Last reconciled: **2026-09-01**
 
 ## Current baseline
 
@@ -41,10 +41,9 @@ Public structured health currently reports one coherent deployed commit with:
 Automatic release publication is disabled because `PUBLICATION_ENABLED` is
 absent. Production archive Wrap is connected and its Encrypt-only/decrypt-
 denial preflight is qualified; the production replay role variable is absent.
-The staging release role trusts the current ID-bearing GitHub OIDC subject, and
-its credentialed, publication-disabled reconstruction boundary is qualified.
-The production release trust repair remains an authenticated operator handoff;
-standing maintainer authorization covers that exact reviewed change.
+Both release roles trust their exact current ID-bearing GitHub OIDC subjects.
+The staging credentialed, publication-disabled reconstruction boundary and the
+production controller, audit-read, and OIDC trust preflights are qualified.
 
 ## Cloudflare resources
 
@@ -285,9 +284,9 @@ trying to recover the old private material.
 | submissions / `archive-production` | `EN_kwDOSh7OzM8AAAAEu8r25w` | `lean-eval-dispatch/*` | Production Encrypt-only `AWS_WRAP_ROLE_ARN` set and qualified |
 | submissions / `replay-staging` | `EN_kwDOSh7OzM8AAAAEu8r21Q` | `main` and `lean-eval-dispatch/*` | Staging replay invoker role set |
 | submissions / `replay-production` | `EN_kwDOSh7OzM8AAAAEu8r3MQ` | protected branches | Production replay variable absent |
-| submissions / `archive-migration-production` | `EN_kwDOSh7OzM8AAAAEwLDSMQ` | protected branches | Ordinary production Wrap role recorded but incompatible with this environment's OIDC subject; unusable |
+| submissions / `archive-migration-production` | `EN_kwDOSh7OzM8AAAAEwLDSMQ` | protected branches | Prebound to the dedicated migration role ARN; live AWS apply/readback pending, so unusable |
 | releases / `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | protected branches | Staging release invoker role set; live trust matches the current ID-bearing subject |
-| releases / `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | protected branches | Production release invoker and Git keys set; live release trust repair pending; publication variable absent |
+| releases / `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | protected branches | Production release invoker and Git keys set; live trust matches the current ID-bearing subject; publication variable absent |
 
 Environment protection/policy IDs, in the same order, are:
 
@@ -343,17 +342,18 @@ Current GitHub OIDC subject prefixes are
 `repo:leanprover@7233018/lean-eval-releases@1340741242`. The staging release
 role trusts exact subject
 `repo:leanprover@7233018/lean-eval-releases@1340741242:environment:release-staging`.
-The production release role still trusts the obsolete name-only subject; its
-authenticated repair is documented in
-[`docs/aws-release-production-trust-repair.md`](docs/aws-release-production-trust-repair.md).
-That procedure reuses the live production template so it cannot also provision
-the deferred migration role.
+The production release role trusts exact subject
+`repo:leanprover@7233018/lean-eval-releases@1340741242:environment:release-production`.
+Automatic publication remains independently disabled because the repository
+variable `PUBLICATION_ENABLED` is absent.
 
 The historical migration role
 `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`
 and stack output `MigrationWrapRoleArn` are not provisioned. The existing
 ordinary production Wrap role does not trust the migration environment. The
-required `LEGACY_ARCHIVE_IDENTITY` secret is absent.
+GitHub environment is prebound to the intended dedicated role ARN, but that
+does not create AWS authority. The required authenticated CloudFormation/IAM
+apply and readback, and the `LEGACY_ARCHIVE_IDENTITY` secret, remain absent.
 
 Archives remain standard `age` ciphertext. The schema-version-3 sidecar binds
 submission ID, ciphertext digest, recipient, adapter name, and opaque wrapped
@@ -425,7 +425,7 @@ summaries:
 - `docs/historical-public-replay-profiles.md`;
 - `docs/historical-private-archive-crosswalk.md`;
 - `docs/historical-public-unavailability.md`; and
-- current setup and trust-repair instructions under `docs/`.
+- current setup and recovery instructions under `docs/`.
 
 ## Reconciliation checklist
 

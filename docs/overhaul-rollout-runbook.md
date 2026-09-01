@@ -358,11 +358,9 @@ submission/digest binding, and provider-neutral adapter fields.
 Current authority boundaries and environment variables are recorded in
 [`../INFRASTRUCTURE.md`](../INFRASTRUCTURE.md). The staging release trust and
 credentialed reconstruction boundary are qualified, as is the connected
-production archive Wrap-only boundary. The remaining production release-trust
-repair is covered by standing authorization but must follow the exact
-operator-handoff procedure in
-[`aws-release-production-trust-repair.md`](aws-release-production-trust-repair.md)
-without decrypting or publishing production source.
+production archive Wrap-only boundary. The production release role trusts its
+exact ID-bearing subject, and its publication-disabled controller, audit-read,
+and OIDC preflights pass without decrypting or publishing production source.
 
 The qualified staging release boundary is limited to:
 

@@ -69,7 +69,7 @@ statements: Encrypt only on the production migration role and Decrypt only on
 the unwrap function role. Standing authorization covers deployment of those
 reviewed statements through the exact historical execution packet. That packet
 is separate from the already qualified production live-intake Wrap boundary
-and the release-controller trust-repair procedure.
+and the already qualified production release-controller boundary.
 
 ## Trusted archive writer
 

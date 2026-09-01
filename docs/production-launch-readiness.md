@@ -1,6 +1,6 @@
 # Production launch readiness packet
 
-Status: **NO-GO — final staging and production release trust are pending**
+Status: **NO-GO — final staging and launch-packet refresh are pending**
 
 Scope authority: [LeanEval completion plan, section 7.5][completion-plan]
 
@@ -68,7 +68,7 @@ model consolidation, replay, or publication.
 | Disabled baseline | Production intake, general replay, historical-public replay, every public lifecycle family, model consolidation, and the promotion canary are effectively disabled. Protected production State validates at `07e68200ee20efdd363cea16c1d08a13971acc2e`; the deployed lifecycle contract pin remains its validated ancestor `c6a4bb67b55609ae7215bdd3cac2378b2db42a0a`. The release queue is empty. The public leaderboard retains stable problem pages and visible statements. |
 | Archive boundary | Schema-version-3 archive-before-evaluation is deployed. Production archive authority is connected to the Encrypt-only Wrap role and has a qualified decrypt denial. The evaluation lane has no Wrap or unwrap authority. |
 | Staging release boundary | Qualified: exact one-submission scope, consume-before-unwrap, identical reuse refusal, authority removal before reconstruction, source allowlisting, no plaintext artifact, no State/Git mutation, and cleanup. Publication and production authority remained absent. |
-| Production release preflight | Controller State-write and audit-read credential preflights pass at release commit `4f3d4cdd11d41e93294ba7821899923375ba360f`, with publication absent and no due work. **PENDING:** repair the exact ID-bearing `release-production` OIDC trust, read it back, and pass the publication-disabled trust-only preflight. Do not decrypt or publish a production archive. |
+| Production release preflight | Qualified at release commit `a02e06e7ce5258cdde23b6dee79666355b947a21`, with publication absent and no due work. The controller State-write, audit-read, and exact ID-bearing `release-production` OIDC trust preflights all pass. No production archive was decrypted or published. |
 | Entry and submitter UI | The static `https://lean-lang.org/eval/submit/` entry page and the stable production application at `https://lean-eval-submission-server.lean-eval.workers.dev/` are live in disabled posture. The entry page states the policy and links to the Worker origin; the Worker supplies OAuth feedback, preserved form values, progress spinners, and status. One-way publication opt-in is kept separate from new intake on the dedicated `/release/` page when enabled. No LeanEval hostname or DNS change is required. |
 | Exact-version staging | **PENDING:** record the successful browser and source-bound submissions, denial cases, archive/Result/State/scheduling checks, publication-disabled reconstruction, redaction checks, all-false rollback, and validated final staging State in section 9. |
 
@@ -92,8 +92,9 @@ custodian except where organization ownership provides recovery.
 | AWS archive and release sessions | GitHub OIDC only: production archive may assume the Encrypt-only Wrap role; production release may invoke only the versioned unwrap Lambda | No long-lived AWS access key. Revoke by removing the exact environment role variable or narrowing/removing its OIDC trust. Release pause also removes the publication latch and cancels active runs. |
 
 Production archive authority is connected and its decrypt denial is qualified.
-Production release authority remains unusable until the pending OIDC trust
-repair in section 3 succeeds.
+Production release authority is connected to the exact ID-bearing OIDC subject
+and its publication-disabled preflights pass. Automatic publication remains
+disabled because the separate publication latch is absent.
 
 Browser OAuth is temporarily owned by personal account `kim-em`, which is an
 accepted launch limitation. Production client ID

@@ -115,9 +115,8 @@ These are bounded smoke cases, not a combinatorial staging matrix.
       allowlisting, no plaintext artifact, and cleanup.
 - [x] Connect the production archive Wrap-only role and prove it cannot unwrap
       before intake is enabled.
-- [ ] Repair and reverify the production release role trust and scope using
-      [`aws-release-production-trust-repair.md`](aws-release-production-trust-repair.md),
-      without decrypting or publishing a production archive.
+- [x] Repair and reverify the production release role trust and scope without
+      decrypting or publishing a production archive.
 
 ### Historical completion
 
