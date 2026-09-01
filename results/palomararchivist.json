@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-09-01T09:13:16Z",
+      "benchmark_commit": "a0a06faa95f2ee15578675c6dacc596a83b17db3",
+      "declared_model": "LeanEval final staging withheld smoke 6b81f13b4e1c4f48994a0cf76a861d82",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a05c13-2269-747c-8b15-6a0eb5d95a76"
+      },
+      "problem_id": "two_plus_two",
+      "production_metadata": {
+        "harness": "bounded staging lifecycle smoke",
+        "human_involvement": "Selected and submitted by the staging operator",
+        "web_access": false
+      },
+      "result_id": "r2_ff7c978c25f4cd6340d46982199e4ef42fcb9b13d906165d59a7b6a69e16e830",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "34357f2f94f39e293b1d2b127b7f298654d39cf7",
+        "repo": "leanprover/lean-eval-state-staging"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "palomararchivist"
+}
