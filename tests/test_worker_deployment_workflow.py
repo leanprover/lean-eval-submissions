@@ -1008,7 +1008,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 broker_secrets,
             )
 
-    def test_temporary_workers_dev_routes_are_exact_and_intake_disabled(self) -> None:
+    def test_temporary_workers_dev_routes_have_reviewed_intake_state(self) -> None:
         staging = WRANGLER["env"]["staging"]
         production = WRANGLER["env"]["production"]
         expected = {
@@ -1034,7 +1034,10 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 self.assertIs(configuration["workers_dev"], True)
                 self.assertIs(configuration["preview_urls"], False)
                 self.assertNotIn("routes", configuration)
-                self.assertEqual(configuration["vars"]["INTAKE_ENABLED"], "false")
+                expected_intake = "true" if environment == "production" else "false"
+                self.assertEqual(
+                    configuration["vars"]["INTAKE_ENABLED"], expected_intake
+                )
                 self.assertEqual(
                     configuration["vars"]["LEGACY_RESULT_OWNER_API_ENABLED"],
                     expected_lifecycle,

@@ -1,9 +1,9 @@
 # lean-eval submission Worker
 
 This directory contains the Cloudflare Worker that will replace GitHub Issues
-as the submission intake boundary. The tracked lifecycle candidate enables the
-reviewed production lifecycle APIs while keeping new intake disabled; staging
-keeps both surfaces disabled. The emergency rollback posture sets
+as the submission intake boundary. The tracked production configuration enables
+the reviewed lifecycle APIs and durable server intake; staging keeps both
+surfaces disabled. The emergency rollback posture sets
 `INTAKE_ENABLED=false`, uses `INTAKE_ENABLEMENT_MODE=disabled`, disables every
 public lifecycle gate, and clears both maintainer arrays.
 
@@ -49,7 +49,7 @@ State, archive, and broker contracts allow a later move to an organization
 account or another provider without changing stable identities.
 The authentication and source-boundary design is recorded in
 [`../docs/intake-threat-model.md`](../docs/intake-threat-model.md); every launch
-gate there remains mandatory while intake is disabled.
+gate there remains mandatory for production operation.
 
 ## Replay executor
 
@@ -186,7 +186,7 @@ and materializer. The lifecycle-aware submission view (wire schema version 2)
 additionally authenticates its referenced archive, evaluation, and result
 events without scanning the full ledger. Staging uses this contract for the
 end-to-end fixture; the tracked production configuration also binds the
-contract while keeping intake disabled.
+contract in durable intake mode.
 
 ## GitHub App broker boundary
 
@@ -282,8 +282,7 @@ asynchronous no-op job completed. Responses contain no fixture contents,
 credentials, or upstream response bodies.
 
 State independently reconstructs archive/evaluation/result summaries from the
-immutable event graph and rejects a stale or fabricated view. Production intake
-remains disabled in this tracked lifecycle-only state. Later intake enablement
-must use the finite-lease controller before durable mode; lease expiry or
-recovery returns intake to the fail-closed disabled posture. Do not treat a
-queued State record alone as a completed pipeline.
+immutable event graph and rejects a stale or fabricated view. The tracked
+production configuration reaches durable intake only after the finite-lease
+controller proof. Emergency recovery returns intake to the fail-closed disabled
+posture. Do not treat a queued State record alone as a completed pipeline.

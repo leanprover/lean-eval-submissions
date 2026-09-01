@@ -1,6 +1,6 @@
 # Submission intake threat model
 
-Status: reviewed launch contract; tracked production intake remains disabled.
+Status: reviewed launch contract; tracked production intake is durable-enabled.
 Last reviewed: 2026-08-30.
 
 ## Assets and trust boundaries
@@ -74,7 +74,7 @@ publicly attributable State events.
 | Private-source disclosure | Worker never handles source; encrypted archival precedes evaluation; no plaintext artifacts; release requires the separate embargo/key gate. |
 | Direct workflow-dispatch bypass | Server-only inputs are exact-field decoded again in Python; workflow-tag commit, source visibility, and source commit are revalidated; only the requested problem/revision is recordable; UUID archive locator is mandatory. |
 
-## Credential provisioning still required
+## Credential boundary
 
 Agent repository/tag verification for private repositories and server workflow
 dispatch cannot use the discarded browser OAuth token. Secret-gist challenge
@@ -84,10 +84,11 @@ private](https://docs.github.com/en/get-started/writing-on-github/editing-and-sh
 the exact-ID request is anonymous. The selected implementation is a
 private Cloudflare service-binding broker with separate source-reader and
 workflow-dispatch Apps. Static verification/dispatch token hooks are
-local-contract scaffolding only. The Apps and secrets still require operator
-creation; with those credentials absent, requests fail with `503`, and with
-`INTAKE_ENABLED=false`, every `/api/` route fails before auth or provider work.
-Broadening OAuth to `repo` or `gist` is not an acceptable fallback.
+local-contract scaffolding only. The provisioned Apps and secrets remain
+operator-managed; if those credentials become unavailable, requests fail with
+`503`, and with `INTAKE_ENABLED=false`, every `/api/` route fails before auth or
+provider work. Broadening OAuth to `repo` or `gist` is not an acceptable
+fallback.
 
 ## Launch gates
 
