@@ -1,0 +1,128 @@
+{
+  "benchmark_commit": "c3ad17d7cd10a1047fab88ce9187d1a2af9a4cca",
+  "benchmark_tree": "470fe05872e186d88bf7915465638c767d822b65",
+  "checker": "nanoda",
+  "execution_profile": {
+    "architecture": "x86_64",
+    "cache_state": "cold",
+    "components": {
+      "comparator": {
+        "commit": "71b52ec29e06d4b7d882726553b1ceb99a2499e0",
+        "repository": "leanprover/comparator"
+      },
+      "landrun": {
+        "commit": "5ed4a3db3a4ad930d577215c6b9abaa19df7f99f",
+        "repository": "zouuup/landrun"
+      },
+      "lean4export": {
+        "commit": "12581a6b680d8478175596338eb2d53383a323e3",
+        "repository": "leanprover/lean4export"
+      },
+      "nanoda": {
+        "commit": "68d5ca9db226849b41a6fff59d796ff19d0a8840",
+        "repository": "robsimmons/nanoda_lib"
+      }
+    },
+    "cpu_model": "AMD EPYC",
+    "go_toolchain": "go1.25.12",
+    "kernel_release": "6.18.36-cloudflare-firecracker-2026.6.17",
+    "measurement_command": [
+      "/opt/lean-eval/replay-measure"
+    ],
+    "runner_profile": "cloudflare-sandbox-standard-4-v1",
+    "rust_toolchain": "rustc-1.89.0",
+    "schema_version": 1,
+    "toolchain": "leanprover/lean4:v4.30.0-rc2",
+    "vm_image_digest": "sha256:c7906f81b3c9150e5c58cff667952ac7757c700e1a9c9304ca0924f52e36bada"
+  },
+  "execution_profile_digest": "38e7bbc5cf0021eee8e1b282271dcb05c09e924c29d1bf82b2fab39cc0da5006",
+  "image_family": "lean-eval-authoritative-private-replay-v1",
+  "image_source_commit": "0a85d3a055600c3f60149d34f611c9e10767641b",
+  "image_source_repository": "leanprover/lean-eval-submissions",
+  "kind": "historical_private_replay_profile_qualification",
+  "lean_toolchain_blob_sha256": "2ca79bdfcf30c10b90f1bf037cf0f0d7528cf6b1f4a72a7f98ef17a2752d36af",
+  "measurement_config": {
+    "memory_limit_bytes": 12884901888,
+    "retired_instructions": {
+      "perf_event": "instructions:u",
+      "required": false
+    },
+    "schema_version": 1,
+    "wall_time_limit_ms": 19800000
+  },
+  "measurement_config_digest": "2dfc898270b83b6c99689e3f551a102c5e76636ec9f469a408498080e3e45945",
+  "qualification": {
+    "cloudflare_runtime_validation": "deferred_to_first_historical_replay",
+    "offline_image_inspection": {
+      "archive_expectation_schema_version": 2,
+      "key_material_type": "age-file-key-v1",
+      "network": "blocked",
+      "official_entrypoint": "passed",
+      "registry_manifest": "validated",
+      "root_filesystem": "read_only",
+      "runner_entrypoint": "/opt/lean-eval/replay-authoritative",
+      "source_closure": "validated"
+    },
+    "workflow_commit": "0a85d3a055600c3f60149d34f611c9e10767641b",
+    "workflow_path": ".github/workflows/historical-private-image-qualification.yml",
+    "workflow_repository": "leanprover/lean-eval-submissions",
+    "workflow_run_attempt": 1,
+    "workflow_run_id": 33452099133,
+    "workflow_sha256": "7b1866704c453c46abec06f5e388c9d66f53ee55f29920899bf64deaf89deb2a"
+  },
+  "qualification_status": "qualified",
+  "registry_manifest_digest": "sha256:c7906f81b3c9150e5c58cff667952ac7757c700e1a9c9304ca0924f52e36bada",
+  "registry_repository": "lean-eval-authoritative",
+  "schema_version": 1,
+  "source_blobs": {
+    "age_file_key_go_mod": {
+      "path": "server/age-file-key/go.mod",
+      "sha256": "7426bb4820ff52e95438f7475697d218018094f76e5e14977b02274bdd046c8c"
+    },
+    "age_file_key_go_sum": {
+      "path": "server/age-file-key/go.sum",
+      "sha256": "695d16f4670e79394429ce9d62846e4a2b0e1f517c0ca9dd3bb31ed729ef1aac"
+    },
+    "age_file_key_main": {
+      "path": "server/age-file-key/main.go",
+      "sha256": "c2398bc1802aeda2a8da7caa4fbeff2d47f81b3d640130b0d08147697a43fb9d"
+    },
+    "comparator_patch": {
+      "path": "server/replay-image/comparator-71b52-phase-metrics.patch",
+      "sha256": "8fe2d46616f3140b1a189290d47ba320ebbd908b9949cead4cbcaa331fb49d14"
+    },
+    "dockerfile": {
+      "path": "Dockerfile.historical-private-replay",
+      "sha256": "763ed9843d490acbdae8d1bbe20962e49d099fae4c131e40e08d9550885a2d5d"
+    },
+    "dockerignore": {
+      "path": "Dockerfile.historical-private-replay.dockerignore",
+      "sha256": "054a0871fa1960d5d611d755b2a19542085beb51f6dd91124bf7092518e7e314"
+    },
+    "evaluator": {
+      "path": "scripts/evaluate_submission.py",
+      "sha256": "9660fb5412718754687abeb0a726d5c2166490a455f907035da763efd6e76cd4"
+    },
+    "layer_preparation": {
+      "path": "scripts/prepare_historical_image_layers.py",
+      "sha256": "c27ba386ae791304dca70f67177703a6f5117aed7892015ada8c21a058703c4f"
+    },
+    "measurement_helper": {
+      "path": "server/replay-image/replay-measure",
+      "sha256": "a8d881c155863a9f880a402f00c132040c77f585def1670750e7f6320bdd6296"
+    },
+    "orchestrator": {
+      "path": "scripts/replay_orchestrator.py",
+      "sha256": "ec97bce72465a4159d2e1e43e074d5a61a70fe685f52161a523209fa6617b36d"
+    },
+    "profile_matrix": {
+      "path": "configuration/historical-private-replay-image-matrix-v1.json",
+      "sha256": "54ad4c237d08e5d0e298dfc8f752b25c89ce30e79b396a2256b4216a1c0f772c"
+    },
+    "runtime_helper": {
+      "path": "server/replay-image/replay-authoritative",
+      "sha256": "e6c47f05b84b096c549e21bc5c93b5d624e7b7ecab3fdcaab90f1eac85d3af11"
+    }
+  },
+  "toolchain": "leanprover/lean4:v4.30.0-rc2"
+}
