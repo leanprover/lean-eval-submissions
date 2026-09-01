@@ -19,30 +19,33 @@ client secrets in documentation, issues, pull requests, logs, or artifacts.
 
 ## 1. Current posture
 
-Keep the not-yet-deployed repair baseline distinct from live service state.
+Keep the not-yet-deployed lifecycle candidate, its separate rollback baseline,
+and live service state distinct.
 
-The repair baseline tracks:
+The lifecycle candidate tracks:
 
 - production intake disabled;
 - staging and production general replay disabled;
 - historical-public replay disabled;
 - production acceptance endpoints disabled;
-- every production lifecycle and publication-choice API disabled;
-- empty production maintainer lists;
+- the six reviewed production lifecycle and publication-opt-in APIs enabled;
+- exactly `kim-em` / GitHub user `477956` in both production maintainer lists;
 - staging intake and every staging lifecycle API all-false with empty
   maintainer lists;
 - model consolidation disabled in both environments; and
 - release publication disabled in `leanprover/lean-eval-releases`.
 
-It has not been deployed and the launch-readiness packet remains `NO-GO`. The
-live production Workers are deployed at
-`f09e30565ec8f180cb7b0a85935f9439f802a14c`: production intake and every public
-production lifecycle API are effectively disabled and both live production
-maintainer lists are empty, but the superseded State-contract pin makes that
-commit unsuitable as a launch or rollback target. Live staging intake and
-lifecycle APIs remain all-false. The bounded staging acceptance and
-promotion-canary exceptions keep their separately documented staging-only
-posture.
+It has not been deployed and the launch-readiness packet remains `NO-GO`. Its
+exact parent, `451856ebdd4ca4d875e43be7cd113678dea9e1b7`, is the qualified
+all-false rollback baseline. Production currently runs that exact commit with
+intake, replay, every public lifecycle API, model consolidation, and the
+promotion canary disabled; both maintainer lists are empty. Its production
+intake, broker, and replay version IDs are respectively
+`7afc61bf-6427-431a-b4f6-c1c3ec2641ac`,
+`dfd77e4f-16ae-4a63-81ab-bbb79797385b`, and
+`570664e6-a6f5-428d-87cb-803dd5b1768f`. Live staging intake and lifecycle APIs
+remain all-false. The bounded staging acceptance and promotion-canary
+exceptions keep their separately documented staging-only posture.
 
 Verify live state before relying on it:
 
@@ -57,11 +60,11 @@ python3 -m json.tool "$tmp_dir/health.json"
 
 Remove the temporary directory after inspection. The monitor compares live
 health with the checked-out tracked configuration. It is therefore expected to
-report a mismatch until this repair baseline is deployed. After deployment, a
-ready report must bind all four public Worker health endpoints to one full
-deployed commit and the tracked all-false configuration. Also inspect the
-latest protected deployment and the canonical readiness issue; endpoint health
-alone does not prove that a rollout is not stuck.
+report a mismatch until this lifecycle candidate is deployed. After deployment,
+a ready report must bind all four public Worker health endpoints to one full
+deployed commit and the tracked lifecycle configuration. Also inspect the latest
+protected deployment and the canonical readiness issue; endpoint health alone
+does not prove that a rollout is not stuck.
 
 ## 2. Ordinary protected deployment
 
@@ -330,9 +333,10 @@ state. [`worker_lifecycle_configuration.py`](../scripts/worker_lifecycle_configu
 requires all six launch flags to be identical, requires exactly one canonical
 maintainer identity per maintainer family when enabled and none when disabled,
 and always rejects model-consolidation enablement. First deploy and qualify the
-tracked all-false repair baseline as the coherent rollback unit. Then prepare a
-separate single-purpose lifecycle candidate that changes only the reviewed
-lifecycle state, stage it, and bind it in the launch packet. The normal
+tracked all-false repair baseline as the coherent rollback unit. This branch is
+the separate single-purpose lifecycle candidate: it changes only the reviewed
+lifecycle state and its matching tests and current-state documentation. Stage
+it and bind it in the launch packet. The normal
 protected deployment controller reads that state, binds it to the immutable
 dispatch tag, enters `cloudflare-production`, and verifies every effective
 public health field. Do not deploy the lifecycle candidate to production until
