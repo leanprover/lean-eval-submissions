@@ -36,6 +36,10 @@ class HistoricalBaselineStateWorkflowTests(unittest.TestCase):
         self.assertGreaterEqual(
             WORKFLOW.count("81e94fe2f4fc819300fd7d4e036f00124166784f"), 2
         )
+        self.assertIn(
+            "--qualification-repository-root public-qualification-source", WORKFLOW
+        )
+        self.assertNotIn('--qualification-commit "$GITHUB_SHA"', WORKFLOW)
 
     def test_no_controller_or_external_mutation_is_enabled(self) -> None:
         self.assertNotIn("HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED", WORKFLOW)
