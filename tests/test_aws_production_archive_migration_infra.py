@@ -96,15 +96,23 @@ class ProductionArchiveMigrationInfrastructureTests(unittest.TestCase):
         self.assertEqual(SCRIPT.count("LEGACY_ARCHIVE_IDENTITY"), 2)
         self.assertIn("does not authorize migration", DOC)
 
-    def test_connects_only_the_nonsecret_migration_selector_last(self) -> None:
-        connect = SCRIPT.index("echo step=connect-migration-role-selector")
+    def test_requires_and_preserves_prebound_migration_selector(self) -> None:
+        verify_selector = SCRIPT.index("echo step=verify-migration-role-selector")
         execute = SCRIPT.index("echo step=execute-production-change-set")
         verify = SCRIPT.index("echo step=post-update-verification")
         self.assertLess(execute, verify)
-        self.assertLess(verify, connect)
-        self.assertEqual(SCRIPT.count("gh variable set"), 1)
-        self.assertIn("--body \"$MIGRATION_ROLE_ARN\"", SCRIPT)
-        self.assertGreater(SCRIPT.index("complete=true"), connect)
+        self.assertLess(verify, verify_selector)
+        self.assertNotIn("gh variable set", SCRIPT)
+        self.assertIn("environment-variables-before.json", SCRIPT)
+        self.assertIn("environment-variables-after.json", SCRIPT)
+        self.assertIn(
+            'value: $migration}]\n\' "$ops/environment-variables-before.json"',
+            SCRIPT,
+        )
+        self.assertIn(
+            'cmp "$ops/environment-variables-before.json"', SCRIPT
+        )
+        self.assertGreater(SCRIPT.index("complete=true"), verify_selector)
 
 
 if __name__ == "__main__":
