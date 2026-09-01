@@ -658,7 +658,10 @@ jobs:
           echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
 
       - name: Fail a started attempt explicitly if orchestration did not finish
-        if: ${{ !cancelled() && steps.started.outputs.appended == 'true' && steps.terminal.outputs.appended != 'true' }}
+        if: >-
+          ${{ !cancelled() && steps.started.outputs.appended == 'true' &&
+              steps.execute.outputs.ready != 'true' &&
+              steps.terminal.outputs.appended != 'true' }}
         env:
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
           AMBIGUOUS_CLEANUP_KIND: ${{ steps.ambiguous_cleanup.outputs.kind }}

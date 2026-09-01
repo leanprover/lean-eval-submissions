@@ -135,15 +135,28 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         failure_step = WORKFLOW.split(
             "Fail a started attempt explicitly if orchestration did not finish", 1
         )[1].split("Confirm credentials remained separated", 1)[0]
-        self.assertIn(
-            "${{ !cancelled() && steps.started.outputs.appended == 'true' "
-            "&& steps.terminal.outputs.appended != 'true' }}",
-            failure_step,
-        )
+        self.assertIn("!cancelled()", failure_step)
+        self.assertIn("steps.started.outputs.appended == 'true'", failure_step)
+        self.assertIn("steps.execute.outputs.ready != 'true'", failure_step)
+        self.assertIn("steps.terminal.outputs.appended != 'true'", failure_step)
         self.assertNotIn("always()", failure_step)
         self.assertIn("timeout-minutes: 360", WORKFLOW)
         self.assertNotIn("actions/upload-artifact", WORKFLOW)
         self.assertIn("runner-loss-cleanup-confirmed", failure_step)
+
+    def test_valid_verdict_cas_exhaustion_is_left_for_retryable_recovery(self) -> None:
+        terminal = WORKFLOW.split(
+            "Append the exact reported historical terminal outcome", 1
+        )[1].split(
+            "Fail a started attempt explicitly if orchestration did not finish", 1
+        )[0]
+        failure = WORKFLOW.split(
+            "Fail a started attempt explicitly if orchestration did not finish", 1
+        )[1].split("Confirm credentials remained separated", 1)[0]
+        self.assertIn('test "$published" = true', terminal)
+        self.assertIn("steps.execute.outputs.ready != 'true'", failure)
+        self.assertIn('failure_reason=$(cat "$RUNNER_TEMP/failure-reason")', failure)
+        self.assertNotIn("steps.execute.outputs.ready == 'true'", failure)
 
     def test_terminal_appends_refresh_and_retry_exact_current_state(self) -> None:
         terminal = WORKFLOW.split(
