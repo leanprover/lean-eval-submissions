@@ -298,8 +298,8 @@ describe("Worker routing", () => {
     const rootEntries = [
       { path: "README.md", mode: "100644", type: "blob", sha: "1dd08b8569c1a3a8eadec72af96276f520d4afec" },
       { path: "docs", mode: "040000", type: "tree", sha: "7401f6bf26083ebbc0db05f11cd90007d2a74f80" },
-      { path: "schema", mode: "040000", type: "tree", sha: "4cfe7363c7d8ab2d8ebf0cb2c4e26697c27ab680" },
-      { path: "scripts", mode: "040000", type: "tree", sha: "34abea8751e17bd6d65a0bcbdc4837540b6fd84e" },
+      { path: "schema", mode: "040000", type: "tree", sha: "92a7c3433e85931c8be355e81b20a42a932f6950" },
+      { path: "scripts", mode: "040000", type: "tree", sha: "ee7965eb33ecf4f7d062b4836a2d9b755b2da9fd" },
     ] as const;
     const replies = [
       Response.json({ permissions: { push: true } }),
