@@ -49,10 +49,10 @@ The fixed reviewed implementation bindings are:
 The migration job's GitHub OIDC request handle is a job-level capability and
 cannot be revoked between steps. Its AWS trust is restricted to the dedicated
 production migration role, whose policy permits only `Encrypt` with the exact
-v2 encryption context and never `Decrypt`. Before the separate audit writer is
-minted, the workflow removes the legacy decryption identity, active AWS session,
-read-authority checkout, and migration scratch. Audit `main` remains protected
-by the independently bound exact-patch promotion contract.
+v2 encryption context and never `Decrypt`. Before the audit writer token is
+minted, the workflow removes the legacy decryption identity, active AWS
+session, read-authority checkout, and migration scratch. Audit `main` remains
+protected by the independently bound exact-patch promotion contract.
 
 Both replay controllers are restricted to protected `main`, use one shared
 non-cancelling concurrency group, allow at most four execution attempts, and
