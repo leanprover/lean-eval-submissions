@@ -24,12 +24,13 @@ history, or replace the cross-repository execution runbook.
   opt-out, and the promotion canary remain disabled.
 - The production canary is terminal and scheduled for
   `2026-11-02T03:50:01.002Z`. Production State was observed at
-  `d699f057af46adee69aa4d1cbdd6966d7716abbb` after the terminal events and may
+  `fb70dd6ba14cae94b30d570818e4801884e81e04` after the terminal events and may
   advance append-only. Its fixture branch and temporary App repository access
   are removed.
 - The exact production all-false pause and ordered release/lifecycle/intake
-  restore are complete. Server-primary presentation and the overlap
-  announcement remain pending.
+  restore are complete. Server-primary presentation is live. The overlap began
+  `2026-09-02T06:57:10Z`, and issue intake remains available through no earlier
+  than `2026-09-30T06:57:10Z`.
 - Tracked staging intake and every staging lifecycle API remain all-false with
   empty maintainer allowlists.
 - General staging replay, historical-public replay, and production replay are
@@ -104,8 +105,8 @@ not this summary.
 - [x] Bind the protected lifecycle and intake deployment to immutable dispatch,
       complete the production canary, and verify the all-false pause and
       ordered restore.
-- [ ] Make server intake primary in the leaderboard entry and publish the
-      overlap announcement.
+- [x] Make server intake primary in the leaderboard entry and begin the
+      four-week overlap at `2026-09-02T06:57:10Z`.
 
 Rerun a functional case only if its implementation path changes or the fresh
 checks expose drift. This is a bounded launch check, not a qualification

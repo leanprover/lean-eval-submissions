@@ -43,7 +43,7 @@ Public structured health currently reports one coherent deployed commit with:
 
 Automatic release publication is enabled. The terminal production canary is
 scheduled for `2026-11-02T03:50:01.002Z`; its source is not yet due. Production
-State was observed at `d699f057af46adee69aa4d1cbdd6966d7716abbb` after the
+State was observed at `fb70dd6ba14cae94b30d570818e4801884e81e04` after the
 canary events and may advance append-only. Production archive Wrap is connected
 and its Encrypt-only/decrypt-
 denial preflight is qualified; the production replay role variable is absent.
@@ -68,9 +68,11 @@ No LeanEval resource is hosted in the unrelated
 | Staging rate-limit namespace | `24012001` |
 | Production rate-limit namespace | `24012002` |
 
-No dedicated hostname or DNS change is required for launch. The leaderboard
-will provide `https://lean-lang.org/eval/submit/` as a static entry page and
-send users to the production Worker origin for authentication and submission.
+No dedicated hostname or DNS change is required. The leaderboard provides
+`https://lean-lang.org/eval/submit/` as the server-primary entry and sends users
+to the production Worker origin for authentication and submission. Issue intake
+remains the overlap fallback through no earlier than
+`2026-09-30T06:57:10Z`.
 
 | Environment | Intake Worker | Broker Worker | Replay Worker / container application |
 | --- | --- | --- | --- |
@@ -249,9 +251,9 @@ passed the same preflight.
 
 ### Audit repository rulesets
 
-`leanprover/lean-eval-audit` is private. Its default branch is `main`, currently
-at `34e33e339eaac47a10c463abaedef47361c5abab`, and GitHub reports that branch as
-protected. Four rules are effective on the default branch:
+`leanprover/lean-eval-audit` is private. Its protected default branch is `main`,
+currently at `7a53c75c6d7c263c684ebcd54590c657c9298642` with bootstrap-verified
+tree `4e44c06`. Four rules are effective on the default branch:
 
 | Ruleset | Enforcement and target | Rules | Bypass |
 | --- | --- | --- | --- |
@@ -293,7 +295,7 @@ trying to recover the old private material.
 | submissions / `replay-production` | `EN_kwDOSh7OzM8AAAAEu8r3MQ` | protected branches | Production replay variable absent |
 | submissions / `archive-migration-production` | `EN_kwDOSh7OzM8AAAAEwLDSMQ` | protected branches | Prebound to the dedicated migration role ARN; live AWS apply/readback pending, so unusable |
 | releases / `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | protected branches | Staging release invoker role set; live trust matches the current ID-bearing subject |
-| releases / `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | protected branches | Production release invoker and Git keys set; live trust matches the current ID-bearing subject; publication variable absent |
+| releases / `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | protected branches | Production release invoker and Git keys set; live trust matches the current ID-bearing subject; publication enabled |
 
 Environment protection/policy IDs, in the same order, are:
 

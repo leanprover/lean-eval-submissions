@@ -36,11 +36,13 @@ The deployed production release at
 The launch-readiness packet is `GO`. The production canary is terminal and its
 one-way publication opt-in is scheduled for `2026-11-02T03:50:01.002Z`.
 Production State was observed at
-`d699f057af46adee69aa4d1cbdd6966d7716abbb` after the terminal canary events;
+`fb70dd6ba14cae94b30d570818e4801884e81e04` after the terminal canary events;
 the append-only head may advance. The canary fixture branch is deleted and the
 temporary source repository is removed from both App selections. The exact
 production pause and ordered release/lifecycle/intake restore are complete.
-Server-primary presentation and the overlap announcement remain pending.
+Server-primary presentation is live. The overlap began
+`2026-09-02T06:57:10Z`, and issue intake remains available through no earlier
+than `2026-09-30T06:57:10Z`.
 
 Verify live state before relying on it:
 
