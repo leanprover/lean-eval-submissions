@@ -161,18 +161,30 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
             "results-store checkout must retain the App token for its push-retry loop",
         )
 
-    def test_idempotent_lifecycle_callbacks_retry_only_transient_failures(self) -> None:
+    def test_idempotent_lifecycle_callbacks_survive_bounded_state_throttling(self) -> None:
         self.assertEqual(self.text.count("curl --fail-with-body"), 4)
         for option in (
             "--connect-timeout 10",
             "--max-time 30",
-            "--retry 3",
-            "--retry-delay 2",
-            "--retry-max-time 120",
+            "--retry 15",
+            "--retry-delay 60",
+            "--retry-max-time 900",
             "--retry-connrefused",
         ):
             self.assertEqual(self.text.count(option), 4)
         self.assertNotIn("--retry-all-errors", self.text)
+        self.assertEqual(self.text.count('--output "$response_file"'), 4)
+        self.assertNotIn('cat "$response_file"', self.text)
+        for job, following_marker in (
+            ("archive_failure_state", "archive_state:"),
+            ("archive_state", "evaluation_state:"),
+            ("evaluation_state", "record:"),
+            ("result_state", "# Catches"),
+        ):
+            section = self.text.split(f"\n  {job}:", 1)[1].split(
+                f"\n  {following_marker}", 1
+            )[0]
+            self.assertIn("timeout-minutes: 20", section)
 
     def test_evaluate_disables_unwritable_github_cache(self) -> None:
         # lean-action still fetches Mathlib's independent cache, but must not
