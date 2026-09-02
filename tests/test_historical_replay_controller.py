@@ -25,6 +25,7 @@ from scripts.historical_replay_controller import (
     canonical_bytes,
     load_reviewed_inputs,
     plan_next,
+    rebind_execution_plan,
     recover_running,
     render_executor_config,
     replay_task_id,
@@ -148,6 +149,46 @@ class HistoricalReplayInputTests(unittest.TestCase):
             second = subprocess.run(command, check=False, capture_output=True, text=True)
             self.assertEqual(second.returncode, 1)
             self.assertEqual(output.read_bytes(), original)
+
+    def test_refresh_rebind_cli_updates_only_queue_metadata(self) -> None:
+        fixture = Fixture()
+        plan = fixture.plan()
+        queue = copy.deepcopy(fixture.queue)
+        queue["source_event_count"] += 1
+        queue["source_digest"] = "f" * 64
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            plan_path = root / "plan.json"
+            queue_path = root / "queue.json"
+            output = root / "rebound.json"
+            plan_path.write_bytes(canonical_bytes(plan))
+            queue_path.write_bytes(state_canonical_bytes(queue))
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts/historical_replay_controller.py"),
+                    "refresh-rebind-plan",
+                    "--plan",
+                    str(plan_path),
+                    "--queue",
+                    str(queue_path),
+                    "--repository-root",
+                    str(ROOT),
+                    "--output",
+                    str(output),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            rebound = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(rebound["queue"]["queue_source_event_count"], 5)
+            self.assertEqual(rebound["queue"]["queue_source_digest"], "f" * 64)
+            self.assertEqual(
+                {k: v for k, v in rebound.items() if k != "queue"},
+                {k: v for k, v in plan.items() if k != "queue"},
+            )
 
 
 class Fixture:
@@ -647,6 +688,72 @@ class HistoricalReplayPlanTests(unittest.TestCase):
         queue["source_digest"] = "f" * 64
         with self.assertRaises(HistoricalReplayControllerError):
             validate_plan_against_queue(plan, queue)
+
+    def test_rebind_changes_only_whole_state_queue_metadata(self) -> None:
+        plan = self.fixture.plan()
+        queue = copy.deepcopy(self.fixture.queue)
+        queue["source_event_count"] += 1
+        queue["source_digest"] = "f" * 64
+        rebound = rebind_execution_plan(
+            plan,
+            queue,
+            self.fixture.authority,
+            self.fixture.authority_raw,
+            self.fixture.profile,
+            self.fixture.profile_raw,
+            self.fixture.matrix,
+            self.fixture.matrix_raw,
+            self.fixture.contract,
+            self.fixture.contract_raw,
+        )
+        self.assertNotEqual(rebound["queue"], plan["queue"])
+        self.assertEqual(
+            {k: v for k, v in rebound.items() if k != "queue"},
+            {k: v for k, v in plan.items() if k != "queue"},
+        )
+        self.assertEqual(validate_plan_against_queue(rebound, queue), rebound)
+
+    def test_rebind_refuses_task_or_attempt_change(self) -> None:
+        plan = self.fixture.plan()
+        queue = copy.deepcopy(self.fixture.queue)
+        queue["tasks"][0].update(
+            status="failed", attempt=1, reason_code="runner_lost", retryable=True
+        )
+        with self.assertRaisesRegex(
+            HistoricalReplayControllerError, "task changed while refreshing"
+        ):
+            rebind_execution_plan(
+                plan,
+                queue,
+                self.fixture.authority,
+                self.fixture.authority_raw,
+                self.fixture.profile,
+                self.fixture.profile_raw,
+                self.fixture.matrix,
+                self.fixture.matrix_raw,
+                self.fixture.contract,
+                self.fixture.contract_raw,
+            )
+
+    def test_rebind_refuses_environment_change(self) -> None:
+        plan = self.fixture.plan()
+        queue = copy.deepcopy(self.fixture.queue)
+        queue["environment"] = "staging"
+        with self.assertRaisesRegex(
+            HistoricalReplayControllerError, "task changed while refreshing"
+        ):
+            rebind_execution_plan(
+                plan,
+                queue,
+                self.fixture.authority,
+                self.fixture.authority_raw,
+                self.fixture.profile,
+                self.fixture.profile_raw,
+                self.fixture.matrix,
+                self.fixture.matrix_raw,
+                self.fixture.contract,
+                self.fixture.contract_raw,
+            )
 
     def test_exact_repository_blobs_are_proved(self) -> None:
         verify_repository_bindings(

@@ -52,10 +52,10 @@ execution attempts: the initial execution and at most three retries. Attempt
 four is terminal, and an exhausted task remains in State without starving a
 later eligible task.
 
-## Serialized production workflow
+## Two serialized production lanes
 
-`.github/workflows/historical-authoritative-replay.yml` is manual, serialized,
-and dark while repository variable
+`.github/workflows/historical-authoritative-replay.yml` is manual, serialized
+within the public lane, and dark while repository variable
 `HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED` is absent. When deliberately
 enabled with the separately reviewed environment credentials, one invocation:
 
@@ -87,6 +87,37 @@ Cloudflare deployment, State reads, State writes, public source fetching, and
 executor OIDC are kept in separate steps. The lane has no AWS permission and
 never reads an encrypted private archive. It uploads no State-derived plan,
 source, request, or verdict artifact.
+
+The temporary
+`.github/workflows/historical-replay-two-lane-driver.yml` starts at most one
+public and one private lane. Each lane retains its own non-cancelling
+concurrency group, so there is never more than one public and one private
+controller active. A successful controller may dispatch exactly one successor
+with a strictly decreasing run budget. It stops replenishing on cancellation,
+job failure, a live same-lane attempt, an empty queue, a blocked public queue,
+or budget exhaustion. The driver defaults leave headroom above the 174 public
+and 639 private retained-baseline tasks but hard-limit either lane to 1,024
+runs per start.
+
+The driver binds the protected commit that starts the chain. Before every
+successor dispatch and again at the beginning of every successor, the workflow
+requires either that exact commit or a complete, non-truncated descendant whose
+entire diff consists only of added or modified `results/*.json` files. Any code,
+workflow, deletion, rename, divergent history, or oversized comparison stops
+the chain before replay authority is used.
+
+Only the five-minute driver and replenishment jobs receive `actions: write`.
+They have no checkout, protected environment, OIDC, or repository/service
+secret. The long-running replay jobs retain their prior `contents: read` and
+`id-token: write` permissions and do not receive dispatch authority.
+
+Because both lanes append to one State repository, the public start append now
+uses the same four-attempt compare-and-swap shape as the existing private
+controller. Before each attempt it refreshes and validates State, rematerializes
+the public queue, and permits only the queue's whole-State source count and
+digest to change. Any change to the selected task, attempt, authority,
+qualification, execution profile, measurement profile, or transition fails
+closed. Terminal appends already refresh and retry against exact current State.
 
 The dedicated historical-production OIDC audience accepts protected `main`
 only on the four historical routes: start, status, cleanup reservation, and

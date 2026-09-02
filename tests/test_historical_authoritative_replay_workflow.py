@@ -17,14 +17,46 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
     def test_lane_is_manual_serialized_and_still_dark(self) -> None:
         self.assertIn("workflow_dispatch:", WORKFLOW)
         self.assertIn("cancel-in-progress: false", WORKFLOW)
-        self.assertIn("group: lean-eval-historical-replay-controller", WORKFLOW)
-        self.assertIn("group: lean-eval-historical-replay-controller", PRIVATE_WORKFLOW)
+        self.assertIn(
+            "group: lean-eval-historical-public-replay-controller", WORKFLOW
+        )
+        self.assertIn(
+            "group: lean-eval-historical-private-replay-controller",
+            PRIVATE_WORKFLOW,
+        )
         self.assertIn("environment: replay-production", WORKFLOW)
         self.assertIn(
             "vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED == 'true'",
             WORKFLOW,
         )
         self.assertNotIn("schedule:", WORKFLOW)
+
+    def test_replenishment_is_bounded_and_has_separate_permissions(self) -> None:
+        replay, replenish = WORKFLOW.split("  replenish-public-lane:", 1)
+        self.assertIn("permissions:\n      contents: read\n      id-token: write", replay)
+        self.assertNotIn("actions: write", replay)
+        self.assertIn("permissions:\n      actions: write", replenish)
+        self.assertIn("contents: read", replenish)
+        self.assertNotIn("environment: replay-production", replenish)
+        self.assertNotIn("secrets.", replenish)
+        self.assertNotIn("actions/checkout", replenish)
+        self.assertIn("needs.replay-one.result == 'success'", replenish)
+        self.assertIn("!cancelled()", replenish)
+        self.assertIn("inputs.remaining_runs > 1", replenish)
+        self.assertIn('test "$REMAINING_RUNS" -le 1024', replenish)
+        self.assertIn("needs.replay-one.outputs.preflight_kind != 'busy'", replenish)
+        self.assertIn("needs.replay-one.outputs.plan_kind != 'empty'", replenish)
+        self.assertIn("needs.replay-one.outputs.plan_kind != 'blocked'", replenish)
+        self.assertIn("REVIEWED_IMPLEMENTATION_COMMIT", replenish)
+        self.assertIn(".merge_base_commit.sha == $base", replenish)
+        self.assertIn(".ahead_by == (.commits | length)", replenish)
+        self.assertIn("(.files | length) < 300", replenish)
+        self.assertIn('test("^results/', replenish)
+        self.assertEqual(replenish.count("actions/workflows/"), 1)
+        self.assertIn(
+            "actions/workflows/historical-authoritative-replay.yml/dispatches",
+            replenish,
+        )
 
     def test_recovery_and_exact_state_cas_precede_execution(self) -> None:
         validation = WORKFLOW.index("state/scripts/state.py --root state validate")
@@ -42,6 +74,26 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
         self.assertIn("--expected-head", WORKFLOW)
         self.assertIn("PRODUCTION_STATE_READ_KEY", WORKFLOW)
         self.assertIn("PRODUCTION_STATE_WRITE_KEY", WORKFLOW)
+
+    def test_started_append_rebinds_only_after_validated_state_and_retries_cas(self) -> None:
+        started = WORKFLOW.split(
+            "Append replay.started before fetching public source", 1
+        )[1].split("Fetch exact public source", 1)[0]
+        self.assertIn("for cas_attempt in $(seq 1 4)", started)
+        self.assertIn("git -C state fetch --no-tags origin", started)
+        self.assertIn("git -C state merge --ff-only", started)
+        self.assertIn("state/scripts/state.py --root state validate", started)
+        self.assertIn("state/scripts/state.py --root state materialize", started)
+        self.assertIn("historical_replay_controller.py refresh-rebind-plan", started)
+        self.assertIn("historical_replay_controller.py state-event started", started)
+        self.assertLess(
+            started.index("refresh-rebind-plan"),
+            started.index("state-event started"),
+        )
+        self.assertIn("git clone --quiet --no-hardlinks state", started)
+        self.assertIn('--expected-head "$expected"', started)
+        self.assertIn('test "$published" = true', started)
+        self.assertNotIn("EXPECTED_STATE_HEAD", started)
 
     def test_stale_recovery_is_gated_by_exact_durable_destruction(self) -> None:
         preflight = WORKFLOW.split(
@@ -288,6 +340,12 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
             WORKFLOW,
         )
         self.assertIn("$HISTORICAL_EXECUTOR_URL/status", WORKFLOW)
+        preflight = WORKFLOW.split(
+            "Require exact protected main and the explicit controller gate", 1
+        )[1].split("actions/checkout", 1)[0]
+        self.assertIn("REVIEWED_IMPLEMENTATION_COMMIT", preflight)
+        self.assertIn(".merge_base_commit.sha == $base", preflight)
+        self.assertIn("(.files | length) < 300", preflight)
 
     def test_executor_uses_idempotent_start_and_status_polling(self) -> None:
         executor = WORKFLOW.split(
