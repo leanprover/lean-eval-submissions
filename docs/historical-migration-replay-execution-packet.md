@@ -116,7 +116,8 @@ workflow artifact, worktree file, mutable tag, or branch head.
       event SHA. A later event SHA is
       accepted only when the complete comparison from the reviewed baseline is
       non-truncated and contains solely added or modified `results/*.json`
-      files; every other change fails before the protected migration job.
+      files; every other change fails before private audit checkout or any
+      legacy-identity reference or use.
       Require migration-workflow
       SHA-256
       `90c29e5fc37f283846b87d67a419e1afad3dd7cbe6f24a4b6bfcfa296390abd7`,
@@ -130,8 +131,7 @@ workflow artifact, worktree file, mutable tag, or branch head.
 - [x] The production template is bound at SHA-256
       `aac24318c973523a65b76af34b8e1408a5680f61b52c4fb996f93967253ef94d`,
       and `archive-migration-production` directly defines only
-      `AWS_WRAP_ROLE_ARN` with the dedicated migration role,
-      `REVIEWED_IMPLEMENTATION_COMMIT` with the reviewed workflow baseline, plus
+      `AWS_WRAP_ROLE_ARN` with the dedicated migration role plus
       `AUDIT_MIGRATION_READ_KEY`. Authenticated readback bound the production
       stack at `UPDATE_COMPLETE`, last updated
       `2026-08-31T06:07:26.081Z`, with the exact migration-role OIDC trust and
@@ -139,6 +139,10 @@ workflow artifact, worktree file, mutable tag, or branch head.
       ordinary v1 roles and outputs. The staging stack remained
       `UPDATE_COMPLETE`, last updated `2026-08-27T06:33:54.697Z`. No further
       infrastructure apply is part of this packet.
+- [ ] After this workflow change lands, set
+      `REVIEWED_IMPLEMENTATION_COMMIT` in `archive-migration-production` to the
+      exact reviewed merge commit and perform authenticated exact-value
+      readback before dispatching a dry run or apply run.
 - [x] The exact migration inputs are audit commit
       `ad356e7bc5a2d650d9902ac3f6d352a0164360bc`, selected inventory digest
       `a8913f1c8b5073e5b7ab309ba10481b615ca4fc00e629e41a9e57962f3afebd4`,
