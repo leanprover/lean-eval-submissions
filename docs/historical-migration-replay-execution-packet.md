@@ -35,14 +35,14 @@ The fixed reviewed implementation bindings are:
 
 | Component | Exact binding |
 | --- | --- |
-| Migration workflow | `.github/workflows/migrate-archive-envelopes.yml`, SHA-256 `f3b4abf0fe027cb1d1f58b9228f78e4fa2a23720ef7e85aa27eb4cfeb81de68f` |
+| Migration workflow | `.github/workflows/migrate-archive-envelopes.yml`, SHA-256 `90c29e5fc37f283846b87d67a419e1afad3dd7cbe6f24a4b6bfcfa296390abd7` |
 | Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `402e8cab4e8d308cbca36ddcfe7060482a243b9c6aad29ba91b78a3dd1e672c8` |
 | Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `a1afb9da60ddcd8bc7192d673b4cfc2e51831acc307164c252dee1a0b8126d21` |
 | Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
 | Private plan builder | `scripts/prepare_historical_private_replay.py`, SHA-256 `2f1ae6a6e8710a0d0983aa7c2b3f64e77ebf2322da8154c04e39be084f4355e4` |
 | Public finalizer | `scripts/prepare_historical_public_authority.py`, SHA-256 `59e611fd468e700b766343adc2f3a861ed2fa3c182761ef2ba7f6efd66434d6b` |
 | Migration infrastructure | Applied production template `infrastructure/aws-key-adapter/template.yaml`, SHA-256 `aac24318c973523a65b76af34b8e1408a5680f61b52c4fb996f93967253ef94d`. The completed operator procedure is not an execution input and must not be rerun. |
-| Migration boundary | role `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`; environment `archive-migration-production`; review branch `archive-file-key-rewrap-v1`; confirmation `stage-envelope-migration` |
+| Migration boundary | role `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`; environment `archive-migration-production`; environment variable `REVIEWED_IMPLEMENTATION_COMMIT`; review branch `archive-file-key-rewrap-v1`; confirmation `stage-envelope-migration` |
 | Audit promotion contract | caller `.github/workflows/promote-archive-migration.yml`, SHA-256 `a1cde0d8663adf6fddc5bd8942f92602c391ca918f04dd84e59325460cb26c5a`; reusable audit contract commit `7a53c75c6d7c263c684ebcd54590c657c9298642`, workflow SHA-256 `b760ee6e6f04bcd061e3f15bea67c3dad33812e7cf5627b5850635d8228c8d3e` |
 | Deterministic migration report | SHA-256 `faa26e1aa47eb629966db03695eda4f949b6c9804166f0047f53e09d9cc83339` |
 
@@ -53,6 +53,13 @@ v2 encryption context and never `Decrypt`. Before the audit writer token is
 minted, the workflow removes the legacy decryption identity, active AWS
 session, read-authority checkout, and migration scratch. Audit `main` remains
 protected by the independently bound exact-patch promotion contract.
+
+Protected-main review is the trust root for the workflow itself. The
+environment-bound implementation commit prevents an operator typo or ordinary
+Results-only intake churn from changing reviewed migration code; it does not
+claim to defend against a malicious maintainer who first merges a workflow
+that removes its own gate. Such a non-Results protected-main change fails the
+existing gate and requires a new reviewed baseline before any later run.
 
 Both replay controllers are restricted to protected `main`, use one shared
 non-cancelling concurrency group, allow at most four execution attempts, and
@@ -102,21 +109,29 @@ workflow artifact, worktree file, mutable tag, or branch head.
       `5e7c181edef7569dcf2ecb2c33f7819adfb75b07`. It contains 63 profiles,
       639 `profile_qualified` entries, 29 `archive_not_found` entries, and
       zero `profile_pending` entries.
-- [ ] Select the execution commit immediately before each dry-run or apply
-      dispatch. Pass its full SHA as `expected_workflow_commit`; it must equal
-      that run's protected submissions `main`. Require migration-workflow
+- [ ] Select one reviewed implementation baseline from protected submissions
+      `main`, bind it as protected-environment variable
+      `REVIEWED_IMPLEMENTATION_COMMIT`, and pass that same full SHA as
+      `expected_workflow_commit`. Each run self-binds its exact protected-`main`
+      event SHA. A later event SHA is
+      accepted only when the complete comparison from the reviewed baseline is
+      non-truncated and contains solely added or modified `results/*.json`
+      files; every other change fails before the protected migration job.
+      Require migration-workflow
       SHA-256
-      `f3b4abf0fe027cb1d1f58b9228f78e4fa2a23720ef7e85aa27eb4cfeb81de68f`,
+      `90c29e5fc37f283846b87d67a419e1afad3dd7cbe6f24a4b6bfcfa296390abd7`,
       private-controller SHA-256
       `402e8cab4e8d308cbca36ddcfe7060482a243b9c6aad29ba91b78a3dd1e672c8`,
       and public-controller SHA-256
       `a1afb9da60ddcd8bc7192d673b4cfc2e51831acc307164c252dee1a0b8126d21`.
-      If protected `main` advances after the dry run, bind the new SHA and
-      repeat the dry run before apply.
+      A successful dry run remains valid across only those proven Results-only
+      descendants. Any other protected-`main` advance requires a new reviewed
+      baseline and dry run before apply.
 - [x] The production template is bound at SHA-256
       `aac24318c973523a65b76af34b8e1408a5680f61b52c4fb996f93967253ef94d`,
       and `archive-migration-production` directly defines only
-      `AWS_WRAP_ROLE_ARN` with the dedicated migration role plus
+      `AWS_WRAP_ROLE_ARN` with the dedicated migration role,
+      `REVIEWED_IMPLEMENTATION_COMMIT` with the reviewed workflow baseline, plus
       `AUDIT_MIGRATION_READ_KEY`. Authenticated readback bound the production
       stack at `UPDATE_COMPLETE`, last updated
       `2026-08-31T06:07:26.081Z`, with the exact migration-role OIDC trust and

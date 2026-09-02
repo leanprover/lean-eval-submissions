@@ -40,9 +40,10 @@ class ManualDispatchRefGuardTests(unittest.TestCase):
         self.assertIn("contents: read", authorization)
         self.assertIn('test "$EVENT_REF" = refs/heads/main', authorization)
         self.assertIn('test "$EVENT_REF_PROTECTED" = true', authorization)
-        self.assertIn(
+        self.assertNotIn(
             'test "$EXPECTED_WORKFLOW_COMMIT" = "$EVENT_SHA"', authorization
         )
+        self.assertIn('[[ "$EXPECTED_WORKFLOW_COMMIT" =~', authorization)
         self.assertIn(
             "gh api repos/leanprover/lean-eval-submissions/branches/main",
             authorization,

@@ -113,7 +113,7 @@ def sidecar(
 
 def write_pair(
     root: pathlib.Path, relative: str, value: dict[str, object], ciphertext: bytes
-) -> None:
+        ) -> None:
     cipher_path = root.joinpath(*relative.split("/"))
     cipher_path.parent.mkdir(parents=True, exist_ok=True)
     cipher_path.write_bytes(ciphertext)
@@ -334,8 +334,32 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("expected_workflow_commit:", workflow)
-        self.assertIn('test "$EXPECTED_WORKFLOW_COMMIT" = "$EVENT_SHA"', workflow)
+        self.assertNotIn('test "$EXPECTED_WORKFLOW_COMMIT" = "$EVENT_SHA"', workflow)
+        self.assertIn(
+            'REVIEWED_IMPLEMENTATION_COMMIT: ${{ vars.REVIEWED_IMPLEMENTATION_COMMIT }}',
+            workflow,
+        )
+        self.assertIn(
+            'test "$EXPECTED_WORKFLOW_COMMIT" = "$REVIEWED_IMPLEMENTATION_COMMIT"',
+            workflow,
+        )
+        self.assertIn(
+            'compare/$REVIEWED_IMPLEMENTATION_COMMIT...$EVENT_SHA', workflow
+        )
+        self.assertIn('.merge_base_commit.sha == $base', workflow)
+        self.assertIn('.head_commit.sha == $head', workflow)
+        self.assertIn('.ahead_by == (.commits | length)', workflow)
+        self.assertIn('(.files | length) < 300', workflow)
+        self.assertIn(
+            'test("^results/[a-z0-9][a-z0-9._-]*[.]json$")', workflow
+        )
+        self.assertIn('.status == "added" or .status == "modified"', workflow)
         self.assertIn('test "$EVENT_REF_PROTECTED" = true', workflow)
+        bind = workflow.index(
+            "Bind the environment-reviewed implementation and exact event commit"
+        )
+        audit_checkout = workflow.index("Check out the exact private audit source")
+        self.assertLess(bind, audit_checkout)
         self.assertIn("preflight-audit", workflow)
         preflight_step = named_workflow_steps(workflow)[
             "Prove a fresh review branch and non-overlapping audit main"
