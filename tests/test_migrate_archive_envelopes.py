@@ -334,6 +334,15 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("expected_workflow_commit:", workflow)
+        self.assertIn(
+            "run-name: Historical archive migration ${{ inputs.operation_id }}",
+            workflow,
+        )
+        self.assertIn("operation_id:", workflow)
+        self.assertIn("OPERATION_ID: ${{ inputs.operation_id }}", workflow)
+        self.assertIn(
+            '[[ "$OPERATION_ID" =~ ^archive-migration-[0-9a-f]{32}$ ]]', workflow
+        )
         self.assertNotIn('test "$EXPECTED_WORKFLOW_COMMIT" = "$EVENT_SHA"', workflow)
         self.assertIn(
             'REVIEWED_IMPLEMENTATION_COMMIT: ${{ vars.REVIEWED_IMPLEMENTATION_COMMIT }}',

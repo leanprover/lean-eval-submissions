@@ -38,6 +38,10 @@ class ManualDispatchRefGuardTests(unittest.TestCase):
         source = workflow("migrate-archive-envelopes.yml")
         authorization = job(source, "authorize-manual")
         self.assertIn("contents: read", authorization)
+        self.assertIn(
+            '[[ "$OPERATION_ID" =~ ^archive-migration-[0-9a-f]{32}$ ]]',
+            authorization,
+        )
         self.assertIn('test "$EVENT_REF" = refs/heads/main', authorization)
         self.assertIn('test "$EVENT_REF_PROTECTED" = true', authorization)
         self.assertNotIn(

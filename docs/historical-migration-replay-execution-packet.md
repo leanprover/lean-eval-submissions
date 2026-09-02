@@ -35,7 +35,7 @@ The fixed reviewed implementation bindings are:
 
 | Component | Exact binding |
 | --- | --- |
-| Migration workflow | `.github/workflows/migrate-archive-envelopes.yml`, SHA-256 `90c29e5fc37f283846b87d67a419e1afad3dd7cbe6f24a4b6bfcfa296390abd7` |
+| Migration workflow | `.github/workflows/migrate-archive-envelopes.yml`, SHA-256 `f1d00a45092a39afa0a0bc6be4cc9a319be85876e29a9ac20334f41f0aa0eb99` |
 | Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `402e8cab4e8d308cbca36ddcfe7060482a243b9c6aad29ba91b78a3dd1e672c8` |
 | Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `a1afb9da60ddcd8bc7192d673b4cfc2e51831acc307164c252dee1a0b8126d21` |
 | Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
@@ -118,9 +118,11 @@ workflow artifact, worktree file, mutable tag, or branch head.
       non-truncated and contains solely added or modified `results/*.json`
       files; every other change fails before private audit checkout or any
       legacy-identity reference or use.
+      Generate one unique `archive-migration-<32-lowercase-hex>` operation ID
+      for exact dispatch correlation and crash-safe supervisor recovery.
       Require migration-workflow
       SHA-256
-      `90c29e5fc37f283846b87d67a419e1afad3dd7cbe6f24a4b6bfcfa296390abd7`,
+      `f1d00a45092a39afa0a0bc6be4cc9a319be85876e29a9ac20334f41f0aa0eb99`,
       private-controller SHA-256
       `402e8cab4e8d308cbca36ddcfe7060482a243b9c6aad29ba91b78a3dd1e672c8`,
       and public-controller SHA-256

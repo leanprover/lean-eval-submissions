@@ -1,8 +1,13 @@
 name: Migrate historical archive envelopes
+run-name: Historical archive migration ${{ inputs.operation_id }}
 
 on:
   workflow_dispatch:
     inputs:
+      operation_id:
+        description: Unique operator correlation ID (archive-migration- plus 32 lowercase hex)
+        required: true
+        type: string
       audit_commit:
         description: Exact reviewed lean-eval-audit main commit
         required: true
@@ -51,8 +56,10 @@ jobs:
           EVENT_REPOSITORY: ${{ github.repository }}
           EXPECTED_WORKFLOW_COMMIT: ${{ inputs.expected_workflow_commit }}
           GH_TOKEN: ${{ github.token }}
+          OPERATION_ID: ${{ inputs.operation_id }}
         run: |
           set -euo pipefail
+          [[ "$OPERATION_ID" =~ ^archive-migration-[0-9a-f]{32}$ ]]
           test "$EVENT_REPOSITORY" = leanprover/lean-eval-submissions
           test "$EVENT_REF" = refs/heads/main
           test "$EVENT_REF_PROTECTED" = true
