@@ -235,7 +235,7 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
             "Rewrap selected file keys and copy exact ciphertext bytes"
         )
         authority_gone = workflow.index(
-            "Prove decrypt and wrap authority is gone before audit write authority"
+            "Prove legacy decrypt material and AWS session are gone before audit write authority"
         )
         writer = workflow.index("Mint audit-repository-only migration writer")
         writer_checkout = workflow.index(
@@ -258,10 +258,10 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
             exact_role,
         )
         authority_step = steps[
-            "Prove decrypt and wrap authority is gone before audit write authority"
+            "Prove legacy decrypt material and AWS session are gone before audit write authority"
         ]
-        self.assertIn('ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""', authority_step)
-        self.assertIn('ACTIONS_ID_TOKEN_REQUEST_URL: ""', authority_step)
+        self.assertNotIn("ACTIONS_ID_TOKEN_REQUEST_TOKEN", authority_step)
+        self.assertNotIn("ACTIONS_ID_TOKEN_REQUEST_URL", authority_step)
         self.assertIn('AWS_ACCESS_KEY_ID: ""', authority_step)
         self.assertIn('AWS_SECRET_ACCESS_KEY: ""', authority_step)
         self.assertIn('AWS_SESSION_TOKEN: ""', authority_step)
@@ -323,9 +323,8 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
         self.assertNotIn("git -C audit config --local", push_step)
         self.assertNotIn("http.https://github.com/.extraheader ||", push_step)
         post_authority = workflow[authority_gone:]
-        self.assertGreaterEqual(
-            post_authority.count('ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""'), 3
-        )
+        self.assertNotIn("ACTIONS_ID_TOKEN_REQUEST_TOKEN", post_authority)
+        self.assertNotIn("ACTIONS_ID_TOKEN_REQUEST_URL", post_authority)
         self.assertGreaterEqual(post_authority.count('AWS_ACCESS_KEY_ID: ""'), 3)
 
     def test_workflow_binds_apply_to_exact_protected_commit_and_preflights_early(

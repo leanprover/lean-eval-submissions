@@ -35,7 +35,7 @@ The fixed reviewed implementation bindings are:
 
 | Component | Exact binding |
 | --- | --- |
-| Migration workflow | `.github/workflows/migrate-archive-envelopes.yml`, SHA-256 `b3a61b774c986147e1954f3c5d9290bb64aa2beceadf206b3ce0317873709801` |
+| Migration workflow | `.github/workflows/migrate-archive-envelopes.yml`, SHA-256 `f3b4abf0fe027cb1d1f58b9228f78e4fa2a23720ef7e85aa27eb4cfeb81de68f` |
 | Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `402e8cab4e8d308cbca36ddcfe7060482a243b9c6aad29ba91b78a3dd1e672c8` |
 | Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `a1afb9da60ddcd8bc7192d673b4cfc2e51831acc307164c252dee1a0b8126d21` |
 | Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
@@ -45,6 +45,14 @@ The fixed reviewed implementation bindings are:
 | Migration boundary | role `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`; environment `archive-migration-production`; review branch `archive-file-key-rewrap-v1`; confirmation `stage-envelope-migration` |
 | Audit promotion contract | caller `.github/workflows/promote-archive-migration.yml`, SHA-256 `a1cde0d8663adf6fddc5bd8942f92602c391ca918f04dd84e59325460cb26c5a`; reusable audit contract commit `7a53c75c6d7c263c684ebcd54590c657c9298642`, workflow SHA-256 `b760ee6e6f04bcd061e3f15bea67c3dad33812e7cf5627b5850635d8228c8d3e` |
 | Deterministic migration report | SHA-256 `faa26e1aa47eb629966db03695eda4f949b6c9804166f0047f53e09d9cc83339` |
+
+The migration job's GitHub OIDC request handle is a job-level capability and
+cannot be revoked between steps. Its AWS trust is restricted to the dedicated
+production migration role, whose policy permits only `Encrypt` with the exact
+v2 encryption context and never `Decrypt`. Before the audit writer token is
+minted, the workflow removes the legacy decryption identity, active AWS
+session, read-authority checkout, and migration scratch. Audit `main` remains
+protected by the independently bound exact-patch promotion contract.
 
 Both replay controllers are restricted to protected `main`, use one shared
 non-cancelling concurrency group, allow at most four execution attempts, and
@@ -98,7 +106,7 @@ workflow artifact, worktree file, mutable tag, or branch head.
       dispatch. Pass its full SHA as `expected_workflow_commit`; it must equal
       that run's protected submissions `main`. Require migration-workflow
       SHA-256
-      `b3a61b774c986147e1954f3c5d9290bb64aa2beceadf206b3ce0317873709801`,
+      `f3b4abf0fe027cb1d1f58b9228f78e4fa2a23720ef7e85aa27eb4cfeb81de68f`,
       private-controller SHA-256
       `402e8cab4e8d308cbca36ddcfe7060482a243b9c6aad29ba91b78a3dd1e672c8`,
       and public-controller SHA-256
