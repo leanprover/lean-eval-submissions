@@ -20,7 +20,7 @@ class AuditPromotionBootstrapTests(unittest.TestCase):
 
     def test_is_one_shot_and_exactly_bound_to_the_reviewed_audit_pr(self) -> None:
         self.assertEqual(
-            self.workflow.count("01f55a1a532bb1bc3470aff2beeaecd2d1f3f41c"), 5
+            self.workflow.count("7a53c75c6d7c263c684ebcd54590c657c9298642"), 5
         )
         self.assertEqual(
             self.workflow.count("f50c46574dd719486a01272e3eaeced396ac5ada"), 2
@@ -57,7 +57,7 @@ class AuditPromotionCallerTests(unittest.TestCase):
         cls.workflow = CALLER.read_text(encoding="utf-8")
 
     def test_calls_only_the_exact_reviewed_private_contract(self) -> None:
-        contract = "01f55a1a532bb1bc3470aff2beeaecd2d1f3f41c"
+        contract = "7a53c75c6d7c263c684ebcd54590c657c9298642"
         self.assertIn(
             "uses: leanprover/lean-eval-audit/.github/workflows/"
             f"promote-archive-migration.yml@{contract}",

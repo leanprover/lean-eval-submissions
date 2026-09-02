@@ -54,7 +54,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval-audit
-          ref: 01f55a1a532bb1bc3470aff2beeaecd2d1f3f41c
+          ref: 7a53c75c6d7c263c684ebcd54590c657c9298642
           path: audit
           fetch-depth: 2
           persist-credentials: false
@@ -66,7 +66,7 @@ jobs:
         run: |
           set -euo pipefail
           readonly base=f50c46574dd719486a01272e3eaeced396ac5ada
-          readonly head=01f55a1a532bb1bc3470aff2beeaecd2d1f3f41c
+          readonly head=7a53c75c6d7c263c684ebcd54590c657c9298642
           readonly tree=1d225ef9e535e1ff6c12b051fe111c16d3a33039
           readonly branch=feat/migration-promotion-cas
           test -n "$AUDIT_TOKEN"
@@ -103,7 +103,7 @@ jobs:
         run: |
           set -euo pipefail
           readonly base=f50c46574dd719486a01272e3eaeced396ac5ada
-          readonly head=01f55a1a532bb1bc3470aff2beeaecd2d1f3f41c
+          readonly head=7a53c75c6d7c263c684ebcd54590c657c9298642
           readonly tree=1d225ef9e535e1ff6c12b051fe111c16d3a33039
           test -n "$AUDIT_TOKEN"
           audit_token=$AUDIT_TOKEN
@@ -133,7 +133,7 @@ jobs:
           AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}
         run: |
           set -euo pipefail
-          readonly head=01f55a1a532bb1bc3470aff2beeaecd2d1f3f41c
+          readonly head=7a53c75c6d7c263c684ebcd54590c657c9298642
           readonly branch=feat/migration-promotion-cas
           test -n "$AUDIT_TOKEN"
           basic_auth=$(printf 'x-access-token:%s' "$AUDIT_TOKEN" | base64 -w0)
@@ -160,7 +160,7 @@ jobs:
 
       - name: Record bootstrap result
         run: |
-          readonly head=01f55a1a532bb1bc3470aff2beeaecd2d1f3f41c
+          readonly head=7a53c75c6d7c263c684ebcd54590c657c9298642
           readonly tree=1d225ef9e535e1ff6c12b051fe111c16d3a33039
           {
             echo '### Audit migration promotion contract bootstrapped'
