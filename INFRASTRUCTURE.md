@@ -16,7 +16,7 @@ performed by the maintainer because the agent lacks access is an operator
 handoff, not a new permission gate. The remaining approval exceptions are
 listed in [`docs/overhaul-tracker.md`](docs/overhaul-tracker.md).
 
-Last reconciled: **2026-09-01**
+Last reconciled: **2026-09-02**
 
 ## Current baseline
 
@@ -29,17 +29,23 @@ Last reconciled: **2026-09-01**
 
 Public structured health currently reports one coherent deployed commit with:
 
-- production intake configured and effectively disabled;
+- production commit `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d` with
+  durable intake;
 - staging and production general replay disabled;
 - historical-public replay disabled;
 - staging acceptance enabled and production acceptance disabled;
 - production promotion canary disabled;
-- result-owner, amendment-owner, amendment-maintainer, model-owner, and
-  model-maintainer APIs disabled; and
-- empty maintainer lists.
+- the six approved result-owner, amendment-owner, amendment-maintainer,
+  model-owner, model-maintainer, and one-way publication-opt-in gates enabled;
+- exactly `kim-em` / GitHub user `477956` in both production maintainer lists;
+  and
+- model consolidation and publication opt-out disabled.
 
-Automatic release publication is disabled because `PUBLICATION_ENABLED` is
-absent. Production archive Wrap is connected and its Encrypt-only/decrypt-
+Automatic release publication is enabled. The terminal production canary is
+scheduled for `2026-11-02T03:50:01.002Z`; its source is not yet due. Production
+State was observed at `fb70dd6ba14cae94b30d570818e4801884e81e04` after the
+canary events and may advance append-only. Production archive Wrap is connected
+and its Encrypt-only/decrypt-
 denial preflight is qualified; the production replay role variable is absent.
 Both release roles trust their exact current ID-bearing GitHub OIDC subjects.
 The staging credentialed, publication-disabled reconstruction boundary and the
@@ -62,9 +68,11 @@ No LeanEval resource is hosted in the unrelated
 | Staging rate-limit namespace | `24012001` |
 | Production rate-limit namespace | `24012002` |
 
-No dedicated hostname or DNS change is required for launch. The leaderboard
-will provide `https://lean-lang.org/eval/submit/` as a static entry page and
-send users to the production Worker origin for authentication and submission.
+No dedicated hostname or DNS change is required. The leaderboard provides
+`https://lean-lang.org/eval/submit/` as the server-primary entry and sends users
+to the production Worker origin for authentication and submission. Issue intake
+remains the overlap fallback through no earlier than
+`2026-09-30T06:57:10Z`.
 
 | Environment | Intake Worker | Broker Worker | Replay Worker / container application |
 | --- | --- | --- | --- |
@@ -243,9 +251,9 @@ passed the same preflight.
 
 ### Audit repository rulesets
 
-`leanprover/lean-eval-audit` is private. Its default branch is `main`, currently
-at `34e33e339eaac47a10c463abaedef47361c5abab`, and GitHub reports that branch as
-protected. Four rules are effective on the default branch:
+`leanprover/lean-eval-audit` is private. Its protected default branch is `main`,
+currently at `7a53c75c6d7c263c684ebcd54590c657c9298642` with bootstrap-verified
+tree `4e44c06`. Four rules are effective on the default branch:
 
 | Ruleset | Enforcement and target | Rules | Bypass |
 | --- | --- | --- | --- |
@@ -285,9 +293,9 @@ trying to recover the old private material.
 | submissions / `archive-production` | `EN_kwDOSh7OzM8AAAAEu8r25w` | `lean-eval-dispatch/*` | Production Encrypt-only `AWS_WRAP_ROLE_ARN` set and qualified |
 | submissions / `replay-staging` | `EN_kwDOSh7OzM8AAAAEu8r21Q` | `main` and `lean-eval-dispatch/*` | Staging replay invoker role set |
 | submissions / `replay-production` | `EN_kwDOSh7OzM8AAAAEu8r3MQ` | protected branches | Production replay variable absent |
-| submissions / `archive-migration-production` | `EN_kwDOSh7OzM8AAAAEwLDSMQ` | protected branches | Prebound to the dedicated migration role ARN; live AWS apply/readback pending, so unusable |
+| submissions / `archive-migration-production` | `EN_kwDOSh7OzM8AAAAEwLDSMQ` | protected branches | Bound to the live dedicated Encrypt-only migration role; `AUDIT_MIGRATION_READ_KEY` is installed and `LEGACY_ARCHIVE_IDENTITY` is absent |
 | releases / `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | protected branches | Staging release invoker role set; live trust matches the current ID-bearing subject |
-| releases / `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | protected branches | Production release invoker and Git keys set; live trust matches the current ID-bearing subject; publication variable absent |
+| releases / `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | protected branches | Production release invoker and Git keys set; live trust matches the current ID-bearing subject; publication enabled |
 
 Environment protection/policy IDs, in the same order, are:
 
@@ -372,10 +380,9 @@ read path without affecting State writers or intake.
 
 `leanprover/lean-eval-releases` owns public two-calendar-month-delayed source
 bundles and provenance. Eligibility is recomputed from immutable State. The
-controller's publication variable remains absent. The initial private/scheduled
-choice, one-way later publication opt-in, and submitter-facing license/release
-text must pass the launch smoke and maintainer review before enablement. The
-reverse scheduled-to-private transition remains disabled.
+controller is enabled. The initial private/scheduled choice and one-way later
+publication opt-in are live; the reverse scheduled-to-private transition
+remains disabled.
 
 ## Monitoring and emergency response
 
@@ -409,6 +416,12 @@ Rollback does not revert or rewrite State, Results, releases, AWS resources,
 credentials, or repository history. If the non-atomic multi-component deploy
 is interrupted, keep intake paused and rerun disable-only recovery or
 forward-deploy one coherent reviewed unit. Never mix target commits.
+
+The current coherent rollback unit is commit
+`ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`, disabled intake
+`1b1b12d1-2cf3-4f8f-8b32-ef064263d569`, replay
+`00501e8b-6285-4948-8386-2aa8ced3aea4`, and broker
+`24a74b99-c87f-4fba-a4ee-3d86cc59a0d2`.
 
 Release-removal and confidentiality recovery use the contracts in
 `leanprover/lean-eval-releases`:
