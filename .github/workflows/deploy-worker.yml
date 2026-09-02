@@ -59,7 +59,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: submission-worker-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  group: ${{ github.event_name == 'pull_request' && format('submission-worker-pr-{0}', github.event.pull_request.number) || 'submission-worker-protected-main' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
