@@ -59,11 +59,18 @@ describe("browser intake page", () => {
     expect(body).not.toContain("open-conjectures");
     expect(body).not.toContain('id="source_visibility"');
     expect(body).not.toContain('<option value="public">');
-    expect(body).toContain('<option value="scheduled">scheduled release (default)</option>');
+    expect(body).toContain(
+      '<option value="scheduled">scheduled release (recommended default)</option>',
+    );
     expect(body.indexOf('value="scheduled"')).toBeLessThan(body.indexOf('value="withheld"'));
+    expect(body).toContain("lets the community inspect and reuse accepted solutions");
     expect(body).toContain("authorized to license the submitted source under the Apache License 2.0");
     expect(body).toContain("exactly two UTC calendar months after acceptance");
-    expect(body).toContain("Choose private to keep accepted source withheld");
+    expect(body).toContain(
+      "Keep accepted source private only if you have a specific reason not to publish it",
+    );
+    expect(body).toContain("the public result will show the solution as withheld");
+    expect(body).toContain("you may irreversibly schedule release later");
     expect(body.toLowerCase()).not.toContain("opt out");
     expect(body).not.toContain("<script>");
   });

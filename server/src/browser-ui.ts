@@ -103,10 +103,10 @@ export function browserPage(
       <label>Exact source commit <input id="source_commit" name="source_commit" required pattern="[0-9a-f]{40}" minlength="40" maxlength="40"></label>
       <label>Publication choice
         <select id="publication_choice" name="publication_choice">
-          <option value="scheduled">scheduled release (default)</option>
+          <option value="scheduled">scheduled release (recommended default)</option>
           <option value="withheld">keep accepted source private</option>
         </select>
-        <small>Choosing scheduled release confirms that you are authorized to license the submitted source under the Apache License 2.0. Accepted source is released under that license exactly two UTC calendar months after acceptance. Choose private to keep accepted source withheld; you may schedule it later.</small>
+        <small>Scheduled release is the recommended default because it lets the community inspect and reuse accepted solutions. Choosing it confirms that you are authorized to license the submitted source under the Apache License 2.0. Accepted source is released under that license exactly two UTC calendar months after acceptance. Keep accepted source private only if you have a specific reason not to publish it; the public result will show the solution as withheld, and you may irreversibly schedule release later.</small>
       </label>
       <label>Production metadata JSON <textarea id="production_metadata" name="production_metadata" rows="5">{}</textarea></label>
       <button id="submit-button" type="submit" aria-busy="false">
