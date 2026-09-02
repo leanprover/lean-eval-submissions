@@ -41,8 +41,9 @@ The fixed reviewed implementation bindings are:
 | Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
 | Private plan builder | `scripts/prepare_historical_private_replay.py`, SHA-256 `2f1ae6a6e8710a0d0983aa7c2b3f64e77ebf2322da8154c04e39be084f4355e4` |
 | Public finalizer | `scripts/prepare_historical_public_authority.py`, SHA-256 `59e611fd468e700b766343adc2f3a861ed2fa3c182761ef2ba7f6efd66434d6b` |
-| Migration infrastructure | `infrastructure/aws-key-adapter/template.yaml`, SHA-256 `aac24318c973523a65b76af34b8e1408a5680f61b52c4fb996f93967253ef94d`; operator script SHA-256 `d8fed95053e166674dd1b426437cb7eaa2fe450a8699361f486c0da2f93147a3` |
+| Migration infrastructure | Applied production template `infrastructure/aws-key-adapter/template.yaml`, SHA-256 `aac24318c973523a65b76af34b8e1408a5680f61b52c4fb996f93967253ef94d`. The completed operator procedure is not an execution input and must not be rerun. |
 | Migration boundary | role `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`; environment `archive-migration-production`; review branch `archive-file-key-rewrap-v1`; confirmation `stage-envelope-migration` |
+| Audit promotion contract | caller `.github/workflows/promote-archive-migration.yml`, SHA-256 `a1cde0d8663adf6fddc5bd8942f92602c391ca918f04dd84e59325460cb26c5a`; reusable audit contract commit `7a53c75c6d7c263c684ebcd54590c657c9298642`, workflow SHA-256 `b760ee6e6f04bcd061e3f15bea67c3dad33812e7cf5627b5850635d8228c8d3e` |
 | Deterministic migration report | SHA-256 `faa26e1aa47eb629966db03695eda4f949b6c9804166f0047f53e09d9cc83339` |
 
 Both replay controllers are restricted to protected `main`, use one shared
@@ -93,22 +94,28 @@ workflow artifact, worktree file, mutable tag, or branch head.
       `5e7c181edef7569dcf2ecb2c33f7819adfb75b07`. It contains 63 profiles,
       639 `profile_qualified` entries, 29 `archive_not_found` entries, and
       zero `profile_pending` entries.
-- [ ] Select the execution commit immediately before dispatch. It must equal
-      the then-current protected submissions `main`; the migration workflow
-      blob must retain SHA-256
-      `242da58b04478f7bf614f55b6ab78d01cd494b5b6df867681e2e5616ef848f64`.
-      Protected source commit `647160063758df5e21f9b64e7ec2e198dff6d481`
-      carries that exact migration blob. Controller source commit
-      `139b2e2db63d942222260595f3347945aee13583` carries both reviewed
-      controller blobs.
-- [ ] The production template is bound at SHA-256
+- [ ] Select the execution commit immediately before each dry-run or apply
+      dispatch. Pass its full SHA as `expected_workflow_commit`; it must equal
+      that run's protected submissions `main`. Require migration-workflow
+      SHA-256
+      `242da58b04478f7bf614f55b6ab78d01cd494b5b6df867681e2e5616ef848f64`,
+      private-controller SHA-256
+      `402e8cab4e8d308cbca36ddcfe7060482a243b9c6aad29ba91b78a3dd1e672c8`,
+      and public-controller SHA-256
+      `a1afb9da60ddcd8bc7192d673b4cfc2e51831acc307164c252dee1a0b8126d21`.
+      If protected `main` advances after the dry run, bind the new SHA and
+      repeat the dry run before apply.
+- [x] The production template is bound at SHA-256
       `aac24318c973523a65b76af34b8e1408a5680f61b52c4fb996f93967253ef94d`,
       and `archive-migration-production` directly defines only
       `AWS_WRAP_ROLE_ARN` with the dedicated migration role plus
-      `AUDIT_MIGRATION_READ_KEY`. Complete the authenticated live
-      CloudFormation/IAM readback: exact migration-role
-      OIDC trust and Encrypt-only v2 policy, replay v1+v2 Decrypt support,
-      unchanged ordinary v1 roles and outputs, and unchanged staging stack.
+      `AUDIT_MIGRATION_READ_KEY`. Authenticated readback bound the production
+      stack at `UPDATE_COMPLETE`, last updated
+      `2026-08-31T06:07:26.081Z`, with the exact migration-role OIDC trust and
+      Encrypt-only v2 policy, replay v1+v2 Decrypt support, and unchanged
+      ordinary v1 roles and outputs. The staging stack remained
+      `UPDATE_COMPLETE`, last updated `2026-08-27T06:33:54.697Z`. No further
+      infrastructure apply is part of this packet.
 - [x] The exact migration inputs are audit commit
       `ad356e7bc5a2d650d9902ac3f6d352a0164360bc`, selected inventory digest
       `a8913f1c8b5073e5b7ab309ba10481b615ca4fc00e629e41a9e57962f3afebd4`,
@@ -149,13 +156,23 @@ workflow artifact, worktree file, mutable tag, or branch head.
       content-addressed encrypted locators and digests; migration/replay does
       not modify Results, and no source, key material, or plaintext enters a
       public projection, artifact, log, release, or publication.
-- [ ] The source-bound recovery contract leaves audit `main` unchanged on
-      migration failure and removes identity, AWS session, scratch, and the
-      isolated review branch. The review branch is currently absent. Before
-      identity installation, verify that replay variables remain absent and
-      Cloudflare has no historical temporary executor. Retain the migration
-      role, protected environment, and workflow for the separately bound
-      final-cutoff delta unless the lane is explicitly abandoned and retired.
+- [x] The source-bound recovery contract leaves audit `main` unchanged on
+      migration failure and removes job-local identity, AWS session, and
+      scratch. The isolated branch is written only by the terminal staging
+      step and is deleted by promotion after its compare-and-swap readback. At
+      audit head
+      `7a53c75c6d7c263c684ebcd54590c657c9298642`, the pinned audit source is an
+      ancestor, its 1,756 migration-touched paths have zero overlap with the
+      160 intervening changed paths, and `archive-file-key-rewrap-v1` is
+      absent. Replay variables are absent; production replay and historical
+      public replay flags are false; Cloudflare has no `hpr-` Worker or
+      `le-hpr-` application; and production State
+      `fb70dd6ba14cae94b30d570818e4801884e81e04` has no active replay series.
+      Recheck these live absences before identity installation; apply repeats
+      the audit-head, path-overlap, and branch checks.
+      Retain the migration role, protected environment, and workflow for the
+      separately bound final-cutoff delta unless the lane is explicitly
+      abandoned and retired.
 - [x] Explicit exclusions: no legacy-key destruction, final-cutoff delta,
       intake or publication change, experimental checker, FC/disproof work,
       external PR/comment, or item outside the hashes in this packet.
