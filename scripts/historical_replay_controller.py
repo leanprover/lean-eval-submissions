@@ -1910,6 +1910,14 @@ def recover_running(
             "schema_version": 1,
             "kind": "busy",
             "replay_task_id": started["subject_id"],
+            "attempt": _integer(
+                _object(started.get("payload"), "running historical payload").get(
+                    "attempt"
+                ),
+                "running historical attempt",
+                1,
+            ),
+            "started_event_id": started["event_id"],
         }
     payload = _object(started.get("payload"), "running historical payload")
     attempt = _integer(payload.get("attempt"), "running historical attempt", 1)
