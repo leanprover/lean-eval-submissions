@@ -20,8 +20,19 @@ The public leaderboard that renders these results is
 
 ## Submitting a solution
 
-Open a [**Submit benchmark solution**](https://github.com/leanprover/lean-eval-submissions/issues/new?template=submit.yml)
-issue. You point it at any content that contains at least one
+The preferred submission path is the
+[**LeanEval submission service**](https://lean-lang.org/eval/submit/).
+
+GitHub issue intake remains available during the transition and is
+provisionally scheduled to close no earlier than `2026-09-30T06:57:10Z`.
+Closure is not automatic: issue intake will remain open if a severity-high
+incident is unresolved or the adoption, service-stability, or final historical
+cutoff and append-only delta gates have not passed. Any closure will be
+confirmed separately.
+
+While issue intake remains open, you can use the
+[**Submit benchmark solution**](https://github.com/leanprover/lean-eval-submissions/issues/new?template=submit.yml)
+form. Point it at any content that contains at least one
 `lakefile.toml` whose `name` matches a benchmark problem id with a
 `Submission.lean` alongside it — a generated workspace, a fork of
 `leanprover/lean-eval` with changes under `generated/`, a repo with
