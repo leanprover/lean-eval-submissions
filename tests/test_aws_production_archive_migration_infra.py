@@ -87,6 +87,16 @@ class ProductionArchiveMigrationInfrastructureTests(unittest.TestCase):
             SCRIPT,
         )
 
+    def test_live_stack_preflight_accepts_created_or_updated_stack(self) -> None:
+        preflight, post = SCRIPT.split("echo step=post-update-verification", 1)
+        self.assertIn(
+            '(.Stacks[0].StackStatus == "CREATE_COMPLETE" or\n'
+            '   .Stacks[0].StackStatus == "UPDATE_COMPLETE")',
+            preflight,
+        )
+        self.assertNotIn('StackStatus == "CREATE_COMPLETE"', post)
+        self.assertIn('.Stacks[0].StackStatus == "UPDATE_COMPLETE"', post)
+
     def test_never_installs_secret_or_runs_workloads(self) -> None:
         self.assertNotIn("gh secret set", SCRIPT)
         self.assertNotIn("gh workflow run", SCRIPT)

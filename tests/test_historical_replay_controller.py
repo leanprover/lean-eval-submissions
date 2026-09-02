@@ -1269,7 +1269,13 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
             events = self.events()
             self.write_events(root, events)
             busy = recover_running(root, "2026-08-25T02:00:00.000Z", state_validated=True)
-            self.assertEqual(busy["kind"], "busy")
+            self.assertEqual(busy, {
+                "schema_version": 1,
+                "kind": "busy",
+                "replay_task_id": events[-1]["subject_id"],
+                "attempt": 1,
+                "started_event_id": events[-1]["event_id"],
+            })
             stale = recover_running(
                 root,
                 "2026-08-25T08:00:00.004Z",
