@@ -57,6 +57,17 @@ HISTORICAL_AUTHORITY_PREPARATION = (
 
 
 class WorkerDeploymentWorkflowTests(unittest.TestCase):
+    def test_pull_request_checks_cannot_cancel_the_protected_main_deployment(self) -> None:
+        self.assertIn(
+            "format('submission-worker-pr-{0}', github.event.pull_request.number)",
+            DEPLOY,
+        )
+        self.assertIn("'submission-worker-protected-main'", DEPLOY)
+        self.assertIn(
+            "cancel-in-progress: ${{ github.event_name == 'pull_request' }}",
+            DEPLOY,
+        )
+
     def test_deploy_and_rollback_bind_current_state_and_atomic_model_health(self) -> None:
         expected = "235a96c96462438c7680e6fb90fa0e6044ec1774"
         self.assertEqual(QUALIFICATION["state_main_commit"], expected)
