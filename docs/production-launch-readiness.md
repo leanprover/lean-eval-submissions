@@ -19,7 +19,7 @@ Protected `main` at this packet revision:
 | Repository | Commit |
 | --- | --- |
 | `leanprover/lean-eval` | `313078a0962c4a929d790772a7bf2f997f22857b` |
-| `leanprover/lean-eval-submissions` | `f7d84603fa3b842c7c9ef87274dc830315676784`; refresh before merging this packet |
+| `leanprover/lean-eval-submissions` | `b8d0338f96f133614f04df0a0560a6f364aef808`; refresh before merging this packet |
 | `leanprover/lean-eval-leaderboard` | `c593bfb7dcb719ee7613848f9951828dfeb4e1da` |
 | `leanprover/lean-eval-state` | Observed at `fb70dd6ba14cae94b30d570818e4801884e81e04`; this append-only head may advance |
 | `leanprover/lean-eval-state-staging` | `c604bb446a51fc833c96887053ec64672c912d8c` |
