@@ -182,6 +182,22 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 )
         self.assertNotIn("/internal/v1/staging-amendment-canary", WORKER_APP)
 
+    def test_historical_public_qualifier_is_retired(self) -> None:
+        retired_paths = {
+            ".github/workflows/historical-public-authority-preparation.yml",
+            ".github/workflows/historical-public-image-qualification.yml",
+            "docs/historical-public-authority-preparation.md",
+            "historical-public-qualification/contract-v1.json",
+            "historical-public-qualification/qualification.py",
+            "historical-public-qualification/wait_rollout.py",
+            "schemas/historical-public-authority-preparation-v1.schema.json",
+            "schemas/historical-public-authority-preparation-v2.schema.json",
+            "tests/test_historical_public_image_qualification.py",
+        }
+        for path in retired_paths:
+            with self.subTest(path=path):
+                self.assertFalse((ROOT / path).exists())
+
     def test_offline_evidence_scripts_do_not_redeploy_workers(self) -> None:
         pull_request = DEPLOY.split("  pull_request:", 1)[1].split("  push:", 1)[0]
         push = DEPLOY.split("  push:", 1)[1].split("  workflow_dispatch:", 1)[0]
@@ -244,8 +260,6 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "aws-key-adapter-staging-smoke.yml",
                 "aws-production-wrap-preflight.yml",
                 "bounded-staging-lifecycle-watchdog.yml",
-                "historical-public-authority-preparation.yml",
-                "historical-public-image-qualification.yml",
                 "historical-public-replay-plan.yml",
                 "historical-public-runner-contract.yml",
                 "historical-replay-inventory.yml",

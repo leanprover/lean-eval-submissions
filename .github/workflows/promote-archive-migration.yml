@@ -1,0 +1,67 @@
+name: Promote reviewed archive migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_workflow_commit:
+        description: Exact protected lean-eval-submissions workflow commit
+        required: true
+        type: string
+      source_audit_commit:
+        description: Exact audit commit used to stage the migration
+        required: true
+        type: string
+      staged_migration_commit:
+        description: Exact isolated migration review-branch commit
+        required: true
+        type: string
+      expected_staged_tree:
+        description: Reviewed tree of the isolated migration commit
+        required: true
+        type: string
+      expected_patch_sha256:
+        description: Reviewed canonical binary-safe migration patch digest
+        required: true
+        type: string
+      expected_migration_count:
+        description: Reviewed number of migrated archive pairs
+        required: true
+        type: string
+      current_audit_head:
+        description: Exact audit main head immediately bound for promotion
+        required: true
+        type: string
+      expected_result_tree:
+        description: Reviewed tree after exact patch application to current main
+        required: true
+        type: string
+      expected_result_commit:
+        description: Reviewed deterministic promotion commit
+        required: true
+        type: string
+      confirmation:
+        description: Enter promote-reviewed-archive-migration
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    uses: leanprover/lean-eval-audit/.github/workflows/promote-archive-migration.yml@7a53c75c6d7c263c684ebcd54590c657c9298642
+    with:
+      expected_caller_commit: ${{ inputs.expected_workflow_commit }}
+      expected_contract_commit: 7a53c75c6d7c263c684ebcd54590c657c9298642
+      source_audit_commit: ${{ inputs.source_audit_commit }}
+      staged_migration_commit: ${{ inputs.staged_migration_commit }}
+      expected_staged_tree: ${{ inputs.expected_staged_tree }}
+      expected_patch_sha256: ${{ inputs.expected_patch_sha256 }}
+      expected_migration_count: ${{ inputs.expected_migration_count }}
+      current_audit_head: ${{ inputs.current_audit_head }}
+      expected_result_tree: ${{ inputs.expected_result_tree }}
+      expected_result_commit: ${{ inputs.expected_result_commit }}
+      confirmation: ${{ inputs.confirmation }}
+    secrets:
+      archiver_client_id: ${{ secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID }}
+      archiver_private_key: ${{ secrets.LEAN_EVAL_ARCHIVER_PRIVATE_KEY }}

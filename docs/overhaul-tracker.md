@@ -16,26 +16,29 @@ history, or replace the cross-repository execution runbook.
 ## Current safe baseline
 
 - Protected `main` requires the `verify` aggregate check.
-- Production Workers report one coherent fail-closed live deployment at
-  `451856ebdd4ca4d875e43be7cd113678dea9e1b7`.
-- That exact commit is the qualified all-false rollback baseline: production
-  intake, replay, every public lifecycle API, model consolidation, and the
-  promotion canary are configured and effectively disabled, with empty
-  maintainer allowlists and the current production State-contract pin.
-- This lifecycle candidate keeps production intake, replay, model
-  consolidation, and the promotion canary disabled while tracking the reviewed
-  result-owner, amendment-owner, amendment-maintainer, model-identity-owner,
-  model-identity-maintainer, and publication-opt-in gates as enabled. Both
-  production maintainer lists contain exactly `kim-em` / GitHub user `477956`.
-  It has not been deployed and readiness remains `NO-GO`.
+- Production Workers report one coherent durable live deployment at
+  `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`.
+- Production intake, the six approved lifecycle gates, and one-way publication
+  opt-in are enabled. Both production maintainer lists contain exactly
+  `kim-em` / GitHub user `477956`. Replay, model consolidation, publication
+  opt-out, and the promotion canary remain disabled.
+- The production canary is terminal and scheduled for
+  `2026-11-02T03:50:01.002Z`. Production State was observed at
+  `fb70dd6ba14cae94b30d570818e4801884e81e04` after the terminal events and may
+  advance append-only. Its fixture branch and temporary App repository access
+  are removed.
+- The exact production all-false pause and ordered release/lifecycle/intake
+  restore are complete. Server-primary presentation is live. The overlap began
+  `2026-09-02T06:57:10Z`, and issue intake remains available through no earlier
+  than `2026-09-30T06:57:10Z`.
 - Tracked staging intake and every staging lifecycle API remain all-false with
   empty maintainer allowlists.
 - General staging replay, historical-public replay, and production replay are
   disabled. The bounded staging acceptance endpoint remains enabled.
 - Model consolidation remains disabled in both tracked environments and is not
   a launch feature.
-- Automatic release publication is disabled in
-  `leanprover/lean-eval-releases`.
+- Automatic release publication is enabled in
+  `leanprover/lean-eval-releases`; the canary source is not yet due.
 - Production archive Wrap is connected and qualified; the production replay
   role variable is not connected.
 - The staging release role trusts the exact current ID-bearing GitHub OIDC
@@ -96,13 +99,14 @@ not this summary.
       evidence.
 - [x] Prove that each launch gate returns to disabled and public health reports
       the effective state.
-- [x] Deploy and qualify the merged all-false repair baseline
-      `451856ebdd4ca4d875e43be7cd113678dea9e1b7`; its exact staging and
-      production readback, coherent rollback versions, no-op recovery, and
-      readiness reconciliation are current.
-- [ ] Record this lifecycle candidate's protected CI, exact staging
-      deployment/readback, immutable dispatch tag, and promotion canary before
-      rebuilding the launch packet.
+- [x] Retain one coherent disable-only rollback unit at
+      `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d` and keep its exact component
+      versions in the infrastructure inventory and rollout runbook.
+- [x] Bind the protected lifecycle and intake deployment to immutable dispatch,
+      complete the production canary, and verify the all-false pause and
+      ordered restore.
+- [x] Make server intake primary in the leaderboard entry and begin the
+      four-week overlap at `2026-09-02T06:57:10Z`.
 
 Rerun a functional case only if its implementation path changes or the fresh
 checks expose drift. This is a bounded launch check, not a qualification
@@ -177,13 +181,13 @@ the [cross-repository execution runbook][execution-runbook].
 
 ## Definition of done for this repository
 
-- [ ] New submissions archive before evaluation with a per-submission envelope.
-- [ ] Accepted and rejected lifecycle transitions are coherent and recoverable.
-- [ ] Launch-approved owner and maintainer APIs are operating with disable
+- [x] New submissions archive before evaluation with a per-submission envelope.
+- [x] Accepted and rejected lifecycle transitions are coherent and recoverable.
+- [x] Launch-approved owner and maintainer APIs are operating with disable
       paths.
-- [ ] Automatic releases operate under the two-calendar-month policy with the
+- [x] Automatic releases operate under the two-calendar-month policy with the
       initial private/scheduled choice and one-way later opt-in.
 - [ ] Every final-cutoff accepted Result has an official-Lean-plus-nanoda
       terminal replay or reviewed unavailable disposition.
-- [ ] Current rollback and emergency-pause procedures are verified.
-- [ ] No tracked instruction asks for work outside the completion-plan scope.
+- [x] Current rollback and emergency-pause procedures are verified.
+- [x] No tracked instruction asks for work outside the completion-plan scope.

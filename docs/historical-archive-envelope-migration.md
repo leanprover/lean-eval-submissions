@@ -46,6 +46,12 @@ zero-overlap check across every migration-touched path. It applies exactly the
 staged patch to that current head, binds the resulting commit and tree, and
 requires merged audit `main` to have exactly that tree. The same
 exact-patch/current-head rule applies to the final issue-intake delta.
+The protected
+[`promote-archive-migration.yml`](../.github/workflows/promote-archive-migration.yml)
+caller pins the reusable contract owned by `lean-eval-audit` and passes the
+existing audit-only archiver App credentials; the audit repository does not
+duplicate those credentials. Promotion deletes the fixed isolated review
+branch only after the compare-and-swap push and exact protected-main readback.
 The reviewed template must first be applied, through the immutable historical
 migration/replay readiness packet, to every stack that must wrap or replay
 these archives. Standing authorization covers the infrastructure mutation but
