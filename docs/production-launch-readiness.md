@@ -4,22 +4,22 @@ Status: **production launch complete; overlap active**
 
 Scope authority: [LeanEval completion plan, section 7.5][completion-plan]
 
-This is the compact launch-decision packet. It contains the current bindings,
-controls, and remaining launch actions only. The mutable checklist belongs in
-the [execution runbook][runbook]; neither document should accumulate run
-histories or evidence appendices.
+This is the compact launch-decision packet. It contains the launch bindings and
+current controls. The mutable checklist belongs in the
+[execution runbook][runbook]; neither document should accumulate run histories
+or evidence appendices.
 
 [completion-plan]: https://github.com/leanprover/lean-eval/blob/main/docs/overhaul-completion-plan.md#75-production-launch-readiness-packet
 [runbook]: https://github.com/leanprover/lean-eval/blob/main/docs/overhaul-execution-runbook.md
 
-## 1. Exact current bindings
+## 1. Launch and current runtime bindings
 
-Protected `main` at this packet revision:
+Protected launch implementation bindings:
 
-| Repository | Commit |
+| Repository | Binding |
 | --- | --- |
 | `leanprover/lean-eval` | `313078a0962c4a929d790772a7bf2f997f22857b` |
-| `leanprover/lean-eval-submissions` | `b8d0338f96f133614f04df0a0560a6f364aef808`; refresh before merging this packet |
+| `leanprover/lean-eval-submissions` | Protected implementation ancestor `b8d0338f96f133614f04df0a0560a6f364aef808`; this documentation-only merge is an expected descendant and does not redeploy or change the Worker runtime |
 | `leanprover/lean-eval-leaderboard` | `c593bfb7dcb719ee7613848f9951828dfeb4e1da` |
 | `leanprover/lean-eval-state` | Observed at `fb70dd6ba14cae94b30d570818e4801884e81e04`; this append-only head may advance |
 | `leanprover/lean-eval-state-staging` | `c604bb446a51fc833c96887053ec64672c912d8c` |
