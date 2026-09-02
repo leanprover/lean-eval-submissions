@@ -16,7 +16,7 @@ performed by the maintainer because the agent lacks access is an operator
 handoff, not a new permission gate. The remaining approval exceptions are
 listed in [`docs/overhaul-tracker.md`](docs/overhaul-tracker.md).
 
-Last reconciled: **2026-09-01**
+Last reconciled: **2026-09-02**
 
 ## Current baseline
 
@@ -29,17 +29,23 @@ Last reconciled: **2026-09-01**
 
 Public structured health currently reports one coherent deployed commit with:
 
-- production intake configured and effectively disabled;
+- production commit `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d` with
+  durable intake;
 - staging and production general replay disabled;
 - historical-public replay disabled;
 - staging acceptance enabled and production acceptance disabled;
 - production promotion canary disabled;
-- result-owner, amendment-owner, amendment-maintainer, model-owner, and
-  model-maintainer APIs disabled; and
-- empty maintainer lists.
+- the six approved result-owner, amendment-owner, amendment-maintainer,
+  model-owner, model-maintainer, and one-way publication-opt-in gates enabled;
+- exactly `kim-em` / GitHub user `477956` in both production maintainer lists;
+  and
+- model consolidation and publication opt-out disabled.
 
-Automatic release publication is disabled because `PUBLICATION_ENABLED` is
-absent. Production archive Wrap is connected and its Encrypt-only/decrypt-
+Automatic release publication is enabled. The terminal production canary is
+scheduled for `2026-11-02T03:50:01.002Z`; its source is not yet due. Production
+State was observed at `d699f057af46adee69aa4d1cbdd6966d7716abbb` after the
+canary events and may advance append-only. Production archive Wrap is connected
+and its Encrypt-only/decrypt-
 denial preflight is qualified; the production replay role variable is absent.
 Both release roles trust their exact current ID-bearing GitHub OIDC subjects.
 The staging credentialed, publication-disabled reconstruction boundary and the
@@ -372,10 +378,9 @@ read path without affecting State writers or intake.
 
 `leanprover/lean-eval-releases` owns public two-calendar-month-delayed source
 bundles and provenance. Eligibility is recomputed from immutable State. The
-controller's publication variable remains absent. The initial private/scheduled
-choice, one-way later publication opt-in, and submitter-facing license/release
-text must pass the launch smoke and maintainer review before enablement. The
-reverse scheduled-to-private transition remains disabled.
+controller is enabled. The initial private/scheduled choice and one-way later
+publication opt-in are live; the reverse scheduled-to-private transition
+remains disabled.
 
 ## Monitoring and emergency response
 
@@ -409,6 +414,12 @@ Rollback does not revert or rewrite State, Results, releases, AWS resources,
 credentials, or repository history. If the non-atomic multi-component deploy
 is interrupted, keep intake paused and rerun disable-only recovery or
 forward-deploy one coherent reviewed unit. Never mix target commits.
+
+The current coherent rollback unit is commit
+`ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`, disabled intake
+`1b1b12d1-2cf3-4f8f-8b32-ef064263d569`, replay
+`00501e8b-6285-4948-8386-2aa8ced3aea4`, and broker
+`24a74b99-c87f-4fba-a4ee-3d86cc59a0d2`.
 
 Release-removal and confidentiality recovery use the contracts in
 `leanprover/lean-eval-releases`:

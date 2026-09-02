@@ -19,12 +19,10 @@ client secrets in documentation, issues, pull requests, logs, or artifacts.
 
 ## 1. Current posture
 
-Keep the not-yet-deployed lifecycle candidate, its separate rollback baseline,
-and live service state distinct.
+The deployed production release at
+`ccd7a01a420d3c8dc18f996ea9efc65d38513b6d` tracks:
 
-The lifecycle candidate tracks:
-
-- production intake disabled;
+- durable production intake;
 - staging and production general replay disabled;
 - historical-public replay disabled;
 - production acceptance endpoints disabled;
@@ -33,19 +31,16 @@ The lifecycle candidate tracks:
 - staging intake and every staging lifecycle API all-false with empty
   maintainer lists;
 - model consolidation disabled in both environments; and
-- release publication disabled in `leanprover/lean-eval-releases`.
+- automatic release publication enabled in `leanprover/lean-eval-releases`.
 
-It has not been deployed and the launch-readiness packet remains `NO-GO`. Its
-exact parent, `451856ebdd4ca4d875e43be7cd113678dea9e1b7`, is the qualified
-all-false rollback baseline. Production currently runs that exact commit with
-intake, replay, every public lifecycle API, model consolidation, and the
-promotion canary disabled; both maintainer lists are empty. Its production
-intake, broker, and replay version IDs are respectively
-`7afc61bf-6427-431a-b4f6-c1c3ec2641ac`,
-`dfd77e4f-16ae-4a63-81ab-bbb79797385b`, and
-`570664e6-a6f5-428d-87cb-803dd5b1768f`. Live staging intake and lifecycle APIs
-remain all-false. The bounded staging acceptance and promotion-canary
-exceptions keep their separately documented staging-only posture.
+The launch-readiness packet is `GO`. The production canary is terminal and its
+one-way publication opt-in is scheduled for `2026-11-02T03:50:01.002Z`.
+Production State was observed at
+`d699f057af46adee69aa4d1cbdd6966d7716abbb` after the terminal canary events;
+the append-only head may advance. The canary fixture branch is deleted and the
+temporary source repository is removed from both App selections. The exact
+production pause and ordered release/lifecycle/intake restore are complete.
+Server-primary presentation and the overlap announcement remain pending.
 
 Verify live state before relying on it:
 
@@ -59,9 +54,8 @@ python3 -m json.tool "$tmp_dir/health.json"
 ```
 
 Remove the temporary directory after inspection. The monitor compares live
-health with the checked-out tracked configuration. It is therefore expected to
-report a mismatch until this lifecycle candidate is deployed. After deployment,
-a ready report must bind all four public Worker health endpoints to one full
+health with the checked-out tracked configuration. A ready report must bind all
+four public Worker health endpoints to one full
 deployed commit and the tracked lifecycle configuration. Also inspect the latest
 protected deployment and the canonical readiness issue; endpoint health alone
 does not prove that a rollout is not stuck.
@@ -310,18 +304,9 @@ required source change, not optional cleanup. Delete this exact inventory:
 - `tests/test_bounded_staging_lifecycle_acceptance.py`; and
 - `tests/test_staging_lifecycle_smoke.py`.
 
-After every dependent archive and evaluation is terminal, also delete temporary
-branch `staging-source-fixture-v1` from
-`leanprover/lean-eval-state-staging`. Never remove the branch while a generated
-source tag or dependent run remains. Retain that repository in the selected
-installations of both read-only source Apps only through the named production
-canary on its separate fixture branch. After the canary's archive, evaluation,
-State, Result, leaderboard presentation, and private-to-scheduled event are
-verified and no dependent run remains, delete temporary branch
-`production-canary-source-fixture-v4`. Then remove
-`leanprover/lean-eval-state-staging` from both App selections as the final canary
-cleanup step. The scheduled source need not have reached its two-month
-publication date before this cleanup.
+The temporary staging and production-canary fixture branches are deleted.
+`leanprover/lean-eval-state-staging` is removed from both App selections. No
+fixture or temporary App access remains after the terminal production canary.
 
 Remove this bounded-acceptance subsection and any tests or workflow inventories
 that reference those paths in the same retirement change. Retain no replacement
@@ -332,17 +317,11 @@ closed maintainer arrays in `server/wrangler.jsonc` form one reviewed rollout
 state. [`worker_lifecycle_configuration.py`](../scripts/worker_lifecycle_configuration.py)
 requires all six launch flags to be identical, requires exactly one canonical
 maintainer identity per maintainer family when enabled and none when disabled,
-and always rejects model-consolidation enablement. First deploy and qualify the
-tracked all-false repair baseline as the coherent rollback unit. This branch is
-the separate single-purpose lifecycle candidate: it changes only the reviewed
-lifecycle state and its matching tests and current-state documentation. Stage
-it and bind it in the launch packet. The normal
-protected deployment controller reads that state, binds it to the immutable
-dispatch tag, enters `cloudflare-production`, and verifies every effective
-public health field. Do not deploy the lifecycle candidate to production until
-the packet is complete and still reads `GO`; do not combine its deployment with
-intake enablement, release publication, refactoring, or unrelated implementation
-changes.
+and always rejects model-consolidation enablement. The normal protected
+deployment controller binds this state to the immutable dispatch tag, enters
+`cloudflare-production`, and verifies every effective public health field. The
+approved lifecycle state and durable intake are deployed at
+`ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`.
 
 The same disable-only recovery used for intake also returns every lifecycle
 gate to false. It validates the exact recovered Worker version against explicit
@@ -380,15 +359,10 @@ The qualified staging release boundary is limited to:
 
 ## 7. Exact-version staging rehearsal
 
-Retain the bounded f09 browser/headless, owner/maintainer denial,
-private-to-scheduled opt-in, archive/result/State, publication-disabled
-reconstruction, leaderboard, and all-false recovery results as
-unchanged-feature evidence. For the repair baseline and separate lifecycle
-candidate, require fresh protected CI, exact staging deployment/readback, the
-immutable dispatch tag, the staging promotion canary, and one fresh all-false
-recovery of the baseline. Rerun a functional case only if its implementation
-path changes or those fresh checks expose drift. Do not rerun broad functional
-or historical matrices merely to refresh timestamps.
+The bounded staging acceptance, production canary, exact production pause, and
+ordered restore are complete. Rerun a functional case only if its
+implementation path changes or current checks expose drift. Do not rerun broad
+functional or historical matrices merely to refresh timestamps.
 
 The compact production go/no-go record is
 [`production-launch-readiness.md`](production-launch-readiness.md). Keep its
@@ -427,6 +401,13 @@ disabled. Before mutation it independently proves that protected State is the
 reviewed contract or a descendant with unchanged guarded roots and schema.
 After restoring target intake, require its authenticated readiness proof before
 changing broker or replay.
+
+The current coherent rollback unit is:
+
+- commit `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`;
+- disabled intake `1b1b12d1-2cf3-4f8f-8b32-ef064263d569`;
+- replay `00501e8b-6285-4948-8386-2aa8ced3aea4`; and
+- broker `24a74b99-c87f-4fba-a4ee-3d86cc59a0d2`.
 
 Rollback never rewrites State, Results, releases, AWS resources, credentials,
 or GitHub repository history. If the multi-component deploy is interrupted,
