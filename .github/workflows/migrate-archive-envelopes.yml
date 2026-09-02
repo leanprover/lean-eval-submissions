@@ -1,8 +1,13 @@
 name: Migrate historical archive envelopes
+run-name: Historical archive migration ${{ inputs.operation_id }}
 
 on:
   workflow_dispatch:
     inputs:
+      operation_id:
+        description: Unique operator correlation ID (archive-migration- plus 32 lowercase hex)
+        required: true
+        type: string
       audit_commit:
         description: Exact reviewed lean-eval-audit main commit
         required: true
@@ -16,7 +21,7 @@ on:
         required: true
         type: string
       expected_workflow_commit:
-        description: Exact reviewed lean-eval-submissions workflow commit
+        description: Exact environment-bound reviewed implementation commit
         required: true
         type: string
       apply:
@@ -49,16 +54,16 @@ jobs:
           EVENT_REF: ${{ github.ref }}
           EVENT_REF_PROTECTED: ${{ github.ref_protected }}
           EVENT_REPOSITORY: ${{ github.repository }}
-          EVENT_SHA: ${{ github.sha }}
           EXPECTED_WORKFLOW_COMMIT: ${{ inputs.expected_workflow_commit }}
           GH_TOKEN: ${{ github.token }}
+          OPERATION_ID: ${{ inputs.operation_id }}
         run: |
           set -euo pipefail
+          [[ "$OPERATION_ID" =~ ^archive-migration-[0-9a-f]{32}$ ]]
           test "$EVENT_REPOSITORY" = leanprover/lean-eval-submissions
           test "$EVENT_REF" = refs/heads/main
           test "$EVENT_REF_PROTECTED" = true
           [[ "$EXPECTED_WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]]
-          test "$EXPECTED_WORKFLOW_COMMIT" = "$EVENT_SHA"
           test "$(gh api repos/leanprover/lean-eval-submissions/branches/main --jq .protected)" = true
 
   migrate:
@@ -70,6 +75,37 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
+
+      - name: Bind the environment-reviewed implementation and exact event commit
+        env:
+          EVENT_SHA: ${{ github.sha }}
+          EXPECTED_WORKFLOW_COMMIT: ${{ inputs.expected_workflow_commit }}
+          GH_TOKEN: ${{ github.token }}
+          REVIEWED_IMPLEMENTATION_COMMIT: ${{ vars.REVIEWED_IMPLEMENTATION_COMMIT }}
+        run: |
+          set -euo pipefail
+          [[ "$REVIEWED_IMPLEMENTATION_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$EXPECTED_WORKFLOW_COMMIT" = "$REVIEWED_IMPLEMENTATION_COMMIT"
+          if [ "$EVENT_SHA" != "$REVIEWED_IMPLEMENTATION_COMMIT" ]; then
+            comparison=$(gh api \
+              "repos/leanprover/lean-eval-submissions/compare/$REVIEWED_IMPLEMENTATION_COMMIT...$EVENT_SHA")
+            jq -e \
+              --arg base "$REVIEWED_IMPLEMENTATION_COMMIT" \
+              --arg head "$EVENT_SHA" '
+                .status == "ahead" and
+                .base_commit.sha == $base and
+                .merge_base_commit.sha == $base and
+                .head_commit.sha == $head and
+                .ahead_by == .total_commits and
+                .ahead_by == (.commits | length) and
+                (.files | length) > 0 and
+                (.files | length) < 300 and
+                all(.files[];
+                  (.filename | test("^results/[a-z0-9][a-z0-9._-]*[.]json$")) and
+                  (.status == "added" or .status == "modified") and
+                  (has("previous_filename") | not))
+              ' <<< "$comparison" >/dev/null
+          fi
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
