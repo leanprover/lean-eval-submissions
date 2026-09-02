@@ -398,6 +398,25 @@
         "ref": "94dfb27eaa0edf18ce51da4591aa4b09d21a89e0",
         "repo": "kim-em/029a31248cea54e2d04b060b27e5e8f4"
       }
+    },
+    {
+      "accepted_at": "2026-09-02T04:54:26Z",
+      "benchmark_commit": "cd6fc7c27fa5227b29b610558290c73994ffe84e",
+      "declared_model": "LeanEval production launch canary 3dc17f41ccd0c86fa443687fac784a42f3798183",
+      "intake": {
+        "kind": "server",
+        "submission_id": "01a0603c-6189-7751-9c43-c904b50b477a"
+      },
+      "problem_id": "substInv_X_sub_X_sq_eq_catalan",
+      "production_metadata": {},
+      "result_id": "r2_176e0f46710a69d54b3cbcc722a948b364de2acdf2a1ee6fe667f0a331254a59",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "3dc17f41ccd0c86fa443687fac784a42f3798183",
+        "repo": "leanprover/lean-eval-state-staging"
+      }
     }
   ],
   "schema_version": 2,

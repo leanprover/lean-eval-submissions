@@ -7,8 +7,6 @@ on:
       - '.github/workflows/promote-workflow-dispatch-ref.yml'
       - '.github/workflows/aws-key-adapter-staging-smoke.yml'
       - '.github/workflows/aws-production-wrap-preflight.yml'
-      - '.github/workflows/historical-public-authority-preparation.yml'
-      - '.github/workflows/historical-public-image-qualification.yml'
       - '.github/workflows/historical-public-replay-plan.yml'
       - '.github/workflows/historical-public-runner-contract.yml'
       - '.github/workflows/historical-replay-inventory.yml'

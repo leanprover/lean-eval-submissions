@@ -14,7 +14,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: lean-eval-historical-authoritative-replay-controller
+  group: lean-eval-historical-replay-controller
   cancel-in-progress: false
 
 jobs:
@@ -51,9 +51,27 @@ jobs:
           repository: leanprover/lean-eval-state
           ref: main
           path: state
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
           ssh-key: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
+
+      - name: Install one temporary read-only State refresh identity
+        env:
+          STATE_READ_KEY: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          state_key="$RUNNER_TEMP/historical-public-state-reader"
+          state_hosts="$RUNNER_TEMP/historical-public-state-known-hosts"
+          test -n "$STATE_READ_KEY"
+          printf '%s\n' "$STATE_READ_KEY" > "$state_key"
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$state_hosts"
+          chmod 0600 "$state_key" "$state_hosts"
+          ssh_command="ssh -i $state_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$state_hosts -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3"
+          git -C state config core.sshCommand "$ssh_command"
+          unset STATE_READ_KEY
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
         with:
@@ -558,21 +576,94 @@ jobs:
         if: steps.execute.outputs.ready == 'true'
         env:
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
-          EXPECTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
         run: |
           set -euo pipefail
-          state_head=$(scripts/publish_replay_state_event --environment production \
-            --root state --event "$RUNNER_TEMP/terminal-event.json" \
-            --expected-head "$EXPECTED_STATE_HEAD" \
-            --message "Record historical authoritative replay outcome")
+          published=false
+          last_event=
+          for cas_attempt in $(seq 1 4); do
+            local_head=$(git -C state rev-parse HEAD)
+            test -z "$(git -C state status --porcelain=v1 --untracked-files=all)"
+            git -C state fetch --no-tags origin \
+              refs/heads/main:refs/remotes/origin/main
+            remote_head=$(git -C state rev-parse refs/remotes/origin/main)
+            git -C state merge-base --is-ancestor "$local_head" "$remote_head"
+            git -C state merge --ff-only refs/remotes/origin/main
+            python state/scripts/state.py --root state validate
+
+            if [ -n "$last_event" ]; then
+              event_id=$(jq -er .event_id "$last_event")
+              committed_event="state/events/${event_id:0:2}/$event_id.json"
+              if [ -f "$committed_event" ] && cmp -s "$last_event" "$committed_event"; then
+                state_head=$(git -C state rev-parse HEAD)
+                published=true
+                break
+              fi
+            fi
+
+            running="$RUNNER_TEMP/running-before-terminal.cas-$cas_attempt.json"
+            python scripts/historical_replay_controller.py recover \
+              --events-root state/events --state-validated \
+              --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+              --output "$running"
+            jq -e \
+              --arg task "$(jq -er .task.replay_task_id "$RUNNER_TEMP/historical-replay-plan.json")" \
+              --argjson attempt "$(jq -er .started_transition.payload.attempt "$RUNNER_TEMP/historical-replay-plan.json")" \
+              --arg started "$(jq -er .event_id "$RUNNER_TEMP/started-event.json")" \
+              '. == {schema_version: 1, kind: "busy", replay_task_id: $task,
+                     attempt: $attempt, started_event_id: $started}' \
+              "$running" >/dev/null
+            started_event_id=$(jq -er .event_id "$RUNNER_TEMP/started-event.json")
+            cmp "$RUNNER_TEMP/started-event.json" \
+              "state/events/${started_event_id:0:2}/$started_event_id.json"
+
+            event="$RUNNER_TEMP/terminal-event.cas-$cas_attempt.json"
+            publish_root="$RUNNER_TEMP/historical-terminal-state-publish-$cas_attempt"
+            python scripts/historical_replay_controller.py terminal-event \
+              --plan "$RUNNER_TEMP/historical-replay-plan.json" \
+              --started "$RUNNER_TEMP/started-event.json" \
+              --executor-request "$RUNNER_TEMP/executor-request.json" \
+              --verdict "$RUNNER_TEMP/executor-response.json" \
+              --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+              --output "$event"
+            expected=$(git -C state rev-parse HEAD)
+            git clone --quiet --no-hardlinks state "$publish_root"
+            last_event=$event
+            if state_head=$(scripts/publish_replay_state_event \
+              --environment production --root "$publish_root" --event "$event" \
+              --expected-head "$expected" \
+              --message "Record historical authoritative replay outcome"); then
+              local_head=$(git -C state rev-parse HEAD)
+              git -C state fetch --no-tags origin \
+                refs/heads/main:refs/remotes/origin/main
+              remote_head=$(git -C state rev-parse refs/remotes/origin/main)
+              git -C state merge-base --is-ancestor "$local_head" "$remote_head"
+              git -C state merge --ff-only refs/remotes/origin/main
+              python state/scripts/state.py --root state validate
+              event_id=$(jq -er .event_id "$event")
+              cmp "$event" "state/events/${event_id:0:2}/$event_id.json"
+              git -C state merge-base --is-ancestor "$state_head" \
+                "$(git -C state rev-parse HEAD)"
+              committed="$RUNNER_TEMP/terminal-committed.cas-$cas_attempt.json"
+              python scripts/historical_replay_controller.py recover \
+                --events-root state/events --state-validated \
+                --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+                --output "$committed"
+              test "$(jq -er .kind "$committed")" = none
+              published=true
+              break
+            fi
+          done
+          test "$published" = true
           echo 'appended=true' >> "$GITHUB_OUTPUT"
           echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
 
       - name: Fail a started attempt explicitly if orchestration did not finish
-        if: ${{ !cancelled() && steps.started.outputs.appended == 'true' && steps.terminal.outputs.appended != 'true' }}
+        if: >-
+          ${{ !cancelled() && steps.started.outputs.appended == 'true' &&
+              steps.execute.outputs.ready != 'true' &&
+              steps.terminal.outputs.appended != 'true' }}
         env:
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
-          EXPECTED_STATE_HEAD: ${{ steps.started.outputs.state_head }}
           AMBIGUOUS_CLEANUP_KIND: ${{ steps.ambiguous_cleanup.outputs.kind }}
         run: |
           set -euo pipefail
@@ -581,16 +672,80 @@ jobs:
             test "$AMBIGUOUS_CLEANUP_KIND" = confirmed
             test -f "$RUNNER_TEMP/runner-loss-cleanup-confirmed"
           fi
-          python scripts/historical_replay_controller.py terminal-event \
-            --plan "$RUNNER_TEMP/historical-replay-plan.json" \
-            --started "$RUNNER_TEMP/started-event.json" \
-            --failure-reason "$failure_reason" \
-            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
-            --output "$RUNNER_TEMP/failure-event.json"
-          scripts/publish_replay_state_event --environment production \
-            --root state --event "$RUNNER_TEMP/failure-event.json" \
-            --expected-head "$EXPECTED_STATE_HEAD" \
-            --message "Record historical authoritative replay failure"
+          published=false
+          last_event=
+          for cas_attempt in $(seq 1 4); do
+            local_head=$(git -C state rev-parse HEAD)
+            test -z "$(git -C state status --porcelain=v1 --untracked-files=all)"
+            git -C state fetch --no-tags origin \
+              refs/heads/main:refs/remotes/origin/main
+            remote_head=$(git -C state rev-parse refs/remotes/origin/main)
+            git -C state merge-base --is-ancestor "$local_head" "$remote_head"
+            git -C state merge --ff-only refs/remotes/origin/main
+            python state/scripts/state.py --root state validate
+
+            if [ -n "$last_event" ]; then
+              event_id=$(jq -er .event_id "$last_event")
+              committed_event="state/events/${event_id:0:2}/$event_id.json"
+              if [ -f "$committed_event" ] && cmp -s "$last_event" "$committed_event"; then
+                published=true
+                break
+              fi
+            fi
+
+            running="$RUNNER_TEMP/running-before-failure.cas-$cas_attempt.json"
+            python scripts/historical_replay_controller.py recover \
+              --events-root state/events --state-validated \
+              --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+              --output "$running"
+            jq -e \
+              --arg task "$(jq -er .task.replay_task_id "$RUNNER_TEMP/historical-replay-plan.json")" \
+              --argjson attempt "$(jq -er .started_transition.payload.attempt "$RUNNER_TEMP/historical-replay-plan.json")" \
+              --arg started "$(jq -er .event_id "$RUNNER_TEMP/started-event.json")" \
+              '. == {schema_version: 1, kind: "busy", replay_task_id: $task,
+                     attempt: $attempt, started_event_id: $started}' \
+              "$running" >/dev/null
+            started_event_id=$(jq -er .event_id "$RUNNER_TEMP/started-event.json")
+            cmp "$RUNNER_TEMP/started-event.json" \
+              "state/events/${started_event_id:0:2}/$started_event_id.json"
+
+            event="$RUNNER_TEMP/failure-event.cas-$cas_attempt.json"
+            publish_root="$RUNNER_TEMP/historical-failure-state-publish-$cas_attempt"
+            python scripts/historical_replay_controller.py terminal-event \
+              --plan "$RUNNER_TEMP/historical-replay-plan.json" \
+              --started "$RUNNER_TEMP/started-event.json" \
+              --failure-reason "$failure_reason" \
+              --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+              --output "$event"
+            expected=$(git -C state rev-parse HEAD)
+            git clone --quiet --no-hardlinks state "$publish_root"
+            last_event=$event
+            if state_head=$(scripts/publish_replay_state_event \
+              --environment production --root "$publish_root" --event "$event" \
+              --expected-head "$expected" \
+              --message "Record historical authoritative replay failure"); then
+              local_head=$(git -C state rev-parse HEAD)
+              git -C state fetch --no-tags origin \
+                refs/heads/main:refs/remotes/origin/main
+              remote_head=$(git -C state rev-parse refs/remotes/origin/main)
+              git -C state merge-base --is-ancestor "$local_head" "$remote_head"
+              git -C state merge --ff-only refs/remotes/origin/main
+              python state/scripts/state.py --root state validate
+              event_id=$(jq -er .event_id "$event")
+              cmp "$event" "state/events/${event_id:0:2}/$event_id.json"
+              git -C state merge-base --is-ancestor "$state_head" \
+                "$(git -C state rev-parse HEAD)"
+              committed="$RUNNER_TEMP/failure-committed.cas-$cas_attempt.json"
+              python scripts/historical_replay_controller.py recover \
+                --events-root state/events --state-validated \
+                --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+                --output "$committed"
+              test "$(jq -er .kind "$committed")" = none
+              published=true
+              break
+            fi
+          done
+          test "$published" = true
 
       - name: Confirm credentials remained separated and remove scratch
         if: always()
@@ -599,7 +754,17 @@ jobs:
           test -z "${STATE_WRITE_KEY:-}"
           test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -z "${CLOUDFLARE_API_TOKEN:-}"
+          if [ -d state ]; then
+            git -C state config --unset-all core.sshCommand || true
+          fi
+          for path in \
+            "$RUNNER_TEMP/historical-public-state-reader" \
+            "$RUNNER_TEMP/historical-public-state-known-hosts"; do
+            if [ -f "$path" ]; then shred --remove "$path"; fi
+          done
           rm -rf state "$RUNNER_TEMP/state-views" "$RUNNER_TEMP/source" "$RUNNER_TEMP/benchmark"
+          rm -rf "$RUNNER_TEMP"/historical-terminal-state-publish-* \
+            "$RUNNER_TEMP"/historical-failure-state-publish-*
           find "$RUNNER_TEMP" -maxdepth 1 -type f \
             \( -name '*historical*' -o -name '*executor*' -o -name '*event.json' \
                -o -name '*cleanup*' \

@@ -127,7 +127,8 @@ jq -e \
   --arg submissions "$SUBMISSION_PREFIX" \
   --arg releases "$RELEASE_PREFIX" '
   (.Stacks | length) == 1 and
-  .Stacks[0].StackStatus == "UPDATE_COMPLETE" and
+  (.Stacks[0].StackStatus == "CREATE_COMPLETE" or
+   .Stacks[0].StackStatus == "UPDATE_COMPLETE") and
   (.Stacks[0].EnableTerminationProtection | type) == "boolean" and
   (.Stacks[0].Parameters | map({key: .ParameterKey, value: .ParameterValue}) | from_entries) == {
     EnvironmentName: "production",
