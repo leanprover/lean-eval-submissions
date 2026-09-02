@@ -257,9 +257,24 @@ class ArchiveEnvelopeMigrationTests(unittest.TestCase):
             "lean-eval-archive-migration-wrap-production",
             exact_role,
         )
-        self.assertIn("test ! -e /dev/shm/lean-eval-legacy-archive-identity", workflow)
-        self.assertIn('test -z "${AWS_ACCESS_KEY_ID:-}"', workflow)
-        self.assertIn("rm -rf audit\n          test ! -e audit", workflow)
+        authority_step = steps[
+            "Prove decrypt and wrap authority is gone before audit write authority"
+        ]
+        self.assertIn('ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""', authority_step)
+        self.assertIn('ACTIONS_ID_TOKEN_REQUEST_URL: ""', authority_step)
+        self.assertIn('AWS_ACCESS_KEY_ID: ""', authority_step)
+        self.assertIn('AWS_SECRET_ACCESS_KEY: ""', authority_step)
+        self.assertIn('AWS_SESSION_TOKEN: ""', authority_step)
+        self.assertIn(
+            "rm -f /dev/shm/lean-eval-legacy-archive-identity", authority_step
+        )
+        self.assertIn(
+            "test ! -e /dev/shm/lean-eval-legacy-archive-identity", authority_step
+        )
+        self.assertIn('test -z "${AWS_ACCESS_KEY_ID:-}"', authority_step)
+        self.assertIn("rm -rf -- audit", authority_step)
+        self.assertIn("test ! -e audit || refuse", authority_step)
+        self.assertIn("authority boundary refused:", authority_step)
         migration_step = steps[
             "Rewrap selected file keys and copy exact ciphertext bytes"
         ]

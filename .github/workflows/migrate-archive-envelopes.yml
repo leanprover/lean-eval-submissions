@@ -241,17 +241,32 @@ jobs:
 
       - name: Prove decrypt and wrap authority is gone before audit write authority
         if: inputs.apply == true
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
         run: |
           set -euo pipefail
-          test ! -e /dev/shm/lean-eval-legacy-archive-identity
-          test -z "${AWS_ACCESS_KEY_ID:-}"
-          test -z "${AWS_SECRET_ACCESS_KEY:-}"
-          test -z "${AWS_SESSION_TOKEN:-}"
-          test -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}"
-          test -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}"
-          test -s "$RUNNER_TEMP/archive-migration-report.json"
-          rm -rf audit
-          test ! -e audit
+          refuse() {
+            printf 'authority boundary refused: %s\n' "$1" >&2
+            exit 1
+          }
+          rm -f /dev/shm/lean-eval-legacy-archive-identity
+          test ! -e /dev/shm/lean-eval-legacy-archive-identity || \
+            refuse 'legacy identity remains'
+          test -z "${AWS_ACCESS_KEY_ID:-}" || refuse 'AWS access key remains'
+          test -z "${AWS_SECRET_ACCESS_KEY:-}" || refuse 'AWS secret key remains'
+          test -z "${AWS_SESSION_TOKEN:-}" || refuse 'AWS session token remains'
+          test -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" || \
+            refuse 'OIDC request token remains'
+          test -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || \
+            refuse 'OIDC request URL remains'
+          test -s "$RUNNER_TEMP/archive-migration-report.json" || \
+            refuse 'validated migration report is absent'
+          rm -rf -- audit
+          test ! -e audit || refuse 'read-authority checkout remains'
 
       - name: Mint audit-repository-only migration writer
         if: inputs.apply == true

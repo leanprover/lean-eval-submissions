@@ -35,7 +35,7 @@ The fixed reviewed implementation bindings are:
 
 | Component | Exact binding |
 | --- | --- |
-| Migration workflow | `.github/workflows/migrate-archive-envelopes.yml`, SHA-256 `242da58b04478f7bf614f55b6ab78d01cd494b5b6df867681e2e5616ef848f64` |
+| Migration workflow | `.github/workflows/migrate-archive-envelopes.yml`, SHA-256 `b3a61b774c986147e1954f3c5d9290bb64aa2beceadf206b3ce0317873709801` |
 | Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `402e8cab4e8d308cbca36ddcfe7060482a243b9c6aad29ba91b78a3dd1e672c8` |
 | Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `a1afb9da60ddcd8bc7192d673b4cfc2e51831acc307164c252dee1a0b8126d21` |
 | Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
@@ -98,7 +98,7 @@ workflow artifact, worktree file, mutable tag, or branch head.
       dispatch. Pass its full SHA as `expected_workflow_commit`; it must equal
       that run's protected submissions `main`. Require migration-workflow
       SHA-256
-      `242da58b04478f7bf614f55b6ab78d01cd494b5b6df867681e2e5616ef848f64`,
+      `b3a61b774c986147e1954f3c5d9290bb64aa2beceadf206b3ce0317873709801`,
       private-controller SHA-256
       `402e8cab4e8d308cbca36ddcfe7060482a243b9c6aad29ba91b78a3dd1e672c8`,
       and public-controller SHA-256
