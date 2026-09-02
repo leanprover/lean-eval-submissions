@@ -1,0 +1,27 @@
+{
+  "results": [
+    {
+      "accepted_at": "2026-09-02T21:17:00Z",
+      "benchmark_commit": "7f03790babc8295aa05875e88e6eff932debd4f3",
+      "declared_model": "BRILLiant + ChatGPT 5.6 Sol",
+      "intake": {
+        "issue_number": 1626,
+        "kind": "issue"
+      },
+      "problem_id": "annals_unit_conjecture",
+      "production_metadata": {
+        "solution_publication_status": "private"
+      },
+      "result_id": "r2_0880b2f051617b273bb27d9ad0cb0ff8f1f87c6177b90027dc82a28f79678ca9",
+      "statement_revision": 1,
+      "submission": {
+        "kind": "github_repo",
+        "public": false,
+        "ref": "5c1830c5edc6878bb9c00d484904a3563a462d69",
+        "repo": "LexBrill/lean-eval-annals-unit-submission"
+      }
+    }
+  ],
+  "schema_version": 2,
+  "user": "LexBrill"
+}
