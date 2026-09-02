@@ -891,7 +891,7 @@ jobs:
       && github.event_name == 'workflow_dispatch'
       && needs.archive.result != 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     environment:
       name: cloudflare-${{ inputs.callback_environment }}
     permissions:
@@ -952,12 +952,14 @@ jobs:
               stream.write("\n")
           PY
           response_file=$(mktemp)
+          # State PAT secondary throttling can outlive a short transport retry.
+          # Keep the idempotent payload fixed and retry once per minute for at most 15 minutes.
           curl --fail-with-body --silent --show-error \
             --connect-timeout 10 \
             --max-time 30 \
-            --retry 3 \
-            --retry-delay 2 \
-            --retry-max-time 120 \
+            --retry 15 \
+            --retry-delay 60 \
+            --retry-max-time 900 \
             --retry-connrefused \
             --request POST \
             --header "Authorization: Bearer ${LIFECYCLE_CALLBACK_TOKEN}" \
@@ -984,7 +986,7 @@ jobs:
       && github.event_name == 'workflow_dispatch'
       && needs.archive.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     environment:
       name: cloudflare-${{ inputs.callback_environment }}
     permissions:
@@ -1015,12 +1017,14 @@ jobs:
               ;;
           esac
           response_file=$(mktemp)
+          # State PAT secondary throttling can outlive a short transport retry.
+          # Keep the idempotent payload fixed and retry once per minute for at most 15 minutes.
           curl --fail-with-body --silent --show-error \
             --connect-timeout 10 \
             --max-time 30 \
-            --retry 3 \
-            --retry-delay 2 \
-            --retry-max-time 120 \
+            --retry 15 \
+            --retry-delay 60 \
+            --retry-max-time 900 \
             --retry-connrefused \
             --request POST \
             --header "Authorization: Bearer ${LIFECYCLE_CALLBACK_TOKEN}" \
@@ -1047,7 +1051,7 @@ jobs:
       && github.event_name == 'workflow_dispatch'
       && needs.archive_state.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     environment:
       name: cloudflare-${{ inputs.callback_environment }}
     permissions:
@@ -1112,12 +1116,14 @@ jobs:
               ;;
           esac
           response_file=$(mktemp)
+          # State PAT secondary throttling can outlive a short transport retry.
+          # Keep the idempotent payload fixed and retry once per minute for at most 15 minutes.
           curl --fail-with-body --silent --show-error \
             --connect-timeout 10 \
             --max-time 30 \
-            --retry 3 \
-            --retry-delay 2 \
-            --retry-max-time 120 \
+            --retry 15 \
+            --retry-delay 60 \
+            --retry-max-time 900 \
             --retry-connrefused \
             --request POST \
             --header "Authorization: Bearer ${LIFECYCLE_CALLBACK_TOKEN}" \
@@ -1480,7 +1486,7 @@ jobs:
       && needs.record.result == 'success'
       && needs.record.outputs.result_receipt_ready == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 20
     environment:
       name: cloudflare-${{ inputs.callback_environment }}
     permissions:
@@ -1511,12 +1517,14 @@ jobs:
               ;;
           esac
           response_file=$(mktemp)
+          # State PAT secondary throttling can outlive a short transport retry.
+          # Keep the idempotent payload fixed and retry once per minute for at most 15 minutes.
           curl --fail-with-body --silent --show-error \
             --connect-timeout 10 \
             --max-time 30 \
-            --retry 3 \
-            --retry-delay 2 \
-            --retry-max-time 120 \
+            --retry 15 \
+            --retry-delay 60 \
+            --retry-max-time 900 \
             --retry-connrefused \
             --request POST \
             --header "Authorization: Bearer ${LIFECYCLE_CALLBACK_TOKEN}" \
