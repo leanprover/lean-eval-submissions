@@ -293,7 +293,7 @@ trying to recover the old private material.
 | submissions / `archive-production` | `EN_kwDOSh7OzM8AAAAEu8r25w` | `lean-eval-dispatch/*` | Production Encrypt-only `AWS_WRAP_ROLE_ARN` set and qualified |
 | submissions / `replay-staging` | `EN_kwDOSh7OzM8AAAAEu8r21Q` | `main` and `lean-eval-dispatch/*` | Staging replay invoker role set |
 | submissions / `replay-production` | `EN_kwDOSh7OzM8AAAAEu8r3MQ` | protected branches | Production replay variable absent |
-| submissions / `archive-migration-production` | `EN_kwDOSh7OzM8AAAAEwLDSMQ` | protected branches | Prebound to the dedicated migration role ARN; live AWS apply/readback pending, so unusable |
+| submissions / `archive-migration-production` | `EN_kwDOSh7OzM8AAAAEwLDSMQ` | protected branches | Bound to the live dedicated Encrypt-only migration role; `AUDIT_MIGRATION_READ_KEY` is installed and `LEGACY_ARCHIVE_IDENTITY` is absent |
 | releases / `release-staging` | `EN_kwDOT-oWes8AAAAEu8r3Mw` | protected branches | Staging release invoker role set; live trust matches the current ID-bearing subject |
 | releases / `release-production` | `EN_kwDOT-oWes8AAAAEu8r3KQ` | protected branches | Production release invoker and Git keys set; live trust matches the current ID-bearing subject; publication enabled |
 

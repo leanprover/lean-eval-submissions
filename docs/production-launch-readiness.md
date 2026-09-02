@@ -72,8 +72,8 @@ The established launch boundaries below are qualified:
 - lifecycle-aware leaderboard output with stable problem pages and visible
   statements.
 
-The table records the completed launch binding and the remaining audit
-bootstrap verification.
+The table records the completed launch binding and audit bootstrap
+verification.
 
 | Phase 4 finalization category | Required exact final binding | Current status |
 | --- | --- | --- |
