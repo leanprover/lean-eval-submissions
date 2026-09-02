@@ -23,10 +23,10 @@ class AuditPromotionBootstrapTests(unittest.TestCase):
             self.workflow.count("7a53c75c6d7c263c684ebcd54590c657c9298642"), 5
         )
         self.assertEqual(
-            self.workflow.count("f50c46574dd719486a01272e3eaeced396ac5ada"), 2
+            self.workflow.count("c7290ca50c2c42fe78415269e37c0c4eed4deac5"), 2
         )
         self.assertEqual(
-            self.workflow.count("1d225ef9e535e1ff6c12b051fe111c16d3a33039"), 3
+            self.workflow.count("4e44c06caed2e359c652b0e99779f35d1835aae9"), 3
         )
 
     def test_mints_only_the_existing_audit_archiver_app(self) -> None:

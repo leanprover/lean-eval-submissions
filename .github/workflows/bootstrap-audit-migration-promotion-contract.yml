@@ -65,9 +65,9 @@ jobs:
           AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}
         run: |
           set -euo pipefail
-          readonly base=f50c46574dd719486a01272e3eaeced396ac5ada
+          readonly base=c7290ca50c2c42fe78415269e37c0c4eed4deac5
           readonly head=7a53c75c6d7c263c684ebcd54590c657c9298642
-          readonly tree=1d225ef9e535e1ff6c12b051fe111c16d3a33039
+          readonly tree=4e44c06caed2e359c652b0e99779f35d1835aae9
           readonly branch=feat/migration-promotion-cas
           test -n "$AUDIT_TOKEN"
           audit_token=$AUDIT_TOKEN
@@ -102,9 +102,9 @@ jobs:
           AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}
         run: |
           set -euo pipefail
-          readonly base=f50c46574dd719486a01272e3eaeced396ac5ada
+          readonly base=c7290ca50c2c42fe78415269e37c0c4eed4deac5
           readonly head=7a53c75c6d7c263c684ebcd54590c657c9298642
-          readonly tree=1d225ef9e535e1ff6c12b051fe111c16d3a33039
+          readonly tree=4e44c06caed2e359c652b0e99779f35d1835aae9
           test -n "$AUDIT_TOKEN"
           audit_token=$AUDIT_TOKEN
           unset AUDIT_TOKEN
@@ -161,7 +161,7 @@ jobs:
       - name: Record bootstrap result
         run: |
           readonly head=7a53c75c6d7c263c684ebcd54590c657c9298642
-          readonly tree=1d225ef9e535e1ff6c12b051fe111c16d3a33039
+          readonly tree=4e44c06caed2e359c652b0e99779f35d1835aae9
           {
             echo '### Audit migration promotion contract bootstrapped'
             echo
