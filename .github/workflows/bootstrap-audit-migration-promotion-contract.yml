@@ -1,0 +1,172 @@
+name: Bootstrap audit migration promotion contract
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_workflow_commit:
+        description: Exact protected lean-eval-submissions workflow commit
+        required: true
+        type: string
+      confirmation:
+        description: Enter promote-reviewed-audit-contract
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lean-eval-audit-promotion-contract-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  promote-exact-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Require the exact protected caller
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_REF_PROTECTED: ${{ github.ref_protected }}
+          EVENT_REPOSITORY: ${{ github.repository }}
+          EVENT_SHA: ${{ github.sha }}
+          EXPECTED_WORKFLOW_COMMIT: ${{ inputs.expected_workflow_commit }}
+        run: |
+          set -euo pipefail
+          test "$EVENT_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$EVENT_REF" = refs/heads/main
+          test "$EVENT_REF_PROTECTED" = true
+          [[ "$EXPECTED_WORKFLOW_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$EVENT_SHA" = "$EXPECTED_WORKFLOW_COMMIT"
+          test "$CONFIRMATION" = promote-reviewed-audit-contract
+
+      - name: Mint only the audit-repository archiver token
+        id: audit_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_ARCHIVER_PRIVATE_KEY }}
+          owner: leanprover
+          repositories: lean-eval-audit
+
+      - name: Check out the exact reviewed contract commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          ref: 7a53c75c6d7c263c684ebcd54590c657c9298642
+          path: audit
+          fetch-depth: 2
+          persist-credentials: false
+          token: ${{ steps.audit_token.outputs.token }}
+
+      - name: Prove the immutable contract and untouched protected base
+        env:
+          AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          readonly base=c7290ca50c2c42fe78415269e37c0c4eed4deac5
+          readonly head=7a53c75c6d7c263c684ebcd54590c657c9298642
+          readonly tree=4e44c06caed2e359c652b0e99779f35d1835aae9
+          readonly branch=feat/migration-promotion-cas
+          test -n "$AUDIT_TOKEN"
+          audit_token=$AUDIT_TOKEN
+          unset AUDIT_TOKEN
+          basic_auth=$(printf 'x-access-token:%s' "$audit_token" | base64 -w0)
+          cleanup() {
+            unset audit_token basic_auth
+            unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          }
+          trap cleanup EXIT
+          GIT_CONFIG_COUNT=1
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic_auth"
+          export GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          git -C audit fetch --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/heads/$branch:refs/remotes/origin/$branch"
+          test "$(git -C audit rev-parse refs/remotes/origin/main)" = "$base"
+          test "$(git -C audit rev-parse refs/remotes/origin/$branch)" = "$head"
+          test "$(git -C audit rev-parse "$head^")" = "$base"
+          test "$(git -C audit rev-parse "${head}^{tree}")" = "$tree"
+          test "$(git -C audit diff --name-only -z "$base" "$head" | sha256sum | cut -d' ' -f1)" = \
+            30b5a9d92c9d1240d95d20ea6ee47bd3f79f0a6a68e47500ca4b09ebd90cefd4
+          test "$(git -C audit diff --name-only "$base" "$head" | wc -l)" = 6
+          test "$(GH_TOKEN="$audit_token" gh api \
+            repos/leanprover/lean-eval-audit/branches/main --jq .protected)" = true
+          cleanup
+          trap - EXIT
+
+      - name: CAS fast-forward only the exact reviewed contract
+        env:
+          AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          readonly base=c7290ca50c2c42fe78415269e37c0c4eed4deac5
+          readonly head=7a53c75c6d7c263c684ebcd54590c657c9298642
+          readonly tree=4e44c06caed2e359c652b0e99779f35d1835aae9
+          test -n "$AUDIT_TOKEN"
+          audit_token=$AUDIT_TOKEN
+          unset AUDIT_TOKEN
+          basic_auth=$(printf 'x-access-token:%s' "$audit_token" | base64 -w0)
+          cleanup() {
+            unset audit_token basic_auth
+            unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          }
+          trap cleanup EXIT
+          GIT_CONFIG_COUNT=1
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic_auth"
+          export GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          test "$(git -C audit ls-remote --exit-code origin refs/heads/main | cut -f1)" = "$base"
+          git -C audit push origin "$head:refs/heads/main" \
+            "--force-with-lease=refs/heads/main:$base"
+          test "$(git -C audit ls-remote --exit-code origin refs/heads/main | cut -f1)" = "$head"
+          git -C audit fetch --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main"
+          test "$(git -C audit rev-parse 'refs/remotes/origin/main^{tree}')" = "$tree"
+          cleanup
+          trap - EXIT
+
+      - name: Delete only the verified contract branch
+        env:
+          AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          readonly head=7a53c75c6d7c263c684ebcd54590c657c9298642
+          readonly branch=feat/migration-promotion-cas
+          test -n "$AUDIT_TOKEN"
+          basic_auth=$(printf 'x-access-token:%s' "$AUDIT_TOKEN" | base64 -w0)
+          unset AUDIT_TOKEN
+          cleanup() {
+            unset basic_auth GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          }
+          trap cleanup EXIT
+          GIT_CONFIG_COUNT=1
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic_auth"
+          export GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          test "$(git -C audit ls-remote --exit-code origin refs/heads/main | cut -f1)" = "$head"
+          branch_head=$(git -C audit ls-remote origin "refs/heads/$branch" | cut -f1)
+          if [ -n "$branch_head" ]; then
+            test "$branch_head" = "$head"
+            git -C audit push origin ":refs/heads/$branch" \
+              "--force-with-lease=refs/heads/$branch:$head"
+          fi
+          test -z "$(git -C audit ls-remote origin "refs/heads/$branch")"
+          test "$(git -C audit ls-remote --exit-code origin refs/heads/main | cut -f1)" = "$head"
+          cleanup
+          trap - EXIT
+
+      - name: Record bootstrap result
+        run: |
+          readonly head=7a53c75c6d7c263c684ebcd54590c657c9298642
+          readonly tree=4e44c06caed2e359c652b0e99779f35d1835aae9
+          {
+            echo '### Audit migration promotion contract bootstrapped'
+            echo
+            echo "- protected audit main: \`$head\`"
+            echo "- protected audit tree: \`$tree\`"
+            echo '- exact reviewed feature branch deleted after protected-main readback'
+            echo '- no archive data, migration branch, credential, or ruleset changed'
+          } >> "$GITHUB_STEP_SUMMARY"
