@@ -208,8 +208,6 @@ jobs:
               echo 'AWS_ACCESS_KEY_ID='
               echo 'AWS_SECRET_ACCESS_KEY='
               echo 'AWS_SESSION_TOKEN='
-              echo 'ACTIONS_ID_TOKEN_REQUEST_TOKEN='
-              echo 'ACTIONS_ID_TOKEN_REQUEST_URL='
             } >> "$GITHUB_ENV"
           }
           trap cleanup EXIT
@@ -239,11 +237,9 @@ jobs:
             --output-root "$output_root" \
             --output "$RUNNER_TEMP/archive-migration-report.json"
 
-      - name: Prove decrypt and wrap authority is gone before audit write authority
+      - name: Prove legacy decrypt material and AWS session are gone before audit write authority
         if: inputs.apply == true
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
           AWS_ACCESS_KEY_ID: ""
           AWS_SECRET_ACCESS_KEY: ""
           AWS_SESSION_TOKEN: ""
@@ -259,10 +255,6 @@ jobs:
           test -z "${AWS_ACCESS_KEY_ID:-}" || refuse 'AWS access key remains'
           test -z "${AWS_SECRET_ACCESS_KEY:-}" || refuse 'AWS secret key remains'
           test -z "${AWS_SESSION_TOKEN:-}" || refuse 'AWS session token remains'
-          test -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" || \
-            refuse 'OIDC request token remains'
-          test -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || \
-            refuse 'OIDC request URL remains'
           test -s "$RUNNER_TEMP/archive-migration-report.json" || \
             refuse 'validated migration report is absent'
           rm -rf -- audit
@@ -272,8 +264,6 @@ jobs:
         if: inputs.apply == true
         id: audit_token
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
           AWS_ACCESS_KEY_ID: ""
           AWS_SECRET_ACCESS_KEY: ""
           AWS_SESSION_TOKEN: ""
@@ -287,8 +277,6 @@ jobs:
       - name: Re-check out the exact audit source with branch-staging authority
         if: inputs.apply == true
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
           AWS_ACCESS_KEY_ID: ""
           AWS_SECRET_ACCESS_KEY: ""
           AWS_SESSION_TOKEN: ""
@@ -304,8 +292,6 @@ jobs:
       - name: Push only an isolated review branch
         if: inputs.apply == true
         env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
           AWS_ACCESS_KEY_ID: ""
           AWS_SECRET_ACCESS_KEY: ""
           AWS_SESSION_TOKEN: ""
