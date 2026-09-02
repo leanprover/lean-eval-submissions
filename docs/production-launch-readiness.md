@@ -1,6 +1,6 @@
 # Production launch readiness packet
 
-Status: **NO-GO — final bounded staging smoke and all-false cleanup pending**
+Status: **GO — prelaunch gates complete; Phase 4 underway**
 
 Scope authority: [LeanEval completion plan, section 7.5][completion-plan]
 
@@ -18,17 +18,17 @@ Protected `main` at this packet revision:
 
 | Repository | Commit |
 | --- | --- |
-| `leanprover/lean-eval` | `bcc165c27c6c546b27408454af35e3533e966463` |
-| `leanprover/lean-eval-submissions` | `a4ed8f7b811cbf647f446a3ca872ff48436ab5e0` |
-| `leanprover/lean-eval-leaderboard` | `b6df2533e2a6ceea8a6ed6eff5527cc3aef3e7c2` |
-| `leanprover/lean-eval-state` | `235a96c96462438c7680e6fb90fa0e6044ec1774` |
-| `leanprover/lean-eval-state-staging` | `42e6cab55fa31bf95d0bb0b5f3381aea433bd4dc` |
-| `leanprover/lean-eval-releases` | `c0bcb97d87eeb17c0a2f1ef7e8bfc76502deb798` |
+| `leanprover/lean-eval` | `cd6fc7c27fa5227b29b610558290c73994ffe84e` |
+| `leanprover/lean-eval-submissions` | `f03f5cde4f1ac83b13ce78f294fc2273980dbf0a` |
+| `leanprover/lean-eval-leaderboard` | `d7f0de9d9b5abbb62a4080df31002825a1afa814` |
+| `leanprover/lean-eval-state` | `7ffb7ffb78d79847137785c65df25770f41b62ef` |
+| `leanprover/lean-eval-state-staging` | `c604bb446a51fc833c96887053ec64672c912d8c` |
+| `leanprover/lean-eval-releases` | `dbd9d7ca947e28b041fbb1b72667f0283265189f` |
 | `leanprover/lean-eval-generator` | `010b01634cccda2db538cf9b09e6f26ddc453743` |
-| `leanprover/lean-eval-audit` | `2681d179d515b6843ee4a4f862d76983f09ea2e9` |
+| `leanprover/lean-eval-audit` | `666950ce7702d1d2a1392b12f9104781ac9446e3` |
 
 The protected submissions `staging-results` branch is
-`06bfd1ed3f7a11db5cb33f5a581330077e55e80e`.
+`1deb87414faf64edfa31639a8430fcf98fb2ccb5`.
 
 Current deployed state:
 
@@ -36,18 +36,21 @@ Current deployed state:
 | --- | --- |
 | Production submission unit | Commit `451856ebdd4ca4d875e43be7cd113678dea9e1b7`; intake disabled; every public lifecycle family disabled; both maintainer lists empty; model consolidation, publication opt-out, and promotion canary disabled. Active Cloudflare versions: intake `7afc61bf-6427-431a-b4f6-c1c3ec2641ac`, broker `dfd77e4f-16ae-4a63-81ab-bbb79797385b`, replay `570664e6-a6f5-428d-87cb-803dd5b1768f`. |
 | Production replay | Commit `451856ebdd4ca4d875e43be7cd113678dea9e1b7`; general replay, historical-public replay, and staging acceptance disabled. |
-| Staging submission unit | Commit `a4ed8f7b811cbf647f446a3ca872ff48436ab5e0`; intake, lifecycle families, maintainer lists, publication opt-in, model consolidation, and publication opt-out currently read false after the bounded window. The staging-only dispatch promotion canary is intentionally true and is not a public lifecycle gate. Final cleanup remains pending until the corrected verifier proves every required false field. |
-| Staging replay | Commit `a4ed8f7b811cbf647f446a3ca872ff48436ab5e0`; general and historical-public replay disabled; staging acceptance enabled. |
-| Release controller | Commit `c0bcb97d87eeb17c0a2f1ef7e8bfc76502deb798`; current production and staging State contracts, including emergency removal, are pinned; repository variable `PUBLICATION_ENABLED` absent; the production publication-disabled credential preflight passes on this exact commit. |
-| Public entry and leaderboard | `https://lean-lang.org/eval/submit/` and `https://lean-eval-submission-server.lean-eval.workers.dev/` are live in disabled posture. Lifecycle-aware problem pages, including visible problem statements, are live. |
+| Staging submission unit | Commit `f03f5cde4f1ac83b13ce78f294fc2273980dbf0a`; intake version `c55e2220-393a-4739-b0ad-71d8eb455dc2`, broker version `b93729b0-dfac-4fba-bf9b-12d318e2111f`; intake and every public lifecycle gate are false; both maintainer lists are empty; model consolidation and publication opt-out are false. The staging-only promotion canary is true. |
+| Staging replay | Commit `f03f5cde4f1ac83b13ce78f294fc2273980dbf0a`; version `c91f96f2-a0f8-4900-a951-b8f26eaceef9`, container application version `22`; general and historical-public replay disabled; staging acceptance enabled. |
+| Release controller | Protected commit `dbd9d7ca947e28b041fbb1b72667f0283265189f`; production State projection is pinned to `7ffb7ffb78d79847137785c65df25770f41b62ef`; publication variable `PUBLICATION_ENABLED` is `true`. The exact enabled controller produced an empty or not-due plan and did not change State or audit. |
+| Public entry and leaderboard | Protected and deployed leaderboard `d7f0de9d9b5abbb62a4080df31002825a1afa814` retains stable lifecycle-aware problem pages and visible statements. `https://lean-lang.org/eval/submit/` remains issue-primary and the production Worker remains disabled. The deployed projection maps a modern Result with no release task to `withheld`; its first production readback belongs to the production canary. |
 
 The immutable dispatch ref for the protected submissions candidate is
-`lean-eval-dispatch/a4ed8f7b811cbf647f446a3ca872ff48436ab5e0`.
-No current production capability is enabled by this packet.
+`lean-eval-dispatch/f03f5cde4f1ac83b13ce78f294fc2273980dbf0a`.
+The automatic release controller is enabled. Production server intake,
+lifecycle APIs, replay, model consolidation, and publication opt-out remain
+disabled.
 
 ## 2. Launch gate status
 
-Everything below is qualified except the explicitly pending staging closeout:
+The established prelaunch boundaries below are qualified. Held post-`GO`
+candidates remain explicitly pending:
 
 - schema-version-3 archive-before-evaluation with one per-submission envelope,
   strict submission/digest binding, production Encrypt-only Wrap authority,
@@ -58,27 +61,45 @@ Everything below is qualified except the explicitly pending staging closeout:
 - production release OIDC, audit-read, State-write, and unwrap-invoker scope,
   with no production decrypt or publication performed during preflight;
 - protected production State contract and event-schema readiness;
-- browser OAuth, source-bound headless intake, owner and maintainer lifecycle
-  routes, one-way publication opt-in, authorization denials, redaction, and
-  exact dispatch promotion in staging;
+- exact-`f03f5cde` browser OAuth and source-bound headless archive, evaluation,
+  and Result paths;
+- launch-approved optional lifecycle routes, authorization denials, and
+  redaction through repository tests and prior staging route evidence; an
+  exact-`f03f5cde` route matrix is not a launch gate;
+- one-way publication opt-in remains launch-enabled behind its feature flag;
+  the production canary supplies its launch proof;
 - production all-false recovery and coherent rollback; and
 - lifecycle-aware leaderboard output with stable problem pages and visible
   statements.
 
-The only pre-production item still open is terminal review of the bounded
-browser smoke at the exact staging runtime above, followed by corrected
-verification that every public launch gate is false. The staging-only
-promotion canary remains at its reviewed true setting. A failed terminal
-result, State inconsistency, cleanup failure, unexpected due-release work, or
-non-coherent deployment keeps this packet `NO-GO`.
+The completed staging binding is recorded once in the finalization table
+below. The packet has no remaining pre-production `GO` blocker.
 
-## 3. Draft launch changes — candidates, not facts
+The table records the completed staging binding and leaves future bindings
+explicitly unfilled. `Pending` is not evidence that an action succeeded.
+
+| Phase 4 finalization category | Required exact final binding | Current status |
+| --- | --- | --- |
+| Final staging smoke | Browser `01a05f9a-a349-7b40-91e3-31082d2e99f3` is terminal through archive, accepted Result `r2_9b791dd9ba2d4383e0065bc791bb19f8f81d9e4d8a21f7470d806057e8e9a90c`, and State. Headless `01a05f9e-0291-77a1-b80f-de07610fd3ad` is terminal through evaluation and Result `r2_93e1c1d18533806f33531603858059536c2ce7d3cb838f5f67b70699d27d6198` at `staging-results` `1deb87414faf64edfa31639a8430fcf98fb2ccb5`; audit repository head is `666950ce7702d1d2a1392b12f9104781ac9446e3`; result event `01a05fca-f7fa-77a6-82d6-5dd0c22fc959` and scheduled-release event `01a05fca-f7fb-7dd4-92ed-8f3487cb0ee4` for `2026-11-02T00:57:18.002Z` are at State `c604bb446a51fc833c96887053ec64672c912d8c`. | **Complete:** protected-main State validation [`33582505523`](https://github.com/leanprover/lean-eval-state-staging/actions/runs/33582505523) passed; all-false intake `c55e2220-393a-4739-b0ad-71d8eb455dc2`, broker `b93729b0-dfac-4fba-bf9b-12d318e2111f`, and replay `c91f96f2-a0f8-4900-a951-b8f26eaceef9` are bound; effective health is all false except the staging promotion canary; watchdog [`33579467307`](https://github.com/leanprover/lean-eval-submissions/actions/runs/33579467307) is cancelled; bounded staging-fixture removal is verified. |
+| Automatic release | Protected releases `dbd9d7ca947e28b041fbb1b72667f0283265189f`; publication-disabled credential, audit-read, OIDC, and write-free no-op preflights; `PUBLICATION_ENABLED=true`; enabled controller run [`33583140345`](https://github.com/leanprover/lean-eval-releases/actions/runs/33583140345) | **Complete:** protected-main validation [`33582979345`](https://github.com/leanprover/lean-eval-releases/actions/runs/33582979345) and preflights [`33583050588`](https://github.com/leanprover/lean-eval-releases/actions/runs/33583050588), [`33583051949`](https://github.com/leanprover/lean-eval-releases/actions/runs/33583051949), [`33583053537`](https://github.com/leanprover/lean-eval-releases/actions/runs/33583053537), and [`33583055166`](https://github.com/leanprover/lean-eval-releases/actions/runs/33583055166) passed. The disabled no-op plan was `empty`; the enabled run also found no due work and skipped unwrap. Production State remains `7ffb7ffb78d79847137785c65df25770f41b62ef` and audit remains `666950ce7702d1d2a1392b12f9104781ac9446e3`. |
+| Production lifecycle APIs | Exact protected submissions commit and dispatch tag; production intake, broker, and replay version IDs; effective-health readback showing only the approved lifecycle and publication-opt-in families enabled while intake, consolidation, opt-out, and replay remain false; one non-mutating authorization denial | **Pending separate lifecycle deployment after packet `GO`.** |
+| Production intake lease and durable transition | Exact merged intake commit and dispatch tag; provisional-disabled and finite-lease version/readback; lease start and expiry; one-use smoke result; protected State head recheck; final durable intake, broker, and replay versions and effective health | **Pending a clean intake-only descendant after the lifecycle deployment.** |
+| Production canary | Submission ID and packet-bound source/model identity; archive commit/path and digests; evaluation run and terminal Result identity; terminal State and Results heads; exact leaderboard deployed head/build/URL showing initial `Release withheld`; irreversible opt-in event and subsequent scheduled presentation; release-readiness binding | **Withheld projection contract deployed at leaderboard `d7f0de9d9b5abbb62a4080df31002825a1afa814`; actual withheld and scheduled cards pending durable production intake and the at-most-once canary.** |
+| Production pause | Exact pre-pause release, intake, broker, replay, and State heads; all-false recovery action and disabled version/readback; publication-disabled no-op preflight and unchanged State; disposition of any active release run | **Pending successful canary.** |
+| Ordered restore | Separate release-controller, lifecycle-with-intake-disabled, and finite-lease-to-durable intake restore actions; exact commit/version, effective-health, publication posture, and protected-State readback after each action | **Pending successful pause proof.** |
+| Server-primary entry | Protected and deployed leaderboard commit/build/readback for the server-primary page with issue fallback; protected LeanEval launch-copy commit; verified live entry URL and security/license/release text | **Pending restored production service and refreshed launch-copy candidate `#603`.** |
+| Overlap announcement | Explicit UTC announcement time, UTC overlap start, target closure no earlier than four weeks later, issue-intake fallback URL, and subsequent closure-notice date at least two weeks before any closure | **Pending verified server-primary deployment; no dates are claimed yet.** |
+
+## 3. Held launch presentation change
+
+This packet branch adds only the reviewed publication-default copy
+`f4b21d74fbf4891f72b7d2bb9cc33383042795a1` to the protected f03 runtime;
+production intake remains disabled. Intake enablement is a later
+single-purpose descendant and must not be folded into this pull request.
 
 | Draft | Exact candidate | Intended action |
 | --- | --- | --- |
-| [`lean-eval-submissions#1603`](https://github.com/leanprover/lean-eval-submissions/pull/1603) | `1d3864193827e28ed50818910e092300fb47b413`, based on `a4ed8f7b811cbf647f446a3ca872ff48436ab5e0` | Change only tracked production intake from disabled to durable-enabled, using the protected deploy workflow's finite lease, smoke, and final durable transition. |
-| [`lean-eval#603`](https://github.com/leanprover/lean-eval/pull/603) | `4ac6205ea122278db1101d4f5cd91cb4d28a954d`, based on `bcc165c27c6c546b27408454af35e3533e966463` | Make the server the primary submission path while retaining issue intake during the overlap. Merge only after server intake is public. |
-| [`lean-eval#604`](https://github.com/leanprover/lean-eval/pull/604) | `b9a00afd1efe6c8299c5b23a30a5b1b1906b7e38`, based on `bcc165c27c6c546b27408454af35e3533e966463` | Refresh the mutable execution checklist for the final staging candidate and launch sequence. |
+| [`lean-eval#603`](https://github.com/leanprover/lean-eval/pull/603) | Existing remote head `4ac6205ea122278db1101d4f5cd91cb4d28a954d` is stale; a reviewed replacement is prepared for rebasing onto protected `cd6fc7c27fa5227b29b610558290c73994ffe84e` | Make repository copy server-primary while retaining issue intake during the overlap. Update the draft only after server intake and the matching leaderboard entry are public. |
 
 Opening or checking these drafts changes no runtime. Their commits, checks,
 and stated effects must be re-read immediately before merge; a changed head is
@@ -126,21 +147,29 @@ must state that:
 
 ## 6. Pause and rollback
 
-1. Dispatch
+1. Before the production pause, bind the exact deployed intake, broker, replay,
+   release, and protected State heads. Dispatch
    [`intake-disable-recovery.yml`](../.github/workflows/intake-disable-recovery.yml)
-   to force intake and every public lifecycle gate false, clear both maintainer
-   arrays, and verify exact effective health.
-2. Use [`rollback-worker.yml`](../.github/workflows/rollback-worker.yml) only
+   at that protected submissions commit. Require intake, every public lifecycle
+   family, and publication opt-in to read false; both maintainer arrays to read
+   empty; consolidation and opt-out to remain false; and replay to remain dark.
+2. Remove or set `PUBLICATION_ENABLED=false`, cancel any active controller run,
+   and reconcile any committed `release.started` event. Run the exact protected
+   write-free production no-op preflight and require unchanged production State,
+   no archive or publication write, and effective disabled health. Block the
+   `release-production` environment or revoke its scoped deploy keys/AWS trust
+   only for an emergency stop.
+3. Restore the reviewed settings as three separate actions in this exact order:
+   release controller, lifecycle APIs with intake still disabled, then intake
+   through its finite-lease-to-durable controller. After each action, re-read
+   its exact deployed version, effective health, publication posture, and the
+   unchanged or expected append-only protected State head. Do not use the
+   earlier staging rollback as this production proof.
+4. Use [`rollback-worker.yml`](../.github/workflows/rollback-worker.yml) only
    for a reviewed coherent intake/broker/replay target. It redeploys target
    code with current secrets and finishes with production intake disabled.
-3. Pause publication by removing or setting `PUBLICATION_ENABLED=false`,
-   cancelling active controller runs, and reconciling any committed
-   `release.started` event. Block `release-production` or revoke its scoped
-   deploy keys/AWS trust for an emergency stop.
-4. Never rewrite State, Results, releases, audit objects, AWS data, credentials,
-   or Git history as rollback. After recovery, verify exact `/healthz`,
-   authenticated `POST /readyz`, protected State, and independent publication
-   posture before resuming.
+5. Never rewrite State, Results, releases, audit objects, AWS data, credentials,
+   or Git history as rollback.
 
 ## 7. Deferred or deliberately disabled
 
@@ -158,40 +187,69 @@ must state that:
 
 ## 8. Remaining launch actions
 
-Only these actions are pending, in order. Record their actual commits, runtime
-versions, State heads, timestamps, and URLs in the mutable runbook after they
-exist; do not prefill terminal values here.
+Only these actions are pending, in order. Fill the matching finalization row
+above and keep the mutable runbook current after each fact exists; do not
+prefill terminal values.
 
-1. **Close final staging.** Verify the bounded browser smoke's terminal
-   archive/evaluation/Result/State/release-readiness and leaderboard behavior.
-   Restore intake, lifecycle, maintainer, and publication-opt-in gates to false
-   through the reviewed disable path, while retaining the staging-only
-   promotion canary at its reviewed true setting. Use the corrected verifier,
-   then re-read staging State, Results, and public health. Reconcile and merge
-   runbook draft `#604` only after those facts are known.
-2. **Enable automatic release.** Confirm no release is due, enable the
-   publication controller at the exact protected release commit, and read back
-   its State, audit, OIDC, and publication posture.
-3. **Deploy production lifecycle APIs.** Reconfirm production is all-false and
-   no newer protected deployment supersedes `a4ed8f7b811cbf647f446a3ca872ff48436ab5e0`.
-   Complete its held production deployment, leaving intake disabled while
+The single permitted production canary is bound before launch as follows:
+
+| Field | Exact value |
+| --- | --- |
+| Submitter/owner | `kim-em` |
+| Source repository | `leanprover/lean-eval-state-staging` |
+| Source branch | `production-canary-source-fixture-v4` |
+| Source commit | `3dc17f41ccd0c86fa443687fac784a42f3798183` |
+| Problem group | `formalization-evaluation` |
+| Problem ID | `substInv_X_sub_X_sq_eq_catalan` |
+| Statement revision | `1` |
+| Declared model | `LeanEval production launch canary 3dc17f41ccd0c86fa443687fac784a42f3798183` |
+| Initial publication choice | `withheld` |
+| Production metadata | `{}` |
+| Expected Result ID | `r2_176e0f46710a69d54b3cbcc722a948b364de2acdf2a1ee6fe667f0a331254a59` |
+| Source Reader repository-access preflight | [successful run `33557767912`](https://github.com/leanprover/lean-eval-submissions/actions/runs/33557767912) at `f03f5cde4f1ac83b13ce78f294fc2273980dbf0a` |
+| Evaluation App exact-ref preflight | [successful run `33557770740`](https://github.com/leanprover/lean-eval-submissions/actions/runs/33557770740) at `f03f5cde4f1ac83b13ce78f294fc2273980dbf0a` |
+
+Submit that exact tuple at most once. After its archive, evaluation, State,
+Result, leaderboard presentation, irreversible private-to-scheduled event, and
+every dependent run are terminal, delete the fixture branch. Only then remove
+`leanprover/lean-eval-state-staging` from both read-only source App
+installations. The source-App cleanup does not wait for the scheduled source's
+two-month publication date.
+
+1. **Deploy production lifecycle APIs.** Reconfirm server production is
+   all-false and
+   deploy the exact protected descendant of copy candidate
+   `f4b21d74fbf4891f72b7d2bb9cc33383042795a1`, leaving intake disabled while
    enabling only the launch-approved owner, maintainer, alias/rename, and
    one-way publication-opt-in families. Keep consolidation and opt-out false.
-4. **Enable server intake.** Revalidate draft `#1603`, merge its exact reviewed
-   head or a newly reviewed descendant, and require the deployment to pass the
+2. **Enable server intake.** Prepare and merge the clean intake-only descendant,
+   and require the deployment to pass the
    provisional-disabled checks, finite lease, one-use smoke, protected-State
    recheck, and final durable transition.
-5. **Run one production canary.** Submit the packet-bound private canary,
+3. **Verify withheld presentation with the canary.** The exact reviewed
+   leaderboard `#90` projection is deployed from protected main and the
+   prelaunch submit page remains issue-primary. Production State contains no
+   modern Result yet, so verify its first actual `Release withheld` card as the
+   initial presentation step of the at-most-once canary below.
+4. **Run one production canary.** Submit the packet-bound private canary,
    verify archive-before-evaluation, terminal State and Result, leaderboard
    presentation, and release readiness, then exercise the visible irreversible
-   private-to-scheduled opt-in. On any failure, run all-false recovery and
-   pause publication.
-6. **Publish launch and begin overlap.** Revalidate and merge launch-copy draft
-   `#603` only after intake is publicly usable. Publish the server URL, explicit
-   UTC overlap start and target closure dates, the issue-intake fallback, and
-   the security/license/release contract above. Zulip or comments on other
-   repositories remain separately authorized external communication.
+   private-to-scheduled opt-in. Force a leaderboard build and verify both the
+   initial withheld state and the scheduled transition. On any failure, run
+   all-false recovery and pause publication.
+5. **Prove production pause and restore.** Execute section 6 against the exact
+   deployed production versions. Restore release, lifecycle, and intake as
+   separate actions in that order, with effective-health and protected-State
+   readback after each action.
+6. **Make the server primary and begin overlap.** After restored intake is
+   publicly usable, merge and deploy a single-purpose leaderboard change that
+   makes `https://lean-lang.org/eval/submit/` server-primary while preserving
+   issue intake as the overlap fallback. Rebase, revalidate, and merge
+   launch-copy draft `#603` against current protected LeanEval. Verify the live
+   entry page before publishing the server URL, explicit UTC overlap start and
+   target closure dates, issue fallback, and security/license/release contract.
+   Zulip or comments on other repositories remain separately authorized
+   external communication.
 
-The packet becomes `GO` only after action 1 succeeds and its all-false cleanup
-is verified. Actions 2–6 then proceed under that `GO`, one capability at a
-time, with pause or rollback after any failed readback.
+The packet is `GO`. Actions 1–6 proceed in order, one capability at a time,
+with pause or rollback after any failed readback.
