@@ -113,7 +113,7 @@ def sidecar(
 
 def write_pair(
     root: pathlib.Path, relative: str, value: dict[str, object], ciphertext: bytes
-        ) -> None:
+) -> None:
     cipher_path = root.joinpath(*relative.split("/"))
     cipher_path.parent.mkdir(parents=True, exist_ok=True)
     cipher_path.write_bytes(ciphertext)
