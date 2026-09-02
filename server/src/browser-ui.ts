@@ -90,7 +90,7 @@ export function browserPage(
   ` : "";
   const submissionForm = intakeEnabled ? `
     <form id="submission-form">
-      <label>Problem ID <input id="problem_id" name="problem_id" required pattern="[a-z][a-z0-9_]*"></label>
+      <label>Problem ID <input id="problem_id" name="problem_id" required pattern="[A-Za-z0-9][A-Za-z0-9_\\-]{0,127}" maxlength="128"></label>
       <label>Problem group
         <select id="problem_group" name="problem_group">
           <option value="formalization-evaluation">formalization-evaluation</option>

@@ -51,6 +51,16 @@ describe("browser intake page", () => {
     expect(body).toContain("GitHub sign-in is required");
     expect(body).toContain('id="submit-button"');
     expect(body).toContain('id="submit-spinner"');
+    expect(body).toContain(
+      'id="problem_id" name="problem_id" required pattern="[A-Za-z0-9][A-Za-z0-9_\\-]{0,127}" maxlength="128"',
+    );
+    expect(body).not.toContain('pattern="[a-z][a-z0-9_]*"');
+    const problemPattern = /id="problem_id"[^>]* pattern="([^"]+)"/.exec(body)?.[1];
+    expect(problemPattern).toBeDefined();
+    const canonicalProblemId = new RegExp(`^(?:${problemPattern ?? ""})$`, "v");
+    expect(canonicalProblemId.test("substInv_X_sub_X_sq_eq_catalan")).toBe(true);
+    expect(canonicalProblemId.test("7_problem-name")).toBe(true);
+    expect(canonicalProblemId.test("invalid problem")).toBe(false);
     expect(body).toContain('href="/release/"');
     expect(body).not.toContain('id="release-opt-in-form"');
     expect(body).not.toContain('id="release-opt-in-submission-id"');
