@@ -51,17 +51,17 @@ class CloudflareHealthMonitorTests(unittest.TestCase):
             report["observations"]["production"]["capabilities"],
             {
                 "historical_public_replay_enabled": False,
-                "intake_enabled": False,
-                "legacy_result_owner_api_enabled": False,
+                "intake_enabled": True,
+                "legacy_result_owner_api_enabled": True,
                 "model_identity_consolidation_api_enabled": False,
-                "model_identity_maintainer_api_enabled": False,
-                "model_identity_owner_api_enabled": False,
+                "model_identity_maintainer_api_enabled": True,
+                "model_identity_owner_api_enabled": True,
                 "promotion_canary_enabled": False,
-                "release_opt_in_api_enabled": False,
+                "release_opt_in_api_enabled": True,
                 "release_opt_out_api_enabled": False,
                 "replay_enabled": False,
-                "result_amendment_maintainer_api_enabled": False,
-                "result_amendment_owner_api_enabled": False,
+                "result_amendment_maintainer_api_enabled": True,
+                "result_amendment_owner_api_enabled": True,
                 "staging_acceptance_enabled": False,
             },
         )
@@ -78,7 +78,7 @@ class CloudflareHealthMonitorTests(unittest.TestCase):
         responses = self.responses()
         responses[endpoints["production"]["intake"]][
             "intake_effective_enabled"
-        ] = True
+        ] = False
         with self.assertRaisesRegex(monitor.MonitorError, "health differs"):
             monitor.verify_snapshot(self.intake, self.replay, lambda url: responses[url])
 
@@ -93,7 +93,7 @@ class CloudflareHealthMonitorTests(unittest.TestCase):
         endpoints = monitor.tracked_endpoints(self.intake, self.replay)
         responses[endpoints["production"]["intake"]][
             "release_opt_in_api_enabled"
-        ] = True
+        ] = False
         with self.assertRaisesRegex(monitor.MonitorError, "health differs"):
             monitor.verify_snapshot(self.intake, self.replay, lambda url: responses[url])
 
@@ -115,8 +115,8 @@ class CloudflareHealthMonitorTests(unittest.TestCase):
 
     def test_rejects_incoherent_mode_or_tracked_lease_material(self) -> None:
         intake = copy.deepcopy(self.intake)
-        intake["env"]["production"]["vars"]["INTAKE_ENABLEMENT_MODE"] = "durable"
-        with self.assertRaisesRegex(monitor.MonitorError, "must be disabled"):
+        intake["env"]["production"]["vars"]["INTAKE_ENABLEMENT_MODE"] = "disabled"
+        with self.assertRaisesRegex(monitor.MonitorError, "must be durable"):
             monitor.expected_health(intake, self.replay, "production")
 
         intake = copy.deepcopy(self.intake)
