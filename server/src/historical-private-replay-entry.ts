@@ -123,11 +123,22 @@ export default {
         const { verifyGithubOidc } = await import("./replay-auth");
         await verifyGithubOidc(incoming, runtime);
       },
-      sandbox(runtime, runnerNonce) {
+      async sandbox(runtime, runnerNonce) {
         // The large replay image can need more than three minutes to become
-        // port-ready after a cold regional pull. This temporary private lane
-        // gets the SDK's bounded maximum without changing ordinary replay.
-        return replaySandbox(runtime, runnerNonce, 600_000);
+        // port-ready after a cold regional pull. getSandbox applies options in
+        // the background, so explicitly await the same configuration before
+        // the first RPC; otherwise that RPC can retain the ordinary 330-second
+        // transport budget. This does not change ordinary replay.
+        const sandbox = replaySandbox(runtime, runnerNonce, 600_000);
+        await sandbox.configure({
+          keepAlive: false,
+          sleepAfter: "5m",
+          containerTimeouts: {
+            instanceGetTimeoutMS: 120_000,
+            portReadyTimeoutMS: 600_000,
+          },
+        });
+        return sandbox;
       },
       receiptStore(runtime) {
         const replayTaskId = runtime.EXPECTED_REPLAY_TASK_ID;
