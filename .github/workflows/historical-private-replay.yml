@@ -892,8 +892,7 @@ jobs:
           }
           trap cleanup EXIT
           prove_running
-          # State/KMS preparation is normally shorter than the sandbox's
-          # five-minute idle limit, but refresh once more before the only
+          # Refresh once more after State/KMS preparation and before the only
           # source-bearing request so scheduling jitter cannot reintroduce a
           # cold-container failure at the confidentiality boundary.
           refresh_readiness
@@ -902,20 +901,51 @@ jobs:
           prove_running
           echo runner_lost > "$RUNNER_TEMP/failure-reason"
           touch "$RUNNER_TEMP/executor-start-attempted"
-          status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+          start_status=000
+          start_transport=failed
+          if start_status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
             --max-time 780 \
             --header "Authorization: Bearer $token" \
             --header 'Content-Type: application/json' --request POST \
             --data-binary "@$RUNNER_TEMP/executor-request.json" \
             "$EXECUTOR_URL/api/v1/replay" \
             --output "$RUNNER_TEMP/executor-start-response.json" \
-            --write-out '%{http_code}')
+            --write-out '%{http_code}'); then
+            start_transport=ok
+          fi
           unset token
-          test "$status" = 202
-          jq -e --slurpfile expected "$RUNNER_TEMP/cleanup-request.json" '
-            . == ($expected[0] + {status:"running"})
-          ' "$RUNNER_TEMP/executor-start-response.json" >/dev/null
           shred --remove "$RUNNER_TEMP/executor-request.json"
+          if [ "$start_transport" != ok ]; then
+            printf 'private executor start transport failed (http_status=%s)\n' \
+              "$start_status" >&2
+            exit 1
+          fi
+          if [ "$start_status" != 202 ]; then
+            safe_reason=$(jq -er '
+              if type == "object" and .error == "executor_failed" and
+                (.reason == "input_transfer_failed" or
+                 .reason == "command_rpc_failed" or
+                 .reason == "command_failed" or
+                 .reason == "command_output_invalid" or
+                 .reason == "sandbox_destroy_failed" or
+                 .reason == "unexpected_failure")
+              then .reason else empty end
+            ' "$RUNNER_TEMP/executor-start-response.json" 2>/dev/null || true)
+            if [ -n "$safe_reason" ]; then
+              printf 'private executor start rejected (http_status=%s reason=%s)\n' \
+                "$start_status" "$safe_reason" >&2
+            else
+              printf 'private executor start rejected (http_status=%s body=redacted)\n' \
+                "$start_status" >&2
+            fi
+            exit 1
+          fi
+          if ! jq -e --slurpfile expected "$RUNNER_TEMP/cleanup-request.json" '
+            . == ($expected[0] + {status:"running"})
+          ' "$RUNNER_TEMP/executor-start-response.json" >/dev/null; then
+            printf 'private executor start response binding invalid (body=redacted)\n' >&2
+            exit 1
+          fi
           prove_running
           deadline=$(( $(date +%s) + 20100 ))
           job_deadline=$(( REPLAY_JOB_STARTED_EPOCH + 20880 ))

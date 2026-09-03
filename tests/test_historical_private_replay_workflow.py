@@ -194,6 +194,15 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         )
         self.assertIn("--max-time 780", start)
         self.assertNotIn("--retry", start)
+        self.assertIn("start_transport=failed", start)
+        self.assertIn("private executor start transport failed", start)
+        self.assertIn("private executor start rejected", start)
+        self.assertIn("body=redacted", start)
+        self.assertNotIn('cat "$RUNNER_TEMP/executor-start-response.json"', start)
+        self.assertLess(
+            start.index('shred --remove "$RUNNER_TEMP/executor-request.json"'),
+            start.index('if [ "$start_transport" != ok ]'),
+        )
         self.assertIn("refresh_readiness", start)
         self.assertIn("prewarm-request.json", start)
         self.assertIn("/api/v1/historical-private-replay/prewarm", start)
@@ -559,7 +568,7 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
             "Confirm exact sandbox destruction after every attempted start",
         )
         self.assertIn("prove_running\n          mint_oidc", execute)
-        self.assertIn("test \"$status\" = 202", execute)
+        self.assertIn('if [ "$start_status" != 202 ]', execute)
         self.assertGreaterEqual(execute.count("prove_running"), 6)
         self.assertRegex(
             execute,
