@@ -239,6 +239,10 @@ class HistoricalAuthoritativeReplayWorkflowTests(unittest.TestCase):
             self.assertIn('merge-base --is-ancestor "$state_head"', append_step)
             self.assertIn('test "$(jq -er .kind "$committed")" = none', append_step)
             self.assertNotIn("EXPECTED_STATE_HEAD", append_step)
+        self.assertIn("running-before-terminal.cas-$cas_attempt.json", terminal)
+        self.assertIn("terminal-committed.cas-$cas_attempt.json", terminal)
+        self.assertIn("running-before-failure.cas-$cas_attempt.json", failure)
+        self.assertIn("failure-committed.cas-$cas_attempt.json", failure)
 
     def test_public_state_refresh_identity_is_temporary_and_read_only(self) -> None:
         install = WORKFLOW.split(
