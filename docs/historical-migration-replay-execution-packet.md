@@ -238,7 +238,7 @@ delta.
 The archive migration and promotion fields are fixed above. The State
 candidate is bound by
 `configuration/historical-baseline-state-promotion-v1.json`, SHA-256
-`be88ae147e71195cd941cac1ab7b9d60c4adf97ba8fdd9113baf4130a02c4d2f`.
+`e2b95a76d5d854f27d95358a2aafd380a40acc8445c3ab13ae7621614ce8d31f`.
 
 - [x] The deterministic migration report digest plus the staged audit commit,
       tree, and exact binary patch digest relative to the pinned audit source.
@@ -252,33 +252,33 @@ candidate is bound by
       commit and tree, and promote only that rebased tree. After merge, require
       audit `main` to have exactly the bound tree.
 - [x] The exact production State head used for combined validation is
-      `60f5676e44a39010f5bc1fbfc4bd0bc228ff8028`, tree
-      `97f31e6e0faa3c7029a31aa0cec057bf7be9d64b`, with 508 base events and
+      `3a4236c50314f1a4e42e114818e287568fd716aa`, tree
+      `05f0e391ba0d11d0f06300dd442a05c0e8e9b6eb`, with 509 base events and
       event-ID-set SHA-256
-      `8fb4df01a769eaba9c3af691cb1c41231b2c248dda4ec43cf94b8bdc275368d8`.
-- [x] `first_occurred_at` is `2026-09-03T02:36:40.777Z`, after the exact
-      State head, and `last_occurred_at` is `2026-09-03T02:36:43.215Z`.
+      `01357078ec1a26907f8454f1e6ce1e0170198048fa755353949f8579a8b090b7`.
+- [x] `first_occurred_at` is `2026-09-03T02:48:13.934Z`, after the exact
+      State head, and `last_occurred_at` is `2026-09-03T02:48:16.372Z`.
       Deterministic public and private event-ID-set SHA-256 values are
-      `4c4066d1e6d54badd26a1096558274d2b7883ec4567442c81718eaf44fda581a`
+      `5b2bb7ad679d03d37af63963db870e29ff5e2e3729b4ea315dcb56b993fe4680`
       and
-      `b54afd7477d6364d5efde84137e38fcbdebb24a7630d9823570e8684afcccba4`.
+      `c3ed298e8aa0cd22ae17b397bf2639ccbe071450d13903ac2e28433a381c5894`.
 - [x] The create-only State candidate is commit
-      `d4f4ab87e916e25d7e5a7cb15bbd71c48f33d3a4`, tree
-      `6fe5e06168b5d93c5bd677bb1c11bee829ef5e40`, with 2,439 events and
+      `76b3b3e54f4be69161a00cd81576a58df8eae815`, tree
+      `e196521b812a0942eea9d11a8bcb2d7569728d50`, with 2,439 events and
       event-set SHA-256
-      `b83812b753a2ac33101da34289c3813eb2267a9e42b8b79501bcc40f91c5c96f`.
+      `44da2b7454b7b9cc1291fbdf7a042b7c59fdf11616e02037538d47e5cf0e01e5`.
       Its public lane has 522 events and 174 tasks; its private lane has 1,917
       events and 639 tasks. The respective queue SHA-256 values are
-      `4ede4c4aef87dc31dd5801f9001ea38451d42312140fc6aafbb490ea02b42a0a`
+      `3e4f95ec64f01cc5e088e095a81f77ecebee87b31ab31c78883c27a46a44f83b`
       and
-      `39854ced5013850be149b50e9a7f8d34c86040b2ad527f779cfc2f5077921b7e`;
+      `ce6285b2aab106cb6bc6d489ee940de5707a2f98c98d130fb9c809ce3749195c`;
       materialized-views SHA-256 is
-      `6cb8aeee80d5019fb1a0c1e954cd39779068e0a56e28ccb9f9f387ace10f6bd3`.
+      `0b1aef26f9205f52700d1ee19232d31c41a8340127c4b11a9081fb66f69b7958`.
 - [x] The read-only redacted historical projection and series SHA-256 values
       are
-      `f20ce2b0271b3a6357a954ed9dde0d1b2de692f89309ca2cc8ef8da43d31e4ac`
+      `0092cc0311a77095f011e9672373a269d87e265a05eed76b24d4c89f4defd1e5`
       and
-      `9c2f4e8d5a1306ad85efdd2642ea601160a6cf11f952e44e55ad0364154421be`.
+      `4f3339f7f04f9419acff9aa5905d7f4ce95fa5e9b9fe95063dc4960a805970d3`.
       The bound public/private Result-set and task-set digests prove that all
       813 queued baseline Results appear exactly once, while the reviewed
       unavailability set SHA-256

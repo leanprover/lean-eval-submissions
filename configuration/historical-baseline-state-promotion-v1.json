@@ -6,46 +6,46 @@
   },
   "candidate": {
     "event_count": 2439,
-    "event_set_sha256": "b83812b753a2ac33101da34289c3813eb2267a9e42b8b79501bcc40f91c5c96f",
-    "first_occurred_at": "2026-09-03T02:36:40.777Z",
+    "event_set_sha256": "44da2b7454b7b9cc1291fbdf7a042b7c59fdf11616e02037538d47e5cf0e01e5",
+    "first_occurred_at": "2026-09-03T02:48:13.934Z",
     "lanes": {
       "private": {
         "event_count": 1917,
-        "event_id_set_sha256": "b54afd7477d6364d5efde84137e38fcbdebb24a7630d9823570e8684afcccba4",
-        "event_set_sha256": "66883cedeedf97e85276de46a549b69befcc90e762441fac63f4ec85df07acf1",
+        "event_id_set_sha256": "c3ed298e8aa0cd22ae17b397bf2639ccbe071450d13903ac2e28433a381c5894",
+        "event_set_sha256": "1aa4df11379a5a8931103086fc7320d4b59733dc23cdb1235785defd0b452c5a",
         "result_id_set_sha256": "29647dbaca17bbed72f4b6546dc66a6f2290654d03b4d40a93203e089f4f9e50",
         "task_count": 639,
         "task_id_set_sha256": "c82cb4e9f37a38f120fb6611cf594702aeac6c3c2c48bd263e485eb235de152c"
       },
       "public": {
         "event_count": 522,
-        "event_id_set_sha256": "4c4066d1e6d54badd26a1096558274d2b7883ec4567442c81718eaf44fda581a",
-        "event_set_sha256": "a75055469d6a1a29e221e67a90803712290eb93392f87366cf66ed3b271ead1f",
+        "event_id_set_sha256": "5b2bb7ad679d03d37af63963db870e29ff5e2e3729b4ea315dcb56b993fe4680",
+        "event_set_sha256": "000b6e61217154eea16a04650ba01cf386eba0b1cc1072623560de5439302a47",
         "result_id_set_sha256": "3ba4c58aeaaefc84fb8b339092bf7e5c4e9b5505846bac2d614b201568c83edb",
         "task_count": 174,
         "task_id_set_sha256": "338b6b712540714fdeeb5f469e3281f664446edf1a1f0645e4eadc530e6b6c70"
       }
     },
-    "last_occurred_at": "2026-09-03T02:36:43.215Z",
-    "materialized_views_sha256": "6cb8aeee80d5019fb1a0c1e954cd39779068e0a56e28ccb9f9f387ace10f6bd3",
+    "last_occurred_at": "2026-09-03T02:48:16.372Z",
+    "materialized_views_sha256": "0b1aef26f9205f52700d1ee19232d31c41a8340127c4b11a9081fb66f69b7958",
     "operational_view_addition_count": 813,
-    "operational_view_addition_set_sha256": "4050816ee13e3416c53773f03f5aeb4b5b71f94a1704654ba856463a30c990f7",
+    "operational_view_addition_set_sha256": "68fea9608cddd1833a949397c9b65c237b2d7e88fc3ec7901814eb8a9a6e6fe6",
     "queues": {
       "private": {
         "path": "historical-private-replay-queue.json",
-        "sha256": "39854ced5013850be149b50e9a7f8d34c86040b2ad527f779cfc2f5077921b7e",
+        "sha256": "ce6285b2aab106cb6bc6d489ee940de5707a2f98c98d130fb9c809ce3749195c",
         "task_count": 639,
         "task_id_set_sha256": "c82cb4e9f37a38f120fb6611cf594702aeac6c3c2c48bd263e485eb235de152c"
       },
       "public": {
         "path": "historical-public-replay-queue.json",
-        "sha256": "4ede4c4aef87dc31dd5801f9001ea38451d42312140fc6aafbb490ea02b42a0a",
+        "sha256": "3e4f95ec64f01cc5e088e095a81f77ecebee87b31ab31c78883c27a46a44f83b",
         "task_count": 174,
         "task_id_set_sha256": "338b6b712540714fdeeb5f469e3281f664446edf1a1f0645e4eadc530e6b6c70"
       }
     },
-    "redacted_historical_projection_sha256": "f20ce2b0271b3a6357a954ed9dde0d1b2de692f89309ca2cc8ef8da43d31e4ac",
-    "redacted_historical_series_sha256": "9c2f4e8d5a1306ad85efdd2642ea601160a6cf11f952e44e55ad0364154421be",
+    "redacted_historical_projection_sha256": "0092cc0311a77095f011e9672373a269d87e265a05eed76b24d4c89f4defd1e5",
+    "redacted_historical_series_sha256": "4f3339f7f04f9419acff9aa5905d7f4ce95fa5e9b9fe95063dc4960a805970d3",
     "reviewed_unavailability_counts": {
       "private": 29,
       "public": 459,
@@ -137,7 +137,7 @@
         "sha256": "79edef16a72bda8f7f3d540b07767121737ed350ef6d545d0c545494cc1107fe"
       }
     ],
-    "commit": "9d97f39215b4e9057d1893df7fa3d2025600f10c",
+    "commit": "d8834749c3f21f14d5d42ad259cc67a687417ea9",
     "repository": "leanprover/lean-eval-submissions"
   },
   "kind": "historical_baseline_state_promotion_binding",
@@ -145,13 +145,13 @@
   "review_status": "staged_for_review",
   "schema_version": 1,
   "state": {
-    "base_event_count": 508,
-    "base_event_id_set_sha256": "8fb4df01a769eaba9c3af691cb1c41231b2c248dda4ec43cf94b8bdc275368d8",
-    "candidate_commit": "d4f4ab87e916e25d7e5a7cb15bbd71c48f33d3a4",
-    "candidate_tree": "6fe5e06168b5d93c5bd677bb1c11bee829ef5e40",
-    "combined_event_count": 2947,
-    "parent": "60f5676e44a39010f5bc1fbfc4bd0bc228ff8028",
-    "parent_tree": "97f31e6e0faa3c7029a31aa0cec057bf7be9d64b",
+    "base_event_count": 509,
+    "base_event_id_set_sha256": "01357078ec1a26907f8454f1e6ce1e0170198048fa755353949f8579a8b090b7",
+    "candidate_commit": "76b3b3e54f4be69161a00cd81576a58df8eae815",
+    "candidate_tree": "e196521b812a0942eea9d11a8bcb2d7569728d50",
+    "combined_event_count": 2948,
+    "parent": "3a4236c50314f1a4e42e114818e287568fd716aa",
+    "parent_tree": "05f0e391ba0d11d0f06300dd442a05c0e8e9b6eb",
     "repository": "leanprover/lean-eval-state"
   }
 }
