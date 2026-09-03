@@ -1,11 +1,10 @@
 # Historical migration/replay execution packet
 
 This is the compact preparation record for the one-time retained-baseline
-historical migration and replay. It is not an activation record. Installing
-the legacy identity and writing migrated envelopes stay blocked until the
-pre-mutation packet is complete. State append and replay stay blocked until
-the post-migration readback is also complete and the combined candidate
-validates against the then-current production State head.
+historical migration and replay. Archive migration and audit promotion are
+complete. It is not a replay activation record: State promotion remains
+blocked until the staged candidate's canonical binding is committed and
+revalidated against the then-current production State and audit heads.
 
 The packet reuses the existing public batch finalizer, private replay-plan
 builder, archive migration validator, and State validators. It does not define
@@ -36,8 +35,13 @@ The fixed reviewed implementation bindings are:
 | Component | Exact binding |
 | --- | --- |
 | Migration workflow | `.github/workflows/migrate-archive-envelopes.yml`, SHA-256 `f1d00a45092a39afa0a0bc6be4cc9a319be85876e29a9ac20334f41f0aa0eb99` |
-| Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `402e8cab4e8d308cbca36ddcfe7060482a243b9c6aad29ba91b78a3dd1e672c8` |
-| Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `a1afb9da60ddcd8bc7192d673b4cfc2e51831acc307164c252dee1a0b8126d21` |
+| Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `c58077160ddd969b482867057c1b6404e2370bb99f4b6b3aeb665744bf9e70f6` |
+| Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `7d3d1b5c1a231d73db186331dbc6c52ca992e470a1fefbb5588aa0882fe14a74` |
+| Two-lane driver | `.github/workflows/historical-replay-two-lane-driver.yml`, SHA-256 `5ce9e738e66b9ba3f1dcc30eef2264b9aa720d01a772ce2a9370c7888a65ad21` |
+| State review and promotion workflow | `.github/workflows/append-historical-baseline-state.yml`, SHA-256 `5435d09310bf58fa9820ec3ba870d41388eed49fe5fa3367f671951ea7b08810` |
+| State candidate closer | `scripts/prepare_historical_baseline_state_batch.py`, SHA-256 `8d8112571223316a5fd9f499b7d18ea63c530ce8f2333ffc0150211a77f1d415` |
+| State review verifier | `scripts/review_historical_baseline_state_batch.py`, SHA-256 `4c8821b105b5e3f93639abf8b4359e152f20889a9b92e049cf614e3e789c36f8` |
+| State batch expectation | `configuration/historical-baseline-state-batch-v1.json`, SHA-256 `6f16b548b1774f4fff9101c6f9ac6e8b1e9e08d014de1fef6ad4ffd13ec320e2` |
 | Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
 | Private plan builder | `scripts/prepare_historical_private_replay.py`, SHA-256 `2f1ae6a6e8710a0d0983aa7c2b3f64e77ebf2322da8154c04e39be084f4355e4` |
 | Public finalizer | `scripts/prepare_historical_public_authority.py`, SHA-256 `59e611fd468e700b766343adc2f3a861ed2fa3c182761ef2ba7f6efd66434d6b` |
@@ -61,13 +65,14 @@ claim to defend against a malicious maintainer who first merges a workflow
 that removes its own gate. Such a non-Results protected-main change fails the
 existing gate and requires a new reviewed baseline before any later run.
 
-Both replay controllers are restricted to protected `main`, use one shared
-non-cancelling concurrency group, allow at most four execution attempts, and
-bound each job to 360 minutes. The shared group prevents public and private
-historical execution from overlapping. Cleanup has a seven-hour deadline and
-each OIDC token lifetime is at most ten minutes. Public replay emits no
-artifact; the private controller retains its source-free terminal receipt for
-30 days.
+Both replay controllers are restricted to protected `main`. Each lane has its
+own non-cancelling concurrency group and admits at most one run; the bounded
+driver can replenish one public and one private lane independently without
+performing replay or holding State, Cloudflare, AWS, or audit credentials.
+Each replay task allows at most four execution attempts and each job is bound
+to 360 minutes. Cleanup has a seven-hour deadline and each OIDC token lifetime
+is at most ten minutes. Public replay emits no artifact; the private controller
+retains its source-free terminal receipt for 30 days.
 
 The old plan remains immutable source evidence; it is not current enqueue
 authority. The pinned State validator proves that exactly 20 of its Results now
@@ -109,9 +114,10 @@ workflow artifact, worktree file, mutable tag, or branch head.
       `5e7c181edef7569dcf2ecb2c33f7819adfb75b07`. It contains 63 profiles,
       639 `profile_qualified` entries, 29 `archive_not_found` entries, and
       zero `profile_pending` entries.
-- [ ] Select one reviewed implementation baseline from protected submissions
-      `main`, bind it as protected-environment variable
-      `REVIEWED_IMPLEMENTATION_COMMIT`, and pass that same full SHA as
+- [x] The migration used reviewed implementation baseline
+      `5f5f47b7c3c0670065dbd7c5ccb70e8802e3119c` from protected submissions
+      `main`, bound as protected-environment variable
+      `REVIEWED_IMPLEMENTATION_COMMIT` and passed as
       `expected_workflow_commit`. Each run self-binds its exact protected-`main`
       event SHA. A later event SHA is
       accepted only when the complete comparison from the reviewed baseline is
@@ -141,10 +147,9 @@ workflow artifact, worktree file, mutable tag, or branch head.
       ordinary v1 roles and outputs. The staging stack remained
       `UPDATE_COMPLETE`, last updated `2026-08-27T06:33:54.697Z`. No further
       infrastructure apply is part of this packet.
-- [ ] After this workflow change lands, set
-      `REVIEWED_IMPLEMENTATION_COMMIT` in `archive-migration-production` to the
-      exact reviewed merge commit and perform authenticated exact-value
-      readback before dispatching a dry run or apply run.
+- [x] `REVIEWED_IMPLEMENTATION_COMMIT` in
+      `archive-migration-production` had authenticated exact-value readback at
+      `5f5f47b7c3c0670065dbd7c5ccb70e8802e3119c` before apply.
 - [x] The exact migration inputs are audit commit
       `ad356e7bc5a2d650d9902ac3f6d352a0164360bc`, selected inventory digest
       `a8913f1c8b5073e5b7ab309ba10481b615ca4fc00e629e41a9e57962f3afebd4`,
@@ -153,16 +158,18 @@ workflow artifact, worktree file, mutable tag, or branch head.
       environment `archive-migration-production`, isolated review branch
       `archive-file-key-rewrap-v1`, and apply confirmation
       `stage-envelope-migration`. The review branch is absent before apply.
-- [ ] Legacy identity preflight: custodian Kim Morrison (`@kim-em`) must derive
-      the public key from the supplied legacy identity and require fingerprint
-      `SHA256:4unwBywJxfq9LsOjygB+/NRHaXdBhvxKP+a3EEpqjoE` before installation.
-      Never record the private material or its path. The protected environment
-      does not directly define `LEGACY_ARCHIVE_IDENTITY` before this gate.
+- [x] Custodian Kim Morrison (`@kim-em`) derived the public key from the supplied
+      legacy identity and required fingerprint
+      `SHA256:4unwBywJxfq9LsOjygB+/NRHaXdBhvxKP+a3EEpqjoE` before bounded
+      installation. The private material and path were not recorded, and
+      `LEGACY_ARCHIVE_IDENTITY` is no longer installed.
 - [x] Controller source commit
-      `139b2e2db63d942222260595f3347945aee13583` binds private-controller
-      SHA-256 `402e8cab4e8d308cbca36ddcfe7060482a243b9c6aad29ba91b78a3dd1e672c8`
+      `ffe2a6a2707136e667f1cb843098a2d2b00c716e` binds private-controller
+      SHA-256 `c58077160ddd969b482867057c1b6404e2370bb99f4b6b3aeb665744bf9e70f6`
       and public-controller SHA-256
-      `a1afb9da60ddcd8bc7192d673b4cfc2e51831acc307164c252dee1a0b8126d21`.
+      `7d3d1b5c1a231d73db186331dbc6c52ca992e470a1fefbb5588aa0882fe14a74`,
+      plus bounded driver SHA-256
+      `5ce9e738e66b9ba3f1dcc30eef2264b9aa720d01a772ce2a9370c7888a65ad21`.
       The profile locators bind every immutable image manifest. Both lanes use
       subject `repo:leanprover/lean-eval-submissions:environment:replay-production`,
       exact workflow references on protected `main`, and ten-minute OIDC
@@ -175,7 +182,7 @@ workflow artifact, worktree file, mutable tag, or branch head.
       `lean-eval-historical-private-replay` is limited to POST on
       `/api/v1/replay`, `/api/v1/replay/status`,
       `/api/v1/historical-private-replay/reserve`, and
-      `/api/v1/historical-private-replay/cleanup`. Both lanes use
+      `/api/v1/historical-private-replay/cleanup`. Each lane uses independent
       non-cancelling serialization, a seven-hour recovery lease, 360-minute
       jobs, four attempts, and explicit terminal dispositions.
 - [x] Public projection v6 exposes only historical identity, visibility,
@@ -185,20 +192,19 @@ workflow artifact, worktree file, mutable tag, or branch head.
       content-addressed encrypted locators and digests; migration/replay does
       not modify Results, and no source, key material, or plaintext enters a
       public projection, artifact, log, release, or publication.
-- [x] The source-bound recovery contract leaves audit `main` unchanged on
-      migration failure and removes job-local identity, AWS session, and
-      scratch. The isolated branch is written only by the terminal staging
-      step and is deleted by promotion after its compare-and-swap readback. At
-      audit head
-      `7a53c75c6d7c263c684ebcd54590c657c9298642`, the pinned audit source is an
-      ancestor, its 1,756 migration-touched paths have zero overlap with the
-      160 intervening changed paths, and `archive-file-key-rewrap-v1` is
-      absent. Replay variables are absent; production replay and historical
-      public replay flags are false; Cloudflare has no `hpr-` Worker or
-      `le-hpr-` application; and production State
-      `fb70dd6ba14cae94b30d570818e4801884e81e04` has no active replay series.
-      Recheck these live absences before identity installation; apply repeats
-      the audit-head, path-overlap, and branch checks.
+- [x] The retained-baseline migration completed with no retained job-local
+      identity, AWS session, plaintext, or scratch. Exact staged audit commit
+      `ef1f4b5c3cd1ddf543056f159fd1301334658e80` has tree
+      `0be1d8df679d287169771ac269b28e5c2a42d2bf`; its canonical patch SHA-256 is
+      `81537a9f9b0838fc043b402fc28b1a7510552b15a2a61b33f25ec1f0d221f699`.
+      Promotion applied that patch to audit head
+      `9c5c64644d7b3abd956c0e5aa658cb8f8cd2a9e7` and produced protected audit
+      `main` `d73132415738b0d82c99fd43f630804fe996e342`, tree
+      `48c24fc428eea77d7d9320133fd978f8c7b6abfc`. The review branch and installed
+      legacy identity are absent. The production replay role and Cloudflare
+      credential are installed, while both historical replay flags remain
+      false and protected production State
+      `3e4342b54252ba7225ced558c94ad0f03acc845d` has no active replay series.
       Retain the migration role, protected environment, and workflow for the
       separately bound final-cutoff delta unless the lane is explicitly
       abandoned and retired.
@@ -216,27 +222,29 @@ digest, workflow run and attempt, and a passing local official-entrypoint
 schema-2 file-key probe under Docker `--network none`. Its target Cloudflare
 runtime tuple is accepted only when the packet-bound frozen public profile set
 has one common tuple and an exact matching toolchain/component lock. The first
-real migrated replay remains the serialized Cloudflare execution canary. The
-packet binds the profile descriptor set instead of copying those fields into a
-second format.
+real migrated private replay remains a single non-replenishing Cloudflare
+execution canary; only after it reaches a reviewed terminal state may the
+independent public and private lanes be replenished in parallel. The packet
+binds the profile descriptor set instead of copying those fields into a second
+format.
 
-Completion of this section is the gate for the custodian to install
-`LEGACY_ARCHIVE_IDENTITY` directly into the protected environment and for the
-migration workflow to create the isolated review branch. The identity value is
-never part of the packet.
+The retained-baseline migration portion of this section is complete. The
+identity value was never part of the packet and is no longer installed; the
+offline master remains retained only for the separately bound final-cutoff
+delta.
 
 ## Post-migration readback and State bindings
 
-These fields are unknowable until the packet-bound migration has produced and
-validated the randomized v2 envelope bytes. They are a readback gate, not a
-reason to install the identity before the pre-mutation packet is complete.
+The archive migration and promotion fields are fixed above. The State fields
+remain intentionally unbound until the one-shot stage operation has produced
+and revalidated its source-free canonical promotion binding.
 
-- [ ] The deterministic migration report digest plus the staged audit commit,
+- [x] The deterministic migration report digest plus the staged audit commit,
       tree, and exact binary patch digest relative to the pinned audit source.
       Require 439 schema-version-3 sidecars, zero changed ciphertexts and stable
       IDs, and no retained plaintext, legacy identity, AWS session, or scratch
       output.
-- [ ] Immediately before promotion, bind the then-current audit `main`. Require
+- [x] Immediately before promotion, bind the then-current audit `main`. Require
       the pinned source to be its ancestor and require zero overlap between all
       intervening changes and the migration-touched source and target paths.
       Apply exactly the staged patch to that current head, bind the resulting
@@ -256,18 +264,11 @@ reason to install the identity before the pre-mutation packet is complete.
 
 ## Packet-bound execution order
 
-1. Validate the protected private replay plan and all 63 profile locators at
-   authority merge `5e7c181edef7569dcf2ecb2c33f7819adfb75b07`, then complete the
-   remaining pre-mutation authorization bindings. Do not rebuild or requalify
-   the completed private profiles.
-2. Apply and verify the bounded migration infrastructure, and only then have
-   the custodian install the legacy identity for the exact protected workflow
-   run.
-3. Run the archive migration workflow against the exact audit commit and
-   selected inventory digest. Complete the post-migration readback, then apply
-   the exact staged patch to the separately bound current audit head and
-   promote only the resulting reviewed tree.
-4. Run `prepare_historical_public_authority.py finalize-batch` against its
+1. The protected private replay plan, 63 profile locators, bounded migration
+   infrastructure, archive migration, exact-patch audit promotion, and
+   credential cleanup are complete at the bindings above. Do not rebuild or
+   requalify the completed profiles and do not reinstall the legacy identity.
+2. Run `prepare_historical_public_authority.py finalize-batch` against its
    pinned, complete State contract checkout
    `0c943edde8a247b8670e10339b80fc65be6c0f33`; the finalizer derives the exact
    20 terminal exclusions from that validated ledger. The caller supplies the
@@ -276,30 +277,36 @@ reason to install the identity before the pre-mutation packet is complete.
    `prepare_historical_private_replay.py state-events --selection full
    --append-ready` against that exact current head with non-overlapping times.
    Validate both candidate sets together against the current head before
-   committing either candidate. The one-shot combined State workflow consumes
-   the packet-input counts from
-   `configuration/historical-baseline-state-batch-v1.json`, closes every event,
-   task, Result, queue, view, and redacted historical projection digest, then
-   creates all 2,439 events in one non-force parent-bound State commit. Any
-   parent drift, overlap, duplicate, missing file, extra file, or projection
-   mismatch leaves State unchanged.
-5. Append the reviewed candidates, enable only the required historical
-   controllers, drain both queues with bounded retries, and record a terminal
+   committing either candidate. The one-shot State workflow stages all 2,439
+   events as one create-only commit on fixed private review branch
+   `historical-baseline-state-v1` and emits one compact source-free canonical
+   binding. A separate packet-only commit must install that exact canonical
+   object at `configuration/historical-baseline-state-promotion-v1.json`,
+   binding the exact State and audit heads and trees, staged commit and tree,
+   complete event/task/Result set, queue, view, and redacted-projection digests
+   before promotion is dispatched.
+3. Re-derive the complete committed binding from the staged State tree. Advance
+   State `main` only by non-force fast-forward when it still equals the exact
+   staged parent; otherwise leave `main` unchanged and discard only the exact
+   stale review branch before restaging. Delete the review branch only after
+   exact promoted-main commit and tree readback. Then enable only the private
+   lane for one non-replenishing migrated-envelope canary. After its terminal
+   cleanup, enable and replenish both bounded lanes, drain both queues with
+   bounded retries, and record a terminal
    replay or reviewed-unavailable disposition for every retained-baseline
    Result.
-6. After the retained-baseline queues reach their reviewed terminal states,
-   remove only the installed legacy identity, AWS session, and migration
-   scratch, and disable the historical replay controllers. Retain the dedicated
-   migration Encrypt role and stack output, protected migration environment,
-   one-shot migration workflow, and custodian-held offline master for the
-   separately bound final-cutoff delta.
-7. After the announced issue-intake cutoff, generate the append-only delta and
+4. After the retained-baseline queues reach their reviewed terminal states,
+   disable the historical replay controllers. Retain the dedicated migration
+   Encrypt role and stack output, protected migration environment, one-shot
+   migration workflow, and custodian-held offline master for the separately
+   bound final-cutoff delta.
+5. After the announced issue-intake cutoff, generate the append-only delta and
    prepare a new exact packet covering only those added Results. Never extend
    this retained-baseline packet by implication. Use that packet to migrate any
    selected delta archives, apply its exact staged patch to the separately
    bound current audit head, promote the resulting tree, and complete its
    post-migration readback.
-8. Only after final-delta promotion and readback, remove the installed identity
+6. Only after final-delta promotion and readback, remove the installed identity
    and session material, one-shot migration workflow, protected migration
    environment, and dedicated migration Encrypt role and stack output. The
    custodian must then destroy the

@@ -1,20 +1,36 @@
-name: Append reviewed historical baseline to State
+name: Review and promote historical baseline State
 
 # One-shot retained-baseline machinery. Merge only after production launch
-# cleanup. Delete after the retained baseline has been appended and drained.
+# cleanup. Delete after the retained baseline has been promoted and drained.
 on:
   workflow_dispatch:
     inputs:
-      expected_state_head:
-        description: Exact current protected production State parent
+      operation:
+        description: Stage, promote, or discard the fixed review branch
         required: true
+        type: choice
+        options:
+          - stage
+          - promote
+          - discard-stale
+      expected_state_head:
+        description: Stage only - exact current protected production State parent
+        required: false
         type: string
       expected_audit_head:
-        description: Exact protected audit main after migration promotion
-        required: true
+        description: Stage only - exact protected audit main after migration promotion
+        required: false
+        type: string
+      expected_staged_state_commit:
+        description: Promote/discard only - independently reviewed staged State commit
+        required: false
+        type: string
+      expected_binding_sha256:
+        description: Promote/discard only - independently reviewed committed binding digest
+        required: false
         type: string
       confirmation:
-        description: Enter append-reviewed-historical-baseline
+        description: Enter the operation-specific reviewed-historical-baseline confirmation
         required: true
         type: string
 
@@ -22,45 +38,164 @@ permissions:
   contents: read
 
 concurrency:
-  group: lean-eval-historical-baseline-state-append
+  group: lean-eval-historical-baseline-state-review
   cancel-in-progress: false
 
 jobs:
-  append:
-    if: inputs.confirmation == 'append-reviewed-historical-baseline'
+  review:
     environment: replay-production
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
-      - name: Require exact protected submissions main and bounded inputs
+      - name: Require the exact protected caller and bounded operation
         env:
           GH_TOKEN: ${{ github.token }}
+          OPERATION: ${{ inputs.operation }}
+          CONFIRMATION: ${{ inputs.confirmation }}
           EXPECTED_STATE_HEAD: ${{ inputs.expected_state_head }}
           EXPECTED_AUDIT_HEAD: ${{ inputs.expected_audit_head }}
+          EXPECTED_STAGED_STATE_COMMIT: ${{ inputs.expected_staged_state_commit }}
+          EXPECTED_BINDING_SHA256: ${{ inputs.expected_binding_sha256 }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
           test "$GITHUB_REF" = refs/heads/main
           test "$GITHUB_REF_PROTECTED" = true
-          test "$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '[.commit.sha,.protected] | @tsv')" = "$GITHUB_SHA"$'\ttrue'
-          [[ "$EXPECTED_STATE_HEAD" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$EXPECTED_AUDIT_HEAD" =~ ^[0-9a-f]{40}$ ]]
+          test "$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.commit.sha,.protected] | @tsv')" = "$GITHUB_SHA"$'\ttrue'
+          case "$OPERATION" in
+            stage)
+              test "$CONFIRMATION" = stage-reviewed-historical-baseline
+              [[ "$EXPECTED_STATE_HEAD" =~ ^[0-9a-f]{40}$ ]]
+              [[ "$EXPECTED_AUDIT_HEAD" =~ ^[0-9a-f]{40}$ ]]
+              test -z "$EXPECTED_STAGED_STATE_COMMIT"
+              test -z "$EXPECTED_BINDING_SHA256"
+              ;;
+            promote)
+              test "$CONFIRMATION" = promote-reviewed-historical-baseline
+              test -z "$EXPECTED_STATE_HEAD"
+              test -z "$EXPECTED_AUDIT_HEAD"
+              [[ "$EXPECTED_STAGED_STATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+              [[ "$EXPECTED_BINDING_SHA256" =~ ^[0-9a-f]{64}$ ]]
+              ;;
+            discard-stale)
+              test "$CONFIRMATION" = discard-stale-historical-baseline
+              test -z "$EXPECTED_STATE_HEAD"
+              test -z "$EXPECTED_AUDIT_HEAD"
+              [[ "$EXPECTED_STAGED_STATE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+              [[ "$EXPECTED_BINDING_SHA256" =~ ^[0-9a-f]{64}$ ]]
+              ;;
+            *) exit 1 ;;
+          esac
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Check out the exact protected submissions main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Require a clean exact implementation checkout
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Validate the independent review binding before selecting a State ref
+        if: inputs.operation != 'stage'
+        env:
+          EXPECTED_STAGED_STATE_COMMIT: ${{ inputs.expected_staged_state_commit }}
+          EXPECTED_BINDING_SHA256: ${{ inputs.expected_binding_sha256 }}
+        run: |
+          set -euo pipefail
+          binding=configuration/historical-baseline-state-promotion-v1.json
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          test "$(git ls-files --error-unmatch -- "$binding")" = "$binding"
+          test "$(git hash-object "$binding")" = "$(git rev-parse "$GITHUB_SHA:$binding")"
+          test "$(sha256sum "$binding" | cut -d' ' -f1)" = "$EXPECTED_BINDING_SHA256"
+          test "$(jq -er .state.candidate_commit "$binding")" = \
+            "$EXPECTED_STAGED_STATE_COMMIT"
+          jq -e '
+            .implementation
+            | type == "object"
+              and keys == ["blobs", "commit", "repository"]
+              and (.blobs | type == "array")
+              and all(.blobs[];
+                type == "object" and keys == ["path", "sha256"]
+                and (.path | type == "string")
+                and (.sha256 | type == "string"))
+          ' "$binding" >/dev/null
+          test "$(jq -er .implementation.repository "$binding")" = \
+            leanprover/lean-eval-submissions
+          implementation_commit=$(jq -er .implementation.commit "$binding")
+          [[ "$implementation_commit" =~ ^[0-9a-f]{40}$ ]]
+          git merge-base --is-ancestor "$implementation_commit" "$GITHUB_SHA"
+          expected_paths=(
+            .github/workflows/append-historical-baseline-state.yml
+            configuration/historical-baseline-state-batch-v1.json
+            requirements-jsonschema-workflow.txt
+            schemas/historical-private-profile-qualification-v1.schema.json
+            schemas/historical-private-replay-plan-v1.schema.json
+            schemas/historical-public-profile-qualification-v1.schema.json
+            schemas/replay-execution-profile-v1.schema.json
+            scripts/build_result_receipt.py
+            scripts/classify_historical_private_archives.py
+            scripts/historical_public_runner.py
+            scripts/historical_replay_controller.py
+            scripts/inventory_historical_replay.py
+            scripts/key_capability_contract.py
+            scripts/migrate_archive_envelopes.py
+            scripts/prepare_historical_baseline_state_batch.py
+            scripts/prepare_historical_private_replay.py
+            scripts/prepare_historical_public_authority.py
+            scripts/replay_orchestrator.py
+            scripts/results_schema.py
+            scripts/review_historical_baseline_state_batch.py
+          )
+          mapfile -t bound_paths < <(jq -er \
+            '.implementation.blobs | map(.path) | sort[]' "$binding")
+          test "${#bound_paths[@]}" -eq "${#expected_paths[@]}"
+          test "$(printf '%s\n' "${bound_paths[@]}")" = \
+            "$(printf '%s\n' "${expected_paths[@]}")"
+          mapfile -t descriptors < <(jq -er \
+            '.implementation.blobs[] | [.path, .sha256] | @tsv' "$binding")
+          test "${#descriptors[@]}" -eq "${#expected_paths[@]}"
+          for descriptor in "${descriptors[@]}"; do
+            IFS=$'\t' read -r path digest extra <<< "$descriptor"
+            test -z "${extra:-}"
+            [[ "$path" =~ ^[A-Za-z0-9._/-]+$ ]]
+            [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+            test "$(git ls-files --error-unmatch -- "$path")" = "$path"
+            current_blob=$(git hash-object "$path")
+            test "$current_blob" = "$(git rev-parse "$GITHUB_SHA:$path")"
+            test "$current_blob" = "$(git rev-parse "$implementation_commit:$path")"
+            test "$(sha256sum "$path" | cut -d' ' -f1)" = "$digest"
+          done
+
+      - name: Check out current production State without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval-state
-          ref: ${{ inputs.expected_state_head }}
+          ref: ${{ inputs.operation == 'stage' && inputs.expected_state_head || 'main' }}
           path: state
           fetch-depth: 0
           persist-credentials: false
           ssh-key: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Check out current audit authority without persisted credentials
+        if: inputs.operation != 'discard-stale'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          ref: ${{ inputs.operation == 'stage' && inputs.expected_audit_head || 'main' }}
+          path: audit
+          fetch-depth: 0
+          persist-credentials: false
+          ssh-key: ${{ secrets.AUDIT_READ_KEY }}
+
+      - name: Check out the frozen public qualification source
+        if: inputs.operation == 'stage'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval-submissions
           ref: 81e94fe2f4fc819300fd7d4e036f00124166784f
@@ -68,7 +203,9 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Check out the frozen public State contract
+        if: inputs.operation == 'stage'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval-state
           ref: 0c943edde8a247b8670e10339b80fc65be6c0f33
@@ -76,15 +213,6 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
           ssh-key: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
-
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          repository: leanprover/lean-eval-audit
-          ref: ${{ inputs.expected_audit_head }}
-          path: audit
-          fetch-depth: 0
-          persist-credentials: false
-          ssh-key: ${{ secrets.AUDIT_READ_KEY }}
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
@@ -96,21 +224,69 @@ jobs:
           python -m pip install --disable-pip-version-check --only-binary=:all: \
             --require-hashes -r requirements-jsonschema-workflow.txt
 
-      - name: Prove both private checkouts are the exact current protected heads
+      - name: Bind the exact stage parents and absent fixed review branch
+        if: inputs.operation == 'stage'
         env:
           EXPECTED_STATE_HEAD: ${{ inputs.expected_state_head }}
           EXPECTED_AUDIT_HEAD: ${{ inputs.expected_audit_head }}
+          REVIEW_BRANCH: historical-baseline-state-v1
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git -C state rev-parse HEAD)" = "$EXPECTED_STATE_HEAD"
           test "$(git -C audit rev-parse HEAD)" = "$EXPECTED_AUDIT_HEAD"
-          test "$(git -C state ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_STATE_HEAD"
-          test "$(git -C audit ls-remote origin refs/heads/main | cut -f1)" = "$EXPECTED_AUDIT_HEAD"
+          test "$(git -C state ls-remote --exit-code origin refs/heads/main | cut -f1)" = \
+            "$EXPECTED_STATE_HEAD"
+          test "$(git -C audit ls-remote --exit-code origin refs/heads/main | cut -f1)" = \
+            "$EXPECTED_AUDIT_HEAD"
+          existing_review=$(git -C state ls-remote origin "refs/heads/$REVIEW_BRANCH")
+          test -z "$existing_review"
           test -z "$(git -C state status --porcelain)"
           test -z "$(git -C audit status --porcelain)"
           python state/scripts/state.py --root state validate
+          git -C audit rev-parse 'HEAD^{tree}' > "$RUNNER_TEMP/audit-tree"
 
-      - name: Normalize exact offline controller repository identities
+      - name: Validate committed binding before fetching the exact review commit
+        if: inputs.operation != 'stage'
+        env:
+          EXPECTED_STAGED_STATE_COMMIT: ${{ inputs.expected_staged_state_commit }}
+          REVIEW_BRANCH: historical-baseline-state-v1
+        run: |
+          set -euo pipefail
+          binding=configuration/historical-baseline-state-promotion-v1.json
+          candidate=$(jq -er .state.candidate_commit "$binding")
+          parent=$(jq -er .state.parent "$binding")
+          [[ "$parent" =~ ^[0-9a-f]{40}$ ]]
+          test "$candidate" = "$EXPECTED_STAGED_STATE_COMMIT"
+          remote_main=$(git -C state ls-remote --exit-code origin refs/heads/main | cut -f1)
+          remote_review=$(git -C state ls-remote --exit-code origin \
+            "refs/heads/$REVIEW_BRANCH" | cut -f1)
+          test "$remote_review" = "$EXPECTED_STAGED_STATE_COMMIT"
+          if [ "${{ inputs.operation }}" = promote ]; then
+            audit_head=$(jq -er .audit.head "$binding")
+            audit_tree=$(jq -er .audit.tree "$binding")
+            [[ "$audit_head" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$audit_tree" =~ ^[0-9a-f]{40}$ ]]
+            remote_audit=$(git -C audit ls-remote --exit-code origin refs/heads/main | cut -f1)
+            test "$(git -C audit rev-parse HEAD)" = "$remote_audit"
+            git -C audit merge-base --is-ancestor "$audit_head" "$remote_audit"
+            test "$(git -C audit rev-parse "$audit_head^{tree}")" = "$audit_tree"
+          else
+            test "$remote_main" != "$parent"
+          fi
+          git -C state fetch --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/heads/$REVIEW_BRANCH:refs/remotes/origin/$REVIEW_BRANCH"
+          test "$(git -C state rev-parse "refs/remotes/origin/$REVIEW_BRANCH")" = \
+            "$EXPECTED_STAGED_STATE_COMMIT"
+          test "$(git -C state rev-parse refs/remotes/origin/main)" = "$remote_main"
+          if [ "${{ inputs.operation }}" = promote ] && [ "$remote_main" != "$parent" ]; then
+            git -C state merge-base --is-ancestor "$candidate" "$remote_main"
+          fi
+          git -C state checkout --detach "$EXPECTED_STAGED_STATE_COMMIT"
+          printf '%s\n' "$remote_main" > "$RUNNER_TEMP/pre-mutation-state-main"
+
+      - name: Normalize exact offline repository identities
         run: |
           set -euo pipefail
           normalize() {
@@ -125,10 +301,13 @@ jobs:
           }
           normalize . leanprover/lean-eval-submissions
           normalize state leanprover/lean-eval-state
-          normalize public-state-contract leanprover/lean-eval-state
-          normalize public-qualification-source leanprover/lean-eval-submissions
+          if [ "${{ inputs.operation }}" = stage ]; then
+            normalize public-state-contract leanprover/lean-eval-state
+            normalize public-qualification-source leanprover/lean-eval-submissions
+          fi
 
       - name: Construct both ordinary candidate lanes with nonoverlapping time windows
+        if: inputs.operation == 'stage'
         env:
           EXPECTED_STATE_HEAD: ${{ inputs.expected_state_head }}
           EXPECTED_AUDIT_HEAD: ${{ inputs.expected_audit_head }}
@@ -150,8 +329,10 @@ jobs:
           print(chosen.isoformat(timespec="milliseconds").replace("+00:00", "Z"))
           PY
           )
-          seed=$(printf '%s\0%s\0%s\0%s' "$GITHUB_SHA" "$EXPECTED_STATE_HEAD" "$EXPECTED_AUDIT_HEAD" "$first" | sha256sum | cut -d' ' -f1)
-          public_count=$(jq -er .lanes.public.event_count configuration/historical-baseline-state-batch-v1.json)
+          seed=$(printf '%s\0%s\0%s\0%s' "$GITHUB_SHA" "$EXPECTED_STATE_HEAD" \
+            "$EXPECTED_AUDIT_HEAD" "$first" | sha256sum | cut -d' ' -f1)
+          public_count=$(jq -er .lanes.public.event_count \
+            configuration/historical-baseline-state-batch-v1.json)
           private_first=$(python - "$first" "$public_count" <<'PY'
           import datetime as dt
           import sys
@@ -179,28 +360,266 @@ jobs:
             --first-occurred-at "$private_first" \
             --output-directory "$RUNNER_TEMP/private-candidate"
 
-      - name: Close and validate one exact combined candidate against one State parent
+      - name: Close and validate exactly 2439 events against State and audit
+        if: inputs.operation == 'stage'
         env:
           EXPECTED_STATE_HEAD: ${{ inputs.expected_state_head }}
+          EXPECTED_AUDIT_HEAD: ${{ inputs.expected_audit_head }}
         run: |
           set -euo pipefail
+          audit_tree=$(cat "$RUNNER_TEMP/audit-tree")
+          [[ "$audit_tree" =~ ^[0-9a-f]{40}$ ]]
           python scripts/prepare_historical_baseline_state_batch.py \
             --state-root state \
             --state-head "$EXPECTED_STATE_HEAD" \
+            --audit-head "$EXPECTED_AUDIT_HEAD" \
+            --audit-tree "$audit_tree" \
             --expectation configuration/historical-baseline-state-batch-v1.json \
             --public-candidate-root "$RUNNER_TEMP/public-candidate" \
             --private-candidate-root "$RUNNER_TEMP/private-candidate" \
             --output-directory "$RUNNER_TEMP/combined-candidate"
+          manifest="$RUNNER_TEMP/combined-candidate/historical-baseline-state-append-candidate.json"
+          test "$(jq -er .expectation.total_event_count "$manifest")" = 2439
+          test "$(jq -r '.event_files | length' "$manifest")" = 2439
 
-      - name: Append the closed candidate in one create-only State CAS commit
+      - name: Create and fully rederive the one-parent review commit
+        if: inputs.operation == 'stage'
         env:
           EXPECTED_STATE_HEAD: ${{ inputs.expected_state_head }}
-          STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
+          EXPECTED_AUDIT_HEAD: ${{ inputs.expected_audit_head }}
         run: |
           set -euo pipefail
-          scripts/publish_replay_state_batch \
-            --root state \
-            --candidate-root "$RUNNER_TEMP/combined-candidate" \
-            --manifest "$RUNNER_TEMP/combined-candidate/historical-baseline-state-append-candidate.json" \
-            --expected-head "$EXPECTED_STATE_HEAD" \
-            --message "Append reviewed historical replay baseline"
+          binding="$RUNNER_TEMP/historical-baseline-state-promotion-v1.json"
+          candidate="$RUNNER_TEMP/combined-candidate"
+          audit_tree=$(cat "$RUNNER_TEMP/audit-tree")
+          python scripts/review_historical_baseline_state_batch.py stage \
+            --submissions-root . \
+            --state-root state \
+            --state-parent "$EXPECTED_STATE_HEAD" \
+            --audit-head "$EXPECTED_AUDIT_HEAD" \
+            --audit-tree "$audit_tree" \
+            --implementation-commit "$GITHUB_SHA" \
+            --expectation configuration/historical-baseline-state-batch-v1.json \
+            --candidate-root "$candidate" \
+            --manifest "$candidate/historical-baseline-state-append-candidate.json" \
+            --output "$binding"
+          test "$(jq -er .candidate.event_count "$binding")" = 2439
+          test "$(jq -er .state.parent "$binding")" = "$EXPECTED_STATE_HEAD"
+          test "$(jq -er .audit.head "$binding")" = "$EXPECTED_AUDIT_HEAD"
+          test "$(jq -er .audit.tree "$binding")" = "$audit_tree"
+          python scripts/review_historical_baseline_state_batch.py verify \
+            --submissions-root . --state-root state --binding "$binding"
+
+      - name: Fully rederive the committed promotion binding
+        if: inputs.operation != 'stage'
+        run: |
+          set -euo pipefail
+          python scripts/review_historical_baseline_state_batch.py verify \
+            --submissions-root . \
+            --state-root state \
+            --binding configuration/historical-baseline-state-promotion-v1.json
+
+      - name: Recheck exact audit authority immediately before promotion
+        if: inputs.operation == 'promote'
+        run: |
+          set -euo pipefail
+          binding=configuration/historical-baseline-state-promotion-v1.json
+          audit_head=$(jq -er .audit.head "$binding")
+          audit_tree=$(jq -er .audit.tree "$binding")
+          current=refs/review-controller/current-audit-main
+          git -C audit update-ref -d "$current"
+          git -C audit fetch --no-tags origin "+refs/heads/main:$current"
+          git -C audit merge-base --is-ancestor "$audit_head" "$current"
+          test "$(git -C audit rev-parse "$audit_head^{tree}")" = "$audit_tree"
+          git -C audit update-ref -d "$current"
+
+      - name: Fast-forward protected State and delete the exact review lease
+        if: inputs.operation == 'promote'
+        env:
+          STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
+          EXPECTED_STAGED_STATE_COMMIT: ${{ inputs.expected_staged_state_commit }}
+          REVIEW_BRANCH: historical-baseline-state-v1
+        run: |
+          set -euo pipefail
+          umask 077
+          key_file=$(mktemp /dev/shm/lean-eval-baseline-state-writer.XXXXXX)
+          known_hosts=$(mktemp /dev/shm/lean-eval-baseline-state-known-hosts.XXXXXX)
+          cleanup() {
+            unset STATE_WRITE_KEY GIT_SSH_COMMAND
+            rm -f -- "$key_file" "$known_hosts"
+          }
+          trap cleanup EXIT
+          chmod 0600 "$key_file" "$known_hosts"
+          printf '%s\n' "$STATE_WRITE_KEY" > "$key_file"
+          unset STATE_WRITE_KEY
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$known_hosts"
+          GIT_SSH_COMMAND="ssh -i $key_file -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15"
+          export GIT_SSH_COMMAND
+          remote=git@github.com:leanprover/lean-eval-state.git
+          binding=configuration/historical-baseline-state-promotion-v1.json
+          parent=$(jq -er .state.parent "$binding")
+          candidate_tree=$(jq -er .state.candidate_tree "$binding")
+          remote_main=$(git -C state ls-remote --exit-code "$remote" refs/heads/main | cut -f1)
+          test "$(git -C state ls-remote --exit-code "$remote" \
+            "refs/heads/$REVIEW_BRANCH" | cut -f1)" = "$EXPECTED_STAGED_STATE_COMMIT"
+          if [ "$remote_main" = "$parent" ]; then
+            git -C state push "$remote" \
+              "$EXPECTED_STAGED_STATE_COMMIT:refs/heads/main" || true
+          else
+            preexisting=refs/review-controller/preexisting-main
+            git -C state update-ref -d "$preexisting"
+            git -C state fetch --no-tags "$remote" "+refs/heads/main:$preexisting"
+            test "$(git -C state rev-parse "$preexisting")" = "$remote_main"
+            git -C state merge-base --is-ancestor \
+              "$EXPECTED_STAGED_STATE_COMMIT" "$preexisting"
+            git -C state update-ref -d "$preexisting"
+          fi
+          readback=refs/review-controller/readback-main
+          git -C state update-ref -d "$readback"
+          git -C state fetch --no-tags "$remote" "+refs/heads/main:$readback"
+          git -C state merge-base --is-ancestor \
+            "$EXPECTED_STAGED_STATE_COMMIT" "$readback"
+          test "$(git -C state rev-parse "$EXPECTED_STAGED_STATE_COMMIT^{tree}")" = \
+            "$candidate_tree"
+          test "$(git -C state ls-remote --exit-code "$remote" \
+            "refs/heads/$REVIEW_BRANCH" | cut -f1)" = "$EXPECTED_STAGED_STATE_COMMIT"
+          git -C state push "$remote" ":refs/heads/$REVIEW_BRANCH" \
+            "--force-with-lease=refs/heads/$REVIEW_BRANCH:$EXPECTED_STAGED_STATE_COMMIT" \
+            || true
+          remaining_review=$(git -C state ls-remote "$remote" \
+            "refs/heads/$REVIEW_BRANCH")
+          test -z "$remaining_review"
+          post_delete=refs/review-controller/post-delete-main
+          git -C state update-ref -d "$post_delete"
+          git -C state fetch --no-tags "$remote" "+refs/heads/main:$post_delete"
+          git -C state merge-base --is-ancestor \
+            "$EXPECTED_STAGED_STATE_COMMIT" "$post_delete"
+          git -C state update-ref -d "$readback"
+          git -C state update-ref -d "$post_delete"
+          cleanup
+          trap - EXIT
+
+      - name: Delete only a stale exact review lease
+        if: inputs.operation == 'discard-stale'
+        env:
+          STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
+          EXPECTED_STAGED_STATE_COMMIT: ${{ inputs.expected_staged_state_commit }}
+          REVIEW_BRANCH: historical-baseline-state-v1
+        run: |
+          set -euo pipefail
+          umask 077
+          key_file=$(mktemp /dev/shm/lean-eval-baseline-state-writer.XXXXXX)
+          known_hosts=$(mktemp /dev/shm/lean-eval-baseline-state-known-hosts.XXXXXX)
+          cleanup() {
+            unset STATE_WRITE_KEY GIT_SSH_COMMAND
+            rm -f -- "$key_file" "$known_hosts"
+          }
+          trap cleanup EXIT
+          chmod 0600 "$key_file" "$known_hosts"
+          printf '%s\n' "$STATE_WRITE_KEY" > "$key_file"
+          unset STATE_WRITE_KEY
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$known_hosts"
+          GIT_SSH_COMMAND="ssh -i $key_file -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15"
+          export GIT_SSH_COMMAND
+          remote=git@github.com:leanprover/lean-eval-state.git
+          main_before=$(cat "$RUNNER_TEMP/pre-mutation-state-main")
+          parent=$(jq -er .state.parent \
+            configuration/historical-baseline-state-promotion-v1.json)
+          test "$main_before" != "$parent"
+          remote_main=$(git -C state ls-remote --exit-code "$remote" refs/heads/main | cut -f1)
+          test "$remote_main" = "$main_before"
+          test "$remote_main" != "$parent"
+          test "$(git -C state ls-remote --exit-code "$remote" \
+            "refs/heads/$REVIEW_BRANCH" | cut -f1)" = "$EXPECTED_STAGED_STATE_COMMIT"
+          git -C state push "$remote" ":refs/heads/$REVIEW_BRANCH" \
+            "--force-with-lease=refs/heads/$REVIEW_BRANCH:$EXPECTED_STAGED_STATE_COMMIT" \
+            || true
+          remaining_review=$(git -C state ls-remote "$remote" \
+            "refs/heads/$REVIEW_BRANCH")
+          test -z "$remaining_review"
+          test "$(git -C state ls-remote --exit-code "$remote" refs/heads/main | cut -f1)" = \
+            "$main_before"
+          cleanup
+          trap - EXIT
+
+      - name: Record the compact source-free review summary
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.operation }}" = stage ]; then
+            binding="$RUNNER_TEMP/historical-baseline-state-promotion-v1.json"
+          else
+            binding=configuration/historical-baseline-state-promotion-v1.json
+          fi
+          {
+            echo "### Historical baseline State: ${{ inputs.operation }}"
+            echo
+            echo "- State parent: \`$(jq -er .state.parent "$binding")\`"
+            echo "- staged commit: \`$(jq -er .state.candidate_commit "$binding")\`"
+            echo "- staged tree: \`$(jq -er .state.candidate_tree "$binding")\`"
+            echo "- audit head: \`$(jq -er .audit.head "$binding")\`"
+            echo "- audit tree: \`$(jq -er .audit.tree "$binding")\`"
+            echo "- candidate events: \`$(jq -er .candidate.event_count "$binding")\`"
+            echo "- binding SHA-256: \`$(sha256sum "$binding" | cut -d' ' -f1)\`"
+            echo '- candidate source: excluded'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the source-free promotion binding for review
+        if: inputs.operation == 'stage'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: historical-baseline-state-promotion-v1
+          path: ${{ runner.temp }}/historical-baseline-state-promotion-v1.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Push only the absent fixed review branch
+        if: inputs.operation == 'stage'
+        env:
+          STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
+          REVIEW_BRANCH: historical-baseline-state-v1
+        run: |
+          set -euo pipefail
+          umask 077
+          key_file=$(mktemp /dev/shm/lean-eval-baseline-state-writer.XXXXXX)
+          known_hosts=$(mktemp /dev/shm/lean-eval-baseline-state-known-hosts.XXXXXX)
+          cleanup() {
+            unset STATE_WRITE_KEY GIT_SSH_COMMAND
+            rm -f -- "$key_file" "$known_hosts"
+          }
+          trap cleanup EXIT
+          chmod 0600 "$key_file" "$known_hosts"
+          printf '%s\n' "$STATE_WRITE_KEY" > "$key_file"
+          unset STATE_WRITE_KEY
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$known_hosts"
+          GIT_SSH_COMMAND="ssh -i $key_file -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15"
+          export GIT_SSH_COMMAND
+          remote=git@github.com:leanprover/lean-eval-state.git
+          existing_review=$(git -C state ls-remote "$remote" \
+            "refs/heads/$REVIEW_BRANCH")
+          test -z "$existing_review"
+          candidate=$(git -C state rev-parse HEAD)
+          git -C state push "$remote" "HEAD:refs/heads/$REVIEW_BRANCH" \
+            "--force-with-lease=refs/heads/$REVIEW_BRANCH:" || true
+          readback_review=$(git -C state ls-remote --exit-code "$remote" \
+            "refs/heads/$REVIEW_BRANCH" | cut -f1)
+          test "$readback_review" = "$candidate"
+          cleanup
+          trap - EXIT
+
+      - name: Remove review scratch and any residual key material
+        if: always()
+        run: |
+          rm -rf -- state audit public-state-contract public-qualification-source \
+            "$RUNNER_TEMP/public-candidate" "$RUNNER_TEMP/private-candidate" \
+            "$RUNNER_TEMP/combined-candidate"
+          rm -f -- "$RUNNER_TEMP/historical-baseline-state-promotion-v1.json" \
+            "$RUNNER_TEMP/audit-tree" "$RUNNER_TEMP/pre-mutation-state-main"
+          find /dev/shm -maxdepth 1 -type f \
+            \( -name 'lean-eval-baseline-state-writer.*' -o \
+               -name 'lean-eval-baseline-state-known-hosts.*' \) -delete

@@ -53,6 +53,7 @@ def expectation() -> dict[str, object]:
                 "task_count": 1,
             },
         },
+        "reviewed_unavailability_counts": {"public": 0, "private": 0, "total": 0},
         "total_event_count": 6,
         "total_task_count": 2,
     }
@@ -98,6 +99,10 @@ class HistoricalBaselineBatchTests(unittest.TestCase):
         self.assertEqual(value["lanes"]["private"]["task_count"], 639)
         self.assertEqual(value["total_event_count"], 2439)
         self.assertEqual(value["total_task_count"], 813)
+        self.assertEqual(
+            value["reviewed_unavailability_counts"],
+            {"public": 459, "private": 29, "total": 488},
+        )
 
     def test_lane_inventory_binds_every_event_task_and_result(self) -> None:
         events = lane_events("public", 1, 1)

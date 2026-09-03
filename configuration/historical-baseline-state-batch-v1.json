@@ -17,6 +17,11 @@
       "task_count": 174
     }
   },
+  "reviewed_unavailability_counts": {
+    "private": 29,
+    "public": 459,
+    "total": 488
+  },
   "schema_version": 1,
   "total_event_count": 2439,
   "total_task_count": 813

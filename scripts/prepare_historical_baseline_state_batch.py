@@ -91,7 +91,15 @@ def load_expectation(path: pathlib.Path) -> dict[str, Any]:
     value, _ = load_canonical(path, "batch expectation")
     _closed(
         value,
-        {"schema_version", "kind", "environment", "lanes", "total_event_count", "total_task_count"},
+        {
+            "schema_version",
+            "kind",
+            "environment",
+            "lanes",
+            "reviewed_unavailability_counts",
+            "total_event_count",
+            "total_task_count",
+        },
         "batch expectation",
     )
     if (
@@ -101,6 +109,16 @@ def load_expectation(path: pathlib.Path) -> dict[str, Any]:
     ):
         raise BaselineBatchError("batch expectation identity is invalid")
     lanes = _closed(value["lanes"], {"public", "private"}, "batch lanes")
+    unavailable = _closed(
+        value["reviewed_unavailability_counts"],
+        {"public", "private", "total"},
+        "reviewed unavailability counts",
+    )
+    if (
+        any(type(unavailable[name]) is not int or unavailable[name] < 0 for name in unavailable)
+        or unavailable["total"] != unavailable["public"] + unavailable["private"]
+    ):
+        raise BaselineBatchError("reviewed unavailability counts are invalid")
     lane_fields = {
         "authority_event_type",
         "qualification_event_type",
@@ -458,6 +476,11 @@ def prepare(args: argparse.Namespace) -> None:
             "expected_tree": _git(state_root, "rev-parse", f"{args.state_head}^{{tree}}"),
             **projection,
         },
+        "audit": {
+            "repository": "leanprover/lean-eval-audit",
+            "expected_head": args.audit_head,
+            "expected_tree": args.audit_tree,
+        },
         "expectation": {
             "path": args.expectation.name,
             "sha256": sha256(expectation_raw),
@@ -475,6 +498,8 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("--state-root", required=True, type=pathlib.Path)
     result.add_argument("--state-head", required=True)
+    result.add_argument("--audit-head", required=True)
+    result.add_argument("--audit-tree", required=True)
     result.add_argument("--expectation", required=True, type=pathlib.Path)
     result.add_argument("--public-candidate-root", required=True, type=pathlib.Path)
     result.add_argument("--private-candidate-root", required=True, type=pathlib.Path)
@@ -484,7 +509,10 @@ def parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     try:
-        prepare(parser().parse_args())
+        args = parser().parse_args()
+        if COMMIT.fullmatch(args.audit_head) is None or COMMIT.fullmatch(args.audit_tree) is None:
+            raise BaselineBatchError("audit head or tree is invalid")
+        prepare(args)
         return 0
     except BaselineBatchError as error:
         print(f"historical-baseline-state-batch: {error}", file=sys.stderr)
