@@ -263,7 +263,6 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "authoritative-replay-staging.yml",
                 "aws-key-adapter-staging-smoke.yml",
                 "aws-production-wrap-preflight.yml",
-                "bounded-staging-lifecycle-watchdog.yml",
                 "historical-final-delta-packet.yml",
                 "historical-public-replay-plan.yml",
                 "historical-public-runner-contract.yml",
@@ -271,7 +270,6 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "public-replay-github-evidence.yml",
                 "server-archive.yml",
                 "set-staging-intake.yml",
-                "set-staging-lifecycle-smoke.yml",
                 "submission.yml",
                 "promotion-canary.yml",
             },
@@ -309,9 +307,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         runtime_bound_dependencies = deployed_dependencies | {
             "accepted-archive-replay-staging.yml",
             "authoritative-replay-staging.yml",
-            "bounded-staging-lifecycle-watchdog.yml",
             "set-staging-intake.yml",
-            "set-staging-lifecycle-smoke.yml",
         }
         promotion_push = WORKFLOW_PROMOTION.split("  push:", 1)[1].split(
             "permissions:", 1
@@ -335,10 +331,6 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                     self.assertNotIn(path, pull_request)
                     self.assertNotIn(path, push)
                     self.assertIn(path, promotion_push)
-        for trigger in (pull_request, push):
-            self.assertIn(
-                "'configuration/staging-lifecycle-smoke-v1.json'", trigger
-            )
         self.assertIn(
             "'.github/workflows/promote-workflow-dispatch-ref.yml'",
             promotion_push,
