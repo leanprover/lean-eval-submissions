@@ -533,6 +533,99 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.fixture.close()
 
+    def test_unwrap_cli_accepts_strict_noncanonical_provider_json(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            plan = self.fixture.plan()
+            started = controller.started_candidate(
+                plan,
+                self.fixture.state,
+                "2026-10-21T07:00:00.000Z",
+                random_bytes=b"\x0a" * 10,
+            )
+            self.fixture.commit_state_event(started["event"])
+            unwrap_request = controller.prepare_unwrap(
+                plan,
+                self.fixture.state,
+                started,
+                self.fixture.audit,
+                "2026-10-21T07:00:00.000Z",
+                request_random=b"\x03" * 10,
+                runner_nonce="4" * 64,
+            )
+            response_value = {
+                "schema_version": 2,
+                "adapter": "aws-kms-v1",
+                "request_id": unwrap_request["capability"]["request_id"],
+                "data_key_id": unwrap_request["envelope"]["data_key_id"],
+                "capability_digest": capability_digest(
+                    unwrap_request["capability"]
+                ),
+                "key_material_type": "age-file-key-v1",
+                "plaintext_key_material_base64": "a2tra2tra2tra2tra2traw==",
+            }
+            metadata_value = {"StatusCode": 200, "ExecutedVersion": "live"}
+            request = root / "request.json"
+            response = root / "response.json"
+            metadata = root / "metadata.json"
+            output = root / "key"
+            request.write_bytes(controller.canonical_bytes(unwrap_request))
+            response.write_text(json.dumps(response_value) + "\n", encoding="utf-8")
+            metadata.write_text(json.dumps(metadata_value) + "\n", encoding="utf-8")
+            self.assertNotEqual(
+                response.read_bytes(), controller.canonical_bytes(response_value)
+            )
+            self.assertNotEqual(
+                metadata.read_bytes(), controller.canonical_bytes(metadata_value)
+            )
+            arguments = [
+                "historical_private_replay_controller.py",
+                "unwrap-identity",
+                "--request",
+                str(request),
+                "--response",
+                str(response),
+                "--metadata",
+                str(metadata),
+                "--output",
+                str(output),
+            ]
+            with mock.patch.object(sys, "argv", arguments):
+                self.assertEqual(controller.main(), 0)
+            self.assertEqual(output.read_bytes(), b"k" * 16)
+
+            for field, value, message in (
+                (
+                    "request_id",
+                    "019a0000-0000-7000-8000-000000000009",
+                    "exact request",
+                ),
+                ("capability_digest", "f" * 64, "exact request"),
+                ("key_material_type", "age-identity-v1", "key material type"),
+                ("schema_version", 2.0, "exact request"),
+            ):
+                with self.subTest(field=field):
+                    changed = copy.deepcopy(response_value)
+                    changed[field] = value
+                    with self.assertRaisesRegex(ValueError, message):
+                        controller.unwrap_identity(
+                            unwrap_request, changed, metadata_value
+                        )
+            with self.assertRaisesRegex(ValueError, "successful invocation"):
+                controller.unwrap_identity(
+                    unwrap_request, response_value, {"StatusCode": 200.0}
+                )
+
+    def test_provider_json_still_rejects_ambiguous_values(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            path = pathlib.Path(raw) / "provider.json"
+            for value in ('{"a":1,"a":2}', '{"a":NaN}', '[1,2]'):
+                path.write_text(value, encoding="utf-8")
+                with self.assertRaises(
+                    controller.HistoricalPrivateReplayControllerError
+                ):
+                    controller._load_provider_json(path, "provider response")
+
     def assert_post_start_actions_reject_terminal_history(
         self, plan: dict[str, object], started: dict[str, object]
     ) -> None:
