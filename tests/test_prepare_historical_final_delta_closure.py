@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from prepare_historical_final_delta_closure import (
     TEMPORARY_WORKFLOWS,
     ClosureError,
+    _candidate_inventory,
     build_activation,
     build_terminal,
     canonical,
@@ -257,6 +258,55 @@ class ClosureFixture:
             "temporary_workflows": TEMPORARY_WORKFLOWS,
         }
 
+    def terminal_readback(self, head: str) -> dict:
+        return {
+            "schema_version": 1,
+            "kind": "historical_final_delta_terminal_live_readback",
+            "checked_at": "2026-09-03T12:01:00Z",
+            "audit": {
+                "repository": "leanprover/lean-eval-audit",
+                "head": "c" * 40,
+                "tree": "d" * 40,
+            },
+            "state": {
+                "repository": "leanprover/lean-eval-state",
+                "head": head,
+                "tree": subprocess.run(
+                    ["git", "-C", self.root, "rev-parse", f"{head}^{{tree}}"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip(),
+            },
+            "controller_variables": {
+                "HISTORICAL_PRIVATE_REPLAY_CONTROLLER_ENABLED": "absent",
+                "HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED": "absent",
+            },
+            "review_branches": {
+                "audit": {
+                    "name": "historical-final-delta-archive-rewrap-v1",
+                    "status": "absent",
+                },
+                "state": {
+                    "name": "historical-final-delta-state-v1",
+                    "status": "absent",
+                },
+            },
+            "queues": {"private": 0, "public": 0},
+            "recovery": {"private": "none", "public": "none"},
+            "executors": {
+                "private_application_count": 0,
+                "private_worker_count": 0,
+                "public_running_task_count": 0,
+            },
+            "readbacks": {
+                "cloudflare_container_applications_sha256": "1" * 64,
+                "cloudflare_worker_services_sha256": "2" * 64,
+                "github_review_refs_sha256": "3" * 64,
+                "github_variables_sha256": "4" * 64,
+            },
+        }
+
     def build_terminal(self, activation: dict, absence: dict, head: str) -> dict:
         dummy = {
             "repository": "leanprover/lean-eval-submissions",
@@ -291,6 +341,7 @@ class ClosureFixture:
             activation_locator=dummy,
             absence=absence,
             absence_locator=dummy,
+            terminal_readback=self.terminal_readback(head),
             state_root=self.root,
             state_head=head,
             audit_head="c" * 40,
@@ -299,6 +350,95 @@ class ClosureFixture:
 
 
 class FinalDeltaClosureTests(unittest.TestCase):
+    def test_candidate_inventory_rejects_every_out_of_scope_diff_status(self) -> None:
+        for tamper in ("modify", "delete", "add"):
+            with (
+                self.subTest(tamper=tamper),
+                tempfile.TemporaryDirectory() as temporary,
+            ):
+                root = pathlib.Path(temporary)
+                subprocess.run(["git", "init", "-q", "-b", "main", root], check=True)
+                subprocess.run(
+                    ["git", "-C", root, "config", "user.name", "test"], check=True
+                )
+                subprocess.run(
+                    ["git", "-C", root, "config", "user.email", "test@example.com"],
+                    check=True,
+                )
+                (root / "state.json").write_text(
+                    '{"environment":"production"}\n', encoding="utf-8"
+                )
+                (root / "tracked.txt").write_text("original\n", encoding="utf-8")
+                subprocess.run(["git", "-C", root, "add", "."], check=True)
+                subprocess.run(
+                    ["git", "-C", root, "commit", "-q", "-m", "parent"], check=True
+                )
+                parent = subprocess.run(
+                    ["git", "-C", root, "rev-parse", "HEAD"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                qualification_id = "01a00000-0000-7000-8000-000000000001"
+                enqueue_id = "01a00000-0000-7000-8000-000000000002"
+                for event_id, value in (
+                    (
+                        qualification_id,
+                        {
+                            "event_id": qualification_id,
+                            "event_type": "historical_result.replay_profile_qualified",
+                            "subject_id": "r2_" + "1" * 64,
+                        },
+                    ),
+                    (
+                        enqueue_id,
+                        {
+                            "event_id": enqueue_id,
+                            "event_type": "replay.enqueued",
+                            "subject_id": "rt1_" + "2" * 64,
+                            "causation_event_id": qualification_id,
+                            "payload": {"result_id": "r2_" + "1" * 64},
+                        },
+                    ),
+                ):
+                    path = root / "events" / "01" / f"{event_id}.json"
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(canonical(value))
+                if tamper == "modify":
+                    (root / "tracked.txt").write_text("changed\n", encoding="utf-8")
+                elif tamper == "delete":
+                    (root / "tracked.txt").unlink()
+                else:
+                    (root / "extra.txt").write_text("extra\n", encoding="utf-8")
+                subprocess.run(["git", "-C", root, "add", "-A"], check=True)
+                subprocess.run(
+                    ["git", "-C", root, "commit", "-q", "-m", "candidate"],
+                    check=True,
+                )
+                candidate = subprocess.run(
+                    ["git", "-C", root, "rev-parse", "HEAD"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                tree = subprocess.run(
+                    ["git", "-C", root, "rev-parse", "HEAD^{tree}"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout.strip()
+                with self.assertRaisesRegex(ClosureError, "create-only"):
+                    _candidate_inventory(
+                        root,
+                        {
+                            "state": {
+                                "parent": parent,
+                                "candidate_commit": candidate,
+                                "candidate_tree": tree,
+                            }
+                        },
+                    )
+
     def test_terminal_reconciles_exact_accepted_set(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             fixture = ClosureFixture(pathlib.Path(temporary))
@@ -386,6 +526,48 @@ class FinalDeltaClosureTests(unittest.TestCase):
                 mutate(proof)
                 with self.assertRaisesRegex(ClosureError, "absence proof"):
                     fixture.build_terminal(fixture.activation(), proof, head)
+
+    def test_terminal_rejects_invalid_or_nonabsent_live_readback(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = ClosureFixture(pathlib.Path(temporary))
+            head = fixture.terminal()
+            activation = fixture.activation()
+            absence = fixture.absence()
+            readback = fixture.terminal_readback(head)
+            for mutate in (
+                lambda value: value.update(checked_at="not-a-time"),
+                lambda value: value["executors"].update(private_worker_count=1),
+                lambda value: value["controller_variables"].update(
+                    HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED="true"
+                ),
+            ):
+                changed = json.loads(json.dumps(readback))
+                mutate(changed)
+                dummy = {
+                    "repository": "leanprover/lean-eval-submissions",
+                    "commit": "f" * 40,
+                    "path": "x",
+                    "sha256": "0" * 64,
+                }
+                with self.assertRaisesRegex(ClosureError, "live executor readback"):
+                    build_terminal(
+                        activation=activation,
+                        activation_locator=dummy,
+                        absence={
+                            **absence,
+                            "state": {
+                                "repository": "leanprover/lean-eval-state",
+                                "head": head,
+                                "tree": fixture.tree(),
+                            },
+                        },
+                        absence_locator=dummy,
+                        terminal_readback=changed,
+                        state_root=fixture.root,
+                        state_head=head,
+                        audit_head="c" * 40,
+                        audit_tree="d" * 40,
+                    )
 
     def test_content_addressed_locator_mismatch_is_rejected(self) -> None:
         raw = canonical({"x": 1})

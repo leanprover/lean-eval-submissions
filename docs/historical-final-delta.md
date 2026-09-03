@@ -107,7 +107,10 @@ binding and run the `activation` operation of
 activation binding independently reconciles the preparation packet, both
 plans, every staged replay task and reviewed unavailability, the accepted
 inventory and delta counts, and the exact audit and State commits and trees.
-Commit that binding before promoting State and enabling the bounded lanes.
+Commit that binding before promoting State and enabling the bounded lanes. The
+State `promote` operation requires its content-addressed activation digest and
+rejects an activation that does not bind the exact promotion summary, candidate
+commit and tree, or audit commit and tree.
 
 After both final-delta queues are empty, disable both historical controller
 variables. The `absence` operation reads back those absent GitHub variables,
@@ -116,8 +119,12 @@ both absent final-delta review refs, an idle public controller, and zero
 inventory. Commit its source-free, content-addressed output, then run the
 `terminal` operation. The terminal producer validates the complete State
 repository, requires the activated State candidate to be an ancestor of the
-exact terminal head, and reconciles one nonretryable terminal outcome or
-reviewed unavailability for every accepted delta Result.
+exact terminal head, repeats the authenticated live controller, review-ref,
+queue, recovery, and Cloudflare executor absence reads, and reconciles one
+nonretryable terminal outcome or reviewed unavailability for every accepted
+delta Result. The terminal binding carries this second live readback so the
+earlier committed absence artifact cannot be replayed after an executor or
+controller has been recreated.
 
 The terminal binding is the retirement authority. It names only audit
 `refs/heads/historical-final-delta-archive-rewrap-v1` and State

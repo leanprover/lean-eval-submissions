@@ -17,6 +17,7 @@ on:
       expected_audit_tree: {description: Stage only - post-migration audit tree, required: false, type: string}
       expected_staged_state_commit: {description: Promote/discard only - reviewed staged commit, required: false, type: string}
       expected_binding_sha256: {description: Promote/discard only - committed promotion binding digest, required: false, type: string}
+      activation_sha256: {description: Promote only - committed activation binding digest, required: false, type: string}
       confirmation: {description: Exact operation-specific final-delta confirmation, required: true, type: string}
 
 permissions:
@@ -46,6 +47,7 @@ jobs:
           AUDIT_TREE: ${{ inputs.expected_audit_tree }}
           STAGED: ${{ inputs.expected_staged_state_commit }}
           BINDING: ${{ inputs.expected_binding_sha256 }}
+          ACTIVATION: ${{ inputs.activation_sha256 }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
@@ -57,17 +59,17 @@ jobs:
               test "$CONFIRMATION" = stage-reviewed-final-delta
               for value in "$AUTHORITY_COMMIT" "$STATE_HEAD" "$AUDIT_HEAD" "$AUDIT_TREE"; do [[ "$value" =~ ^[0-9a-f]{40}$ ]]; done
               for value in "$PUBLIC_PLAN" "$PRIVATE_PLAN" "$EXPECTATION"; do [[ "$value" =~ ^[0-9a-f]{64}$ ]]; done
-              test -z "$STAGED$BINDING"
+              test -z "$STAGED$BINDING$ACTIVATION"
               ;;
             promote)
               test "$CONFIRMATION" = promote-reviewed-final-delta
-              [[ "$STAGED" =~ ^[0-9a-f]{40}$ ]]; [[ "$BINDING" =~ ^[0-9a-f]{64}$ ]]
+              [[ "$STAGED" =~ ^[0-9a-f]{40}$ ]]; [[ "$BINDING" =~ ^[0-9a-f]{64}$ ]]; [[ "$ACTIVATION" =~ ^[0-9a-f]{64}$ ]]
               test -z "$AUTHORITY_COMMIT$PUBLIC_PLAN$PRIVATE_PLAN$EXPECTATION$STATE_HEAD$AUDIT_HEAD$AUDIT_TREE"
               ;;
             discard-stale)
               test "$CONFIRMATION" = discard-stale-final-delta
               [[ "$STAGED" =~ ^[0-9a-f]{40}$ ]]; [[ "$BINDING" =~ ^[0-9a-f]{64}$ ]]
-              test -z "$AUTHORITY_COMMIT$PUBLIC_PLAN$PRIVATE_PLAN$EXPECTATION$STATE_HEAD$AUDIT_HEAD$AUDIT_TREE"
+              test -z "$AUTHORITY_COMMIT$PUBLIC_PLAN$PRIVATE_PLAN$EXPECTATION$STATE_HEAD$AUDIT_HEAD$AUDIT_TREE$ACTIVATION"
               ;;
             *) exit 1 ;;
           esac
@@ -103,8 +105,10 @@ jobs:
       - name: Bind committed review summary
         if: inputs.operation != 'stage'
         env:
+          OPERATION: ${{ inputs.operation }}
           EXPECTED_STAGED_STATE_COMMIT: ${{ inputs.expected_staged_state_commit }}
           EXPECTED_BINDING_SHA256: ${{ inputs.expected_binding_sha256 }}
+          ACTIVATION_SHA256: ${{ inputs.activation_sha256 }}
         run: |
           set -euo pipefail
           binding=configuration/historical-final-delta-state-promotion-v1.json
@@ -114,6 +118,24 @@ jobs:
           test "$(jq -er .kind "$binding")" = historical_final_delta_state_promotion_binding
           test "$(jq -er .review_branch "$binding")" = historical-final-delta-state-v1
           test "$(jq -er .state.candidate_commit "$binding")" = "$EXPECTED_STAGED_STATE_COMMIT"
+          if [ "$OPERATION" = promote ]; then
+            activation="evidence/historical-replay/final-delta-activations/$ACTIVATION_SHA256.json"
+            test "$(git ls-files --error-unmatch -- "$activation")" = "$activation"
+            test "$(git hash-object "$activation")" = "$(git rev-parse "$GITHUB_SHA:$activation")"
+            test "$(sha256sum "$activation" | cut -d' ' -f1)" = "$ACTIVATION_SHA256"
+            python -m jsonschema --instance "$activation" \
+              schemas/historical-final-delta-activation-v1.schema.json
+            test "$(jq -er .kind "$activation")" = historical_final_delta_activation_binding
+            test "$(jq -er .activation_status "$activation")" = reviewed_state_candidate
+            test "$(jq -cS .audit "$activation")" = "$(jq -cS .audit "$binding")"
+            test "$(jq -cS '.state | {repository,parent,parent_tree,candidate_commit,candidate_tree}' "$activation")" = \
+              "$(jq -cS '.state | {repository,parent,parent_tree,candidate_commit,candidate_tree}' "$binding")"
+            test "$(jq -er .state_promotion.path "$activation")" = "$binding"
+            test "$(jq -er .state_promotion.sha256 "$activation")" = "$EXPECTED_BINDING_SHA256"
+            promotion_commit=$(jq -er .state_promotion.commit "$activation")
+            git merge-base --is-ancestor "$promotion_commit" "$GITHUB_SHA"
+            test "$(git rev-parse "$promotion_commit:$binding")" = "$(git hash-object "$binding")"
+          fi
 
       - name: Check out exact State authority
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

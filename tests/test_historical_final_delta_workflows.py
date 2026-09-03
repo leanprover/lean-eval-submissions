@@ -52,6 +52,17 @@ class FinalDeltaWorkflowTests(unittest.TestCase):
         self.assertIn("historical-final-delta-state-batch-v1.json", workflow)
         self.assertNotIn("2439", workflow)
         self.assertNotIn("historical-baseline-state-v1", workflow)
+        self.assertIn("activation_sha256:", workflow)
+        self.assertIn(
+            'activation="evidence/historical-replay/final-delta-activations/'
+            '$ACTIVATION_SHA256.json"',
+            workflow,
+        )
+        self.assertIn(
+            "schemas/historical-final-delta-activation-v1.schema.json", workflow
+        )
+        self.assertIn(".state_promotion.sha256", workflow)
+        self.assertIn(".state.candidate_commit", workflow)
 
     def test_qualification_is_only_a_blocked_one_shot_output(self) -> None:
         script = (
@@ -76,6 +87,24 @@ class FinalDeltaWorkflowTests(unittest.TestCase):
         self.assertIn("actions/runs/$run_id", workflow)
         self.assertIn('gh run download "$run_id"', workflow)
         self.assertIn('cmp "$artifact" "$proof"', workflow)
+        self.assertIn("Reverify the exact create-only staged State candidate", workflow)
+        self.assertIn(
+            "inputs.operation == 'absence' || inputs.operation == 'terminal'",
+            workflow,
+        )
+        self.assertIn("historical_final_delta_terminal_live_readback", workflow)
+        self.assertIn('--terminal-readback "$RUNNER_TEMP/', workflow)
+        authenticated = workflow.index(
+            "Authenticate the committed absence proof before terminal readback"
+        )
+        live_readback = workflow.index(
+            "Read back current disabled controllers, absent refs, queues, and executors"
+        )
+        terminal = workflow.index(
+            "Build the independently reconciled terminal binding twice"
+        )
+        self.assertLess(authenticated, live_readback)
+        self.assertLess(live_readback, terminal)
         retirement = workflow.split("temporary_workflows:", 1)[1]
         self.assertNotIn("historical-authoritative-replay.yml", retirement)
         self.assertNotIn("historical-private-replay.yml", retirement)

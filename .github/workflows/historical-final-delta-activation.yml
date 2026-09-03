@@ -117,6 +117,13 @@ jobs:
           test -z "$(git -C state status --porcelain)$(git -C audit status --porcelain)"
           python state/scripts/state.py --root state validate
 
+      - name: Reverify the exact create-only staged State candidate
+        if: inputs.operation == 'activation'
+        run: >-
+          python scripts/review_historical_final_delta_state.py verify
+          --submissions-root . --state-root state
+          --binding configuration/historical-final-delta-state-promotion-v1.json
+
       - name: Build the independently reconciled activation binding twice
         if: inputs.operation == 'activation'
         env:
@@ -142,16 +149,42 @@ jobs:
           mv "$RUNNER_TEMP/activation-one.json" "$RUNNER_TEMP/historical-final-delta-activation.json"
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
-        if: inputs.operation == 'absence'
+        if: inputs.operation == 'absence' || inputs.operation == 'terminal'
         with:
           node-version: 22.22.0
           cache: npm
           cache-dependency-path: server/package-lock.json
 
-      - name: Read back disabled controllers, absent refs, queues, and executors
-        if: inputs.operation == 'absence'
+      - name: Authenticate the committed absence proof before terminal readback
+        if: inputs.operation == 'terminal'
         env:
           GH_TOKEN: ${{ github.token }}
+          ABSENCE: ${{ inputs.executor_absence_sha256 }}
+        run: |
+          set -euo pipefail
+          proof="evidence/historical-replay/final-delta-executor-absence/$ABSENCE.json"
+          run_id=$(jq -er .authority.workflow_run_id "$proof")
+          implementation=$(jq -er .authority.implementation_commit "$proof")
+          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")
+          jq -e --arg sha "$implementation" '
+            .status == "completed" and .conclusion == "success" and
+            .event == "workflow_dispatch" and .head_sha == $sha and
+            .path == ".github/workflows/historical-final-delta-activation.yml"
+          ' <<< "$run" >/dev/null
+          mkdir "$RUNNER_TEMP/absence-run-artifact"
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
+            --name "historical-final-delta-absence-$implementation" \
+            --dir "$RUNNER_TEMP/absence-run-artifact"
+          test "$(find "$RUNNER_TEMP/absence-run-artifact" -type f | wc -l)" = 1
+          artifact=$(find "$RUNNER_TEMP/absence-run-artifact" -type f)
+          test "$(sha256sum "$artifact" | cut -d' ' -f1)" = "$ABSENCE"
+          cmp "$artifact" "$proof"
+
+      - name: Read back current disabled controllers, absent refs, queues, and executors
+        if: inputs.operation == 'absence' || inputs.operation == 'terminal'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPERATION: ${{ inputs.operation }}
           STATE_READ_KEY: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
           AUDIT_READ_KEY: ${{ secrets.AUDIT_READ_KEY }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
@@ -206,25 +239,38 @@ jobs:
           npx --prefix server wrangler containers list --json > "$RUNNER_TEMP/container-applications.json"
           application_count=$(jq '[.[] | select(.name | startswith("le-hpr-"))] | length' "$RUNNER_TEMP/container-applications.json")
           test "$application_count" = 0
-          jq -n --arg checked_at "$(date --utc +%Y-%m-%dT%H:%M:%SZ)" \
+          checked_at=$(date --utc +%Y-%m-%dT%H:%M:%SZ)
+          variables_sha=$(sha256sum "$RUNNER_TEMP/github-variable-readback.txt" | cut -d' ' -f1)
+          refs_sha=$(sha256sum "$RUNNER_TEMP/state-review-ref.txt" "$RUNNER_TEMP/audit-review-ref.txt" "$RUNNER_TEMP/state-main-ref.txt" "$RUNNER_TEMP/audit-main-ref.txt" | awk '{print $1}' | sha256sum | cut -d' ' -f1)
+          workers_sha=$(sha256sum "$RUNNER_TEMP/worker-services.json" | cut -d' ' -f1)
+          applications_sha=$(sha256sum "$RUNNER_TEMP/container-applications.json" | cut -d' ' -f1)
+          jq --sort-keys -n --arg checked_at "$checked_at" \
+            --arg state_head "${{ inputs.expected_state_head }}" \
+            --arg state_tree "$(git -C state rev-parse 'HEAD^{tree}')" \
+            --arg audit_head "${{ inputs.expected_audit_head }}" \
+            --arg audit_tree "${{ inputs.expected_audit_tree }}" \
+            --arg variables "$variables_sha" --arg refs "$refs_sha" \
+            --arg workers "$workers_sha" --arg applications "$applications_sha" \
+            '{schema_version:1,kind:"historical_final_delta_terminal_live_readback",checked_at:$checked_at,audit:{repository:"leanprover/lean-eval-audit",head:$audit_head,tree:$audit_tree},state:{repository:"leanprover/lean-eval-state",head:$state_head,tree:$state_tree},controller_variables:{HISTORICAL_PRIVATE_REPLAY_CONTROLLER_ENABLED:"absent",HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED:"absent"},review_branches:{audit:{name:"historical-final-delta-archive-rewrap-v1",status:"absent"},state:{name:"historical-final-delta-state-v1",status:"absent"}},queues:{private:0,public:0},recovery:{private:"none",public:"none"},executors:{private_application_count:0,private_worker_count:0,public_running_task_count:0},readbacks:{github_variables_sha256:$variables,github_review_refs_sha256:$refs,cloudflare_worker_services_sha256:$workers,cloudflare_container_applications_sha256:$applications}}' \
+            > "$RUNNER_TEMP/historical-final-delta-terminal-readback.json"
+          if [ "$OPERATION" = absence ]; then
+            jq -n --arg checked_at "$checked_at" \
             --arg commit "$GITHUB_SHA" --argjson run "$GITHUB_RUN_ID" \
             --arg state_head "${{ inputs.expected_state_head }}" \
             --arg state_tree "$(git -C state rev-parse 'HEAD^{tree}')" \
             --arg audit_head "${{ inputs.expected_audit_head }}" \
             --arg audit_tree "${{ inputs.expected_audit_tree }}" \
-            --arg variables "$(sha256sum "$RUNNER_TEMP/github-variable-readback.txt" | cut -d' ' -f1)" \
-            --arg refs "$(sha256sum "$RUNNER_TEMP/state-review-ref.txt" "$RUNNER_TEMP/audit-review-ref.txt" "$RUNNER_TEMP/state-main-ref.txt" "$RUNNER_TEMP/audit-main-ref.txt" | awk '{print $1}' | sha256sum | cut -d' ' -f1)" \
-            --arg workers "$(sha256sum "$RUNNER_TEMP/worker-services.json" | cut -d' ' -f1)" \
-            --arg applications "$(sha256sum "$RUNNER_TEMP/container-applications.json" | cut -d' ' -f1)" \
+            --arg variables "$variables_sha" --arg refs "$refs_sha" \
+            --arg workers "$workers_sha" --arg applications "$applications_sha" \
             '{schema_version:1,kind:"historical_final_delta_executor_absence",status:"verified_absent",checked_at:$checked_at,submissions_commit:$commit,authority:{repository:"leanprover/lean-eval-submissions",implementation_commit:$commit,workflow_path:".github/workflows/historical-final-delta-activation.yml",workflow_run_id:$run},audit:{repository:"leanprover/lean-eval-audit",head:$audit_head,tree:$audit_tree},state:{repository:"leanprover/lean-eval-state",head:$state_head,tree:$state_tree},controller_variables:{HISTORICAL_PRIVATE_REPLAY_CONTROLLER_ENABLED:"absent",HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED:"absent"},review_branches:{audit:{name:"historical-final-delta-archive-rewrap-v1",status:"absent"},state:{name:"historical-final-delta-state-v1",status:"absent"}},executors:{public:{status:"no_running_task",state_recovery_kind:"none"},private:{worker_prefix:"hpr-",worker_count:0,application_prefix:"le-hpr-",application_count:0,inventory_sha256:$applications}},readbacks:{github_variables_sha256:$variables,github_review_refs_sha256:$refs,cloudflare_worker_services_sha256:$workers,cloudflare_container_applications_sha256:$applications},temporary_workflows:[".github/workflows/historical-final-delta-activation.yml",".github/workflows/historical-final-delta-archive-migration.yml",".github/workflows/historical-final-delta-packet.yml",".github/workflows/historical-final-delta-plans.yml",".github/workflows/historical-final-delta-public-decisions.yml",".github/workflows/historical-final-delta-state.yml",".github/workflows/promote-historical-final-delta-archive-migration.yml"]}' \
             > "$RUNNER_TEMP/historical-final-delta-absence.json"
-          python -m jsonschema --instance "$RUNNER_TEMP/historical-final-delta-absence.json" \
-            schemas/historical-final-delta-executor-absence-v1.schema.json
+            python -m jsonschema --instance "$RUNNER_TEMP/historical-final-delta-absence.json" \
+              schemas/historical-final-delta-executor-absence-v1.schema.json
+          fi
 
       - name: Build the independently reconciled terminal binding twice
         if: inputs.operation == 'terminal'
         env:
-          GH_TOKEN: ${{ github.token }}
           AUTHORITY: ${{ inputs.submissions_authority_commit }}
           ACTIVATION: ${{ inputs.activation_sha256 }}
           ABSENCE: ${{ inputs.executor_absence_sha256 }}
@@ -233,28 +279,12 @@ jobs:
           AUDIT_TREE: ${{ inputs.expected_audit_tree }}
         run: |
           set -euo pipefail
-          proof="evidence/historical-replay/final-delta-executor-absence/$ABSENCE.json"
-          run_id=$(jq -er .authority.workflow_run_id "$proof")
-          implementation=$(jq -er .authority.implementation_commit "$proof")
-          run=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")
-          jq -e --arg sha "$implementation" '
-            .status == "completed" and .conclusion == "success" and
-            .event == "workflow_dispatch" and .head_sha == $sha and
-            .path == ".github/workflows/historical-final-delta-activation.yml"
-          ' <<< "$run" >/dev/null
-          mkdir "$RUNNER_TEMP/absence-run-artifact"
-          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" \
-            --name "historical-final-delta-absence-$implementation" \
-            --dir "$RUNNER_TEMP/absence-run-artifact"
-          test "$(find "$RUNNER_TEMP/absence-run-artifact" -type f | wc -l)" = 1
-          artifact=$(find "$RUNNER_TEMP/absence-run-artifact" -type f)
-          test "$(sha256sum "$artifact" | cut -d' ' -f1)" = "$ABSENCE"
-          cmp "$artifact" "$proof"
           for suffix in one two; do
             python scripts/prepare_historical_final_delta_closure.py terminal \
               --submissions-commit "$AUTHORITY" \
               --activation "evidence/historical-replay/final-delta-activations/$ACTIVATION.json" \
               --executor-absence "evidence/historical-replay/final-delta-executor-absence/$ABSENCE.json" \
+              --terminal-readback "$RUNNER_TEMP/historical-final-delta-terminal-readback.json" \
               --state-root state --state-head "$STATE_HEAD" \
               --audit-head "$AUDIT_HEAD" --audit-tree "$AUDIT_TREE" \
               --output "$RUNNER_TEMP/terminal-$suffix.json"

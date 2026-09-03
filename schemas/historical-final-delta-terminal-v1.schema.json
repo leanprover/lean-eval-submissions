@@ -4,10 +4,11 @@
   "title": "LeanEval final historical delta terminal binding version 1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "kind", "status", "activation", "executor_absence", "cutoff", "accepted_result_count", "terminal_result_count", "terminal_result_id_set_sha256", "lanes", "audit", "state", "retirement"],
+  "required": ["schema_version", "kind", "status", "activation", "executor_absence", "terminal_live_readback", "cutoff", "accepted_result_count", "terminal_result_count", "terminal_result_id_set_sha256", "lanes", "audit", "state", "retirement"],
   "properties": {
     "schema_version": {"const": 1}, "kind": {"const": "historical_final_delta_terminal_binding"}, "status": {"const": "terminal_and_executors_absent"},
     "activation": {"$ref": "#/$defs/locator"}, "executor_absence": {"$ref": "#/$defs/locator"},
+    "terminal_live_readback": {"$ref": "#/$defs/terminalLiveReadback"},
     "cutoff": {"type": "object", "additionalProperties": false, "required": ["accepted_inventory", "delta_sha256", "delta_counts"], "properties": {"accepted_inventory": {"type": "object", "additionalProperties": false, "required": ["source_commit", "results_store_sha256", "inventory_sha256", "result_count"], "properties": {"source_commit": {"$ref": "#/$defs/commit"}, "results_store_sha256": {"$ref": "#/$defs/digest"}, "inventory_sha256": {"$ref": "#/$defs/digest"}, "result_count": {"$ref": "#/$defs/positiveCount"}}}, "delta_sha256": {"$ref": "#/$defs/digest"}, "delta_counts": {"type": "object", "additionalProperties": false, "required": ["result_count", "public_source_probe_pending", "private_archive_migration_pending"], "properties": {"result_count": {"$ref": "#/$defs/positiveCount"}, "public_source_probe_pending": {"$ref": "#/$defs/count"}, "private_archive_migration_pending": {"$ref": "#/$defs/count"}}}}},
     "accepted_result_count": {"$ref": "#/$defs/positiveCount"}, "terminal_result_count": {"$ref": "#/$defs/positiveCount"}, "terminal_result_id_set_sha256": {"$ref": "#/$defs/digest"},
     "lanes": {"type": "object", "additionalProperties": false, "required": ["public", "private"], "properties": {"public": {"$ref": "#/$defs/lane"}, "private": {"$ref": "#/$defs/lane"}}},
@@ -18,6 +19,24 @@
     "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}, "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "count": {"type": "integer", "minimum": 0, "maximum": 10000}, "positiveCount": {"type": "integer", "minimum": 1, "maximum": 10000},
     "locator": {"type": "object", "additionalProperties": false, "required": ["repository", "commit", "path", "sha256"], "properties": {"repository": {"const": "leanprover/lean-eval-submissions"}, "commit": {"$ref": "#/$defs/commit"}, "path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/digest"}}},
     "head": {"type": "object", "additionalProperties": false, "required": ["repository", "head", "tree"], "properties": {"repository": {"enum": ["leanprover/lean-eval-audit", "leanprover/lean-eval-state"]}, "head": {"$ref": "#/$defs/commit"}, "tree": {"$ref": "#/$defs/commit"}}},
+    "terminalLiveReadback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "kind", "checked_at", "audit", "state", "controller_variables", "review_branches", "queues", "recovery", "executors", "readbacks"],
+      "properties": {
+        "schema_version": {"const": 1},
+        "kind": {"const": "historical_final_delta_terminal_live_readback"},
+        "checked_at": {"type": "string", "format": "date-time"},
+        "audit": {"allOf": [{"$ref": "#/$defs/head"}, {"properties": {"repository": {"const": "leanprover/lean-eval-audit"}}}]},
+        "state": {"allOf": [{"$ref": "#/$defs/head"}, {"properties": {"repository": {"const": "leanprover/lean-eval-state"}}}]},
+        "controller_variables": {"const": {"HISTORICAL_PRIVATE_REPLAY_CONTROLLER_ENABLED": "absent", "HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED": "absent"}},
+        "review_branches": {"const": {"audit": {"name": "historical-final-delta-archive-rewrap-v1", "status": "absent"}, "state": {"name": "historical-final-delta-state-v1", "status": "absent"}}},
+        "queues": {"const": {"private": 0, "public": 0}},
+        "recovery": {"const": {"private": "none", "public": "none"}},
+        "executors": {"const": {"private_application_count": 0, "private_worker_count": 0, "public_running_task_count": 0}},
+        "readbacks": {"type": "object", "additionalProperties": false, "required": ["cloudflare_container_applications_sha256", "cloudflare_worker_services_sha256", "github_review_refs_sha256", "github_variables_sha256"], "properties": {"cloudflare_container_applications_sha256": {"$ref": "#/$defs/digest"}, "cloudflare_worker_services_sha256": {"$ref": "#/$defs/digest"}, "github_review_refs_sha256": {"$ref": "#/$defs/digest"}, "github_variables_sha256": {"$ref": "#/$defs/digest"}}}
+      }
+    },
     "lane": {"type": "object", "additionalProperties": false, "required": ["terminal_result_count", "terminal_result_id_set_sha256", "terminal_replay_event_count", "terminal_replay_event_id_set_sha256", "reviewed_unavailable_count"], "properties": {"terminal_result_count": {"$ref": "#/$defs/count"}, "terminal_result_id_set_sha256": {"$ref": "#/$defs/digest"}, "terminal_replay_event_count": {"$ref": "#/$defs/count"}, "terminal_replay_event_id_set_sha256": {"$ref": "#/$defs/digest"}, "reviewed_unavailable_count": {"$ref": "#/$defs/count"}}}
   }
 }

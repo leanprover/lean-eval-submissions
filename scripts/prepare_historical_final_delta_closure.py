@@ -19,6 +19,10 @@ COMMIT = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 RESULT_ID = re.compile(r"r2_[0-9a-f]{64}\Z")
 TASK_ID = re.compile(r"rt1_[0-9a-f]{64}\Z")
+TIMESTAMP = re.compile(
+    r"[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])"
+    r"T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z\Z"
+)
 SUBMISSIONS_REPOSITORY = "leanprover/lean-eval-submissions"
 AUDIT_REPOSITORY = "leanprover/lean-eval-audit"
 STATE_REPOSITORY = "leanprover/lean-eval-state"
@@ -179,20 +183,25 @@ def _candidate_inventory(
         parent,
     ]:
         raise ClosureError("State candidate commit or tree differs")
-    paths = [
-        line.split("\t", 1)[1]
-        for line in git(
-            state_root,
-            "diff-tree",
-            "--no-commit-id",
-            "--name-status",
-            "--no-renames",
-            "-r",
-            parent,
-            candidate,
-        ).splitlines()
-        if line.startswith("A\tevents/")
-    ]
+    status = git(
+        state_root,
+        "diff-tree",
+        "--no-commit-id",
+        "--name-status",
+        "--no-renames",
+        "-r",
+        parent,
+        candidate,
+    ).splitlines()
+    if (
+        not status
+        or len(status) != len(set(status))
+        or any(not line.startswith(("A\tevents/", "A\tviews/")) for line in status)
+    ):
+        raise ClosureError("State candidate is not a create-only event and view append")
+    paths = [line.split("\t", 1)[1] for line in status if line.startswith("A\tevents/")]
+    if not paths:
+        raise ClosureError("State candidate contains no final-delta events")
     qualification_lanes: dict[str, str] = {}
     events: list[dict[str, Any]] = []
     for path in paths:
@@ -426,29 +435,30 @@ def build_terminal(
     activation_locator: dict[str, str],
     absence: dict[str, Any],
     absence_locator: dict[str, str],
+    terminal_readback: dict[str, Any],
     state_root: pathlib.Path,
     state_head: str,
     audit_head: str,
     audit_tree: str,
 ) -> dict[str, Any]:
+    expected_controller_variables = {
+        "HISTORICAL_PRIVATE_REPLAY_CONTROLLER_ENABLED": "absent",
+        "HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED": "absent",
+    }
+    expected_review_branches = {
+        "audit": {
+            "name": "historical-final-delta-archive-rewrap-v1",
+            "status": "absent",
+        },
+        "state": {"name": "historical-final-delta-state-v1", "status": "absent"},
+    }
     if (
         activation.get("kind") != "historical_final_delta_activation_binding"
         or activation.get("activation_status") != "reviewed_state_candidate"
         or absence.get("kind") != "historical_final_delta_executor_absence"
         or absence.get("status") != "verified_absent"
-        or absence.get("controller_variables")
-        != {
-            "HISTORICAL_PRIVATE_REPLAY_CONTROLLER_ENABLED": "absent",
-            "HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED": "absent",
-        }
-        or absence.get("review_branches")
-        != {
-            "audit": {
-                "name": "historical-final-delta-archive-rewrap-v1",
-                "status": "absent",
-            },
-            "state": {"name": "historical-final-delta-state-v1", "status": "absent"},
-        }
+        or absence.get("controller_variables") != expected_controller_variables
+        or absence.get("review_branches") != expected_review_branches
         or absence.get("temporary_workflows") != TEMPORARY_WORKFLOWS
         or absence.get("executors", {}).get("public", {}).get("status")
         != "no_running_task"
@@ -481,6 +491,54 @@ def build_terminal(
         or absence.get("state", {}).get("head") != state_head
     ):
         raise ClosureError("executor-absence proof is not closed")
+    if (
+        set(terminal_readback)
+        != {
+            "schema_version",
+            "kind",
+            "checked_at",
+            "audit",
+            "state",
+            "controller_variables",
+            "review_branches",
+            "queues",
+            "recovery",
+            "executors",
+            "readbacks",
+        }
+        or terminal_readback.get("schema_version") != 1
+        or terminal_readback.get("kind")
+        != "historical_final_delta_terminal_live_readback"
+        or TIMESTAMP.fullmatch(str(terminal_readback.get("checked_at"))) is None
+        or terminal_readback.get("audit")
+        != {"repository": AUDIT_REPOSITORY, "head": audit_head, "tree": audit_tree}
+        or terminal_readback.get("state", {}).get("repository") != STATE_REPOSITORY
+        or terminal_readback.get("state", {}).get("head") != state_head
+        or terminal_readback.get("controller_variables")
+        != expected_controller_variables
+        or terminal_readback.get("review_branches") != expected_review_branches
+        or terminal_readback.get("queues") != {"private": 0, "public": 0}
+        or terminal_readback.get("recovery") != {"private": "none", "public": "none"}
+        or terminal_readback.get("executors")
+        != {
+            "private_application_count": 0,
+            "private_worker_count": 0,
+            "public_running_task_count": 0,
+        }
+        or not isinstance(terminal_readback.get("readbacks"), dict)
+        or set(terminal_readback["readbacks"])
+        != {
+            "cloudflare_container_applications_sha256",
+            "cloudflare_worker_services_sha256",
+            "github_review_refs_sha256",
+            "github_variables_sha256",
+        }
+        or any(
+            DIGEST.fullmatch(str(value)) is None
+            for value in terminal_readback["readbacks"].values()
+        )
+    ):
+        raise ClosureError("terminal live executor readback is not closed")
     if (
         COMMIT.fullmatch(state_head) is None
         or COMMIT.fullmatch(audit_head) is None
@@ -594,12 +652,15 @@ def build_terminal(
     state_tree = git(state_root, "rev-parse", f"{state_head}^{{tree}}")
     if absence["state"].get("tree") != state_tree:
         raise ClosureError("executor-absence State tree differs")
+    if terminal_readback["state"].get("tree") != state_tree:
+        raise ClosureError("terminal live-readback State tree differs")
     return {
         "schema_version": 1,
         "kind": "historical_final_delta_terminal_binding",
         "status": "terminal_and_executors_absent",
         "activation": activation_locator,
         "executor_absence": absence_locator,
+        "terminal_live_readback": terminal_readback,
         "cutoff": activation["cutoff"],
         "accepted_result_count": activation["accepted_result_count"],
         "terminal_result_count": len(terminal_results),
@@ -665,6 +726,7 @@ def main(argv: list[str] | None = None) -> int:
     terminal.add_argument("--submissions-commit", required=True)
     terminal.add_argument("--activation", required=True, type=pathlib.Path)
     terminal.add_argument("--executor-absence", required=True, type=pathlib.Path)
+    terminal.add_argument("--terminal-readback", required=True, type=pathlib.Path)
     terminal.add_argument("--state-root", required=True, type=pathlib.Path)
     terminal.add_argument("--state-head", required=True)
     terminal.add_argument("--audit-head", required=True)
@@ -748,6 +810,9 @@ def main(argv: list[str] | None = None) -> int:
                 ABSENCE_PREFIX,
                 "executor-absence proof",
             )
+            terminal_readback, _ = read_canonical(
+                args.terminal_readback.resolve(), "terminal live executor readback"
+            )
             root = pathlib.Path(
                 git(
                     args.executor_absence.resolve().parent,
@@ -767,6 +832,7 @@ def main(argv: list[str] | None = None) -> int:
                 activation_locator=activation_bound,
                 absence=absence_value,
                 absence_locator=absence_bound,
+                terminal_readback=terminal_readback,
                 state_root=args.state_root.resolve(),
                 state_head=args.state_head,
                 audit_head=args.audit_head,
