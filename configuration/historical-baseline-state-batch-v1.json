@@ -1,0 +1,28 @@
+{
+  "environment": "production",
+  "kind": "historical_baseline_state_batch_expectation",
+  "lanes": {
+    "private": {
+      "authority_event_type": "historical_archive_result.replay_authorized",
+      "enqueue_event_type": "replay.enqueued",
+      "event_count": 1917,
+      "qualification_event_type": "historical_archive_result.replay_profile_qualified",
+      "task_count": 639
+    },
+    "public": {
+      "authority_event_type": "historical_result.replay_authorized",
+      "enqueue_event_type": "replay.enqueued",
+      "event_count": 522,
+      "qualification_event_type": "historical_result.replay_profile_qualified",
+      "task_count": 174
+    }
+  },
+  "reviewed_unavailability_counts": {
+    "private": 29,
+    "public": 459,
+    "total": 488
+  },
+  "schema_version": 1,
+  "total_event_count": 2439,
+  "total_task_count": 813
+}
