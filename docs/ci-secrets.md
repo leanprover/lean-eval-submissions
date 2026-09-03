@@ -76,9 +76,9 @@ in the `Mint lean-eval-bot installation token` step, via
 single `Fetch submission` step and is used to clone the contributor's
 submission source.
 
-The issue template
-[`.github/ISSUE_TEMPLATE/submit.yml`](../.github/ISSUE_TEMPLATE/submit.yml)
-instructs contributors to install this app on their submission repo.
+The [LeanEval submission service](https://lean-lang.org/eval/submit/)
+instructs contributors with private source repositories to install this app
+before submitting.
 
 ### Reconstruction from scratch
 
