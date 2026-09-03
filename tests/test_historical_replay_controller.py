@@ -16,6 +16,7 @@ from scripts.historical_replay_controller import (
     _historical_replay_states,
     _is_expected_repository_remote,
     _load_canonical,
+    _load_provider_json,
     _load_state_canonical,
     _read_regular,
     _terminal_transition,
@@ -88,6 +89,21 @@ class HistoricalReplayInputTests(unittest.TestCase):
             link.symlink_to(target)
             with self.assertRaises(HistoricalReplayControllerError):
                 _load_canonical(link, "hostile input")
+
+    def test_provider_json_accepts_formatting_but_rejects_ambiguity(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            path = root / "provider.json"
+            path.write_text('{"z": 1, "a": 2}\n', encoding="utf-8")
+            self.assertEqual(
+                _load_provider_json(path, "provider response"),
+                {"a": 2, "z": 1},
+            )
+            self.assertNotEqual(path.read_bytes(), canonical_bytes({"a": 2, "z": 1}))
+            for raw in ('{"a":1,"a":2}', '{"a":NaN}', '{"a":1e999}', '[1,2]'):
+                path.write_text(raw, encoding="utf-8")
+                with self.assertRaises(HistoricalReplayControllerError):
+                    _load_provider_json(path, "provider response")
 
     def test_state_codec_accepts_only_ascii_escaped_canonical_bytes(self) -> None:
         value = {"declared_model": "model-β"}
@@ -1062,6 +1078,80 @@ class HistoricalReplayHandoffTests(unittest.TestCase):
                 verdict_value=unconfirmed,
             )
 
+    def test_terminal_cli_accepts_strict_noncanonical_provider_json(self) -> None:
+        archive = b"public source archive fixture"
+        plan = self.fixture.plan()
+        handoff = self.fixture.handoff(archive)
+        started = started_event(
+            plan,
+            self.fixture.queue,
+            "2026-08-25T01:00:00.000Z",
+            random_bytes=b"\x01" * 10,
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            archive_path = root / "source.tar.gz"
+            archive_path.write_bytes(archive)
+            request = build_executor_request(
+                plan,
+                handoff,
+                archive_path,
+                self.fixture.matrix,
+                self.fixture.contract,
+                "4" * 64,
+            )
+            response = {
+                "schema_version": 1,
+                "contract": "historical_public_executor_v1",
+                **{
+                    field: request[field]
+                    for field in (
+                        "runner_nonce",
+                        "replay_task_id",
+                        "attempt",
+                        "handoff_sha256",
+                        "source_archive_sha256",
+                        "execution_profile_digest",
+                        "measurement_config_digest",
+                        "vm_image_digest",
+                    )
+                },
+                "runner_verdict": self.fixture.verdict(),
+                "destruction": "confirmed",
+            }
+            plan_path = root / "plan.json"
+            started_path = root / "started.json"
+            request_path = root / "request.json"
+            response_path = root / "response.json"
+            output_path = root / "terminal.json"
+            plan_path.write_bytes(canonical_bytes(plan))
+            started_path.write_bytes(state_canonical_bytes(started))
+            request_path.write_bytes(canonical_bytes(request))
+            response_path.write_text(json.dumps(response) + "\n", encoding="utf-8")
+            self.assertNotEqual(response_path.read_bytes(), canonical_bytes(response))
+            command = [
+                sys.executable,
+                str(ROOT / "scripts/historical_replay_controller.py"),
+                "terminal-event",
+                "--plan",
+                str(plan_path),
+                "--started",
+                str(started_path),
+                "--executor-request",
+                str(request_path),
+                "--verdict",
+                str(response_path),
+                "--trusted-now",
+                "2026-08-25T01:00:00.004Z",
+                "--output",
+                str(output_path),
+            ]
+            completed = subprocess.run(command, check=False, capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            terminal = json.loads(output_path.read_bytes())
+            self.assertEqual(terminal["event_type"], "replay.accepted")
+            self.assertEqual(terminal["subject_id"], request["replay_task_id"])
+
     def test_production_executor_config_is_exact_and_ordinary_replay_stays_dark(self) -> None:
         plan = self.fixture.plan()
         rendered = render_executor_config(
@@ -1422,6 +1512,47 @@ class HistoricalReplayRecoveryTests(unittest.TestCase):
                 recover_running(root, "2026-08-25T08:00:01.000Z", state_validated=True)["kind"],
                 "none",
             )
+
+    def test_recovery_cli_accepts_noncanonical_provider_cleanup_json(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            events = self.events()
+            self.write_events(root, events)
+            confirmation = {
+                "schema_version": 1,
+                "replay_task_id": events[-1]["subject_id"],
+                "attempt": 1,
+                "destruction": "confirmed",
+            }
+            confirmation_path = root / "cleanup.json"
+            output_path = root / "recovery.json"
+            confirmation_path.write_text(
+                json.dumps(confirmation) + "\n",
+                encoding="utf-8",
+            )
+            self.assertNotEqual(
+                confirmation_path.read_bytes(),
+                canonical_bytes(confirmation),
+            )
+            command = [
+                sys.executable,
+                str(ROOT / "scripts/historical_replay_controller.py"),
+                "recover",
+                "--events-root",
+                str(root),
+                "--state-validated",
+                "--trusted-now",
+                "2026-08-25T08:00:00.004Z",
+                "--cleanup-confirmation",
+                str(confirmation_path),
+                "--output",
+                str(output_path),
+            ]
+            completed = subprocess.run(command, check=False, capture_output=True, text=True)
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            recovery = json.loads(output_path.read_bytes())
+            self.assertEqual(recovery["kind"], "failed")
+            self.assertEqual(recovery["event"]["payload"]["reason_code"], "runner_lost")
 
     def test_stale_recovery_rejects_unconfirmed_or_mismatched_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

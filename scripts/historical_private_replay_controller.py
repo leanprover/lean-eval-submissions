@@ -49,6 +49,7 @@ from historical_replay_controller import (
     _read_regular,
     _reject_duplicate_pairs,
     _reject_nonfinite_constant,
+    _reject_nonfinite_float,
     _timestamp,
     _write,
     canonical_bytes,
@@ -206,6 +207,7 @@ def _load_provider_json(path: pathlib.Path, label: str) -> dict[str, Any]:
             raw.decode("utf-8"),
             object_pairs_hook=_reject_duplicate_pairs,
             parse_constant=_reject_nonfinite_constant,
+            parse_float=_reject_nonfinite_float,
         )
     except HistoricalPrivateReplayControllerError:
         raise
@@ -547,6 +549,7 @@ def _parse_json_object(raw: bytes, label: str) -> dict[str, Any]:
             raw.decode("utf-8"),
             object_pairs_hook=_reject_duplicate_pairs,
             parse_constant=_reject_nonfinite_constant,
+            parse_float=_reject_nonfinite_float,
         )
     except (UnicodeError, json.JSONDecodeError, HistoricalPrivateReplayControllerError) as error:
         raise HistoricalPrivateReplayControllerError(
@@ -2161,7 +2164,7 @@ def main() -> int:
             confirmation = (
                 None
                 if args.cleanup_confirmation is None
-                else _load_canonical(args.cleanup_confirmation, "cleanup confirmation")[0]
+                else _load_provider_json(args.cleanup_confirmation, "cleanup confirmation")
             )
             _write(
                 args.output,

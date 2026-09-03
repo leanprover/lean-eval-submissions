@@ -16,6 +16,7 @@ import copy
 import datetime as dt
 import hashlib
 import json
+import math
 import os
 import pathlib
 import re
@@ -49,6 +50,7 @@ from results_schema import ResultsSchemaError
 from results_schema import result_id as stable_result_id
 
 MAX_JSON_BYTES = 16 * 1024 * 1024
+MAX_PROVIDER_JSON_BYTES = 512 * 1024
 MAX_STATE_EVENT_FILES = 1_000_000
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 MAX_EXECUTOR_SOURCE_ARCHIVE_BYTES = 16 * 1024 * 1024
@@ -321,6 +323,15 @@ def _reject_nonfinite_constant(value: str) -> None:
     raise HistoricalReplayControllerError(f"non-finite JSON number {value} is invalid")
 
 
+def _reject_nonfinite_float(value: str) -> float:
+    parsed = float(value)
+    if not math.isfinite(parsed):
+        raise HistoricalReplayControllerError(
+            f"non-finite JSON number {value} is invalid"
+        )
+    return parsed
+
+
 def _read_regular(path: pathlib.Path, maximum: int, label: str) -> bytes:
     flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -349,6 +360,7 @@ def _parse_canonical(
             raw.decode("utf-8"),
             object_pairs_hook=_reject_duplicate_pairs,
             parse_constant=_reject_nonfinite_constant,
+            parse_float=_reject_nonfinite_float,
         )
     except HistoricalReplayControllerError:
         raise
@@ -370,6 +382,26 @@ def _load_state_canonical(path: pathlib.Path, label: str) -> tuple[dict[str, Any
     raw = _read_regular(path, MAX_JSON_BYTES, label)
     value = _parse_canonical(raw, label, state_canonical_bytes)
     return value, raw
+
+
+def _load_provider_json(path: pathlib.Path, label: str) -> dict[str, Any]:
+    """Parse strict bounded JSON without constraining provider byte layout."""
+
+    raw = _read_regular(path, MAX_PROVIDER_JSON_BYTES, label)
+    try:
+        value = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_reject_duplicate_pairs,
+            parse_constant=_reject_nonfinite_constant,
+            parse_float=_reject_nonfinite_float,
+        )
+    except HistoricalReplayControllerError:
+        raise
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise HistoricalReplayControllerError(
+            f"{label} is not one UTF-8 JSON object"
+        ) from error
+    return _object(value, label)
 
 
 def _write(path: pathlib.Path, value: Any, serializer: Any = canonical_bytes) -> None:
@@ -2426,7 +2458,7 @@ def main() -> int:
             verdict = (
                 None
                 if args.verdict is None
-                else _load_canonical(args.verdict, "historical executor verdict")[0]
+                else _load_provider_json(args.verdict, "historical executor verdict")
             )
             value = terminal_event(
                 plan,
@@ -2441,9 +2473,9 @@ def main() -> int:
             cleanup_confirmation = (
                 None
                 if args.cleanup_confirmation is None
-                else _load_canonical(
+                else _load_provider_json(
                     args.cleanup_confirmation, "sandbox cleanup confirmation"
-                )[0]
+                )
             )
             _write(
                 args.output,
