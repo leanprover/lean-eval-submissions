@@ -1383,7 +1383,7 @@ async function historicalProcessStatus(
 async function writeSandboxFile(
   sandbox: SandboxClient,
   path: string,
-  contents: string,
+  contents: string | ReadableStream<Uint8Array>,
 ): Promise<void> {
   let result: Awaited<ReturnType<SandboxClient["writeFile"]>>;
   try {
@@ -1394,6 +1394,24 @@ async function writeSandboxFile(
   if (!result.success || result.path !== path) {
     throw new ReplayExecutorError("input_transfer_failed");
   }
+}
+
+function streamedText(contents: string): ReadableStream<Uint8Array> {
+  // Keep large base64 archives off the inline Sandbox RPC message path while
+  // preserving the exact text file consumed by the locked executor image.
+  const encoder = new TextEncoder();
+  let offset = 0;
+  return new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (offset === contents.length) {
+        controller.close();
+        return;
+      }
+      const end = Math.min(offset + 64 * 1024, contents.length);
+      controller.enqueue(encoder.encode(contents.slice(offset, end)));
+      offset = end;
+    },
+  });
 }
 
 async function executeSandboxCommand(
@@ -1756,7 +1774,11 @@ export async function handleReplayRequest(
             "/workspace/archive-expectation.json",
             JSON.stringify(input.archive_expectation),
           );
-          await writeSandboxFile(sandbox, "/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
+          await writeSandboxFile(
+            sandbox,
+            "/workspace/archive.tar.gz.age.b64",
+            streamedText(input.ciphertext_base64),
+          );
           if (input.schema_version === 1) {
             await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);
           } else {

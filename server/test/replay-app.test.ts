@@ -41,8 +41,10 @@ async function archiveInput(): Promise<Record<string, unknown>> {
   };
 }
 
-async function authoritativeInput(): Promise<Record<string, unknown>> {
-  const ciphertext = btoa("age-encryption.org/v1\nauthoritative-fixture");
+async function authoritativeInput(
+  ciphertextContents = "age-encryption.org/v1\nauthoritative-fixture",
+): Promise<Record<string, unknown>> {
+  const ciphertext = btoa(ciphertextContents);
   const bytes = Uint8Array.from(atob(ciphertext), (character) => character.charCodeAt(0));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
   const archiveDigest = [...new Uint8Array(digest)]
@@ -1090,8 +1092,10 @@ describe("Cloudflare replay executor", () => {
   });
 
   it("starts one background command, polls it, and confirms destruction", async () => {
-    const body = await authoritativeInput();
-    const writes: string[] = [];
+    const body = await authoritativeInput(
+      `age-encryption.org/v1\n${"a".repeat(1_500_000)}`,
+    );
+    const writes = new Map<string, string | ReadableStream<Uint8Array>>();
     const commands: string[] = [];
     const timeouts: number[] = [];
     let destroyed = false;
@@ -1106,8 +1110,8 @@ describe("Cloudflare replay executor", () => {
       }),
     };
     const sandbox = {
-      writeFile: (path: string) => {
-        writes.push(path);
+      writeFile: (path: string, contents: string | ReadableStream<Uint8Array>) => {
+        writes.set(path, contents);
         return Promise.resolve({ success: true, path, timestamp: "fixture" });
       },
       exec: () => { throw new Error("blocking exec must remain unreachable"); },
@@ -1135,12 +1139,30 @@ describe("Cloudflare replay executor", () => {
     expect(await start.json()).toMatchObject({ status: "running" });
     expect(commands).toEqual(["/opt/lean-eval/replay-authoritative"]);
     expect(timeouts).toEqual([20_100_000]);
-    expect(writes).toEqual([
+    expect([...writes.keys()]).toEqual([
       "/workspace/replay-request.json",
       "/workspace/archive-expectation.json",
       "/workspace/archive.tar.gz.age.b64",
       "/workspace/identity.age.b64",
     ]);
+    const archiveWrite = writes.get("/workspace/archive.tar.gz.age.b64");
+    expect(archiveWrite).toBeInstanceOf(ReadableStream);
+    const reader = (archiveWrite as ReadableStream<Uint8Array>).getReader();
+    const decoder = new TextDecoder();
+    let streamedArchive = "";
+    let chunkCount = 0;
+    let chunk = await reader.read();
+    while (!chunk.done) {
+      chunkCount += 1;
+      expect(chunk.value.byteLength).toBeLessThanOrEqual(64 * 1024);
+      streamedArchive += decoder.decode(chunk.value, { stream: true });
+      chunk = await reader.read();
+    }
+    streamedArchive += decoder.decode();
+    expect(chunkCount).toBeGreaterThan(1);
+    expect(streamedArchive).toBe(body.ciphertext_base64);
+    expect(writes.get("/workspace/identity.age.b64"))
+      .toBe(body.plaintext_identity_base64);
     expect(destroyed).toBe(false);
 
     const duplicateStart = await handleReplayRequest(new Request(
