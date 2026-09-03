@@ -1055,12 +1055,18 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         }
         for environment, (configuration, base_url) in expected.items():
             with self.subTest(environment=environment):
-                expected_lifecycle = "false"
-                expected_maintainers = "[]"
+                expected_lifecycle = (
+                    "true" if environment == "production" else "false"
+                )
+                expected_maintainers = (
+                    '[{"github_id":477956,"login":"kim-em"}]'
+                    if environment == "production"
+                    else "[]"
+                )
                 self.assertIs(configuration["workers_dev"], True)
                 self.assertIs(configuration["preview_urls"], False)
                 self.assertNotIn("routes", configuration)
-                expected_intake = "false"
+                expected_intake = "true" if environment == "production" else "false"
                 self.assertEqual(
                     configuration["vars"]["INTAKE_ENABLED"], expected_intake
                 )

@@ -20,11 +20,8 @@ The public leaderboard that renders these results is
 
 ## Submitting a solution
 
-While the submission service is temporarily paused for the dual-App admission
-repair, use the GitHub issue intake linked from
-[**the LeanEval submission page**](https://lean-lang.org/eval/submit/). After
-the repaired boundary is qualified and restored, the authenticated submission
-service becomes the preferred path again.
+The preferred submission path is the
+[**LeanEval submission service**](https://lean-lang.org/eval/submit/).
 
 Before submitting through the service, install both read-only Apps on only the
 repository you intend to submit:
