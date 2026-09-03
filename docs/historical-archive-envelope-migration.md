@@ -48,8 +48,11 @@ requires merged audit `main` to have exactly that tree. The same
 exact-patch/current-head rule applies to the final issue-intake delta.
 The protected
 [`promote-archive-migration.yml`](../.github/workflows/promote-archive-migration.yml)
-caller pins the reusable contract owned by `lean-eval-audit` and passes the
-existing audit-only archiver App credentials; the audit repository does not
+caller contains the reviewed promotion steps directly and passes the existing
+audit-only archiver App credentials. A public repository cannot call a private
+repository's reusable workflow, so the caller requires the validator blob at
+the current audit head to be byte-identical to audit contract commit
+`7a53c75c6d7c263c684ebcd54590c657c9298642`; the audit repository does not
 duplicate those credentials. Promotion deletes the fixed isolated review
 branch only after the compare-and-swap push and exact protected-main readback.
 The reviewed template must first be applied, through the immutable historical
