@@ -1,0 +1,144 @@
+name: One-shot replay Cloudflare token transfer
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Export the source token or verify its target installation
+        required: true
+        type: choice
+        options:
+          - export
+          - verify
+      confirm:
+        description: Run the one-shot encrypted token transfer
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: replay-token-transfer-21f2ab603612835a97602213f78e763b
+  cancel-in-progress: false
+
+jobs:
+  export-encrypted-token:
+    if: inputs.confirm == true && inputs.mode == 'export'
+    environment: cloudflare-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Require the exact protected-main boundary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.commit.sha, .protected] | @tsv')
+          test "$branch" = "$GITHUB_SHA"$'\ttrue'
+
+      - name: Encrypt the token for the one-time receiver
+        env:
+          SOURCE_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          RECIPIENT_DER_BASE64: MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAyIWRY7W18ATteqbF6AOIkrvHUrAhP3b7mwWy4Orbqf8fFQfMB38da3AtoD+v02qQgfjyyhfbLWsUpFRvKwkK4fyhnqOGvljlLot4xJwUW4SAKXklssm1W8wMAIIDkZNjx73ur0enpAd4/cMI6iGatxEV/i0IPQNw0SucUd3v8+m6sJ2HFc9w3Uar5QHW7xTvRCPxqguetviDxXjfabUIoVVY1JmweA+mkO3mCn4bC85S/rc3SyxoGpGY0z7aZ/GrEjNZkBxo/0443lROvcCMfmOsT/T55B06+v3uaisS5vPWhWVu4jIwI3JYjdI5HZKPIQ52Gf7Wd3zrlwMkVfoD0MN1X9S/JKj8WUQQlcwemInNOsWqB8N9u1q03OSgNuUcW6/Y86tPpLCM9yC8JIhzQQlFOhmxZk5/b5FrsXaNRv4r+zmKzaUUmFf2ZB82yqYibJ9woeDJsG/t8ryVEH9zftPAUwljPxSQO1HTNYv8unedkOoQDSkqej7FuJlqx11/B7fck/RDYN6lkOcPP7iusPAmKh9jVwf0Sf6YR07ek2CcwTq+ROBwLKHy46W22LnR7u+JWH1YmjaacdCyP4jgRaQi0qYzpiamIyPyKzE5lbb2Kj4UtbR/2o+PWpUPgQpK723of8tawSsLEnJZLlF3K+MCyzwBg4zILb5D9ZsWvGcCAwEAAQ==
+          RECIPIENT_SHA256: c4fe61cf7b75f5a943cca50053caf4ce30ced01934cca266dd80fa90ddbdadf1
+        run: |
+          set +x
+          set -euo pipefail
+          umask 077
+          public_key="$RUNNER_TEMP/recipient.der"
+          ciphertext="$RUNNER_TEMP/ciphertext.bin"
+          printf '%s' "$RECIPIENT_DER_BASE64" | base64 --decode > "$public_key"
+          test "$(sha256sum "$public_key" | cut -d' ' -f1)" = "$RECIPIENT_SHA256"
+          openssl pkey -pubin -inform DER -in "$public_key" -noout
+          [[ "$SOURCE_TOKEN" =~ ^[A-Za-z0-9_-]{20,256}$ ]]
+          printf '%s' "$SOURCE_TOKEN" | openssl pkeyutl -encrypt \
+            -pubin -keyform DER -inkey "$public_key" \
+            -pkeyopt rsa_padding_mode:oaep \
+            -pkeyopt rsa_oaep_md:sha256 \
+            -out "$ciphertext"
+          unset SOURCE_TOKEN
+          test -s "$ciphertext"
+          test "$(stat --format='%s' "$ciphertext")" -le 1024
+          jq -cn \
+            --arg operation 'replay-token-transfer-21f2ab603612835a97602213f78e763b' \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg workflow_sha "$GITHUB_SHA" \
+            --arg recipient_sha256 "$RECIPIENT_SHA256" \
+            --arg ciphertext_sha256 "$(sha256sum "$ciphertext" | cut -d' ' -f1)" \
+            '{schema_version: 1, operation: $operation, repository: $repository,
+              workflow_sha: $workflow_sha, recipient_sha256: $recipient_sha256,
+              ciphertext_sha256: $ciphertext_sha256}' \
+            > "$RUNNER_TEMP/manifest.json"
+
+      # actions/upload-artifact pinned to v7.0.1.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: replay-token-transfer-21f2ab603612835a97602213f78e763b
+          path: |
+            ${{ runner.temp }}/ciphertext.bin
+            ${{ runner.temp }}/manifest.json
+          if-no-files-found: error
+          retention-days: 1
+
+  verify-target-token:
+    if: inputs.confirm == true && inputs.mode == 'verify'
+    environment: replay-production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Require the exact protected-main boundary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.commit.sha, .protected] | @tsv')
+          test "$branch" = "$GITHUB_SHA"$'\ttrue'
+
+      - name: Verify the installed target token is active
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TARGET_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set +x
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import urllib.request
+
+          account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+          token = os.environ.get("TARGET_TOKEN", "")
+          if re.fullmatch(r"[0-9a-f]{32}", account) is None:
+              raise SystemExit("target Cloudflare account binding is unavailable")
+          if re.fullmatch(r"[A-Za-z0-9_-]{20,256}", token) is None:
+              raise SystemExit("target Cloudflare token is unavailable")
+          request = urllib.request.Request(
+              f"https://api.cloudflare.com/client/v4/accounts/{account}/tokens/verify",
+              headers={"Authorization": "Bearer " + token},
+          )
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  payload = json.load(response)
+          except Exception:
+              raise SystemExit("target Cloudflare token verification failed") from None
+          result = payload.get("result") if isinstance(payload, dict) else None
+          if (
+              not isinstance(payload, dict)
+              or payload.get("success") is not True
+              or not isinstance(result, dict)
+              or result.get("status") != "active"
+          ):
+              raise SystemExit("target Cloudflare token is not active")
+          print("REPLAY_CLOUDFLARE_TOKEN_VERIFIED")
+          PY
