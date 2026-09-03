@@ -342,13 +342,20 @@ environment,events=load_tree(a.root); validate_semantics(events,environment)
         packet = (
             ROOT / "docs/historical-migration-replay-execution-packet.md"
         ).read_text(encoding="utf-8")
+        implementation = "b6f8c8834213a26a19ba1e8c7440db30ad0c05f2"
+        self.assertIn(f"submissions commit\n`{implementation}`", packet)
         for relative in (
             ".github/workflows/append-historical-baseline-state.yml",
             "configuration/historical-baseline-state-batch-v1.json",
             "scripts/prepare_historical_baseline_state_batch.py",
             "scripts/review_historical_baseline_state_batch.py",
         ):
-            digest = hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
+            raw = subprocess.run(
+                ["git", "-C", ROOT, "show", f"{implementation}:{relative}"],
+                check=True,
+                capture_output=True,
+            ).stdout
+            digest = hashlib.sha256(raw).hexdigest()
             self.assertIn(f"`{relative}`, SHA-256 `{digest}`", packet)
 
 

@@ -31,7 +31,8 @@ a second transaction or replay system.
 | Selected schema-1 migration set | inventory digest `a8913f1c8b5073e5b7ab309ba10481b615ca4fc00e629e41a9e57962f3afebd4` | 439 unique archives |
 | Pre-mutation State comparison, not append authority | production commit `9cf3b4999bae2b6faaa32ff1bf5f040c5e6f787f`; event-set digest `d3392218297ea11f6093b59e5252f3ae394887368e02cea40a58e6fd82a901b5`; public-v6 projection SHA-256 `381275d999fdd99540c6837adcda549f7cc6c8294e6431d442ce30b245057cb2` | 489 events; 0 replay series; 488 reviewed-unavailable Results |
 
-The fixed reviewed implementation bindings are:
+The fixed reviewed implementation bindings below are from submissions commit
+`b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`:
 
 | Component | Exact binding |
 | --- | --- |
