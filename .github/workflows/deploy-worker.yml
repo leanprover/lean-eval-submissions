@@ -714,17 +714,13 @@ jobs:
             echo "final intake health did not converge" >&2
             exit 1
           fi
-          if [ "$((INTAKE_LEASE_EXPIRES_AT - $(date +%s)))" -lt 240 ]; then
-            echo "leased smoke no longer has a safe finalization margin" >&2
-            exit 1
-          fi
-          curl --fail --silent --show-error --proto '=https' --max-redirs 0 \
-            --max-time 20 --retry 2 --retry-all-errors --retry-max-time 45 \
-            -H "Authorization: Bearer $READINESS_TOKEN" \
-            -H 'Content-Type: application/json' \
-            --data-binary @"$plan_dir/intake-lease-smoke.json" \
-            https://lean-eval-submission-server.lean-eval.workers.dev/internal/v1/intake-lease-smoke \
-            > "$plan_dir/intake-lease-smoke-response.json"
+          python ../scripts/run_production_intake_lease_smoke.py \
+            --request "$plan_dir/intake-lease-smoke.json" \
+            --response-output "$plan_dir/intake-lease-smoke-response.json" \
+            --state-proof-output "$plan_dir/post-smoke-state-proof.json" \
+            --expected-expires-at "$INTAKE_LEASE_EXPIRES_AT" \
+            --expected-contract 235a96c96462438c7680e6fb90fa0e6044ec1774 \
+            --expected-schema 5394e7f24901db390b16c97ac5ab781a407da6cedee60f96e3e9396bce549587
           state_commit=$(jq -er '
             select(.status == "lease_smoke_consumed" or .status == "lease_smoke_already_consumed") |
             select(.environment == "production") |
@@ -735,41 +731,6 @@ jobs:
             echo "leased smoke did not return an exact post-consumption State commit" >&2
             exit 1
           fi
-          curl --fail-with-body --silent --show-error --proto '=https' \
-            --max-redirs 0 --max-time 30 \
-            --request POST \
-            --header "Authorization: Bearer ${READINESS_TOKEN}" \
-            --output "$plan_dir/post-smoke-state-proof.json" \
-            https://lean-eval-submission-server.lean-eval.workers.dev/readyz
-          STATE_COMMIT="$state_commit" STATE_PROOF="$plan_dir/post-smoke-state-proof.json" python - <<'PY'
-          import json
-          import os
-
-          with open(os.environ["STATE_PROOF"], encoding="utf-8") as stream:
-              proof = json.load(stream)
-          expected = {
-              "environment", "intake_configured_enabled", "intake_effective_enabled",
-              "intake_enabled", "intake_enablement_mode", "intake_lease_expires_at",
-              "state_branch_protected", "state_commit", "state_contract_commit",
-              "state_contract_verified", "state_event_schema_sha256", "status",
-          }
-          if (
-              set(proof) != expected
-              or proof["status"] != "state_writer_ready"
-              or proof["environment"] != "production"
-              or proof["intake_configured_enabled"] is not True
-              or proof["intake_effective_enabled"] is not True
-              or proof["intake_enabled"] is not True
-              or proof["intake_enablement_mode"] != "leased"
-              or proof["intake_lease_expires_at"] != int(os.environ["INTAKE_LEASE_EXPIRES_AT"])
-              or proof["state_branch_protected"] is not True
-              or proof["state_commit"] != os.environ["STATE_COMMIT"]
-              or proof["state_contract_commit"] != "235a96c96462438c7680e6fb90fa0e6044ec1774"
-              or proof["state_contract_verified"] is not True
-              or proof["state_event_schema_sha256"] != "5394e7f24901db390b16c97ac5ab781a407da6cedee60f96e3e9396bce549587"
-          ):
-              raise SystemExit("protected State moved after the leased smoke proof")
-          PY
 
       - name: Verify final disabled intake and protected State
         if: steps.production-intake.outputs.enabled == 'false'
@@ -841,7 +802,7 @@ jobs:
           INTAKE_LEASE_EXPIRES_AT: ${{ steps.intake-lease.outputs.expires_at }}
         run: |
           set -euo pipefail
-          if [ "$((INTAKE_LEASE_EXPIRES_AT - $(date +%s)))" -lt 180 ]; then
+          if [ "$((INTAKE_LEASE_EXPIRES_AT - $(date +%s)))" -lt 240 ]; then
             echo "leased intake no longer has a safe durable-transition margin" >&2
             exit 1
           fi
