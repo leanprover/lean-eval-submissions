@@ -183,6 +183,23 @@ esac
 
 
 class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
+    def test_cold_container_start_has_one_bounded_private_sdk_window(self) -> None:
+        start = step(
+            "Invoke and poll the exact blocked-network executor",
+            "Confirm exact sandbox destruction after every attempted start",
+        )
+        self.assertIn("--max-time 780", start)
+        self.assertNotIn("--retry", start)
+        sandbox = (ROOT / "server/src/replay-sandbox.ts").read_text(
+            encoding="utf-8"
+        )
+        private_entry = (
+            ROOT / "server/src/historical-private-replay-entry.ts"
+        ).read_text(encoding="utf-8")
+        self.assertIn("portReadyTimeoutMS = 180_000", sandbox)
+        self.assertIn("replaySandbox(runtime, runnerNonce, 600_000)", private_entry)
+        self.assertNotIn("600_000", sandbox)
+
     def test_lane_is_manual_dark_serialized_and_temporary(self) -> None:
         self.assertIn("workflow_dispatch:", WORKFLOW)
         self.assertNotIn("schedule:", WORKFLOW)

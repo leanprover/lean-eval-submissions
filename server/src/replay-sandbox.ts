@@ -11,6 +11,7 @@ export function replaySandboxId(runnerNonce: string): string {
 export function replaySandbox(
   env: ReplaySandboxEnvironment,
   runnerNonce: string,
+  portReadyTimeoutMS = 180_000,
 ): Sandbox {
   return getSandbox(env.REPLAY_SANDBOX, replaySandboxId(runnerNonce), {
     enableDefaultSession: false,
@@ -18,7 +19,7 @@ export function replaySandbox(
     sleepAfter: "5m",
     containerTimeouts: {
       instanceGetTimeoutMS: 120_000,
-      portReadyTimeoutMS: 180_000,
+      portReadyTimeoutMS,
     },
   });
 }

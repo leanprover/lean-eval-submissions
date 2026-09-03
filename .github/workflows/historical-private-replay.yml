@@ -810,7 +810,7 @@ jobs:
           echo runner_lost > "$RUNNER_TEMP/failure-reason"
           touch "$RUNNER_TEMP/executor-start-attempted"
           status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
-            --max-time 300 --retry 3 --retry-all-errors --retry-delay 2 \
+            --max-time 780 \
             --header "Authorization: Bearer $token" \
             --header 'Content-Type: application/json' --request POST \
             --data-binary "@$RUNNER_TEMP/executor-request.json" \
