@@ -47,21 +47,200 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: lean-eval-audit-migration-promotion
+  cancel-in-progress: false
+
 jobs:
   promote:
-    uses: leanprover/lean-eval-audit/.github/workflows/promote-archive-migration.yml@7a53c75c6d7c263c684ebcd54590c657c9298642
-    with:
-      expected_caller_commit: ${{ inputs.expected_workflow_commit }}
-      expected_contract_commit: 7a53c75c6d7c263c684ebcd54590c657c9298642
-      source_audit_commit: ${{ inputs.source_audit_commit }}
-      staged_migration_commit: ${{ inputs.staged_migration_commit }}
-      expected_staged_tree: ${{ inputs.expected_staged_tree }}
-      expected_patch_sha256: ${{ inputs.expected_patch_sha256 }}
-      expected_migration_count: ${{ inputs.expected_migration_count }}
-      current_audit_head: ${{ inputs.current_audit_head }}
-      expected_result_tree: ${{ inputs.expected_result_tree }}
-      expected_result_commit: ${{ inputs.expected_result_commit }}
-      confirmation: ${{ inputs.confirmation }}
-    secrets:
-      archiver_client_id: ${{ secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID }}
-      archiver_private_key: ${{ secrets.LEAN_EVAL_ARCHIVER_PRIVATE_KEY }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Require the exact protected caller
+        env:
+          CALLER_COMMIT: ${{ github.sha }}
+          CALLER_REF: ${{ github.ref }}
+          CALLER_REF_PROTECTED: ${{ github.ref_protected }}
+          CALLER_REPOSITORY: ${{ github.repository }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          EXPECTED_CALLER_COMMIT: ${{ inputs.expected_workflow_commit }}
+        run: |
+          set -euo pipefail
+          test "$CALLER_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$CALLER_REF" = refs/heads/main
+          test "$CALLER_REF_PROTECTED" = true
+          test "$CALLER_COMMIT" = "$EXPECTED_CALLER_COMMIT"
+          [[ "$EXPECTED_CALLER_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$CONFIRMATION" = promote-reviewed-archive-migration
+
+      - name: Mint only the audit-repository archiver token
+        id: audit_token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          client-id: ${{ secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID }}
+          private-key: ${{ secrets.LEAN_EVAL_ARCHIVER_PRIVATE_KEY }}
+          owner: leanprover
+          repositories: lean-eval-audit
+
+      - name: Check out audit history without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: leanprover/lean-eval-audit
+          ref: ${{ inputs.current_audit_head }}
+          path: audit
+          fetch-depth: 0
+          persist-credentials: false
+          token: ${{ steps.audit_token.outputs.token }}
+
+      - name: Fetch and bind only the promotion refs and objects
+        env:
+          AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}
+          CURRENT_AUDIT_HEAD: ${{ inputs.current_audit_head }}
+          EXPECTED_CONTRACT_COMMIT: 7a53c75c6d7c263c684ebcd54590c657c9298642
+          SOURCE_AUDIT_COMMIT: ${{ inputs.source_audit_commit }}
+          STAGED_MIGRATION_COMMIT: ${{ inputs.staged_migration_commit }}
+        run: |
+          set -euo pipefail
+          test -n "$AUDIT_TOKEN"
+          basic_auth=$(printf 'x-access-token:%s' "$AUDIT_TOKEN" | base64 -w0)
+          unset AUDIT_TOKEN
+          cleanup() {
+            unset basic_auth GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          }
+          trap cleanup EXIT
+          GIT_CONFIG_COUNT=1
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic_auth"
+          export GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          git -C audit fetch --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/heads/archive-file-key-rewrap-v1:refs/remotes/origin/archive-file-key-rewrap-v1" \
+            "$EXPECTED_CONTRACT_COMMIT" "$SOURCE_AUDIT_COMMIT" \
+            "$STAGED_MIGRATION_COMMIT" "$CURRENT_AUDIT_HEAD"
+          test "$(git -C audit rev-parse "$CURRENT_AUDIT_HEAD:scripts/archive_migration_promotion.py")" = \
+            "$(git -C audit rev-parse "$EXPECTED_CONTRACT_COMMIT:scripts/archive_migration_promotion.py")"
+          cleanup
+          trap - EXIT
+
+      - name: Verify exact patch, ancestry, zero overlap, and rebased result
+        env:
+          CURRENT_AUDIT_HEAD: ${{ inputs.current_audit_head }}
+          EXPECTED_MIGRATION_COUNT: ${{ inputs.expected_migration_count }}
+          EXPECTED_PATCH_SHA256: ${{ inputs.expected_patch_sha256 }}
+          EXPECTED_RESULT_COMMIT: ${{ inputs.expected_result_commit }}
+          EXPECTED_RESULT_TREE: ${{ inputs.expected_result_tree }}
+          EXPECTED_STAGED_TREE: ${{ inputs.expected_staged_tree }}
+          SOURCE_AUDIT_COMMIT: ${{ inputs.source_audit_commit }}
+          STAGED_MIGRATION_COMMIT: ${{ inputs.staged_migration_commit }}
+        run: |
+          set -euo pipefail
+          python audit/scripts/archive_migration_promotion.py prepare \
+            --repository audit \
+            --source-commit "$SOURCE_AUDIT_COMMIT" \
+            --staged-commit "$STAGED_MIGRATION_COMMIT" \
+            --expected-staged-tree "$EXPECTED_STAGED_TREE" \
+            --expected-patch-sha256 "$EXPECTED_PATCH_SHA256" \
+            --expected-migration-count "$EXPECTED_MIGRATION_COUNT" \
+            --current-head "$CURRENT_AUDIT_HEAD" \
+            --expected-result-tree "$EXPECTED_RESULT_TREE" \
+            --expected-result-commit "$EXPECTED_RESULT_COMMIT" \
+            --output "$RUNNER_TEMP/audit-migration-promotion.json"
+
+      - name: CAS-push only the exact reviewed result commit
+        env:
+          AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}
+          CURRENT_AUDIT_HEAD: ${{ inputs.current_audit_head }}
+          EXPECTED_RESULT_COMMIT: ${{ inputs.expected_result_commit }}
+        run: |
+          set -euo pipefail
+          test -n "$AUDIT_TOKEN"
+          test "$(GH_TOKEN="$AUDIT_TOKEN" gh api \
+            repos/leanprover/lean-eval-audit/branches/main --jq .protected)" = true
+          test "$(jq -r .current_audit_head "$RUNNER_TEMP/audit-migration-promotion.json")" = \
+            "$CURRENT_AUDIT_HEAD"
+          test "$(jq -r .result_commit "$RUNNER_TEMP/audit-migration-promotion.json")" = \
+            "$EXPECTED_RESULT_COMMIT"
+          basic_auth=$(printf 'x-access-token:%s' "$AUDIT_TOKEN" | base64 -w0)
+          unset AUDIT_TOKEN
+          cleanup() {
+            unset basic_auth GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          }
+          trap cleanup EXIT
+          GIT_CONFIG_COUNT=1
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic_auth"
+          export GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          remote_main=$(git -C audit ls-remote --exit-code origin refs/heads/main | cut -f1)
+          if [ "$remote_main" = "$CURRENT_AUDIT_HEAD" ]; then
+            git -C audit push origin \
+              "$EXPECTED_RESULT_COMMIT:refs/heads/main" \
+              "--force-with-lease=refs/heads/main:$CURRENT_AUDIT_HEAD"
+          else
+            test "$remote_main" = "$EXPECTED_RESULT_COMMIT"
+          fi
+          test "$(git -C audit ls-remote --exit-code origin refs/heads/main | cut -f1)" = \
+            "$EXPECTED_RESULT_COMMIT"
+          cleanup
+          trap - EXIT
+
+      - name: Verify protected main and delete only the exact review branch
+        env:
+          AUDIT_TOKEN: ${{ steps.audit_token.outputs.token }}
+          EXPECTED_RESULT_COMMIT: ${{ inputs.expected_result_commit }}
+          EXPECTED_RESULT_TREE: ${{ inputs.expected_result_tree }}
+          STAGED_MIGRATION_COMMIT: ${{ inputs.staged_migration_commit }}
+        run: |
+          set -euo pipefail
+          test -n "$AUDIT_TOKEN"
+          basic_auth=$(printf 'x-access-token:%s' "$AUDIT_TOKEN" | base64 -w0)
+          unset AUDIT_TOKEN
+          cleanup() {
+            unset basic_auth GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          }
+          trap cleanup EXIT
+          GIT_CONFIG_COUNT=1
+          GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $basic_auth"
+          export GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+          test "$(git -C audit ls-remote --exit-code origin refs/heads/main | cut -f1)" = \
+            "$EXPECTED_RESULT_COMMIT"
+          git -C audit fetch --no-tags origin \
+            "+refs/heads/main:refs/remotes/origin/main"
+          test "$(git -C audit rev-parse 'refs/remotes/origin/main^{tree}')" = \
+            "$EXPECTED_RESULT_TREE"
+          review_head=$(git -C audit ls-remote origin \
+            refs/heads/archive-file-key-rewrap-v1 | cut -f1)
+          if [ -n "$review_head" ]; then
+            test "$review_head" = "$STAGED_MIGRATION_COMMIT"
+            git -C audit push origin \
+              :refs/heads/archive-file-key-rewrap-v1 \
+              "--force-with-lease=refs/heads/archive-file-key-rewrap-v1:$STAGED_MIGRATION_COMMIT"
+          fi
+          test -z "$(git -C audit ls-remote origin refs/heads/archive-file-key-rewrap-v1)"
+          test "$(git -C audit ls-remote --exit-code origin refs/heads/main | cut -f1)" = \
+            "$EXPECTED_RESULT_COMMIT"
+          cleanup
+          trap - EXIT
+
+      - name: Record content-free promotion binding
+        env:
+          EXPECTED_PATCH_SHA256: ${{ inputs.expected_patch_sha256 }}
+          EXPECTED_RESULT_COMMIT: ${{ inputs.expected_result_commit }}
+          EXPECTED_RESULT_TREE: ${{ inputs.expected_result_tree }}
+          SOURCE_AUDIT_COMMIT: ${{ inputs.source_audit_commit }}
+          STAGED_MIGRATION_COMMIT: ${{ inputs.staged_migration_commit }}
+        run: |
+          {
+            echo '### Reviewed archive migration promoted'
+            echo
+            echo "- source audit commit: \`$SOURCE_AUDIT_COMMIT\`"
+            echo "- staged migration commit: \`$STAGED_MIGRATION_COMMIT\`"
+            echo "- canonical patch SHA-256: \`$EXPECTED_PATCH_SHA256\`"
+            echo "- protected main commit: \`$EXPECTED_RESULT_COMMIT\`"
+            echo "- protected main tree: \`$EXPECTED_RESULT_TREE\`"
+            echo '- isolated review branch: deleted after verified promotion'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove the path-bearing promotion plan
+        if: always()
+        run: rm -f "$RUNNER_TEMP/audit-migration-promotion.json"

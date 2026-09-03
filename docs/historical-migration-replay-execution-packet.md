@@ -43,7 +43,7 @@ The fixed reviewed implementation bindings are:
 | Public finalizer | `scripts/prepare_historical_public_authority.py`, SHA-256 `59e611fd468e700b766343adc2f3a861ed2fa3c182761ef2ba7f6efd66434d6b` |
 | Migration infrastructure | Applied production template `infrastructure/aws-key-adapter/template.yaml`, SHA-256 `aac24318c973523a65b76af34b8e1408a5680f61b52c4fb996f93967253ef94d`. The completed operator procedure is not an execution input and must not be rerun. |
 | Migration boundary | role `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`; environment `archive-migration-production`; environment variable `REVIEWED_IMPLEMENTATION_COMMIT`; review branch `archive-file-key-rewrap-v1`; confirmation `stage-envelope-migration` |
-| Audit promotion contract | caller `.github/workflows/promote-archive-migration.yml`, SHA-256 `a1cde0d8663adf6fddc5bd8942f92602c391ca918f04dd84e59325460cb26c5a`; reusable audit contract commit `7a53c75c6d7c263c684ebcd54590c657c9298642`, workflow SHA-256 `b760ee6e6f04bcd061e3f15bea67c3dad33812e7cf5627b5850635d8228c8d3e` |
+| Audit promotion contract | self-contained protected caller `.github/workflows/promote-archive-migration.yml`, SHA-256 `4ae6ebab493ce684392d848da04f931ff51cef3eefcd357c756f1cb745fba88a`; its promotion validator must remain byte-identical to audit contract commit `7a53c75c6d7c263c684ebcd54590c657c9298642`, whose reusable workflow SHA-256 is `b760ee6e6f04bcd061e3f15bea67c3dad33812e7cf5627b5850635d8228c8d3e` |
 | Deterministic migration report | SHA-256 `faa26e1aa47eb629966db03695eda4f949b6c9804166f0047f53e09d9cc83339` |
 
 The migration job's GitHub OIDC request handle is a job-level capability and
