@@ -168,6 +168,15 @@ class ReplayControllerTests(unittest.TestCase):
                 unwrap_identity(unwrap, response, {"StatusCode": 200}),
                 native_identity,
             )
+            for metadata in ({"StatusCode": 200.0}, {"StatusCode": True}):
+                with self.assertRaisesRegex(
+                    ReplayControllerError, "successful invocation"
+                ):
+                    unwrap_identity(unwrap, response, metadata)
+            for version in (1.0, True):
+                changed_version = {**response, "schema_version": version}
+                with self.assertRaisesRegex(ReplayControllerError, "exact request"):
+                    unwrap_identity(unwrap, changed_version, {"StatusCode": 200})
             changed_response = {
                 **response,
                 "request_id": "0198abcd-0000-7000-8000-000000000009",

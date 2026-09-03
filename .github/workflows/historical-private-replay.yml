@@ -1034,10 +1034,14 @@ jobs:
           echo 'appended=true' >> "$GITHUB_OUTPUT"
 
       - name: Write one redacted source-free terminal artifact
-        if: steps.terminal.outputs.appended == 'true' || steps.failure.outputs.appended == 'true'
+        if: >-
+          always() && (steps.terminal.outputs.appended == 'true' ||
+          steps.failure.outputs.appended == 'true')
         env:
           START_EVENT_COMMIT: ${{ steps.started.outputs.state_head }}
+          TERMINAL_APPENDED: ${{ steps.terminal.outputs.appended }}
           TERMINAL_STATE_HEAD: ${{ steps.terminal.outputs.state_head }}
+          FAILURE_APPENDED: ${{ steps.failure.outputs.appended }}
           FAILURE_STATE_HEAD: ${{ steps.failure.outputs.state_head }}
         run: |
           set -euo pipefail
@@ -1045,9 +1049,18 @@ jobs:
           import json, os, pathlib
           temporary = pathlib.Path(os.environ["RUNNER_TEMP"])
           plan = json.loads((temporary / "private-replay-plan.json").read_text())
-          event_path = temporary / "terminal-event.json"
-          if not event_path.exists():
+          terminal_appended = os.environ["TERMINAL_APPENDED"] == "true"
+          failure_appended = os.environ["FAILURE_APPENDED"] == "true"
+          if terminal_appended == failure_appended:
+              raise SystemExit("exactly one terminal append must be committed")
+          if terminal_appended:
+              event_path = temporary / "terminal-event.json"
+              terminal_state_head = os.environ["TERMINAL_STATE_HEAD"]
+          else:
               event_path = temporary / "failure-event.json"
+              terminal_state_head = os.environ["FAILURE_STATE_HEAD"]
+          if not terminal_state_head:
+              raise SystemExit("committed terminal State head is unavailable")
           event = json.loads(event_path.read_text())
           evidence = {
               "schema_version": 1,
@@ -1065,7 +1078,7 @@ jobs:
               "terminal_event_id": event["event_id"],
               "terminal_event_type": event["event_type"],
               "started_state_commit": os.environ["START_EVENT_COMMIT"],
-              "terminal_state_commit": os.environ["TERMINAL_STATE_HEAD"] or os.environ["FAILURE_STATE_HEAD"],
+              "terminal_state_commit": terminal_state_head,
               "sandbox_destruction": "confirmed",
               "network_policy": "blocked",
               "checker": "nanoda",
@@ -1076,7 +1089,9 @@ jobs:
           PY
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        if: steps.terminal.outputs.appended == 'true' || steps.failure.outputs.appended == 'true'
+        if: >-
+          always() && (steps.terminal.outputs.appended == 'true' ||
+          steps.failure.outputs.appended == 'true')
         with:
           name: historical-private-replay-redacted
           path: historical-private-replay-redacted.json

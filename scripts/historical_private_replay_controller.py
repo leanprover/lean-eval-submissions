@@ -46,6 +46,7 @@ from historical_replay_controller import (
     _match,
     _object,
     _parse_canonical,
+    _read_regular,
     _reject_duplicate_pairs,
     _reject_nonfinite_constant,
     _timestamp,
@@ -192,7 +193,27 @@ REPOSITORY_REMOTES = {
     },
 }
 MAX_ARCHIVE_BYTES = 11 * 1024 * 1024
+MAX_PROVIDER_JSON_BYTES = 512 * 1024
 MAX_STATE_EXPORT_BYTES = 512 * 1024 * 1024
+
+
+def _load_provider_json(path: pathlib.Path, label: str) -> dict[str, Any]:
+    """Parse strict provider JSON without requiring provider-controlled bytes."""
+
+    raw = _read_regular(path, MAX_PROVIDER_JSON_BYTES, label)
+    try:
+        value = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_reject_duplicate_pairs,
+            parse_constant=_reject_nonfinite_constant,
+        )
+    except HistoricalPrivateReplayControllerError:
+        raise
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise HistoricalPrivateReplayControllerError(
+            f"{label} is not one UTF-8 JSON object"
+        ) from error
+    return _object(value, label)
 
 
 def _git_text(root: pathlib.Path, *arguments: str) -> str:
@@ -2118,8 +2139,8 @@ def main() -> int:
             )
         elif args.command == "unwrap-identity":
             request, _ = _load_canonical(args.request, "private unwrap request")
-            response, _ = _load_canonical(args.response, "private unwrap response")
-            metadata, _ = _load_canonical(args.metadata, "Lambda invocation metadata")
+            response = _load_provider_json(args.response, "private unwrap response")
+            metadata = _load_provider_json(args.metadata, "Lambda invocation metadata")
             _write_bytes(args.output, unwrap_identity(request, response, metadata))
         elif args.command == "validate-response":
             plan, _ = _load_canonical(args.plan, "historical private plan")

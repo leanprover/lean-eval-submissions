@@ -6,6 +6,7 @@ import pathlib
 import re
 import subprocess
 import tempfile
+import textwrap
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -650,12 +651,85 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
             "Write one redacted source-free terminal artifact",
             "Delete the terminal task's temporary executor",
         )
+        self.assertEqual(artifact.count("always() &&"), 2)
+        self.assertEqual(artifact.count("steps.failure.outputs.appended == 'true'"), 2)
         self.assertIn("historical_private_replay_redacted_terminal", artifact)
         self.assertNotIn("ciphertext_base64", artifact)
         self.assertNotIn("plaintext_key_material_base64", artifact)
         self.assertNotIn("source.tar", artifact)
         for forbidden in ("release", "published", "lifecycle", "accepted_at"):
             self.assertNotIn(forbidden, artifact.lower())
+
+    def test_failure_artifact_ignores_an_uncommitted_terminal_candidate(self) -> None:
+        artifact_step = step(
+            "Write one redacted source-free terminal artifact",
+            "Delete the terminal task's temporary executor",
+        )
+        script = textwrap.dedent(
+            artifact_step.split("python - <<'PY'\n", 1)[1].split("\n          PY", 1)[0]
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            plan = {
+                "task": {
+                    "replay_task_id": "rt1_" + "a" * 64,
+                    "result_id": "r1_" + "b" * 64,
+                    "attempt": 1,
+                    "execution_profile_digest": "c" * 64,
+                    "measurement_config_digest": "d" * 64,
+                    "archive_ciphertext_sha256": "e" * 64,
+                },
+                "state": {"queue_source_digest": "f" * 64},
+                "execution_plan": {
+                    "request": {
+                        "execution_profile": {
+                            "vm_image_digest": "sha256:" + "1" * 64
+                        }
+                    }
+                },
+            }
+            (root / "private-replay-plan.json").write_text(json.dumps(plan))
+            (root / "started-event.json").write_text(
+                json.dumps({"event_id": "019a0000-0000-7000-8000-000000000001"})
+            )
+            (root / "terminal-event.json").write_text(
+                json.dumps(
+                    {
+                        "event_id": "019a0000-0000-7000-8000-000000000002",
+                        "event_type": "replay.accepted",
+                    }
+                )
+            )
+            (root / "failure-event.json").write_text(
+                json.dumps(
+                    {
+                        "event_id": "019a0000-0000-7000-8000-000000000003",
+                        "event_type": "replay.failed",
+                    }
+                )
+            )
+            environment = {
+                **os.environ,
+                "RUNNER_TEMP": str(root),
+                "GITHUB_SHA": "2" * 40,
+                "START_EVENT_COMMIT": "3" * 40,
+                "TERMINAL_APPENDED": "false",
+                "TERMINAL_STATE_HEAD": "4" * 40,
+                "FAILURE_APPENDED": "true",
+                "FAILURE_STATE_HEAD": "5" * 40,
+            }
+            subprocess.run(
+                ["python", "-c", script], cwd=root, env=environment, check=True
+            )
+            evidence = json.loads(
+                (root / "historical-private-replay-redacted.json").read_text()
+            )
+            self.assertEqual(evidence["terminal_event_type"], "replay.failed")
+            self.assertEqual(
+                evidence["terminal_event_id"],
+                "019a0000-0000-7000-8000-000000000003",
+            )
+            self.assertEqual(evidence["terminal_state_commit"], "5" * 40)
 
     def test_actions_are_commit_pinned(self) -> None:
         pins = re.findall(r"uses:\s*[^\s@]+@([^\s#]+)", WORKFLOW)

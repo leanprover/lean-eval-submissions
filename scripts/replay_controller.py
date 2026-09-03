@@ -381,7 +381,11 @@ def unwrap_identity(
     if set(request) != UNWRAP_FIELDS:
         raise ReplayControllerError("unwrap request fields are not canonical")
     metadata = _object(metadata_value, "Lambda invocation metadata")
-    if metadata.get("StatusCode") != 200 or "FunctionError" in metadata:
+    if (
+        type(metadata.get("StatusCode")) is not int
+        or metadata["StatusCode"] != 200
+        or "FunctionError" in metadata
+    ):
         raise ReplayControllerError("unwrap Lambda did not return a successful invocation")
     response = _object(response_value, "unwrap response")
     try:
@@ -408,7 +412,8 @@ def unwrap_identity(
     capability = _object(request.get("capability"), "unwrap capability")
     expected_digest = capability_digest(capability)
     if (
-        response.get("schema_version") != schema_version
+        type(response.get("schema_version")) is not int
+        or response["schema_version"] != schema_version
         or response.get("adapter") != request.get("adapter")
         or response.get("request_id") != capability.get("request_id")
         or response.get("data_key_id") != envelope.get("data_key_id")
