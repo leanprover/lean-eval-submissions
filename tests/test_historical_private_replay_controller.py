@@ -619,7 +619,7 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
     def test_provider_json_still_rejects_ambiguous_values(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             path = pathlib.Path(raw) / "provider.json"
-            for value in ('{"a":1,"a":2}', '{"a":NaN}', '[1,2]'):
+            for value in ('{"a":1,"a":2}', '{"a":NaN}', '{"a":1e999}', '[1,2]'):
                 path.write_text(value, encoding="utf-8")
                 with self.assertRaises(
                     controller.HistoricalPrivateReplayControllerError

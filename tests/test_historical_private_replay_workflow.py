@@ -503,7 +503,12 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertGreaterEqual(execute.count("prove_running"), 6)
         self.assertRegex(
             execute,
-            r"status=\$\(curl[\s\S]+?unset token\n\s+prove_running\n\s+if \[ \"\$status\" = 202 \]",
+            r"if status=\$\(curl[\s\S]+?unset token\n\s+prove_running\n\s+if \[ \"\$status\" = 202 \]",
+        )
+        self.assertIn(
+            'rm -f "$RUNNER_TEMP/executor-poll-response.json"\n'
+            "            prove_running",
+            execute,
         )
         cleanup = step(
             "Confirm exact sandbox destruction after every attempted start",

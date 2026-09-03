@@ -832,25 +832,30 @@ jobs:
             prove_running
             mint_oidc
             prove_running
-            status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+            status=000
+            if status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
               --max-time 90 --header "Authorization: Bearer $token" \
               --header 'Content-Type: application/json' --request POST \
               --data-binary "@$RUNNER_TEMP/executor-status-request.json" \
               "$EXECUTOR_URL/api/v1/replay/status" \
               --output "$RUNNER_TEMP/executor-poll-response.json" \
-              --write-out '%{http_code}' || true)
-            unset token
-            prove_running
-            if [ "$status" = 202 ]; then
-              jq -e --slurpfile expected "$RUNNER_TEMP/cleanup-request.json" '
-                . == ($expected[0] + {status:"running"})
-              ' "$RUNNER_TEMP/executor-poll-response.json" >/dev/null
-              continue
+              --write-out '%{http_code}'); then
+              unset token
+              prove_running
+              if [ "$status" = 202 ]; then
+                jq -e --slurpfile expected "$RUNNER_TEMP/cleanup-request.json" '
+                  . == ($expected[0] + {status:"running"})
+                ' "$RUNNER_TEMP/executor-poll-response.json" >/dev/null
+                continue
+              fi
+              mv "$RUNNER_TEMP/executor-poll-response.json" \
+                "$RUNNER_TEMP/executor-response.json"
+              test "$status" = 200
+              break
             fi
-            mv "$RUNNER_TEMP/executor-poll-response.json" \
-              "$RUNNER_TEMP/executor-response.json"
-            test "$status" = 200
-            break
+            unset token
+            rm -f "$RUNNER_TEMP/executor-poll-response.json"
+            prove_running
           done
           test -f "$RUNNER_TEMP/executor-response.json"
           prove_running
