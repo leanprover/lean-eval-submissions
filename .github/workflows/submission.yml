@@ -67,10 +67,11 @@ concurrency:
 jobs:
   # A selected cutoff is activated by creating the repository variable
   # ISSUE_INTAKE_CUTOFF with one canonical UTC-second timestamp. Admission is
-  # bound to the workflow run's immutable creation time and cached here, so a
-  # pre-cutoff run may finish even if the variable is created while it is
-  # queued or executing. The server workflow_dispatch lane never depends on
-  # this issue-only job.
+  # bound to the original run's immutable creation time, or to run_started_at
+  # for a rerun attempt, and cached here. A pre-cutoff first attempt may finish
+  # even if the variable is created while it is queued or executing, but a
+  # post-cutoff rerun cannot inherit the original timestamp. The reusable
+  # archive_server job never depends on this issue-only job.
   issue_intake_admission:
     if: github.event_name == 'issues'
     runs-on: ubuntu-24.04
@@ -108,12 +109,40 @@ jobs:
             .id == $run_id and
             .repository.full_name == $repository and
             .event == "issues" and
+            (.run_attempt | type == "number") and
+            .run_attempt >= 1 and
+            (.run_started_at | type == "string") and
             (.created_at | type == "string")
           ' <<< "$run" >/dev/null
+          run_attempt=$(jq -er .run_attempt <<< "$run")
           run_created_at=$(jq -er .created_at <<< "$run")
+          run_started_at=$(jq -er .run_started_at <<< "$run")
           python scripts/classify_issue_intake_cutoff.py \
+            --run-attempt "$run_attempt" \
             --run-created-at "$run_created_at" \
+            --run-started-at "$run_started_at" \
             --cutoff "$ISSUE_INTAKE_CUTOFF" >> "$GITHUB_OUTPUT"
+
+      - name: Explain frozen issue intake
+        if: steps.classify.outputs.allowed == 'false'
+        run: |
+          echo '::notice title=Issue intake frozen::This issue event is at or after the selected cutoff and was not processed. Use the submission service.'
+          printf '%s\n' \
+            '## Issue intake frozen' \
+            '' \
+            'This issue event is at or after the selected cutoff and was not processed.' \
+            'Use the submission service linked from the Issue Form.' \
+            >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Explain fail-closed admission error
+        if: failure()
+        run: |
+          echo '::error title=Issue admission failed closed::No issue intake processing was allowed.'
+          printf '%s\n' \
+            '## Issue admission failed closed' \
+            '' \
+            'No issue intake processing was allowed.' \
+            >> "$GITHUB_STEP_SUMMARY"
 
   # The web Issue Form applies `submission` itself. GitHub's issue API drops
   # labels requested by authors without triage permission, so an API-created
@@ -856,7 +885,6 @@ jobs:
     # A reusable job is a hard authority boundary: only server dispatch enters
     # the environment carrying the Encrypt-only AWS role. The legacy issue
     # lane above never receives OIDC permission or KMS configuration.
-    needs: intake
     if: always() && github.event_name == 'workflow_dispatch'
     permissions:
       contents: read

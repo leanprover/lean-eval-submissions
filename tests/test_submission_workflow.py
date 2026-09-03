@@ -298,7 +298,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         evaluate_header = self.text.split("\n  evaluate:", 1)[1].split(
             "\n    # Default:", 1
         )[0]
-        self.assertIn("needs: intake", evaluate_header)
+        self.assertIn("needs: [intake, archive, archive_state]", evaluate_header)
         self.assertIn("needs.intake.outputs.evaluate == 'true'", evaluate_header)
         self.assertIn("github.event.label.name == 'submission'", evaluate_header)
 
@@ -310,8 +310,14 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn("ISSUE_INTAKE_CUTOFF: ${{ vars.ISSUE_INTAKE_CUTOFF }}", admission)
         self.assertIn('repos/$REPOSITORY/actions/runs/$RUN_ID', admission)
         self.assertIn(".event == \"issues\"", admission)
+        self.assertIn(".run_attempt | type == \"number\"", admission)
+        self.assertIn(".run_started_at | type == \"string\"", admission)
+        self.assertIn('--run-attempt "$run_attempt"', admission)
+        self.assertIn('--run-started-at "$run_started_at"', admission)
         self.assertIn("python scripts/classify_issue_intake_cutoff.py", admission)
         self.assertNotIn("issues: write", admission)
+        self.assertIn("Explain frozen issue intake", admission)
+        self.assertIn("Explain fail-closed admission error", admission)
 
         intake = self.text.split("\n  intake:", 1)[1].split("\n  evaluate:", 1)[0]
         archive_issue = self.text.split("\n  archive_issue:", 1)[1].split(
@@ -331,6 +337,7 @@ class SubmissionWorkflowStructureTests(unittest.TestCase):
         self.assertIn(gate, notify)
         self.assertNotIn("ISSUE_INTAKE_CUTOFF", archive_server)
         self.assertNotIn("issue_intake_admission", archive_server)
+        self.assertNotIn("needs:", archive_server)
         self.assertIn(
             "if: always() && github.event_name == 'workflow_dispatch'",
             archive_server,

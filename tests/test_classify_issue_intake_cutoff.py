@@ -14,21 +14,67 @@ from classify_issue_intake_cutoff import CutoffError, classify, timestamp
 class IssueIntakeCutoffTests(unittest.TestCase):
     def test_pre_cutoff_run_is_admitted(self) -> None:
         self.assertEqual(
-            classify("2026-09-30T06:57:09Z", "2026-09-30T06:57:10Z"),
+            classify(
+                1,
+                "2026-09-30T06:57:09Z",
+                "2026-09-30T06:57:09Z",
+                "2026-09-30T06:57:10Z",
+            ),
             (True, "before_cutoff"),
         )
 
     def test_run_at_cutoff_is_frozen(self) -> None:
         self.assertEqual(
-            classify("2026-09-30T06:57:10Z", "2026-09-30T06:57:10Z"),
+            classify(
+                1,
+                "2026-09-30T06:57:10Z",
+                "2026-09-30T06:57:10Z",
+                "2026-09-30T06:57:10Z",
+            ),
             (False, "at_or_after_cutoff"),
         )
 
     def test_post_cutoff_run_is_frozen(self) -> None:
         self.assertEqual(
-            classify("2026-09-30T06:57:11Z", "2026-09-30T06:57:10Z"),
+            classify(
+                1,
+                "2026-09-30T06:57:11Z",
+                "2026-09-30T06:57:11Z",
+                "2026-09-30T06:57:10Z",
+            ),
             (False, "at_or_after_cutoff"),
         )
+
+    def test_post_cutoff_rerun_cannot_reuse_pre_cutoff_creation_time(self) -> None:
+        self.assertEqual(
+            classify(
+                2,
+                "2026-09-30T06:57:09Z",
+                "2026-09-30T06:57:11Z",
+                "2026-09-30T06:57:10Z",
+            ),
+            (False, "at_or_after_cutoff"),
+        )
+
+    def test_pre_cutoff_rerun_uses_its_own_start_time(self) -> None:
+        self.assertEqual(
+            classify(
+                3,
+                "2026-09-30T06:57:01Z",
+                "2026-09-30T06:57:09Z",
+                "2026-09-30T06:57:10Z",
+            ),
+            (True, "before_cutoff"),
+        )
+
+    def test_nonpositive_run_attempt_fails_closed(self) -> None:
+        with self.assertRaisesRegex(CutoffError, "attempt must be positive"):
+            classify(
+                0,
+                "2026-09-30T06:57:01Z",
+                "2026-09-30T06:57:01Z",
+                "2026-09-30T06:57:10Z",
+            )
 
     def test_invalid_or_noncanonical_timestamps_fail_closed(self) -> None:
         for value in (
@@ -45,7 +91,11 @@ class IssueIntakeCutoffTests(unittest.TestCase):
             [
                 sys.executable,
                 str(ROOT / "scripts" / "classify_issue_intake_cutoff.py"),
+                "--run-attempt",
+                "2",
                 "--run-created-at",
+                "2026-09-30T06:57:01Z",
+                "--run-started-at",
                 "2026-09-30T06:57:10Z",
                 "--cutoff",
                 "2026-09-30T06:57:10Z",

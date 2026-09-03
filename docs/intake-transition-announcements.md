@@ -96,23 +96,30 @@ change.
 
 ## Cutoff freeze mechanism
 
-Keep the Issue Form present while the final corpus is reconciled. At the exact
-selected cutoff, create the `lean-eval-submissions` repository Actions variable
-`ISSUE_INTAKE_CUTOFF` with the canonical UTC-second cutoff timestamp. An absent
-variable means issue intake remains open. The `Submission` workflow compares
-the variable with the immutable workflow-run creation time, admits only runs
-created strictly before the cutoff, and caches that decision before intake.
-Server `workflow_dispatch` submissions do not pass through this gate.
+Keep the Issue Form present while the final corpus is reconciled. After the
+readiness gates pass and before the selected cutoff arrives, set the
+`lean-eval-submissions` repository Actions variable `ISSUE_INTAKE_CUTOFF` to
+that future canonical UTC-second timestamp and read it back exactly. Do not wait
+until the cutoff instant: installing the future timestamp in advance avoids a
+repository-variable propagation gap. An absent variable means issue intake
+remains open. The `Submission` workflow compares the variable with the first
+attempt's immutable workflow-run creation time, or a rerun attempt's strict
+start time, admits only attempts before the cutoff, and caches that decision
+before intake. Server `workflow_dispatch` submissions do not pass through this
+gate.
 
-Before creating the variable, verify the selected timestamp and that every
-preceding closure gate except the final cutoff/delta readback is satisfied. Read
-the variable back exactly after creation. New issue runs at or after the cutoff
-must complete only the admission job and perform no label, issue, source,
-archive, evaluation, Results, State, or leaderboard mutation. Runs created
-before the cutoff retain their cached admission and may drain normally.
+Before setting the variable, verify the selected future timestamp and that
+every preceding closure gate except the final cutoff/delta readback is
+satisfied. New issue runs at or after the cutoff must complete only the
+admission job and perform no label, issue, source, archive, evaluation, Results,
+State, or leaderboard mutation. First attempts created before the cutoff retain
+their cached admission and may drain normally. A rerun is a new attempt: it is
+admitted only when that attempt's `run_started_at` is also before the cutoff.
 
-If the freeze was activated with the wrong timestamp, delete only
-`ISSUE_INTAKE_CUTOFF`, verify it is absent, and leave issue intake open while a
-corrected cutoff is reviewed. Do not delete the variable merely to retry a
-post-cutoff submission. Final retirement replaces the form with the server link
-only after the final delta and readiness packet have passed.
+Before the selected cutoff, a wrong future value may be reversed by deleting
+only `ISSUE_INTAKE_CUTOFF`, verifying it is absent, and leaving issue intake
+open while a corrected cutoff is reviewed. Once the selected cutoff has passed,
+deleting the variable reopens issue intake and is an incident-recovery action,
+not ordinary rollback. Do not delete the variable merely to retry a post-cutoff
+submission. Final retirement replaces the form with the server link only after
+the final delta and readiness packet have passed.
