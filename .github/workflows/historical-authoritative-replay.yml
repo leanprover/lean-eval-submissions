@@ -8,13 +8,27 @@ on:
         required: true
         type: boolean
         default: false
+      replenish_lane:
+        description: Start the next public task after this run succeeds
+        required: true
+        type: boolean
+        default: false
+      remaining_runs:
+        description: Hard cap including this run (1-1024)
+        required: true
+        type: number
+        default: 1
+      reviewed_implementation_commit:
+        description: Protected baseline; only complete Results-only descendants are accepted
+        required: false
+        type: string
+        default: ''
 
 permissions:
-  contents: read
-  id-token: write
+  contents: none
 
 concurrency:
-  group: lean-eval-historical-replay-controller
+  group: lean-eval-historical-public-replay-controller
   cancel-in-progress: false
 
 jobs:
@@ -22,6 +36,12 @@ jobs:
     if: >-
       inputs.confirm_authoritative_replay == true &&
       vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      preflight_kind: ${{ steps.preflight.outputs.kind }}
+      plan_kind: ${{ steps.plan.outputs.kind }}
     environment: replay-production
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -30,6 +50,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           HISTORICAL_CONTROLLER_ENABLED: ${{ vars.HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED }}
+          REPLENISH_LANE: ${{ inputs.replenish_lane }}
+          REVIEWED_IMPLEMENTATION_COMMIT: ${{ inputs.reviewed_implementation_commit }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
@@ -39,6 +61,25 @@ jobs:
           branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
             --jq '[.commit.sha, .protected] | @tsv')
           test "$branch" = "$GITHUB_SHA"$'\ttrue'
+          if [ "$REPLENISH_LANE" = true ]; then
+            [[ "$REVIEWED_IMPLEMENTATION_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+            if [ "$GITHUB_SHA" != "$REVIEWED_IMPLEMENTATION_COMMIT" ]; then
+              comparison=$(timeout 30s gh api \
+                "repos/$GITHUB_REPOSITORY/compare/$REVIEWED_IMPLEMENTATION_COMMIT...$GITHUB_SHA")
+              jq -e --arg base "$REVIEWED_IMPLEMENTATION_COMMIT" \
+                --arg head "$GITHUB_SHA" '
+                  .status == "ahead" and .base_commit.sha == $base and
+                  .merge_base_commit.sha == $base and .head_commit.sha == $head and
+                  .ahead_by == .total_commits and
+                  .ahead_by == (.commits | length) and
+                  (.files | length) > 0 and (.files | length) < 300 and
+                  all(.files[];
+                    (.filename | test("^results/[a-z0-9][a-z0-9._-]*[.]json$")) and
+                    (.status == "added" or .status == "modified") and
+                    (has("previous_filename") | not))
+                ' <<< "$comparison" >/dev/null
+            fi
+          fi
           echo "HISTORICAL_REPLAY_JOB_STARTED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -294,20 +335,47 @@ jobs:
         if: steps.reserve.outputs.reserved == 'true'
         env:
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
-          EXPECTED_STATE_HEAD: ${{ steps.preflight.outputs.state_head }}
         run: |
           set -euo pipefail
           test -z "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -z "${CLOUDFLARE_API_TOKEN:-}"
-          python scripts/historical_replay_controller.py state-event started \
-            --plan "$RUNNER_TEMP/historical-replay-plan.json" \
-            --queue "$RUNNER_TEMP/state-views/historical-public-replay-queue.json" \
-            --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
-            --output "$RUNNER_TEMP/started-event.json"
-          state_head=$(scripts/publish_replay_state_event --environment production \
-            --root state --event "$RUNNER_TEMP/started-event.json" \
-            --expected-head "$EXPECTED_STATE_HEAD" \
-            --message "Start one historical authoritative replay")
+          published=false
+          for cas_attempt in $(seq 1 4); do
+            local_head=$(git -C state rev-parse HEAD)
+            test -z "$(git -C state status --porcelain=v1 --untracked-files=all)"
+            git -C state fetch --no-tags origin \
+              refs/heads/main:refs/remotes/origin/main
+            remote_head=$(git -C state rev-parse refs/remotes/origin/main)
+            git -C state merge-base --is-ancestor "$local_head" "$remote_head"
+            git -C state merge --ff-only refs/remotes/origin/main
+            python state/scripts/state.py --root state validate
+            views="$RUNNER_TEMP/state-views.cas-$cas_attempt"
+            python state/scripts/state.py --root state materialize --output "$views"
+            plan="$RUNNER_TEMP/historical-replay-plan.cas-$cas_attempt.json"
+            event="$RUNNER_TEMP/started-event.cas-$cas_attempt.json"
+            publish_root="$RUNNER_TEMP/historical-started-state-publish-$cas_attempt"
+            python scripts/historical_replay_controller.py refresh-rebind-plan \
+              --plan "$RUNNER_TEMP/historical-replay-plan.json" \
+              --queue "$views/historical-public-replay-queue.json" \
+              --repository-root . --output "$plan"
+            python scripts/historical_replay_controller.py state-event started \
+              --plan "$plan" \
+              --queue "$views/historical-public-replay-queue.json" \
+              --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
+              --output "$event"
+            expected=$(git -C state rev-parse HEAD)
+            git clone --quiet --no-hardlinks state "$publish_root"
+            if state_head=$(scripts/publish_replay_state_event \
+              --environment production --root "$publish_root" --event "$event" \
+              --expected-head "$expected" \
+              --message "Start one historical authoritative replay"); then
+              mv "$plan" "$RUNNER_TEMP/historical-replay-plan.json"
+              mv "$event" "$RUNNER_TEMP/started-event.json"
+              published=true
+              break
+            fi
+          done
+          test "$published" = true
           echo source_fetch_failed > "$RUNNER_TEMP/failure-reason"
           echo 'appended=true' >> "$GITHUB_OUTPUT"
           echo "state_head=$state_head" >> "$GITHUB_OUTPUT"
@@ -763,7 +831,9 @@ jobs:
             if [ -f "$path" ]; then shred --remove "$path"; fi
           done
           rm -rf state "$RUNNER_TEMP/state-views" "$RUNNER_TEMP/source" "$RUNNER_TEMP/benchmark"
-          rm -rf "$RUNNER_TEMP"/historical-terminal-state-publish-* \
+          rm -rf "$RUNNER_TEMP"/state-views.cas-* \
+            "$RUNNER_TEMP"/historical-started-state-publish-* \
+            "$RUNNER_TEMP"/historical-terminal-state-publish-* \
             "$RUNNER_TEMP"/historical-failure-state-publish-*
           find "$RUNNER_TEMP" -maxdepth 1 -type f \
             \( -name '*historical*' -o -name '*executor*' -o -name '*event.json' \
@@ -771,3 +841,67 @@ jobs:
                -o -name 'failure-reason' -o -name 'qualification.json' \
                -o -name 'profile-matrix.json' -o -name 'runner-contract.json' \) -delete
           echo 'No AWS credential or encrypted private archive was used.' >> "$GITHUB_STEP_SUMMARY"
+
+  replenish-public-lane:
+    needs: replay-one
+    if: >-
+      ${{
+        !cancelled() && needs.replay-one.result == 'success' &&
+        inputs.replenish_lane == true && inputs.remaining_runs > 1 &&
+        needs.replay-one.outputs.preflight_kind != 'busy' &&
+        needs.replay-one.outputs.plan_kind != 'empty' &&
+        needs.replay-one.outputs.plan_kind != 'blocked'
+      }}
+    permissions:
+      actions: write
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch exactly one bounded public-lane successor
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REMAINING_RUNS: ${{ inputs.remaining_runs }}
+          REVIEWED_IMPLEMENTATION_COMMIT: ${{ inputs.reviewed_implementation_commit }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          [[ "$REMAINING_RUNS" =~ ^[0-9]+$ ]]
+          [[ "$REVIEWED_IMPLEMENTATION_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          test "$REMAINING_RUNS" -ge 2
+          test "$REMAINING_RUNS" -le 1024
+          branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.commit.sha, .protected] | @tsv')
+          head=${branch%%$'\t'*}
+          test "$branch" = "$head"$'\t'true
+          if [ "$head" != "$REVIEWED_IMPLEMENTATION_COMMIT" ]; then
+            comparison=$(timeout 30s gh api \
+              "repos/$GITHUB_REPOSITORY/compare/$REVIEWED_IMPLEMENTATION_COMMIT...$head")
+            jq -e --arg base "$REVIEWED_IMPLEMENTATION_COMMIT" --arg head "$head" '
+              .status == "ahead" and .base_commit.sha == $base and
+              .merge_base_commit.sha == $base and .head_commit.sha == $head and
+              .ahead_by == .total_commits and .ahead_by == (.commits | length) and
+              (.files | length) > 0 and (.files | length) < 300 and
+              all(.files[];
+                (.filename | test("^results/[a-z0-9][a-z0-9._-]*[.]json$")) and
+                (.status == "added" or .status == "modified") and
+                (has("previous_filename") | not))
+            ' <<< "$comparison" >/dev/null
+          fi
+          next_runs=$(( REMAINING_RUNS - 1 ))
+          request=$(mktemp)
+          trap 'rm -f "$request"' EXIT
+          jq -n --arg remaining "$next_runs" '{
+            ref: "main",
+            inputs: {
+              confirm_authoritative_replay: "true",
+              replenish_lane: "true",
+              remaining_runs: $remaining,
+              reviewed_implementation_commit: env.REVIEWED_IMPLEMENTATION_COMMIT
+            }
+          }' > "$request"
+          timeout 30s gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/historical-authoritative-replay.yml/dispatches" \
+            --input "$request"

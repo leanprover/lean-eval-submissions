@@ -1,0 +1,107 @@
+name: Start bounded historical replay lanes (temporary)
+
+# Temporary retained-baseline machinery. Remove this workflow with the two
+# historical controllers after both queues are terminal and executor cleanup
+# has been proved. It carries no replay, State, Cloudflare, AWS, or audit secret.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_two_lane_replay:
+        description: Start at most one public and one private replay lane
+        required: true
+        type: boolean
+        default: false
+      public_run_budget:
+        description: Public runs including recovery passes (1-1024)
+        required: true
+        type: number
+        default: 256
+      private_run_budget:
+        description: Private runs including recovery passes (1-1024)
+        required: true
+        type: number
+        default: 768
+
+permissions:
+  contents: none
+
+concurrency:
+  group: lean-eval-historical-replay-two-lane-driver
+  cancel-in-progress: false
+
+jobs:
+  start-public-lane:
+    if: inputs.confirm_two_lane_replay == true
+    permissions:
+      actions: write
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch the first bounded public-lane run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_BUDGET: ${{ inputs.public_run_budget }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          [[ "$RUN_BUDGET" =~ ^[0-9]+$ ]]
+          test "$RUN_BUDGET" -ge 1
+          test "$RUN_BUDGET" -le 1024
+          branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.commit.sha, .protected] | @tsv')
+          test "$branch" = "$GITHUB_SHA"$'\t'true
+          request=$(mktemp)
+          trap 'rm -f "$request"' EXIT
+          jq -n --arg budget "$RUN_BUDGET" --arg baseline "$GITHUB_SHA" '{
+            ref: "main",
+            inputs: {
+              confirm_authoritative_replay: "true",
+              replenish_lane: "true",
+              remaining_runs: $budget,
+              reviewed_implementation_commit: $baseline
+            }
+          }' > "$request"
+          timeout 30s gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/historical-authoritative-replay.yml/dispatches" \
+            --input "$request"
+
+  start-private-lane:
+    if: inputs.confirm_two_lane_replay == true
+    permissions:
+      actions: write
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch the first bounded private-lane run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_BUDGET: ${{ inputs.private_run_budget }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = leanprover/lean-eval-submissions
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REF_PROTECTED" = true
+          [[ "$RUN_BUDGET" =~ ^[0-9]+$ ]]
+          test "$RUN_BUDGET" -ge 1
+          test "$RUN_BUDGET" -le 1024
+          branch=$(timeout 30s gh api "repos/$GITHUB_REPOSITORY/branches/main" \
+            --jq '[.commit.sha, .protected] | @tsv')
+          test "$branch" = "$GITHUB_SHA"$'\t'true
+          request=$(mktemp)
+          trap 'rm -f "$request"' EXIT
+          jq -n --arg budget "$RUN_BUDGET" --arg baseline "$GITHUB_SHA" '{
+            ref: "main",
+            inputs: {
+              confirm_historical_private_replay: "true",
+              replenish_lane: "true",
+              remaining_runs: $budget,
+              reviewed_implementation_commit: $baseline
+            }
+          }' > "$request"
+          timeout 30s gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/historical-private-replay.yml/dispatches" \
+            --input "$request"

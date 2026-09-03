@@ -42,6 +42,32 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("queue is empty, State proves", WORKFLOW)
         self.assertIn("no `hpr-` Worker or `le-hpr-` application remains", WORKFLOW)
 
+    def test_replenishment_is_bounded_and_has_separate_permissions(self) -> None:
+        replay, replenish = WORKFLOW.split("  replenish-private-lane:", 1)
+        self.assertIn("permissions:\n      contents: read\n      id-token: write", replay)
+        self.assertNotIn("actions: write", replay)
+        self.assertIn("permissions:\n      actions: write", replenish)
+        self.assertIn("contents: read", replenish)
+        self.assertNotIn("environment: replay-production", replenish)
+        self.assertNotIn("secrets.", replenish)
+        self.assertNotIn("actions/checkout", replenish)
+        self.assertIn("needs.replay-one.result == 'success'", replenish)
+        self.assertIn("!cancelled()", replenish)
+        self.assertIn("inputs.remaining_runs > 1", replenish)
+        self.assertIn('test "$REMAINING_RUNS" -le 1024', replenish)
+        self.assertIn("needs.replay-one.outputs.preflight_kind != 'busy'", replenish)
+        self.assertIn("needs.replay-one.outputs.plan_kind != 'empty'", replenish)
+        self.assertIn("REVIEWED_IMPLEMENTATION_COMMIT", replenish)
+        self.assertIn(".merge_base_commit.sha == $base", replenish)
+        self.assertIn(".ahead_by == (.commits | length)", replenish)
+        self.assertIn("(.files | length) < 300", replenish)
+        self.assertIn('test("^results/', replenish)
+        self.assertEqual(replenish.count("actions/workflows/"), 1)
+        self.assertIn(
+            "actions/workflows/historical-private-replay.yml/dispatches",
+            replenish,
+        )
+
     def test_only_exact_protected_main_can_run(self) -> None:
         preflight = step(
             "Require exact protected main and the explicit dark gate",

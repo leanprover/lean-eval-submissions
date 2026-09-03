@@ -1020,6 +1020,49 @@ def validate_plan_against_queue(plan_value: Any, queue_value: Any) -> dict[str, 
     return plan
 
 
+def rebind_execution_plan(
+    plan_value: Any,
+    queue_value: Any,
+    authority_plan: dict[str, Any],
+    authority_raw: bytes,
+    qualification_value: dict[str, Any],
+    qualification_raw: bytes,
+    matrix_value: dict[str, Any],
+    matrix_raw: bytes,
+    contract_value: dict[str, Any],
+    contract_raw: bytes,
+) -> dict[str, Any]:
+    """Refresh only a plan's whole-State queue binding after unrelated appends."""
+    original = validate_execution_plan(plan_value)
+    refreshed = plan_next(
+        queue_value,
+        authority_plan,
+        authority_raw,
+        qualification_value,
+        qualification_raw,
+        matrix_value,
+        matrix_raw,
+        contract_value,
+        contract_raw,
+    )
+    if refreshed.get("kind") != "execution":
+        raise HistoricalReplayControllerError(
+            "historical plan is no longer an executable live queue task"
+        )
+    immutable_queue_fields = ("queue_environment", "task_sha256")
+    queue_changed = any(
+        refreshed["queue"][field] != original["queue"][field]
+        for field in immutable_queue_fields
+    )
+    original_without_queue = {k: v for k, v in original.items() if k != "queue"}
+    refreshed_without_queue = {k: v for k, v in refreshed.items() if k != "queue"}
+    if queue_changed or refreshed_without_queue != original_without_queue:
+        raise HistoricalReplayControllerError(
+            "historical plan task changed while refreshing State"
+        )
+    return refreshed
+
+
 def started_event(
     plan_value: Any,
     queue_value: Any,
@@ -2237,6 +2280,11 @@ def parser() -> argparse.ArgumentParser:
     event.add_argument("--queue", required=True, type=pathlib.Path)
     event.add_argument("--trusted-now", required=True)
     event.add_argument("--output", required=True, type=pathlib.Path)
+    rebind = commands.add_parser("refresh-rebind-plan")
+    rebind.add_argument("--plan", required=True, type=pathlib.Path)
+    rebind.add_argument("--queue", required=True, type=pathlib.Path)
+    rebind.add_argument("--repository-root", required=True, type=pathlib.Path)
+    rebind.add_argument("--output", required=True, type=pathlib.Path)
     recover = commands.add_parser("recover")
     recover.add_argument("--events-root", required=True, type=pathlib.Path)
     recover.add_argument("--state-validated", required=True, action="store_true")
@@ -2330,6 +2378,31 @@ def main() -> int:
             queue, _ = _load_state_canonical(args.queue, "historical replay queue")
             value = started_event(plan, queue, args.trusted_now)
             _write(args.output, value, state_canonical_bytes)
+        elif args.command == "refresh-rebind-plan":
+            plan, _ = _load_canonical(args.plan, "historical execution plan")
+            queue, _ = _load_state_canonical(args.queue, "State queue")
+            validated_queue = validate_queue(queue)
+            selected = _next_eligible_task(validated_queue)
+            if selected is None:
+                raise HistoricalReplayControllerError(
+                    "historical plan is no longer an executable live queue task"
+                )
+            reviewed = load_reviewed_inputs(args.repository_root, selected)
+            _write(
+                args.output,
+                rebind_execution_plan(
+                    plan,
+                    queue,
+                    reviewed[0],
+                    reviewed[1],
+                    reviewed[2],
+                    reviewed[3],
+                    reviewed[4],
+                    reviewed[5],
+                    reviewed[6],
+                    reviewed[7],
+                ),
+            )
         elif args.command == "terminal-event":
             plan, _ = _load_canonical(args.plan, "historical execution plan")
             started, _ = _load_state_canonical(
