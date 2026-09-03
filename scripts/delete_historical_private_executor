@@ -34,6 +34,10 @@ cleanup() {
 trap cleanup EXIT
 
 worker_endpoint="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/services/$worker"
+# Delete the service directly so this temporary, non-Workers-Sites executor
+# does not require Wrangler's unrelated KV namespace-list permission.
+worker_delete_endpoint="$worker_endpoint?force=true"
+worker_delete_requested=false
 worker_absent=false
 for retry in 1 2 3 4; do
   code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
@@ -44,7 +48,23 @@ for retry in 1 2 3 4; do
     break
   fi
   test "$code" = 200
-  npx --prefix server wrangler delete "$worker" --force || true
+  if test "$worker_delete_requested" = false; then
+    delete_code=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+      --max-time 30 --request DELETE \
+      --output "$scratch/worker-delete.json" --write-out '%{http_code}' \
+      --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+      "$worker_delete_endpoint")
+    case "$delete_code" in
+      200)
+        if test -s "$scratch/worker-delete.json"; then
+          jq -e '.success == true' "$scratch/worker-delete.json" >/dev/null
+        fi
+        ;;
+      404) ;; # The Worker disappeared between the ownership read and delete.
+      *) echo "historical private executor Worker delete failed: HTTP $delete_code" >&2; exit 1 ;;
+    esac
+    worker_delete_requested=true
+  fi
   test "$retry" -lt 4
   sleep $((retry * 5))
 done

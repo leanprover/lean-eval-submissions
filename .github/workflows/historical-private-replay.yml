@@ -169,7 +169,7 @@ jobs:
           test -z "$(git -C state status --short)"
           test -z "$(git -C audit status --short)"
           python scripts/historical_private_replay_controller.py refresh-state \
-            --state-root state --output "$RUNNER_TEMP/refreshed-state.json"
+            --state-root state --output "$RUNNER_TEMP/refreshed-state-preflight.json"
           python state/scripts/state.py --root state validate
           python state/scripts/state.py --root state materialize \
             --output "$RUNNER_TEMP/state-views"
@@ -204,18 +204,22 @@ jobs:
           jq -n --arg task "$REPLAY_TASK_ID" --argjson attempt "$REPLAY_ATTEMPT" \
             '{schema_version:1,replay_task_id:$task,attempt:$attempt}' \
             > "$RUNNER_TEMP/recovery-cleanup-request.json"
+          recovery_proof_index=0
           prove_recovery() {
+            recovery_proof_index=$((recovery_proof_index + 1))
+            refreshed="$RUNNER_TEMP/refreshed-state-recovery-$recovery_proof_index.json"
+            proof="$RUNNER_TEMP/recovery-current-$recovery_proof_index.json"
             python scripts/historical_private_replay_controller.py refresh-state \
-              --state-root state --output "$RUNNER_TEMP/refreshed-state.json"
+              --state-root state --output "$refreshed"
             python scripts/historical_private_replay_controller.py recover \
               --state-root state \
               --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
-              --output "$RUNNER_TEMP/recovery-current.json"
-            test "$(jq -er .kind "$RUNNER_TEMP/recovery-current.json")" = \
+              --output "$proof"
+            test "$(jq -er .kind "$proof")" = \
               cleanup_required
-            test "$(jq -er .replay_task_id "$RUNNER_TEMP/recovery-current.json")" = \
+            test "$(jq -er .replay_task_id "$proof")" = \
               "$REPLAY_TASK_ID"
-            test "$(jq -er .attempt "$RUNNER_TEMP/recovery-current.json")" = \
+            test "$(jq -er .attempt "$proof")" = \
               "$REPLAY_ATTEMPT"
           }
           prove_recovery
@@ -265,7 +269,8 @@ jobs:
             event="$RUNNER_TEMP/recovery-event.cas-$cas_attempt.json"
             publish_root="$RUNNER_TEMP/recovery-state-publish-$cas_attempt"
             python scripts/historical_private_replay_controller.py refresh-state \
-              --state-root state --output "$RUNNER_TEMP/refreshed-state.json"
+              --state-root state \
+              --output "$RUNNER_TEMP/refreshed-state-recovery-cas-$cas_attempt.json"
             python scripts/historical_private_replay_controller.py recover \
               --state-root state \
               --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
@@ -309,11 +314,13 @@ jobs:
         run: |
           set -euo pipefail
           python scripts/historical_private_replay_controller.py refresh-state \
-            --state-root state --output "$RUNNER_TEMP/refreshed-state.json"
+            --state-root state \
+            --output "$RUNNER_TEMP/refreshed-state-before-recovered-delete.json"
           scripts/delete_historical_private_executor \
             "$WORKER_NAME" "$APPLICATION_NAME"
           python scripts/historical_private_replay_controller.py refresh-state \
-            --state-root state --output "$RUNNER_TEMP/refreshed-state.json"
+            --state-root state \
+            --output "$RUNNER_TEMP/refreshed-state-after-recovered-delete.json"
 
       - name: Report a non-stale running controller and stop
         if: steps.preflight.outputs.kind == 'busy'
@@ -363,8 +370,8 @@ jobs:
           test "$CLOUDFLARE_ACCOUNT_ID" = a46b90978a1c29cc4795f30677e7e4b8
           python scripts/historical_private_replay_controller.py refresh-rebind-plan \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
-            --output "$RUNNER_TEMP/private-replay-plan.refreshed.json"
-          mv "$RUNNER_TEMP/private-replay-plan.refreshed.json" \
+            --output "$RUNNER_TEMP/private-replay-plan.resource-preflight-initial.json"
+          mv "$RUNNER_TEMP/private-replay-plan.resource-preflight-initial.json" \
             "$RUNNER_TEMP/private-replay-plan.json"
           config="$RUNNER_TEMP/historical-private-wrangler.json"
           python scripts/historical_private_replay_controller.py render-executor-config \
@@ -436,8 +443,8 @@ jobs:
             fi
             python scripts/historical_private_replay_controller.py refresh-rebind-plan \
               --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
-              --output "$RUNNER_TEMP/private-replay-plan.refreshed.json"
-            mv "$RUNNER_TEMP/private-replay-plan.refreshed.json" \
+              --output "$RUNNER_TEMP/private-replay-plan.before-orphan-delete.json"
+            mv "$RUNNER_TEMP/private-replay-plan.before-orphan-delete.json" \
               "$RUNNER_TEMP/private-replay-plan.json"
             : > "$RUNNER_TEMP/verified-orphan-collision"
             scripts/delete_historical_private_executor "$worker" "$application"
@@ -455,8 +462,8 @@ jobs:
           fi
           python scripts/historical_private_replay_controller.py refresh-rebind-plan \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
-            --output "$RUNNER_TEMP/private-replay-plan.refreshed.json"
-          mv "$RUNNER_TEMP/private-replay-plan.refreshed.json" \
+            --output "$RUNNER_TEMP/private-replay-plan.resource-preflight-final.json"
+          mv "$RUNNER_TEMP/private-replay-plan.resource-preflight-final.json" \
             "$RUNNER_TEMP/private-replay-plan.json"
           {
             echo "worker=$worker"
@@ -477,8 +484,8 @@ jobs:
           config="$RUNNER_TEMP/historical-private-wrangler.json"
           python scripts/historical_private_replay_controller.py refresh-rebind-plan \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
-            --output "$RUNNER_TEMP/private-replay-plan.refreshed.json"
-          mv "$RUNNER_TEMP/private-replay-plan.refreshed.json" \
+            --output "$RUNNER_TEMP/private-replay-plan.before-deploy.json"
+          mv "$RUNNER_TEMP/private-replay-plan.before-deploy.json" \
             "$RUNNER_TEMP/private-replay-plan.json"
           test "$(jq -er .name "$config")" = "$WORKER_NAME"
           : > "$RUNNER_TEMP/executor-deploy-attempted"
@@ -512,8 +519,8 @@ jobs:
             ' "$RUNNER_TEMP/executor-health.json" >/dev/null
           python scripts/historical_private_replay_controller.py refresh-rebind-plan \
             --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
-            --output "$RUNNER_TEMP/private-replay-plan.refreshed.json"
-          mv "$RUNNER_TEMP/private-replay-plan.refreshed.json" \
+            --output "$RUNNER_TEMP/private-replay-plan.after-deploy.json"
+          mv "$RUNNER_TEMP/private-replay-plan.after-deploy.json" \
             "$RUNNER_TEMP/private-replay-plan.json"
           rm -f "$config"
           {
@@ -532,11 +539,14 @@ jobs:
           test -z "${STATE_WRITE_KEY:-}"
           test -z "${AWS_ACCESS_KEY_ID:-}"
           test -z "${CLOUDFLARE_API_TOKEN:-}"
+          queued_proof_index=0
           refresh_queued() {
+            queued_proof_index=$((queued_proof_index + 1))
+            rebound="$RUNNER_TEMP/private-replay-plan.reserve-$queued_proof_index.json"
             python scripts/historical_private_replay_controller.py refresh-rebind-plan \
               --plan "$RUNNER_TEMP/private-replay-plan.json" --state-root state \
-              --output "$RUNNER_TEMP/private-replay-plan.refreshed.json"
-            mv "$RUNNER_TEMP/private-replay-plan.refreshed.json" \
+              --output "$rebound"
+            mv "$rebound" \
               "$RUNNER_TEMP/private-replay-plan.json"
           }
           refresh_queued
@@ -671,12 +681,15 @@ jobs:
               "$RUNNER_TEMP/reuse-metadata.json"
           }
           trap cleanup EXIT
+          running_proof_index=0
           prove_running() {
+            running_proof_index=$((running_proof_index + 1))
+            proof="$RUNNER_TEMP/current-running-unwrap-$running_proof_index.json"
             python scripts/historical_private_replay_controller.py refresh-prove-running \
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
-              --state-root state --output "$RUNNER_TEMP/current-running.json"
-            test "$(jq -er .started_event_id "$RUNNER_TEMP/current-running.json")" = \
+              --state-root state --output "$proof"
+            test "$(jq -er .started_event_id "$proof")" = \
               "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           }
           prove_running
@@ -752,12 +765,15 @@ jobs:
           test -z "${AWS_ACCESS_KEY_ID:-}"
           test -z "${STATE_WRITE_KEY:-}"
           test -z "${CLOUDFLARE_API_TOKEN:-}"
+          running_proof_index=0
           prove_running() {
+            running_proof_index=$((running_proof_index + 1))
+            proof="$RUNNER_TEMP/current-running-executor-$running_proof_index.json"
             python scripts/historical_private_replay_controller.py refresh-prove-running \
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
-              --state-root state --output "$RUNNER_TEMP/current-running.json"
-            test "$(jq -er .started_event_id "$RUNNER_TEMP/current-running.json")" = \
+              --state-root state --output "$proof"
+            test "$(jq -er .started_event_id "$proof")" = \
               "$(jq -er .event.event_id "$RUNNER_TEMP/started-candidate.json")"
           }
           mint_oidc() {
@@ -915,7 +931,8 @@ jobs:
               refresh-prove-running \
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
-              --state-root state --output "$RUNNER_TEMP/running-before-terminal.json"
+              --state-root state \
+              --output "$RUNNER_TEMP/running-before-terminal.cas-$cas_attempt.json"
             python scripts/historical_private_replay_controller.py terminal-candidate \
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
@@ -968,7 +985,8 @@ jobs:
               refresh-prove-running \
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
-              --state-root state --output "$RUNNER_TEMP/running-before-failure.json"
+              --state-root state \
+              --output "$RUNNER_TEMP/running-before-failure.cas-$cas_attempt.json"
             python scripts/historical_private_replay_controller.py terminal-candidate \
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
@@ -1066,13 +1084,16 @@ jobs:
           if test ! -f "$terminal_candidate"; then
             terminal_candidate="$RUNNER_TEMP/failure-candidate.json"
           fi
+          terminal_proof_index=0
           prove_terminal() {
+            terminal_proof_index=$((terminal_proof_index + 1))
+            proof="$RUNNER_TEMP/terminal-before-resource-delete-$terminal_proof_index.json"
             python scripts/historical_private_replay_controller.py \
               refresh-verify-terminal \
               --plan "$RUNNER_TEMP/private-replay-plan.json" \
               --started-candidate "$RUNNER_TEMP/started-candidate.json" \
               --terminal-candidate "$terminal_candidate" --state-root state \
-              --output "$RUNNER_TEMP/terminal-before-resource-delete.json"
+              --output "$proof"
           }
           prove_terminal
           scripts/delete_historical_private_executor \
@@ -1133,8 +1154,10 @@ jobs:
             "$RUNNER_TEMP"/*candidate.json \
             "$RUNNER_TEMP"/*.cas-*.json \
             "$RUNNER_TEMP"/private-replay-plan.json \
-            "$RUNNER_TEMP"/private-replay-plan.refreshed.json \
-            "$RUNNER_TEMP"/refreshed-state.json \
+            "$RUNNER_TEMP"/private-replay-plan.*.json \
+            "$RUNNER_TEMP"/refreshed-state*.json \
+            "$RUNNER_TEMP"/recovery-current-*.json \
+            "$RUNNER_TEMP"/terminal-before-resource-delete-*.json \
             "$RUNNER_TEMP"/replay-verdict.json \
             "$RUNNER_TEMP"/failure-reason \
             "$RUNNER_TEMP"/executor-deploy-attempted \

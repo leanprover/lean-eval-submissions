@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
 import pathlib
 import re
+import subprocess
+import tempfile
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -26,6 +29,155 @@ def step(name: str, following_name: str) -> str:
     return WORKFLOW.split(f"- name: {name}", 1)[1].split(
         f"- name: {following_name}", 1
     )[0]
+
+
+class HistoricalPrivateExecutorDeleteTests(unittest.TestCase):
+    worker = "hpr-" + "a" * 56 + "-1"
+    application = "le-hpr-" + "b" * 22 + "-1"
+
+    def run_delete(
+        self,
+        *,
+        worker_absent: bool = False,
+        application_absent: bool = False,
+        delete_status: str = "200",
+        delete_body: str = "",
+    ) -> tuple[subprocess.CompletedProcess[str], str]:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            binary = root / "bin"
+            runner_temp = root / "runner"
+            state = root / "state"
+            binary.mkdir()
+            runner_temp.mkdir()
+            state.mkdir()
+            if worker_absent:
+                (state / "worker-deleted").touch()
+            if application_absent:
+                (state / "application-deleted").touch()
+            curl = binary / "curl"
+            curl.write_text(
+                """#!/usr/bin/env bash
+set -euo pipefail
+output=
+method=GET
+url=
+while test "$#" -gt 0; do
+  case "$1" in
+    --output) output=$2; shift 2 ;;
+    --request) method=$2; shift 2 ;;
+    --write-out|--header|--max-time|--proto) shift 2 ;;
+    --tlsv1.2|--silent|--show-error) shift ;;
+    *) url=$1; shift ;;
+  esac
+done
+printf '%s %s\n' "$method" "$url" >> "$FAKE_STATE/curl.log"
+if test "$method" = DELETE; then
+  printf '%s' "$FAKE_DELETE_BODY" > "$output"
+  if test "$FAKE_DELETE_STATUS" = 200 -o "$FAKE_DELETE_STATUS" = 404; then
+    touch "$FAKE_STATE/worker-deleted"
+  fi
+  printf '%s' "$FAKE_DELETE_STATUS"
+elif test -e "$FAKE_STATE/worker-deleted"; then
+  : > "$output"
+  printf 404
+else
+  printf '{"success":true}' > "$output"
+  printf 200
+fi
+""",
+                encoding="utf-8",
+            )
+            curl.chmod(0o755)
+            npx = binary / "npx"
+            npx.write_text(
+                """#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$FAKE_STATE/npx.log"
+case " $* " in
+  *" containers list "*)
+    if test -e "$FAKE_STATE/application-deleted"; then
+      printf '[]\n'
+    else
+      printf '[{"name":"%s","id":"11111111-1111-1111-1111-111111111111"}]\n' \
+        "$FAKE_APPLICATION"
+    fi
+    ;;
+  *" containers delete "*) touch "$FAKE_STATE/application-deleted" ;;
+  *) exit 97 ;;
+esac
+""",
+                encoding="utf-8",
+            )
+            npx.chmod(0o755)
+            sleep = binary / "sleep"
+            sleep.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+            sleep.chmod(0o755)
+            environment = {
+                **os.environ,
+                "PATH": f"{binary}:{os.environ['PATH']}",
+                "RUNNER_TEMP": str(runner_temp),
+                "CLOUDFLARE_ACCOUNT_ID": "a46b90978a1c29cc4795f30677e7e4b8",
+                "CLOUDFLARE_API_TOKEN": "test-token",
+                "FAKE_STATE": str(state),
+                "FAKE_APPLICATION": self.application,
+                "FAKE_DELETE_STATUS": delete_status,
+                "FAKE_DELETE_BODY": delete_body,
+            }
+            completed = subprocess.run(
+                [
+                    str(ROOT / "scripts/delete_historical_private_executor"),
+                    self.worker,
+                    self.application,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                env=environment,
+            )
+            logs = "\n".join(
+                path.read_text(encoding="utf-8")
+                for path in (state / "curl.log", state / "npx.log")
+                if path.exists()
+            )
+            return completed, logs
+
+    def test_direct_delete_then_proves_worker_and_application_absent(self) -> None:
+        completed, logs = self.run_delete()
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn(
+            f"DELETE https://api.cloudflare.com/client/v4/accounts/"
+            f"a46b90978a1c29cc4795f30677e7e4b8/workers/services/{self.worker}?force=true",
+            logs,
+        )
+        self.assertIn("containers delete 11111111-1111-1111-1111-111111111111", logs)
+        self.assertNotIn("kv", logs.lower())
+
+    def test_already_absent_resources_are_idempotent(self) -> None:
+        completed, logs = self.run_delete(
+            worker_absent=True,
+            application_absent=True,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertNotIn("DELETE ", logs)
+        self.assertNotIn("containers delete", logs)
+
+    def test_delete_race_404_is_idempotent(self) -> None:
+        completed, _ = self.run_delete(
+            application_absent=True,
+            delete_status="404",
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+
+    def test_unexpected_or_unsuccessful_delete_fails_closed(self) -> None:
+        for status, body in (("403", ""), ("200", '{"success":false}')):
+            with self.subTest(status=status, body=body):
+                completed, _ = self.run_delete(
+                    application_absent=True,
+                    delete_status=status,
+                    delete_body=body,
+                )
+                self.assertNotEqual(completed.returncode, 0)
 
 
 class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
@@ -115,6 +267,21 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertGreaterEqual(WORKFLOW.count("refresh-prove-running"), 8)
         self.assertNotIn("EXPECTED_STATE_HEAD", WORKFLOW)
         self.assertNotIn("STARTED_STATE_HEAD", WORKFLOW)
+
+    def test_static_output_paths_are_not_reused(self) -> None:
+        paths = re.findall(r'--output "\$RUNNER_TEMP/([^"$]+)"', WORKFLOW)
+        duplicates = sorted({path for path in paths if paths.count(path) > 1})
+        self.assertEqual(duplicates, [])
+        for counter in (
+            "recovery_proof_index",
+            "queued_proof_index",
+            "running_proof_index",
+            "terminal_proof_index",
+        ):
+            self.assertIn(f"{counter}=0", WORKFLOW)
+            self.assertIn(f"{counter}=$(({counter} + 1))", WORKFLOW)
+        self.assertIn("running-before-terminal.cas-$cas_attempt.json", WORKFLOW)
+        self.assertIn("running-before-failure.cas-$cas_attempt.json", WORKFLOW)
 
     def test_each_append_refreshes_and_proves_its_exact_event_before_teardown(self) -> None:
         recovery = step(
@@ -326,7 +493,12 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         )
 
     def test_worker_and_container_app_are_verified_absent_after_safe_delete(self) -> None:
-        self.assertIn("wrangler delete", RESOURCE_DELETE)
+        self.assertIn("--request DELETE", RESOURCE_DELETE)
+        self.assertIn(
+            'worker_delete_endpoint="$worker_endpoint?force=true"',
+            RESOURCE_DELETE,
+        )
+        self.assertNotIn("wrangler delete", RESOURCE_DELETE)
         self.assertIn("workers/services/$worker", RESOURCE_DELETE)
         self.assertIn("wrangler containers list --json", RESOURCE_DELETE)
         self.assertIn("wrangler containers delete", RESOURCE_DELETE)
