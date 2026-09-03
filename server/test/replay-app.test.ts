@@ -257,6 +257,104 @@ const REVIEWED_ENV = {
 } as ReplayRuntimeEnv;
 
 describe("Cloudflare replay executor", () => {
+  it("prewarms one exact historical private sandbox without transferring source", async () => {
+    const body = await authoritativeInput();
+    const status = authoritativeStatusInput(body);
+    let activeBinding: unknown = null;
+    let processLookups = 0;
+    const order: string[] = [];
+    const response = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/historical-private-replay/prewarm",
+      { method: "POST", body: JSON.stringify(status) },
+    ), {
+      ...REVIEWED_ENV,
+      DEPLOYMENT_ENVIRONMENT: "historical-private-replay",
+      REPLAY_ENABLED: "true",
+      EXPECTED_REPLAY_TASK_ID: status.replay_task_id as string,
+      EXPECTED_REPLAY_ATTEMPT: String(status.attempt),
+    }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: (_env, runnerNonce) => {
+        order.push("sandbox");
+        expect(runnerNonce).toBe(status.runner_nonce);
+        return {
+          writeFile: () => { throw new Error("source transfer must remain unreachable"); },
+          exec: () => { throw new Error("blocking exec must remain unreachable"); },
+          getProcess: () => {
+            order.push("getProcess");
+            processLookups += 1;
+            return Promise.resolve(null);
+          },
+          startProcess: () => { throw new Error("process start must remain unreachable"); },
+          destroy: () => { throw new Error("ready sandbox must remain warm"); },
+        };
+      },
+      receiptStore: () => ({
+        claimBinding: (value: unknown) => {
+          order.push("binding");
+          if (activeBinding === null) activeBinding = value;
+          return Promise.resolve(activeBinding);
+        },
+        readBinding: () => Promise.resolve(activeBinding),
+        readReceipt: () => Promise.resolve(null),
+        prepareReceipt: () => { throw new Error("receipt preparation must remain unreachable"); },
+        confirmReceipt: () => { throw new Error("receipt confirmation must remain unreachable"); },
+      }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ...status, status: "ready" });
+    expect(activeBinding).toMatchObject(status);
+    expect(typeof (activeBinding as Record<string, unknown>).cleanup_after_epoch_ms)
+      .toBe("number");
+    expect(typeof (activeBinding as Record<string, unknown>).retained_until_epoch_ms)
+      .toBe("number");
+    expect(order).toEqual(["binding", "sandbox", "getProcess"]);
+    expect(processLookups).toBe(1);
+  });
+
+  it("does not expose private prewarm on an ordinary replay deployment", async () => {
+    let authenticated = false;
+    const response = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/historical-private-replay/prewarm",
+      { method: "POST", body: "{}" },
+    ), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+      authenticate: () => {
+        authenticated = true;
+        return Promise.resolve();
+      },
+      sandbox: () => { throw new Error("sandbox must remain unreachable"); },
+    });
+    expect(response.status).toBe(404);
+    expect(authenticated).toBe(false);
+  });
+
+  it("rejects a private prewarm outside its rendered task binding", async () => {
+    const body = await authoritativeInput();
+    const status = authoritativeStatusInput(body);
+    const expectedTask = status.replay_task_id as string;
+    status.replay_task_id = `rt1_${"f".repeat(64)}`;
+    let sandboxLookups = 0;
+    const response = await handleReplayRequest(new Request(
+      "https://example.test/api/v1/historical-private-replay/prewarm",
+      { method: "POST", body: JSON.stringify(status) },
+    ), {
+      ...REVIEWED_ENV,
+      DEPLOYMENT_ENVIRONMENT: "historical-private-replay",
+      REPLAY_ENABLED: "true",
+      EXPECTED_REPLAY_TASK_ID: expectedTask,
+      EXPECTED_REPLAY_ATTEMPT: "1",
+    }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => {
+        sandboxLookups += 1;
+        throw new Error("sandbox must remain unreachable");
+      },
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_request" });
+    expect(sandboxLookups).toBe(0);
+  });
+
   it("rejects a historical private request outside its rendered task binding", async () => {
     const body = await authoritativeInput();
     const execution = body.request as Record<string, unknown>;

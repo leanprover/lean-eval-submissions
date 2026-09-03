@@ -1489,6 +1489,8 @@ export async function handleReplayRequest(
   const archiveAcceptance = url.pathname === "/api/v1/staging-archive-acceptance";
   const authoritativeReplay = url.pathname === "/api/v1/replay";
   const authoritativeStatus = url.pathname === "/api/v1/replay/status";
+  const authoritativePrewarm = url.pathname
+    === "/api/v1/historical-private-replay/prewarm";
   const historicalPublicReplay = url.pathname === "/api/v1/historical-public-replay";
   const historicalPublicStatus = url.pathname === "/api/v1/historical-public-replay/status";
   const historicalPublicCleanup = url.pathname === "/api/v1/historical-public-replay/cleanup";
@@ -1500,6 +1502,7 @@ export async function handleReplayRequest(
       && !archiveAcceptance
       && !authoritativeReplay
       && !authoritativeStatus
+      && !authoritativePrewarm
       && !historicalPublicReplay
       && !historicalPublicStatus
       && !historicalPublicCleanup
@@ -1509,8 +1512,14 @@ export async function handleReplayRequest(
   ) {
     return json({ error: "not_found" }, 404);
   }
-  if (authoritativeReplay && env.REPLAY_ENABLED !== "true") {
+  if ((authoritativeReplay || authoritativePrewarm) && env.REPLAY_ENABLED !== "true") {
     return json({ error: "replay_disabled" }, 503);
+  }
+  if (
+    authoritativePrewarm
+    && env.DEPLOYMENT_ENVIRONMENT !== "historical-private-replay"
+  ) {
+    return json({ error: "not_found" }, 404);
   }
   if (
     (
@@ -1647,6 +1656,45 @@ export async function handleReplayRequest(
         return json({ error: "invalid_request" }, 400);
       }
       recordExecutorFailure("historical_public_replay", error);
+      return authoritativeExecutorFailure(error);
+    }
+  }
+  if (authoritativePrewarm) {
+    try {
+      await dependencies.authenticate(request, env);
+      const input = await readAuthoritativeReplayStatusRequest(
+        request,
+        env.REVIEWED_EXECUTION_PROFILE_DIGEST,
+        env.REVIEWED_MEASUREMENT_CONFIG_DIGEST,
+        env.REVIEWED_VM_IMAGE_DIGEST,
+      );
+      requireHistoricalPrivateBinding(env, input);
+      // Claim the cleanup reservation before the first sandbox RPC. A prewarm
+      // creates the nonce-named sandbox even though it transfers no source. If
+      // the controller later fails before /api/v1/replay, cleanup must still
+      // know that exact nonce rather than treating the reservation as proof
+      // that no sandbox exists.
+      const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
+      await claimActiveBinding(store, input);
+      const sandbox = await dependencies.sandbox(env, input.runner_nonce);
+      if (sandbox.getProcess === undefined) {
+        throw new ReplayExecutorError("command_rpc_failed");
+      }
+      try {
+        // This is deliberately the only container RPC. It makes Cloudflare
+        // provision the exact sandbox before State records an attempt and
+        // before any private archive key or ciphertext reaches the Worker.
+        await sandbox.getProcess(AUTHORITATIVE_PROCESS_ID);
+      } catch {
+        throw new ReplayExecutorError("command_rpc_failed");
+      }
+      return json({ ...input, status: "ready" });
+    } catch (error) {
+      if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
+      if (error instanceof AuthoritativeReplayContractError || error instanceof SyntaxError) {
+        return json({ error: "invalid_request" }, 400);
+      }
+      recordExecutorFailure("historical_private_replay_prewarm", error);
       return authoritativeExecutorFailure(error);
     }
   }

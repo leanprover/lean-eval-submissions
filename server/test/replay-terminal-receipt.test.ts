@@ -91,6 +91,30 @@ describe("durable replay sandbox cleanup", () => {
     expect(storage.values.get(ACTIVE_BINDING_KEY)).toEqual(binding);
   });
 
+  it("destroys a prewarmed reserved sandbox even when replay never starts", async () => {
+    const storage = storageFixture();
+    let destroyCalls = 0;
+    const instance = receiptFixture(storage, () => {
+      destroyCalls += 1;
+      return Promise.resolve();
+    });
+    const binding = activeBinding();
+    const identity = {
+      schema_version: 1 as const,
+      replay_task_id: binding.replay_task_id as string,
+      attempt: binding.attempt as number,
+    };
+
+    await instance.reserveCleanupIdentity(identity);
+    await instance.claimReservedBinding(binding);
+    const marker = await instance.destroyBoundSandbox(identity);
+
+    expect(marker).toMatchObject({ ...identity, destruction_state: "confirmed" });
+    expect(destroyCalls).toBe(1);
+    expect(storage.values.get(ACTIVE_BINDING_KEY)).toEqual(binding);
+    expect(storage.values.has(RESERVATION_KEY)).toBe(false);
+  });
+
   it("rejects a reserved authoritative claim after cleanup", async () => {
     const storage = storageFixture();
     const instance = receiptFixture(storage, () => Promise.resolve());

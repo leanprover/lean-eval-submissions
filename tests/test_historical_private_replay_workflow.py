@@ -184,12 +184,49 @@ esac
 
 class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
     def test_cold_container_start_has_one_bounded_private_sdk_window(self) -> None:
+        prewarm = step(
+            "Prove exact container readiness without private material",
+            "Append the exact replay.started candidate with CAS",
+        )
         start = step(
             "Invoke and poll the exact blocked-network executor",
             "Confirm exact sandbox destruction after every attempted start",
         )
         self.assertIn("--max-time 780", start)
         self.assertNotIn("--retry", start)
+        self.assertIn("refresh_readiness", start)
+        self.assertIn("prewarm-request.json", start)
+        self.assertIn("/api/v1/historical-private-replay/prewarm", start)
+        self.assertLess(
+            start.index("refresh_readiness"),
+            start.index("executor-start-attempted"),
+        )
+        self.assertLess(
+            start.index("prewarm-request.json"),
+            start.index("executor-request.json"),
+        )
+        self.assertIn("prepare-prewarm", prewarm)
+        self.assertIn("/api/v1/historical-private-replay/prewarm", prewarm)
+        self.assertIn("for prewarm_attempt in $(seq 1 4)", prewarm)
+        self.assertIn("--max-time 240", prewarm)
+        self.assertNotIn("archive-file-key", prewarm)
+        self.assertNotIn("unwrap-request", prewarm)
+        self.assertLess(
+            WORKFLOW.index("Prove exact container readiness without private material"),
+            WORKFLOW.index("Append the exact replay.started candidate with CAS"),
+        )
+        self.assertLess(
+            WORKFLOW.index("Prove exact container readiness without private material"),
+            WORKFLOW.index("Prepare the exact five-minute one-use unwrap capability"),
+        )
+        self.assertIn(
+            "if: steps.prewarm.outputs.ready == 'true'",
+            WORKFLOW,
+        )
+        self.assertIn(
+            '--prewarm-request "$RUNNER_TEMP/prewarm-request.json"',
+            WORKFLOW,
+        )
         sandbox = (ROOT / "server/src/replay-sandbox.ts").read_text(
             encoding="utf-8"
         )
