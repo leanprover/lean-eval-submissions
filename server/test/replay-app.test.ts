@@ -260,7 +260,9 @@ describe("Cloudflare replay executor", () => {
   it("prewarms one exact historical private sandbox without transferring source", async () => {
     const body = await authoritativeInput();
     const status = authoritativeStatusInput(body);
+    let activeBinding: unknown = null;
     let processLookups = 0;
+    const order: string[] = [];
     const response = await handleReplayRequest(new Request(
       "https://example.test/api/v1/historical-private-replay/prewarm",
       { method: "POST", body: JSON.stringify(status) },
@@ -273,11 +275,13 @@ describe("Cloudflare replay executor", () => {
     }, {
       authenticate: () => Promise.resolve(),
       sandbox: (_env, runnerNonce) => {
+        order.push("sandbox");
         expect(runnerNonce).toBe(status.runner_nonce);
         return {
           writeFile: () => { throw new Error("source transfer must remain unreachable"); },
           exec: () => { throw new Error("blocking exec must remain unreachable"); },
           getProcess: () => {
+            order.push("getProcess");
             processLookups += 1;
             return Promise.resolve(null);
           },
@@ -285,10 +289,26 @@ describe("Cloudflare replay executor", () => {
           destroy: () => { throw new Error("ready sandbox must remain warm"); },
         };
       },
-      receiptStore: () => { throw new Error("State binding must remain unreachable"); },
+      receiptStore: () => ({
+        claimBinding: (value: unknown) => {
+          order.push("binding");
+          if (activeBinding === null) activeBinding = value;
+          return Promise.resolve(activeBinding);
+        },
+        readBinding: () => Promise.resolve(activeBinding),
+        readReceipt: () => Promise.resolve(null),
+        prepareReceipt: () => { throw new Error("receipt preparation must remain unreachable"); },
+        confirmReceipt: () => { throw new Error("receipt confirmation must remain unreachable"); },
+      }),
     });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ ...status, status: "ready" });
+    expect(activeBinding).toMatchObject(status);
+    expect(typeof (activeBinding as Record<string, unknown>).cleanup_after_epoch_ms)
+      .toBe("number");
+    expect(typeof (activeBinding as Record<string, unknown>).retained_until_epoch_ms)
+      .toBe("number");
+    expect(order).toEqual(["binding", "sandbox", "getProcess"]);
     expect(processLookups).toBe(1);
   });
 

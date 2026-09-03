@@ -1669,6 +1669,13 @@ export async function handleReplayRequest(
         env.REVIEWED_VM_IMAGE_DIGEST,
       );
       requireHistoricalPrivateBinding(env, input);
+      // Claim the cleanup reservation before the first sandbox RPC. A prewarm
+      // creates the nonce-named sandbox even though it transfers no source. If
+      // the controller later fails before /api/v1/replay, cleanup must still
+      // know that exact nonce rather than treating the reservation as proof
+      // that no sandbox exists.
+      const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
+      await claimActiveBinding(store, input);
       const sandbox = await dependencies.sandbox(env, input.runner_nonce);
       if (sandbox.getProcess === undefined) {
         throw new ReplayExecutorError("command_rpc_failed");
