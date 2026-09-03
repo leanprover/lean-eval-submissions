@@ -170,6 +170,30 @@ class HistoricalBaselineStateWorkflowTests(unittest.TestCase):
         self.assertIn('"merge-base",\n        "--is-ancestor",', PUBLIC_AUTHORITY_HELPER)
         self.assertIn("PLAN_COMMIT,\n        qualification_commit,", PUBLIC_AUTHORITY_HELPER)
 
+    def test_private_authority_uses_clean_detached_worktree(self) -> None:
+        create = WORKFLOW.index("Create an exact clean private authority worktree")
+        construct = WORKFLOW.index("Construct both ordinary candidate lanes")
+        cleanup = WORKFLOW.index("Remove review scratch and any residual key material")
+        self.assertLess(create, construct)
+        provision = WORKFLOW[create:construct]
+        self.assertIn('git worktree add --detach "$authority_root" "$GITHUB_SHA"', provision)
+        self.assertIn("rev-parse --is-shallow-repository", provision)
+        self.assertIn("https://github.com/leanprover/lean-eval-submissions.git", provision)
+        self.assertIn("--porcelain=v1 --untracked-files=all", provision)
+        candidate = WORKFLOW[construct:cleanup]
+        self.assertIn(
+            '--plan "$authority_root/evidence/private-replay/plans/', candidate
+        )
+        self.assertNotIn(
+            "--plan evidence/private-replay/plans/", candidate
+        )
+        finalizer = WORKFLOW[cleanup:]
+        self.assertIn(
+            'git worktree remove --force "$RUNNER_TEMP/private-authority"', finalizer
+        )
+        self.assertIn("git worktree prune --expire now", finalizer)
+        self.assertIn('"$RUNNER_TEMP/private-authority"', finalizer)
+
     def test_stage_logs_then_uploads_binding_before_branch_mutation(self) -> None:
         summary = WORKFLOW.index("Record the compact source-free review summary")
         upload = WORKFLOW.index("Upload the source-free promotion binding")

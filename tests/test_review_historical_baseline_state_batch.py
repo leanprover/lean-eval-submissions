@@ -51,6 +51,8 @@ class ReviewHistoricalBaselineStateBatchTests(unittest.TestCase):
         scripts.mkdir()
         (scripts / "validate_state.py").write_text(
             """import json, pathlib
+def load_environment(root,indexed,repository):
+  return json.loads(pathlib.Path(root,'state.json').read_text())['environment']
 def load_tree(root):
   events=[json.loads(p.read_text()) for p in sorted(pathlib.Path(root,'events').glob('*/*.json'))]
   return 'production',events
@@ -63,15 +65,27 @@ def validate_semantics(events,environment):
             encoding="utf-8",
         )
         (scripts / "materialize_state.py").write_text(
-            """def materialize(environment,events):
+            """import json, pathlib
+def materialize(environment,events):
   lanes={'public':[],'private':[]}
   qualifications={e['event_id']:e['event_type'].startswith('historical_archive_result.') for e in events}
+  operational={}
   for event in events:
     if event['event_type']=='replay.enqueued':
       lane='private' if qualifications.get(event['causation_event_id'],False) else 'public'
       lanes[lane].append({'replay_task_id':event['subject_id']})
+    if event['event_type'].endswith('replay_authorized'):
+      identity='eri1_'+event['subject_id'].removeprefix('r2_')
+      operational[f'views/effective-result-identities/{identity[5:7]}/{identity}.json']={'event_id':event['event_id']}
   base={'schema_version':1,'environment':environment,'source_event_count':len(events),'source_digest':'0'*64}
-  return {'historical-public-replay-queue.json':{**base,'tasks':lanes['public']},'historical-private-replay-queue.json':{**base,'tasks':lanes['private']}}
+  return {'historical-public-replay-queue.json':{**base,'tasks':lanes['public']},'historical-private-replay-queue.json':{**base,'tasks':lanes['private']},**operational}
+def write_views(views,output,check):
+  for name,value in views.items():
+    path=pathlib.Path(output,name); path.parent.mkdir(parents=True,exist_ok=True)
+    expected=json.dumps(value,ensure_ascii=True,indent=2,sort_keys=True)+'\\n'
+    if check:
+      if path.read_text()!=expected: raise ValueError('mismatch')
+    else: path.write_text(expected)
 """,
             encoding="utf-8",
         )
@@ -161,6 +175,7 @@ environment,events=load_tree(a.root); validate_semantics(events,environment)
         self.git(submissions, "commit", "-m", "implementation")
         implementation = self.git(submissions, "rev-parse", "HEAD")
         self.write_state_modules(state)
+        (state / ".gitignore").write_text("__pycache__/\n*.pyc\n", encoding="utf-8")
         (state / "state.json").write_text('{"environment":"production"}\n', encoding="utf-8")
         baseline = self.event(0, "baseline", "baseline", None)
         baseline_path = state / "events" / "01" / f"{identity(0)}.json"
@@ -263,8 +278,20 @@ environment,events=load_tree(a.root); validate_semantics(events,environment)
             self.assertNotIn(result_identity(1), output.read_text(encoding="utf-8"))
             self.assertNotIn(task_identity(1), output.read_text(encoding="utf-8"))
             changed = self.git(state, "diff", "--name-status", "HEAD^", "HEAD").splitlines()
-            self.assertEqual(len(changed), 6)
-            self.assertTrue(all(line.startswith("A\tevents/") for line in changed))
+            self.assertEqual(len(changed), 8)
+            self.assertEqual(
+                sum(line.startswith("A\tevents/") for line in changed), 6
+            )
+            self.assertEqual(
+                sum(
+                    line.startswith("A\tviews/effective-result-identities/")
+                    for line in changed
+                ),
+                2,
+            )
+            self.assertEqual(
+                binding["candidate"]["operational_view_addition_count"], 2
+            )
             self.assertEqual(self.git(submissions, "status", "--porcelain"), "")
 
     def test_verify_rederives_binding_and_rejects_digest_or_tree_drift(self) -> None:
