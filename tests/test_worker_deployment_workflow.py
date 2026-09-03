@@ -31,6 +31,9 @@ BROKER_WRANGLER = json.loads(
 REPLAY_WRANGLER = json.loads(
     (ROOT / "server/wrangler.replay.jsonc").read_text(encoding="utf-8")
 )
+LEASE_SMOKE = (ROOT / "scripts/run_production_intake_lease_smoke.py").read_text(
+    encoding="utf-8"
+)
 PACKAGE = json.loads((ROOT / "server/package.json").read_text(encoding="utf-8"))
 QUALIFICATION = json.loads(
     (ROOT / ".audit/cloudflare-rollback-qualification-v1.json").read_text(
@@ -106,7 +109,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn("base64.b64decode", ROLLBACK_VALIDATOR)
         self.assertIn("GH_TOKEN: ${{ github.token }}", ROLLBACK)
         self.assertNotIn("GITHUB_STATE_TOKEN", ROLLBACK)
-        self.assertIn("state_contract_verified", DEPLOY)
+        self.assertIn("state_contract_verified", LEASE_SMOKE)
 
     def test_staging_deploy_proves_the_results_branch_is_protected(self) -> None:
         staging = DEPLOY.split("  deploy-staging:", 1)[1].split(
@@ -845,10 +848,15 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertIn('arguments+=(--var "$name:$value")', production)
         self.assertIn("intake-lease-smoke.json", production)
         self.assertIn("intake_lease", production)
+        self.assertIn("run_production_intake_lease_smoke.py", production)
+        self.assertIn('--expected-expires-at "$INTAKE_LEASE_EXPIRES_AT"', production)
+        self.assertIn('--state-proof-output "$plan_dir/post-smoke-state-proof.json"', production)
+        self.assertNotIn("--retry 2 --retry-all-errors --retry-max-time 45", production)
         self.assertIn(QUALIFICATION["state_main_commit"], production)
         self.assertIn(QUALIFICATION["state_event_schema_sha256"], production)
-        self.assertIn("state_contract_verified", production)
+        self.assertIn("state_contract_verified", LEASE_SMOKE)
         self.assertIn("timeout --signal=TERM --kill-after=10s 150s", production)
+        self.assertIn('INTAKE_LEASE_EXPIRES_AT - $(date +%s)))" -lt 240', production)
         self.assertNotIn("\n      - name:", production[final:].split("run: |", 1)[1])
         self.assertIn('--var "INTAKE_ENABLEMENT_MODE:durable"', production[final:])
 
