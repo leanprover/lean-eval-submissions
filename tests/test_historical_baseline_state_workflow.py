@@ -231,11 +231,56 @@ class HistoricalBaselineStateWorkflowTests(unittest.TestCase):
             WORKFLOW.count("mktemp /dev/shm/lean-eval-baseline-state-writer."), 3
         )
         self.assertEqual(WORKFLOW.count("unset STATE_WRITE_KEY GIT_SSH_COMMAND"), 3)
-        self.assertEqual(WORKFLOW.count("trap cleanup EXIT"), 3)
+        self.assertGreaterEqual(WORKFLOW.count("trap cleanup EXIT"), 7)
         self.assertGreaterEqual(WORKFLOW.count("StrictHostKeyChecking=yes"), 3)
         self.assertGreaterEqual(WORKFLOW.count("AAAAC3NzaC1lZDI1NTE5AAAAIOM"), 3)
         cleanup = WORKFLOW[WORKFLOW.index("Remove review scratch") :]
         self.assertIn("rm -rf -- state audit public-state-contract", cleanup)
+
+    def test_private_remote_reads_have_explicit_ephemeral_credentials(self) -> None:
+        stage = WORKFLOW[
+            WORKFLOW.index("Bind the exact stage parents") :
+            WORKFLOW.index("Validate committed binding before fetching")
+        ]
+        self.assertIn("AUDIT_READ_KEY: ${{ secrets.AUDIT_READ_KEY }}", stage)
+        self.assertIn(
+            "PRODUCTION_STATE_READ_KEY: ${{ secrets.PRODUCTION_STATE_READ_KEY }}",
+            stage,
+        )
+        self.assertIn('GIT_SSH_COMMAND="$state_ssh" git -C state ls-remote', stage)
+        self.assertIn('GIT_SSH_COMMAND="$audit_ssh" git -C audit ls-remote', stage)
+        self.assertIn("unset PRODUCTION_STATE_READ_KEY AUDIT_READ_KEY", stage)
+
+        state = WORKFLOW[
+            WORKFLOW.index("Validate committed binding before fetching") :
+            WORKFLOW.index("Validate the bound immutable audit authority")
+        ]
+        self.assertIn(
+            "PRODUCTION_STATE_READ_KEY: ${{ secrets.PRODUCTION_STATE_READ_KEY }}",
+            state,
+        )
+        self.assertIn("export GIT_SSH_COMMAND", state)
+        self.assertIn("git -C state ls-remote", state)
+        self.assertIn("git -C state fetch", state)
+        self.assertIn("unset PRODUCTION_STATE_READ_KEY GIT_SSH_COMMAND", state)
+
+        for start, end in (
+            ("Validate the bound immutable audit authority", "Normalize exact offline"),
+            ("Recheck exact audit authority", "Fast-forward protected State"),
+        ):
+            audit = WORKFLOW[WORKFLOW.index(start) : WORKFLOW.index(end)]
+            self.assertIn("AUDIT_READ_KEY: ${{ secrets.AUDIT_READ_KEY }}", audit)
+            self.assertIn("export GIT_SSH_COMMAND", audit)
+            self.assertIn("git -C audit fetch", audit)
+            self.assertIn("unset AUDIT_READ_KEY GIT_SSH_COMMAND", audit)
+
+        cleanup = WORKFLOW[WORKFLOW.index("Remove review scratch") :]
+        for pattern in (
+            "lean-eval-baseline-state-reader.*",
+            "lean-eval-baseline-audit-reader.*",
+            "lean-eval-baseline-read-known-hosts.*",
+        ):
+            self.assertIn(pattern, cleanup)
 
 
 if __name__ == "__main__":

@@ -227,20 +227,45 @@ jobs:
       - name: Bind the exact stage parents and absent fixed review branch
         if: inputs.operation == 'stage'
         env:
+          AUDIT_READ_KEY: ${{ secrets.AUDIT_READ_KEY }}
           EXPECTED_STATE_HEAD: ${{ inputs.expected_state_head }}
           EXPECTED_AUDIT_HEAD: ${{ inputs.expected_audit_head }}
+          PRODUCTION_STATE_READ_KEY: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
           REVIEW_BRANCH: historical-baseline-state-v1
         run: |
           set -euo pipefail
+          umask 077
+          state_key=$(mktemp /dev/shm/lean-eval-baseline-state-reader.XXXXXX)
+          audit_key=$(mktemp /dev/shm/lean-eval-baseline-audit-reader.XXXXXX)
+          known_hosts=$(mktemp /dev/shm/lean-eval-baseline-read-known-hosts.XXXXXX)
+          cleanup() {
+            unset PRODUCTION_STATE_READ_KEY AUDIT_READ_KEY state_ssh audit_ssh
+            rm -f -- "$state_key" "$audit_key" "$known_hosts"
+          }
+          trap cleanup EXIT
+          chmod 0600 "$state_key" "$audit_key" "$known_hosts"
+          printf '%s\n' "$PRODUCTION_STATE_READ_KEY" > "$state_key"
+          printf '%s\n' "$AUDIT_READ_KEY" > "$audit_key"
+          unset PRODUCTION_STATE_READ_KEY AUDIT_READ_KEY
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$known_hosts"
+          state_ssh="ssh -i $state_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15"
+          audit_ssh="ssh -i $audit_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git -C state rev-parse HEAD)" = "$EXPECTED_STATE_HEAD"
           test "$(git -C audit rev-parse HEAD)" = "$EXPECTED_AUDIT_HEAD"
-          test "$(git -C state ls-remote --exit-code origin refs/heads/main | cut -f1)" = \
-            "$EXPECTED_STATE_HEAD"
-          test "$(git -C audit ls-remote --exit-code origin refs/heads/main | cut -f1)" = \
-            "$EXPECTED_AUDIT_HEAD"
-          existing_review=$(git -C state ls-remote origin "refs/heads/$REVIEW_BRANCH")
+          state_main=$(GIT_SSH_COMMAND="$state_ssh" git -C state ls-remote \
+            --exit-code origin refs/heads/main | cut -f1)
+          test "$state_main" = "$EXPECTED_STATE_HEAD"
+          audit_main=$(GIT_SSH_COMMAND="$audit_ssh" git -C audit ls-remote \
+            --exit-code origin refs/heads/main | cut -f1)
+          test "$audit_main" = "$EXPECTED_AUDIT_HEAD"
+          existing_review=$(GIT_SSH_COMMAND="$state_ssh" git -C state ls-remote \
+            origin "refs/heads/$REVIEW_BRANCH")
           test -z "$existing_review"
+          cleanup
+          trap - EXIT
           test -z "$(git -C state status --porcelain)"
           test -z "$(git -C audit status --porcelain)"
           python state/scripts/state.py --root state validate
@@ -250,9 +275,26 @@ jobs:
         if: inputs.operation != 'stage'
         env:
           EXPECTED_STAGED_STATE_COMMIT: ${{ inputs.expected_staged_state_commit }}
+          PRODUCTION_STATE_READ_KEY: ${{ secrets.PRODUCTION_STATE_READ_KEY }}
           REVIEW_BRANCH: historical-baseline-state-v1
         run: |
           set -euo pipefail
+          umask 077
+          state_key=$(mktemp /dev/shm/lean-eval-baseline-state-reader.XXXXXX)
+          known_hosts=$(mktemp /dev/shm/lean-eval-baseline-read-known-hosts.XXXXXX)
+          cleanup() {
+            unset PRODUCTION_STATE_READ_KEY GIT_SSH_COMMAND
+            rm -f -- "$state_key" "$known_hosts"
+          }
+          trap cleanup EXIT
+          chmod 0600 "$state_key" "$known_hosts"
+          printf '%s\n' "$PRODUCTION_STATE_READ_KEY" > "$state_key"
+          unset PRODUCTION_STATE_READ_KEY
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$known_hosts"
+          GIT_SSH_COMMAND="ssh -i $state_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15"
+          export GIT_SSH_COMMAND
           binding=configuration/historical-baseline-state-promotion-v1.json
           candidate=$(jq -er .state.candidate_commit "$binding")
           parent=$(jq -er .state.parent "$binding")
@@ -262,16 +304,7 @@ jobs:
           remote_review=$(git -C state ls-remote --exit-code origin \
             "refs/heads/$REVIEW_BRANCH" | cut -f1)
           test "$remote_review" = "$EXPECTED_STAGED_STATE_COMMIT"
-          if [ "${{ inputs.operation }}" = promote ]; then
-            audit_head=$(jq -er .audit.head "$binding")
-            audit_tree=$(jq -er .audit.tree "$binding")
-            [[ "$audit_head" =~ ^[0-9a-f]{40}$ ]]
-            [[ "$audit_tree" =~ ^[0-9a-f]{40}$ ]]
-            remote_audit=$(git -C audit ls-remote --exit-code origin refs/heads/main | cut -f1)
-            test "$(git -C audit rev-parse HEAD)" = "$remote_audit"
-            git -C audit merge-base --is-ancestor "$audit_head" "$remote_audit"
-            test "$(git -C audit rev-parse "$audit_head^{tree}")" = "$audit_tree"
-          else
+          if [ "${{ inputs.operation }}" = discard-stale ]; then
             test "$remote_main" != "$parent"
           fi
           git -C state fetch --no-tags origin \
@@ -283,8 +316,46 @@ jobs:
           if [ "${{ inputs.operation }}" = promote ] && [ "$remote_main" != "$parent" ]; then
             git -C state merge-base --is-ancestor "$candidate" "$remote_main"
           fi
+          cleanup
+          trap - EXIT
           git -C state checkout --detach "$EXPECTED_STAGED_STATE_COMMIT"
           printf '%s\n' "$remote_main" > "$RUNNER_TEMP/pre-mutation-state-main"
+
+      - name: Validate the bound immutable audit authority
+        if: inputs.operation == 'promote'
+        env:
+          AUDIT_READ_KEY: ${{ secrets.AUDIT_READ_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          audit_key=$(mktemp /dev/shm/lean-eval-baseline-audit-reader.XXXXXX)
+          known_hosts=$(mktemp /dev/shm/lean-eval-baseline-read-known-hosts.XXXXXX)
+          current=refs/review-controller/validated-audit-main
+          cleanup() {
+            unset AUDIT_READ_KEY GIT_SSH_COMMAND
+            git -C audit update-ref -d "$current" >/dev/null 2>&1 || true
+            rm -f -- "$audit_key" "$known_hosts"
+          }
+          trap cleanup EXIT
+          chmod 0600 "$audit_key" "$known_hosts"
+          printf '%s\n' "$AUDIT_READ_KEY" > "$audit_key"
+          unset AUDIT_READ_KEY
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$known_hosts"
+          GIT_SSH_COMMAND="ssh -i $audit_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15"
+          export GIT_SSH_COMMAND
+          binding=configuration/historical-baseline-state-promotion-v1.json
+          audit_head=$(jq -er .audit.head "$binding")
+          audit_tree=$(jq -er .audit.tree "$binding")
+          [[ "$audit_head" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$audit_tree" =~ ^[0-9a-f]{40}$ ]]
+          git -C audit update-ref -d "$current"
+          git -C audit fetch --no-tags origin "+refs/heads/main:$current"
+          git -C audit merge-base --is-ancestor "$audit_head" "$current"
+          test "$(git -C audit rev-parse "$audit_head^{tree}")" = "$audit_tree"
+          cleanup
+          trap - EXIT
 
       - name: Normalize exact offline repository identities
         run: |
@@ -421,17 +492,37 @@ jobs:
 
       - name: Recheck exact audit authority immediately before promotion
         if: inputs.operation == 'promote'
+        env:
+          AUDIT_READ_KEY: ${{ secrets.AUDIT_READ_KEY }}
         run: |
           set -euo pipefail
+          umask 077
+          audit_key=$(mktemp /dev/shm/lean-eval-baseline-audit-reader.XXXXXX)
+          known_hosts=$(mktemp /dev/shm/lean-eval-baseline-read-known-hosts.XXXXXX)
           binding=configuration/historical-baseline-state-promotion-v1.json
           audit_head=$(jq -er .audit.head "$binding")
           audit_tree=$(jq -er .audit.tree "$binding")
           current=refs/review-controller/current-audit-main
+          cleanup() {
+            unset AUDIT_READ_KEY GIT_SSH_COMMAND
+            git -C audit update-ref -d "$current" >/dev/null 2>&1 || true
+            rm -f -- "$audit_key" "$known_hosts"
+          }
+          trap cleanup EXIT
+          chmod 0600 "$audit_key" "$known_hosts"
+          printf '%s\n' "$AUDIT_READ_KEY" > "$audit_key"
+          unset AUDIT_READ_KEY
+          printf '%s\n' \
+            'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+            > "$known_hosts"
+          GIT_SSH_COMMAND="ssh -i $audit_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$known_hosts -o ConnectTimeout=15"
+          export GIT_SSH_COMMAND
           git -C audit update-ref -d "$current"
           git -C audit fetch --no-tags origin "+refs/heads/main:$current"
           git -C audit merge-base --is-ancestor "$audit_head" "$current"
           test "$(git -C audit rev-parse "$audit_head^{tree}")" = "$audit_tree"
-          git -C audit update-ref -d "$current"
+          cleanup
+          trap - EXIT
 
       - name: Fast-forward protected State and delete the exact review lease
         if: inputs.operation == 'promote'
@@ -622,4 +713,7 @@ jobs:
             "$RUNNER_TEMP/audit-tree" "$RUNNER_TEMP/pre-mutation-state-main"
           find /dev/shm -maxdepth 1 -type f \
             \( -name 'lean-eval-baseline-state-writer.*' -o \
-               -name 'lean-eval-baseline-state-known-hosts.*' \) -delete
+               -name 'lean-eval-baseline-state-known-hosts.*' -o \
+               -name 'lean-eval-baseline-state-reader.*' -o \
+               -name 'lean-eval-baseline-audit-reader.*' -o \
+               -name 'lean-eval-baseline-read-known-hosts.*' \) -delete
