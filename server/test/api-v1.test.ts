@@ -12,12 +12,12 @@ import {
   decodeResultRetractionDecision,
   decodeResultRetractionOverride,
   decodeResultCompletion,
-  decodeSourceReaderPreflight,
   decodeSubmissionInput,
   readJson,
 } from "../src/api-contract";
 import {
   lifecycleEventId,
+  makeAgentChallenge,
   makeSubmissionGrant,
   nonceDigest,
   signToken,
@@ -774,47 +774,6 @@ describe("strict API contract", () => {
       .toThrow(/pins/);
   });
 
-  it("strictly decodes and authenticates the staging source-reader preflight", async () => {
-    expect(decodeSourceReaderPreflight({ repository: "kim-em/lean-eval-intake-fixture" }))
-      .toBe("kim-em/lean-eval-intake-fixture");
-    expect(() => decodeSourceReaderPreflight({ repository: "Kim Em/bad", extra: true }))
-      .toThrow(/unknown|canonical/);
-
-    const upstream = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json({
-      full_name: "kim-em/lean-eval-intake-fixture",
-      private: true,
-    }));
-    const request = jsonRequest("/internal/v1/source-reader-preflight", {
-      repository: "kim-em/lean-eval-intake-fixture",
-    });
-    request.headers.set("authorization", "Bearer readiness-secret");
-    const response = await handleRequest(
-      request,
-      { ...ENV, READINESS_TOKEN: "readiness-secret" },
-      LIFECYCLE,
-      { provider: new GitHubProvider(upstream, "verification-token") },
-    );
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({
-      status: "source_reader_ready",
-      environment: "staging",
-      repository: "kim-em/lean-eval-intake-fixture",
-      private: true,
-    });
-
-    const productionRequest = jsonRequest("/internal/v1/source-reader-preflight", {
-      repository: "kim-em/lean-eval-intake-fixture",
-    });
-    productionRequest.headers.set("authorization", "Bearer readiness-secret");
-    const production = await handleRequest(
-      productionRequest,
-      { ...ENV, DEPLOYMENT_ENVIRONMENT: "production", READINESS_TOKEN: "readiness-secret" },
-      LIFECYCLE,
-      { provider: new GitHubProvider(upstream, "verification-token") },
-    );
-    expect(production.status).toBe(403);
-  });
-
   it("records authenticated archive completion while public intake is disabled", async () => {
     const state = new MemoryState();
     const submissionId = "019debcf-cb48-7000-8000-000000000001";
@@ -1502,12 +1461,17 @@ describe("agent intake in workerd", () => {
       if (url.includes("/git/ref/tags/")) {
         return Promise.resolve(Response.json({ object: { type: "commit", sha: "a".repeat(40) } }));
       }
+      if (url.endsWith(`/git/commits/${"a".repeat(40)}`)) {
+        return Promise.resolve(Response.json({ sha: "a".repeat(40) }));
+      }
       if (url.endsWith("/repos/alice/proofs")) {
         return Promise.resolve(Response.json({ full_name: "alice/proofs", private: true }));
       }
       return Promise.reject(new Error(`unexpected provider request: ${url}`));
     });
-    const github = new GitHubProvider(upstream, "verification-token");
+    const github = new GitHubProvider(
+      upstream, "verification-token", undefined, undefined, undefined, undefined, undefined, upstream,
+    );
     const challengeResponse = await handleRequest(
       jsonRequest("/api/v1/agent/challenges", {
         login: "alice",
@@ -1581,10 +1545,13 @@ describe("agent intake in workerd", () => {
         files: { "lean-eval-proof.txt": { truncated: false, content: challenge } },
       }));
       if (url.includes("/git/ref/tags/")) return Promise.resolve(Response.json({ object: { type: "commit", sha: "a".repeat(40) } }));
+      if (url.endsWith(`/git/commits/${"a".repeat(40)}`)) return Promise.resolve(Response.json({ sha: "a".repeat(40) }));
       if (url.endsWith("/repos/alice/proofs")) return Promise.resolve(Response.json({ full_name: "alice/proofs", private: true }));
       return Promise.reject(new Error(`unexpected provider request: ${url}`));
     });
-    const github = new GitHubProvider(upstream, "verification-token");
+    const github = new GitHubProvider(
+      upstream, "verification-token", undefined, undefined, undefined, undefined, undefined, upstream,
+    );
     const challengeResponse = await handleRequest(jsonRequest("/api/v1/agent/challenges", {
       login: "alice", gist_id: "abcde", source_repository: "alice/proofs", source_commit: "a".repeat(40),
     }), ENV, LIFECYCLE, { now: () => NOW_MS, provider: github, state });
@@ -1628,6 +1595,125 @@ describe("agent intake in workerd", () => {
       { now: () => NOW_MS, state: new MemoryState() },
     );
     expect(response.status).toBe(401);
+  });
+
+  it("fails browser intake before State when the workflow App cannot read the repository", async () => {
+    const state = new MemoryState();
+    const authenticated: BrowserSession = {
+      kind: "browser_session",
+      login: "alice",
+      github_id: 42,
+      issued_at: Math.floor(NOW_MS / 1000),
+      expires_at: Math.floor(NOW_MS / 1000) + 3600,
+    };
+    const sessionToken = await signToken(SECRET, authenticated);
+    const grant = makeSubmissionGrant("alice", Math.floor(NOW_MS / 1000));
+    const grantToken = await signToken(SECRET, grant);
+    const sourceReader = vi.fn<typeof fetch>((input, init) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.endsWith(`/git/commits/${SUBMISSION.source_commit}`)) {
+        expect(new Headers(init?.headers).get("x-lean-eval-expected-commit"))
+          .toBe(SUBMISSION.source_commit);
+        return Promise.resolve(Response.json({ sha: SUBMISSION.source_commit }));
+      }
+      return Promise.resolve(Response.json({ full_name: "alice/proofs", private: true }));
+    });
+    const workflowReader = vi.fn<typeof fetch>(() =>
+      Promise.resolve(Response.json({ message: "Not Found" }, { status: 404 })));
+    const provider = new GitHubProvider(
+      undefined,
+      undefined,
+      sourceReader,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      workflowReader,
+    );
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    const response = await handleRequest(
+      new Request("https://submit.test/api/v1/browser/submissions", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          cookie: `lean_eval_session=${sessionToken}`,
+          origin: "https://submit.test",
+        },
+        body: JSON.stringify({ grant: grantToken, submission: SUBMISSION }),
+      }),
+      ENV,
+      LIFECYCLE,
+      { now: () => NOW_MS, provider, state, dispatch },
+    );
+    expect(response.status).toBe(422);
+    expect(sourceReader).toHaveBeenCalled();
+    expect(workflowReader).toHaveBeenCalledOnce();
+    expect(state.events).toHaveLength(0);
+    expect(state.views).toHaveLength(0);
+    expect(state.outbox).toHaveLength(0);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("fails headless intake before State when the legacy workflow reader cannot read the repository", async () => {
+    const state = new MemoryState();
+    const grant = makeAgentChallenge({
+      login: "alice",
+      source_repository: SUBMISSION.source_repository,
+      source_commit: SUBMISSION.source_commit,
+      gist_id: "abcde",
+    }, Math.floor(NOW_MS / 1000));
+    const challenge = await signToken(SECRET, grant);
+    const anonymousFetch = vi.fn<typeof fetch>((input) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (!url.endsWith("/gists/abcde")) {
+        return Promise.reject(new Error(`unexpected anonymous request: ${url}`));
+      }
+      return Promise.resolve(Response.json({
+        public: false,
+        owner: { id: 42, login: "alice" },
+        files: { "lean-eval-proof.txt": { truncated: false, content: challenge } },
+      }));
+    });
+    const sourceReader = vi.fn<typeof fetch>((input, init) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.includes("/git/ref/tags/")) {
+        return Promise.resolve(Response.json({
+          object: { type: "commit", sha: SUBMISSION.source_commit },
+        }));
+      }
+      if (url.endsWith(`/git/commits/${SUBMISSION.source_commit}`)) {
+        expect(new Headers(init?.headers).get("x-lean-eval-expected-commit"))
+          .toBe(SUBMISSION.source_commit);
+        return Promise.resolve(Response.json({ sha: SUBMISSION.source_commit }));
+      }
+      return Promise.resolve(Response.json({ full_name: "alice/proofs", private: true }));
+    });
+    const workflowReader = vi.fn<typeof fetch>(() =>
+      Promise.resolve(Response.json({ message: "Not Found" }, { status: 404 })));
+    const github = new GitHubProvider(
+      anonymousFetch,
+      undefined,
+      sourceReader,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      workflowReader,
+    );
+    const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
+    const response = await handleRequest(
+      jsonRequest("/api/v1/agent/submissions", { challenge, submission: SUBMISSION }),
+      ENV,
+      LIFECYCLE,
+      { now: () => NOW_MS, provider: github, state, dispatch },
+    );
+    expect(response.status).toBe(422);
+    expect(sourceReader).toHaveBeenCalled();
+    expect(workflowReader).toHaveBeenCalledOnce();
+    expect(state.events).toHaveLength(0);
+    expect(state.views).toHaveLength(0);
+    expect(state.outbox).toHaveLength(0);
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });
 
@@ -1901,13 +1987,29 @@ describe("automatic staging promotion canary in workerd", () => {
     });
   }
 
+  function canarySource(): ReturnType<typeof vi.fn<typeof fetch>> {
+    return vi.fn<typeof fetch>((input) => {
+      const url = input instanceof Request ? input.url : input.toString();
+      if (url.endsWith("/git/commits/ae38f4d3e4ad2991212135435f54e6640bcc89e7")) {
+        return Promise.resolve(Response.json({ sha: "ae38f4d3e4ad2991212135435f54e6640bcc89e7" }));
+      }
+      return Promise.resolve(Response.json({
+        full_name: "kim-em/lean-eval-intake-fixture",
+        private: true,
+      }));
+    });
+  }
+
+  function canaryProvider(source: ReturnType<typeof vi.fn<typeof fetch>>): GitHubProvider {
+    return new GitHubProvider(
+      undefined, undefined, source, undefined, undefined, undefined, undefined, source,
+    );
+  }
+
   it("defers exact synthetic intake to the actual scheduled handler and is idempotent", async () => {
     const state = new MemoryState();
-    const source = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
-      full_name: "kim-em/lean-eval-intake-fixture",
-      private: true,
-    })));
-    const github = new GitHubProvider(undefined, undefined, source);
+    const source = canarySource();
+    const github = canaryProvider(source);
     const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
     const first = await handleRequest(canaryRequest(), canaryEnv, LIFECYCLE, {
       provider: github,
@@ -1995,10 +2097,7 @@ describe("automatic staging promotion canary in workerd", () => {
 
   it("creates fresh material per workflow attempt and reconciles every prior run", async () => {
     const state = new MemoryState();
-    const source = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
-      full_name: "kim-em/lean-eval-intake-fixture",
-      private: true,
-    })));
+    const source = canarySource();
     const dispatch = vi.fn<(request: Request) => Promise<void>>(() => Promise.resolve());
     const ids: string[] = [];
     for (const runAttempt of ["1", "2"]) {
@@ -2011,7 +2110,7 @@ describe("automatic staging promotion canary in workerd", () => {
         body: JSON.stringify({ ...canaryBody, controller_run_attempt: runAttempt }),
       });
       const response = await handleRequest(request, canaryEnv, LIFECYCLE, {
-        provider: new GitHubProvider(undefined, undefined, source),
+        provider: canaryProvider(source),
         state,
         dispatch,
       });
@@ -2030,11 +2129,8 @@ describe("automatic staging promotion canary in workerd", () => {
 
   it("reconciles one complete fixed-shard canary scan when operations are in-memory", async () => {
     const state = new MemoryState();
-    const source = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
-      full_name: "kim-em/lean-eval-intake-fixture",
-      private: true,
-    })));
-    const github = new GitHubProvider(undefined, undefined, source);
+    const source = canarySource();
+    const github = canaryProvider(source);
     for (let index = 0; index < 21; index += 1) {
       const request = new Request("https://submit.test/internal/v1/promotion-canary", {
         method: "POST",
@@ -2059,11 +2155,8 @@ describe("automatic staging promotion canary in workerd", () => {
 
   it("records a failed no-op dispatch and reports it without claiming success", async () => {
     const state = new MemoryState();
-    const source = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
-      full_name: "kim-em/lean-eval-intake-fixture",
-      private: true,
-    })));
-    const github = new GitHubProvider(undefined, undefined, source);
+    const source = canarySource();
+    const github = canaryProvider(source);
     const failedDispatch = vi.fn<(request: Request) => Promise<void>>(() =>
       Promise.reject(new Error("source-free test failure")));
     await handleRequest(canaryRequest(), canaryEnv, LIFECYCLE, {
@@ -2091,12 +2184,9 @@ describe("automatic staging promotion canary in workerd", () => {
 
   it("terminally removes an exact canary outbox after the bounded retry limit", async () => {
     const state = new MemoryState();
-    const source = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
-      full_name: "kim-em/lean-eval-intake-fixture",
-      private: true,
-    })));
+    const source = canarySource();
     const response = await handleRequest(canaryRequest(), canaryEnv, LIFECYCLE, {
-      provider: new GitHubProvider(undefined, undefined, source),
+      provider: canaryProvider(source),
       state,
       dispatch: () => Promise.resolve(),
     });
@@ -2129,12 +2219,9 @@ describe("automatic staging promotion canary in workerd", () => {
 
   it("contains canary scheduler errors and still reconciles ordinary staging intake", async () => {
     const state = new MemoryState();
-    const source = vi.fn<typeof fetch>(() => Promise.resolve(Response.json({
-      full_name: "kim-em/lean-eval-intake-fixture",
-      private: true,
-    })));
+    const source = canarySource();
     await handleRequest(canaryRequest(), canaryEnv, LIFECYCLE, {
-      provider: new GitHubProvider(undefined, undefined, source),
+      provider: canaryProvider(source),
       state,
       dispatch: () => Promise.resolve(),
     });

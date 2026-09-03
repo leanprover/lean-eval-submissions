@@ -44,6 +44,7 @@ WORKER_APP = (ROOT / "server/src/app.ts").read_text(encoding="utf-8")
 WORKER_PROVIDER = (ROOT / "server/src/github-provider.ts").read_text(
     encoding="utf-8"
 )
+WORKER_BROKER = (ROOT / "server/src/github-broker.ts").read_text(encoding="utf-8")
 WORKER_ENTRYPOINT = (ROOT / "server/src/index.ts").read_text(encoding="utf-8")
 REPLAY_ENTRYPOINT = (ROOT / "server/src/replay-entry.ts").read_text(encoding="utf-8")
 REPLAY_APP = (ROOT / "server/src/replay-app.ts").read_text(encoding="utf-8")
@@ -1005,6 +1006,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 self.assertNotIn("routes", broker)
                 self.assertNotIn("SOURCE_APP_PRIVATE_KEY", broker["vars"])
                 self.assertNotIn("DISPATCH_APP_PRIVATE_KEY", broker["vars"])
+                self.assertNotIn("LEGACY_SOURCE_APP_PRIVATE_KEY", broker["vars"])
                 deploy_block = DEPLOY.split(
                     f"- name: Deploy {environment} GitHub broker", 1
                 )[1].split(f"- name: Deploy {environment} submission Worker", 1)[0]
@@ -1023,6 +1025,8 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         broker_secrets = {
             "DISPATCH_APP_ID",
             "DISPATCH_APP_PRIVATE_KEY",
+            "LEGACY_SOURCE_APP_ID",
+            "LEGACY_SOURCE_APP_PRIVATE_KEY",
             "SOURCE_APP_ID",
             "SOURCE_APP_PRIVATE_KEY",
         }
@@ -1051,18 +1055,12 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         }
         for environment, (configuration, base_url) in expected.items():
             with self.subTest(environment=environment):
-                expected_lifecycle = (
-                    "true" if environment == "production" else "false"
-                )
-                expected_maintainers = (
-                    '[{"github_id":477956,"login":"kim-em"}]'
-                    if environment == "production"
-                    else "[]"
-                )
+                expected_lifecycle = "false"
+                expected_maintainers = "[]"
                 self.assertIs(configuration["workers_dev"], True)
                 self.assertIs(configuration["preview_urls"], False)
                 self.assertNotIn("routes", configuration)
-                expected_intake = "true" if environment == "production" else "false"
+                expected_intake = "false"
                 self.assertEqual(
                     configuration["vars"]["INTAKE_ENABLED"], expected_intake
                 )
@@ -1127,6 +1125,75 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
         self.assertNotIn("eval-submit-staging.lean-lang.org", DEPLOY)
         self.assertNotIn("eval-submit.lean-lang.org", DEPLOY)
         self.assertNotIn("eval-submit.lean-lang.org", ROLLBACK)
+
+    def test_protected_deploy_converges_legacy_source_credentials_without_logging_values(
+        self,
+    ) -> None:
+        for environment in ("staging", "production"):
+            with self.subTest(environment=environment):
+                name = f"Converge {environment} legacy-source broker credentials"
+                self.assertEqual(DEPLOY.count(name), 1)
+                block = DEPLOY.split(f"- name: {name}", 1)[1].split(
+                    f"- name: Deploy {environment} GitHub broker", 1
+                )[0]
+                self.assertIn(
+                    "LEGACY_SOURCE_APP_ID: ${{ secrets.LEAN_EVAL_BOT_CLIENT_ID }}",
+                    block,
+                )
+                self.assertIn(
+                    "LEGACY_SOURCE_APP_PRIVATE_KEY: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}",
+                    block,
+                )
+                self.assertIn(
+                    'if [ "$LEGACY_SOURCE_APP_ID" != "Iv23liLATwL7VxAK37uX" ]',
+                    block,
+                )
+                self.assertIn(
+                    "printf '%s' \"$LEGACY_SOURCE_APP_ID\" |", block
+                )
+                self.assertIn(
+                    "printf '%s' \"$LEGACY_SOURCE_APP_PRIVATE_KEY\" |", block
+                )
+                self.assertIn("wrangler secret put", block)
+                self.assertIn("--config wrangler.broker.jsonc", block)
+                self.assertIn(f"--env {environment}", block)
+                self.assertNotIn("set -x", block)
+                self.assertNotIn("echo \"$LEGACY_SOURCE", block)
+        production = DEPLOY.split("\n  deploy-production:", 1)[1]
+        self.assertLess(
+            production.index("Provisionally deploy production intake disabled"),
+            production.index("Converge production legacy-source broker credentials"),
+        )
+
+    def test_intake_and_canary_share_dual_app_exact_commit_admission(self) -> None:
+        self.assertEqual(WORKER_APP.count(".submissionRepository("), 2)
+        self.assertIn(
+            'githubBrokerFetch(env.GITHUB_BROKER, "source")', WORKER_APP
+        )
+        self.assertIn(
+            'githubBrokerFetch(env.GITHUB_BROKER, "legacy_source")', WORKER_APP
+        )
+        self.assertIn("PROMOTION_CANARY_SOURCE_COMMIT", WORKER_APP)
+        self.assertIn(
+            'const PROMOTION_CANARY_REPOSITORY = "kim-em/lean-eval-intake-fixture"',
+            WORKER_APP,
+        )
+        self.assertIn(
+            'const PROMOTION_CANARY_SOURCE_COMMIT = "ae38f4d3e4ad2991212135435f54e6640bcc89e7"',
+            WORKER_APP,
+        )
+        self.assertIn('/git/commits/${expectedCommit}', WORKER_PROVIDER)
+        self.assertIn('type Authority = "source" | "legacy_source"', WORKER_BROKER)
+        self.assertIn('const SOURCE_APP_ID = "4666604"', WORKER_BROKER)
+        self.assertIn(
+            'const LEGACY_SOURCE_APP_ID = "Iv23liLATwL7VxAK37uX"',
+            WORKER_BROKER,
+        )
+        self.assertIn('const DISPATCH_APP_ID = "4666633"', WORKER_BROKER)
+        self.assertIn(
+            'request.authority === "legacy_source" && (tagRef || annotatedTag)',
+            WORKER_BROKER,
+        )
 
     def test_owner_routes_have_no_full_ledger_scan(self) -> None:
         self.assertNotIn("readEvents", WORKER_APP)

@@ -15,7 +15,7 @@ is unrelated to this pipeline.
 
 | Item | Type | Stored as | Used by |
 | --- | --- | --- | --- |
-| `lean-eval-bot` | GitHub App | `LEAN_EVAL_BOT_CLIENT_ID`, `LEAN_EVAL_BOT_PRIVATE_KEY` | `submission.yml` (fetch) |
+| `lean-eval-bot` | GitHub App | `LEAN_EVAL_BOT_CLIENT_ID`, `LEAN_EVAL_BOT_PRIVATE_KEY` | `submission.yml` (fetch); protected `deploy-worker.yml` (broker-secret convergence) |
 | `lean-eval-recorder` | GitHub App | `LEAN_EVAL_RECORDER_CLIENT_ID`, `LEAN_EVAL_RECORDER_PRIVATE_KEY` | `submission.yml` (record) |
 | `lean-eval-archiver` | GitHub App | `LEAN_EVAL_ARCHIVER_CLIENT_ID`, `LEAN_EVAL_ARCHIVER_PRIVATE_KEY` | `submission.yml` (archive) |
 | `LEADERBOARD_WRITE_TOKEN` | Fine-grained PAT | `LEADERBOARD_WRITE_TOKEN` | `submission.yml` (leaderboard redeploy dispatch) |
@@ -75,6 +75,12 @@ in the `Mint lean-eval-bot installation token` step, via
 `actions/create-github-app-token`. The minted token is scoped to the
 single `Fetch submission` step and is used to clone the contributor's
 submission source.
+
+Protected [`.github/workflows/deploy-worker.yml`](../.github/workflows/deploy-worker.yml)
+also pipes these existing secrets directly into each private broker as
+`LEGACY_SOURCE_APP_ID` and `LEGACY_SOURCE_APP_PRIVATE_KEY`. That broker mints a
+separate repository-scoped contents/metadata-read token only to prove the exact
+repository and commit before server intake mutates State.
 
 The issue template
 [`.github/ISSUE_TEMPLATE/submit.yml`](../.github/ISSUE_TEMPLATE/submit.yml)

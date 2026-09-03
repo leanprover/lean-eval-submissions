@@ -229,6 +229,28 @@ jobs:
           --config wrangler.replay.jsonc
           --environment staging
           --application lean-eval-replay-executor-staging-replaysandbox-staging
+      - name: Converge staging legacy-source broker credentials
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          LEGACY_SOURCE_APP_ID: ${{ secrets.LEAN_EVAL_BOT_CLIENT_ID }}
+          LEGACY_SOURCE_APP_PRIVATE_KEY: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ "$LEGACY_SOURCE_APP_ID" != "Iv23liLATwL7VxAK37uX" ]; then
+            echo "legacy source GitHub App identity differs from the reviewed App" >&2
+            exit 1
+          fi
+          if [[ "$LEGACY_SOURCE_APP_PRIVATE_KEY" != *"-----BEGIN "*"PRIVATE KEY-----"* ]]; then
+            echo "legacy source GitHub App private key is missing or malformed" >&2
+            exit 1
+          fi
+          printf '%s' "$LEGACY_SOURCE_APP_ID" |
+            timeout --signal=TERM --kill-after=10s 90s npx wrangler secret put \
+              LEGACY_SOURCE_APP_ID --config wrangler.broker.jsonc --env staging
+          printf '%s' "$LEGACY_SOURCE_APP_PRIVATE_KEY" |
+            timeout --signal=TERM --kill-after=10s 90s npx wrangler secret put \
+              LEGACY_SOURCE_APP_PRIVATE_KEY --config wrangler.broker.jsonc --env staging
       - name: Deploy staging GitHub broker
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -479,6 +501,28 @@ jobs:
           --config wrangler.replay.jsonc
           --environment production
           --application lean-eval-replay-executor-replaysandbox-production
+      - name: Converge production legacy-source broker credentials
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          LEGACY_SOURCE_APP_ID: ${{ secrets.LEAN_EVAL_BOT_CLIENT_ID }}
+          LEGACY_SOURCE_APP_PRIVATE_KEY: ${{ secrets.LEAN_EVAL_BOT_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ "$LEGACY_SOURCE_APP_ID" != "Iv23liLATwL7VxAK37uX" ]; then
+            echo "legacy source GitHub App identity differs from the reviewed App" >&2
+            exit 1
+          fi
+          if [[ "$LEGACY_SOURCE_APP_PRIVATE_KEY" != *"-----BEGIN "*"PRIVATE KEY-----"* ]]; then
+            echo "legacy source GitHub App private key is missing or malformed" >&2
+            exit 1
+          fi
+          printf '%s' "$LEGACY_SOURCE_APP_ID" |
+            timeout --signal=TERM --kill-after=10s 90s npx wrangler secret put \
+              LEGACY_SOURCE_APP_ID --config wrangler.broker.jsonc --env production
+          printf '%s' "$LEGACY_SOURCE_APP_PRIVATE_KEY" |
+            timeout --signal=TERM --kill-after=10s 90s npx wrangler secret put \
+              LEGACY_SOURCE_APP_PRIVATE_KEY --config wrangler.broker.jsonc --env production
       - name: Deploy production GitHub broker
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

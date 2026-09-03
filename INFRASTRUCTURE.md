@@ -27,25 +27,18 @@ Last reconciled: **2026-09-03**
 | Replay image tag | `lean-eval-authoritative:4026b18d5e679b07be1961d538a51ad689a9d8d4` |
 | Replay image digest | `sha256:f61b6be446c3bc355c2eefddc3b376226acee89ca562e66f3b283576a32bb20b` |
 
-Public structured health currently reports one coherent deployment at
-`b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`:
+Public structured health currently reports protected submission implementation
+`e28473c5c83764a044cb9d2666e1b815517e6d0e`. Re-read exact active version IDs
+from Cloudflare before any rollback or promotion. The current feature posture is:
 
-- production intake `98e1d29e-aa81-4fa5-b095-ac2261d7f9a0`, replay
-  `8dabd811-9e81-4a37-95c2-5290b07fbabb`, broker
-  `30d025fd-aa30-40d5-9cbb-a1762fc99725`, and container application version
-  `25`, with durable intake;
-- staging intake `70373652-8cd0-4519-ab8a-54c01467455c`, replay
-  `b4f1f260-cf8d-498a-9e31-6c926ce7aaec`, broker
-  `75276fda-6c36-4f53-af5a-00f507afe1ba`, and container application version
-  `22`;
+- production intake disabled in both configured and effective state;
 - staging and production general replay disabled;
 - historical-public replay disabled;
 - staging acceptance enabled and production acceptance disabled;
 - production promotion canary disabled;
-- the six approved result-owner, amendment-owner, amendment-maintainer,
-  model-owner, model-maintainer, and one-way publication-opt-in gates enabled;
-- exactly `kim-em` / GitHub user `477956` in both production maintainer lists;
-  and
+- the six result-owner, amendment-owner, amendment-maintainer, model-owner,
+  model-maintainer, and one-way publication-opt-in gates disabled;
+- both production maintainer lists empty while their APIs are disabled; and
 - model consolidation and publication opt-out disabled.
 
 Automatic release publication is enabled. The terminal production canary is
@@ -58,11 +51,11 @@ immediately before every later State-bound operation.
 Production archive Wrap is connected and its Encrypt-only/decrypt-denial
 preflight is qualified. The production replay role and Cloudflare, State, and
 audit credentials are installed in `replay-production`. The public historical
-controller variable and private historical controller variable are both absent.
-The non-replenishing migrated-envelope private canary completed successfully,
-and protected State `d223853a90b37a51d4bbfac30c8213cf78be5778`
-materializes 174 public and 637 private queued tasks. General Worker replay
-remains disabled, and the bounded drain is not enabled.
+controller variable and private historical controller variable are both absent,
+and neither lane has an active task. The non-replenishing migrated-envelope
+private canary completed successfully. Current protected State head and queue
+counts must be read live before any later State-bound operation. General Worker
+replay remains disabled.
 Both release roles trust their exact repository/environment GitHub OIDC
 subjects.
 The staging credentialed, publication-disabled reconstruction boundary and the
@@ -85,11 +78,12 @@ No LeanEval resource is hosted in the unrelated
 | Staging rate-limit namespace | `24012001` |
 | Production rate-limit namespace | `24012002` |
 
-No dedicated hostname or DNS change is required. The leaderboard provides
-`https://lean-lang.org/eval/submit/` as the server-primary entry and sends users
-to the production Worker origin for authentication and submission. Issue intake
-remains the overlap fallback through no earlier than
-`2026-09-30T06:57:10Z`.
+No dedicated hostname or DNS change is required. During the temporary intake
+pause, the leaderboard keeps problem statements visible and presents issue
+intake as primary. The prepared server-primary copy will again send users from
+`https://lean-lang.org/eval/submit/` to the production Worker origin only after
+the repaired intake boundary is qualified and restored. Issue intake remains
+available through no earlier than `2026-09-30T06:57:10Z`.
 
 | Environment | Intake Worker | Broker Worker | Replay Worker / container application |
 | --- | --- | --- | --- |
@@ -115,11 +109,12 @@ unconditional destruction.
 
 GitHub environments `cloudflare-staging` (`20259250422`) and
 `cloudflare-production` (`20259250928`) are restricted to protected branches.
-`cloudflare-production` additionally requires reviewer `kim-em`, with
-self-review permitted, so an exact candidate can finish staging verification
-before its production deployment is released. To remove only this hold, clear
-the reviewer list while preserving the protected-branch policy and first
-verify that no production deployment is waiting.
+`cloudflare-production` has no required reviewer. The same environment supplies
+the callback token to protected lifecycle jobs, which must run automatically;
+a required-reviewer rule would strand archive, evaluation, and result State
+callbacks. Production mutation is instead limited to protected-main workflows
+whose own readiness checks fail closed. Preserve the protected-branch policy
+when changing this environment.
 Each contains distinct values for:
 
 - `CLOUDFLARE_ACCOUNT_ID`;
@@ -190,12 +185,33 @@ a fresh value through a reviewed, packet-bound credential change.
 | App | App ID / key | Authority | Installation |
 | --- | --- | --- | --- |
 | Lean Eval Source Reader (`lean-eval-source-reader`) | `4666604` / `4176146` | Metadata read, Contents read | Installed only on contributor repositories that opt in |
+| Legacy workflow source reader (`lean-eval-bot`) | `3346375` / `Iv23liLATwL7VxAK37uX` | Metadata read, Contents read | Installed only on contributor repositories that opt in |
 | Lean Eval Workflow Dispatcher (`lean-eval-workflow-dispatcher`) | `4666633` / `4176163` | Metadata read, Contents read, Actions read/write | `155329316`, selected repository exactly `leanprover/lean-eval-submissions` |
 
-Both Apps are owned by `leanprover`, subscribe to no events, and have no
-webhook. Each broker environment holds its matching App IDs and private keys.
-Kim Morrison is the temporary private-key custodian; organization ownership is
-the recovery path if that custody is lost. No current private-key creation date,
+The Source Reader and Workflow Dispatcher Apps are owned by `leanprover`; the
+legacy workflow reader is temporarily owned by `kim-em`. They subscribe to no
+events and have no webhook. Each broker environment holds separate credentials
+for all three Apps. The protected deployment workflow copies the existing
+repository secrets `LEAN_EVAL_BOT_CLIENT_ID` and
+`LEAN_EVAL_BOT_PRIVATE_KEY` directly to the environment's
+`LEGACY_SOURCE_APP_ID` and `LEGACY_SOURCE_APP_PRIVATE_KEY` broker secrets over
+stdin before deploying that broker. Values are neither emitted nor persisted
+in workflow artifacts.
+
+Server intake obtains independent repository-scoped tokens from the Source
+Reader and legacy workflow reader. Before State acceptance or workflow
+dispatch, both must verify the same repository identity, visibility, and exact
+40-character commit object. The legacy broker authority permits only repository
+metadata and that exact commit-object read; it cannot dispatch, read tags, or
+reach another GitHub API origin.
+The broker pins all three reviewed identities: Source Reader App ID `4666604`,
+legacy workflow-reader client ID `Iv23liLATwL7VxAK37uX`, and Dispatcher App ID
+`4666633`. A well-formed but different App credential fails closed.
+
+Kim Morrison is the temporary private-key custodian. Organization ownership is
+the recovery path for the Source Reader and Dispatcher; recovery of the
+temporary legacy reader currently requires its `kim-em` owner account. No
+current private-key creation date,
 expiry, or fingerprint is recorded, and repository and public App APIs do not
 expose which App key the Worker secret contains. Rotate a key by creating one
 replacement under the same App, installing it in both broker environments,
@@ -443,7 +459,7 @@ credentials, or repository history. If the non-atomic multi-component deploy
 is interrupted, keep intake paused and rerun disable-only recovery or
 forward-deploy one coherent reviewed unit. Never mix target commits.
 
-The current coherent rollback unit is commit
+The last recorded coherent rollback unit is commit
 `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`, intake
 `98e1d29e-aa81-4fa5-b095-ac2261d7f9a0`, replay
 `8dabd811-9e81-4a37-95c2-5290b07fbabb`, and broker

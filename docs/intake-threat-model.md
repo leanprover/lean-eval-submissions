@@ -1,7 +1,8 @@
 # Submission intake threat model
 
-Status: reviewed launch contract; tracked production intake is durable-enabled.
-Last reviewed: 2026-08-30.
+Status: reviewed launch contract; tracked production intake is disabled pending
+dual-App staging proof.
+Last reviewed: 2026-09-03.
 
 ## Assets and trust boundaries
 
@@ -61,8 +62,8 @@ publicly attributable State events.
 | --- | --- |
 | OAuth login CSRF or callback substitution | One-time state bound to the initiating session, exact callback allowlist, expiry, and reuse tests. |
 | Stolen browser token | Minimal scopes, immediate verification, never log or persist the token, redact upstream bodies. |
-| Agent impersonation | The signed challenge must appear verbatim in `lean-eval-proof.txt` in the asserted owner's secret (unlisted) gist; the anonymous exact-ID fetch sends no credential and checks `public: false`, owner equality, truncation, expiry, and nonce-consumption races. Repository identity and the immutable tag are verified separately by the source-reader App. |
-| Ref movement or repository swap | Resolve and record the source's exact 40-character commit. GitHub dispatch accepts only branch/tag refs, so the workflow uses a protected `lean-eval-dispatch/<commit>` tag, carries the embedded commit as an input, and checks it against `GITHUB_SHA` before any source access. |
+| Agent impersonation | The signed challenge must appear verbatim in `lean-eval-proof.txt` in the asserted owner's secret (unlisted) gist; the anonymous exact-ID fetch sends no credential and checks `public: false`, owner equality, truncation, expiry, and nonce-consumption races. Both source-reader Apps verify repository identity and the exact commit before State acceptance. |
+| Ref movement or repository swap | Both source-reader Apps independently resolve the same canonical repository metadata and exact 40-character commit before State mutation. GitHub dispatch accepts only branch/tag refs, so the workflow uses a protected `lean-eval-dispatch/<commit>` tag, carries the embedded commit as an input, and checks it against `GITHUB_SHA` before any source access. |
 | SSRF through source metadata | Worker never fetches source; downstream fetcher accepts only canonical GitHub repository or gist forms already validated by the secure pipeline. |
 | Duplicate or ambiguous requests | Stable idempotency key, immutable ID-derived event path, byte-equivalent replay success, non-forced compare-and-swap update. |
 | State corruption | Exact event schemas, causal/state-transition materialization, append-only validation, and protected branches. |
@@ -82,13 +83,19 @@ verification needs no credential because GitHub [documents secret gists as
 unlisted, not
 private](https://docs.github.com/en/get-started/writing-on-github/editing-and-sharing-content-with-gists/creating-gists);
 the exact-ID request is anonymous. The selected implementation is a
-private Cloudflare service-binding broker with separate source-reader and
-workflow-dispatch Apps. Static verification/dispatch token hooks are
-local-contract scaffolding only. The provisioned Apps and secrets remain
-operator-managed; if those credentials become unavailable, requests fail with
-`503`, and with `INTAKE_ENABLED=false`, every `/api/` route fails before auth or
-provider work. Broadening OAuth to `repo` or `gist` is not an acceptable
-fallback.
+private Cloudflare service-binding broker with three pinned authorities: the
+organization Source Reader App, the temporary legacy workflow reader App, and
+the organization Workflow Dispatcher App. Each source reader can obtain only
+repository-scoped metadata/contents read permission and can proxy only exact
+repository metadata and commit-object requests during intake; neither can
+dispatch. The protected deployment workflow transfers the existing legacy App
+repository secrets directly into each broker environment through stdin without
+printing or persisting their values. Static verification/dispatch token hooks
+are local-contract scaffolding only. If either reader credential is unavailable
+or either App cannot see the repository and exact commit, browser and headless
+intake fail before State mutation or dispatch. With `INTAKE_ENABLED=false`, every
+`/api/` route fails before auth or provider work. Broadening OAuth to `repo` or
+`gist` is not an acceptable fallback.
 
 ## Launch gates
 

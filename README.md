@@ -23,6 +23,18 @@ The public leaderboard that renders these results is
 The preferred submission path is the
 [**LeanEval submission service**](https://lean-lang.org/eval/submit/).
 
+Before submitting through the service, install both read-only Apps on only the
+repository you intend to submit:
+
+- [LeanEval Source Reader](https://github.com/apps/lean-eval-source-reader/installations/new)
+  verifies the repository and exact source commit during intake.
+- [lean-eval-bot](https://github.com/apps/lean-eval-bot/installations/new)
+  lets the archive and evaluation workflow fetch that same commit.
+
+The service verifies both installations and exact-commit access before it
+records or dispatches a submission. This is enforced for browser and headless
+submission clients; it is not a form checkbox or user assertion.
+
 GitHub issue intake remains available during the transition and is
 provisionally scheduled to close no earlier than `2026-09-30T06:57:10Z`.
 Closure is not automatic: issue intake will remain open if a severity-high
@@ -43,7 +55,7 @@ Only `Submission.lean` and files under `Submission/` are read. Nothing
 else from your submission is inspected or published — only the set of
 solved problem ids plus the metadata you enter on the form.
 
-If your submission lives in a **private** repository, install the
+If you use the legacy issue path and your submission lives in a **private** repository, install the
 `lean-eval-bot` GitHub App on it so the CI can clone it:
 **<https://github.com/apps/lean-eval-bot>**.
 
