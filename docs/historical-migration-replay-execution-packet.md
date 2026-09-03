@@ -38,12 +38,12 @@ The fixed reviewed implementation bindings are:
 | Private replay controller | `.github/workflows/historical-private-replay.yml`, SHA-256 `c58077160ddd969b482867057c1b6404e2370bb99f4b6b3aeb665744bf9e70f6` |
 | Public replay controller | `.github/workflows/historical-authoritative-replay.yml`, SHA-256 `7d3d1b5c1a231d73db186331dbc6c52ca992e470a1fefbb5588aa0882fe14a74` |
 | Two-lane driver | `.github/workflows/historical-replay-two-lane-driver.yml`, SHA-256 `5ce9e738e66b9ba3f1dcc30eef2264b9aa720d01a772ce2a9370c7888a65ad21` |
-| State review and promotion workflow | `.github/workflows/append-historical-baseline-state.yml`, SHA-256 `668eaecba9a16bbe1b00c534c1a2a7032142447be3777701e6e439539ddf8cba` |
+| State review and promotion workflow | `.github/workflows/append-historical-baseline-state.yml`, SHA-256 `590582cf72500fad58e2eb4fe563b00f1d9f2e7bc3521f6382b7b8a4eae83ade` |
 | State candidate closer | `scripts/prepare_historical_baseline_state_batch.py`, SHA-256 `8d8112571223316a5fd9f499b7d18ea63c530ce8f2333ffc0150211a77f1d415` |
 | State review verifier | `scripts/review_historical_baseline_state_batch.py`, SHA-256 `4c8821b105b5e3f93639abf8b4359e152f20889a9b92e049cf614e3e789c36f8` |
 | State batch expectation | `configuration/historical-baseline-state-batch-v1.json`, SHA-256 `6f16b548b1774f4fff9101c6f9ac6e8b1e9e08d014de1fef6ad4ffd13ec320e2` |
 | Migration validator | `scripts/migrate_archive_envelopes.py`, SHA-256 `988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6` |
-| Private plan builder | `scripts/prepare_historical_private_replay.py`, SHA-256 `2f1ae6a6e8710a0d0983aa7c2b3f64e77ebf2322da8154c04e39be084f4355e4` |
+| Private plan builder | `scripts/prepare_historical_private_replay.py`, SHA-256 `2982dd857279fb4e76bca34fff178cbb8bf07950a77be252f0d158189431109e` |
 | Public finalizer | `scripts/prepare_historical_public_authority.py`, SHA-256 `59e611fd468e700b766343adc2f3a861ed2fa3c182761ef2ba7f6efd66434d6b` |
 | Migration infrastructure | Applied production template `infrastructure/aws-key-adapter/template.yaml`, SHA-256 `aac24318c973523a65b76af34b8e1408a5680f61b52c4fb996f93967253ef94d`. The completed operator procedure is not an execution input and must not be rerun. |
 | Migration boundary | role `arn:aws:iam::161072922960:role/lean-eval-archive-migration-wrap-production`; environment `archive-migration-production`; environment variable `REVIEWED_IMPLEMENTATION_COMMIT`; review branch `archive-file-key-rewrap-v1`; confirmation `stage-envelope-migration` |

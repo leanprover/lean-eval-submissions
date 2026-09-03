@@ -89,6 +89,7 @@ DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z"
 )
+RESULT_ID = re.compile(r"r2_[0-9a-f]{64}\Z")
 TIMESTAMP_SECONDS = re.compile(
     r"(?!0000-)[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\Z"
 )
@@ -1092,7 +1093,155 @@ def validate_embedded_private_profiles(
             )
 
 
-def archive_binding(audit_root: pathlib.Path, audit_commit: str, entry: dict[str, Any]) -> dict[str, Any]:
+def load_exact_crosswalk_entries(
+    plan: dict[str, Any],
+    authority_root: pathlib.Path,
+    authority_commit: str,
+    audit_root: pathlib.Path,
+    audit_commit: str,
+) -> dict[str, dict[str, Any]]:
+    locator = plan["crosswalk"]
+    _require_ancestor(
+        authority_root,
+        locator["commit"],
+        authority_commit,
+        "private archive crosswalk commit",
+    )
+    raw = _blob_at_commit(
+        authority_root,
+        locator["commit"],
+        locator["path"],
+        "private archive crosswalk",
+    )
+    if sha256(raw) != locator["sha256"]:
+        raise PrivateReplayPlanError("private archive crosswalk digest changed")
+    try:
+        value = json.loads(raw.decode("utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise PrivateReplayPlanError("private archive crosswalk is invalid") from error
+    if not isinstance(value, dict) or canonical(value) != raw:
+        raise PrivateReplayPlanError("private archive crosswalk is not canonical")
+    entries = _closed_crosswalk(
+        value, raw, locator["commit"], pathlib.Path(locator["path"])
+    )
+    if (
+        value["results_repository"] != plan["results"]["repository"]
+        or value["results_commit"] != plan["results"]["commit"]
+        or value["results_store_sha256"] != plan["results"]["store_sha256"]
+        or value["audit_repository"] != AUDIT_REPOSITORY
+        or COMMIT.fullmatch(value["audit_commit"]) is None
+    ):
+        raise PrivateReplayPlanError("private archive crosswalk roots changed")
+    _require_ancestor(
+        audit_root,
+        value["audit_commit"],
+        audit_commit,
+        "private archive crosswalk audit commit",
+    )
+    by_result: dict[str, dict[str, Any]] = {}
+    for source in entries:
+        if not isinstance(source, dict):
+            raise PrivateReplayPlanError("private archive crosswalk entry is invalid")
+        result_id = source.get("result_id")
+        classification = source.get("classification")
+        expected_fields = {"result_id", "classification"}
+        if classification == "bound":
+            expected_fields |= {
+                "submission_id",
+                "archive_plan_entry_sha256",
+                "archive_schema_version",
+                "archive_result_evidence",
+                "benchmark_relation",
+            }
+        if (
+            not isinstance(result_id, str)
+            or RESULT_ID.fullmatch(result_id) is None
+            or result_id in by_result
+            or set(source) != expected_fields
+            or classification not in {"bound", "archive_not_found"}
+        ):
+            raise PrivateReplayPlanError("private archive crosswalk entry is invalid")
+        if classification == "bound" and (
+            UUID7.fullmatch(source["submission_id"]) is None
+            or DIGEST.fullmatch(source["archive_plan_entry_sha256"]) is None
+            or type(source["archive_schema_version"]) is not int
+            or source["archive_schema_version"] not in {1, 2, 3}
+            or source["archive_result_evidence"]
+            not in {"confirmed_pass", "legacy_unrecorded"}
+            or source["benchmark_relation"]
+            not in {"same", "archive_recorded_different"}
+            or (
+                source["benchmark_relation"] == "archive_recorded_different"
+                and source["archive_result_evidence"] != "confirmed_pass"
+            )
+        ):
+            raise PrivateReplayPlanError("private archive crosswalk binding is invalid")
+        by_result[result_id] = source
+    if set(by_result) != {entry["result_id"] for entry in plan["entries"]}:
+        raise PrivateReplayPlanError("private archive crosswalk corpus changed")
+    for entry in plan["entries"]:
+        source = by_result[entry["result_id"]]
+        if (
+            sha256(canonical_compact(source)) != entry["crosswalk_entry_sha256"]
+            or source["classification"] != entry["classification"]
+            or (
+                source["classification"] == "bound"
+                and (
+                    source["submission_id"] != entry["archive_submission_id"]
+                    or source["archive_plan_entry_sha256"]
+                    != entry["archive_plan_entry_sha256"]
+                )
+            )
+        ):
+            raise PrivateReplayPlanError("private archive crosswalk entry changed")
+    return by_result
+
+
+def validate_archive_benchmark_relation(
+    archived_benchmark: Any,
+    result_benchmark: str,
+    crosswalk_entry: dict[str, Any] | None,
+) -> None:
+    if (
+        not isinstance(archived_benchmark, str)
+        or COMMIT.fullmatch(archived_benchmark) is None
+        or COMMIT.fullmatch(result_benchmark) is None
+    ):
+        raise PrivateReplayPlanError("migrated archive binding is invalid")
+    relation = (
+        "same" if crosswalk_entry is None else crosswalk_entry.get("benchmark_relation")
+    )
+    valid = archived_benchmark == result_benchmark if relation == "same" else (
+        relation == "archive_recorded_different"
+        and archived_benchmark != result_benchmark
+        and crosswalk_entry is not None
+        and crosswalk_entry.get("archive_result_evidence") == "confirmed_pass"
+    )
+    if not valid:
+        raise PrivateReplayPlanError("migrated archive binding is invalid")
+
+
+def validate_cached_archive_binding(
+    cached_result_benchmark: str,
+    archived_benchmark: str,
+    entry: dict[str, Any],
+    crosswalk_entry: dict[str, Any] | None,
+) -> None:
+    if cached_result_benchmark != entry["benchmark_commit"]:
+        raise PrivateReplayPlanError(
+            "shared migrated archive has conflicting benchmark bindings"
+        )
+    validate_archive_benchmark_relation(
+        archived_benchmark, entry["benchmark_commit"], crosswalk_entry
+    )
+
+
+def load_archive_binding(
+    audit_root: pathlib.Path,
+    audit_commit: str,
+    entry: dict[str, Any],
+    crosswalk_entry: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], str]:
     submission_id = entry["archive_submission_id"]
     relative = canonical_archive_path(submission_id)
     ciphertext = audit_root.joinpath(*relative.split("/"))
@@ -1114,13 +1263,16 @@ def archive_binding(audit_root: pathlib.Path, audit_commit: str, entry: dict[str
         raise PrivateReplayPlanError("migrated archive sidecar is invalid") from error
     plaintext_digest = sidecar.get("sha256_plaintext_tar")
     plaintext_size = sidecar.get("size_bytes_plaintext_tar")
+    archived_benchmark = sidecar.get("benchmark_commit")
+    validate_archive_benchmark_relation(
+        archived_benchmark, entry["benchmark_commit"], crosswalk_entry
+    )
     if (
         sidecar.get("schema_version") != 3
         or metadata["schema_version"] != 3
         or metadata["submission_id"] != submission_id
         or sidecar.get("submission_id") != submission_id
         or sidecar.get("submission_public") is not False
-        or sidecar.get("benchmark_commit") != entry["benchmark_commit"]
         or sidecar.get("sha256_ciphertext") != ciphertext_digest
         or sidecar.get("size_bytes_ciphertext") != len(ciphertext_raw)
         or envelope["submission_id"] != submission_id
@@ -1134,7 +1286,7 @@ def archive_binding(audit_root: pathlib.Path, audit_commit: str, entry: dict[str
     workflow_run = sidecar.get("archiver_workflow_run")
     if not isinstance(workflow_run, str) or not workflow_run:
         raise PrivateReplayPlanError("migrated archive workflow identity is invalid")
-    return {
+    archive = {
         "archive_repository": AUDIT_REPOSITORY,
         "archive_commit": audit_commit,
         "archive_path": relative,
@@ -1154,6 +1306,19 @@ def archive_binding(audit_root: pathlib.Path, audit_commit: str, entry: dict[str
             )
         ),
     }
+    return archive, archived_benchmark
+
+
+def archive_binding(
+    audit_root: pathlib.Path,
+    audit_commit: str,
+    entry: dict[str, Any],
+    crosswalk_entry: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    archive, _archived_benchmark = load_archive_binding(
+        audit_root, audit_commit, entry, crosswalk_entry
+    )
+    return archive
 
 
 def _parse_timestamp(value: str) -> dt.datetime:
@@ -1569,7 +1734,8 @@ def prepare_state_events(args: argparse.Namespace) -> int:
     first = _parse_timestamp(args.first_occurred_at)
     plan_relative = expected_plan_path
     events: list[dict[str, Any]] = []
-    archive_cache: dict[str, tuple[str, dict[str, Any]]] = {}
+    archive_cache: dict[str, tuple[str, str, dict[str, Any]]] = {}
+    crosswalk_entries: dict[str, dict[str, Any]] = {}
     if unavailable_only:
         events = build_unavailable_selection(
             plan=plan,
@@ -1589,22 +1755,40 @@ def prepare_state_events(args: argparse.Namespace) -> int:
             )
         audit_root = pathlib.Path(args.audit_root).resolve()
         verify_checkout(audit_root, args.audit_commit, "audit")
+        if args.append_ready:
+            crosswalk_entries = load_exact_crosswalk_entries(
+                plan,
+                authority_root,
+                args.authority_commit,
+                audit_root,
+                args.audit_commit,
+            )
         for entry in plan["entries"]:
             if entry["classification"] == "archive_not_found":
                 continue
             if entry["replay_profile_status"] != "profile_qualified":
                 continue
             submission_id = entry["archive_submission_id"]
+            crosswalk_entry = crosswalk_entries.get(entry["result_id"])
             cached = archive_cache.get(submission_id)
             if cached is None:
-                archive = archive_binding(audit_root, args.audit_commit, entry)
-                archive_cache[submission_id] = (entry["benchmark_commit"], archive)
+                archive, archived_benchmark = load_archive_binding(
+                    audit_root,
+                    args.audit_commit,
+                    entry,
+                    crosswalk_entry,
+                )
+                archive_cache[submission_id] = (
+                    entry["benchmark_commit"], archived_benchmark, archive
+                )
             else:
-                cached_benchmark, archive = cached
-                if cached_benchmark != entry["benchmark_commit"]:
-                    raise PrivateReplayPlanError(
-                        "shared migrated archive has conflicting benchmark bindings"
-                    )
+                cached_result_benchmark, archived_benchmark, archive = cached
+                validate_cached_archive_binding(
+                    cached_result_benchmark,
+                    archived_benchmark,
+                    entry,
+                    crosswalk_entry,
+                )
             profile = plan["profiles"][entry["execution_profile_digest"]]
             selected = build_bound_events(
                 entry=entry,

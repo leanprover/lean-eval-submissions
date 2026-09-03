@@ -379,6 +379,24 @@ jobs:
             normalize public-qualification-source leanprover/lean-eval-submissions
           fi
 
+      - name: Create an exact clean private authority worktree
+        if: inputs.operation == 'stage'
+        run: |
+          set -euo pipefail
+          authority_root="$RUNNER_TEMP/private-authority"
+          test ! -e "$authority_root"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse --is-shallow-repository)" = false
+          git worktree add --detach "$authority_root" "$GITHUB_SHA"
+          test "$(git -C "$authority_root" rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C "$authority_root" rev-parse 'HEAD^{tree}')" = \
+            "$(git rev-parse "$GITHUB_SHA^{tree}")"
+          test "$(git -C "$authority_root" rev-parse --is-shallow-repository)" = false
+          test "$(git -C "$authority_root" remote get-url origin)" = \
+            https://github.com/leanprover/lean-eval-submissions.git
+          test -z "$(git -C "$authority_root" status \
+            --porcelain=v1 --untracked-files=all)"
+
       - name: Construct both ordinary candidate lanes with nonoverlapping time windows
         if: inputs.operation == 'stage'
         env:
@@ -414,6 +432,10 @@ jobs:
           print((first + dt.timedelta(milliseconds=int(sys.argv[2]))).isoformat(timespec="milliseconds").replace("+00:00", "Z"))
           PY
           )
+          authority_root="$RUNNER_TEMP/private-authority"
+          test "$(git -C "$authority_root" rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git -C "$authority_root" status \
+            --porcelain=v1 --untracked-files=all)"
           python scripts/prepare_historical_public_authority.py finalize-batch \
             --qualification-commit 81e94fe2f4fc819300fd7d4e036f00124166784f \
             --qualification-repository-root public-qualification-source \
@@ -422,7 +444,7 @@ jobs:
             --event-id-seed "$seed" \
             --output-directory "$RUNNER_TEMP/public-candidate"
           python scripts/prepare_historical_private_replay.py state-events \
-            --plan evidence/private-replay/plans/08992e62486c2b000bf4914c80cbfe734a3aa9d0d07dab481b40cd8684fe268d.json \
+            --plan "$authority_root/evidence/private-replay/plans/08992e62486c2b000bf4914c80cbfe734a3aa9d0d07dab481b40cd8684fe268d.json" \
             --authority-commit "$GITHUB_SHA" \
             --selection full \
             --audit-root audit \
@@ -708,9 +730,13 @@ jobs:
       - name: Remove review scratch and any residual key material
         if: always()
         run: |
+          git worktree remove --force "$RUNNER_TEMP/private-authority" \
+            >/dev/null 2>&1 || true
           rm -rf -- state audit public-state-contract public-qualification-source \
+            "$RUNNER_TEMP/private-authority" \
             "$RUNNER_TEMP/public-candidate" "$RUNNER_TEMP/private-candidate" \
             "$RUNNER_TEMP/combined-candidate"
+          git worktree prune --expire now >/dev/null 2>&1 || true
           rm -f -- "$RUNNER_TEMP/historical-baseline-state-promotion-v1.json" \
             "$RUNNER_TEMP/audit-tree" "$RUNNER_TEMP/pre-mutation-state-main"
           find /dev/shm -maxdepth 1 -type f \

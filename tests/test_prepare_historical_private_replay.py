@@ -85,6 +85,41 @@ def file_key_envelope(submission_id: str, ciphertext: bytes) -> dict[str, object
 
 
 class HistoricalPrivateReplayPlanTests(unittest.TestCase):
+    def test_nested_checkout_dirties_root_but_detached_authority_is_clean(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fixture_root = pathlib.Path(directory)
+            repository = fixture_root / "submissions"
+            authority = fixture_root / "authority"
+            subprocess.run(["git", "init", "-q", str(repository)], check=True)
+            (repository / "authority.txt").write_text("reviewed\n", encoding="utf-8")
+            commit = self.commit_fixture(repository, "reviewed authority")
+            nested = repository / "state"
+            nested.mkdir()
+            (nested / "state.json").write_text("{}\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                private_replay.PrivateReplayPlanError,
+                "submissions input tree is not clean",
+            ):
+                private_replay.verify_checkout(repository, commit, "submissions")
+
+            subprocess.run(
+                [
+                    "git", "-C", str(repository), "worktree", "add", "--detach",
+                    str(authority), commit,
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            private_replay.verify_checkout(authority, commit, "submissions")
+            self.assertEqual(
+                subprocess.check_output(
+                    ["git", "-C", str(authority), "rev-parse", "HEAD"], text=True
+                ).strip(),
+                commit,
+            )
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.raw = PRIVATE_PLAN.read_bytes()
@@ -429,6 +464,41 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
         self.assertEqual(max(plan_reuse.values()), 19)
         self.assertEqual(sum(count > 1 for count in plan_reuse.values()), 58)
 
+    def test_append_ready_crosswalk_is_the_exact_committed_corpus(self) -> None:
+        with mock.patch.object(private_replay, "_require_ancestor") as require_ancestor:
+            entries = private_replay.load_exact_crosswalk_entries(
+                self.plan,
+                ROOT,
+                subprocess.check_output(
+                    ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
+                ).strip(),
+                ROOT,
+                "a" * 40,
+            )
+        self.assertEqual(len(entries), 668)
+        self.assertEqual(
+            collections.Counter(
+                entry.get("benchmark_relation")
+                for entry in entries.values()
+                if entry["classification"] == "bound"
+            ),
+            {"same": 631, "archive_recorded_different": 8},
+        )
+        self.assertEqual(require_ancestor.call_count, 2)
+
+        tampered = copy.deepcopy(self.plan)
+        tampered["entries"][0]["crosswalk_entry_sha256"] = "0" * 64
+        with (
+            mock.patch.object(private_replay, "_require_ancestor"),
+            self.assertRaisesRegex(
+                private_replay.PrivateReplayPlanError,
+                "private archive crosswalk entry changed",
+            ),
+        ):
+            private_replay.load_exact_crosswalk_entries(
+                tampered, ROOT, "b" * 40, ROOT, "a" * 40
+            )
+
     def test_plan_emits_no_private_source_data(self) -> None:
         forbidden = {
             "archiver_workflow_run",
@@ -701,6 +771,67 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
                         "c" * 40,
                         {**entry, "benchmark_commit": "f" * 40},
                     )
+                reviewed_difference = {
+                    "benchmark_relation": "archive_recorded_different",
+                    "archive_result_evidence": "confirmed_pass",
+                }
+                private_replay.archive_binding(
+                    root,
+                    "c" * 40,
+                    {**entry, "benchmark_commit": "f" * 40},
+                    reviewed_difference,
+                )
+                for crosswalk_entry, selected_entry in (
+                    (
+                        {
+                            "benchmark_relation": "same",
+                            "archive_result_evidence": "confirmed_pass",
+                        },
+                        {**entry, "benchmark_commit": "f" * 40},
+                    ),
+                    (reviewed_difference, entry),
+                    (
+                        {
+                            **reviewed_difference,
+                            "archive_result_evidence": "legacy_unrecorded",
+                        },
+                        {**entry, "benchmark_commit": "f" * 40},
+                    ),
+                    (
+                        {
+                            **reviewed_difference,
+                            "benchmark_relation": "unexpected",
+                        },
+                        {**entry, "benchmark_commit": "f" * 40},
+                    ),
+                ):
+                    with self.assertRaisesRegex(
+                        private_replay.PrivateReplayPlanError,
+                        "migrated archive binding is invalid",
+                    ):
+                        private_replay.archive_binding(
+                            root,
+                            "c" * 40,
+                            selected_entry,
+                            crosswalk_entry,
+                        )
+                for malformed_benchmark in (None, "not-a-commit"):
+                    tampered_sidecar = copy.deepcopy(value)
+                    if malformed_benchmark is None:
+                        del tampered_sidecar["benchmark_commit"]
+                    else:
+                        tampered_sidecar["benchmark_commit"] = malformed_benchmark
+                    archive.with_suffix("").with_suffix(".json").write_text(
+                        json.dumps(tampered_sidecar, indent=2, sort_keys=True) + "\n",
+                        encoding="utf-8",
+                    )
+                    with self.assertRaises(private_replay.PrivateReplayPlanError):
+                        private_replay.archive_binding(
+                            root,
+                            "c" * 40,
+                            {**entry, "benchmark_commit": "f" * 40},
+                            reviewed_difference,
+                        )
         self.assertNotEqual(
             bindings[0]["archive_ciphertext_sha256"],
             bindings[1]["archive_ciphertext_sha256"],
@@ -713,6 +844,35 @@ class HistoricalPrivateReplayPlanTests(unittest.TestCase):
             bindings[0]["workflow_run_identity_sha256"],
             bindings[1]["workflow_run_identity_sha256"],
         )
+
+    def test_shared_archive_cache_preserves_the_first_result_benchmark(self) -> None:
+        entry = {"benchmark_commit": "a" * 40}
+        with self.assertRaisesRegex(
+            private_replay.PrivateReplayPlanError,
+            "shared migrated archive has conflicting benchmark bindings",
+        ):
+            private_replay.validate_cached_archive_binding(
+                "b" * 40,
+                "a" * 40,
+                entry,
+                {
+                    "benchmark_relation": "same",
+                    "archive_result_evidence": "confirmed_pass",
+                },
+            )
+        with self.assertRaisesRegex(
+            private_replay.PrivateReplayPlanError,
+            "migrated archive binding is invalid",
+        ):
+            private_replay.validate_cached_archive_binding(
+                "a" * 40,
+                "b" * 40,
+                entry,
+                {
+                    "benchmark_relation": "same",
+                    "archive_result_evidence": "confirmed_pass",
+                },
+            )
 
     def test_exact_committed_plan_blob_is_required(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
