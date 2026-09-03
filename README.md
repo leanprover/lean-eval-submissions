@@ -100,8 +100,8 @@ the same user no longer proves it.
         "submission_id": "01a0603c-6189-7751-9c43-c904b50b477a"
       },
       "submission": {
-        "kind": "gist",
-        "repo": "kim-em/22bad2dccd67bcca0df87c01d072ef39",
+        "kind": "github_repo",
+        "repo": "kim-em/lean-eval-solution",
         "ref": "567b8d1feebbc6ccbb1f8ebb0a7bbcf5e914f135",
         "public": true
       },

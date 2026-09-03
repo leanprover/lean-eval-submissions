@@ -13,6 +13,7 @@ ISSUE_CONFIG = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "config.yml"
 ISSUE_FORM = REPO_ROOT / ".github" / "ISSUE_TEMPLATE" / "submit.yml"
 ISSUE_RECONCILER = REPO_ROOT / ".github" / "workflows" / "submission-reconciler.yml"
 ISSUE_CUTOFF_GUARD = REPO_ROOT / "scripts" / "issue_intake_cutoff_guard.sh"
+CI_SECRETS = REPO_ROOT / "docs" / "ci-secrets.md"
 
 
 class SubmissionWorkflowStructureTests(unittest.TestCase):
@@ -238,9 +239,17 @@ class IssueIntakeRetirementTests(unittest.TestCase):
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn("https://lean-lang.org/eval/submit/", readme)
         self.assertIn("GitHub Issues are no longer a submission path", readme)
+        self.assertIn('"kind": "server"', readme)
+        self.assertIn('"kind": "github_repo"', readme)
+        self.assertNotIn('"kind": "gist"', readme)
         self.assertNotIn("Issue Form", readme)
         self.assertNotIn("submission-reconciler", readme)
         self.assertNotIn("template=submit.yml", readme)
+
+    def test_private_source_instructions_follow_server_retirement(self) -> None:
+        ci_secrets = CI_SECRETS.read_text(encoding="utf-8")
+        self.assertIn("https://lean-lang.org/eval/submit/", ci_secrets)
+        self.assertNotIn(".github/ISSUE_TEMPLATE/submit.yml", ci_secrets)
 
     def test_cutoff_guard_remains_for_final_delta_verification(self) -> None:
         self.assertTrue(ISSUE_CUTOFF_GUARD.is_file())
