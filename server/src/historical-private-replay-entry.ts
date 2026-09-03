@@ -24,6 +24,7 @@ const ALLOWED_ROUTES = new Set([
   "GET /healthz",
   "POST /api/v1/replay",
   "POST /api/v1/replay/status",
+  "POST /api/v1/historical-private-replay/prewarm",
   "POST /api/v1/historical-private-replay/reserve",
   "POST /api/v1/historical-private-replay/cleanup",
 ]);

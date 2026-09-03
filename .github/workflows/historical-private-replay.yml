@@ -592,9 +592,65 @@ jobs:
           ' "$RUNNER_TEMP/reservation.json" >/dev/null
           echo 'reserved=true' >> "$GITHUB_OUTPUT"
 
+      - name: Prove exact container readiness without private material
+        id: prewarm
+        if: steps.reserve.outputs.reserved == 'true'
+        env:
+          EXECUTOR_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -z "${AWS_ACCESS_KEY_ID:-}"
+          test -z "${STATE_WRITE_KEY:-}"
+          test -z "${CLOUDFLARE_API_TOKEN:-}"
+          python scripts/historical_private_replay_controller.py prepare-prewarm \
+            --plan "$RUNNER_TEMP/private-replay-plan.json" \
+            --output "$RUNNER_TEMP/prewarm-request.json"
+          test "$(jq -r '.. | objects | keys[]' "$RUNNER_TEMP/prewarm-request.json" \
+            | grep -Eic 'source|archive|key|ciphertext|credential|token|session' || true)" = 0
+          ready=false
+          cleanup() {
+            unset token
+            rm -f "$RUNNER_TEMP/prewarm-oidc.json"
+          }
+          trap cleanup EXIT
+          for prewarm_attempt in $(seq 1 4); do
+            curl --proto '=https' --tlsv1.2 --fail --silent --show-error \
+              --max-time 30 --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=lean-eval-historical-private-replay" \
+              --output "$RUNNER_TEMP/prewarm-oidc.json"
+            token=$(jq -er .value "$RUNNER_TEMP/prewarm-oidc.json")
+            rm -f "$RUNNER_TEMP/prewarm-oidc.json"
+            status=000
+            if status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+              --max-time 240 \
+              --header "Authorization: Bearer $token" \
+              --header 'Content-Type: application/json' --request POST \
+              --data-binary "@$RUNNER_TEMP/prewarm-request.json" \
+              "$EXECUTOR_URL/api/v1/historical-private-replay/prewarm" \
+              --output "$RUNNER_TEMP/prewarm-response.json" \
+              --write-out '%{http_code}'); then
+              unset token
+              if [ "$status" = 200 ] && jq -e \
+                --slurpfile expected "$RUNNER_TEMP/prewarm-request.json" '
+                  . == ($expected[0] + {status:"ready"})
+                ' "$RUNNER_TEMP/prewarm-response.json" >/dev/null; then
+                ready=true
+                break
+              fi
+            fi
+            unset token
+            rm -f "$RUNNER_TEMP/prewarm-response.json"
+            if [ "$prewarm_attempt" -lt 4 ]; then sleep 15; fi
+          done
+          test "$ready" = true
+          cleanup
+          trap - EXIT
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+
       - name: Append the exact replay.started candidate with CAS
         id: started
-        if: steps.reserve.outputs.reserved == 'true'
+        if: steps.prewarm.outputs.ready == 'true'
         env:
           STATE_WRITE_KEY: ${{ secrets.PRODUCTION_STATE_WRITE_KEY }}
         run: |
@@ -665,6 +721,7 @@ jobs:
             --state-root state \
             --started-candidate "$RUNNER_TEMP/started-candidate.json" \
             --audit-root audit \
+            --prewarm-request "$RUNNER_TEMP/prewarm-request.json" \
             --trusted-now "$(date --utc +%Y-%m-%dT%H:%M:%S.000Z)" \
             --output "$RUNNER_TEMP/unwrap-request.json"
           test "$(jq -er .capability.max_uses "$RUNNER_TEMP/unwrap-request.json")" = 1
@@ -801,9 +858,45 @@ jobs:
           }
           cleanup() {
             unset token
-            rm -f "$RUNNER_TEMP/executor-oidc.json"
+            rm -f "$RUNNER_TEMP/executor-oidc.json" \
+              "$RUNNER_TEMP/readiness-refresh-response.json"
+          }
+          refresh_readiness() {
+            local readiness=false
+            local readiness_attempt status
+            for readiness_attempt in $(seq 1 4); do
+              mint_oidc
+              status=000
+              if status=$(curl --proto '=https' --tlsv1.2 --silent --show-error \
+                --max-time 240 \
+                --header "Authorization: Bearer $token" \
+                --header 'Content-Type: application/json' --request POST \
+                --data-binary "@$RUNNER_TEMP/prewarm-request.json" \
+                "$EXECUTOR_URL/api/v1/historical-private-replay/prewarm" \
+                --output "$RUNNER_TEMP/readiness-refresh-response.json" \
+                --write-out '%{http_code}'); then
+                unset token
+                if [ "$status" = 200 ] && jq -e \
+                  --slurpfile expected "$RUNNER_TEMP/prewarm-request.json" '
+                    . == ($expected[0] + {status:"ready"})
+                  ' "$RUNNER_TEMP/readiness-refresh-response.json" >/dev/null; then
+                  readiness=true
+                  break
+                fi
+              fi
+              unset token
+              rm -f "$RUNNER_TEMP/readiness-refresh-response.json"
+              if [ "$readiness_attempt" -lt 4 ]; then sleep 15; fi
+            done
+            test "$readiness" = true
           }
           trap cleanup EXIT
+          prove_running
+          # State/KMS preparation is normally shorter than the sandbox's
+          # five-minute idle limit, but refresh once more before the only
+          # source-bearing request so scheduling jitter cannot reintroduce a
+          # cold-container failure at the confidentiality boundary.
+          refresh_readiness
           prove_running
           mint_oidc
           prove_running
@@ -1181,6 +1274,7 @@ jobs:
             "$RUNNER_TEMP"/recovery-state-publish-*
           rm -f "$RUNNER_TEMP"/*oidc*.json \
             "$RUNNER_TEMP"/*cleanup*.json \
+            "$RUNNER_TEMP"/*prewarm*.json \
             "$RUNNER_TEMP"/*reservation*.json \
             "$RUNNER_TEMP"/*executor*.json \
             "$RUNNER_TEMP"/*running*.json \

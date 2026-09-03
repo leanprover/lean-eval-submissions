@@ -533,6 +533,50 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.fixture.close()
 
+    def test_prewarm_request_is_exact_and_contains_no_private_material(self) -> None:
+        plan = self.fixture.plan()
+        request = controller.prepare_prewarm_request(
+            plan, runner_nonce="4" * 64
+        )
+        self.assertEqual(
+            request,
+            {
+                "schema_version": 1,
+                "runner_nonce": "4" * 64,
+                "replay_task_id": self.fixture.task["replay_task_id"],
+                "attempt": 1,
+                "execution_profile_digest": self.fixture.task[
+                    "execution_profile_digest"
+                ],
+                "measurement_config_digest": self.fixture.task[
+                    "measurement_config_digest"
+                ],
+                "vm_image_digest": plan["execution_plan"]["request"][
+                    "execution_profile"
+                ]["vm_image_digest"],
+            },
+        )
+        self.assertEqual(
+            controller.validate_prewarm_request(plan, request), "4" * 64
+        )
+        self.assertTrue(
+            {
+                "source",
+                "archive",
+                "ciphertext_base64",
+                "plaintext_identity_base64",
+                "plaintext_key_material_base64",
+                "key_material_type",
+            }.isdisjoint(recursive_keys(request))
+        )
+        changed = copy.deepcopy(request)
+        changed["attempt"] = 2
+        with self.assertRaisesRegex(
+            controller.HistoricalPrivateReplayControllerError,
+            "differs from the exact private execution",
+        ):
+            controller.validate_prewarm_request(plan, changed)
+
     def test_unwrap_cli_accepts_strict_noncanonical_provider_json(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = pathlib.Path(raw)
@@ -1444,6 +1488,9 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
 
     def test_existing_one_use_unwrap_and_executor_primitives_are_composed(self) -> None:
         plan = self.fixture.plan()
+        prewarm = controller.prepare_prewarm_request(
+            plan, runner_nonce="5" * 64
+        )
         started = controller.started_candidate(
             plan,
             self.fixture.state,
@@ -1460,9 +1507,11 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 started,
                 self.fixture.audit,
                 "2026-10-21T07:00:00.000Z",
+                runner_nonce=controller.validate_prewarm_request(plan, prewarm),
             )
         self.assertEqual(value, {"unwrap": "exact"})
         self.assertEqual(unwrap.call_args.args[0], plan["execution_plan"])
+        self.assertEqual(unwrap.call_args.kwargs["runner_nonce"], "5" * 64)
 
         with mock.patch.object(
             controller,

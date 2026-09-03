@@ -14,6 +14,7 @@ import copy
 import json
 import pathlib
 import re
+import secrets
 import subprocess
 import sys
 import tempfile
@@ -1757,6 +1758,52 @@ def prepare_unwrap(
         )
 
 
+def prepare_prewarm_request(
+    plan_value: Any,
+    *,
+    runner_nonce: str | None = None,
+) -> dict[str, Any]:
+    """Bind a source-free container readiness probe to one execution plan."""
+
+    plan = validate_execution_plan(plan_value)
+    request = plan["execution_plan"]["request"]
+    nonce = secrets.token_hex(32) if runner_nonce is None else runner_nonce
+    _match(DIGEST, nonce, "prewarm runner_nonce")
+    return {
+        "schema_version": 1,
+        "runner_nonce": nonce,
+        "replay_task_id": request["replay_task_id"],
+        "attempt": request["attempt"],
+        "execution_profile_digest": request["execution_profile_digest"],
+        "measurement_config_digest": request["measurement_config_digest"],
+        "vm_image_digest": request["execution_profile"]["vm_image_digest"],
+    }
+
+
+def validate_prewarm_request(plan_value: Any, prewarm_value: Any) -> str:
+    plan = validate_execution_plan(plan_value)
+    prewarm = _object(prewarm_value, "historical private prewarm request")
+    _fields(
+        prewarm,
+        {
+            "schema_version",
+            "runner_nonce",
+            "replay_task_id",
+            "attempt",
+            "execution_profile_digest",
+            "measurement_config_digest",
+            "vm_image_digest",
+        },
+        "historical private prewarm request",
+    )
+    nonce = _match(DIGEST, prewarm.get("runner_nonce"), "prewarm runner_nonce")
+    if prewarm != prepare_prewarm_request(plan, runner_nonce=nonce):
+        raise HistoricalPrivateReplayControllerError(
+            "prewarm request differs from the exact private execution"
+        )
+    return nonce
+
+
 def build_executor_request(
     plan_value: Any,
     state_root: pathlib.Path,
@@ -1982,9 +2029,13 @@ def parser() -> argparse.ArgumentParser:
     )
     verify_recovery.add_argument("--state-root", required=True, type=pathlib.Path)
     verify_recovery.add_argument("--output", required=True, type=pathlib.Path)
+    prewarm = commands.add_parser("prepare-prewarm")
+    prewarm.add_argument("--plan", required=True, type=pathlib.Path)
+    prewarm.add_argument("--output", required=True, type=pathlib.Path)
     unwrap = commands.add_parser("prepare-unwrap")
     for name in ("plan", "state-root", "started-candidate", "audit-root", "output"):
         unwrap.add_argument(f"--{name}", required=True, type=pathlib.Path)
+    unwrap.add_argument("--prewarm-request", required=True, type=pathlib.Path)
     unwrap.add_argument("--trusted-now", required=True)
     executor = commands.add_parser("build-executor-request")
     for name in (
@@ -2117,15 +2168,26 @@ def main() -> int:
                 args.output,
                 recovery_committed_proof(recovery_value, args.state_root),
             )
+        elif args.command == "prepare-prewarm":
+            plan, _ = _load_canonical(args.plan, "historical private plan")
+            _write(args.output, prepare_prewarm_request(plan))
         elif args.command == "prepare-unwrap":
             plan, _ = _load_canonical(args.plan, "historical private plan")
             started, _ = _load_state_canonical(
                 args.started_candidate, "started append candidate"
             )
+            prewarm, _ = _load_canonical(
+                args.prewarm_request, "historical private prewarm request"
+            )
             _write(
                 args.output,
                 prepare_unwrap(
-                    plan, args.state_root, started, args.audit_root, args.trusted_now
+                    plan,
+                    args.state_root,
+                    started,
+                    args.audit_root,
+                    args.trusted_now,
+                    runner_nonce=validate_prewarm_request(plan, prewarm),
                 ),
             )
         elif args.command == "build-executor-request":

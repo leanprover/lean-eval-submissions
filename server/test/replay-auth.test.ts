@@ -123,6 +123,7 @@ describe("GitHub OIDC replay authentication", () => {
     for (const path of [
       "/api/v1/replay",
       "/api/v1/replay/status",
+      "/api/v1/historical-private-replay/prewarm",
       "/api/v1/historical-private-replay/reserve",
       "/api/v1/historical-private-replay/cleanup",
     ]) {
@@ -153,6 +154,7 @@ describe("GitHub OIDC replay authentication", () => {
     for (const path of [
       "/api/v1/replay",
       "/api/v1/replay/status",
+      "/api/v1/historical-private-replay/prewarm",
       "/api/v1/historical-private-replay/reserve",
     ]) {
       const request = await signedRequest(advanced, path);
