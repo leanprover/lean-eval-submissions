@@ -84,6 +84,8 @@ class FinalDeltaArchiveSelectionTests(unittest.TestCase):
         self.assertEqual(
             binding["review_branch"], "historical-final-delta-archive-rewrap-v1"
         )
+        self.assertNotIn("source_path", str(binding))
+        self.assertNotIn("target_path", str(binding))
         _require_canonical_selection(plan, binding)
 
     def test_rejects_missing_archive_plan_entry(self) -> None:

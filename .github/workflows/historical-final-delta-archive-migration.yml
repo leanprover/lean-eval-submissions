@@ -81,9 +81,8 @@ jobs:
           test "$(git -C audit rev-parse 'HEAD^{tree}')" = "$AUDIT_TREE"
           prep="evidence/historical-replay/final-delta-preparations/$PREPARATION_SHA256.json"
           crosswalk="evidence/historical-replay/private-crosswalks/$CROSSWALK_SHA256.json"
-          plan="evidence/historical-replay/final-delta-archive-plans/$PLAN_SHA256.json"
           binding="evidence/historical-replay/final-delta-archive-migrations/$BINDING_SHA256.json"
-          for path in "$prep" "$crosswalk" "$plan" "$binding"; do
+          for path in "$prep" "$crosswalk" "$binding"; do
             test "$(git ls-files --error-unmatch -- "$path")" = "$path"
             test "$(git hash-object "$path")" = "$(git rev-parse "$GITHUB_SHA:$path")"
           done
@@ -98,13 +97,13 @@ jobs:
           done
           cmp "$RUNNER_TEMP/plan-one.json" "$RUNNER_TEMP/plan-two.json"
           cmp "$RUNNER_TEMP/binding-one.json" "$RUNNER_TEMP/binding-two.json"
-          cmp "$plan" "$RUNNER_TEMP/plan-one.json"
           cmp "$binding" "$RUNNER_TEMP/binding-one.json"
-          test "$(sha256sum "$plan" | cut -d' ' -f1)" = "$PLAN_SHA256"
+          test "$(sha256sum "$RUNNER_TEMP/plan-one.json" | cut -d' ' -f1)" = "$PLAN_SHA256"
           test "$(sha256sum "$binding" | cut -d' ' -f1)" = "$BINDING_SHA256"
-          test "$(jq -er .inventory_digest "$plan")" = "$EXPECTED_INVENTORY"
-          test "$(jq -er .migration_count "$plan")" = "$EXPECTED_COUNT"
-          printf '%s\n' "$plan" > "$RUNNER_TEMP/selected-plan-path"
+          test "$(jq -er .migration_plan_sha256 "$binding")" = "$PLAN_SHA256"
+          test "$(jq -er .inventory_digest "$RUNNER_TEMP/plan-one.json")" = "$EXPECTED_INVENTORY"
+          test "$(jq -er .migration_count "$RUNNER_TEMP/plan-one.json")" = "$EXPECTED_COUNT"
+          printf '%s\n' "$RUNNER_TEMP/plan-one.json" > "$RUNNER_TEMP/selected-plan-path"
           printf '%s\n' "$binding" > "$RUNNER_TEMP/selection-binding-path"
 
       - name: Require explicit mutation confirmation and absent review branch
@@ -173,6 +172,8 @@ jobs:
               echo 'AWS_ACCESS_KEY_ID='
               echo 'AWS_SECRET_ACCESS_KEY='
               echo 'AWS_SESSION_TOKEN='
+              echo 'ACTIONS_ID_TOKEN_REQUEST_TOKEN='
+              echo 'ACTIONS_ID_TOKEN_REQUEST_URL='
             } >> "$GITHUB_ENV"
           }
           trap cleanup EXIT
@@ -200,6 +201,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ""
           AWS_SECRET_ACCESS_KEY: ""
           AWS_SESSION_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
         run: |
           set -euo pipefail
           test ! -e /dev/shm/final-delta-legacy-identity
@@ -215,6 +218,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ""
           AWS_SECRET_ACCESS_KEY: ""
           AWS_SESSION_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
           client-id: ${{ secrets.LEAN_EVAL_ARCHIVER_CLIENT_ID }}
@@ -228,6 +233,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ""
           AWS_SECRET_ACCESS_KEY: ""
           AWS_SESSION_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           repository: leanprover/lean-eval-audit
@@ -243,6 +250,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ""
           AWS_SECRET_ACCESS_KEY: ""
           AWS_SESSION_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
           AUDIT_TOKEN: ${{ steps.audit-token.outputs.token }}
         run: |
           set -euo pipefail
@@ -275,6 +284,12 @@ jobs:
 
       - name: Remove all migration scratch
         if: always()
+        env:
+          AWS_ACCESS_KEY_ID: ""
+          AWS_SECRET_ACCESS_KEY: ""
+          AWS_SESSION_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
         run: |
           rm -rf -- audit "$RUNNER_TEMP/migrated-audit"
           rm -f -- /dev/shm/final-delta-legacy-identity "$RUNNER_TEMP"/{full-plan,plan-one,plan-two,binding-one,binding-two,report}.json "$RUNNER_TEMP"/{selected-plan-path,selection-binding-path,age-file-key}

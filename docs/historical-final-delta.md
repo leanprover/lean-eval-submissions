@@ -28,7 +28,6 @@ The accepted paths are:
 - `evidence/historical-replay/public-source-decisions/<sha256>.json`; and
 - `evidence/historical-replay/private-crosswalks/<sha256>.json`;
 - `evidence/historical-replay/final-delta-preparations/<sha256>.json`;
-- `evidence/historical-replay/final-delta-archive-plans/<sha256>.json`;
 - `evidence/historical-replay/final-delta-archive-migrations/<sha256>.json`;
 - `evidence/historical-replay/final-delta-qualification-requirements/<sha256>.json`;
 - `evidence/historical-replay/final-delta-activations/<sha256>.json`;

@@ -25,7 +25,26 @@ class FinalDeltaWorkflowTests(unittest.TestCase):
         self.assertLess(boundary, writer)
         self.assertIn("echo 'AWS_ACCESS_KEY_ID='", stage[:boundary])
         self.assertIn('AWS_ACCESS_KEY_ID: ""', stage[boundary:])
+        self.assertIn("echo 'ACTIONS_ID_TOKEN_REQUEST_TOKEN='", stage[:boundary])
+        self.assertIn("echo 'ACTIONS_ID_TOKEN_REQUEST_URL='", stage[:boundary])
+        post_aws = stage[boundary:]
+        self.assertGreaterEqual(
+            post_aws.count('ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""'), 5
+        )
+        self.assertGreaterEqual(
+            post_aws.count('ACTIONS_ID_TOKEN_REQUEST_URL: ""'), 5
+        )
         self.assertIn("rm -rf -- audit", stage[boundary:writer])
+
+    def test_archive_plan_remains_private_and_only_binding_is_committed(self) -> None:
+        stage = self.text("historical-final-delta-archive-migration.yml")
+        docs = (ROOT / "docs" / "historical-final-delta.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("final-delta-archive-plans/", stage)
+        self.assertNotIn("final-delta-archive-plans/", docs)
+        self.assertIn("$RUNNER_TEMP/plan-one.json", stage)
+        self.assertIn("final-delta-archive-migrations/", stage)
 
     def test_state_lane_is_separate_and_has_dynamic_counts(self) -> None:
         workflow = self.text("historical-final-delta-state.yml")
@@ -46,6 +65,8 @@ class FinalDeltaWorkflowTests(unittest.TestCase):
         self,
     ) -> None:
         workflow = self.text("historical-final-delta-activation.yml")
+        permissions = workflow.split("permissions:", 1)[1].split("concurrency:", 1)[0]
+        self.assertNotIn("id-token", permissions)
         self.assertIn("HISTORICAL_PUBLIC_REPLAY_CONTROLLER_ENABLED", workflow)
         self.assertIn("workers/services?per_page=1000", workflow)
         self.assertIn("historical-final-delta-state-v1", workflow)

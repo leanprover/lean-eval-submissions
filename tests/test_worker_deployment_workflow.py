@@ -210,10 +210,17 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "scripts/classify_historical_private_archives.py",
             "scripts/historical_replay_controller.py",
             "scripts/inventory_historical_replay.py",
+            "scripts/migrate_archive_envelopes.py",
+            "scripts/prepare_historical_final_delta_activation.py",
+            "scripts/prepare_historical_final_delta_archive_migration.py",
+            "scripts/prepare_historical_final_delta_closure.py",
             "scripts/prepare_historical_final_delta_packet.py",
+            "scripts/prepare_historical_final_delta_public_decisions.py",
+            "scripts/prepare_historical_final_delta_state.py",
             "scripts/prepare_historical_public_authority.py",
             "scripts/prepare_public_replay_plan.py",
             "scripts/reconcile_historical_replay_inventory_delta.py",
+            "scripts/review_historical_final_delta_state.py",
             "scripts/resolve_public_replay_github_evidence.py",
         }
         runtime_scripts = {
@@ -264,6 +271,7 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
                 "aws-key-adapter-staging-smoke.yml",
                 "aws-production-wrap-preflight.yml",
                 "historical-final-delta-packet.yml",
+                "historical-final-delta-public-decisions.yml",
                 "historical-public-replay-plan.yml",
                 "historical-public-runner-contract.yml",
                 "historical-replay-inventory.yml",
@@ -345,10 +353,17 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             "classify_historical_private_archives.py",
             "historical_replay_controller.py",
             "inventory_historical_replay.py",
+            "migrate_archive_envelopes.py",
+            "prepare_historical_final_delta_activation.py",
+            "prepare_historical_final_delta_archive_migration.py",
+            "prepare_historical_final_delta_closure.py",
             "prepare_historical_final_delta_packet.py",
+            "prepare_historical_final_delta_public_decisions.py",
+            "prepare_historical_final_delta_state.py",
             "prepare_historical_public_authority.py",
             "prepare_public_replay_plan.py",
             "reconcile_historical_replay_inventory_delta.py",
+            "review_historical_final_delta_state.py",
             "resolve_public_replay_github_evidence.py",
         }
         for trigger in (pull_request, push):
@@ -365,6 +380,12 @@ class WorkerDeploymentWorkflowTests(unittest.TestCase):
             - {
                 "classify_historical_private_archives.py",
                 "historical_replay_controller.py",
+                "migrate_archive_envelopes.py",
+                "prepare_historical_final_delta_activation.py",
+                "prepare_historical_final_delta_archive_migration.py",
+                "prepare_historical_final_delta_closure.py",
+                "prepare_historical_final_delta_state.py",
+                "review_historical_final_delta_state.py",
             },
         )
         self.assertEqual(
