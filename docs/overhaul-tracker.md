@@ -17,16 +17,18 @@ history, or replace the cross-repository execution runbook.
 
 - Protected `main` requires the `verify` aggregate check.
 - Production Workers report one coherent durable live deployment at
-  `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d`.
+  `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`.
 - Production intake, the six approved lifecycle gates, and one-way publication
   opt-in are enabled. Both production maintainer lists contain exactly
-  `kim-em` / GitHub user `477956`. Replay, model consolidation, publication
-  opt-out, and the promotion canary remain disabled.
+  `kim-em` / GitHub user `477956`. General Worker replay, the bounded historical
+  drain, model consolidation, publication opt-out, and the promotion canary
+  remain disabled.
 - The production canary is terminal and scheduled for
-  `2026-11-02T03:50:01.002Z`. Production State was observed at
-  `fb70dd6ba14cae94b30d570818e4801884e81e04` after the terminal events and may
-  advance append-only. Its fixture branch and temporary App repository access
-  are removed.
+  `2026-11-02T03:50:01.002Z`. The retained historical baseline is promoted in
+  production State at `76b3b3e54f4be69161a00cd81576a58df8eae815`, tree
+  `e196521b812a0942eea9d11a8bcb2d7569728d50`; the append-only head may
+  advance during ordinary intake. The canary fixture branch and temporary App
+  repository access are removed.
 - The exact production all-false pause and ordered release/lifecycle/intake
   restore are complete. Server-primary presentation is live. The overlap began
   `2026-09-02T06:57:10Z`, and issue intake remains available through no earlier
@@ -39,9 +41,14 @@ history, or replace the cross-repository execution runbook.
   a launch feature.
 - Automatic release publication is enabled in
   `leanprover/lean-eval-releases`; the canary source is not yet due.
-- Production archive Wrap is connected and qualified; the production replay
-  role variable is not connected.
-- The staging release role trusts the exact current ID-bearing GitHub OIDC
+- Production archive Wrap is connected and qualified. The production replay
+  role and State, audit, and Cloudflare credentials are installed. The public
+  and private historical controller variables are both absent. The
+  non-replenishing migrated-envelope private canary completed successfully;
+  protected State `d223853a90b37a51d4bbfac30c8213cf78be5778`
+  materializes 174 public and 637 private queued tasks. General Worker replay
+  remains disabled, and the bounded drain is not enabled.
+- The staging release role trusts the exact repository/environment GitHub OIDC
   subject, and its credentialed, publication-disabled reconstruction boundary
   is qualified.
 - Exact resource identifiers, credential custody, feature states, and rollback
@@ -100,7 +107,7 @@ not this summary.
 - [x] Prove that each launch gate returns to disabled and public health reports
       the effective state.
 - [x] Retain one coherent disable-only rollback unit at
-      `ccd7a01a420d3c8dc18f996ea9efc65d38513b6d` and keep its exact component
+      `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2` and keep its exact component
       versions in the infrastructure inventory and rollout runbook.
 - [x] Bind the protected lifecycle and intake deployment to immutable dispatch,
       complete the production canary, and verify the all-false pause and
@@ -139,8 +146,28 @@ campaign.
       authorize, qualify, and enqueue State events across the exact retained
       public task subset. It derives terminal exclusions from the validated
       pinned State ledger; appending its output remains gated on that packet.
-- [ ] Migrate recoverable legacy private envelopes only after the migration
-      execution packet is complete and the custodian operator handoff is ready.
+- [x] Migrate all 439 recoverable retained-baseline legacy private envelopes
+      to bound schema-version-3 sidecars and promote the reviewed patch to
+      audit `d73132415738b0d82c99fd43f630804fe996e342`, tree
+      `48c24fc428eea77d7d9320133fd978f8c7b6abfc`, without changing archive
+      ciphertext or stable IDs.
+- [x] Remove the installed migration identity and retain the custodian-held
+      legacy key offline only through the separately bound final-cutoff delta,
+      its promotion/readback, and recovery checks.
+- [x] Install the production replay role and State, audit, and Cloudflare
+      credentials while leaving both replay lanes disabled.
+- [x] Merge the bounded independent public/private replay controllers and
+      driver. The current controller source binding is
+      `b6f8c8834213a26a19ba1e8c7440db30ad0c05f2`.
+- [x] Promote the exact retained-baseline State batch at
+      `76b3b3e54f4be69161a00cd81576a58df8eae815`, tree
+      `e196521b812a0942eea9d11a8bcb2d7569728d50`, containing 2,439 events and
+      813 replay tasks; the fixed review branch is absent.
+- [x] Complete one non-replenishing migrated-envelope private canary with
+      terminal `replay.accepted` and verified artifact, resource, scrub, Audit,
+      and cleanup checks; return both controller variables to absent.
+- [ ] Enable and drain the independent bounded public and private
+      retained-baseline lanes, currently 174 public and 637 private tasks.
 - [ ] Run bounded official-Lean-plus-nanoda replay and record a terminal replay
       or unavailable disposition for every final-cutoff Result.
 
