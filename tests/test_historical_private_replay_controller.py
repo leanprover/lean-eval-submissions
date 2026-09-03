@@ -626,6 +626,45 @@ class HistoricalPrivateReplayControllerTests(unittest.TestCase):
                 ):
                     controller._load_provider_json(path, "provider response")
 
+    def test_validate_response_cli_accepts_strict_provider_formatting(self) -> None:
+        plan = self.fixture.plan()
+        verdict = json.loads(
+            (ROOT / "tests/fixtures/replay-verdict-accepted-v1.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        verdict["replay_task_id"] = self.fixture.task["replay_task_id"]
+        response_value = {
+            "schema_version": 1,
+            "verdict": verdict,
+            "destruction": "confirmed",
+        }
+        with tempfile.TemporaryDirectory() as raw:
+            root = pathlib.Path(raw)
+            plan_path = root / "plan.json"
+            response_path = root / "response.json"
+            output_path = root / "verdict.json"
+            plan_path.write_bytes(controller.canonical_bytes(plan))
+            response_path.write_text(
+                json.dumps(response_value, indent=2) + "\n", encoding="utf-8"
+            )
+            self.assertNotEqual(
+                response_path.read_bytes(), controller.canonical_bytes(response_value)
+            )
+            arguments = [
+                "historical_private_replay_controller.py",
+                "validate-response",
+                "--plan",
+                str(plan_path),
+                "--response",
+                str(response_path),
+                "--verdict-output",
+                str(output_path),
+            ]
+            with mock.patch.object(sys, "argv", arguments):
+                self.assertEqual(controller.main(), 0)
+            self.assertEqual(output_path.read_bytes(), controller.canonical_bytes(verdict))
+
     def assert_post_start_actions_reject_terminal_history(
         self, plan: dict[str, object], started: dict[str, object]
     ) -> None:
