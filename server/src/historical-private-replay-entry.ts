@@ -130,10 +130,14 @@ export default {
         // the background, so explicitly await the same configuration before
         // the first RPC; otherwise that RPC can retain the ordinary 330-second
         // transport budget. This does not change ordinary replay.
-        const sandbox = replaySandbox(runtime, runnerNonce, 600_000);
+        // State CAS and one-use KMS preparation took just over four minutes in
+        // the bounded production canary. Keep this exact reserved sandbox
+        // awake with enough margin for the source-free readiness refresh;
+        // every terminal and failure path still destroys it explicitly.
+        const sandbox = replaySandbox(runtime, runnerNonce, 600_000, "15m");
         await sandbox.configure({
           keepAlive: false,
-          sleepAfter: "5m",
+          sleepAfter: "15m",
           containerTimeouts: {
             instanceGetTimeoutMS: 120_000,
             portReadyTimeoutMS: 600_000,
