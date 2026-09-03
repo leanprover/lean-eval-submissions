@@ -96,29 +96,37 @@ change.
 
 ## Cutoff freeze mechanism
 
-Keep the Issue Form present while the final corpus is reconciled. After the
-readiness gates pass and before the selected cutoff arrives, set the
-`lean-eval-submissions` repository Actions variable `ISSUE_INTAKE_CUTOFF` to
-that future canonical UTC-second timestamp and read it back exactly. Do not wait
+Keep the Issue Form present while the final corpus is reconciled. As soon as
+the cutoff workflow is protected, set the `lean-eval-submissions` repository
+Actions variable `ISSUE_INTAKE_CUTOFF` to the announced future canonical
+UTC-second timestamp and read it back exactly. This installs a scheduled latch;
+it does not claim that the eventual retirement gates have passed. Do not wait
 until the cutoff instant: installing the future timestamp in advance avoids a
-repository-variable propagation gap. An absent variable means issue intake
-remains open. The `Submission` workflow compares the variable with the first
-attempt's immutable workflow-run creation time, or a rerun attempt's strict
-start time, admits only attempts before the cutoff, and caches that decision
-before intake. Server `workflow_dispatch` submissions do not pass through this
-gate.
+repository-variable propagation gap and ensures pre-cutoff runs carry the
+selected value. An absent variable means issue intake remains open. The
+`Submission` workflow compares the variable with the first attempt's immutable
+workflow-run creation time, or a rerun attempt's strict start time, and admits
+only attempts before the cutoff. Every issue-processing job repeats that
+attempt-aware check before its first source access or mutation; this prevents
+**Re-run failed jobs** from reusing a successful pre-cutoff admission job after
+the cutoff. Server `workflow_dispatch` submissions do not pass through these
+guards.
 
-Before setting the variable, verify the selected future timestamp and that
-every preceding closure gate except the final cutoff/delta readback is
-satisfied. New issue runs at or after the cutoff must complete only the
-admission job and perform no label, issue, source, archive, evaluation, Results,
-State, or leaderboard mutation. First attempts created before the cutoff retain
-their cached admission and may drain normally. A rerun is a new attempt: it is
-admitted only when that attempt's `run_started_at` is also before the cutoff.
+Before the future timestamp arrives, verify every preceding closure gate except
+the final cutoff/delta readback. If any gate requires extending the overlap,
+replace the variable with the reviewed later future timestamp and read that
+value back before the old cutoff. New issue runs at or after the effective
+cutoff must complete only the admission job and perform no label, issue, source,
+archive, evaluation, Results, State, or leaderboard mutation. First attempts
+created before the cutoff retain their admission at every local guard and may
+drain normally. A rerun is a new attempt: each rerun job is admitted only when
+that attempt's `run_started_at` is also before the cutoff. A denied rerun can
+execute its local guard but cannot repeat source access or any mutation.
 
-Before the selected cutoff, a wrong future value may be reversed by deleting
-only `ISSUE_INTAKE_CUTOFF`, verifying it is absent, and leaving issue intake
-open while a corrected cutoff is reviewed. Once the selected cutoff has passed,
+Before the selected cutoff, correct a wrong value by replacing it with the
+reviewed future timestamp and reading it back exactly. Deleting only
+`ISSUE_INTAKE_CUTOFF` and verifying absence fully reverses the mechanism, but
+also returns issue intake to the open state. Once a selected cutoff has passed,
 deleting the variable reopens issue intake and is an incident-recovery action,
 not ordinary rollback. Do not delete the variable merely to retry a post-cutoff
 submission. Final retirement replaces the form with the server link only after
