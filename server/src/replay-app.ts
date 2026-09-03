@@ -93,7 +93,10 @@ class ProcessStartConflictError extends ReplayExecutorError {
 
 type Dependencies = {
   authenticate(request: Request, env: ReplayAuthEnvironment): Promise<void>;
-  sandbox(env: ReplayRuntimeEnv, runnerNonce: string): SandboxClient;
+  sandbox(
+    env: ReplayRuntimeEnv,
+    runnerNonce: string,
+  ): SandboxClient | Promise<SandboxClient>;
   receiptStore?(
     env: ReplayRuntimeEnv,
     runnerNonce: string,
@@ -1585,7 +1588,7 @@ export async function handleReplayRequest(
       );
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce, input);
       const binding = await requireHistoricalActiveBinding(store, input);
-      const sandbox = dependencies.sandbox(env, input.runner_nonce);
+      const sandbox = await dependencies.sandbox(env, input.runner_nonce);
       return await historicalProcessStatus(sandbox, store, binding);
     } catch (error) {
       if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
@@ -1617,7 +1620,7 @@ export async function handleReplayRequest(
       if (existingReceipt !== null) {
         return historicalRunningResponse(historicalStatusBinding(input));
       }
-      const sandbox = dependencies.sandbox(env, input.runner_nonce);
+      const sandbox = await dependencies.sandbox(env, input.runner_nonce);
       try {
         await startHistoricalPublicProcess(sandbox, async () => {
           await writeSandboxFile(
@@ -1660,7 +1663,7 @@ export async function handleReplayRequest(
       requireHistoricalPrivateBinding(env, input);
       const store = terminalReceiptStore(dependencies, env, input.runner_nonce);
       await requireActiveBinding(store, input);
-      sandbox = dependencies.sandbox(env, input.runner_nonce);
+      sandbox = await dependencies.sandbox(env, input.runner_nonce);
       return await authoritativeProcessStatus(sandbox, store, input);
     } catch (error) {
       if (error instanceof ReplayAuthError) return json({ error: "unauthorized" }, 401);
@@ -1696,7 +1699,7 @@ export async function handleReplayRequest(
           status: "running",
         }, 202);
       }
-      const sandbox = dependencies.sandbox(env, input.runner_nonce);
+      const sandbox = await dependencies.sandbox(env, input.runner_nonce);
       try {
         await startAuthoritativeProcess(sandbox, async () => {
           await writeSandboxFile(sandbox, "/workspace/replay-request.json", JSON.stringify(input.request));
@@ -1740,7 +1743,7 @@ export async function handleReplayRequest(
     await dependencies.authenticate(request, env);
     if (archiveAcceptance) {
       const input = await readArchiveAcceptanceRequest(request);
-      const sandbox = dependencies.sandbox(env, input.runner_nonce);
+      const sandbox = await dependencies.sandbox(env, input.runner_nonce);
       const evidence = await withSandboxDestruction(sandbox, async () => {
           await writeSandboxFile(sandbox, "/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
           await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);
@@ -1788,7 +1791,7 @@ export async function handleReplayRequest(
       });
     }
     const input = await readAcceptanceRequest(request);
-    const sandbox = dependencies.sandbox(env, input.runner_nonce);
+    const sandbox = await dependencies.sandbox(env, input.runner_nonce);
     const evidence = await withSandboxDestruction(sandbox, async () => {
         await writeSandboxFile(sandbox, "/workspace/archive.tar.gz.age.b64", input.ciphertext_base64);
         await writeSandboxFile(sandbox, "/workspace/identity.age.b64", input.plaintext_identity_base64);

@@ -198,6 +198,8 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("portReadyTimeoutMS = 180_000", sandbox)
         self.assertIn("replaySandbox(runtime, runnerNonce, 600_000)", private_entry)
+        self.assertIn("await sandbox.configure({", private_entry)
+        self.assertIn("portReadyTimeoutMS: 600_000", private_entry)
         self.assertNotIn("600_000", sandbox)
 
     def test_lane_is_manual_dark_serialized_and_temporary(self) -> None:

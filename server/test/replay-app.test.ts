@@ -1106,6 +1106,58 @@ describe("Cloudflare replay executor", () => {
     expect(commands).toHaveLength(1);
   });
 
+  it("does not issue a sandbox RPC before asynchronous sandbox setup completes", async () => {
+    const body = await authoritativeInput();
+    let rpcCalls = 0;
+    const sandbox = {
+      writeFile: (path: string) => {
+        rpcCalls += 1;
+        return Promise.resolve({ success: true, path, timestamp: "fixture" });
+      },
+      exec: () => { throw new Error("blocking exec must remain unreachable"); },
+      getProcess: () => {
+        rpcCalls += 1;
+        return Promise.resolve(null);
+      },
+      startProcess: () => {
+        rpcCalls += 1;
+        return Promise.resolve({} as never);
+      },
+      destroy: () => Promise.resolve(),
+    };
+    let releaseSandbox: (value: typeof sandbox) => void = () => {
+      throw new Error("sandbox release was not initialized");
+    };
+    let markRequested: () => void = () => {
+      throw new Error("sandbox request marker was not initialized");
+    };
+    const sandboxReady = new Promise<typeof sandbox>((resolve) => {
+      releaseSandbox = resolve;
+    });
+    const sandboxRequested = new Promise<void>((resolve) => {
+      markRequested = resolve;
+    });
+
+    const responsePromise = handleReplayRequest(new Request(
+      "https://example.test/api/v1/replay",
+      { method: "POST", body: JSON.stringify(body) },
+    ), { ...REVIEWED_ENV, REPLAY_ENABLED: "true" }, {
+      authenticate: () => Promise.resolve(),
+      sandbox: () => {
+        markRequested();
+        return sandboxReady;
+      },
+      receiptStore: () => terminalReceiptStore(),
+    });
+
+    await sandboxRequested;
+    expect(rpcCalls).toBe(0);
+    releaseSandbox(sandbox);
+    const response = await responsePromise;
+    expect(response.status).toBe(202);
+    expect(rpcCalls).toBeGreaterThan(0);
+  });
+
   it("writes historical file-key material to its distinct sandbox input", async () => {
     const body = await authoritativeInput();
     body.schema_version = 2;
