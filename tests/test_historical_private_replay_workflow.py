@@ -83,17 +83,20 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
         self.assertIn("fetch-depth: 0", WORKFLOW)
         self.assertIn("persist-credentials: false", WORKFLOW)
 
-    def test_root_cleanliness_allows_only_intentional_nested_checkouts(self) -> None:
+    def test_root_cleanliness_excludes_only_validated_nested_checkouts(self) -> None:
         validate = step(
             "Validate protected checkouts and identify one running attempt",
             "Confirm destruction before recovering an abandoned attempt",
         )
-        self.assertIn(
-            'test -z "$(git status --short --untracked-files=no)"', validate
-        )
+        self.assertIn("$'?? audit/\\n?? state/'", validate)
+        self.assertIn("git rev-parse --git-path info/exclude", validate)
+        self.assertIn("test ! -L", validate)
+        self.assertIn("printf '%s\\n' /audit/ /state/", validate)
+        self.assertIn("--untracked-files=all", validate)
         self.assertIn('test -z "$(git -C state status --short)"', validate)
         self.assertIn('test -z "$(git -C audit status --short)"', validate)
         self.assertNotIn('test -z "$(git status --short)"', validate)
+        self.assertNotIn("--untracked-files=no", validate)
 
     def test_state_is_validated_materialized_and_cas_published(self) -> None:
         validate = WORKFLOW.index("state/scripts/state.py --root state validate")
