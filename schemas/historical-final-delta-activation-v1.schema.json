@@ -4,7 +4,7 @@
   "title": "LeanEval final historical delta activation binding version 1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "kind", "activation_status", "preparation", "cutoff", "plans", "state_promotion", "audit", "state", "review_branches", "accepted_result_count", "accepted_result_id_set_sha256", "lanes"],
+  "required": ["schema_version", "kind", "activation_status", "preparation", "cutoff", "plans", "state_promotion", "audit", "state", "review_branches", "accepted_result_count", "accepted_result_id_set_sha256", "server_native_results", "lanes"],
   "properties": {
     "schema_version": {"const": 1},
     "kind": {"const": "historical_final_delta_activation_binding"},
@@ -18,11 +18,12 @@
         "delta_sha256": {"$ref": "#/$defs/digest"},
         "delta_counts": {
           "type": "object", "additionalProperties": false,
-          "required": ["result_count", "public_source_probe_pending", "private_archive_migration_pending"],
+          "required": ["result_count", "public_source_probe_pending", "private_archive_migration_pending", "server_native_excluded"],
           "properties": {
             "result_count": {"$ref": "#/$defs/positiveCount"},
             "public_source_probe_pending": {"$ref": "#/$defs/count"},
-            "private_archive_migration_pending": {"$ref": "#/$defs/count"}
+            "private_archive_migration_pending": {"$ref": "#/$defs/count"},
+            "server_native_excluded": {"$ref": "#/$defs/count"}
           }
         }
       }
@@ -47,6 +48,15 @@
     },
     "accepted_result_count": {"$ref": "#/$defs/positiveCount"},
     "accepted_result_id_set_sha256": {"$ref": "#/$defs/digest"},
+    "server_native_results": {
+      "type": "object", "additionalProperties": false,
+      "required": ["excluded_result_count", "excluded_result_id_set_sha256", "entries"],
+      "properties": {
+        "excluded_result_count": {"$ref": "#/$defs/count"},
+        "excluded_result_id_set_sha256": {"$ref": "#/$defs/digest"},
+        "entries": {"type": "array", "maxItems": 10000, "uniqueItems": true, "items": {"$ref": "#/$defs/serverNativeResult"}}
+      }
+    },
     "lanes": {
       "type": "object", "additionalProperties": false, "required": ["public", "private"],
       "properties": {"public": {"$ref": "#/$defs/lane"}, "private": {"$ref": "#/$defs/lane"}}
@@ -59,6 +69,7 @@
     "positiveCount": {"type": "integer", "minimum": 1, "maximum": 10000},
     "resultId": {"type": "string", "pattern": "^r2_[0-9a-f]{64}$"},
     "taskId": {"type": "string", "pattern": "^rt1_[0-9a-f]{64}$"},
+    "uuid7": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"},
     "submissionsLocator": {
       "type": "object", "additionalProperties": false,
       "required": ["repository", "commit", "path", "sha256"],
@@ -72,6 +83,16 @@
     "audit": {
       "type": "object", "additionalProperties": false, "required": ["repository", "head", "tree"],
       "properties": {"repository": {"const": "leanprover/lean-eval-audit"}, "head": {"$ref": "#/$defs/commit"}, "tree": {"$ref": "#/$defs/commit"}}
+    },
+    "serverNativeResult": {
+      "type": "object", "additionalProperties": false,
+      "required": ["result_id", "submission_id", "result_recorded_event_id", "result_tree_digest"],
+      "properties": {
+        "result_id": {"$ref": "#/$defs/resultId"},
+        "submission_id": {"$ref": "#/$defs/uuid7"},
+        "result_recorded_event_id": {"$ref": "#/$defs/uuid7"},
+        "result_tree_digest": {"$ref": "#/$defs/digest"}
+      }
     },
     "lane": {
       "type": "object", "additionalProperties": false,

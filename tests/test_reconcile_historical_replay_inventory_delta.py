@@ -89,6 +89,8 @@ class HistoricalReplayInventoryDeltaTests(unittest.TestCase):
         self.assertEqual(
             result["delta_counts"]["private_archive_migration_pending"], 1
         )
+        self.assertEqual(result["delta_counts"]["server_native_excluded"], 0)
+        self.assertEqual(result["server_exclusions"], [])
         identities = [entry["result_id"] for entry in result["entries"]]
         self.assertEqual(identities, sorted(identities))
         self.assertEqual(
@@ -175,7 +177,12 @@ class HistoricalReplayInventoryDeltaTests(unittest.TestCase):
         current = inventory(ROOT / "results", "d" * 40)
         current_raw = canonical_inventory_bytes(current)
         result = reconcile(
-            baseline, baseline_raw, current, current_raw, INVENTORY_SCHEMA
+            baseline,
+            baseline_raw,
+            current,
+            current_raw,
+            INVENTORY_SCHEMA,
+            ROOT / "results",
         )
         entries = {entry["result_id"]: entry for entry in result["entries"]}
         known_public_result_ids = {
@@ -192,6 +199,64 @@ class HistoricalReplayInventoryDeltaTests(unittest.TestCase):
             )
         )
         self.assertEqual(result["delta_counts"]["result_count"], len(entries))
+        excluded = {entry["result_id"] for entry in result["server_exclusions"]}
+        self.assertIn(
+            "r2_176e0f46710a69d54b3cbcc722a948b364de2acdf2a1ee6fe667f0a331254a59",
+            excluded,
+        )
+        self.assertEqual(
+            result["delta_counts"]["server_native_excluded"], len(excluded)
+        )
+
+    def test_mixed_delta_excludes_server_results_with_exact_binding(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            old = document("Owner", public=True, suffix="old")
+            issue = document("Issue", public=True, suffix="issue")
+            server = document("Server", public=True, suffix="server")
+            server_record = server["results"][0]
+            server_record["intake"] = {
+                "kind": "server",
+                "submission_id": "01a00000-0000-7000-8000-000000000001",
+            }
+            (root / "owner.json").write_bytes(canonical_file_bytes(old))
+            baseline = inventory(root, "a" * 40)
+            baseline_raw = canonical_inventory_bytes(baseline)
+            (root / "issue.json").write_bytes(canonical_file_bytes(issue))
+            server_raw = canonical_file_bytes(server)
+            (root / "server.json").write_bytes(server_raw)
+            current = inventory(root, "b" * 40)
+            current_raw = canonical_inventory_bytes(current)
+
+            result = reconcile(
+                baseline,
+                baseline_raw,
+                current,
+                current_raw,
+                INVENTORY_SCHEMA,
+                root,
+            )
+
+        self.assertEqual(
+            [entry["result_id"] for entry in result["entries"]],
+            [issue["results"][0]["result_id"]],
+        )
+        self.assertEqual(result["delta_counts"]["result_count"], 1)
+        self.assertEqual(result["delta_counts"]["server_native_excluded"], 1)
+        self.assertEqual(
+            result["server_exclusions"],
+            [
+                {
+                    "result_id": server_record["result_id"],
+                    "submission_id": server_record["intake"]["submission_id"],
+                    "results_path": "results/server.json",
+                    "result_file_sha256": hashlib.sha256(server_raw).hexdigest(),
+                    "result_tree_digest": delta_module.result_tree_digest(
+                        "results/server.json", server_raw
+                    ),
+                }
+            ],
+        )
 
 
 if __name__ == "__main__":

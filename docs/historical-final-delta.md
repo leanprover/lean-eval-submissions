@@ -8,7 +8,9 @@ packet, plans, matrices, or State workflow.
 
 After new issue-intake acceptance is frozen at the announced cutoff and every
 pre-cutoff run has settled, but before the final form is removed, select the
-exact protected submissions commit whose `results/` tree is the final corpus.
+exact protected submissions commit whose issue-intake Results are the final
+historical corpus. Server-intake Results are outside the historical replay
+delta and continue through their ordinary lifecycle.
 From that commit:
 
 1. build and review the complete historical inventory;
@@ -36,18 +38,24 @@ The accepted paths are:
 - `evidence/public-replay/plans/<sha256>.json`; and
 - `evidence/private-replay/plans/<sha256>.json`.
 
-The packet commit may be a documentation/data-only descendant of the cutoff
-commit, but its `results/` tree must be byte-identical to the cutoff commit.
+The packet commit may be a descendant of the cutoff commit. Its logical
+issue-intake corpus must be byte-identical to the cutoff commit. Later
+canonical server-intake Results may be appended without blocking preparation;
+malformed Results and any issue-intake addition, deletion, or mutation fail
+closed, as does deletion or mutation of a server Result already present at the
+cutoff.
 
 ## Preparation packet
 
 Dispatch `Prepare final historical delta packet` from the immutable
 `lean-eval-dispatch/<packet-commit>` tag with the exact four input digests and
-public, private, and total delta counts. The workflow:
+public, private, total issue-delta, and excluded server-native counts. The
+workflow:
 
 - requires that tag to equal current protected `main`;
 - reads only committed content-addressed inputs;
-- independently rederives the append-only delta;
+- independently rederives the append-only issue-intake delta and the complete
+  post-baseline server-intake exclusion set;
 - binds every delta entry to the exact canonical Result;
 - requires complete reviewed public-source decisions;
 - carries the reviewed request and workflow-run identity required by State for
@@ -76,6 +84,9 @@ final delta can enter State, a later compact execution binding must add:
 - one exact current production State parent and create-only event set;
 - independent validation that every delta Result is represented exactly once
   by a replay task or reviewed unavailable event; and
+- independent validation that every excluded server-native Result is already
+  represented by one exact `result.recorded` event in that validated State,
+  with matching submission and Result-tree identities; and
 - the existing two-phase State review/promotion and bounded two-lane replay
   controls.
 
@@ -106,7 +117,8 @@ binding and run the `activation` operation of
 `historical-final-delta-activation.yml`. The resulting content-addressed
 activation binding independently reconciles the preparation packet, both
 plans, every staged replay task and reviewed unavailability, the accepted
-inventory and delta counts, and the exact audit and State commits and trees.
+inventory and delta counts, every server-native exclusion against exact State,
+and the exact audit and State commits and trees.
 Commit that binding before promoting State and enabling the bounded lanes. The
 State `promote` operation requires its content-addressed activation digest and
 rejects an activation that does not bind the exact promotion summary, candidate

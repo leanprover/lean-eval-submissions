@@ -38,6 +38,10 @@ on:
         description: Exact final delta private Result count
         required: true
         type: string
+      expected_server_native_excluded_count:
+        description: Exact post-baseline server-native Result exclusion count
+        required: true
+        type: string
       confirm_preparation_only:
         description: Build a source-minimized blocked packet without mutation or replay
         required: true
@@ -147,9 +151,12 @@ jobs:
           EXPECTED_COUNT: ${{ inputs.expected_delta_result_count }}
           EXPECTED_PUBLIC: ${{ inputs.expected_public_result_count }}
           EXPECTED_PRIVATE: ${{ inputs.expected_private_result_count }}
+          EXPECTED_SERVER_EXCLUDED: ${{ inputs.expected_server_native_excluded_count }}
         run: |
           set -euo pipefail
-          for count in "$EXPECTED_COUNT" "$EXPECTED_PUBLIC" "$EXPECTED_PRIVATE"; do
+          for count in \
+            "$EXPECTED_COUNT" "$EXPECTED_PUBLIC" "$EXPECTED_PRIVATE" \
+            "$EXPECTED_SERVER_EXCLUDED"; do
             [[ "$count" =~ ^[0-9]+$ ]]
             test "$count" -le 10000
           done
@@ -196,6 +203,17 @@ jobs:
           assert counts["public"]["total"] == int(os.environ["EXPECTED_PUBLIC"])
           assert counts["private"]["total"] == int(os.environ["EXPECTED_PRIVATE"])
           assert len(packet["entries"]) == int(os.environ["EXPECTED_COUNT"])
+          assert len(packet["server_exclusions"]) == int(
+              os.environ["EXPECTED_SERVER_EXCLUDED"]
+          )
+          assert packet["cutoff"]["delta_counts"]["server_native_excluded"] == int(
+              os.environ["EXPECTED_SERVER_EXCLUDED"]
+          )
+          assert packet["cutoff"]["current_inventory"]["result_count"] == (
+              packet["cutoff"]["baseline_inventory"]["result_count"]
+              + int(os.environ["EXPECTED_COUNT"])
+              + int(os.environ["EXPECTED_SERVER_EXCLUDED"])
+          )
           assert all(
               "source" not in entry
               for entry in packet["entries"]

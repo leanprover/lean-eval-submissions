@@ -27,7 +27,11 @@ from prepare_historical_final_delta_closure import (
 class ClosureFixture:
     public_result = "r2_" + "1" * 64
     private_result = "r2_" + "2" * 64
+    server_result = "r2_" + "4" * 64
     public_task = "rt1_" + "3" * 64
+    server_submission = "01a00000-0000-7000-8000-000000000004"
+    server_tree_digest = "5" * 64
+    server_recorded_event = "01a00000-0000-7000-8000-000000000005"
 
     def __init__(self, root: pathlib.Path) -> None:
         self.root = root
@@ -41,6 +45,18 @@ class ClosureFixture:
         (scripts / "state.py").write_text("raise SystemExit(0)\n", encoding="utf-8")
         (root / "state.json").write_text(
             '{"environment":"production"}\n', encoding="utf-8"
+        )
+        self.event(
+            self.server_recorded_event,
+            {
+                "event_id": self.server_recorded_event,
+                "event_type": "result.recorded",
+                "subject_id": self.server_result,
+                "payload": {
+                    "submission_id": self.server_submission,
+                    "tree_digest": self.server_tree_digest,
+                },
+            },
         )
         self.commit("candidate")
         self.candidate = self.head()
@@ -114,15 +130,25 @@ class ClosureFixture:
                     "source_commit": "b" * 40,
                     "results_store_sha256": "c" * 64,
                     "inventory_sha256": "d" * 64,
-                    "result_count": 3,
+                    "result_count": 4,
                 },
                 "delta_sha256": "e" * 64,
                 "delta_counts": {
                     "result_count": 2,
                     "public_source_probe_pending": 1,
                     "private_archive_migration_pending": 1,
+                    "server_native_excluded": 1,
                 },
             },
+            "server_exclusions": [
+                {
+                    "result_id": self.server_result,
+                    "submission_id": self.server_submission,
+                    "results_path": "results/server.json",
+                    "result_file_sha256": "6" * 64,
+                    "result_tree_digest": self.server_tree_digest,
+                }
+            ],
             "entries": [
                 {"result_id": self.public_result},
                 {"result_id": self.private_result},
@@ -200,6 +226,7 @@ class ClosureFixture:
                     "unavailable_result_ids": [self.private_result],
                 },
             },
+            state_root=self.root,
         )
 
     def absence(self) -> dict:
@@ -438,6 +465,63 @@ class FinalDeltaClosureTests(unittest.TestCase):
                             }
                         },
                     )
+    def test_activation_proves_server_native_exclusion_in_exact_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = ClosureFixture(pathlib.Path(temporary))
+            activation = fixture.activation()
+        self.assertEqual(
+            activation["server_native_results"],
+            {
+                "excluded_result_count": 1,
+                "excluded_result_id_set_sha256": digest_set(
+                    [fixture.server_result]
+                ),
+                "entries": [
+                    {
+                        "result_id": fixture.server_result,
+                        "submission_id": fixture.server_submission,
+                        "result_recorded_event_id": fixture.server_recorded_event,
+                        "result_tree_digest": fixture.server_tree_digest,
+                    }
+                ],
+            },
+        )
+
+    def test_tampered_server_native_state_binding_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = ClosureFixture(pathlib.Path(temporary))
+            path = (
+                fixture.root
+                / "events"
+                / fixture.server_recorded_event[:2]
+                / f"{fixture.server_recorded_event}.json"
+            )
+            event = json.loads(path.read_bytes())
+            event["payload"]["submission_id"] = (
+                "01a00000-0000-7000-8000-000000000099"
+            )
+            path.write_bytes(canonical(event))
+            fixture.commit("tamper server binding")
+            fixture.candidate = fixture.head()
+            fixture.candidate_tree = fixture.tree()
+            with self.assertRaisesRegex(ClosureError, "differs from exact State"):
+                fixture.activation()
+
+    def test_missing_server_native_state_event_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            fixture = ClosureFixture(pathlib.Path(temporary))
+            path = (
+                fixture.root
+                / "events"
+                / fixture.server_recorded_event[:2]
+                / f"{fixture.server_recorded_event}.json"
+            )
+            path.unlink()
+            fixture.commit("remove server binding")
+            fixture.candidate = fixture.head()
+            fixture.candidate_tree = fixture.tree()
+            with self.assertRaisesRegex(ClosureError, "lacks one exact State"):
+                fixture.activation()
 
     def test_terminal_reconciles_exact_accepted_set(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

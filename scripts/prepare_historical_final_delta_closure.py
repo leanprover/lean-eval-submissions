@@ -278,6 +278,7 @@ def build_activation(
     promotion: dict[str, Any],
     promotion_locator: dict[str, str],
     candidate: dict[str, dict[str, list[str]]],
+    state_root: pathlib.Path,
 ) -> dict[str, Any]:
     if (
         preparation.get("kind") != "historical_final_delta_preparation_packet"
@@ -293,6 +294,7 @@ def build_activation(
         not isinstance(accepted_inventory, dict)
         or accepted_inventory.get("result_count")
         != cutoff["delta_counts"]["result_count"]
+        + cutoff["delta_counts"].get("server_native_excluded", -1)
         + cutoff.get("baseline_inventory", {}).get("result_count", -1)
         or DIGEST.fullmatch(str(cutoff.get("delta_sha256"))) is None
     ):
@@ -366,6 +368,12 @@ def build_activation(
     accepted = (
         lanes["public"]["accepted_result_ids"] + lanes["private"]["accepted_result_ids"]
     )
+    server_native_results = _server_native_state_proof(
+        state_root,
+        state["candidate_commit"],
+        preparation.get("server_exclusions"),
+        cutoff["delta_counts"].get("server_native_excluded"),
+    )
     return {
         "schema_version": 1,
         "kind": "historical_final_delta_activation_binding",
@@ -396,6 +404,7 @@ def build_activation(
         },
         "accepted_result_count": len(accepted),
         "accepted_result_id_set_sha256": digest_set(accepted),
+        "server_native_results": server_native_results,
         "lanes": lanes,
     }
 
@@ -427,6 +436,62 @@ def _load_state_events(
             raise ClosureError("State event is invalid")
         events.append(event)
     return events
+
+
+def _server_native_state_proof(
+    state_root: pathlib.Path,
+    state_head: str,
+    exclusions: Any,
+    expected_count: Any,
+) -> dict[str, Any]:
+    if not isinstance(exclusions, list) or type(expected_count) is not int:
+        raise ClosureError("server-native exclusion inventory is invalid")
+    result_ids = [
+        item.get("result_id") for item in exclusions if isinstance(item, dict)
+    ]
+    if (
+        len(result_ids) != len(exclusions)
+        or len(exclusions) != expected_count
+        or result_ids != sorted(set(result_ids))
+    ):
+        raise ClosureError("server-native exclusion inventory is invalid")
+    recorded: dict[str, list[dict[str, Any]]] = {}
+    for event in _load_state_events(state_root, state_head):
+        if event.get("event_type") == "result.recorded":
+            result_id = event.get("subject_id")
+            if isinstance(result_id, str):
+                recorded.setdefault(result_id, []).append(event)
+    proof_entries = []
+    for exclusion in exclusions:
+        result_id = exclusion["result_id"]
+        matches = recorded.get(result_id, [])
+        if len(matches) != 1:
+            raise ClosureError(
+                "server-native exclusion lacks one exact State result.recorded event"
+            )
+        event = matches[0]
+        payload = event.get("payload", {})
+        event_id = event.get("event_id")
+        if (
+            not isinstance(payload, dict)
+            or payload.get("submission_id") != exclusion.get("submission_id")
+            or payload.get("tree_digest") != exclusion.get("result_tree_digest")
+            or not isinstance(event_id, str)
+        ):
+            raise ClosureError("server-native exclusion differs from exact State")
+        proof_entries.append(
+            {
+                "result_id": result_id,
+                "submission_id": exclusion["submission_id"],
+                "result_recorded_event_id": event_id,
+                "result_tree_digest": exclusion["result_tree_digest"],
+            }
+        )
+    return {
+        "excluded_result_count": len(proof_entries),
+        "excluded_result_id_set_sha256": digest_set(result_ids),
+        "entries": proof_entries,
+    }
 
 
 def build_terminal(
@@ -796,6 +861,7 @@ def main(argv: list[str] | None = None) -> int:
                 promotion=promotion,
                 promotion_locator=promotion_bound,
                 candidate=candidate,
+                state_root=args.state_root.resolve(),
             )
         else:
             activation_value, activation_bound = _checkout_locator(

@@ -12,6 +12,7 @@
     "cutoff",
     "classification_inputs",
     "classification_counts",
+    "server_exclusions",
     "archive_migration",
     "image_requirement_count",
     "image_requirements",
@@ -63,6 +64,12 @@
         "public": {"$ref": "#/$defs/dispositionCounts"},
         "private": {"$ref": "#/$defs/dispositionCounts"}
       }
+    },
+    "server_exclusions": {
+      "type": "array",
+      "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/serverExclusion"}
     },
     "archive_migration": {
       "type": "object",
@@ -134,11 +141,24 @@
     "deltaCounts": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["result_count", "public_source_probe_pending", "private_archive_migration_pending"],
+      "required": ["result_count", "public_source_probe_pending", "private_archive_migration_pending", "server_native_excluded"],
       "properties": {
         "result_count": {"type": "integer", "minimum": 1, "maximum": 10000},
         "public_source_probe_pending": {"$ref": "#/$defs/count"},
-        "private_archive_migration_pending": {"$ref": "#/$defs/count"}
+        "private_archive_migration_pending": {"$ref": "#/$defs/count"},
+        "server_native_excluded": {"$ref": "#/$defs/count"}
+      }
+    },
+    "serverExclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["result_id", "submission_id", "results_path", "result_file_sha256", "result_tree_digest"],
+      "properties": {
+        "result_id": {"$ref": "#/$defs/resultId"},
+        "submission_id": {"$ref": "#/$defs/uuid7"},
+        "results_path": {"type": "string", "pattern": "^results/[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?\\.json$"},
+        "result_file_sha256": {"$ref": "#/$defs/digest"},
+        "result_tree_digest": {"$ref": "#/$defs/digest"}
       }
     },
     "dispositionCounts": {

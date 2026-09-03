@@ -77,6 +77,7 @@ def build_decisions(
             "baseline",
             "current",
             "delta_counts",
+            "server_exclusions",
             "entries",
         },
         "inventory delta",

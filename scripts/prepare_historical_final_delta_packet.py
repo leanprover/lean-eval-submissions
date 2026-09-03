@@ -28,12 +28,11 @@ from reconcile_historical_replay_inventory_delta import (
     _read_canonical_json,
     canonical_delta_bytes,
     reconcile,
+    result_documents,
 )
 from results_schema import (
     ResultsSchemaError,
-    canonical_file_bytes,
     canonical_store_digest,
-    read_results_file,
 )
 
 COMMIT = re.compile(r"[0-9a-f]{40}\Z")
@@ -44,11 +43,21 @@ UUID7 = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z"
 )
 MAX_JSON_BYTES = 16 * 1024 * 1024
-MAX_RESULTS_BYTES = 32 * 1024 * 1024
 MAX_RESULTS = 10_000
 RESULTS_REPOSITORY = "leanprover/lean-eval-submissions"
 AUDIT_REPOSITORY = "leanprover/lean-eval-audit"
 BENCHMARK_REPOSITORY = "leanprover/lean-eval"
+RESULT_BINDING_FIELDS = (
+    "owner_login",
+    "declared_model",
+    "problem_id",
+    "statement_revision",
+    "historical_accepted_at",
+    "benchmark_commit",
+    "results_path",
+    "result_file_sha256",
+    "result_tree_digest",
+)
 
 
 class FinalDeltaError(ValueError):
@@ -154,10 +163,34 @@ def _verify_results_checkout(root: pathlib.Path, commit: str) -> None:
         raise FinalDeltaError(
             "cutoff commit is not an ancestor of the packet"
         ) from error
-    if _git(repository_root, "rev-parse", f"{head}:results") != _git(
-        repository_root, "rev-parse", f"{commit}:results"
+    try:
+        corpora = []
+        for selected in (commit, head):
+            records = {}
+            for relative, document, _ in result_documents(root, selected):
+                for record in document["results"]:
+                    result_id = record["result_id"]
+                    if result_id in records:
+                        raise FinalDeltaError("Results corpus has duplicate identities")
+                    records[result_id] = {
+                        "results_path": relative,
+                        "user": document["user"],
+                        "record": record,
+                    }
+            corpora.append(records)
+    except InventoryDeltaError as error:
+        raise FinalDeltaError(str(error)) from error
+    cutoff_corpus, packet_corpus = corpora
+    if any(packet_corpus.get(result_id) != binding for result_id, binding in cutoff_corpus.items()):
+        raise FinalDeltaError("a cutoff Result changed after the selected commit")
+    additions = set(packet_corpus) - set(cutoff_corpus)
+    if any(
+        packet_corpus[result_id]["record"]["intake"]["kind"] != "server"
+        for result_id in additions
     ):
-        raise FinalDeltaError("Results changed after the selected cutoff commit")
+        raise FinalDeltaError(
+            "issue-intake Results changed after the selected cutoff commit"
+        )
     if _git(repository_root, "remote", "get-url", "origin") not in {
         "https://github.com/leanprover/lean-eval-submissions",
         "https://github.com/leanprover/lean-eval-submissions.git",
@@ -172,25 +205,13 @@ def _results_bindings(
         _verify_results_checkout(root, commit)
     if not root.is_dir() or root.is_symlink():
         raise FinalDeltaError("Results root must be one real directory")
+    try:
+        documents = result_documents(root, commit if verify_git else None)
+    except InventoryDeltaError as error:
+        raise FinalDeltaError(str(error)) from error
     bindings: dict[str, dict[str, Any]] = {}
     files: list[tuple[str, dict[str, Any]]] = []
-    total_bytes = 0
-    for path in sorted(root.iterdir(), key=lambda item: item.name):
-        if path.name == ".gitkeep":
-            continue
-        if path.is_symlink() or not path.is_file() or path.suffix != ".json":
-            raise FinalDeltaError("Results contains a noncanonical root entry")
-        total_bytes += path.stat().st_size
-        if total_bytes > MAX_RESULTS_BYTES:
-            raise FinalDeltaError("Results store exceeds its byte bound")
-        try:
-            document, version = read_results_file(path)
-        except (OSError, UnicodeError, ResultsSchemaError) as error:
-            raise FinalDeltaError("Results store is invalid") from error
-        raw = path.read_bytes()
-        if version != 2 or canonical_file_bytes(document) != raw:
-            raise FinalDeltaError("Results store is not canonical schema version 2")
-        relative = f"results/{path.name}"
+    for relative, document, raw in documents:
         files.append((relative, document))
         file_binding = {
             "results_path": relative,
@@ -208,6 +229,7 @@ def _results_bindings(
                 "statement_revision": record["statement_revision"],
                 "historical_accepted_at": record["accepted_at"],
                 "benchmark_commit": record["benchmark_commit"],
+                "intake": record["intake"],
                 **file_binding,
             }
     try:
@@ -224,6 +246,9 @@ def _inventory_inputs(
     current_path: pathlib.Path,
     delta_path: pathlib.Path,
     schema_path: pathlib.Path,
+    results_root: pathlib.Path,
+    *,
+    verify_git: bool,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, bytes]]:
     try:
         schema = _load_schema(schema_path)
@@ -234,7 +259,15 @@ def _inventory_inputs(
     except (InventoryDeltaError, OSError, ValueError) as error:
         raise FinalDeltaError(str(error)) from error
     delta, delta_raw = _read(delta_path, "cutoff delta")
-    derived = reconcile(baseline, baseline_raw, current, current_raw, schema)
+    derived = reconcile(
+        baseline,
+        baseline_raw,
+        current,
+        current_raw,
+        schema,
+        results_root,
+        current["source_commit"] if verify_git else None,
+    )
     if canonical_delta_bytes(derived) != delta_raw:
         raise FinalDeltaError(
             "cutoff delta is not the exact append-only reconciliation"
@@ -475,7 +508,12 @@ def build_packet(
     if COMMIT.fullmatch(authority_commit) is None:
         raise FinalDeltaError("packet authority commit is invalid")
     baseline, current, delta, inventory_raw = _inventory_inputs(
-        baseline_path, current_path, delta_path, inventory_schema_path
+        baseline_path,
+        current_path,
+        delta_path,
+        inventory_schema_path,
+        results_root,
+        verify_git=verify_git,
     )
     results = _results_bindings(
         results_root,
@@ -487,6 +525,38 @@ def build_packet(
         raise FinalDeltaError(
             "Results records do not exactly equal the cutoff inventory"
         )
+    server_exclusions = delta.get("server_exclusions")
+    excluded_ids = (
+        [item.get("result_id") for item in server_exclusions if isinstance(item, dict)]
+        if isinstance(server_exclusions, list)
+        else []
+    )
+    if (
+        not isinstance(server_exclusions, list)
+        or len(excluded_ids) != len(server_exclusions)
+        or excluded_ids != sorted(set(excluded_ids))
+    ):
+        raise FinalDeltaError("server-native exclusions are not canonically sorted")
+    for exclusion in server_exclusions:
+        if not isinstance(exclusion, dict):
+            raise FinalDeltaError("server-native exclusion is invalid")
+        result = results.get(exclusion.get("result_id"))
+        if (
+            result is None
+            or result["intake"]
+            != {"kind": "server", "submission_id": exclusion.get("submission_id")}
+            or any(
+                result[field] != exclusion.get(field)
+                for field in (
+                    "results_path",
+                    "result_file_sha256",
+                    "result_tree_digest",
+                )
+            )
+        ):
+            raise FinalDeltaError(
+                "server-native exclusion differs from its exact Result"
+            )
     public, public_raw = _public_decisions(
         public_decisions_path, delta, inventory_raw["delta"]
     )
@@ -523,7 +593,8 @@ def build_packet(
         visibility = inventory_entry["source"]["visibility"]
         result = results[result_id]
         if (
-            result["owner_login"] != inventory_entry["owner"].lower()
+            result["intake"].get("kind") != "issue"
+            or result["owner_login"] != inventory_entry["owner"].lower()
             or result["problem_id"] != inventory_entry["problem_id"]
             or result["statement_revision"] != inventory_entry["statement_revision"]
             or result["historical_accepted_at"] != inventory_entry["accepted_at"]
@@ -538,7 +609,7 @@ def build_packet(
             "source_visibility": visibility,
             "benchmark_repository": BENCHMARK_REPOSITORY,
             "benchmark_commit": inventory_entry["benchmark_commit"],
-            "result": result,
+            "result": {field: result[field] for field in RESULT_BINDING_FIELDS},
         }
         if visibility == "public":
             decision = public[result_id]
@@ -701,6 +772,7 @@ def build_packet(
             },
         },
         "classification_counts": result_counts,
+        "server_exclusions": server_exclusions,
         "archive_migration": {
             "legacy_unique_archive_count": len(legacy_archives),
             "migrated_unique_archive_count": len(migrated_archives),
