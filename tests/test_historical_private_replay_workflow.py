@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import pathlib
 import re
@@ -378,12 +379,108 @@ class HistoricalPrivateReplayWorkflowTests(unittest.TestCase):
             "Plan exactly one qualified private task",
             "Render and preflight only the exact qualified task executor",
         )
+        self.assertIn('$task.status == "queued"', planning)
+        self.assertIn('$task.attempt >= 0 and $task.attempt < 4', planning)
+        self.assertIn('has("reconfiguration_event_id")', planning)
+        self.assertIn('$task.status == "failed"', planning)
+        self.assertIn('$task.attempt >= 1 and $task.attempt < 4', planning)
+        self.assertIn('$task.retryable == true', planning)
+        for reason in (
+            "benchmark_fetch_failed",
+            "runner_lost",
+            "runner_start_failed",
+            "source_fetch_failed",
+        ):
+            self.assertIn(reason, planning)
         self.assertIn(".task.checker", planning)
         self.assertIn("^leanprover/lean4:v[0-9]", planning)
         self.assertIn(
             '["comparator", "landrun", "lean4export", "nanoda"]',
             planning,
         )
+
+    def test_queueable_status_filter_accepts_only_bounded_retries(self) -> None:
+        planning = step(
+            "Plan exactly one qualified private task",
+            "Render and preflight only the exact qualified task executor",
+        )
+        predicate = planning.split("jq -e '", 1)[1].split(
+            "' \"$RUNNER_TEMP/private-replay-plan.json\"",
+            1,
+        )[0]
+
+        def accepted(task: dict[str, object]) -> bool:
+            completed = subprocess.run(
+                ["jq", "-e", predicate],
+                input=json.dumps({"task": task}),
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            return completed.returncode == 0
+
+        self.assertTrue(accepted({"status": "queued", "attempt": 0}))
+        for attempt in (1, 2, 3):
+            self.assertTrue(
+                accepted(
+                    {
+                        "status": "queued",
+                        "attempt": attempt,
+                        "reconfiguration_event_id": "validated-by-controller",
+                    }
+                )
+            )
+        for reason in (
+            "benchmark_fetch_failed",
+            "runner_lost",
+            "runner_start_failed",
+            "source_fetch_failed",
+        ):
+            for attempt in (1, 2, 3):
+                self.assertTrue(
+                    accepted(
+                        {
+                            "status": "failed",
+                            "attempt": attempt,
+                            "retryable": True,
+                            "reason_code": reason,
+                        }
+                    )
+                )
+        for task in (
+            {"status": "queued", "attempt": 1},
+            {
+                "status": "queued",
+                "attempt": 4,
+                "reconfiguration_event_id": "validated-by-controller",
+            },
+            {"status": "queued", "attempt": 0, "retryable": True},
+            {
+                "status": "failed",
+                "attempt": 0,
+                "retryable": True,
+                "reason_code": "runner_lost",
+            },
+            {
+                "status": "failed",
+                "attempt": 4,
+                "retryable": True,
+                "reason_code": "runner_lost",
+            },
+            {
+                "status": "failed",
+                "attempt": 1,
+                "retryable": False,
+                "reason_code": "runner_lost",
+            },
+            {
+                "status": "failed",
+                "attempt": 1,
+                "retryable": True,
+                "reason_code": "verdict_invalid",
+            },
+        ):
+            self.assertFalse(accepted(task))
 
     def test_server_requires_reservation_and_exact_task_attempt(self) -> None:
         self.assertIn("override enableInternet = false", ENTRY)

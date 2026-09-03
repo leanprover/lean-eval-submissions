@@ -337,7 +337,21 @@ jobs:
           kind=$(jq -er .kind "$RUNNER_TEMP/private-replay-plan.json")
           case "$kind" in
             historical_private_execution)
-              test "$(jq -r .task.status "$RUNNER_TEMP/private-replay-plan.json")" = queued
+              jq -e '
+                .task as $task |
+                ($task.status == "queued" and
+                 $task.attempt >= 0 and $task.attempt < 4 and
+                 ($task.attempt == 0 or
+                  ($task | has("reconfiguration_event_id"))) and
+                 ($task | has("reason_code") | not) and
+                 ($task | has("retryable") | not)) or
+                ($task.status == "failed" and
+                 $task.attempt >= 1 and $task.attempt < 4 and
+                 $task.retryable == true and
+                 (["benchmark_fetch_failed", "runner_lost",
+                   "runner_start_failed", "source_fetch_failed"] |
+                  index($task.reason_code)) != null)
+              ' "$RUNNER_TEMP/private-replay-plan.json" >/dev/null
               test "$(jq -r .task.checker "$RUNNER_TEMP/private-replay-plan.json")" = nanoda
               toolchain=$(jq -er .execution_plan.request.execution_profile.toolchain \
                 "$RUNNER_TEMP/private-replay-plan.json")
