@@ -1,0 +1,157 @@
+{
+  "audit": {
+    "head": "d73132415738b0d82c99fd43f630804fe996e342",
+    "repository": "leanprover/lean-eval-audit",
+    "tree": "48c24fc428eea77d7d9320133fd978f8c7b6abfc"
+  },
+  "candidate": {
+    "event_count": 2439,
+    "event_set_sha256": "b83812b753a2ac33101da34289c3813eb2267a9e42b8b79501bcc40f91c5c96f",
+    "first_occurred_at": "2026-09-03T02:36:40.777Z",
+    "lanes": {
+      "private": {
+        "event_count": 1917,
+        "event_id_set_sha256": "b54afd7477d6364d5efde84137e38fcbdebb24a7630d9823570e8684afcccba4",
+        "event_set_sha256": "66883cedeedf97e85276de46a549b69befcc90e762441fac63f4ec85df07acf1",
+        "result_id_set_sha256": "29647dbaca17bbed72f4b6546dc66a6f2290654d03b4d40a93203e089f4f9e50",
+        "task_count": 639,
+        "task_id_set_sha256": "c82cb4e9f37a38f120fb6611cf594702aeac6c3c2c48bd263e485eb235de152c"
+      },
+      "public": {
+        "event_count": 522,
+        "event_id_set_sha256": "4c4066d1e6d54badd26a1096558274d2b7883ec4567442c81718eaf44fda581a",
+        "event_set_sha256": "a75055469d6a1a29e221e67a90803712290eb93392f87366cf66ed3b271ead1f",
+        "result_id_set_sha256": "3ba4c58aeaaefc84fb8b339092bf7e5c4e9b5505846bac2d614b201568c83edb",
+        "task_count": 174,
+        "task_id_set_sha256": "338b6b712540714fdeeb5f469e3281f664446edf1a1f0645e4eadc530e6b6c70"
+      }
+    },
+    "last_occurred_at": "2026-09-03T02:36:43.215Z",
+    "materialized_views_sha256": "6cb8aeee80d5019fb1a0c1e954cd39779068e0a56e28ccb9f9f387ace10f6bd3",
+    "operational_view_addition_count": 813,
+    "operational_view_addition_set_sha256": "4050816ee13e3416c53773f03f5aeb4b5b71f94a1704654ba856463a30c990f7",
+    "queues": {
+      "private": {
+        "path": "historical-private-replay-queue.json",
+        "sha256": "39854ced5013850be149b50e9a7f8d34c86040b2ad527f779cfc2f5077921b7e",
+        "task_count": 639,
+        "task_id_set_sha256": "c82cb4e9f37a38f120fb6611cf594702aeac6c3c2c48bd263e485eb235de152c"
+      },
+      "public": {
+        "path": "historical-public-replay-queue.json",
+        "sha256": "4ede4c4aef87dc31dd5801f9001ea38451d42312140fc6aafbb490ea02b42a0a",
+        "task_count": 174,
+        "task_id_set_sha256": "338b6b712540714fdeeb5f469e3281f664446edf1a1f0645e4eadc530e6b6c70"
+      }
+    },
+    "redacted_historical_projection_sha256": "f20ce2b0271b3a6357a954ed9dde0d1b2de692f89309ca2cc8ef8da43d31e4ac",
+    "redacted_historical_series_sha256": "9c2f4e8d5a1306ad85efdd2642ea601160a6cf11f952e44e55ad0364154421be",
+    "reviewed_unavailability_counts": {
+      "private": 29,
+      "public": 459,
+      "total": 488
+    },
+    "reviewed_unavailability_sha256": "8a81f3cc77d7a9a36fc399f569b9e19be0c581af62f4a76afa411c4522bb9f2d"
+  },
+  "environment": "production",
+  "implementation": {
+    "blobs": [
+      {
+        "path": ".github/workflows/append-historical-baseline-state.yml",
+        "sha256": "05ff5d0cdc39a4bc275a42fbe49b8771547db29a7c86f150e610d03c48656a17"
+      },
+      {
+        "path": "configuration/historical-baseline-state-batch-v1.json",
+        "sha256": "6f16b548b1774f4fff9101c6f9ac6e8b1e9e08d014de1fef6ad4ffd13ec320e2"
+      },
+      {
+        "path": "requirements-jsonschema-workflow.txt",
+        "sha256": "46bdb0f95b4111d1d1e125f23ad7f7ac55229c59caa45b697623a48c366bf65c"
+      },
+      {
+        "path": "scripts/build_result_receipt.py",
+        "sha256": "c2fb38fa837cd76d680ba2c5abc24347c1bfdcb75e92befaa1f2745fa89b57b7"
+      },
+      {
+        "path": "scripts/classify_historical_private_archives.py",
+        "sha256": "7a790764916f176868378e4fc855c246eca1a9b9c0126a51d1f408fd65bcbe01"
+      },
+      {
+        "path": "scripts/historical_public_runner.py",
+        "sha256": "d2f2c1c563f74aaeb802585709aad4225acbc095839f57f381a867a59eea5572"
+      },
+      {
+        "path": "scripts/historical_replay_controller.py",
+        "sha256": "db0f4cccb6b33bdf231bca2159485ff168b8f783e1771eeada7297ea70dcadf1"
+      },
+      {
+        "path": "scripts/inventory_historical_replay.py",
+        "sha256": "acf0709f02b1644d065c00b450977b59756d60097a97a8ddc0a0f2eb23d3a5f3"
+      },
+      {
+        "path": "scripts/key_capability_contract.py",
+        "sha256": "b9cd5cee74228f09b7fb5e8d27ea33ef7584d69659814ca449adeb11b5d988d9"
+      },
+      {
+        "path": "scripts/migrate_archive_envelopes.py",
+        "sha256": "988fa540773860a391e40709df12774bde179e69b9e5c77ebc743978c59992c6"
+      },
+      {
+        "path": "scripts/prepare_historical_baseline_state_batch.py",
+        "sha256": "8d8112571223316a5fd9f499b7d18ea63c530ce8f2333ffc0150211a77f1d415"
+      },
+      {
+        "path": "scripts/prepare_historical_private_replay.py",
+        "sha256": "2982dd857279fb4e76bca34fff178cbb8bf07950a77be252f0d158189431109e"
+      },
+      {
+        "path": "scripts/prepare_historical_public_authority.py",
+        "sha256": "59e611fd468e700b766343adc2f3a861ed2fa3c182761ef2ba7f6efd66434d6b"
+      },
+      {
+        "path": "scripts/replay_orchestrator.py",
+        "sha256": "ec97bce72465a4159d2e1e43e074d5a61a70fe685f52161a523209fa6617b36d"
+      },
+      {
+        "path": "scripts/results_schema.py",
+        "sha256": "dbbe2c462daec0a482cc4f06f34bf5665a045b47c93548b58c0ebaf33ede703f"
+      },
+      {
+        "path": "scripts/review_historical_baseline_state_batch.py",
+        "sha256": "4a7311a8f9e07a83b44d70c26f97c7db4a4c8eae7f3c45c8d55d8cba375f4d4b"
+      },
+      {
+        "path": "schemas/historical-private-profile-qualification-v1.schema.json",
+        "sha256": "7b599787db04693cb41ebe23a8e0849ac64ecda1817c512f89b9f5b9750cde8f"
+      },
+      {
+        "path": "schemas/historical-private-replay-plan-v1.schema.json",
+        "sha256": "2852b6421cc6c55a107e2ef7c9aa8759efa36c6817bec94091ff705c8d4b79e3"
+      },
+      {
+        "path": "schemas/historical-public-profile-qualification-v1.schema.json",
+        "sha256": "7bc92d256ec02113ea222a6d2fe2ae5d6fcb44fcd1871e2e916115356302d41c"
+      },
+      {
+        "path": "schemas/replay-execution-profile-v1.schema.json",
+        "sha256": "79edef16a72bda8f7f3d540b07767121737ed350ef6d545d0c545494cc1107fe"
+      }
+    ],
+    "commit": "9d97f39215b4e9057d1893df7fa3d2025600f10c",
+    "repository": "leanprover/lean-eval-submissions"
+  },
+  "kind": "historical_baseline_state_promotion_binding",
+  "review_branch": "historical-baseline-state-v1",
+  "review_status": "staged_for_review",
+  "schema_version": 1,
+  "state": {
+    "base_event_count": 508,
+    "base_event_id_set_sha256": "8fb4df01a769eaba9c3af691cb1c41231b2c248dda4ec43cf94b8bdc275368d8",
+    "candidate_commit": "d4f4ab87e916e25d7e5a7cb15bbd71c48f33d3a4",
+    "candidate_tree": "6fe5e06168b5d93c5bd677bb1c11bee829ef5e40",
+    "combined_event_count": 2947,
+    "parent": "60f5676e44a39010f5bc1fbfc4bd0bc228ff8028",
+    "parent_tree": "97f31e6e0faa3c7029a31aa0cec057bf7be9d64b",
+    "repository": "leanprover/lean-eval-state"
+  }
+}

@@ -235,9 +235,10 @@ delta.
 
 ## Post-migration readback and State bindings
 
-The archive migration and promotion fields are fixed above. The State fields
-remain intentionally unbound until the one-shot stage operation has produced
-and revalidated its source-free canonical promotion binding.
+The archive migration and promotion fields are fixed above. The State
+candidate is bound by
+`configuration/historical-baseline-state-promotion-v1.json`, SHA-256
+`be88ae147e71195cd941cac1ab7b9d60c4adf97ba8fdd9113baf4130a02c4d2f`.
 
 - [x] The deterministic migration report digest plus the staged audit commit,
       tree, and exact binary patch digest relative to the pinned audit source.
@@ -250,17 +251,40 @@ and revalidated its source-free canonical promotion binding.
       Apply exactly the staged patch to that current head, bind the resulting
       commit and tree, and promote only that rebased tree. After merge, require
       audit `main` to have exactly the bound tree.
-- [ ] The exact production State head used for combined validation.
-- [ ] One `first_occurred_at` after that State head and deterministic event
-      identities derived by the canonical public and private finalizers from
-      the final immutable inputs.
-- [ ] The create-only public and private State candidate tree digests, event-set
-      digests, materialized queue digests, event counts, and task counts after
-      validating the combined graph against that exact State head.
-- [ ] A read-only redacted projection of the combined candidate and proof that
-      every queued baseline Result appears exactly once while all 459 public
-      and 29 private reviewed-unavailable Results retain their terminal
-      dispositions.
+- [x] The exact production State head used for combined validation is
+      `60f5676e44a39010f5bc1fbfc4bd0bc228ff8028`, tree
+      `97f31e6e0faa3c7029a31aa0cec057bf7be9d64b`, with 508 base events and
+      event-ID-set SHA-256
+      `8fb4df01a769eaba9c3af691cb1c41231b2c248dda4ec43cf94b8bdc275368d8`.
+- [x] `first_occurred_at` is `2026-09-03T02:36:40.777Z`, after the exact
+      State head, and `last_occurred_at` is `2026-09-03T02:36:43.215Z`.
+      Deterministic public and private event-ID-set SHA-256 values are
+      `4c4066d1e6d54badd26a1096558274d2b7883ec4567442c81718eaf44fda581a`
+      and
+      `b54afd7477d6364d5efde84137e38fcbdebb24a7630d9823570e8684afcccba4`.
+- [x] The create-only State candidate is commit
+      `d4f4ab87e916e25d7e5a7cb15bbd71c48f33d3a4`, tree
+      `6fe5e06168b5d93c5bd677bb1c11bee829ef5e40`, with 2,439 events and
+      event-set SHA-256
+      `b83812b753a2ac33101da34289c3813eb2267a9e42b8b79501bcc40f91c5c96f`.
+      Its public lane has 522 events and 174 tasks; its private lane has 1,917
+      events and 639 tasks. The respective queue SHA-256 values are
+      `4ede4c4aef87dc31dd5801f9001ea38451d42312140fc6aafbb490ea02b42a0a`
+      and
+      `39854ced5013850be149b50e9a7f8d34c86040b2ad527f779cfc2f5077921b7e`;
+      materialized-views SHA-256 is
+      `6cb8aeee80d5019fb1a0c1e954cd39779068e0a56e28ccb9f9f387ace10f6bd3`.
+- [x] The read-only redacted historical projection and series SHA-256 values
+      are
+      `f20ce2b0271b3a6357a954ed9dde0d1b2de692f89309ca2cc8ef8da43d31e4ac`
+      and
+      `9c2f4e8d5a1306ad85efdd2642ea601160a6cf11f952e44e55ad0364154421be`.
+      The bound public/private Result-set and task-set digests prove that all
+      813 queued baseline Results appear exactly once, while the reviewed
+      unavailability set SHA-256
+      `8a81f3cc77d7a9a36fc399f569b9e19be0c581af62f4a76afa411c4522bb9f2d`
+      retains the terminal dispositions for all 459 public and 29 private
+      unavailable Results.
 
 ## Packet-bound execution order
 
