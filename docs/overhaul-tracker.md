@@ -34,7 +34,7 @@ history, or replace the cross-repository execution runbook.
 - Tracked staging intake and every staging lifecycle API remain all-false with
   empty maintainer allowlists.
 - General staging replay, historical-public replay, and production replay are
-  disabled. The bounded staging acceptance endpoint remains enabled.
+  disabled.
 - Model consolidation remains disabled in both tracked environments and is not
   a launch feature.
 - Automatic release publication is enabled in
