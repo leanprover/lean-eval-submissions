@@ -124,7 +124,10 @@ export default {
         await verifyGithubOidc(incoming, runtime);
       },
       sandbox(runtime, runnerNonce) {
-        return replaySandbox(runtime, runnerNonce);
+        // The large replay image can need more than three minutes to become
+        // port-ready after a cold regional pull. This temporary private lane
+        // gets the SDK's bounded maximum without changing ordinary replay.
+        return replaySandbox(runtime, runnerNonce, 600_000);
       },
       receiptStore(runtime) {
         const replayTaskId = runtime.EXPECTED_REPLAY_TASK_ID;
