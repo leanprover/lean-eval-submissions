@@ -6,8 +6,9 @@ packet, plans, matrices, or State workflow.
 
 ## Cutoff inputs
 
-After issue intake is closed, select the exact protected submissions commit
-whose `results/` tree is the final corpus. From that commit:
+At the announced issue-intake cutoff, after all pending accepted issue
+submissions have settled, select the exact protected submissions commit whose
+`results/` tree is the final corpus. From that commit:
 
 1. build and review the complete historical inventory;
 2. reconcile it against the retained inventory at
