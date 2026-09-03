@@ -46,7 +46,7 @@ class WorkerIntakeConfigurationTests(unittest.TestCase):
 
     def test_tracked_configuration_reports_reviewed_states(self) -> None:
         tracked = pathlib.Path(__file__).resolve().parent.parent / "server/wrangler.jsonc"
-        expected = {"staging": "false", "production": "true"}
+        expected = {"staging": "false", "production": "false"}
         for environment, state in expected.items():
             with self.subTest(environment=environment):
                 self.assertEqual(read_intake_state(tracked, environment), state)

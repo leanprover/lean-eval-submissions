@@ -46,11 +46,16 @@ describe("browser intake page", () => {
     expect(body).toContain("LeanEval staging intake");
     expect(body).toContain('href="/api/v1/oauth/start"');
     expect(body).toContain('id="submission-form"');
-    expect(body).toContain('src="/intake.js?v=intake-v2"');
+    expect(body).toContain('src="/intake.js?v=intake-v3"');
     expect(body).toContain('id="auth-status"');
     expect(body).toContain("GitHub sign-in is required");
     expect(body).toContain('id="submit-button"');
     expect(body).toContain('id="submit-spinner"');
+    expect(body).toContain("Required repository access");
+    expect(body).toContain("https://github.com/apps/lean-eval-source-reader/installations/new");
+    expect(body).toContain("https://github.com/apps/lean-eval-bot/installations/new");
+    expect(body).toContain("both Apps can read the named repository and exact commit");
+    expect(body).not.toContain("source_apps_confirmed");
     expect(body).toContain(
       'id="problem_id" name="problem_id" required pattern="[A-Za-z0-9][A-Za-z0-9_\\-]{0,127}" maxlength="128"',
     );

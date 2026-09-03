@@ -331,6 +331,7 @@ export class GitHubProvider {
   readonly #resultFetcher: ProviderFetch | undefined;
   readonly #resultsProtectedBranch: ResultsProtectedBranch | undefined;
   readonly #benchmarkFetcher: ProviderFetch | undefined;
+  readonly #legacyVerificationFetcher: ProviderFetch | undefined;
 
   constructor(
     fetcher: ProviderFetch = fetch,
@@ -340,6 +341,7 @@ export class GitHubProvider {
     resultFetcher?: ProviderFetch,
     resultsProtectedBranch?: ResultsProtectedBranch,
     benchmarkFetcher?: ProviderFetch,
+    legacyVerificationFetcher?: ProviderFetch,
   ) {
     // A Worker runtime fetch function must be invoked without rebinding its
     // receiver. Calling a function-valued private field as `this.#fetcher()`
@@ -360,6 +362,9 @@ export class GitHubProvider {
     this.#benchmarkFetcher = benchmarkFetcher === undefined
       ? undefined
       : (input, init) => benchmarkFetcher(input, init);
+    this.#legacyVerificationFetcher = legacyVerificationFetcher === undefined
+      ? undefined
+      : (input, init) => legacyVerificationFetcher(input, init);
   }
 
   async exchangeOAuth(
@@ -424,6 +429,82 @@ export class GitHubProvider {
       throw new GitHubProviderError(409, "repository identity changed");
     }
     return { fullName: data.full_name, private: data.private };
+  }
+
+  async #repositoryWithFetcher(
+    repository: string,
+    fetcher: ProviderFetch,
+    label: string,
+    token?: string,
+  ): Promise<GitHubRepository> {
+    const response = await fetcher(`${API}/repos/${repository}`, {
+      headers: providerHeaders(token),
+      redirect: "manual",
+      signal: AbortSignal.timeout(5000),
+    });
+    const data = await jsonResponse(response, `${label} repository response`);
+    if (typeof data.full_name !== "string" || typeof data.private !== "boolean") {
+      throw new GitHubProviderError(502, `${label} repository response fields were invalid`);
+    }
+    if (data.full_name.toLowerCase() !== repository.toLowerCase()) {
+      throw new GitHubProviderError(409, `${label} repository identity changed`);
+    }
+    return { fullName: data.full_name, private: data.private };
+  }
+
+  async #verifyCommitWithFetcher(
+    repository: string,
+    expectedCommit: string,
+    fetcher: ProviderFetch,
+    label: string,
+    token?: string,
+  ): Promise<void> {
+    if (!COMMIT.test(expectedCommit)) {
+      throw new GitHubProviderError(400, "source commit proof was invalid");
+    }
+    const headers = providerHeaders(token);
+    headers.set("x-lean-eval-expected-commit", expectedCommit);
+    const response = await fetcher(`${API}/repos/${repository}/git/commits/${expectedCommit}`, {
+      headers,
+      redirect: "manual",
+      signal: AbortSignal.timeout(5000),
+    });
+    const data = await jsonResponse(response, `${label} commit response`);
+    if (data.sha !== expectedCommit) {
+      throw new GitHubProviderError(409, `${label} commit identity changed`);
+    }
+  }
+
+  /**
+   * Prove that both Apps needed by the server lifecycle can read the exact
+   * repository and commit before any submission State is mutated.
+   */
+  async submissionRepository(repository: string, expectedCommit: string): Promise<GitHubRepository> {
+    const sourceFetcher = this.#verificationFetcher ?? (this.#verificationToken ? this.#fetcher : undefined);
+    const legacyFetcher = this.#legacyVerificationFetcher;
+    if (sourceFetcher === undefined || legacyFetcher === undefined) {
+      throw new GitHubProviderError(503, "both source verification credentials are required");
+    }
+    const verify = async (
+      fetcher: ProviderFetch,
+      label: string,
+      token?: string,
+    ): Promise<GitHubRepository> => {
+      const identity = await this.#repositoryWithFetcher(repository, fetcher, label, token);
+      await this.#verifyCommitWithFetcher(repository, expectedCommit, fetcher, label, token);
+      return identity;
+    };
+    const [source, legacy] = await Promise.all([
+      verify(sourceFetcher, "source reader", this.#verificationFetcher ? undefined : this.#verificationToken),
+      verify(legacyFetcher, "workflow source reader"),
+    ]);
+    if (
+      source.fullName.toLowerCase() !== legacy.fullName.toLowerCase() ||
+      source.private !== legacy.private
+    ) {
+      throw new GitHubProviderError(409, "source Apps disagreed about repository identity or visibility");
+    }
+    return source;
   }
 
   async verifyTag(repository: string, tag: string, expectedCommit: string): Promise<void> {

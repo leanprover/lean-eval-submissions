@@ -11,11 +11,13 @@ let rsaPrivateKey = "";
 const ENV = {
   DEPLOYED_COMMIT: "test-commit",
   DEPLOYMENT_ENVIRONMENT: "staging",
-  DISPATCH_APP_ID: "222",
+  DISPATCH_APP_ID: "4666633",
   DISPATCH_APP_PRIVATE_KEY: "set in beforeAll",
   DISPATCH_REPOSITORY: "leanprover/lean-eval-submissions",
   DISPATCH_WORKFLOW: "submission.yml",
-  SOURCE_APP_ID: "111",
+  LEGACY_SOURCE_APP_ID: "Iv23liLATwL7VxAK37uX",
+  LEGACY_SOURCE_APP_PRIVATE_KEY: "set in beforeAll",
+  SOURCE_APP_ID: "4666604",
   SOURCE_APP_PRIVATE_KEY: "set in beforeAll",
 } satisfies BrokerRuntimeEnv;
 
@@ -68,11 +70,16 @@ function extractPkcs1(pkcs8: ArrayBuffer): ArrayBuffer {
 }
 
 function environment(): BrokerRuntimeEnv {
-  return { ...ENV, SOURCE_APP_PRIVATE_KEY: privateKey, DISPATCH_APP_PRIVATE_KEY: privateKey };
+  return {
+    ...ENV,
+    DISPATCH_APP_PRIVATE_KEY: privateKey,
+    LEGACY_SOURCE_APP_PRIVATE_KEY: privateKey,
+    SOURCE_APP_PRIVATE_KEY: privateKey,
+  };
 }
 
 function brokerRequest(
-  authority: "source" | "dispatch" | "results" | "benchmark",
+  authority: "source" | "legacy_source" | "dispatch" | "results" | "benchmark",
   url: string,
   options: Readonly<{ method?: string; body?: string | null; expectedCommit?: string | null }> = {},
 ): Request {
@@ -136,6 +143,146 @@ describe("GitHub App broker", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ full_name: "alice/proofs", private: true });
     expect(calls).toHaveLength(3);
+  });
+
+  it("uses the legacy App client ID and permits only exact repository and commit reads", async () => {
+    const expected = "c".repeat(40);
+    const issuers: string[] = [];
+    const upstream = vi.fn<typeof fetch>((input, init) => {
+      const url = inputUrl(input);
+      if (url.endsWith("/repos/alice/legacy-source/installation")) {
+        const jwt = (new Headers(init?.headers).get("authorization") ?? "").replace(/^Bearer /, "");
+        const encodedPayload = jwt.split(".")[1];
+        if (encodedPayload === undefined) throw new TypeError("JWT payload was missing");
+        const payload: unknown = JSON.parse(
+          atob(encodedPayload.replaceAll("-", "+").replaceAll("_", "/")),
+        );
+        if (payload === null || typeof payload !== "object" || Array.isArray(payload) || !("iss" in payload)) {
+          throw new TypeError("JWT payload was not an object");
+        }
+        issuers.push(String(payload.iss));
+        return Promise.resolve(Response.json({ id: 9123 }));
+      }
+      if (url.endsWith("/app/installations/9123/access_tokens")) {
+        expect(JSON.parse(bodyText(init?.body))).toEqual({
+          repositories: ["legacy-source"],
+          permissions: { contents: "read", metadata: "read" },
+        });
+        return Promise.resolve(Response.json({
+          token: "ghs_legacy-source-installation-token",
+          expires_at: new Date(NOW + 3_600_000).toISOString(),
+        }));
+      }
+      if (url.endsWith(`/repos/alice/legacy-source/git/commits/${expected}`)) {
+        return Promise.resolve(Response.json({ sha: expected }));
+      }
+      return Promise.reject(new Error(`unexpected GitHub call: ${url}`));
+    });
+    const response = await handleBrokerRequest(
+      brokerRequest(
+        "legacy_source",
+        `https://api.github.com/repos/alice/legacy-source/git/commits/${expected}`,
+        { expectedCommit: expected },
+      ),
+      environment(),
+      upstream,
+      NOW,
+    );
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ sha: expected });
+    expect(issuers).toEqual(["Iv23liLATwL7VxAK37uX"]);
+  });
+
+  it("rejects legacy-source tag access and a commit response with the wrong identity", async () => {
+    const upstream = vi.fn<typeof fetch>((input) => {
+      const url = inputUrl(input);
+      if (url.endsWith("/installation")) return Promise.resolve(Response.json({ id: 9124 }));
+      if (url.endsWith("/access_tokens")) {
+        return Promise.resolve(Response.json({
+          token: "ghs_wrong-commit-installation-token",
+          expires_at: new Date(NOW + 3_600_000).toISOString(),
+        }));
+      }
+      return Promise.resolve(Response.json({ sha: "d".repeat(40) }));
+    });
+    const tag = await handleBrokerRequest(
+      brokerRequest(
+        "legacy_source",
+        "https://api.github.com/repos/alice/rejected/git/ref/tags/lean-eval%2F0198abcd-1111-7000-8000-000000000001",
+        { expectedCommit: COMMIT },
+      ),
+      environment(),
+      upstream,
+      NOW,
+    );
+    expect(tag.status).toBe(403);
+    expect(upstream).not.toHaveBeenCalled();
+
+    const wrongCommit = await handleBrokerRequest(
+      brokerRequest(
+        "legacy_source",
+        `https://api.github.com/repos/alice/wrong-commit/git/commits/${COMMIT}`,
+        { expectedCommit: COMMIT },
+      ),
+      environment(),
+      upstream,
+      NOW,
+    );
+    expect(wrongCommit.status).toBe(409);
+  });
+
+  it("fails closed when the legacy-source credential is absent or malformed", async () => {
+    const upstream = vi.fn<typeof fetch>();
+    const configured = environment();
+    const { LEGACY_SOURCE_APP_ID: removed, ...missing } = configured;
+    expect(removed).toBe("Iv23liLATwL7VxAK37uX");
+    for (const candidate of [
+      missing,
+      { ...configured, LEGACY_SOURCE_APP_ID: "not-a-github-client-id" },
+      { ...configured, LEGACY_SOURCE_APP_ID: "Iv1.bad-punctuation" },
+      { ...configured, LEGACY_SOURCE_APP_ID: "Iv23liLATwL7VxAK37uY" },
+    ]) {
+      const response = await handleBrokerRequest(
+        brokerRequest("legacy_source", "https://api.github.com/repos/alice/unconfigured"),
+        candidate,
+        upstream,
+        NOW,
+      );
+      expect(response.status).toBe(503);
+    }
+    expect(upstream).not.toHaveBeenCalled();
+  });
+
+  it("rejects well-formed but unreviewed source and dispatcher App identities", async () => {
+    const upstream = vi.fn<typeof fetch>();
+    const wrongSource = await handleBrokerRequest(
+      brokerRequest("source", "https://api.github.com/repos/alice/unreviewed"),
+      { ...environment(), SOURCE_APP_ID: "4666605" },
+      upstream,
+      NOW,
+    );
+    expect(wrongSource.status).toBe(503);
+
+    const body = JSON.stringify({
+      ref: `lean-eval-dispatch/${COMMIT}`,
+      inputs: {
+        workflow_commit: COMMIT,
+        archive_state_callback_required: "true",
+        callback_environment: "staging",
+      },
+    });
+    const wrongDispatcher = await handleBrokerRequest(
+      brokerRequest(
+        "dispatch",
+        "https://api.github.com/repos/leanprover/lean-eval-submissions/actions/workflows/submission.yml/dispatches",
+        { method: "POST", body },
+      ),
+      { ...environment(), DISPATCH_APP_ID: "4666634" },
+      upstream,
+      NOW,
+    );
+    expect(wrongDispatcher.status).toBe(503);
+    expect(upstream).not.toHaveBeenCalled();
   });
 
   it("rejects gist proof instead of broadening installation authority", async () => {
@@ -710,6 +857,22 @@ describe("GitHub App broker", () => {
     const response = await proxied("https://api.github.com/repos/alice/proofs/git/tags/" + "b".repeat(40), {
       headers: { "x-lean-eval-expected-commit": COMMIT },
     });
+    expect(response.status).toBe(200);
+  });
+
+  it("serializes a distinct legacy-source authority for exact commit admission", async () => {
+    const bindingFetch = vi.fn<Pick<Fetcher, "fetch">["fetch"]>((_input, init) => {
+      const payload = JSON.parse(bodyText(init?.body)) as Record<string, unknown>;
+      expect(payload.audience).toBe("lean-eval-submission-server");
+      expect(payload.authority).toBe("legacy_source");
+      expect(payload.expected_commit).toBe(COMMIT);
+      return Promise.resolve(Response.json({ sha: COMMIT }));
+    });
+    const proxied = githubBrokerFetch({ fetch: bindingFetch }, "legacy_source");
+    const response = await proxied(
+      `https://api.github.com/repos/alice/proofs/git/commits/${COMMIT}`,
+      { headers: { "x-lean-eval-expected-commit": COMMIT } },
+    );
     expect(response.status).toBe(200);
   });
 

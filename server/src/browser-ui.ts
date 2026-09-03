@@ -52,6 +52,8 @@ const PAGE_STYLE = `
     @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 1.5s; } }
     .notice { border-left: .3rem solid #2d7; padding: .75rem 1rem; }
     .disabled { border-left-color: #d75; }
+    .prerequisite { border: 1px solid currentColor; padding: 1rem; }
+    .prerequisite h2 { margin-top: 0; }
     nav { border-top: 1px solid currentColor; margin-top: 2rem; padding-top: 1rem; }
     pre { overflow-wrap: anywhere; white-space: pre-wrap; }
 `;
@@ -89,6 +91,15 @@ export function browserPage(
     <p id="auth-status" class="auth-status" role="status" aria-live="polite">GitHub sign-in is required.</p>
   ` : "";
   const submissionForm = intakeEnabled ? `
+    <section class="prerequisite" aria-labelledby="repository-access">
+      <h2 id="repository-access">Required repository access</h2>
+      <p>Install both read-only GitHub Apps on only the repository you intend to submit:</p>
+      <ol>
+        <li><a href="https://github.com/apps/lean-eval-source-reader/installations/new" target="_blank" rel="noopener noreferrer">Install LeanEval Source Reader</a> for intake verification.</li>
+        <li><a href="https://github.com/apps/lean-eval-bot/installations/new" target="_blank" rel="noopener noreferrer">Install lean-eval-bot</a> for the archive and evaluation workflow.</li>
+      </ol>
+      <p>The server checks that both Apps can read the named repository and exact commit before accepting or dispatching the submission.</p>
+    </section>
     <form id="submission-form">
       <label>Problem ID <input id="problem_id" name="problem_id" required pattern="[A-Za-z0-9][A-Za-z0-9_\\-]{0,127}" maxlength="128"></label>
       <label>Problem group
@@ -121,7 +132,7 @@ export function browserPage(
       <a href="/release/">Schedule release for an existing private submission</a>
     </nav>
   ` : "";
-  return page(title, status, authentication + submissionForm + releaseLink, intakeEnabled ? "/intake.js?v=intake-v2" : undefined);
+  return page(title, status, authentication + submissionForm + releaseLink, intakeEnabled ? "/intake.js?v=intake-v3" : undefined);
 }
 
 export function releasePage(

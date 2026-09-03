@@ -17,7 +17,6 @@ import {
   decodeChallengeSubmission,
   decodeMetadataAmendment,
   decodePublicationChoice,
-  decodeSourceReaderPreflight,
   isUuidV7,
   readJson,
   type ProductionMetadata,
@@ -669,6 +668,7 @@ function provider(env: RuntimeEnv, dependencies: ApiDependencies): GitHubProvide
     env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "results") : undefined,
     env.DEPLOYMENT_ENVIRONMENT === "production" ? "main" : "staging-results",
     env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "benchmark") : undefined,
+    env.GITHUB_BROKER ? githubBrokerFetch(env.GITHUB_BROKER, "legacy_source") : undefined,
   );
 }
 
@@ -1176,7 +1176,7 @@ async function acceptSubmission(
   if (grant.login !== identity.login) throw new AuthError("authenticated identity does not match grant");
   const repository = await submissionStage(
     "source_repository_verification",
-    () => provider(env, dependencies).repository(input.source_repository),
+    () => provider(env, dependencies).submissionRepository(input.source_repository, input.source_commit),
   );
   assertSourcePolicy(input.problem_group, input.source_visibility, repository.private);
   const acceptedAtMilliseconds = dependencies.now?.() ?? Date.now();
@@ -1294,7 +1294,10 @@ async function promotionCanary(
   const material = await promotionCanaryMaterial(identity);
   const repository = await submissionStage(
     "promotion_canary_github_connectivity",
-    () => provider(env, dependencies).repository(PROMOTION_CANARY_REPOSITORY),
+    () => provider(env, dependencies).submissionRepository(
+      PROMOTION_CANARY_REPOSITORY,
+      PROMOTION_CANARY_SOURCE_COMMIT,
+    ),
   );
   if (!repository.private || repository.fullName.toLowerCase() !== PROMOTION_CANARY_REPOSITORY.toLowerCase()) {
     throw new GitHubProviderError(409, "promotion canary fixture repository identity or visibility changed");
@@ -1875,25 +1878,6 @@ async function resultCompleted(
     event_id: result.event_id,
     release_event_id: release?.event_id ?? null,
   }, outcome.created ? 201 : 200);
-}
-
-async function sourceReaderPreflight(
-  request: Request,
-  env: RuntimeEnv,
-  dependencies: ApiDependencies,
-): Promise<Response> {
-  if (!(await readinessAuthorized(request, env))) return json({ error: "not_found" }, 404);
-  if (env.DEPLOYMENT_ENVIRONMENT !== "staging") {
-    return json({ error: "staging_only" }, 403);
-  }
-  const repository = decodeSourceReaderPreflight(await readJson(request));
-  const source = await provider(env, dependencies).repository(repository);
-  return json({
-    status: "source_reader_ready",
-    environment: "staging",
-    repository: source.fullName,
-    private: source.private,
-  });
 }
 
 function statusFor(view: SubmissionView): Record<string, unknown> {
@@ -2577,13 +2561,6 @@ export async function handleRequest(
   if (request.method === "POST" && url.pathname === "/internal/v1/result-completed") {
     try {
       return await resultCompleted(request, env, dependencies);
-    } catch (error) {
-      return errorResponse(error);
-    }
-  }
-  if (request.method === "POST" && url.pathname === "/internal/v1/source-reader-preflight") {
-    try {
-      return await sourceReaderPreflight(request, env, dependencies);
     } catch (error) {
       return errorResponse(error);
     }

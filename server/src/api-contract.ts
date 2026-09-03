@@ -657,15 +657,6 @@ export function decodeResultCompletion(value: unknown): ResultCompletion {
   return data as ResultCompletion;
 }
 
-export function decodeSourceReaderPreflight(value: unknown): string {
-  const data = object(value, "source reader preflight");
-  exactFields(data, ["repository"], [], "source reader preflight");
-  if (typeof data.repository !== "string" || !REPOSITORY.test(data.repository)) {
-    throw new ApiDecodeError("source reader preflight repository is not canonical");
-  }
-  return data.repository;
-}
-
 export function assertSourcePolicy(
   group: IntakeProblemGroup,
   declared: "private",

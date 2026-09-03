@@ -2,13 +2,20 @@ const GITHUB_API = "https://api.github.com";
 const MAX_BROKER_REQUEST_BYTES = 512 * 1024;
 const MAX_GITHUB_ERROR_BYTES = 4096;
 const APP_ID = /^[1-9][0-9]{0,15}$/;
+// GitHub accepts either the numeric App ID or App client ID as a JWT issuer.
+// Bound the current compact 20-character form without assuming an undocumented
+// prefix, while retaining GitHub's documented legacy Iv1.<16 hex> example.
+const APP_CLIENT_ID = /^(?:[A-Za-z0-9]{20}|Iv1\.[0-9a-fA-F]{16})$/;
+const SOURCE_APP_ID = "4666604";
+const LEGACY_SOURCE_APP_ID = "Iv23liLATwL7VxAK37uX";
+const DISPATCH_APP_ID = "4666633";
 const REPOSITORY = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const COMMIT = /^[0-9a-f]{40}$/;
 const DISPATCH_REF = /^lean-eval-dispatch\/([0-9a-f]{40})$/;
 // GitHub caps an unpaginated compare at 250 commits. Reject a truncated proof.
 const GITHUB_COMPARE_DEFAULT_COMMIT_LIMIT = 250;
 
-type Authority = "source" | "dispatch" | "results" | "benchmark";
+type Authority = "source" | "legacy_source" | "dispatch" | "results" | "benchmark";
 type BrokerRequest = Readonly<{
   schema_version: 1;
   audience: "lean-eval-submission-server";
@@ -29,6 +36,8 @@ export type BrokerRuntimeEnv = Omit<
   | "DISPATCH_APP_PRIVATE_KEY"
   | "SOURCE_APP_ID"
   | "SOURCE_APP_PRIVATE_KEY"
+  | "LEGACY_SOURCE_APP_ID"
+  | "LEGACY_SOURCE_APP_PRIVATE_KEY"
 > & Readonly<{
   DEPLOYED_COMMIT: string;
   DEPLOYMENT_ENVIRONMENT: "staging" | "production";
@@ -38,6 +47,8 @@ export type BrokerRuntimeEnv = Omit<
   DISPATCH_APP_PRIVATE_KEY?: string;
   SOURCE_APP_ID?: string;
   SOURCE_APP_PRIVATE_KEY?: string;
+  LEGACY_SOURCE_APP_ID?: string;
+  LEGACY_SOURCE_APP_PRIVATE_KEY?: string;
 }>;
 
 type GitHubApp = Readonly<{ appId: string; privateKey: string }>;
@@ -178,7 +189,7 @@ function decodeRequest(value: unknown): BrokerRequest {
   if (
     data.schema_version !== 1 ||
     data.audience !== "lean-eval-submission-server" ||
-    (data.authority !== "source" && data.authority !== "dispatch" &&
+    (data.authority !== "source" && data.authority !== "legacy_source" && data.authority !== "dispatch" &&
       data.authority !== "results" && data.authority !== "benchmark") ||
     (data.method !== "GET" && data.method !== "POST" && data.method !== "PATCH") ||
     typeof data.url !== "string" ||
@@ -215,13 +226,20 @@ function assertSourceRequest(request: BrokerRequest, url: URL): string {
   }
   const { repository, suffix } = repositoryFromPath(url.pathname);
   const metadata = suffix === "";
+  const commit = /^\/git\/commits\/[0-9a-f]{40}$/.test(suffix);
   const tagRef = /^\/git\/ref\/tags\/lean-eval%2F[0-9a-f-]{36}$/i.test(suffix);
   const annotatedTag = /^\/git\/tags\/[0-9a-f]{40}$/.test(suffix);
-  if (!metadata && !tagRef && !annotatedTag) {
+  if (!metadata && !commit && !tagRef && !annotatedTag) {
     throw new BrokerError(403, "source operation was not allowlisted");
   }
-  if ((tagRef || annotatedTag) !== (request.expected_commit !== null)) {
-    throw new BrokerError(400, "source tag request lacked an immutable commit proof");
+  if ((commit || tagRef || annotatedTag) !== (request.expected_commit !== null)) {
+    throw new BrokerError(400, "source object request lacked an immutable commit proof");
+  }
+  if (commit && suffix !== `/git/commits/${request.expected_commit ?? ""}`) {
+    throw new BrokerError(403, "source commit path did not match its immutable proof");
+  }
+  if (request.authority === "legacy_source" && (tagRef || annotatedTag)) {
+    throw new BrokerError(403, "legacy source authority is limited to repository and commit verification");
   }
   return repository;
 }
@@ -346,10 +364,27 @@ function assertBenchmarkRequest(request: BrokerRequest, url: URL): string {
 
 function appFor(authority: Authority, env: BrokerRuntimeEnv): GitHubApp {
   const dispatchAuthority = authority === "dispatch" || authority === "results";
-  const appId = dispatchAuthority ? env.DISPATCH_APP_ID : env.SOURCE_APP_ID;
-  const privateKey = dispatchAuthority ? env.DISPATCH_APP_PRIVATE_KEY : env.SOURCE_APP_PRIVATE_KEY;
-  if (!appId || !APP_ID.test(appId) || !privateKey) {
-    throw new BrokerError(503, `${dispatchAuthority ? "dispatch" : "source"} GitHub App is not configured`);
+  const legacySourceAuthority = authority === "legacy_source";
+  const appId = dispatchAuthority
+    ? env.DISPATCH_APP_ID
+    : legacySourceAuthority
+      ? env.LEGACY_SOURCE_APP_ID
+      : env.SOURCE_APP_ID;
+  const privateKey = dispatchAuthority
+    ? env.DISPATCH_APP_PRIVATE_KEY
+    : legacySourceAuthority
+      ? env.LEGACY_SOURCE_APP_PRIVATE_KEY
+      : env.SOURCE_APP_PRIVATE_KEY;
+  const expectedAppId = dispatchAuthority
+    ? DISPATCH_APP_ID
+    : legacySourceAuthority
+      ? LEGACY_SOURCE_APP_ID
+      : SOURCE_APP_ID;
+  if (appId === undefined || privateKey === undefined ||
+    appId !== expectedAppId ||
+    (legacySourceAuthority ? !APP_ID.test(appId) && !APP_CLIENT_ID.test(appId) : !APP_ID.test(appId))) {
+    const label = dispatchAuthority ? "dispatch" : legacySourceAuthority ? "legacy source" : "source";
+    throw new BrokerError(503, `${label} GitHub App is not configured`);
   }
   return { appId, privateKey };
 }
@@ -536,7 +571,11 @@ async function validateSourceResponse(response: Response, request: BrokerRequest
     return;
   }
   const expected = request.expected_commit;
-  if (expected === null) throw new BrokerError(500, "validated tag response lacked its commit proof");
+  if (expected === null) throw new BrokerError(500, "validated source response lacked its commit proof");
+  if (suffix.startsWith("/git/commits/")) {
+    if (data.sha !== expected) throw new BrokerError(409, "source commit identity changed");
+    return;
+  }
   const target = object(data.object, "GitHub tag target");
   if (suffix.startsWith("/git/ref/tags/")) {
     if (target.type === "commit" && target.sha !== expected) throw new BrokerError(409, "source tag moved");
@@ -658,7 +697,7 @@ async function proxy(
   if (url.origin !== GITHUB_API || url.username || url.password || url.hash) {
     throw new BrokerError(403, "broker can reach only the GitHub API origin");
   }
-  const repository = brokerRequest.authority === "source"
+  const repository = brokerRequest.authority === "source" || brokerRequest.authority === "legacy_source"
     ? assertSourceRequest(brokerRequest, url)
     : brokerRequest.authority === "dispatch"
       ? assertDispatchRequest(brokerRequest, url, env)
@@ -676,7 +715,7 @@ async function proxy(
     redirect: "manual",
     signal: AbortSignal.timeout(5000),
   });
-  if (brokerRequest.authority === "source") {
+  if (brokerRequest.authority === "source" || brokerRequest.authority === "legacy_source") {
     await validateSourceResponse(response, brokerRequest, url, repository);
   } else if (brokerRequest.authority === "results") {
     await validateResultsResponse(response, brokerRequest, url, env);

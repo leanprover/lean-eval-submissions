@@ -30,6 +30,8 @@ SECRET_BINDINGS = {
     "broker": {
         "DISPATCH_APP_ID",
         "DISPATCH_APP_PRIVATE_KEY",
+        "LEGACY_SOURCE_APP_ID",
+        "LEGACY_SOURCE_APP_PRIVATE_KEY",
         "SOURCE_APP_ID",
         "SOURCE_APP_PRIVATE_KEY",
     },
