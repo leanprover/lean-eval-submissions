@@ -165,7 +165,7 @@ workflow artifact, worktree file, mutable tag, or branch head.
       installation. The private material and path were not recorded, and
       `LEGACY_ARCHIVE_IDENTITY` is no longer installed.
 - [x] Current controller source commit
-      `2c8972b7b3ce2164811ae4afa7b8ff296cb7250d` binds private-controller
+      `f371efaf72e6193fa44d3e9daff4db224f65436e` binds private-controller
       SHA-256 `707769939badf9d884836f23215d05f5bb75ffcadd932cb9564bddc7c43801ea`
       and public-controller SHA-256
       `7d3d1b5c1a231d73db186331dbc6c52ca992e470a1fefbb5588aa0882fe14a74`,
